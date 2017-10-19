@@ -7,6 +7,7 @@ extern crate png;
 extern crate inflate;
 
 #[macro_use] extern crate ndarray;
+extern crate rand;
 
 #[cfg(feature="flame")] extern crate flame;
 

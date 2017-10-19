@@ -8,6 +8,8 @@ use dmm::{Map, Grid, Prefab};
 use dmi::{Image, IconFile};
 
 const TILE_SIZE: u32 = 32;
+const CONTRABAND_POSTERS: u32 = 44;
+const LEGIT_POSTERS: u32 = 35;
 
 // ----------------------------------------------------------------------------
 // Main minimap code
@@ -25,6 +27,8 @@ pub fn generate(
     z: usize,
     icon_cache: &mut HashMap<PathBuf, IconFile>,
 ) -> Result<Image, ()> {
+    use rand::Rng;
+
     flame!("minimap");
     let grid = map.z_level(z);
     let (len_x, len_y) = grid.dim();
@@ -37,7 +41,7 @@ pub fn generate(
     for (y, row) in grid.axis_iter(Axis(0)).enumerate() {
         for (x, e) in row.iter().enumerate() {
             for mut atom in get_atom_list(objtree, &map.dictionary[e], (x as u32, y as u32)) {
-                // objects which override appearance in New() to differ from their map states
+                // icons which differ from their map states
                 let p = &atom.type_.path;
                 if p == "/obj/structures/table/wood/fancy/black" {
                     atom.set_var("icon", "'icons/obj/smooth_structures/fancy_table_black.dmi'");
@@ -46,6 +50,19 @@ pub fn generate(
                 } else if subtype(p, "/turf/closed/mineral/") {
                     atom.set_var("pixel_x", "-4");
                     atom.set_var("pixel_y", "-4");
+                } else if subtype(p, "/obj/structure/bookcase/") {
+                    atom.set_var("icon_state", "\"book-0\"");
+                } else if subtype(p, "/obj/structure/sign/poster/contraband/random/") {
+                    atom.set_var("icon_state", format!("\"poster{}\"", ::rand::thread_rng().gen_range(1, 1 + CONTRABAND_POSTERS)));
+                } else if subtype(p, "/obj/structure/sign/poster/official/random/") {
+                    atom.set_var("icon_state", format!("\"poster{}_legit\"", ::rand::thread_rng().gen_range(1, 1 + LEGIT_POSTERS)));
+                } else if subtype(p, "/obj/structure/sign/poster/random/") {
+                    let i = 1 + ::rand::thread_rng().gen_range(0, CONTRABAND_POSTERS + LEGIT_POSTERS);
+                    if i <= CONTRABAND_POSTERS {
+                        atom.set_var("icon_state", format!("\"poster{}\"", i));
+                    } else {
+                        atom.set_var("icon_state", format!("\"poster{}_legit\"", i - CONTRABAND_POSTERS));
+                    }
                 }
 
                 // overlays and underlays
@@ -58,7 +75,7 @@ pub fn generate(
                     let mut copy = atom.clone();
                     copy.set_var("icon_state", format!("\"{}_door\"", &door[1..door.len()-1]));
                     overlays.push(copy);
-                } else if subtype(p, "/obj/machinery/computer/") {
+                } else if subtype(p, "/obj/machinery/computer/") || subtype(p, "/obj/machinery/power/solar_control/") {
                     // computer screens and keyboards
                     let screen = atom.get_var("icon_screen", objtree);
                     if screen != "" && screen != "null" {
@@ -74,6 +91,35 @@ pub fn generate(
                     }
                 } else if subtype(p, "/obj/structure/transit_tube/") {
                     generate_tube_overlays(&mut overlays, ctx, &atom);
+                } else if subtype(p, "/obj/machinery/door/airlock/") {
+                    let mut copy = atom.clone();
+                    let glass = atom.get_var("glass", objtree);
+                    if glass == "" || glass == "FALSE" || glass == "0" {
+                        copy.set_var("icon_state", "\"fill_closed\"");
+                    } else if glass == "TRUE" || glass == "1" {
+                        copy.set_var("icon_state", "\"glass_closed\"");
+                        copy.set_var("icon", atom.get_var("overlays_file", objtree));
+                    }
+                    overlays.push(copy);
+                } else if subtype(p, "/obj/machinery/atmospherics/components/unary/") {
+                    let aboveground = match atom.get_var("icon_state", objtree) {
+                        "\"vent_map\"" => "vent_off",
+                        "\"vent_map_on\"" => "vent_out",
+                        "\"vent_map_siphon_on\"" => "vent_in",
+                        "\"scrub_map\"" => "scrub_off",
+                        "\"scrub_map_on\"" => "scrub_on",
+                        _ => "",
+                    };
+                    if !aboveground.is_empty() {
+                        let mut copy = atom.clone();
+                        copy.set_var("icon_state", format!("{:?}", aboveground));
+                        overlays.push(copy);
+                        atom.set_var("layer", "-5");
+                    }
+                } else if subtype(p, "/obj/item/storage/box/") && !subtype(p, "/obj/item/storage/box/papersack/") {
+                    let mut copy = atom.clone();
+                    copy.set_var("icon_state", atom.get_var("illustration", objtree));
+                    overlays.push(copy);
                 }
 
                 // smoothing time
@@ -305,6 +351,8 @@ fn layer_of(objtree: &ObjectTree, atom: &Atom) -> i32 {
         -4_000
     } else if subtype(p, "/obj/structure/lattice/") {
         -8_000
+    } else if subtype(p, "/obj/machinery/navbeacon/") {
+        -3_000
     } else {
         let layer = atom.get_var("layer", objtree);
         match layer {
@@ -503,30 +551,31 @@ fn diagonal_smooth<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, source: &At
         if source.get_var("fixed_underlay", ctx.objtree) == "\"space\"1" {
             output.push(Atom::from_type(ctx.objtree, "/turf/open/space/basic", source.loc).unwrap());
         } else {
-            let (dx, dy) = offset(flip(reverse_ndir(adjacencies)));
-            let new_loc = (source.loc.0 as i32 + dx, source.loc.1 as i32 + dy);
-            let (dim_y, dim_x) = ctx.grid.dim();
-            if !(new_loc.0 < 0 || new_loc.1 < 0 || new_loc.0 >= dim_x as i32 || new_loc.1 >= dim_y as i32) {
-                let new_loc = (new_loc.0 as u32, new_loc.1 as u32);
-                // TODO: make this not call get_atom_list way too many times
-                let atom_list = get_atom_list(ctx.objtree,
-                    &ctx.map.dictionary[&ctx.grid[ndarray::Dim([new_loc.1 as usize, new_loc.0 as usize])]],
-                    new_loc);
-                let mut put_plating = false;
-                // TODO: check 45deg left and 45deg right for open turfs as well
-                for mut atom in atom_list {
-                    if subtype(&atom.type_.path, "/turf/open/") {
-                        atom.loc = source.loc;
-                        output.push(atom);
-                        break;
-                    } else if subtype(&atom.type_.path, "/turf/closed/") {
-                        put_plating = true;
-                        break;
+            let dir = flip(reverse_ndir(adjacencies));
+            let mut needs_plating = true;
+            // check direct, then 45deg left, then 45deg right
+            'dirs: for &each in &[dir, left_45(dir), right_45(dir)] {
+                let (dx, dy) = offset(each);
+                let new_loc = (source.loc.0 as i32 + dx, source.loc.1 as i32 + dy);
+                let (dim_y, dim_x) = ctx.grid.dim();
+                if !(new_loc.0 < 0 || new_loc.1 < 0 || new_loc.0 >= dim_x as i32 || new_loc.1 >= dim_y as i32) {
+                    let new_loc = (new_loc.0 as u32, new_loc.1 as u32);
+                    // TODO: make this not call get_atom_list way too many times
+                    let atom_list = get_atom_list(ctx.objtree,
+                        &ctx.map.dictionary[&ctx.grid[ndarray::Dim([new_loc.1 as usize, new_loc.0 as usize])]],
+                        new_loc);
+                    for mut atom in atom_list {
+                        if subtype(&atom.type_.path, "/turf/open/") {
+                            atom.loc = source.loc;
+                            output.push(atom);
+                            needs_plating = false;
+                            break 'dirs;
+                        }
                     }
                 }
-                if put_plating {
-                    output.push(Atom::from_type(ctx.objtree, "/turf/open/floor/plating", source.loc).unwrap());
-                }
+            }
+            if needs_plating {
+                output.push(Atom::from_type(ctx.objtree, "/turf/open/floor/plating", source.loc).unwrap());
             }
         }
     }
@@ -596,6 +645,36 @@ fn reverse_ndir(ndir: u32) -> u32 {
         N_NORTHEAST | NE1 | NE2 => NORTHEAST,
         N_NORTHWEST | NW1 | NW2 => NORTHWEST,
         _ => panic!(),
+    }
+}
+
+fn left_45(dir: u32) -> u32 {
+    use dmi::*;
+    match dir {
+        NORTH => NORTHWEST,
+        NORTHEAST => NORTH,
+        EAST => NORTHEAST,
+        SOUTHEAST => EAST,
+        SOUTH => SOUTHEAST,
+        SOUTHWEST => SOUTH,
+        WEST => SOUTHWEST,
+        NORTHWEST => WEST,
+        e => e,
+    }
+}
+
+fn right_45(dir: u32) -> u32 {
+    use dmi::*;
+    match dir {
+        NORTH => NORTHEAST,
+        NORTHEAST => EAST,
+        EAST => SOUTHEAST,
+        SOUTHEAST => SOUTH,
+        SOUTH => SOUTHWEST,
+        SOUTHWEST => WEST,
+        WEST => NORTHWEST,
+        NORTHWEST => NORTH,
+        e => e,
     }
 }
 
