@@ -7,7 +7,7 @@ use petgraph::graph::{Graph, NodeIndex};
 use xml::EventReader;
 use xml::reader::XmlEvent;
 
-pub type Vars = BTreeMap<String, String>;
+pub type Vars = ::linked_hash_map::LinkedHashMap<String, String>;
 
 #[derive(Debug)]
 pub struct ObjectTree {
@@ -54,7 +54,7 @@ impl ObjectTree {
         let mut tree = ObjectTree {
             graph: Graph::new(),
             types: BTreeMap::new(),
-            blank_vars: BTreeMap::new(),
+            blank_vars: Default::default(),
         };
         let root = tree.graph.add_node(Type {
             name: String::new(),

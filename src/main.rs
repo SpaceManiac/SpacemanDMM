@@ -6,6 +6,7 @@ extern crate petgraph;
 extern crate png;
 extern crate inflate;
 
+extern crate linked_hash_map;
 #[macro_use] extern crate ndarray;
 extern crate rand;
 

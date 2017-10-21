@@ -1,13 +1,16 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::fs::File;
-use std::io::{self, BufReader};
+use std::io::{self, BufReader, BufWriter};
+use std::fmt;
 
 use ndarray::{self, Array3, Axis};
+use linked_hash_map::LinkedHashMap;
 
 #[derive(Debug)]
 pub struct Map {
     pub key_length: u8,
+    // sorted order
     pub dictionary: BTreeMap<u32, Vec<Prefab>>,
     pub grid: Array3<u32>, // Z/Y/X order
 }
@@ -17,8 +20,8 @@ pub type Grid<'a> = ndarray::ArrayBase<ndarray::ViewRepr<&'a u32>, ndarray::Dim<
 #[derive(Debug, Default)]
 pub struct Prefab {
     pub path: String,
-    // important that this is a BTreeMap, so it's ordered alphabetically
-    pub vars: BTreeMap<String, String>,
+    // insertion order, sort of most of the time alphabetical but not quite
+    pub vars: LinkedHashMap<String, String>,
 }
 
 impl Map {
@@ -26,11 +29,16 @@ impl Map {
         flame!("Map::from_file");
         let mut map = Map {
             key_length: 0,
-            dictionary: BTreeMap::new(),
+            dictionary: Default::default(),
             grid: Array3::default((1, 255, 255)),
         };
         parse_map(&mut map, File::open(path)?)?;
         Ok(map)
+    }
+
+    pub fn to_file(&self, path: &Path) -> io::Result<()> {
+        // DMM saver later
+        save_tgm(self, File::create(path)?)
     }
 
     #[inline]
@@ -42,6 +50,90 @@ impl Map {
     pub fn z_level(&self, z: usize) -> Grid {
         self.grid.subview(Axis(0), z)
     }
+
+    #[inline]
+    pub fn format_key(&self, key: u32) -> FormatKey {
+        FormatKey(self.key_length, key)
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Map Writer
+
+#[derive(Copy, Clone)]
+pub struct FormatKey(u8, u32);
+
+impl FormatKey {
+    #[inline]
+    pub fn new(key_length: u8, key: u32) -> FormatKey {
+        FormatKey(key_length, key)
+    }
+}
+
+impl fmt::Display for FormatKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use std::fmt::Write;
+        let FormatKey(key_length, key) = *self;
+
+        if key >= 52u32.pow(key_length as u32) {
+            panic!();  // TODO be more reasonable
+        }
+
+        let mut current = 52usize.pow(key_length as u32 - 1);
+        for i in 0..key_length {
+            f.write_char(BASE_52[(key as usize / current) % 52] as char)?;
+            current /= 52;
+        }
+
+        Ok(())
+    }
+}
+
+const BASE_52: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+const TGM_HEADER: &str = "//MAP CONVERTED BY dmm2tgm.py THIS HEADER COMMENT PREVENTS RECONVERSION, DO NOT REMOVE";
+
+fn save_tgm(map: &Map, f: File) -> io::Result<()> {
+    use std::io::Write;
+
+    let mut f = BufWriter::new(f);
+    write!(f, "{}\n", TGM_HEADER)?;
+
+    // dictionary
+    for (&key, prefabs) in map.dictionary.iter() {
+        write!(f, "\"{}\" = (\n", map.format_key(key))?;
+        for (i, fab) in prefabs.iter().enumerate() {
+            write!(f, "{}", fab.path)?;
+            if !fab.vars.is_empty() {
+                write!(f, "{{")?;
+                for (i, (var, value)) in fab.vars.iter().enumerate() {
+                    write!(f, "\n\t{} = {}", var, value)?;
+                    if i + 1 != fab.vars.len() {
+                        write!(f, ";")?;
+                    }
+                }
+                write!(f, "\n\t}}")?;
+            }
+            if i + 1 != prefabs.len() {
+                write!(f, ",\n")?;
+            }
+        }
+        write!(f, ")\n")?;
+    }
+
+    // grid in Y-major
+    for (z, z_grid) in map.grid.axis_iter(Axis(0)).enumerate() {
+        write!(f, "\n")?;
+        for (x, x_col) in z_grid.axis_iter(Axis(1)).enumerate() {
+            write!(f, "({},1,{}) = {{\"\n", x + 1, z + 1)?;
+            for &elem in x_col.iter() {
+                write!(f, "{}\n", map.format_key(elem))?;
+            }
+            write!(f, "\"}}\n")?;
+        }
+    }
+
+    Ok(())
 }
 
 // ----------------------------------------------------------------------------
@@ -125,7 +217,7 @@ fn parse_map(map: &mut Map, f: File) -> io::Result<()> {
                     if ch == '"' {
                         curr_datum.push(ch);
                         in_quote_block = true;
-                    } else if ch == '=' {
+                    } else if ch == '=' && curr_var.is_empty() {
                         curr_var = take(&mut curr_datum);
                         let length = curr_var.trim_right().len();
                         curr_var.truncate(length);
@@ -134,7 +226,9 @@ fn parse_map(map: &mut Map, f: File) -> io::Result<()> {
                         curr_prefab.vars.insert(take(&mut curr_var), take(&mut curr_datum));
                         skip_whitespace = true;
                     } else if ch == '}' {
-                        curr_prefab.vars.insert(take(&mut curr_var), take(&mut curr_datum));
+                        if !curr_var.is_empty() {
+                            curr_prefab.vars.insert(take(&mut curr_var), take(&mut curr_datum));
+                        }
                         in_varedit_block = false;
                     } else {
                         curr_datum.push(ch);
