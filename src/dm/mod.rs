@@ -1,1 +1,72 @@
+//
+#![allow(dead_code)]
+
+use std::path::Path;
+use std::io;
+
+macro_rules! try_iter {
+    ($e:expr) => {
+        match $e {
+            Ok(x) => x,
+            Err(e) => return Some(Err(From::from(e))),
+        }
+    }
+}
+macro_rules! try_opt {
+    ($e:expr) => {
+        match $e {
+            Some(x) => x,
+            None => return None,
+        }
+    }
+}
+
 pub mod lexer;
+pub mod preprocessor;
+
+#[derive(Debug)]
+pub struct DMError;
+
+#[allow(unused_variables)]
+impl DMError {
+    fn new<S: Into<String>>(line: usize, col: usize, desc: S) -> DMError {
+        // TODO
+        panic!("{}:{}: {}", line, col, desc.into());
+    }
+
+    fn with_cause<S, E>(line: usize, col: usize, desc: S, cause: E) -> DMError
+        where S: Into<String>, E: ::std::error::Error + 'static
+    {
+        // TODO
+        panic!("{}:{}: {}\n{}\n{:?}", line, col, desc.into(), cause, cause);
+    }
+}
+
+impl From<io::Error> for DMError {
+    fn from(e: io::Error) -> DMError {
+        DMError::with_cause(0, 0, "i/o error", e)
+    }
+}
+
+fn parse(path: &Path) {
+    let mut was_newline = true;
+    for token in preprocessor::Preprocessor::new(path.to_owned()).unwrap() {
+        let t = token.unwrap();
+        match t.token {
+            lexer::Token::Punct(lexer::Punctuation::Newline) if was_newline => {}
+            lexer::Token::Punct(lexer::Punctuation::Newline) => {
+                //println!();
+                was_newline = true;
+            }
+            token => {
+                was_newline = false;
+                //print!("{} ", token);
+            }
+        }
+    }
+}
+
+#[test]
+fn tgstation() {
+    parse("D:/projects/tgstation/tgstation.dme".as_ref());
+}
