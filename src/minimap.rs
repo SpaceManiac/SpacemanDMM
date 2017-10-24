@@ -227,7 +227,7 @@ pub fn generate(
     Ok(map_image)
 }
 
-fn get_atom_list<'a>(objtree: &'a ObjectTree, prefabs: &'a [Prefab], loc: (u32, u32)) -> Vec<Atom<'a>> {
+pub fn get_atom_list<'a>(objtree: &'a ObjectTree, prefabs: &'a [Prefab], loc: (u32, u32)) -> Vec<Atom<'a>> {
     flame!("get_atom_list");
     let mut result = Vec::new();
 
@@ -274,7 +274,7 @@ fn get_atom_list<'a>(objtree: &'a ObjectTree, prefabs: &'a [Prefab], loc: (u32, 
 // Atoms and related utilities
 
 #[derive(Debug, Clone)]
-struct Atom<'a> {
+pub struct Atom<'a> {
     type_: &'a Type,
     prefab: &'a Vars,
     vars: Vars,
@@ -300,11 +300,15 @@ impl<'a> Atom<'a> {
         })
     }
 
-    fn get_var(&self, key: &str, objtree: &'a ObjectTree) -> &str {
+    pub fn istype(&self, path: &str) -> bool {
+        subtype(&self.type_.path, path)
+    }
+
+    pub fn get_var(&self, key: &str, objtree: &'a ObjectTree) -> &str {
         self.get_var_or(key, objtree, "")
     }
 
-    fn get_var_or<'b>(&'b self, key: &str, objtree: &'a ObjectTree, default: &'b str) -> &'b str {
+    pub fn get_var_or<'b>(&'b self, key: &str, objtree: &'a ObjectTree, default: &'b str) -> &'b str {
         if let Some(v) = self.vars.get(key) {
             return v;
         }
@@ -326,7 +330,7 @@ impl<'a> Atom<'a> {
     }
 }
 
-fn subtype(path: &str, parent: &str) -> bool {
+pub fn subtype(path: &str, parent: &str) -> bool {
     debug_assert!(path.starts_with("/") && parent.starts_with("/") && parent.ends_with("/"));
     path == &parent[..parent.len() - 1] || path.starts_with(parent)
 }

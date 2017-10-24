@@ -80,7 +80,7 @@ impl fmt::Display for FormatKey {
         }
 
         let mut current = 52usize.pow(key_length as u32 - 1);
-        for i in 0..key_length {
+        for _ in 0..key_length {
             f.write_char(BASE_52[(key as usize / current) % 52] as char)?;
             current /= 52;
         }
