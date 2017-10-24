@@ -14,9 +14,10 @@ extern crate rand;
 
 #[macro_use] mod utils;
 pub mod objtree;
+pub mod dm;
 pub mod dmi;
 pub mod dmm;
-mod minimap;
+pub mod minimap;
 
 fn main() {
     let objtree = objtree::ObjectTree::from_file("data/objtree.xml".as_ref()).unwrap();
