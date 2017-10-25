@@ -1,3 +1,4 @@
+//! The lexer/tokenizer.
 use std::io::{Read, Bytes};
 use std::str::FromStr;
 use std::fmt;
@@ -96,8 +97,8 @@ pub enum Token {
     Eof,
     /// A punctuation symbol.
     Punct(Punctuation),
-    /// A raw identifier or keyword.
-    Ident(String),
+    /// A raw identifier or keyword. Indicates whether it is followed by whitespace.
+    Ident(String, bool),
     /// A string literal with no interpolation.
     String(String),
     /// Interpolation markers. Strings and expressions in-between are combined.
@@ -119,7 +120,7 @@ impl fmt::Display for Token {
             Eof => f.write_str("__EOF__"),
             Punct(Punctuation::Tab) => f.write_str("    "),
             Punct(p) => f.write_str(::std::str::from_utf8(p.value()).unwrap()),
-            Ident(ref i) => f.write_str(i),
+            Ident(ref i, _) => f.write_str(i),
             String(ref i) => write!(f, "{:?}", i),
             InterpStringBegin(ref i) => write!(f, "\"{}[", i),
             InterpStringPart(ref i) => write!(f, "]{}[", i),
@@ -182,7 +183,7 @@ impl<R: Read> Lexer<R> {
         }
     }
 
-    pub fn position(&self) -> (usize, usize) {
+    pub fn location(&self) -> (usize, usize) {
         (self.line, self.column)
     }
 
@@ -481,12 +482,10 @@ impl<R: Read> Iterator for Lexer<R> {
                             Ok(ident) => ident,
                             Err(e) => return Some(Err(e)),
                         };
-                        /*let token = match KEYWORD_TABLE.iter().find(|&&(keywd, _)| keywd == &ident) {
-                            Some(&(_, keywd)) => Keyword(keywd),
-                            None => Ident(ident)
-                        };*/
-                        let token = Ident(ident);
-                        Some(Ok(locate(token)))
+                        let next = try_iter!(self.next());
+                        self.put_back(next);
+                        let ws = next == Some(b' ') || next == Some(b'\t');
+                        Some(Ok(locate(Ident(ident, ws))))
                     }
                     b'\\' => {
                         self.at_line_head = false;

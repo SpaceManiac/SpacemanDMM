@@ -21,8 +21,10 @@ macro_rules! try_opt {
     }
 }
 
+// roughly in order of stage
 pub mod lexer;
 pub mod preprocessor;
+pub mod indents;
 
 #[derive(Debug)]
 pub struct DMError;
@@ -50,18 +52,16 @@ impl From<io::Error> for DMError {
 
 fn parse(path: &Path) {
     let mut was_newline = true;
-    for token in preprocessor::Preprocessor::new(path.to_owned()).unwrap() {
+    for token in indents::IndentProcessor::new(preprocessor::Preprocessor::new(path.to_owned()).unwrap()) {
         let t = token.unwrap();
+        print!("{} ", t.token);
         match t.token {
-            lexer::Token::Punct(lexer::Punctuation::Newline) if was_newline => {}
-            lexer::Token::Punct(lexer::Punctuation::Newline) => {
-                //println!();
-                was_newline = true;
+            lexer::Token::Punct(lexer::Punctuation::LBrace) |
+            lexer::Token::Punct(lexer::Punctuation::RBrace) |
+            lexer::Token::Punct(lexer::Punctuation::Semicolon) => {
+                println!();
             }
-            token => {
-                was_newline = false;
-                //print!("{} ", token);
-            }
+            _ => {}
         }
     }
 }

@@ -1,3 +1,4 @@
+//! The preprocessor.
 use std::collections::{HashMap, VecDeque};
 use std::io::{self, BufReader};
 use std::fs::File;
@@ -62,6 +63,7 @@ impl Ifdef {
     }
 }
 
+/// C-like preprocessor for DM. Expands directives and macro invocations.
 pub struct Preprocessor {
     env_file: PathBuf,
     defines: HashMap<String, Define>,
@@ -87,9 +89,9 @@ impl Preprocessor {
         Ok(pp)
     }
 
-    pub fn position(&self) -> (&Path, usize, usize) {
+    pub fn location(&self) -> (&Path, usize, usize) {
         if let Some(include) = self.include_stack.last() {
-            let (line, column) = include.lexer.position();
+            let (line, column) = include.lexer.location();
             (&include.path, line, column)
         } else {
             (&self.env_file, 0, 0)
@@ -127,6 +129,12 @@ impl Preprocessor {
         }
     }
 
+    fn evaluate(&mut self) -> Result<bool, DMError> {
+        // TODO: read until Newline and evaluate that expression
+        //println!("#if {:?}", self.location());
+        Ok(false)
+    }
+
     #[allow(unreachable_code)]
     fn real_next(&mut self, read: LocatedToken) -> Option<Result<LocatedToken, DMError>> {
         let (mut line, mut column) = (read.line, read.column);
@@ -155,7 +163,7 @@ impl Preprocessor {
         match read.token {
             Token::Punct(Punctuation::Hash) => {
                 // preprocessor directive, next thing ought to be an ident
-                expect_token!(Token::Ident(ident));
+                expect_token!(Token::Ident(ident, _));
                 match &ident[..] {
                     // ifdefs
                     "endif" => {
@@ -166,27 +174,25 @@ impl Preprocessor {
                         self.ifdef_stack.push(last.else_());
                     }
                     "ifdef" => {
-                        expect_token!(Token::Ident(define_name));
+                        expect_token!(Token::Ident(define_name, _));
                         expect_token!(Token::Punct(Punctuation::Newline));
                         let z = self.defines.contains_key(&define_name);
-                        println!("#ifdef {} ==> {}", define_name, z);
                         self.ifdef_stack.push(Ifdef::new(z));
                     }
                     "ifndef" => {
-                        expect_token!(Token::Ident(define_name));
+                        expect_token!(Token::Ident(define_name, _));
                         expect_token!(Token::Punct(Punctuation::Newline));
                         let z = !self.defines.contains_key(&define_name);
-                        println!("#ifndef {} ==> {}", define_name, z);
                         self.ifdef_stack.push(Ifdef::new(z));
                     }
                     "if" => {
-                        // TODO
-                        self.ifdef_stack.push(Ifdef::new(false));
+                        let z = try_iter!(self.evaluate());
+                        self.ifdef_stack.push(Ifdef::new(z));
                     }
                     "elseif" => {
-                        // TODO
                         let last = self.ifdef_stack.pop().unwrap();
-                        self.ifdef_stack.push(last.else_if(false));
+                        let z = try_iter!(self.evaluate());
+                        self.ifdef_stack.push(last.else_if(z));
                     }
                     // anything other than ifdefs may be ifdef'd out
                     _ if self.is_disabled() => {}
@@ -219,12 +225,14 @@ impl Preprocessor {
                     }
                     // both constant and function defines
                     "define" => {
-                        expect_token!(Token::Ident(define_name));
+                        expect_token!(Token::Ident(define_name, ws));
                         //let mut args = Vec::new();
                         let mut subst = Vec::new();
                         'outer: loop {
                             match next!() {
-                                //Token::Punct(Punctuation::LParen) => unimplemented!("#define {}()", define_name),
+                                /*Token::Punct(Punctuation::LParen) if !ws => {
+                                    unimplemented!("#define {}()", define_name);
+                                }*/
                                 Token::Punct(Punctuation::Newline) => break 'outer,
                                 other => {
                                     subst.push(other);
@@ -237,11 +245,10 @@ impl Preprocessor {
                                 }
                             }
                         }
-                        //println!("#define {} {:?}", define_name, subst);
                         self.defines.insert(define_name, Define::Constant(subst));
                     }
                     "undef" => {
-                        expect_token!(Token::Ident(define_name));
+                        expect_token!(Token::Ident(define_name, _));
                         expect_token!(Token::Punct(Punctuation::Newline));
                         self.defines.remove(&define_name); // TODO: warn if none
                     }
@@ -257,7 +264,7 @@ impl Preprocessor {
             // anything other than directives may be ifdef'd out
             _ if self.is_disabled() => return None,
             // identifiers may be macros
-            Token::Ident(ref ident) => {
+            Token::Ident(ref ident, _) => {
                 // if it's a define, perform the substitution
                 match self.defines.get(ident) {
                     Some(&Define::Constant(ref subst)) => {
