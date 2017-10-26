@@ -1,7 +1,7 @@
 //! The indentation processor.
 use std::collections::VecDeque;
 
-use super::DMError;
+use super::{DMError, Location, HasLocation};
 use super::lexer::{LocatedToken, Token, Punctuation};
 
 /// Eliminates blank lines, parses and validates indentation, braces, and semicolons.
@@ -9,7 +9,9 @@ use super::lexer::{LocatedToken, Token, Punctuation};
 /// After processing, no Newline, Tab, or Space tokens remain.
 pub struct IndentProcessor<I> {
     inner: I,
-    pasting: Option<(usize, usize, VecDeque<Token>)>,
+
+    last_input_loc: Location,
+    output: VecDeque<Token>,
 
     // If we're indented, the number of spaces per indent and the number of indents.
     current: Option<(usize, usize)>,
@@ -18,11 +20,20 @@ pub struct IndentProcessor<I> {
     parentheses: usize,
 }
 
-impl<I: Iterator<Item=Result<LocatedToken, DMError>>> IndentProcessor<I> {
+impl<I: HasLocation> HasLocation for IndentProcessor<I> {
+    fn location(&self) -> Location {
+        self.inner.location()
+    }
+}
+
+impl<I> IndentProcessor<I> where
+    I: Iterator<Item=Result<LocatedToken, DMError>> + HasLocation
+{
     pub fn new<J: IntoIterator<Item=Result<LocatedToken, DMError>, IntoIter=I>>(inner: J) -> Self {
         IndentProcessor {
             inner: inner.into_iter(),
-            pasting: None,
+            last_input_loc: Location::default(),
+            output: VecDeque::new(),
             current: None,
             current_spaces: None,
             parentheses: 0,
@@ -34,41 +45,27 @@ impl<I: Iterator<Item=Result<LocatedToken, DMError>>> IndentProcessor<I> {
         self.inner.next()
     }
 
-    fn paste_one(&mut self, current: LocatedToken) {
-        debug_assert!(self.pasting.is_none());
-        self.pasting = Some((current.line, current.column, vec![current.token].into_iter().collect()));
-    }
-
-    fn real_next(&mut self, current: LocatedToken) -> Option<Result<LocatedToken, DMError>> {
-        let (line, column) = (current.line, current.column);
-        let locate = |t| LocatedToken::new(line, column, t);
-
+    fn real_next(&mut self, read: Token) -> Result<(), DMError> {
         // handle whitespace
-        match current.token {
+        match read {
             Token::Punct(Punctuation::Newline) => {
-                if self.parentheses != 0 {
-                    return None
+                if self.parentheses == 0 {
+                    self.current_spaces = Some(0);
                 }
-                let is_none = self.current_spaces.is_none();
-                self.current_spaces = Some(0);
-                if is_none {
-                    // only generate a semicolon if there was anything on this line
-                    return Some(Ok(locate(Token::Punct(Punctuation::Semicolon))))
-                } else {
-                    return None
-                }
+                // semicolons are placed by the first token on the next line
+                return Ok(());
             }
             Token::Punct(Punctuation::Tab) |
             Token::Punct(Punctuation::Space) => {
                 if let Some(spaces) = self.current_spaces.as_mut() {
                     *spaces += 1;
                 }
-                return None
+                return Ok(());
             }
             _ => {}
         }
 
-        match current.token {
+        match read {
             Token::Punct(Punctuation::LBrace) |
             Token::Punct(Punctuation::RBrace) => {
                 self.current_spaces = None;
@@ -99,7 +96,7 @@ impl<I: Iterator<Item=Result<LocatedToken, DMError>>> IndentProcessor<I> {
                         new_indents = 0;
                     } else {
                         if spaces % spaces_per_indent != 0 {
-                            return Some(Err(DMError::new(current.line, current.column, "inconsistent indentation")));
+                            return Err(self.error("inconsistent indentation"));
                         }
                         new_indents = spaces / spaces_per_indent;
                         self.current = Some((spaces_per_indent, new_indents));
@@ -109,24 +106,28 @@ impl<I: Iterator<Item=Result<LocatedToken, DMError>>> IndentProcessor<I> {
 
             if indents + 1 == new_indents {
                 // single indent
-                self.paste_one(locate(Token::Punct(Punctuation::LBrace)));
+                self.output.push_back(Token::Punct(Punctuation::LBrace));
             } else if indents < new_indents {
                 // multiple indent is an error
-                return Some(Err(DMError::new(current.line, current.column, "inconsistent indentation")))
+                return Err(self.error("inconsistent indentation"));
             } else if indents == new_indents + 1 {
                 // single unindent
-                self.paste_one(locate(Token::Punct(Punctuation::RBrace)));
+                self.output.push_back(Token::Punct(Punctuation::Semicolon));
+                self.output.push_back(Token::Punct(Punctuation::RBrace));
             } else if indents > new_indents {
                 // multiple unindent
-                let v: VecDeque<_> = vec![Token::Punct(Punctuation::RBrace); indents - new_indents].into_iter().collect();
-                self.pasting = Some((current.line, current.column, v));
+                self.output.push_back(Token::Punct(Punctuation::Semicolon));
+                for _ in new_indents..indents {
+                    self.output.push_back(Token::Punct(Punctuation::RBrace));
+                }
             } else {
-                // equal
+                // same indent as before
+                self.output.push_back(Token::Punct(Punctuation::Semicolon));
             }
         }
 
         // handle non-whitespace
-        match current.token {
+        match read {
             Token::Punct(Punctuation::LBrace) => {
                 self.current = match self.current {
                     None => Some((1, 1)),
@@ -135,7 +136,7 @@ impl<I: Iterator<Item=Result<LocatedToken, DMError>>> IndentProcessor<I> {
             }
             Token::Punct(Punctuation::RBrace) => {
                 self.current = match self.current {
-                    None => return Some(Err(DMError::new(current.line, current.column, "unmatched right brace"))),
+                    None => return Err(self.error("unmatched right brace")),
                     Some((_, 1)) => None,
                     Some((x, y)) => Some((x, y - 1)),
                 };
@@ -148,30 +149,41 @@ impl<I: Iterator<Item=Result<LocatedToken, DMError>>> IndentProcessor<I> {
             }
             _ => {}
         }
-        Some(Ok(current))
+
+        self.output.push_back(read);
+        Ok(())
     }
 }
 
-impl<I: Iterator<Item=Result<LocatedToken, DMError>>> Iterator for IndentProcessor<I> {
+impl<I> Iterator for IndentProcessor<I> where
+    I: Iterator<Item=Result<LocatedToken, DMError>> + HasLocation
+{
     type Item = Result<LocatedToken, DMError>;
 
     fn next(&mut self) -> Option<Result<LocatedToken, DMError>> {
         loop {
-            if let Some(&mut (line, column, ref mut pasting)) = self.pasting.as_mut() {
-                if let Some(tok) = pasting.pop_front() {
-                    return Some(Ok(LocatedToken::new(line, column, tok)));
-                }
+            if let Some(token) = self.output.pop_front() {
+                return Some(Ok(LocatedToken {
+                    location: self.last_input_loc,
+                    token: token,
+                }));
             }
-            self.pasting = None;
+
             if let Some(tok) = self.inner_next() {
-                if let Some(out) = self.real_next(try_iter!(tok)) {
-                    match self.pasting {
-                        Some((_, _, ref mut pasting)) => pasting.push_back(try_iter!(out).token),
-                        None => return Some(out)
+                let tok = try_iter!(tok);
+                self.last_input_loc = tok.location;
+                try_iter!(self.real_next(tok.token));
+            } else {
+                match self.current {
+                    None => return None,
+                    Some((_, indents)) => {
+                        self.current = None;
+                        self.output.push_back(Token::Punct(Punctuation::Semicolon));
+                        for _ in 0..indents {
+                            self.output.push_back(Token::Punct(Punctuation::RBrace));
+                        }
                     }
                 }
-            } else {
-                return None;
             }
         }
     }

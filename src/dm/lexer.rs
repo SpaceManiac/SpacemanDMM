@@ -3,7 +3,7 @@ use std::io::{Read, Bytes};
 use std::str::FromStr;
 use std::fmt;
 
-use dm::DMError;
+use super::{DMError, Location, HasLocation};
 
 macro_rules! table {
     ($(#[$attr:meta])* table $tabname:ident: $repr:ty => $enum_:ident; $($literal:expr, $name:ident;)*) => {
@@ -60,6 +60,7 @@ table! {
     b"-=",	SubAssign;
     b".",	Dot;
     b"..",  Super;
+    b"...", Ellipsis;
     b"/",	Slash;
     b"/*",	BlockComment;
     b"//",	LineComment;
@@ -113,6 +114,63 @@ pub enum Token {
     Float(f32),
 }
 
+impl Token {
+    /// Check whether this token should be separated from the previous one when
+    /// pretty-printing.
+    pub fn separate_from(&self, prev: &Token) -> bool {
+        use self::Punctuation::*;
+        // space-surrounded tokens
+        for &each in &[self, prev] {
+            let p = match *each {
+                Token::Punct(p) => p,
+                _ => continue,
+            };
+            match p {
+                Eq |
+                NotEq |
+                Mod |
+                And |
+                BitAndAssign |
+                Mul |
+                Pow |
+                MulAssign |
+                Add |
+                AddAssign |
+                Sub |
+                SubAssign |
+                DivAssign |
+                Colon |
+                Less |
+                LShift |
+                LShiftAssign |
+                LessEq |
+                LessGreater |
+                Assign |
+                Greater |
+                GreaterEq |
+                RShift |
+                RShiftAssign |
+                QuestionMark |
+                BitXorAssign |
+                BitOrAssign |
+                Or => return true,
+                _ => {}
+            }
+        }
+
+        // space
+        match (prev, self) {
+            (&Token::Ident(_, true), _) |
+            (&Token::Punct(Comma), _) => true,
+            (&Token::Ident(_, _), &Token::Punct(_)) |
+            (&Token::Ident(_, _), &Token::InterpStringEnd(_)) |
+            (&Token::Ident(_, _), &Token::InterpStringPart(_)) => false,
+            (&Token::Ident(_, _), _) => true,
+            _ => false,
+        }
+    }
+}
+
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use self::Token::*;
@@ -134,15 +192,14 @@ impl fmt::Display for Token {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct LocatedToken {
-    pub line: usize,
-    pub column: usize,
+    pub location: Location,
     pub token: Token,
 }
 
 impl LocatedToken {
     #[inline]
-    pub fn new(line: usize, column: usize, token: Token) -> LocatedToken {
-        LocatedToken { line, column, token }
+    pub fn new(line: u32, column: u32, token: Token) -> LocatedToken {
+        LocatedToken { location: Location { file: 0, line, column }, token }
     }
 }
 
@@ -164,10 +221,20 @@ struct Interpolation {
 pub struct Lexer<R: Read> {
     next: Option<u8>,
     input: Bytes<R>,
-    line: usize,
-    column: usize,
+    line: u32,
+    column: u32,
     at_line_head: bool,
     interp_stack: Vec<Interpolation>,
+}
+
+impl<R: Read> HasLocation for Lexer<R> {
+    fn location(&self) -> Location {
+        Location {
+            file: 0,
+            line: self.line,
+            column: self.column,
+        }
+    }
 }
 
 impl<R: Read> Lexer<R> {
@@ -181,10 +248,6 @@ impl<R: Read> Lexer<R> {
             at_line_head: true,
             interp_stack: Vec::new(),
         }
-    }
-
-    pub fn location(&self) -> (usize, usize) {
-        (self.line, self.column)
     }
 
     fn next(&mut self) -> Result<Option<u8>, DMError> {
@@ -206,7 +269,7 @@ impl<R: Read> Lexer<R> {
 
                 Ok(Some(ch))
             }
-            Some(Err(e)) => Err(DMError::with_cause(self.line, self.column, "i/o error", e)),
+            Some(Err(_)) => Err(self.error("i/o error")), // TODO
             None => Ok(None),
         }
     }
@@ -265,7 +328,7 @@ impl<R: Read> Lexer<R> {
                     if i == Some(b'I') && n == Some(b'N') && f == Some(b'F') {
                         return Ok((false, 10, "inf".to_owned()));
                     } else {
-                        return Err(DMError::new(self.line, self.column, "expected INF"));
+                        return Err(self.error("expected INF"));
                     }
                 }
                 Some(ch) if is_digit(ch) => buf.push(ch as char),
@@ -279,13 +342,13 @@ impl<R: Read> Lexer<R> {
         if integer {
             match i32::from_str_radix(&buf, radix) {
                 Ok(val) => Ok(Token::Int(val)),
-                Err(e) => Err(DMError::with_cause(self.line, self.column, format!("bad base-{} integer: {}", radix, buf), e)),
+                Err(_) => Err(self.error(format!("bad base-{} integer: {}", radix, buf))), // TODO
             }
         } else {
             // ignore radix
             match f32::from_str(&buf) {
                 Ok(val) => Ok(Token::Float(val)),
-                Err(e) => Err(DMError::with_cause(self.line, self.column, format!("bad float: {}", buf), e)),
+                Err(_) => Err(self.error(format!("bad float: {}", buf))), // TODO
             }
         }
     }
@@ -298,13 +361,13 @@ impl<R: Read> Lexer<R> {
                 ch => { self.put_back(ch); break }
             }
         }
-        String::from_utf8(ident).map_err(|e| DMError::with_cause(self.line, self.column, "non-utf8 identifier", e))
+        String::from_utf8(ident).map_err(|_| self.error("non-utf8 identifier")) // TODO
     }
 
     fn next_string(&mut self) -> Result<u8, DMError> {
         match self.next() {
             Ok(Some(ch)) => Ok(ch),
-            Ok(None) => Err(DMError::new(self.line, self.column, "unterminated string")),
+            Ok(None) => Err(self.error("unterminated string")),
             Err(e) => Err(e),
         }
     }
@@ -321,7 +384,7 @@ impl<R: Read> Lexer<R> {
             }
         }
 
-        String::from_utf8(buf).map_err(|e| DMError::with_cause(self.line, self.column, "non-utf8 string", e))
+        String::from_utf8(buf).map_err(|_| self.error("non-utf8 string")) // TODO
     }
 
     fn read_string(&mut self, end: &'static [u8], interp_closed: bool) -> Result<Token, DMError> {
@@ -373,7 +436,7 @@ impl<R: Read> Lexer<R> {
         }
         let string = match String::from_utf8(buf) {
             Ok(s) => s,
-            Err(e) => return Err(DMError::with_cause(self.line, self.column, "non-utf8 string", e)),
+            Err(_) => return Err(self.error("non-utf8 string")), // TODO
         };
         Ok(match (interp_opened, interp_closed) {
             (true, true) => Token::InterpStringPart(string),
@@ -437,7 +500,18 @@ impl<R: Read> Iterator for Lexer<R> {
         loop {
             let first = match self.skip_ws(skip_newlines) {
                 Ok(Some(t)) => t,
-                Ok(None) => return None,
+                Ok(None) => {
+                    // always end with a newline
+                    if !self.at_line_head {
+                        self.at_line_head = true;
+                        return Some(Ok(LocatedToken {
+                            location: self.location(),
+                            token: Token::Punct(Punctuation::Newline),
+                        }))
+                    } else {
+                        return None;
+                    }
+                }
                 Err(e) => return Some(Err(e)),
             };
             skip_newlines = false;
@@ -492,7 +566,7 @@ impl<R: Read> Iterator for Lexer<R> {
                         skip_newlines = true;
                         continue;
                     }
-                    _ => Some(Err(DMError::new(line, column, format!("illegal byte '{}' (0x{:x})", first as char, first))))
+                    _ => Some(Err(self.error(format!("illegal byte '{}' (0x{:x})", first as char, first))))
                 }
             }
         }

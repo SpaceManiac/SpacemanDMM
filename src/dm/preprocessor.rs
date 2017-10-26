@@ -5,9 +5,12 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 
 use super::lexer::*;
-use super::DMError;
+use super::{DMError, Location, HasLocation};
 
-#[derive(Debug)]
+// ----------------------------------------------------------------------------
+// Macro representation and predefined macros
+
+#[derive(Debug, Clone)]
 enum Define {
     Constant(Vec<Token>),
     Function(Vec<String>, Vec<Token>),
@@ -30,21 +33,94 @@ fn default_defines(defines: &mut HashMap<String, Define>) {
     constant!(PIXEL_SCALE [Int(512)]);
 }
 
-struct Include {
-    path: PathBuf,
-    lexer: Lexer<BufReader<File>>,
-    trailed: bool,
+// ----------------------------------------------------------------------------
+// The stack of currently #included files
+
+enum Include {
+    File {
+        path: PathBuf,
+        file: u32,
+        lexer: Lexer<BufReader<File>>,
+    },
+    Expansion {
+        name: String,
+        location: Location,
+        tokens: VecDeque<Token>,
+    }
 }
 
 impl Include {
-    fn new(path: PathBuf) -> io::Result<Include> {
-        Ok(Include {
+    fn new(path: PathBuf, idx: u32) -> io::Result<Include> {
+        Ok(Include::File {
             lexer: Lexer::new(BufReader::new(File::open(&path)?)),
+            file: idx,
             path: path,
-            trailed: false,
         })
     }
 }
+
+impl HasLocation for Include {
+    fn location(&self) -> Location {
+        match self {
+            &Include::File { file, ref lexer, .. } => Location {
+                file: file,
+                .. lexer.location()
+            },
+            &Include::Expansion { location, .. } => location,
+        }
+    }
+}
+
+struct IncludeStack {
+    stack: Vec<Include>,
+}
+
+impl IncludeStack {
+    fn top_file_path(&self) -> &Path {
+        for each in self.stack.iter().rev() {
+            if let &Include::File { ref path, .. } = each {
+                return path;
+            }
+        }
+        panic!("");
+    }
+    fn top_no_expand(&self) -> &str {
+        for each in self.stack.iter().rev() {
+            if let &Include::Expansion { ref name, .. } = each {
+                return name;
+            }
+        }
+        ""
+    }
+}
+
+impl Iterator for IncludeStack {
+    type Item = Result<LocatedToken, DMError>;
+
+    fn next(&mut self) -> Option<Result<LocatedToken, DMError>> {
+        loop {
+            match self.stack.last_mut() {
+                Some(&mut Include::File { ref mut lexer, .. }) => match lexer.next() {
+                    Some(Err(e)) => return Some(Err(e)),
+                    Some(Ok(t)) => return Some(Ok(t)),
+                    None => {} // fall through
+                }
+                Some(&mut Include::Expansion { ref mut tokens, location, .. }) => match tokens.pop_front() {
+                    Some(token) => {
+                        //println!("PP {:?}", token);
+                        return Some(Ok(LocatedToken { location, token }))
+                    }
+                    None => {} // fall through
+                }
+                None => return None,
+            }
+            self.stack.pop();
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
+// The main preprocessor
 
 struct Ifdef {
     active: bool,
@@ -67,35 +143,51 @@ impl Ifdef {
 pub struct Preprocessor {
     env_file: PathBuf,
     defines: HashMap<String, Define>,
+    files: Vec<PathBuf>,
     maps: Vec<PathBuf>,
     skins: Vec<PathBuf>,
-    include_stack: Vec<Include>,
+    include_stack: IncludeStack,
     ifdef_stack: Vec<Ifdef>,
-    pasting: Option<(usize, usize, VecDeque<Token>)>,
+
+    last_input_loc: Location,
+    output: VecDeque<Token>,
+}
+
+impl HasLocation for Preprocessor {
+    fn location(&self) -> Location {
+        if let Some(include) = self.include_stack.stack.last() {
+            include.location()
+        } else {
+            Location {
+                file: 0,
+                line: 0,
+                column: 0,
+            }
+        }
+    }
 }
 
 impl Preprocessor {
     pub fn new(env_file: PathBuf) -> io::Result<Self> {
         let mut pp = Preprocessor {
+            files: vec![env_file.clone()],
+            include_stack: IncludeStack {
+                stack: vec![Include::new(env_file.clone(), 0)?],
+            },
+            env_file: env_file,
             defines: Default::default(),
             maps: Default::default(),
             skins: Default::default(),
-            include_stack: vec![Include::new(env_file.clone())?],
             ifdef_stack: Default::default(),
-            env_file: env_file,
-            pasting: None,
+            last_input_loc: Default::default(),
+            output: Default::default(),
         };
         default_defines(&mut pp.defines);
         Ok(pp)
     }
 
-    pub fn location(&self) -> (&Path, usize, usize) {
-        if let Some(include) = self.include_stack.last() {
-            let (line, column) = include.lexer.location();
-            (&include.path, line, column)
-        } else {
-            (&self.env_file, 0, 0)
-        }
+    pub fn file_path(&self, file: u32) -> &Path {
+        &self.files[file as usize]
     }
 
     fn is_disabled(&self) -> bool {
@@ -103,30 +195,7 @@ impl Preprocessor {
     }
 
     fn inner_next(&mut self) -> Option<Result<LocatedToken, DMError>> {
-        loop {
-            if let Some(include) = self.include_stack.last_mut() {
-                match include.lexer.next() {
-                    Some(Err(e)) => return Some(Err(e)),
-                    Some(Ok(t)) => {
-                        include.trailed = match t.token {
-                            Token::Punct(Punctuation::Newline) => true,
-                            _ => false,
-                        };
-                        return Some(Ok(t));
-                    }
-                    None if !include.trailed => {
-                        // pretend every file ends with a blank line, so that
-                        // stuff that goes looking for newlines works
-                        include.trailed = true;
-                        return Some(Ok(LocatedToken::new(0, 0, Token::Punct(Punctuation::Newline))));
-                    }
-                    None => {}
-                }
-            } else {
-                return None;
-            }
-            self.include_stack.pop();
-        }
+        self.include_stack.next()
     }
 
     fn evaluate(&mut self) -> Result<bool, DMError> {
@@ -136,34 +205,31 @@ impl Preprocessor {
     }
 
     #[allow(unreachable_code)]
-    fn real_next(&mut self, read: LocatedToken) -> Option<Result<LocatedToken, DMError>> {
-        let (mut line, mut column) = (read.line, read.column);
-
+    fn real_next(&mut self, read: Token) -> Result<(), DMError> {
         macro_rules! next {
             () => {
                 match self.inner_next() {
                     Some(Ok(x)) => {
-                        line = x.line;
-                        column = x.column;
                         x.token
                     }
-                    Some(Err(e)) => return Some(Err(e)),
-                    None => return Some(Err(DMError::new(line, column, "unexpected EOF")))
+                    Some(Err(e)) => return Err(e),
+                    None => return Err(self.error("unexpected EOF"))
                 }
             }
         }
         macro_rules! expect_token {
-            ($($t:tt)*) => {
-                guard!(let $($t)* = next!() else {
-                    return Some(Err(DMError::new(line, column, "unexpected token")))
-                })
+            (($($i:ident),*) = $p:pat) => {
+                let ($($i,)*) = match next!() {
+                    $p => ($($i,)*),
+                    other => return Err(self.error(format!("unexpected token {:?}, expecting {}", other, stringify!($p))))
+                };
             }
         }
 
-        match read.token {
+        match read {
             Token::Punct(Punctuation::Hash) => {
                 // preprocessor directive, next thing ought to be an ident
-                expect_token!(Token::Ident(ident, _));
+                expect_token!((ident) = Token::Ident(ident, _));
                 match &ident[..] {
                     // ifdefs
                     "endif" => {
@@ -174,41 +240,44 @@ impl Preprocessor {
                         self.ifdef_stack.push(last.else_());
                     }
                     "ifdef" => {
-                        expect_token!(Token::Ident(define_name, _));
-                        expect_token!(Token::Punct(Punctuation::Newline));
+                        expect_token!((define_name) = Token::Ident(define_name, _));
+                        expect_token!(() = Token::Punct(Punctuation::Newline));
                         let z = self.defines.contains_key(&define_name);
                         self.ifdef_stack.push(Ifdef::new(z));
                     }
                     "ifndef" => {
-                        expect_token!(Token::Ident(define_name, _));
-                        expect_token!(Token::Punct(Punctuation::Newline));
+                        expect_token!((define_name) = Token::Ident(define_name, _));
+                        expect_token!(() = Token::Punct(Punctuation::Newline));
                         let z = !self.defines.contains_key(&define_name);
                         self.ifdef_stack.push(Ifdef::new(z));
                     }
                     "if" => {
-                        let z = try_iter!(self.evaluate());
+                        let z = self.evaluate()?;
                         self.ifdef_stack.push(Ifdef::new(z));
                     }
                     "elseif" => {
                         let last = self.ifdef_stack.pop().unwrap();
-                        let z = try_iter!(self.evaluate());
+                        let z = self.evaluate()?;
                         self.ifdef_stack.push(last.else_if(z));
                     }
                     // anything other than ifdefs may be ifdef'd out
                     _ if self.is_disabled() => {}
                     // include searches relevant paths for files
                     "include" => {
-                        expect_token!(Token::String(path));
-                        expect_token!(Token::Punct(Punctuation::Newline));
+                        expect_token!((path) = Token::String(path));
+                        //println!("#include {}", path);
+                        expect_token!(() = Token::Punct(Punctuation::Newline));
                         let path = PathBuf::from(path);
 
                         for each in vec![
                             self.env_file.parent().unwrap().join(&path),
-                            self.include_stack.last().unwrap().path.parent().unwrap().join(&path),
+                            self.include_stack.top_file_path().parent().unwrap().join(&path),
                             path,
                         ].into_iter().rev() {
                             if !each.exists() { continue }
                             enum FileType { DMM, DMF, DM }
+                            let len = self.files.len() as u32;
+                            self.files.push(each.clone());
                             match match each.extension().and_then(|s| s.to_str()) {
                                 Some("dmm") => FileType::DMM,
                                 Some("dmf") => FileType::DMF,
@@ -217,22 +286,33 @@ impl Preprocessor {
                             } {
                                 FileType::DMM => self.maps.push(each),
                                 FileType::DMF => self.skins.push(each),
-                                FileType::DM => self.include_stack.push(try_iter!(Include::new(each))),
+                                FileType::DM => self.include_stack.stack.push(Include::new(each, len)?),
                             }
-                            return None;
+                            return Ok(());
                         }
-                        return Some(Err(DMError::new(line, column, "failed to find file")));
+                        return Err(self.error("failed to find file"));
                     }
                     // both constant and function defines
                     "define" => {
-                        expect_token!(Token::Ident(define_name, ws));
-                        //let mut args = Vec::new();
+                        expect_token!((define_name, ws) = Token::Ident(define_name, ws));
+                        let mut args = Vec::new();
                         let mut subst = Vec::new();
                         'outer: loop {
                             match next!() {
-                                /*Token::Punct(Punctuation::LParen) if !ws => {
-                                    unimplemented!("#define {}()", define_name);
-                                }*/
+                                Token::Punct(Punctuation::LParen) if !ws => {
+                                    loop {
+                                        match next!() {
+                                            Token::Ident(name, _) => args.push(name),
+                                            Token::Punct(Punctuation::Ellipsis) => unimplemented!("VA_ARGS"),
+                                            _ => return Err(self.error("malformed macro definition"))
+                                        }
+                                        match next!() {
+                                            Token::Punct(Punctuation::Comma) => {}
+                                            Token::Punct(Punctuation::RParen) => break,
+                                            _ => return Err(self.error("malformed macro definition"))
+                                        }
+                                    }
+                                }
                                 Token::Punct(Punctuation::Newline) => break 'outer,
                                 other => {
                                     subst.push(other);
@@ -245,11 +325,15 @@ impl Preprocessor {
                                 }
                             }
                         }
-                        self.defines.insert(define_name, Define::Constant(subst));
+                        if args.is_empty() {
+                            self.defines.insert(define_name, Define::Constant(subst));
+                        } else {
+                            self.defines.insert(define_name, Define::Function(args, subst));
+                        }
                     }
                     "undef" => {
-                        expect_token!(Token::Ident(define_name, _));
-                        expect_token!(Token::Punct(Punctuation::Newline));
+                        expect_token!((define_name) = Token::Ident(define_name, _));
+                        expect_token!(() = Token::Punct(Punctuation::Newline));
                         self.defines.remove(&define_name); // TODO: warn if none
                     }
                     "error" => {
@@ -259,27 +343,147 @@ impl Preprocessor {
                     _ => unimplemented!("{}", ident),
                 }
                 // yield a newline
-                return Some(Ok(LocatedToken::new(line, column, Token::Punct(Punctuation::Newline))));
+                self.output.push_back(Token::Punct(Punctuation::Newline));
+                return Ok(());
             }
             // anything other than directives may be ifdef'd out
-            _ if self.is_disabled() => return None,
+            _ if self.is_disabled() => return Ok(()),
             // identifiers may be macros
-            Token::Ident(ref ident, _) => {
+            Token::Ident(ref ident, _) if ident != self.include_stack.top_no_expand() => {
                 // if it's a define, perform the substitution
-                match self.defines.get(ident) {
-                    Some(&Define::Constant(ref subst)) => {
-                        assert!(self.pasting.is_none());
-                        self.pasting = Some((line, column, subst.iter().cloned().collect()));
-                        return None;
+                match self.defines.get(ident).cloned() { // TODO
+                    Some(Define::Constant(subst)) => {
+                        let e = Include::Expansion {
+                            name: ident.to_owned(),
+                            tokens: subst.into_iter().collect(),
+                            location: self.last_input_loc,
+                        };
+                        self.include_stack.stack.push(e);
+                        return Ok(());
                     }
-                    Some(&Define::Function(ref params, ref subst)) => unimplemented!("{}()", ident),
+                    Some(Define::Function(ref params, ref subst)) => {
+                        // if it's not followed by an LParen, it isn't really a function call
+                        match next!() {
+                            Token::Punct(Punctuation::LParen) => {}
+                            other => {
+                                self.output.push_back(Token::Ident(ident.to_owned(), false));
+                                self.output.push_back(other);
+                                return Ok(());
+                            }
+                        }
+
+                        // read arguments
+                        let mut args = Vec::new();
+                        let mut this_arg = Vec::new();
+                        let mut parens = 0;
+                        loop {
+                            let token = next!();
+                            match token {
+                                Token::Punct(Punctuation::LParen) => {
+                                    parens += 1;
+                                    this_arg.push(token);
+                                }
+                                Token::Punct(Punctuation::RParen) => {
+                                    if parens == 0 {
+                                        args.push(this_arg);
+                                        break;
+                                    }
+                                    parens -= 1;
+                                    this_arg.push(token);
+                                }
+                                Token::Punct(Punctuation::Comma) if parens == 0 => {
+                                    args.push(this_arg);
+                                    this_arg = Vec::new();
+                                }
+                                _ => this_arg.push(token),
+                            }
+                        }
+
+                        // paste them into the expansion
+                        let mut expansion = VecDeque::new();
+                        let mut input = subst.iter().cloned();
+                        while let Some(token) = input.next() {
+                            match token {
+                                // just an ident = expand it
+                                Token::Ident(ident, ws) => match params.iter().position(|x| *x == ident) {
+                                    Some(i) => expansion.extend(args[i].iter().cloned()),
+                                    None => expansion.push_back(Token::Ident(ident, ws)),
+                                },
+                                // token paste = concat two idents together, if at all possible
+                                Token::Punct(Punctuation::TokenPaste) => {
+                                    match (expansion.pop_back(), input.next()) {
+                                        (Some(Token::Ident(first, ws1)), Some(Token::Ident(second, ws))) => {
+                                            match params.iter().position(|x| *x == second) {
+                                                Some(i) => {
+                                                    let mut arg = args[i].iter().cloned();
+                                                    match arg.next() {
+                                                        Some(Token::Ident(second, ws)) => {
+                                                            expansion.push_back(Token::Ident(format!("{}{}", first, second), ws));
+                                                        }
+                                                        Some(other) => {
+                                                            expansion.push_back(Token::Ident(first, ws1));
+                                                            expansion.push_back(other);
+                                                        }
+                                                        None => {}
+                                                    }
+                                                    expansion.extend(arg);
+                                                }
+                                                None => expansion.push_back(Token::Ident(format!("{}{}", first, second), ws)),
+                                            }
+                                        }
+                                        (non_ident_first, Some(Token::Ident(second, ws))) => {
+                                            expansion.extend(non_ident_first);
+                                            match params.iter().position(|x| *x == second) {
+                                                Some(i) => expansion.extend(args[i].iter().cloned()),
+                                                None => expansion.push_back(Token::Ident(second, ws)),
+                                            }
+                                        }
+                                        (non_ident_first, non_ident_second) => {
+                                            expansion.extend(non_ident_first);
+                                            expansion.extend(non_ident_second);
+                                        }
+                                    }
+                                    // read the next ident and concat it into the previous ident
+                                },
+                                // hash = must be followed by a param name, stringify the whole argument
+                                Token::Punct(Punctuation::Hash) => {
+                                    match input.next() {
+                                        Some(Token::Ident(argname, _)) => match params.iter().position(|x| *x == argname) {
+                                            Some(i) => {
+                                                let mut string = String::new();
+                                                for each in &args[i] {
+                                                    use std::fmt::Write;
+                                                    if !string.is_empty() {
+                                                        string.push(' ');
+                                                    }
+                                                    write!(string, "{}", each).unwrap();
+                                                }
+                                                expansion.push_back(Token::String(string));
+                                            }
+                                            None => return Err(DMError::new(self.last_input_loc, "can only stringify arguments"))
+                                        }
+                                        _ => return Err(DMError::new(self.last_input_loc, "can only stringify arguments"))
+                                    }
+                                }
+                                _ => expansion.push_back(token),
+                            }
+                        }
+                        let e = Include::Expansion {
+                            name: ident.to_owned(),
+                            tokens: expansion,
+                            location: self.last_input_loc,
+                        };
+                        self.include_stack.stack.push(e);
+                        return Ok(());
+                    }
                     None => {}
                 }
             }
             // everything else is itself
             _ => {}
         }
-        Some(Ok(read))
+        self.output.push_back(read);
+        Ok(())
     }
 }
 
@@ -288,19 +492,23 @@ impl Iterator for Preprocessor {
 
     fn next(&mut self) -> Option<Result<LocatedToken, DMError>> {
         loop {
-            if let Some(&mut (line, column, ref mut pasting)) = self.pasting.as_mut() {
-                if let Some(tok) = pasting.pop_front() {
-                    return Some(Ok(LocatedToken::new(line, column, tok)));
-                }
+            if let Some(token) = self.output.pop_front() {
+                return Some(Ok(LocatedToken {
+                    location: self.last_input_loc,
+                    token: token,
+                }));
             }
-            self.pasting = None;
+
             if let Some(tok) = self.inner_next() {
-                if let Some(out) = self.real_next(try_iter!(tok)) {
-                    return Some(out);
-                }
-                continue;
+                let tok = try_iter!(tok);
+                self.last_input_loc = Location {
+                    file: self.files.len() as u32 - 1,
+                    .. tok.location
+                };
+                try_iter!(self.real_next(tok.token));
+            } else {
+                return None;
             }
-            return None
         }
     }
 }
