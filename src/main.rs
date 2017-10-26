@@ -10,8 +10,6 @@ extern crate linked_hash_map;
 #[macro_use] extern crate ndarray;
 extern crate rand;
 
-#[macro_use] extern crate guard;
-
 #[cfg(feature="flame")] extern crate flame;
 
 #[macro_use] mod utils;

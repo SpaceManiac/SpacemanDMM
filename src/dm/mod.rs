@@ -68,21 +68,26 @@ impl<'a, T: HasLocation> HasLocation for &'a mut T {
     fn location(&self) -> Location { (**self).location() }
 }
 
-fn parse(path: &Path) {
+fn debug_output(path: &Path) {
+    let stdout = io::stdout();
+    let mut stdout = stdout.lock();
+
     let mut preprocessor = preprocessor::Preprocessor::new(path.to_owned()).unwrap();
+    match pretty_print(&mut stdout, indents::IndentProcessor::new(&mut preprocessor)) {
+        Ok(()) => {}
+        Err(e) => pretty_print_error(&mut stdout, &preprocessor, &e).unwrap(),
+    }
+}
+
+pub fn pretty_print<W, I>(w: &mut W, input: I) -> Result<(), DMError> where
+    W: io::Write,
+    I: IntoIterator<Item=Result<lexer::LocatedToken, DMError>>
+{
     let mut indents = 0;
     let mut needs_newline = false;
-    let mut error = None;
     let mut prev = None;
-    for thing in indents::IndentProcessor::new(&mut preprocessor) {
-        let thing = match thing {
-            Ok(t) => t,
-            Err(e) => {
-                error = Some(e);
-                break;
-            }
-        };
-        match thing.token {
+    for loc_token in input {
+        match loc_token?.token {
             lexer::Token::Punct(lexer::Punctuation::LBrace) => {
                 indents += 1;
                 needs_newline = true;
@@ -96,28 +101,43 @@ fn parse(path: &Path) {
             }
             other => {
                 if needs_newline {
-                    print!("\n{}", &"                                "[..2*indents]);
+                    const SPACES: &str = "                                ";
+                    let spaces = 2 * indents;
+                    writeln!(w)?;
+                    for _ in 0..(spaces / SPACES.len()) {
+                        write!(w, "{}", SPACES)?;
+                    }
+                    write!(w, "{}", &SPACES[..spaces % SPACES.len()])?;
                     needs_newline = false;
                 } else if let Some(prev) = prev {
                     if other.separate_from(&prev) {
-                        print!(" ");
+                        write!(w, " ")?;
                     }
                 }
-                print!("{}", other);
+                write!(w, "{}", other)?;
                 prev = Some(other);
             }
         }
     }
-    if let Some(error) = error {
-        println!("\n{}, line {}, column {}:",
-            preprocessor.file_path(error.location.file).display(),
-            error.location.line,
-            error.location.column);
-        println!("{}\n", error.desc);
-    }
+    Ok(())
 }
 
-#[test]
-fn tgstation() {
-    parse("D:/projects/tgstation/tgstation.dme".as_ref());
+pub fn pretty_print_error<W: io::Write>(w: &mut W, pp: &preprocessor::Preprocessor, error: &DMError) -> io::Result<()> {
+    writeln!(w, "\n{}, line {}, column {}:",
+        pp.file_path(error.location.file).display(),
+        error.location.line,
+        error.location.column)?;
+    writeln!(w, "{}\n", error.desc)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    const TEST_FILE: &str = "D:/projects/tgstation/tgstation.dme";
+
+    #[test]
+    fn check_preprocessor() {
+        debug_output(TEST_FILE.as_ref());
+    }
 }
