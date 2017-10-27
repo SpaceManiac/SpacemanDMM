@@ -18,6 +18,7 @@ pub struct IndentProcessor<I> {
     // The number of spaces/tabs accumulated on the current line. None when not at line head.
     current_spaces: Option<usize>,
     parentheses: usize,
+    eof_yielded: bool,
 }
 
 impl<I: HasLocation> HasLocation for IndentProcessor<I> {
@@ -37,6 +38,7 @@ impl<I> IndentProcessor<I> where
             current: None,
             current_spaces: None,
             parentheses: 0,
+            eof_yielded: false,
         }
     }
 
@@ -65,10 +67,14 @@ impl<I> IndentProcessor<I> where
             _ => {}
         }
 
+        // handle pre-existing braces
         match read {
-            Token::Punct(Punctuation::LBrace) |
+            Token::Punct(Punctuation::LBrace) => self.current_spaces = None,
             Token::Punct(Punctuation::RBrace) => {
                 self.current_spaces = None;
+                if self.parentheses == 0 {
+                    self.output.push_back(Token::Punct(Punctuation::Semicolon));
+                }
             }
             _ => {}
         }
@@ -173,17 +179,17 @@ impl<I> Iterator for IndentProcessor<I> where
                 let tok = try_iter!(tok);
                 self.last_input_loc = tok.location;
                 try_iter!(self.real_next(tok.token));
+            } else if self.eof_yielded {
+                return None;
             } else {
-                match self.current {
-                    None => return None,
-                    Some((_, indents)) => {
-                        self.current = None;
-                        self.output.push_back(Token::Punct(Punctuation::Semicolon));
-                        for _ in 0..indents {
-                            self.output.push_back(Token::Punct(Punctuation::RBrace));
-                        }
+                self.output.push_back(Token::Punct(Punctuation::Semicolon));
+                if let Some((_, indents)) = self.current {
+                    for _ in 0..indents {
+                        self.output.push_back(Token::Punct(Punctuation::RBrace));
                     }
                 }
+                self.current = None;
+                self.eof_yielded = true;
             }
         }
     }

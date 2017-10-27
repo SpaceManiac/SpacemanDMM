@@ -1,4 +1,4 @@
-//
+//! DreamMaker code parsing suite
 #![allow(dead_code)]
 
 use std::path::Path;
@@ -17,6 +17,8 @@ macro_rules! try_iter {
 pub mod lexer;
 pub mod preprocessor;
 pub mod indents;
+pub mod parser;
+pub mod objtree;
 
 #[derive(Debug)]
 pub struct DMError {
@@ -68,36 +70,54 @@ impl<'a, T: HasLocation> HasLocation for &'a mut T {
     fn location(&self) -> Location { (**self).location() }
 }
 
+fn parse(path: &Path) {
+    let mut preprocessor = preprocessor::Preprocessor::new(path.to_owned()).unwrap();
+    let tree = parser::parse(indents::IndentProcessor::new(&mut preprocessor));
+    match tree {
+        Ok(t) => println!("{:?}", t),
+        Err(e) => {
+            println!("\n{}, line {}, column {}:",
+                preprocessor.file_path(e.location.file).display(),
+                e.location.line,
+                e.location.column);
+            println!("{}\n", e.desc);
+        }
+    }
+}
+
 fn debug_output(path: &Path) {
     let stdout = io::stdout();
     let mut stdout = stdout.lock();
 
     let mut preprocessor = preprocessor::Preprocessor::new(path.to_owned()).unwrap();
-    match pretty_print(&mut stdout, indents::IndentProcessor::new(&mut preprocessor)) {
+    match pretty_print(&mut stdout, indents::IndentProcessor::new(&mut preprocessor).map(|t| t.map(|t| t.token)), true) {
         Ok(()) => {}
         Err(e) => pretty_print_error(&mut stdout, &preprocessor, &e).unwrap(),
     }
 }
 
-pub fn pretty_print<W, I>(w: &mut W, input: I) -> Result<(), DMError> where
+pub fn pretty_print<W, I>(w: &mut W, input: I, show_ws: bool) -> Result<(), DMError> where
     W: io::Write,
-    I: IntoIterator<Item=Result<lexer::LocatedToken, DMError>>
+    I: IntoIterator<Item=Result<lexer::Token, DMError>>
 {
     let mut indents = 0;
     let mut needs_newline = false;
     let mut prev = None;
-    for loc_token in input {
-        match loc_token?.token {
+    for token in input {
+        match token? {
             lexer::Token::Punct(lexer::Punctuation::LBrace) => {
                 indents += 1;
                 needs_newline = true;
+                if show_ws { write!(w, "{{")?; }
             }
             lexer::Token::Punct(lexer::Punctuation::RBrace) => {
                 indents -= 1;
                 needs_newline = true;
+                if show_ws { write!(w, "}}")?; }
             }
             lexer::Token::Punct(lexer::Punctuation::Semicolon) => {
                 needs_newline = true;
+                if show_ws { write!(w, ";")?; }
             }
             other => {
                 if needs_newline {
@@ -119,6 +139,9 @@ pub fn pretty_print<W, I>(w: &mut W, input: I) -> Result<(), DMError> where
             }
         }
     }
+    if needs_newline {
+        writeln!(w)?;
+    }
     Ok(())
 }
 
@@ -135,6 +158,11 @@ mod test {
     use super::*;
 
     const TEST_FILE: &str = "D:/projects/tgstation/tgstation.dme";
+
+    #[test]
+    fn check_parser() {
+        parse(TEST_FILE.as_ref());
+    }
 
     #[test]
     fn check_preprocessor() {

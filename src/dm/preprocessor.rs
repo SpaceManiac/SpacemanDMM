@@ -52,7 +52,7 @@ enum Include {
 impl Include {
     fn new(path: PathBuf, idx: u32) -> io::Result<Include> {
         Ok(Include::File {
-            lexer: Lexer::new(BufReader::new(File::open(&path)?)),
+            lexer: Lexer::new(idx, BufReader::new(File::open(&path)?)),
             file: idx,
             path: path,
         })
@@ -62,10 +62,7 @@ impl Include {
 impl HasLocation for Include {
     fn location(&self) -> Location {
         match self {
-            &Include::File { file, ref lexer, .. } => Location {
-                file: file,
-                .. lexer.location()
-            },
+            &Include::File { ref lexer, .. } => lexer.location(),
             &Include::Expansion { location, .. } => location,
         }
     }
@@ -91,6 +88,20 @@ impl IncludeStack {
             }
         }
         ""
+    }
+}
+
+impl HasLocation for IncludeStack {
+    fn location(&self) -> Location {
+        if let Some(include) = self.stack.last() {
+            include.location()
+        } else {
+            Location {
+                file: 0,
+                line: 0,
+                column: 0,
+            }
+        }
     }
 }
 
@@ -155,15 +166,7 @@ pub struct Preprocessor {
 
 impl HasLocation for Preprocessor {
     fn location(&self) -> Location {
-        if let Some(include) = self.include_stack.stack.last() {
-            include.location()
-        } else {
-            Location {
-                file: 0,
-                line: 0,
-                column: 0,
-            }
-        }
+        self.include_stack.location()
     }
 }
 
@@ -233,10 +236,12 @@ impl Preprocessor {
                 match &ident[..] {
                     // ifdefs
                     "endif" => {
-                        self.ifdef_stack.pop().unwrap();
+                        self.ifdef_stack.pop().ok_or_else(||
+                            DMError::new(self.last_input_loc, "unmatched #endif"))?;
                     }
                     "else" => {
-                        let last = self.ifdef_stack.pop().unwrap();
+                        let last = self.ifdef_stack.pop().ok_or_else(||
+                            DMError::new(self.last_input_loc, "unmatched #else"))?;
                         self.ifdef_stack.push(last.else_());
                     }
                     "ifdef" => {
@@ -256,7 +261,8 @@ impl Preprocessor {
                         self.ifdef_stack.push(Ifdef::new(z));
                     }
                     "elseif" => {
-                        let last = self.ifdef_stack.pop().unwrap();
+                        let last = self.ifdef_stack.pop().ok_or_else(||
+                            DMError::new(self.last_input_loc, "unmatched #elseif"))?;
                         let z = self.evaluate()?;
                         self.ifdef_stack.push(last.else_if(z));
                     }
@@ -456,7 +462,10 @@ impl Preprocessor {
                                                     if !string.is_empty() {
                                                         string.push(' ');
                                                     }
-                                                    write!(string, "{}", each).unwrap();
+                                                    let _e = write!(string, "{}", each);
+                                                    #[cfg(debug_assertions)] {
+                                                        _e.unwrap();
+                                                    }
                                                 }
                                                 expansion.push_back(Token::String(string));
                                             }
@@ -501,10 +510,7 @@ impl Iterator for Preprocessor {
 
             if let Some(tok) = self.inner_next() {
                 let tok = try_iter!(tok);
-                self.last_input_loc = Location {
-                    file: self.files.len() as u32 - 1,
-                    .. tok.location
-                };
+                self.last_input_loc = tok.location;
                 try_iter!(self.real_next(tok.token));
             } else {
                 return None;

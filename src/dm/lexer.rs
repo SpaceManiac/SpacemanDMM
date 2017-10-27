@@ -179,7 +179,7 @@ impl fmt::Display for Token {
             Punct(Punctuation::Tab) => f.write_str("    "),
             Punct(p) => f.write_str(::std::str::from_utf8(p.value()).unwrap()),
             Ident(ref i, _) => f.write_str(i),
-            String(ref i) => write!(f, "{:?}", i),
+            String(ref i) => write!(f, "\"{}\"", i),
             InterpStringBegin(ref i) => write!(f, "\"{}[", i),
             InterpStringPart(ref i) => write!(f, "]{}[", i),
             InterpStringEnd(ref i) => write!(f, "]{}\"", i),
@@ -198,8 +198,8 @@ pub struct LocatedToken {
 
 impl LocatedToken {
     #[inline]
-    pub fn new(line: u32, column: u32, token: Token) -> LocatedToken {
-        LocatedToken { location: Location { file: 0, line, column }, token }
+    pub fn new(location: Location, token: Token) -> LocatedToken {
+        LocatedToken { location, token }
     }
 }
 
@@ -221,30 +221,28 @@ struct Interpolation {
 pub struct Lexer<R: Read> {
     next: Option<u8>,
     input: Bytes<R>,
-    line: u32,
-    column: u32,
+    location: Location,
     at_line_head: bool,
     interp_stack: Vec<Interpolation>,
 }
 
 impl<R: Read> HasLocation for Lexer<R> {
     fn location(&self) -> Location {
-        Location {
-            file: 0,
-            line: self.line,
-            column: self.column,
-        }
+        self.location
     }
 }
 
 impl<R: Read> Lexer<R> {
     /// Create a new lexer from a byte stream.
-    pub fn new(source: R) -> Lexer<R> {
+    pub fn new(file_number: u32, source: R) -> Lexer<R> {
         Lexer {
             next: None,
             input: source.bytes(),
-            line: 1,
-            column: 1,
+            location: Location {
+                file: file_number,
+                line: 1,
+                column: 1,
+            },
             at_line_head: true,
             interp_stack: Vec::new(),
         }
@@ -257,14 +255,14 @@ impl<R: Read> Lexer<R> {
         match self.input.next() {
             Some(Ok(ch)) => {
                 if ch == b'\n' {
-                    self.line += 1;
-                    self.column = 1;
+                    self.location.line += 1;
+                    self.location.column = 1;
                     self.at_line_head = true;
                 } else {
                     if ch != b'\t' && ch != b' ' && self.at_line_head {
                         self.at_line_head = false;
                     }
-                    self.column += 1;
+                    self.location.column += 1;
                 }
 
                 Ok(Some(ch))
@@ -411,10 +409,10 @@ impl<R: Read> Lexer<R> {
                     let next = self.skip_ws(true)?;
                     self.put_back(next)
                 },
-                b'"' | b'\'' | b'\\' | b'[' | b']' if backslash => {
+                /*b'"' | b'\'' | b'\\' | b'[' | b']' if backslash => {
                     backslash = false;
                     buf.push(ch);
-                }
+                }*/
                 ch if backslash => {
                     // escape sequence handling happens at a later stage
                     backslash = false;
@@ -516,8 +514,8 @@ impl<R: Read> Iterator for Lexer<R> {
             };
             skip_newlines = false;
 
-            let (line, column) = (self.line, self.column);
-            let locate = |token| LocatedToken::new(line, column, token);
+            let loc = self.location;
+            let locate = |token| LocatedToken::new(loc, token);
 
             let punct = try_iter!(self.read_punct(first));
             return match punct {
@@ -575,7 +573,7 @@ impl<R: Read> Iterator for Lexer<R> {
 
 #[cfg(test)]
 fn lex(f: &str) -> Vec<Token> {
-    Lexer::new(f.as_bytes()).map(|x| x.map(|y| y.token)).collect::<Result<Vec<_>, _>>().unwrap()
+    Lexer::new(0, f.as_bytes()).map(|x| x.map(|y| y.token)).collect::<Result<Vec<_>, _>>().unwrap()
 }
 
 #[test]
