@@ -9,14 +9,12 @@ pub fn parse<I>(iter: I) -> Result<ObjectTree, DMError> where
     I::IntoIter: HasLocation
 {
     let mut parser = Parser::new(iter.into_iter());
-    match parser.root() {
-        Ok(Some(())) => return Ok(parser.tree),
-        _ => {}
-    }
-
-    let expected = parser.expected.join(", ");
-    let got = parser.next("");
-    Err(DMError::new(parser.location(), format!("got {:?}, expected one of: {}", got, expected)))
+    let mut tree = match parser.root()? {
+        Some(()) => parser.tree,
+        None => return parser.parse_error(),
+    };
+    tree.assign_parent_types()?;
+    Ok(tree)
 }
 
 type Ident = String;
@@ -219,10 +217,10 @@ impl<I> Parser<I> where
         }
 
         // expect at least one ident
-        parts.push(match self.ident() {
-            Ok(Some(i)) => i,
-            Ok(None) if !absolute => return Ok(None),
-            _ => return self.parse_error(),
+        parts.push(match self.ident()? {
+            Some(i) => i,
+            None if !absolute => return Ok(None),
+            None => return self.parse_error(),
         });
         // followed by ('/' ident)*
         loop {

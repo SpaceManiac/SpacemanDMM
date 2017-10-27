@@ -18,19 +18,83 @@ enum Define {
 
 fn default_defines(defines: &mut HashMap<String, Define>) {
     use dm::lexer::Token::*;
-    macro_rules! constant {
-        ($i:ident [$($x:expr),*]) => {
-            defines.insert(stringify!($i).into(), Define::Constant(vec![$($x),*]));
+    macro_rules! c {
+        ($($i:ident = $($x:expr),*;)*) => {
+            $(defines.insert(stringify!($i).into(), Define::Constant(vec![$($x),*]));)*
         }
     }
+    c! {
+        DM_VERSION = Int(511);
 
-    constant!(DM_VERSION [Int(511)]);
+        FALSE = Int(0);
+        TRUE = Int(1);
 
-    constant!(FALSE [Int(0)]);
-    constant!(TRUE [Int(1)]);
+        NORTH = Int(1);
+        SOUTH = Int(2);
+        EAST = Int(4);
+        WEST = Int(8);
+        NORTHEAST = Int(5);
+        SOUTHEAST = Int(6);
+        NORTHWEST = Int(9);
+        NORTHEAST = Int(10);
 
-    constant!(TILE_BOUND [Int(256)]);
-    constant!(PIXEL_SCALE [Int(512)]);
+        FLOAT_LAYER = Int(-1);
+        AREA_LAYER = Int(1);
+        TURF_LAYER = Int(2);
+        OBJ_LAYER = Int(3);
+        MOB_LAYER = Int(4);
+        EFFECTS_LAYER = Int(5000);
+        TOPDOWN_LAYER = Int(10000);
+        BACKGROUND_LAYER = Int(20000);
+
+        ICON_ADD = Int(0);
+        ICON_SUBTRACT = Int(1);
+        ICON_MULTIPLY = Int(2);
+        ICON_OVERLAY = Int(3);
+        ICON_AND = Int(4);
+        ICON_OR = Int(5);
+        ICON_UNDERLAY = Int(6);
+
+        BLEND_DEFAULT = Int(0);
+        BLEND_OVERLAY = Int(1);
+        BLEND_ADD = Int(2);
+        BLEND_SUBTRACT = Int(3);
+        BLEND_MULTIPLY = Int(4);
+
+        NO_STEPS = Int(0);
+        FORWARD_STEPS = Int(1);
+        SLIDE_STEPS = Int(2);
+        SYNC_STEPS = Int(3);
+
+        BLIND = Int(1);
+        SEE_MOBS = Int(4);
+        SEE_OBJS = Int(8);
+        SEE_TURFS = Int(16);
+        SEE_SELF = Int(32);
+        SEE_INFRA = Int(64);
+        SEE_PIXELS = Int(256);
+        SEE_THRU = Int(512);
+        SEE_BLACKNESS = Int(1024);
+
+        LONG_GLIDE = Int(1);
+        RESET_COLOR = Int(2);
+        RESET_ALPHA = Int(4);
+        RESET_TRANSFORM = Int(8);
+        NO_CLIENT_COLOR = Int(16);
+        KEEP_TOGETHER = Int(32);
+        KEEP_APART = Int(64);
+        PLANE_MASTER = Int(128);
+        TILE_BOUND = Int(256);
+        PIXEL_SCALE = Int(512);
+
+        MS_WINDOWS = String("MS Windows".into());
+        UNIX = String("UNIX".into());
+        MALE = String("male".into());
+        FEMALE = String("female".into());
+        NEUTER = String("neuter".into());
+        PLURAL = String("plural".into());
+    }
+    // TODO: functions: ASSERT, CRASH, EXCEPTION
 }
 
 // ----------------------------------------------------------------------------
@@ -79,7 +143,7 @@ impl IncludeStack {
                 return path;
             }
         }
-        panic!("");
+        "".as_ref()
     }
     fn top_no_expand(&self) -> &str {
         for each in self.stack.iter().rev() {
@@ -288,7 +352,7 @@ impl Preprocessor {
                                 Some("dmm") => FileType::DMM,
                                 Some("dmf") => FileType::DMF,
                                 Some("dm") => FileType::DM,
-                                e => unimplemented!("extension {:?}", e),
+                                e => return Err(DMError::new(self.last_input_loc, format!("unknown file type {:?}", e))),
                             } {
                                 FileType::DMM => self.maps.push(each),
                                 FileType::DMF => self.skins.push(each),
@@ -309,7 +373,7 @@ impl Preprocessor {
                                     loop {
                                         match next!() {
                                             Token::Ident(name, _) => args.push(name),
-                                            Token::Punct(Punctuation::Ellipsis) => unimplemented!("VA_ARGS"),
+                                            Token::Punct(Punctuation::Ellipsis) => return Err(DMError::new(self.last_input_loc, "variadic macros unsupported")),
                                             _ => return Err(self.error("malformed macro definition"))
                                         }
                                         match next!() {
@@ -343,10 +407,10 @@ impl Preprocessor {
                         self.defines.remove(&define_name); // TODO: warn if none
                     }
                     "error" => {
-                        panic!("#error {}");
+                        return Err(DMError::new(self.last_input_loc, "#error"));
                     }
                     // none of this other stuff should even exist
-                    _ => unimplemented!("{}", ident),
+                    _ => return Err(DMError::new(self.last_input_loc, format!("unknown directive: #{}", ident)))
                 }
                 // yield a newline
                 self.output.push_back(Token::Punct(Punctuation::Newline));
