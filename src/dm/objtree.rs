@@ -20,9 +20,9 @@ pub struct VarValue {
 }
 
 impl VarValue {
-    fn set_value(&mut self, value: Vec<Token>) -> Result<(), DMError> {
+    fn set_value(&mut self, location: Location, value: Vec<Token>) -> Result<(), DMError> {
         if !self.is_static {
-            super::constants::fold(&value)?;
+            super::constants::fold(location, &value)?;
         }
         self.value = Some(value);
         Ok(())
@@ -207,7 +207,7 @@ impl ObjectTree {
     // an entry which is definitely a var because a value is specified
     pub fn add_var<'a, I: Iterator<Item=&'a str>>(&mut self, location: Location, mut path: I, value: Vec<Token>) -> Result<(), DMError> {
         let (parent, initial) = self.get_from_path(location, &mut path)?;
-        self.register_var(location, parent, initial, path)?.set_value(value);
+        self.register_var(location, parent, initial, path)?.set_value(location, value)?;
         Ok(())
     }
 

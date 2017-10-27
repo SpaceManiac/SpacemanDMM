@@ -19,6 +19,7 @@ pub mod preprocessor;
 pub mod indents;
 pub mod parser;
 pub mod objtree;
+pub mod ast;
 pub mod constants;
 
 #[derive(Debug)]
@@ -75,7 +76,7 @@ fn parse(path: &Path) {
     let mut preprocessor = preprocessor::Preprocessor::new(path.to_owned()).unwrap();
     let tree = parser::parse(indents::IndentProcessor::new(&mut preprocessor));
     match tree {
-        Ok(t) => println!("{:?}", t),
+        Ok(_) => println!("Success!"),
         Err(e) => {
             println!("\n{}, line {}, column {}:",
                 preprocessor.file_path(e.location.file).display(),
