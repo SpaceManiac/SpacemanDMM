@@ -9,8 +9,25 @@ use petgraph::visit::EdgeRef;
 use super::lexer::Token;
 use super::{DMError, Location};
 
-pub type VarValue = Vec<Token>;
 pub type Vars = ::linked_hash_map::LinkedHashMap<String, VarValue>;
+
+#[derive(Debug)]
+pub struct VarValue {
+    pub is_static: bool,
+    pub is_const: bool,
+    pub is_tmp: bool,
+    pub value: Option<Vec<Token>>,
+}
+
+impl VarValue {
+    fn set_value(&mut self, value: Vec<Token>) -> Result<(), DMError> {
+        if !self.is_static {
+            super::constants::fold(&value)?;
+        }
+        self.value = Some(value);
+        Ok(())
+    }
+}
 
 #[derive(Debug, Default)]
 pub struct Type {
@@ -25,6 +42,7 @@ pub struct ObjectTree {
     graph: Graph<Type, ()>,
     types: BTreeMap<String, NodeIndex>,
     blank_vars: Vars,
+    const_fns: Vec<Token>,
 }
 
 impl Default for ObjectTree {
@@ -33,6 +51,7 @@ impl Default for ObjectTree {
             graph: Default::default(),
             types: Default::default(),
             blank_vars: Default::default(),
+            const_fns: Default::default(),
         };
         tree.graph.add_node(Type {
             name: String::new(),
@@ -105,7 +124,7 @@ impl ObjectTree {
 
         // time to add a new child
         let path = format!("{}/{}", self.graph.node_weight(parent).unwrap().path, child);
-        println!("registered: {}", path);
+        //println!("registered: {}", path);
         let node = self.graph.add_node(Type {
             name: child.to_owned(),
             path: path.clone(),
@@ -137,6 +156,8 @@ impl ObjectTree {
     fn register_var<'a, I>(&mut self, location: Location, parent: NodeIndex, mut prev: &'a str, mut rest: I) -> Result<&mut VarValue, DMError> where
         I: Iterator<Item=&'a str>
     {
+        let (mut is_static, mut is_const, mut is_tmp) = (false, false, false);
+
         if is_var_decl(prev) {
             prev = match rest.next() {
                 Some(name) => name,
@@ -145,6 +166,9 @@ impl ObjectTree {
             if prev == "global" || prev == "static" || prev == "tmp" || prev == "const" {
                 // TODO: store this information
                 if let Some(name) = rest.next() {
+                    is_static |= prev == "global" || prev == "static";
+                    is_const |= prev == "const";
+                    is_tmp |= prev == "tmp";
                     prev = name;
                 }
             }
@@ -161,7 +185,12 @@ impl ObjectTree {
 
         // TODO: track the type path
         let node = self.graph.node_weight_mut(parent).unwrap();
-        Ok(node.vars.entry(prev.to_owned()).or_insert_with(|| vec![Token::Ident("null".into(), false)]))
+        Ok(node.vars.entry(prev.to_owned()).or_insert_with(|| VarValue {
+            is_static,
+            is_const,
+            is_tmp,
+            value: None
+        }))
     }
 
     // an entry which may be anything depending on the path
@@ -178,7 +207,7 @@ impl ObjectTree {
     // an entry which is definitely a var because a value is specified
     pub fn add_var<'a, I: Iterator<Item=&'a str>>(&mut self, location: Location, mut path: I, value: Vec<Token>) -> Result<(), DMError> {
         let (parent, initial) = self.get_from_path(location, &mut path)?;
-        *self.register_var(location, parent, initial, path)? = value;
+        self.register_var(location, parent, initial, path)?.set_value(value);
         Ok(())
     }
 

@@ -19,6 +19,7 @@ pub mod preprocessor;
 pub mod indents;
 pub mod parser;
 pub mod objtree;
+pub mod constants;
 
 #[derive(Debug)]
 pub struct DMError {
