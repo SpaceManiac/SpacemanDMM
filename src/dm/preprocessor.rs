@@ -103,6 +103,7 @@ fn default_defines(defines: &mut HashMap<String, Define>) {
 // ----------------------------------------------------------------------------
 // The stack of currently #included files
 
+#[derive(Debug)]
 enum Include {
     File {
         path: PathBuf,
@@ -184,10 +185,7 @@ impl Iterator for IncludeStack {
                     None => {} // fall through
                 }
                 Some(&mut Include::Expansion { ref mut tokens, location, .. }) => match tokens.pop_front() {
-                    Some(token) => {
-                        //println!("PP {:?}", token);
-                        return Some(Ok(LocatedToken { location, token }))
-                    }
+                    Some(token) => return Some(Ok(LocatedToken { location, token })),
                     None => {} // fall through
                 }
                 None => return None,
@@ -338,7 +336,6 @@ impl Preprocessor {
                     // include searches relevant paths for files
                     "include" => {
                         expect_token!((path) = Token::String(path));
-                        //println!("#include {}", path);
                         expect_token!(() = Token::Punct(Punctuation::Newline));
                         let path = PathBuf::from(path);
 

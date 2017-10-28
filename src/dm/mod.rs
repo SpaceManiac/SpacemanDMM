@@ -1,7 +1,6 @@
 //! DreamMaker code parsing suite
 #![allow(dead_code)]
 
-use std::path::Path;
 use std::io;
 
 macro_rules! try_iter {
@@ -21,6 +20,9 @@ pub mod parser;
 pub mod objtree;
 pub mod ast;
 pub mod constants;
+
+// ----------------------------------------------------------------------------
+// Error handling
 
 #[derive(Debug)]
 pub struct DMError {
@@ -50,6 +52,9 @@ impl From<io::Error> for DMError {
     }
 }
 
+// ----------------------------------------------------------------------------
+// Location handling
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Default)]
 pub struct Location {
     pub file: u32,
@@ -65,38 +70,17 @@ pub trait HasLocation {
         DMError::new(self.location(), message)
     }
 }
+
 impl<'a, T: HasLocation> HasLocation for &'a T {
     fn location(&self) -> Location { (**self).location() }
 }
+
 impl<'a, T: HasLocation> HasLocation for &'a mut T {
     fn location(&self) -> Location { (**self).location() }
 }
 
-fn parse(path: &Path) {
-    let mut preprocessor = preprocessor::Preprocessor::new(path.to_owned()).unwrap();
-    let tree = parser::parse(indents::IndentProcessor::new(&mut preprocessor));
-    match tree {
-        Ok(_) => println!("Success!"),
-        Err(e) => {
-            println!("\n{}, line {}, column {}:",
-                preprocessor.file_path(e.location.file).display(),
-                e.location.line,
-                e.location.column);
-            println!("{}\n", e.desc);
-        }
-    }
-}
-
-fn debug_output(path: &Path) {
-    let stdout = io::stdout();
-    let mut stdout = stdout.lock();
-
-    let mut preprocessor = preprocessor::Preprocessor::new(path.to_owned()).unwrap();
-    match pretty_print(&mut stdout, indents::IndentProcessor::new(&mut preprocessor).map(|t| t.map(|t| t.token)), true) {
-        Ok(()) => {}
-        Err(e) => pretty_print_error(&mut stdout, &preprocessor, &e).unwrap(),
-    }
-}
+// ----------------------------------------------------------------------------
+// Pretty printing
 
 pub fn pretty_print<W, I>(w: &mut W, input: I, show_ws: bool) -> Result<(), DMError> where
     W: io::Write,
@@ -117,7 +101,8 @@ pub fn pretty_print<W, I>(w: &mut W, input: I, show_ws: bool) -> Result<(), DMEr
                 needs_newline = true;
                 if show_ws { write!(w, "}}")?; }
             }
-            lexer::Token::Punct(lexer::Punctuation::Semicolon) => {
+            lexer::Token::Punct(lexer::Punctuation::Semicolon) |
+            lexer::Token::Punct(lexer::Punctuation::Newline) => {
                 needs_newline = true;
                 if show_ws { write!(w, ";")?; }
             }
@@ -155,19 +140,45 @@ pub fn pretty_print_error<W: io::Write>(w: &mut W, pp: &preprocessor::Preprocess
     writeln!(w, "{}\n", error.desc)
 }
 
+// ----------------------------------------------------------------------------
+// Tests
+
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::path::PathBuf;
 
     const TEST_FILE: &str = "D:/projects/tgstation/tgstation.dme";
 
     #[test]
-    fn check_parser() {
-        parse(TEST_FILE.as_ref());
+    fn check_preprocessor() {
+        let stdout = io::stdout();
+        let mut stdout = stdout.lock();
+        let mut preprocessor = preprocessor::Preprocessor::new(PathBuf::from(TEST_FILE)).unwrap();
+        match pretty_print(&mut stdout, preprocessor.by_ref().map(|t| t.map(|t| t.token)), true) {
+            Ok(()) => {}
+            Err(e) => pretty_print_error(&mut stdout, &preprocessor, &e).unwrap(),
+        }
     }
 
     #[test]
-    fn check_preprocessor() {
-        debug_output(TEST_FILE.as_ref());
+    fn check_indentor() {
+        let stdout = io::stdout();
+        let mut stdout = stdout.lock();
+        let mut preprocessor = preprocessor::Preprocessor::new(PathBuf::from(TEST_FILE)).unwrap();
+        match pretty_print(&mut stdout, indents::IndentProcessor::new(&mut preprocessor).map(|t| t.map(|t| t.token)), true) {
+            Ok(()) => {}
+            Err(e) => pretty_print_error(&mut stdout, &preprocessor, &e).unwrap(),
+        }
+    }
+
+    #[test]
+    fn check_parser() {
+        let mut preprocessor = preprocessor::Preprocessor::new(PathBuf::from(TEST_FILE)).unwrap();
+        let tree = parser::parse(indents::IndentProcessor::new(&mut preprocessor));
+        match tree {
+            Ok(_) => println!("\n--------\nSuccess!\n--------"),
+            Err(e) => pretty_print_error(&mut io::stdout(), &preprocessor, &e).unwrap(),
+        }
     }
 }

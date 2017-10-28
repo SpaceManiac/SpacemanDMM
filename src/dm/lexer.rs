@@ -212,12 +212,14 @@ fn is_ident(ch: u8) -> bool {
 }
 
 // Used to track nested string interpolations and know when they end.
+#[derive(Debug)]
 struct Interpolation {
     end: &'static [u8],
     bracket_depth: usize,
 }
 
 /// The lexer, which serves as a source of tokens through iteration.
+#[derive(Debug)]
 pub struct Lexer<R: Read> {
     next: Option<u8>,
     input: Bytes<R>,
@@ -285,13 +287,21 @@ impl<R: Read> Lexer<R> {
             if ch == end[idx] {
                 idx += 1;
                 if idx == end.len() {
-                    break
+                    return Ok(())
                 }
+            } else if ch == end[0] {
+                // TODO: this is a hack to fix the '**/' situation
+                idx = 1;
             } else {
                 idx = 0;
             }
         }
-        Ok(())
+        if end == b"\n" {
+            // closed by the implicit newline at the end of the file
+            Ok(())
+        } else {
+            Err(self.error("still skipping comments at end of file"))
+        }
     }
 
     fn read_number_inner(&mut self, first: u8) -> Result<(bool, u32, String), DMError> {
@@ -399,6 +409,10 @@ impl<R: Read> Lexer<R> {
                     break
                 }
                 continue
+            } else if ch == end[0] && !backslash {
+                // TODO: this is a hack to fix the '""}' situation
+                buf.extend_from_slice(&end[..idx]);
+                idx = 1;
             } else {
                 buf.extend_from_slice(&end[..idx]);
                 idx = 0;

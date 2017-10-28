@@ -206,6 +206,9 @@ impl ObjectTree {
             Some(name) => name,
             None => return Err(DMError::new(location, "cannot register root path")),
         };
+        if is_decl(last) {
+            return Ok((current, last));
+        }
         for each in path {
             current = self.subtype_or_add(current, last);
             last = each;
@@ -263,8 +266,10 @@ impl ObjectTree {
     // an entry which may be anything depending on the path
     pub fn add_entry<'a, I: Iterator<Item=&'a str>>(&mut self, location: Location, mut path: I) -> Result<(), DMError> {
         let (parent, child) = self.get_from_path(location, &mut path)?;
-        if child == "var" {
+        if is_var_decl(child) {
             self.register_var(location, parent, "var", path)?;
+        } else if is_proc_decl(child) {
+            return Err(DMError::new(location, "proc looks like a generic entry"))
         } else {
             self.subtype_or_add(parent, child);
         }
