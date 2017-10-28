@@ -437,7 +437,7 @@ impl<I> Parser<I> where
 
     // distinct from a tree_path, path must begin with a path separator and can
     // use any path separator rather than just slash, AND can be followed by vars
-    fn path(&mut self) -> Status<Path> {
+    fn prefab(&mut self) -> Status<Prefab> {
         // path :: path_sep ident (path_sep ident?)*
         // path_sep :: '/' | '.' | ':'
 
@@ -471,7 +471,7 @@ impl<I> Parser<I> where
             })?;
         }
 
-        success(Path { parts, vars })
+        success(Prefab { path: parts, vars })
     }
 
     pub fn expression(&mut self, disallow_assign: bool) -> Status<Expression> {
@@ -595,8 +595,8 @@ impl<I> Parser<I> where
                 // try to read an ident or path
                 let t = if let Some(ident) = self.ident()? {
                     NewType::Ident(ident)
-                } else if let Some(path) = self.path()? {
-                    NewType::Path(path)
+                } else if let Some(path) = self.prefab()? {
+                    NewType::Prefab(path)
                 } else {
                     NewType::Implicit
                 };
@@ -623,7 +623,7 @@ impl<I> Parser<I> where
             t @ Token::Punct(Punctuation::Dot) |
             t @ Token::Punct(Punctuation::Colon) => {
                 self.put_back(t);
-                Term::Path(require!(self.path()))
+                Term::Prefab(require!(self.prefab()))
             }
 
             // term :: ident | str_lit | num_lit

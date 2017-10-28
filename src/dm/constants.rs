@@ -1,5 +1,7 @@
 //! The constant folder/evaluator, used by the preprocessor and object tree.
 
+use linked_hash_map::LinkedHashMap;
+
 use super::{DMError, Location, HasLocation};
 use super::lexer::{Token, LocatedToken};
 use super::objtree::*;
@@ -23,7 +25,7 @@ pub fn evaluate_all(tree: &mut ObjectTree) -> Result<(), DMError> {
 }
 
 enum ConstLookup {
-    Found(Term),
+    Found(Constant),
     Continue(Option<NodeIndex>),
 }
 
@@ -65,7 +67,7 @@ fn constant_ident_lookup(tree: &mut ObjectTree, ty: NodeIndex, ident: &str) -> R
     Ok(ConstLookup::Found(value))
 }
 
-pub fn evaluate(tree: &mut ObjectTree, ty: NodeIndex, location: Location, value: Vec<Token>) -> Result<Term, DMError> {
+pub fn evaluate(tree: &mut ObjectTree, ty: NodeIndex, location: Location, value: Vec<Token>) -> Result<Constant, DMError> {
     println!("{:?}", value);
     {let so = ::std::io::stdout();
     super::pretty_print(&mut so.lock(), value.iter().cloned().map(Ok), false)?;}
@@ -97,7 +99,7 @@ impl<'a> HasLocation for ConstantFolder<'a> {
 }
 
 impl<'a> ConstantFolder<'a> {
-    fn expr(&mut self, expression: Expression) -> Result<Term, DMError> {
+    fn expr(&mut self, expression: Expression) -> Result<Constant, DMError> {
         Ok(match expression {
             Expression::Base { unary, term, follow } => {
                 let mut term = self.term(term)?;
@@ -118,39 +120,43 @@ impl<'a> ConstantFolder<'a> {
         })
     }
 
-    fn expr_vec(&mut self, v: Vec<Expression>) -> Result<Vec<Expression>, DMError> {
+    fn expr_vec(&mut self, v: Vec<Expression>) -> Result<Vec<Constant>, DMError> {
         let mut out = Vec::new();
         for each in v {
-            out.push(Expression::from(self.expr(each)?));
+            out.push(self.expr(each)?);
         }
         Ok(out)
     }
 
-    fn follow(&mut self, _: Term, follow: Follow) -> Result<Term, DMError> {
+    fn follow(&mut self, _: Constant, follow: Follow) -> Result<Constant, DMError> {
         Err(self.error(format!("non-constant expression followers: {:?}", follow)))
     }
 
-    fn unary(&mut self, term: Term, op: UnaryOp) -> Result<Term, DMError> {
+    fn unary(&mut self, term: Constant, op: UnaryOp) -> Result<Constant, DMError> {
+        use self::Constant::*;
+
         Ok(match (op, term) {
             // int ops
-            (UnaryOp::Neg, Term::Int(i)) => Term::Int(-i),
-            (UnaryOp::BitNot, Term::Int(i)) => Term::Int(!i),
-            (UnaryOp::Not, Term::Int(i)) => Term::Int(if i != 0 { 0 } else { 1 }),
+            (UnaryOp::Neg, Int(i)) => Int(-i),
+            (UnaryOp::BitNot, Int(i)) => Int(!i),
+            (UnaryOp::Not, Int(i)) => Int(if i != 0 { 0 } else { 1 }),
             // float ops
-            (UnaryOp::Neg, Term::Float(i)) => Term::Float(-i),
+            (UnaryOp::Neg, Float(i)) => Float(-i),
             // unsupported
             (op, term) => return Err(self.error(format!("non-constant unary operation: {:?} {:?}", op, term))),
         })
     }
 
-    fn binary(&mut self, mut lhs: Term, mut rhs: Term, op: BinaryOp) -> Result<Term, DMError> {
+    fn binary(&mut self, mut lhs: Constant, mut rhs: Constant, op: BinaryOp) -> Result<Constant, DMError> {
+        use self::Constant::*;
+
         macro_rules! numeric {
             ($name:ident $oper:tt) => {
                 match (op, lhs, rhs) {
-                    (BinaryOp::$name, Term::Int(lhs), Term::Int(rhs)) => return Ok(Term::Int(lhs $oper rhs)),
-                    (BinaryOp::$name, Term::Int(lhs), Term::Float(rhs)) => return Ok(Term::Float(lhs as f32 $oper rhs)),
-                    (BinaryOp::$name, Term::Float(lhs), Term::Int(rhs)) => return Ok(Term::Float(lhs $oper rhs as f32)),
-                    (BinaryOp::$name, Term::Float(lhs), Term::Float(rhs)) => return Ok(Term::Float(lhs $oper rhs)),
+                    (BinaryOp::$name, Int(lhs), Int(rhs)) => return Ok(Int(lhs $oper rhs)),
+                    (BinaryOp::$name, Int(lhs), Float(rhs)) => return Ok(Float(lhs as f32 $oper rhs)),
+                    (BinaryOp::$name, Float(lhs), Int(rhs)) => return Ok(Float(lhs $oper rhs as f32)),
+                    (BinaryOp::$name, Float(lhs), Float(rhs)) => return Ok(Float(lhs $oper rhs)),
                     (_, lhs_, rhs_) => { lhs = lhs_; rhs = rhs_; }
                 }
             }
@@ -163,7 +169,7 @@ impl<'a> ConstantFolder<'a> {
         macro_rules! integer {
             ($name:ident $oper:tt) => {
                 match (op, lhs, rhs) {
-                    (BinaryOp::$name, Term::Int(lhs), Term::Int(rhs)) => return Ok(Term::Int(lhs $oper rhs)),
+                    (BinaryOp::$name, Int(lhs), Int(rhs)) => return Ok(Int(lhs $oper rhs)),
                     (_, lhs_, rhs_) => { lhs = lhs_; rhs = rhs_; }
                 }
             }
@@ -174,16 +180,23 @@ impl<'a> ConstantFolder<'a> {
         integer!(RShift >>);
 
         match (op, lhs, rhs) {
-            (BinaryOp::Add, Term::String(lhs), Term::String(rhs)) => Ok(Term::String(lhs + &rhs)),
+            (BinaryOp::Add, String(lhs), String(rhs)) => Ok(String(lhs + &rhs)),
             (op, lhs, rhs) => Err(self.error(format!("non-constant binary operation: {:?} {:?} {:?}", lhs, op, rhs)))
         }
     }
 
-    fn term(&mut self, term: Term) -> Result<Term, DMError> {
+    fn term(&mut self, term: Term) -> Result<Constant, DMError> {
         Ok(match term {
-            Term::Null => Term::Null,
+            Term::Null => Constant::Null,
             Term::New { type_, args } => {
-                Term::New { type_, args: self.expr_vec(args)? }
+                Constant::New {
+                    type_: match type_ {
+                        NewType::Implicit => NewType::Implicit,
+                        NewType::Ident(_) => return Err(self.error("non-constant new expression")),
+                        NewType::Prefab(e) => NewType::Prefab(self.prefab(e)?),
+                    },
+                    args: self.expr_vec(args)?,
+                }
             },
             Term::List(vec) => {
                 let mut out = Vec::new();
@@ -193,20 +206,22 @@ impl<'a> ConstantFolder<'a> {
                             let key = match Term::from(key) {
                                 Term::Ident(ref ident) => {
                                     println!("WARNING: ident used as list key: {}", ident);
-                                    Term::String(ident.clone()).into()
+                                    Constant::String(ident.clone())
                                 },
-                                other => self.term(other)?.into(),
+                                other => self.term(other)?,
                             };
-                            (key, Some(self.expr(val)?.into()))
+                            (key, Some(self.expr(val)?))
                         },
-                        (key, None) => (self.expr(key)?.into(), None),
+                        (key, None) => (self.expr(key)?, None),
                     });
                 }
-                Term::List(out)
+                Constant::List(out)
             },
             Term::Call(ident, args) => match &*ident {
                 // constructors which remain as they are
-                "matrix" | "newlist" | "icon" => Term::Call(ident, self.expr_vec(args)?),
+                "matrix" => Constant::Call(ConstFn::Matrix, self.expr_vec(args)?),
+                "newlist" => Constant::Call(ConstFn::Newlist, self.expr_vec(args)?),
+                "icon" => Constant::Call(ConstFn::Icon, self.expr_vec(args)?),
                 // constant-evaluatable functions
                 "rgb" => {
                     use std::fmt::Write;
@@ -215,35 +230,79 @@ impl<'a> ConstantFolder<'a> {
                     }
                     let mut result = "#".to_owned();
                     for each in args {
-                        if let Term::Int(i) = self.expr(each)? {
+                        if let Constant::Int(i) = self.expr(each)? {
                             let clamped = ::std::cmp::max(::std::cmp::min(i, 255), 0);
                             let _ = write!(result, "{:02x}", clamped);
                         } else {
                             return Err(self.error("malformed rgb() call"));
                         }
                     }
-                    Term::String(result)
+                    Constant::String(result)
                 },
                 // other functions are no-goes
                 _ => return Err(self.error(format!("non-constant function call: {}", ident)))
             },
+            Term::Prefab(prefab) => Constant::Prefab(self.prefab(prefab)?),
+            Term::Ident(ident) => self.ident(ident)?,
+            Term::String(v) => Constant::String(v),
+            Term::Resource(v) => Constant::Resource(v),
+            Term::Int(v) => Constant::Int(v),
+            Term::Float(v) => Constant::Float(v),
             Term::Expr(expr) => self.expr(*expr)?,
-            Term::Ident(ident) => {
-                if ident == "null" {
-                    Term::Null
-                } else {
-                    let mut idx = Some(self.ty);
-                    while let Some(ty) = idx {
-                        println!("searching type #{}", ty.index());
-                        match constant_ident_lookup(self.tree, ty, &ident).map_err(|e| DMError::new(self.location, e.desc))? {
-                            ConstLookup::Found(v) => return Ok(v),
-                            ConstLookup::Continue(i) => idx = i,
-                        }
-                    }
-                    return Err(self.error(format!("unknown variable: {}", ident)));
-                }
-            },
-            other => other,
         })
     }
+
+    fn prefab(&mut self, prefab: Prefab) -> Result<Prefab<Constant>, DMError> {
+        let mut vars = LinkedHashMap::new();
+        for (k, v) in prefab.vars {
+            vars.insert(k, self.expr(v)?);
+        }
+        Ok(Prefab { path: prefab.path, vars })
+    }
+
+    fn ident(&mut self, ident: String) -> Result<Constant, DMError> {
+        if ident == "null" {
+            Ok(Constant::Null)
+        } else {
+            let mut idx = Some(self.ty);
+            while let Some(ty) = idx {
+                println!("searching type #{}", ty.index());
+                match constant_ident_lookup(self.tree, ty, &ident).map_err(|e| DMError::new(self.location, e.desc))? {
+                    ConstLookup::Found(v) => return Ok(v),
+                    ConstLookup::Continue(i) => idx = i,
+                }
+            }
+            Err(self.error(format!("unknown variable: {}", ident)))
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ConstFn {
+    Icon,
+    Matrix,
+    Newlist,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Constant {
+    /// The literal `null`.
+    Null,
+    New {
+        type_: NewType<Constant>,
+        args: Vec<Constant>,
+    },
+    List(Vec<(Constant, Option<Constant>)>),
+    Call(ConstFn, Vec<Constant>),
+    Prefab(Prefab<Constant>),
+    String(String),
+    Resource(String),
+    Int(i32),
+    Float(f32),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AnnotatedConstant {
+    pub type_: String,
+    pub constant: Constant,
 }

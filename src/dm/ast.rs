@@ -67,17 +67,19 @@ impl AssignOp {
     }
 }
 
+pub type TypePath = Vec<(PathOp, String)>;
+
 #[derive(Clone, PartialEq, Debug)]
-pub struct Path {
-    pub parts: Vec<(PathOp, String)>,
-    pub vars: LinkedHashMap<String, Expression>,
+pub struct Prefab<E=Expression> {
+    pub path: Path,
+    pub vars: LinkedHashMap<String, E>,
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub enum NewType {
+pub enum NewType<E=Expression> {
     Implicit,
     Ident(String),
-    Path(Path),
+    Prefab(Prefab<E>),
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -136,8 +138,8 @@ pub enum Term {
     List(Vec<(Expression, Option<Expression>)>),
     /// An unscoped function call.
     Call(String, Vec<Expression>),
-    /// A path literal.
-    Path(Path),
+    /// A prefab literal (path + vars).
+    Prefab(Prefab),
     /// An identifier.
     Ident(String),
     /// A string literal.

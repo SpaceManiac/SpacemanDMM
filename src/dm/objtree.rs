@@ -18,9 +18,11 @@ pub struct VarValue {
     pub is_const: bool,
     pub is_tmp: bool,
 
+    pub type_path: String,
+
     pub location: Location,
     /// Evaluated value for non-static and non-tmp vars.
-    pub value: Option<super::ast::Term>,
+    pub value: Option<super::constants::Constant>,
     /// Syntactic value, as specified in the source.
     pub full_value: Option<Vec<Token>>,
 
@@ -257,6 +259,7 @@ impl ObjectTree {
             is_const,
             is_tmp,
             location,
+            type_path,
             full_value: None,
             value: None,
             being_evaluated: false,
