@@ -152,6 +152,22 @@ pub enum Term {
     Expr(Box<Expression>),
 }
 
+impl From<Expression> for Term {
+    fn from(expr: Expression) -> Term {
+        match expr {
+            Expression::Base { term, unary, follow } => if unary.is_empty() && follow.is_empty() {
+                match term {
+                    Term::Expr(expr) => Term::from(*expr),
+                    other => other,
+                }
+            } else {
+                Term::Expr(Box::new(Expression::Base { term, unary, follow }))
+            },
+            other => Term::Expr(Box::new(other))
+        }
+    }
+}
+
 /// A "follow", an expression part which is applied to a term or another follow.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Follow {

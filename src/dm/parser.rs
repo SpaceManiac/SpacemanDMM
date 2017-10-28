@@ -16,7 +16,7 @@ pub fn parse<I>(iter: I) -> Result<ObjectTree, DMError> where
         Some(()) => parser.tree,
         None => return parser.parse_error(),
     };
-    tree.assign_parent_types()?;
+    tree.finalize()?;
     Ok(tree)
 }
 

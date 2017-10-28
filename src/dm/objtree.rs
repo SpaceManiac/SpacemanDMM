@@ -3,7 +3,8 @@
 use std::collections::BTreeMap;
 use std::cell::Cell;
 
-use petgraph::graph::{Graph, NodeIndex};
+pub use petgraph::graph::NodeIndex;
+use petgraph::graph::Graph;
 use petgraph::visit::EdgeRef;
 
 use super::lexer::Token;
@@ -16,16 +17,26 @@ pub struct VarValue {
     pub is_static: bool,
     pub is_const: bool,
     pub is_tmp: bool,
-    pub value: Option<Vec<Token>>,
+
+    pub location: Location,
+    /// Evaluated value for non-static and non-tmp vars.
+    pub value: Option<super::ast::Term>,
+    /// Syntactic value, as specified in the source.
+    pub full_value: Option<Vec<Token>>,
+
+    pub being_evaluated: bool,
 }
 
 impl VarValue {
     fn set_value(&mut self, location: Location, value: Vec<Token>) -> Result<(), DMError> {
-        if !self.is_static {
-            super::constants::evaluate(location, &value)?;
-        }
-        self.value = Some(value);
+        // TODO warn if self.full_value.is_some()
+        self.location = location;
+        self.full_value = Some(value);
         Ok(())
+    }
+
+    pub fn is_const_evaluable(&self) -> bool {
+        self.is_const || (!self.is_static && !self.is_tmp)
     }
 }
 
@@ -37,9 +48,40 @@ pub struct Type {
     parent_type: Cell<NodeIndex>,
 }
 
+impl Type {
+    pub fn parent_type(&self) -> Option<NodeIndex> {
+        let idx = self.parent_type.get();
+        if idx == NodeIndex::new(::std::usize::MAX) {
+            None
+        } else {
+            Some(idx)
+        }
+    }
+}
+
+struct ParentIterMut<'a> {
+    graph: &'a mut Graph<Type, ()>,
+    current: Option<NodeIndex>,
+}
+
+impl<'a> ParentIterMut<'a> {
+    pub fn next(&mut self) -> Option<&mut Type> {
+        let i = match self.current.take() {
+            None => return None,
+            Some(i) => i,
+        };
+        let ty = match self.graph.node_weight_mut(i) {
+            None => return None,
+            Some(ty) => ty,
+        };
+        self.current = Some(ty.parent_type.get());
+        Some(ty)
+    }
+}
+
 #[derive(Debug)]
 pub struct ObjectTree {
-    graph: Graph<Type, ()>,
+    pub graph: Graph<Type, ()>,
     types: BTreeMap<String, NodeIndex>,
     blank_vars: Vars,
     const_fns: Vec<Token>,
@@ -75,19 +117,31 @@ impl ObjectTree {
         self.graph.node_weight(type_.parent_type.get())
     }
 
+    pub fn parent_of_mut(&mut self, type_: &Type) -> Option<&mut Type> {
+        self.graph.node_weight_mut(type_.parent_type.get())
+    }
+
     pub fn blank_vars(&self) -> &Vars {
         &self.blank_vars
     }
 
     // ------------------------------------------------------------------------
-    // Parsing
+    // Finalization
 
-    pub fn assign_parent_types(&mut self) -> Result<(), DMError> {
+    pub fn finalize(&mut self) -> Result<(), DMError> {
+        self.assign_parent_types()?;
+        self.evaluate_constants()?;
+        Ok(())
+    }
+
+    fn assign_parent_types(&mut self) -> Result<(), DMError> {
         for (path, &type_idx) in self.types.iter() {
             let type_ = self.graph.node_weight(type_idx).unwrap();
 
             let parent_type = if path == "/datum" {
-                continue; // parent is 0
+                // parented to the root type
+                type_.parent_type.set(NodeIndex::new(0));
+                continue;
             } else if path == "/atom" {
                 "/datum"
             } else if path == "/turf" {
@@ -109,10 +163,20 @@ impl ObjectTree {
                 //}
             };
 
-            type_.parent_type.set(self.types[parent_type]);
+            type_.parent_type.set(match self.types.get(parent_type) {
+                Some(&v) => v,
+                None => return Err(DMError::new(Location::default(), format!("bad parent_type for {}: {}", path, parent_type)))
+            });
         }
         Ok(())
     }
+
+    fn evaluate_constants(&mut self) -> Result<(), DMError> {
+        super::constants::evaluate_all(self)
+    }
+
+    // ------------------------------------------------------------------------
+    // Parsing
 
     fn subtype_or_add(&mut self, parent: NodeIndex, child: &str) -> NodeIndex {
         for edge in self.graph.edges(parent) {
@@ -163,7 +227,7 @@ impl ObjectTree {
                 Some(name) => name,
                 None => return Err(DMError::new(location, "var must have a name"))
             };
-            if prev == "global" || prev == "static" || prev == "tmp" || prev == "const" {
+            while prev == "global" || prev == "static" || prev == "tmp" || prev == "const" {
                 // TODO: store this information
                 if let Some(name) = rest.next() {
                     is_static |= prev == "global" || prev == "static";
@@ -189,7 +253,10 @@ impl ObjectTree {
             is_static,
             is_const,
             is_tmp,
-            value: None
+            location,
+            full_value: None,
+            value: None,
+            being_evaluated: false,
         }))
     }
 
