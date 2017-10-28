@@ -465,7 +465,7 @@ impl<I> Parser<I> where
             self.separated(Punctuation::Semicolon, Punctuation::RBrace, |this| {
                 let key = require!(this.ident());
                 require!(this.exact(Token::Punct(Punctuation::Assign)));
-                let value = require!(this.expression());
+                let value = require!(this.expression(false));
                 vars.insert(key, value);
                 SUCCESS
             })?;
@@ -474,12 +474,13 @@ impl<I> Parser<I> where
         success(Path { parts, vars })
     }
 
-    pub fn expression(&mut self) -> Status<Expression> {
+    pub fn expression(&mut self, disallow_assign: bool) -> Status<Expression> {
         let mut expr = leading!(self.group());
         loop {
             // try to read the next operator
             let next = self.next("binary operator")?;
             let &info = match match next {
+                Token::Punct(Punctuation::Assign) if disallow_assign => None,
                 Token::Punct(p) => BINARY_OPS.iter().find(|op| op.token == p),
                 _ => None,
             } {
@@ -491,11 +492,11 @@ impl<I> Parser<I> where
             };
 
             // trampoline high-strength expression parts as the lhs of the newly found op
-            expr = require!(self.expression_part(expr, info));
+            expr = require!(self.expression_part(expr, info, disallow_assign));
         }
     }
 
-    fn expression_part(&mut self, lhs: Expression, prev_op: OpInfo) -> Status<Expression> {
+    fn expression_part(&mut self, lhs: Expression, prev_op: OpInfo, disallow_assign: bool) -> Status<Expression> {
         use std::cmp::Ordering;
 
         let mut bits = vec![lhs];
@@ -505,6 +506,7 @@ impl<I> Parser<I> where
             // try to read the next operator...
             let next = self.next("binary operator")?;
             let &info = match match next {
+                Token::Punct(Punctuation::Assign) if disallow_assign => None,
                 Token::Punct(p) => BINARY_OPS.iter().find(|op| op.token == p),
                 _ => None
             } {
@@ -518,7 +520,7 @@ impl<I> Parser<I> where
             match info.strength.cmp(&prev_op.strength) {
                 Ordering::Greater => {
                     // the operator is stronger than us... recurse down
-                    rhs = require!(self.expression_part(rhs, info));
+                    rhs = require!(self.expression_part(rhs, info, disallow_assign));
                 }
                 Ordering::Less => {
                     // the operator is weaker than us... return up
@@ -638,7 +640,7 @@ impl<I> Parser<I> where
 
             // term :: '(' expression ')'
             Token::Punct(LParen) => {
-                let expr = require!(self.expression());
+                let expr = require!(self.expression(false));
                 require!(self.exact(Token::Punct(Punctuation::RParen)));
                 Term::Expr(Box::new(expr))
             },
@@ -659,7 +661,7 @@ impl<I> Parser<I> where
             }
             // follow :: '[' expression ']'
             Token::Punct(Punctuation::LBracket) => {
-                let expr = require!(self.expression());
+                let expr = require!(self.expression(false));
                 require!(self.exact(Token::Punct(Punctuation::RBracket)));
                 Follow::Index(Box::new(expr))
             }
@@ -670,16 +672,16 @@ impl<I> Parser<I> where
     fn arguments(&mut self) -> Status<Vec<Expression>> {
         // a parenthesized, comma-separated list of expressions
         leading!(self.exact(Token::Punct(Punctuation::LParen)));
-        success(require!(self.comma_sep(Punctuation::RParen, |this| this.expression())))
+        success(require!(self.comma_sep(Punctuation::RParen, |this| this.expression(false))))
     }
 
     fn list_arguments(&mut self) -> Status<Vec<(Expression, Option<Expression>)>> {
         // a parenthesized, comma-separated list of expressions
         leading!(self.exact(Token::Punct(Punctuation::LParen)));
         success(require!(self.comma_sep(Punctuation::RParen, |this| {
-            let first_expr = require!(this.expression());
+            let first_expr = require!(this.expression(true));
             success(if this.exact(Token::Punct(Punctuation::Assign))?.is_some() {
-                let second_expr = require!(this.expression());
+                let second_expr = require!(this.expression(false));
                 (first_expr, Some(second_expr))
             } else {
                 (first_expr, None)

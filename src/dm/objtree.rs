@@ -22,7 +22,7 @@ pub struct VarValue {
 impl VarValue {
     fn set_value(&mut self, location: Location, value: Vec<Token>) -> Result<(), DMError> {
         if !self.is_static {
-            super::constants::fold(location, &value)?;
+            super::constants::evaluate(location, &value)?;
         }
         self.value = Some(value);
         Ok(())

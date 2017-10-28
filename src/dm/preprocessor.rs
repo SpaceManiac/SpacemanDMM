@@ -43,6 +43,7 @@ fn default_defines(defines: &mut HashMap<String, Define>) {
         TURF_LAYER = Int(2);
         OBJ_LAYER = Int(3);
         MOB_LAYER = Int(4);
+        FLY_LAYER = Int(5);
         EFFECTS_LAYER = Int(5000);
         TOPDOWN_LAYER = Int(10000);
         BACKGROUND_LAYER = Int(20000);
@@ -86,6 +87,8 @@ fn default_defines(defines: &mut HashMap<String, Define>) {
         PLANE_MASTER = Int(128);
         TILE_BOUND = Int(256);
         PIXEL_SCALE = Int(512);
+
+        MOUSE_ACTIVE_POINTER = Int(1);
 
         MS_WINDOWS = String("MS Windows".into());
         UNIX = String("UNIX".into());

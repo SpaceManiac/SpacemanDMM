@@ -112,6 +112,16 @@ pub enum Expression {
     },
 }
 
+impl From<Term> for Expression {
+    fn from(term: Term) -> Expression {
+        Expression::Base {
+            unary: vec![],
+            follow: vec![],
+            term,
+        }
+    }
+}
+
 /// The structure of a term, the basic building block of the AST.
 #[derive(Clone, PartialEq, Debug)]
 pub enum Term {
