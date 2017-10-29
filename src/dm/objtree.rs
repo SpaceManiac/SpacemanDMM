@@ -8,6 +8,8 @@ use petgraph::graph::Graph;
 use petgraph::visit::EdgeRef;
 
 use super::lexer::Token;
+use super::ast::{TypePath, PathOp};
+use super::constants::Constant;
 use super::{DMError, Location};
 
 pub type Vars = ::linked_hash_map::LinkedHashMap<String, VarValue>;
@@ -18,11 +20,11 @@ pub struct VarValue {
     pub is_const: bool,
     pub is_tmp: bool,
 
-    pub type_path: String,
+    pub type_path: TypePath,
 
     pub location: Location,
     /// Evaluated value for non-static and non-tmp vars.
-    pub value: Option<super::constants::Constant>,
+    pub value: Option<Constant>,
     /// Syntactic value, as specified in the source.
     pub full_value: Option<Vec<Token>>,
 
@@ -84,7 +86,7 @@ impl<'a> ParentIterMut<'a> {
 #[derive(Debug)]
 pub struct ObjectTree {
     pub graph: Graph<Type, ()>,
-    types: BTreeMap<String, NodeIndex>,
+    pub types: BTreeMap<String, NodeIndex>,
     blank_vars: Vars,
     const_fns: Vec<Token>,
 }
@@ -245,10 +247,9 @@ impl ObjectTree {
             return Err(DMError::new(location, "proc looks like a var"))
         }
 
-        let mut type_path = String::new();
+        let mut type_path = Vec::new();
         for each in rest {
-            type_path.push('/');
-            type_path.push_str(prev);
+            type_path.push((PathOp::Slash, prev.to_owned()));
             prev = each;
         }
 

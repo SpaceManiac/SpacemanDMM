@@ -71,7 +71,7 @@ pub type TypePath = Vec<(PathOp, String)>;
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Prefab<E=Expression> {
-    pub path: Path,
+    pub path: TypePath,
     pub vars: LinkedHashMap<String, E>,
 }
 
