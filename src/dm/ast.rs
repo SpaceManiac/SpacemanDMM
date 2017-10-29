@@ -1,3 +1,5 @@
+use std::fmt;
+
 use linked_hash_map::LinkedHashMap;
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -16,6 +18,16 @@ pub enum PathOp {
     Slash,
     Dot,
     Colon,
+}
+
+impl fmt::Display for PathOp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            PathOp::Slash => f.write_str("/"),
+            PathOp::Dot => f.write_str("."),
+            PathOp::Colon => f.write_str(":"),
+        }
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -75,11 +87,42 @@ pub struct Prefab<E=Expression> {
     pub vars: LinkedHashMap<String, E>,
 }
 
+impl<E: fmt::Display> fmt::Display for Prefab<E> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for each in self.path.iter() {
+            write!(f, "{}{}", each.0, each.1)?;
+        }
+        if !self.vars.is_empty() {
+            write!(f, " {{")?;
+            let mut first = true;
+            for (k, v) in self.vars.iter() {
+                if !first {
+                    write!(f, "; ")?;
+                }
+                first = false;
+                write!(f, "{} = {}", k, v);
+            }
+            write!(f, "}}")?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, PartialEq, Debug)]
 pub enum NewType<E=Expression> {
     Implicit,
     Ident(String),
     Prefab(Prefab<E>),
+}
+
+impl<E: fmt::Display> fmt::Display for NewType<E> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            NewType::Implicit => Ok(()),
+            NewType::Ident(ref name) => write!(f, " {}", name),
+            NewType::Prefab(ref prefab) => write!(f, " {}", prefab),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]

@@ -14,7 +14,7 @@ use super::{DMError, Location};
 
 pub type Vars = ::linked_hash_map::LinkedHashMap<String, VarValue>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VarValue {
     pub is_static: bool,
     pub is_const: bool,

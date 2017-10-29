@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use std::io;
+use std::path::Path;
 
 macro_rules! try_iter {
     ($e:expr) => {
@@ -20,6 +21,14 @@ pub mod parser;
 pub mod objtree;
 pub mod ast;
 pub mod constants;
+
+pub fn parse_environment(dme: &Path) -> Result<objtree::ObjectTree, DMError> {
+    let mut preprocessor = preprocessor::Preprocessor::new(dme.to_owned()).unwrap();
+    parser::parse(indents::IndentProcessor::new(&mut preprocessor)).map_err(|e| {
+        pretty_print_error(&mut io::stdout(), &preprocessor, &e).unwrap();
+        e
+    })
+}
 
 // ----------------------------------------------------------------------------
 // Error handling

@@ -1,4 +1,5 @@
 //! The constant folder/evaluator, used by the preprocessor and object tree.
+use std::fmt;
 
 use linked_hash_map::LinkedHashMap;
 
@@ -324,6 +325,16 @@ pub enum ConstFn {
     Newlist,
 }
 
+impl fmt::Display for ConstFn {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match *self {
+            ConstFn::Icon => "icon",
+            ConstFn::Matrix => "matrix",
+            ConstFn::Newlist => "newlist",
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Constant {
     /// The literal `null`.
@@ -341,8 +352,77 @@ pub enum Constant {
     Float(f32),
 }
 
+impl Default for Constant {
+    fn default() -> Self {
+        Constant::Null(None)
+    }
+}
+
+impl fmt::Display for Constant {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Constant::Null(_) => f.write_str("null"),
+            Constant::New { ref type_, ref args } => {
+                write!(f, "new{}", type_)?;
+                // TODO: make the Vec an Option<Vec>
+                if !args.is_empty() {
+                    write!(f, "(")?;
+                    let mut first = true;
+                    for each in args.iter() {
+                        if !first {
+                            write!(f, ", ")?;
+                        }
+                        first = false;
+                        write!(f, "{}", each)?;
+                    }
+                    write!(f, ")")?;
+                }
+                Ok(())
+            },
+            Constant::List(ref list) => {
+                write!(f, "list(")?;
+                let mut first = true;
+                for &(ref key, ref val) in list.iter() {
+                    if !first {
+                        write!(f, ", ")?;
+                    }
+                    first = false;
+                    write!(f, "{}", key)?;
+                    if let Some(val) = val.as_ref() {
+                        write!(f, " = {}", val);
+                    }
+                }
+                write!(f, ")")
+            },
+            Constant::Call(const_fn, ref list) => {
+                write!(f, "{}(", const_fn)?;
+                let mut first = true;
+                for each in list.iter() {
+                    if !first {
+                        write!(f, ", ")?;
+                    }
+                    first = false;
+                    write!(f, "{}", each);
+                }
+                write!(f, ")")
+            },
+            Constant::Prefab(ref val) => write!(f, "{}", val),
+            Constant::String(ref val) => write!(f, "\"{}\"", val),
+            Constant::Resource(ref val) => write!(f, "'{}'", val),
+            Constant::Int(val) => write!(f, "{}", val),
+            Constant::Float(val) => write!(f, "{}", val),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypedConstant {
     pub type_hint: Option<TypePath>,
     pub constant: Constant,
+}
+
+impl fmt::Display for TypedConstant {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.constant.fmt(f)
+    }
 }
