@@ -11,7 +11,7 @@ use super::ast::*;
 pub fn evaluate_all(tree: &mut ObjectTree) -> Result<(), DMError> {
     for ty in tree.graph.node_indices() {
         let keys: Vec<String> = tree.graph.node_weight(ty).unwrap().vars.keys().cloned().collect();
-        println!("type #{} has these variables: {:?}", ty.index(), keys);
+        //println!("type #{} has these variables: {:?}", ty.index(), keys);
         for key in keys {
             if !tree.graph.node_weight(ty).unwrap().vars[&key].is_const_evaluable() {
                 continue
@@ -77,20 +77,33 @@ fn constant_ident_lookup(tree: &mut ObjectTree, ty: NodeIndex, ident: &str, must
 }
 
 fn evaluate(tree: &mut ObjectTree, ty: NodeIndex, location: Location, type_hint: Option<&TypePath>, value: Vec<Token>) -> Result<Constant, DMError> {
-    println!("{:?}", value);
-    {let so = ::std::io::stdout();
-    super::pretty_print(&mut so.lock(), value.iter().cloned().map(Ok), false)?;}
-    println!();
+    use std::io::Write;
+
+    //println!("{:?}", value);
+    let mut buffer = Vec::new();
+    super::pretty_print(&mut buffer, value.iter().cloned().map(Ok), false)?;
 
     let mut parser = super::parser::Parser::new(value.into_iter().map(|i| Ok(LocatedToken::new(location, i))));
     let v = match parser.expression(false)? {
         Some(v) => v,
         None => return Err(DMError::new(location, "not an expression")),
     };
-    println!("{:?}", v);
     let v = ConstantFolder { tree, location, ty }.expr(v, type_hint);
-    println!("{:?}", v);
-    println!();
+    match v {
+        Ok(ref v) => {
+            let mut buffer2 = Vec::new();
+            let _ = write!(buffer2, "{}", v);
+            if buffer != buffer2 {
+                println!("{}", ::std::str::from_utf8(&buffer).unwrap());
+                println!("{}", ::std::str::from_utf8(&buffer2).unwrap());
+                println!();
+            }
+        }
+        Err(_) => {
+            println!("{}", ::std::str::from_utf8(&buffer).unwrap());
+            println!();
+        }
+    }
 
     v
 }
@@ -221,7 +234,10 @@ impl<'a> ConstantFolder<'a> {
                         NewType::Implicit => NewType::Implicit,
                         NewType::Ident(_) => return Err(self.error("non-constant new expression")),
                     },
-                    args: self.expr_vec(args)?,
+                    args: match args {
+                        Some(args) => Some(self.expr_vec(args)?),
+                        None => None,
+                    },
                 }
             },
             Term::List(vec) => {
@@ -341,7 +357,7 @@ pub enum Constant {
     Null(Option<TypePath>),
     New {
         type_: NewType<Constant>,
-        args: Vec<Constant>,
+        args: Option<Vec<Constant>>,
     },
     List(Vec<(Constant, Option<Constant>)>),
     Call(ConstFn, Vec<Constant>),
@@ -365,7 +381,7 @@ impl fmt::Display for Constant {
             Constant::New { ref type_, ref args } => {
                 write!(f, "new{}", type_)?;
                 // TODO: make the Vec an Option<Vec>
-                if !args.is_empty() {
+                if let Some(args) = args.as_ref() {
                     write!(f, "(")?;
                     let mut first = true;
                     for each in args.iter() {
@@ -389,7 +405,7 @@ impl fmt::Display for Constant {
                     first = false;
                     write!(f, "{}", key)?;
                     if let Some(val) = val.as_ref() {
-                        write!(f, " = {}", val);
+                        write!(f, " = {}", val)?;
                     }
                 }
                 write!(f, ")")
@@ -402,7 +418,7 @@ impl fmt::Display for Constant {
                         write!(f, ", ")?;
                     }
                     first = false;
-                    write!(f, "{}", each);
+                    write!(f, "{}", each)?;
                 }
                 write!(f, ")")
             },

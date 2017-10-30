@@ -602,7 +602,7 @@ impl<I> Parser<I> where
                 };
 
                 // try to read an arglist
-                let a = self.arguments()?.unwrap_or_default();
+                let a = self.arguments()?;
 
                 Term::New {
                     type_: t,

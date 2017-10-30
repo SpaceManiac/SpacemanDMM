@@ -100,7 +100,7 @@ impl<E: fmt::Display> fmt::Display for Prefab<E> {
                     write!(f, "; ")?;
                 }
                 first = false;
-                write!(f, "{} = {}", k, v);
+                write!(f, "{} = {}", k, v)?;
             }
             write!(f, "}}")?;
         }
@@ -175,7 +175,7 @@ pub enum Term {
     /// A `new` call.
     New {
         type_: NewType,
-        args: Vec<Expression>,
+        args: Option<Vec<Expression>>,
     },
     /// A `list` call.
     List(Vec<(Expression, Option<Expression>)>),
