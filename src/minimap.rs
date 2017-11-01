@@ -3,7 +3,9 @@ use std::path::{Path, PathBuf};
 
 use ndarray::{self, Axis};
 
-use objtree::*;
+use dm::objtree::*;
+use dm::objtree::subpath as subtype;
+use dm::constants::Constant;
 use dmm::{Map, Grid, Prefab};
 use dmi::{Image, IconFile};
 
@@ -44,81 +46,80 @@ pub fn generate(
                 // icons which differ from their map states
                 let p = &atom.type_.path;
                 if p == "/obj/structures/table/wood/fancy/black" {
-                    atom.set_var("icon", "'icons/obj/smooth_structures/fancy_table_black.dmi'");
+                    atom.set_var("icon", Constant::Resource("icons/obj/smooth_structures/fancy_table_black.dmi".into()));
                 } else if p == "/obj/structures/table/wood/fancy" {
-                    atom.set_var("icon", "'icons/obj/smooth_structures/fancy_table.dmi'");
+                    atom.set_var("icon", Constant::Resource("icons/obj/smooth_structures/fancy_table.dmi".into()));
                 } else if subtype(p, "/turf/closed/mineral/") {
-                    atom.set_var("pixel_x", "-4");
-                    atom.set_var("pixel_y", "-4");
+                    atom.set_var("pixel_x", Constant::Int(-4));
+                    atom.set_var("pixel_y", Constant::Int(-4));
                 } else if subtype(p, "/obj/structure/bookcase/") {
-                    atom.set_var("icon_state", "\"book-0\"");
+                    atom.set_var("icon_state", Constant::string("book-0"));
                 } else if subtype(p, "/obj/structure/sign/poster/contraband/random/") {
-                    atom.set_var("icon_state", format!("\"poster{}\"", ::rand::thread_rng().gen_range(1, 1 + CONTRABAND_POSTERS)));
+                    atom.set_var("icon_state", Constant::string(format!("poster{}", ::rand::thread_rng().gen_range(1, 1 + CONTRABAND_POSTERS))));
                 } else if subtype(p, "/obj/structure/sign/poster/official/random/") {
-                    atom.set_var("icon_state", format!("\"poster{}_legit\"", ::rand::thread_rng().gen_range(1, 1 + LEGIT_POSTERS)));
+                    atom.set_var("icon_state", Constant::string(format!("poster{}_legit", ::rand::thread_rng().gen_range(1, 1 + LEGIT_POSTERS))));
                 } else if subtype(p, "/obj/structure/sign/poster/random/") {
                     let i = 1 + ::rand::thread_rng().gen_range(0, CONTRABAND_POSTERS + LEGIT_POSTERS);
                     if i <= CONTRABAND_POSTERS {
-                        atom.set_var("icon_state", format!("\"poster{}\"", i));
+                        atom.set_var("icon_state", Constant::string(format!("poster{}", i)));
                     } else {
-                        atom.set_var("icon_state", format!("\"poster{}_legit\"", i - CONTRABAND_POSTERS));
+                        atom.set_var("icon_state", Constant::string(format!("poster{}_legit", i - CONTRABAND_POSTERS)));
                     }
                 }
 
                 // overlays and underlays
                 if subtype(p, "/obj/structure/closet/") {
                     // closet doors
-                    let mut door = atom.get_var("icon_door", objtree);
-                    if door == "" || door == "null" {
-                        door = atom.get_var("icon_state", objtree);
-                    }
-                    let mut copy = atom.clone();
-                    copy.set_var("icon_state", format!("\"{}_door\"", &door[1..door.len()-1]));
-                    overlays.push(copy);
-                } else if subtype(p, "/obj/machinery/computer/") || subtype(p, "/obj/machinery/power/solar_control/") {
-                    // computer screens and keyboards
-                    let screen = atom.get_var("icon_screen", objtree);
-                    if screen != "" && screen != "null" {
+                    if let &Constant::String(ref door) = atom.get_var_notnull("icon_door", objtree)
+                            .unwrap_or_else(|| atom.get_var("icon_state", objtree)) {
                         let mut copy = atom.clone();
-                        copy.set_var("icon_state", screen);
+                        copy.set_var("icon_state", Constant::string(format!("{}_door", door)));
                         overlays.push(copy);
                     }
-                    let keyboard = atom.get_var("icon_keyboard", objtree);
-                    if keyboard != "" && keyboard != "null" {
+                } else if subtype(p, "/obj/machinery/computer/") || subtype(p, "/obj/machinery/power/solar_control/") {
+                    // computer screens and keyboards
+                    if let Some(screen) = atom.get_var_notnull("icon_screen", objtree) {
                         let mut copy = atom.clone();
-                        copy.set_var("icon_state", keyboard);
+                        copy.set_var("icon_state", screen.clone());
+                        overlays.push(copy);
+                    }
+                    if let Some(keyboard) = atom.get_var_notnull("icon_keyboard", objtree) {
+                        let mut copy = atom.clone();
+                        copy.set_var("icon_state", keyboard.clone());
                         overlays.push(copy);
                     }
                 } else if subtype(p, "/obj/structure/transit_tube/") {
                     generate_tube_overlays(&mut overlays, ctx, &atom);
                 } else if subtype(p, "/obj/machinery/door/airlock/") {
                     let mut copy = atom.clone();
-                    let glass = atom.get_var("glass", objtree);
-                    if glass == "" || glass == "FALSE" || glass == "0" {
-                        copy.set_var("icon_state", "\"fill_closed\"");
-                    } else if glass == "TRUE" || glass == "1" {
-                        copy.set_var("icon_state", "\"glass_closed\"");
-                        copy.set_var("icon", atom.get_var("overlays_file", objtree));
+                    if atom.get_var("glass", objtree).to_bool() {
+                        copy.set_var("icon_state", Constant::string("glass_closed"));
+                        copy.set_var("icon", atom.get_var("overlays_file", objtree).clone());
+                    } else {
+                        copy.set_var("icon_state", Constant::string("fill_closed"));
                     }
                     overlays.push(copy);
                 } else if subtype(p, "/obj/machinery/atmospherics/components/unary/") {
                     let aboveground = match atom.get_var("icon_state", objtree) {
-                        "\"vent_map\"" => "vent_off",
-                        "\"vent_map_on\"" => "vent_out",
-                        "\"vent_map_siphon_on\"" => "vent_in",
-                        "\"scrub_map\"" => "scrub_off",
-                        "\"scrub_map_on\"" => "scrub_on",
+                        &Constant::String(ref text) => match &**text {
+                            "vent_map" => "vent_off",
+                            "vent_map_on" => "vent_out",
+                            "vent_map_siphon_on" => "vent_in",
+                            "scrub_map" => "scrub_off",
+                            "scrub_map_on" => "scrub_on",
+                            _ => "",
+                        }
                         _ => "",
                     };
                     if !aboveground.is_empty() {
                         let mut copy = atom.clone();
-                        copy.set_var("icon_state", format!("{:?}", aboveground));
+                        copy.set_var("icon_state", Constant::string(aboveground));
                         overlays.push(copy);
-                        atom.set_var("layer", "-5");
+                        atom.set_var("layer", Constant::Int(-5));
                     }
                 } else if subtype(p, "/obj/item/storage/box/") && !subtype(p, "/obj/item/storage/box/papersack/") {
                     let mut copy = atom.clone();
-                    copy.set_var("icon_state", atom.get_var("illustration", objtree));
+                    copy.set_var("icon_state", atom.get_var("illustration", objtree).clone());
                     overlays.push(copy);
                 }
 
@@ -139,21 +140,27 @@ pub fn generate(
             continue;
         }
 
-        let icon = atom.get_var("icon", objtree);
-        if icon.is_empty() {
-            println!("no icon: {}", atom.type_.path);
-            continue
-        }
-        let icon_state = atom.get_var_or("icon_state", objtree, "\"\"");
-        let dir = atom.get_var("dir", objtree);
+        let icon = match atom.get_var("icon", objtree) {
+            &Constant::Resource(ref path) | &Constant::String(ref path) => path,
+            _ => {
+                println!("no icon: {}", atom.type_.path);
+                continue
+            }
+        };
+        let icon_state = match atom.get_var("icon_state", objtree) {
+            &Constant::String(ref string) => string,
+            _ => "",
+        };
+        let dir = atom.get_var("dir", objtree).to_int().unwrap_or(::dmi::SOUTH as i32) as u32;
 
         let path: &Path = icon[1..icon.len()-1].as_ref();
         let icon_file = icon_cache.entry(path.to_owned())
             .or_insert_with(|| IconFile::from_file(path).unwrap());
 
         if let Some(mut rect) = icon_file.rect_of(&icon_state[1..icon_state.len()-1], dir) {
-            let pixel_x = atom.get_var_or("pixel_x", objtree, "0").parse::<f32>().unwrap() as i32;
-            let pixel_y = atom.get_var_or("pixel_y", objtree, "0").parse::<f32>().unwrap() as i32 + icon_file.metadata.height as i32;
+            let pixel_x = atom.get_var("pixel_x", ctx.objtree).to_int().unwrap_or(0);
+            let pixel_y = atom.get_var("pixel_y", ctx.objtree).to_int().unwrap_or(0) +
+                icon_file.metadata.height as i32;
             let mut loc = (
                 (atom.loc.0 * TILE_SIZE) as i32 + pixel_x,
                 (atom.loc.1 * TILE_SIZE + TILE_SIZE) as i32 - pixel_y
@@ -180,41 +187,18 @@ pub fn generate(
             }
             let loc = (loc.0 as u32, loc.1 as u32);
 
-            // horrifying color handling
+            // HTML color parsing
             let color = match atom.get_var("color", objtree) {
-                "" | "\"\"" => [255, 255, 255, 255],
-                // presented now for your amusement: BYOND
-                // pipes
-                "25500" => [255, 0, 0, 255],
-                "02550" => [0, 255, 0, 255],
-                "00255" => [0, 0, 255, 255],
-                "640128" => [64, 0, 128, 255],
-                "302560" => [30, 255, 0, 255],
-                "0256249" => [0, 255, 249, 255],
-                "25512925" => [255, 129, 25, 255],
-                "2551980" => [255, 19, 80, 255],
-                "13043272" => [130, 43, 255, 255], // 272?? What??
-                "1280182" => [128, 0, 128, 255],
-                "696969" => [69, 69, 69, 255],
-                "\"red\"" => [255, 0, 0, 255],
-                // comfy chairs
-                "2551130" => [255, 113, 0, 255],
-                "255253195" => [255, 253, 195, 255],
-                "0255255" => [0, 255, 255, 255],
-                "167164153" => [167, 164, 153, 255],
-                "2552510" => [255, 251, 0, 255],
-                "255255255" => [255, 255, 255, 255],
-                // HTML color parsing
-                color => if color.starts_with("\"#") {
-                    assert_eq!(color.len(), 9);
+                &Constant::String(ref color) if color.starts_with("#") => {
+                    // TODO: support #XXX
+                    assert_eq!(color.len(), 7);
                     let mut sum = 0;
                     for ch in color[2..color.len()-1].chars() {
                         sum = 16 * sum + ch.to_digit(16).unwrap();
                     }
                     [(sum >> 16) as u8, (sum >> 8) as u8, sum as u8, 255]
-                } else {
-                    panic!("{} -> {}", atom.type_.path, color);
                 }
+                _ => [255, 255, 255, 255],
             };
 
             // the real business
@@ -246,21 +230,38 @@ pub fn get_atom_list<'a>(objtree: &'a ObjectTree, prefabs: &'a [Prefab], loc: (u
         };
 
         // invisible objects and syndicate balloons are not to show
-        if atom.get_var_or("invisibility", objtree, "0").parse::<f32>().unwrap() > 60. {
+        if atom.get_var("invisibility", objtree).to_float().unwrap_or(0.) > 60. {
             continue;
         }
-        if atom.get_var("icon", objtree) == "'icons/obj/items_and_weapons.dmi'" &&
-            atom.get_var("icon_state", objtree) == "\"syndballoon\""
+        if atom.get_var("icon", objtree).eq_resource("icons/obj/items_and_weapons.dmi") &&
+            atom.get_var("icon_state", objtree).eq_string("syndballoon")
         {
-            continue;
+            continue
         }
 
         // convert structure spanwers to their structures
         if spawner {
-            // BYOND
-            for each in atom.get_var("spawn_list", objtree).split("/obj/") {
-                if each.is_empty() { continue }
-                result.push(Atom::from_type(objtree, &format!("/obj/{}", each), loc).unwrap());
+            match atom.get_var("spawn_list", objtree) {
+                &Constant::List(ref elements) => {
+                    for &(ref key, _) in elements {
+                        // TODO: use a more civilized lookup method
+                        let mut type_key = String::new();
+                        let reference;
+                        match key {
+                            &Constant::String(ref s) => reference = s,
+                            &Constant::Prefab(ref fab) => {
+                                for each in fab.path.iter() {
+                                    use std::fmt::Write;
+                                    let _ = write!(type_key, "{}{}", each.0, each.1);
+                                }
+                                reference = &type_key;
+                            }
+                            _ => continue,
+                        }
+                        result.push(Atom::from_type(objtree, reference, loc).unwrap());
+                    }
+                }
+                _ => {}  // TODO: complain?
             }
         } else {
             result.push(atom);
@@ -273,10 +274,12 @@ pub fn get_atom_list<'a>(objtree: &'a ObjectTree, prefabs: &'a [Prefab], loc: (u
 // ----------------------------------------------------------------------------
 // Atoms and related utilities
 
+static NULL: Constant = Constant::Null(None);
+
 #[derive(Debug, Clone)]
 pub struct Atom<'a> {
     type_: &'a Type,
-    prefab: &'a Vars,
+    prefab: Option<&'a Vars>,
     vars: Vars,
     loc: (u32, u32),
 }
@@ -285,7 +288,7 @@ impl<'a> Atom<'a> {
     fn from_prefab(objtree: &'a ObjectTree, fab: &'a Prefab, loc: (u32, u32)) -> Option<Self> {
         objtree.find(&fab.path).map(|type_| Atom {
             type_,
-            prefab: &fab.vars,
+            prefab: Some(&fab.vars),
             vars: Default::default(),
             loc,
         })
@@ -294,7 +297,7 @@ impl<'a> Atom<'a> {
     fn from_type(objtree: &'a ObjectTree, path: &str, loc: (u32, u32)) -> Option<Self> {
         objtree.find(path).map(|type_| Atom {
             type_,
-            prefab: objtree.blank_vars(),
+            prefab: None,
             vars: Default::default(),
             loc,
         })
@@ -304,36 +307,47 @@ impl<'a> Atom<'a> {
         subtype(&self.type_.path, path)
     }
 
-    pub fn get_var(&self, key: &str, objtree: &'a ObjectTree) -> &str {
-        self.get_var_or(key, objtree, "")
+    pub fn get_var(&self, key: &str, objtree: &'a ObjectTree) -> &Constant {
+        self.get_var_spec(key, objtree).unwrap_or(&NULL)
     }
 
-    pub fn get_var_or<'b>(&'b self, key: &str, objtree: &'a ObjectTree, default: &'b str) -> &'b str {
-        if let Some(v) = self.vars.get(key) {
-            return v;
+    pub fn get_var_notnull(&self, key: &str, objtree: &'a ObjectTree) -> Option<&Constant> {
+        match self.get_var_spec(key, objtree) {
+            None | Some(&Constant::Null(_)) => None,
+            Some(other) => Some(other)
         }
-        if let Some(v) = self.prefab.get(key) {
-            return v;
+    }
+
+    pub fn get_var_spec(&self, key: &str, objtree: &'a ObjectTree) -> Option<&Constant> {
+        if let Some(v) = self.vars.get(key) {
+            return Some(v);
+        }
+        if let Some(ref prefab) = self.prefab {
+            if let Some(v) = prefab.get(key) {
+                return Some(v);
+            }
         }
         let mut current = Some(self.type_);
         while let Some(t) = current.take() {
             if let Some(v) = t.vars.get(key) {
-                return v;
+                return Some(v.value.constant.as_ref().unwrap_or(&NULL));
             }
             current = objtree.parent_of(t);
         }
-        default
+        None
     }
 
-    fn set_var<K: Into<String>, V: Into<String>>(&mut self, key: K, value: V) {
-        self.vars.insert(key.into(), value.into());
+    fn copy_var(&mut self, key: &str, from: &Atom, objtree: &'a ObjectTree) {
+        if let Some(var) = from.get_var_notnull(key, objtree) {
+            self.set_var(key, var.clone());
+        }
+    }
+
+    fn set_var<K: Into<String>>(&mut self, key: K, value: Constant) {
+        self.vars.insert(key.into(), value);
     }
 }
 
-pub fn subtype(path: &str, parent: &str) -> bool {
-    debug_assert!(path.starts_with("/") && parent.starts_with("/") && parent.ends_with("/"));
-    path == &parent[..parent.len() - 1] || path.starts_with(parent)
-}
 
 fn layer_of(objtree: &ObjectTree, atom: &Atom) -> i32 {
     let p = &atom.type_.path;
@@ -358,16 +372,10 @@ fn layer_of(objtree: &ObjectTree, atom: &Atom) -> i32 {
     } else if subtype(p, "/obj/machinery/navbeacon/") {
         -3_000
     } else {
-        let layer = atom.get_var("layer", objtree);
-        match layer {
-            "" => panic!("{}", atom.type_.path),
-            "TURF_LAYER" => 2_000,
-            "OBJ_LAYER" => 3_000,
-            "MOB_LAYER" => 4_000,
-            "FLY_LAYER" => 5_000,
-            layer => {
-                (layer.parse::<f32>().unwrap() * 1000.) as i32
-            }
+        match atom.get_var("layer", objtree) {
+            &Constant::Int(i) => (i % 1000) * 1000,
+            &Constant::Float(f) => ((f % 1000.) * 1000.) as i32,
+            other => panic!("not a layer: {:?}", other),
         }
     }
 }
@@ -391,12 +399,8 @@ const SMOOTH_DIAGONAL: u32 = 4;  // smooth diagonally
 const SMOOTH_BORDER: u32 = 8;  // smooth with the borders of the map
 
 fn handle_smooth<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, atom: Atom<'a>, mask: u32) {
-    let mut smooth_flags = 0;
-    for ch in atom.get_var("smooth", ctx.objtree).chars() {
-        if let Some(digit) = ch.to_digit(10) {
-            smooth_flags |= digit;
-        }
-    }
+    let mut smooth_flags = atom.get_var("smooth", ctx.objtree).to_int().unwrap_or(0) as u32;
+
     smooth_flags &= mask;
     if smooth_flags & (SMOOTH_TRUE | SMOOTH_MORE) != 0 {
         let adjacencies = calculate_adjacencies(ctx, &atom, smooth_flags);
@@ -460,41 +464,40 @@ fn find_type_in_direction<'a>(ctx: Context, source: &Atom, direction: u32, flags
     let atom_list = get_atom_list(ctx.objtree,
         &ctx.map.dictionary[&ctx.grid[ndarray::Dim([new_loc.1 as usize, new_loc.0 as usize])]],
         new_loc);
-    let can_smooth_with = source.get_var_or("canSmoothWith", ctx.objtree, "null");
-    if can_smooth_with == "null" {
-        // smooth only with same type
-        for atom in atom_list {
-            if eq(atom.type_, source.type_) {
-                return true;
-            }
-        }
-    } else if flags & SMOOTH_MORE != 0 {
-        // smooth with canSmoothWith + subtypes
-        for atom in atom_list {
-            let mut path = &atom.type_.path[..];
-            while !path.is_empty() {
-                if smoothlist_contains(can_smooth_with, path) {
+    match source.get_var("canSmoothWith", ctx.objtree) {
+        &Constant::List(ref elements) => if flags & SMOOTH_MORE != 0 {
+            // smooth with canSmoothWith + subtypes
+            // TODO
+            /*for atom in atom_list {
+                let mut path = &atom.type_.path[..];
+                while !path.is_empty() {
+                    if path == key {
+                        return true;
+                    }
+                    path = &path[..path.rfind("/").unwrap()];
+                }
+            }*/
+        } else {
+            // smooth only with exact types in canSmoothWith
+            // TODO
+            /*for atom in atom_list {
+                for &(ref key, _) in elements {
+                    if atom.type_.path == key {
+                        return true;
+                    }
+                }
+            }*/
+        },
+        _ => {
+            // smooth only with the same type
+            for atom in atom_list {
+                if eq(atom.type_, source.type_) {
                     return true;
                 }
-                path = &path[..path.rfind("/").unwrap()];
             }
-        }
-    } else {
-        // smooth only with exact types in canSmoothWith
-        for atom in atom_list {
-            if smoothlist_contains(can_smooth_with, &atom.type_.path) {
-                return true;
-            }
-        }
+        },
     }
     false
-}
-
-#[inline]
-fn smoothlist_contains(list: &str, path: &str) -> bool {
-    !path.is_empty() && (list.ends_with(path) ||
-        list.contains(&format!("{}/obj/", path)) ||
-        list.contains(&format!("{}/turf/", path)))
 }
 
 fn cardinal_smooth<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, source: &Atom<'a>, adjacencies: u32) {
@@ -519,10 +522,9 @@ fn cardinal_smooth<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, source: &At
         };
 
         let mut copy = source.clone();
-        copy.set_var("icon_state", format!("{:?}", name));
-        let smooth_icon = source.get_var("smooth_icon", ctx.objtree);
-        if !smooth_icon.is_empty() {
-            copy.set_var("icon", smooth_icon);
+        copy.set_var("icon_state", Constant::string(name));
+        if let Some(icon) = source.get_var_notnull("smooth_icon", ctx.objtree) {
+            copy.set_var("icon", icon.clone());
         }
         output.push(copy);
     }
@@ -552,7 +554,7 @@ fn diagonal_smooth<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, source: &At
     // turf underneath
     if subtype(&source.type_.path, "/turf/closed/wall/") {
         // BYOND memes
-        if source.get_var("fixed_underlay", ctx.objtree) == "\"space\"1" {
+        if source.get_var("fixed_underlay", ctx.objtree).index(&Constant::string("space")).is_some() {
             output.push(Atom::from_type(ctx.objtree, "/turf/open/space/basic", source.loc).unwrap());
         } else {
             let dir = flip(reverse_ndir(adjacencies));
@@ -585,12 +587,11 @@ fn diagonal_smooth<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, source: &At
     }
 
     // the diagonal overlay
-    for each in presets.iter() {
+    for &each in presets.iter() {
         let mut copy = source.clone();
-        copy.set_var("icon_state", format!("{:?}", each));
-        let smooth_icon = source.get_var("smooth_icon", ctx.objtree);
-        if !smooth_icon.is_empty() {
-            copy.set_var("icon", smooth_icon);
+        copy.set_var("icon_state", Constant::string(each));
+        if let Some(icon) = source.get_var_notnull("smooth_icon", ctx.objtree) {
+            copy.set_var("icon", icon.clone());
         }
         output.push(copy);
     }
@@ -688,8 +689,7 @@ fn right_45(dir: u32) -> u32 {
 fn generate_tube_overlays<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, source: &Atom<'a>) {
     use dmi::*;
 
-    let dir = ::dmi::evaluate_dir(source.get_var_or("dir", ctx.objtree, "SOUTH"));
-    let p = &source.type_.path;
+    let dir = source.get_var("dir", ctx.objtree).to_int().unwrap_or(::dmi::SOUTH as i32) as u32;
 
     let mut fulfill = |items: &[u32]| {
         for &dir in items {
@@ -708,6 +708,7 @@ fn generate_tube_overlays<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, sour
         }
     };
 
+    let p = &source.type_.path;
     if subtype(p, "/obj/structure/transit_tube/station/reverse/") {
         fulfill(&match dir {
             NORTH => [EAST],
@@ -773,20 +774,20 @@ fn create_tube_overlay<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, source:
     use dmi::*;
 
     let mut copy = Atom::from_type(ctx.objtree, "/atom", source.loc).unwrap();
-    copy.set_var("dir", format!("{}", dir));
-    copy.set_var("layer", source.get_var("layer", ctx.objtree));
-    copy.set_var("icon", source.get_var("icon", ctx.objtree));
+    copy.set_var("dir", Constant::Int(dir as i32));
+    copy.copy_var("layer", source, ctx.objtree);
+    copy.copy_var("icon", source, ctx.objtree);
     if shift != 0 {
-        copy.set_var("icon_state", "\"decorative_diag\"");
+        copy.set_var("icon_state", Constant::string("decorative_diag"));
         match shift {
-            NORTH => copy.set_var("pixel_y", "32"),
-            SOUTH => copy.set_var("pixel_y", "-32"),
-            EAST => copy.set_var("pixel_x", "32"),
-            WEST => copy.set_var("pixel_x", "-32"),
+            NORTH => copy.set_var("pixel_y", Constant::Int(32)),
+            SOUTH => copy.set_var("pixel_y", Constant::Int(-32)),
+            EAST => copy.set_var("pixel_x", Constant::Int(32)),
+            WEST => copy.set_var("pixel_x", Constant::Int(-32)),
             _ => {}
         }
     } else {
-        copy.set_var("icon_state", "\"decorative\"");
+        copy.set_var("icon_state", Constant::string("decorative"));
     }
     output.push(copy);
 }

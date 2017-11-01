@@ -364,18 +364,9 @@ impl<I> Parser<I> where
                 SUCCESS
             }
             Punct(Assign) => {
-                // TODO: read an expression properly
-                let mut value = Vec::new();
-                loop {
-                    match self.next("expression part")? {
-                        Punct(Semicolon) => break,
-                        other => {
-                            self.put_back(other);
-                            require!(self.read_any_tt(&mut value));
-                        }
-                    }
-                }
-                self.tree.add_var(self.location, new_stack.iter(), value)?;
+                let expr = require!(self.expression(false));
+                require!(self.exact(Punct(Semicolon)));
+                self.tree.add_var(self.location, new_stack.iter(), expr)?;
                 SUCCESS
             }
             t @ Punct(LParen) => {
@@ -664,6 +655,11 @@ impl<I> Parser<I> where
                 let expr = require!(self.expression(false));
                 require!(self.exact(Token::Punct(Punctuation::RBracket)));
                 Follow::Index(Box::new(expr))
+            },
+            // follow :: 'as' ident
+            Token::Ident(ref ident, _) if ident == "as" => {
+                let cast = require!(self.ident());
+                Follow::Cast(cast)
             }
             other => return self.try_another(other)
         })

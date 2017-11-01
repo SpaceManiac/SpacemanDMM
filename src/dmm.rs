@@ -7,6 +7,8 @@ use std::fmt;
 use ndarray::{self, Array3, Axis};
 use linked_hash_map::LinkedHashMap;
 
+use dm::constants::Constant;
+
 #[derive(Debug)]
 pub struct Map {
     pub key_length: u8,
@@ -17,11 +19,12 @@ pub struct Map {
 
 pub type Grid<'a> = ndarray::ArrayBase<ndarray::ViewRepr<&'a u32>, ndarray::Dim<[usize; 2]>>;
 
+// TODO: port to ast::Prefab<Constant>
 #[derive(Debug, Default)]
 pub struct Prefab {
     pub path: String,
     // insertion order, sort of most of the time alphabetical but not quite
-    pub vars: LinkedHashMap<String, String>,
+    pub vars: LinkedHashMap<String, Constant>,
 }
 
 impl Map {
@@ -223,11 +226,11 @@ fn parse_map(map: &mut Map, f: File) -> io::Result<()> {
                         curr_var.truncate(length);
                         skip_whitespace = true;
                     } else if ch == ';' {
-                        curr_prefab.vars.insert(take(&mut curr_var), take(&mut curr_datum));
+                        curr_prefab.vars.insert(take(&mut curr_var), parse_constant(take(&mut curr_datum))?);
                         skip_whitespace = true;
                     } else if ch == '}' {
                         if !curr_var.is_empty() {
-                            curr_prefab.vars.insert(take(&mut curr_var), take(&mut curr_datum));
+                            curr_prefab.vars.insert(take(&mut curr_var), parse_constant(take(&mut curr_datum))?);
                         }
                         in_varedit_block = false;
                     } else {
@@ -380,6 +383,18 @@ fn base_52_reverse(ch: char) -> Option<u32> {
     } else {
         None
     }
+}
+
+fn parse_constant(input: String) -> io::Result<Constant> {
+    use dm::lexer::Lexer;
+    use dm::parser::Parser;
+
+    // TODO: better error handling
+    let expr = Parser::new(Lexer::new(0, input.as_bytes()))
+        .expression(true)
+        .map_err(|_| io::Error::from(io::ErrorKind::InvalidData));
+
+    unimplemented!()
 }
 
 // ----------------------------------------------------------------------------

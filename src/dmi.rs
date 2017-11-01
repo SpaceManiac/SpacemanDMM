@@ -38,14 +38,14 @@ impl IconFile {
         })
     }
 
-    pub fn rect_of(&self, icon_state: &str, dir: &str) -> Option<Rect> {
+    pub fn rect_of(&self, icon_state: &str, dir: u32) -> Option<Rect> {
         let state_index = match self.metadata.state_names.get(icon_state) {
             Some(&i) => i,
             None => return None
         };
         let state = &self.metadata.states[state_index];
 
-        let dir_idx = match (state.dirs, evaluate_dir(dir)) {
+        let dir_idx = match (state.dirs, dir) {
             (Dirs::One, _) => 0,
             (Dirs::Eight, NORTHWEST) => 7,
             (Dirs::Eight, NORTHEAST) => 6,

@@ -186,7 +186,10 @@ mod test {
         let mut preprocessor = preprocessor::Preprocessor::new(PathBuf::from(TEST_FILE)).unwrap();
         let tree = parser::parse(indents::IndentProcessor::new(&mut preprocessor));
         match tree {
-            Ok(_) => println!("\n--------\nSuccess!\n--------"),
+            Ok(v) => {
+                println!("\n--------\nSuccess!\n--------");
+                v.to_xml("objtree.xml".as_ref()).unwrap();
+            }
             Err(e) => pretty_print_error(&mut io::stdout(), &preprocessor, &e).unwrap(),
         }
     }

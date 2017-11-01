@@ -4,21 +4,20 @@ use std::fmt;
 use linked_hash_map::LinkedHashMap;
 
 use super::{DMError, Location, HasLocation};
-use super::lexer::{Token, LocatedToken};
 use super::objtree::*;
 use super::ast::*;
 
 pub fn evaluate_all(tree: &mut ObjectTree) -> Result<(), DMError> {
     for ty in tree.graph.node_indices() {
         let keys: Vec<String> = tree.graph.node_weight(ty).unwrap().vars.keys().cloned().collect();
-        //println!("type #{} has these variables: {:?}", ty.index(), keys);
         for key in keys {
-            if !tree.graph.node_weight(ty).unwrap().vars[&key].is_const_evaluable() {
+            // TODO: when the builtins are added, fix this check
+            if !tree.graph.node_weight(ty).unwrap().get_declaration(&key, tree).map_or(true, |x| x.is_const_evaluable()) {
                 continue
             }
             match constant_ident_lookup(tree, ty, &key, false)? {
                 ConstLookup::Found(_, _) => {}
-                ConstLookup::Continue(_) => return Err(DMError::new(Location::default(), "oh no")),
+                ConstLookup::Continue(_) => panic!("{} {}", key, tree.graph.node_weight(ty).unwrap().path), //return Err(DMError::new(Location::default(), key)),
             }
         }
     }
@@ -33,79 +32,46 @@ enum ConstLookup {
 fn constant_ident_lookup(tree: &mut ObjectTree, ty: NodeIndex, ident: &str, must_be_static: bool) -> Result<ConstLookup, DMError> {
     // try to read the currently-set value if we can and
     // substitute that in, otherwise try to evaluate it.
-    let (location, type_hint, full_value) = {
+    let (location, type_hint, expr) = {
+        let decl = match tree.graph.node_weight(ty).unwrap().get_declaration(ident, tree).cloned() {
+            Some(decl) => decl,
+            None => return Ok(ConstLookup::Continue(None))  // definitely doesn't exist
+        };
+
         let type_ = tree.graph.node_weight_mut(ty).unwrap();
         let parent = type_.parent_type();
         match type_.vars.get_mut(ident) {
             None => { return Ok(ConstLookup::Continue(parent)); }
-            Some(var) => match var.value.clone() {
-                Some(value) => { return Ok(ConstLookup::Found(var.type_path.clone(), value)); }
-                None => match var.full_value.clone() {
-                    Some(full_value) => {
-                        if var.being_evaluated {
-                            return Err(DMError::new(var.location, format!("recursive constant reference: {}", ident)));
-                        } else if !var.is_const_evaluable() {
-                            return Err(DMError::new(var.location, format!("non-const variable: {}", ident)));
-                        } else if !var.is_static && must_be_static {
-                            return Err(DMError::new(var.location, format!("non-static variable: {}", ident)));
+            Some(var) => match var.value.constant.clone() {
+                Some(constant) => { return Ok(ConstLookup::Found(decl.type_path.clone(), constant)); }
+                None => match var.value.expression.clone() {
+                    Some(expr) => {
+                        if var.value.being_evaluated {
+                            return Err(DMError::new(var.value.location, format!("recursive constant reference: {}", ident)));
+                        } else if !decl.is_const_evaluable() {
+                            return Err(DMError::new(var.value.location, format!("non-const variable: {}", ident)));
+                        } else if !decl.is_static && must_be_static {
+                            return Err(DMError::new(var.value.location, format!("non-static variable: {}", ident)));
                         }
-                        var.being_evaluated = true;
-                        (var.location, var.type_path.clone(), full_value)
+                        var.value.being_evaluated = true;
+                        (var.value.location, decl.type_path, expr)
                     }
                     None => {
-                        // basically means "null"
-                        //return Err(DMError::new(var.location, format!("undefined constant reference: {}", ident)));
-                        (var.location, var.type_path.clone(), vec![Token::Ident("null".to_owned(), false)])
+                        let c = Constant::Null(Some(decl.type_path.clone()));
+                        var.value.constant = Some(c.clone());
+                        return Ok(ConstLookup::Found(decl.type_path, c));
                     }
                 }
             }
         }
     };
     // evaluate full_value
-    let value = evaluate(
-        tree,
-        ty,
-        location,
-        if type_hint.is_empty() { None } else { Some(&type_hint) },
-        full_value
-    )?;
+    let value = ConstantFolder { tree, location, ty }.expr(expr, if type_hint.is_empty() { None } else { Some(&type_hint) })?;
     // and store it into 'value', then return it
     let var = tree.graph.node_weight_mut(ty).unwrap().vars.get_mut(ident).unwrap();
-    var.value = Some(value.clone());
-    var.being_evaluated = false;
+    var.value.constant = Some(value.clone());
+    var.value.being_evaluated = false;
     Ok(ConstLookup::Found(type_hint, value))
-}
-
-fn evaluate(tree: &mut ObjectTree, ty: NodeIndex, location: Location, type_hint: Option<&TypePath>, value: Vec<Token>) -> Result<Constant, DMError> {
-    use std::io::Write;
-
-    //println!("{:?}", value);
-    let mut buffer = Vec::new();
-    super::pretty_print(&mut buffer, value.iter().cloned().map(Ok), false)?;
-
-    let mut parser = super::parser::Parser::new(value.into_iter().map(|i| Ok(LocatedToken::new(location, i))));
-    let v = match parser.expression(false)? {
-        Some(v) => v,
-        None => return Err(DMError::new(location, "not an expression")),
-    };
-    let v = ConstantFolder { tree, location, ty }.expr(v, type_hint);
-    match v {
-        Ok(ref v) => {
-            let mut buffer2 = Vec::new();
-            let _ = write!(buffer2, "{}", v);
-            if buffer != buffer2 {
-                println!("{}", ::std::str::from_utf8(&buffer).unwrap());
-                println!("{}", ::std::str::from_utf8(&buffer2).unwrap());
-                println!();
-            }
-        }
-        Err(_) => {
-            println!("{}", ::std::str::from_utf8(&buffer).unwrap());
-            println!();
-        }
-    }
-
-    v
 }
 
 struct ConstantFolder<'a> {
@@ -366,6 +332,79 @@ pub enum Constant {
     Resource(String),
     Int(i32),
     Float(f32),
+}
+
+impl Constant {
+    #[inline]
+    pub fn string<S: Into<String>>(s: S) -> Constant {
+        Constant::String(s.into())
+    }
+
+    pub fn contains_key(&self, key: &Constant) -> bool {
+        match self {
+            &Constant::List(ref elements) => for &(ref k, _) in elements {
+                if key == k {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+        false
+    }
+
+    pub fn index(&self, key: &Constant) -> Option<&Constant> {
+        match (self, key) {
+            (&Constant::List(ref elements), &Constant::Int(i)) => return elements.get(i as usize).map(|&(ref k, _)| k),
+            (&Constant::List(ref elements), key) => for &(ref k, ref v) in elements {
+                if key == k {
+                    return v.as_ref();
+                }
+            }
+            _ => {}
+        }
+        None
+    }
+
+    pub fn to_bool(&self) -> bool {
+        match self {
+            &Constant::Null(_) => false,
+            &Constant::Int(i) => i != 0,
+            &Constant::Float(f) => f != 0.,
+            &Constant::String(ref s) => !s.is_empty(),
+            _ => true,
+        }
+    }
+
+    pub fn to_float(&self) -> Option<f32> {
+        match self {
+            &Constant::Int(i) => Some(i as f32),
+            &Constant::Float(f) => Some(f),
+            _ => None,
+        }
+    }
+
+    pub fn to_int(&self) -> Option<i32> {
+        match self {
+            &Constant::Int(i) => Some(i),
+            &Constant::Float(f) => Some(f as i32),
+            _ => None,
+        }
+    }
+
+    pub fn eq_string(&self, string: &str) -> bool {
+        match self {
+            &Constant::String(ref s) => s == string,
+            _ => false,
+        }
+    }
+
+    pub fn eq_resource(&self, resource: &str) -> bool {
+        match self {
+            &Constant::String(ref s) |
+            &Constant::Resource(ref s) => s == resource,
+            _ => false,
+        }
+    }
 }
 
 impl Default for Constant {
