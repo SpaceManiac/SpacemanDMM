@@ -207,7 +207,7 @@ impl<I> Parser<I> where
 {
     pub fn new(input: I) -> Parser<I> {
         Parser {
-            tree: Default::default(),
+            tree: ObjectTree::with_builtins(),
 
             input,
             eof: false,

@@ -18,8 +18,9 @@ pub mod lexer;
 pub mod preprocessor;
 pub mod indents;
 pub mod parser;
-pub mod objtree;
 pub mod ast;
+pub mod objtree;
+pub mod builtins;
 pub mod constants;
 
 pub fn parse_environment(dme: &Path) -> Result<objtree::ObjectTree, DMError> {

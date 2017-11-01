@@ -11,13 +11,12 @@ pub fn evaluate_all(tree: &mut ObjectTree) -> Result<(), DMError> {
     for ty in tree.graph.node_indices() {
         let keys: Vec<String> = tree.graph.node_weight(ty).unwrap().vars.keys().cloned().collect();
         for key in keys {
-            // TODO: when the builtins are added, fix this check
             if !tree.graph.node_weight(ty).unwrap().get_declaration(&key, tree).map_or(true, |x| x.is_const_evaluable()) {
                 continue
             }
             match constant_ident_lookup(tree, ty, &key, false)? {
                 ConstLookup::Found(_, _) => {}
-                ConstLookup::Continue(_) => panic!("{} {}", key, tree.graph.node_weight(ty).unwrap().path), //return Err(DMError::new(Location::default(), key)),
+                ConstLookup::Continue(_) => return Err(DMError::new(Location::default(), format!("undefined {}/var/{}", tree.graph.node_weight(ty).unwrap().path, key))),
             }
         }
     }
@@ -133,6 +132,12 @@ impl<'a> ConstantFolder<'a> {
                     None => Err(self.error(format!("unknown typepath {}", full_path))),
                 }
             }
+            (Constant::String(string), Follow::Cast(cast)) => {
+                if cast != "text" {
+                    return Err(self.error(format!("cannot cast string to {:?}", cast)));
+                }
+                Ok(Constant::String(string))  // TODO: remove redundant clone
+            }
             (term, follow) => Err(self.error(format!("non-constant expression followers: {:?}.{:?}", term, follow)))
         }
     }
@@ -222,7 +227,6 @@ impl<'a> ConstantFolder<'a> {
                         (key, Some(val)) => {
                             let key = match Term::from(key) {
                                 Term::Ident(ref ident) => {
-                                    println!("WARNING: ident used as list key: {}", ident);
                                     Constant::String(ident.clone())
                                 },
                                 other => self.term(other, element_type)?,
@@ -290,7 +294,6 @@ impl<'a> ConstantFolder<'a> {
     fn recursive_lookup(&mut self, ty: NodeIndex, ident: &str, must_be_static: bool) -> Result<Constant, DMError> {
         let mut idx = Some(ty);
         while let Some(ty) = idx {
-            println!("searching type #{}", ty.index());
             match constant_ident_lookup(self.tree, ty, &ident, must_be_static).map_err(|e| DMError::new(self.location, e.desc))? {
                 ConstLookup::Found(_, v) => return Ok(v),
                 ConstLookup::Continue(i) => idx = i,

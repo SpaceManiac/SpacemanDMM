@@ -175,6 +175,12 @@ impl Default for ObjectTree {
 }
 
 impl ObjectTree {
+    pub fn with_builtins() -> Self {
+        let mut tree = Self::default();
+        super::builtins::register_builtins(&mut tree).unwrap();
+        tree
+    }
+
     // ------------------------------------------------------------------------
     // Access
 
@@ -313,7 +319,6 @@ impl ObjectTree {
 
         // time to add a new child
         let path = format!("{}/{}", self.graph.node_weight(parent).unwrap().path, child);
-        //println!("registered: {}", path);
         let node = self.graph.add_node(Type {
             name: child.to_owned(),
             path: path.clone(),

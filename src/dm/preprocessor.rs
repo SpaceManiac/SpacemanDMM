@@ -88,6 +88,19 @@ fn default_defines(defines: &mut HashMap<String, Define>) {
         TILE_BOUND = Int(256);
         PIXEL_SCALE = Int(512);
 
+        TOPDOWN_MAP = Int(0);
+        ISOMETRIC_MAP = Int(1);
+        SIDE_MAP = Int(2);
+        TILED_ICON_MAP = Int(32768);
+
+        CONTROL_FREAK_ALL = Int(1);
+        CONTROL_FREAK_SKIN = Int(2);
+        CONTROL_FREAK_MACROS = Int(4);
+
+        MOB_PERSPECTIVE = Int(0);
+        EYE_PERSPECTIVE = Int(1);
+        EDGE_PERSPECTIVE = Int(2);
+
         MOUSE_ACTIVE_POINTER = Int(1);
 
         MS_WINDOWS = String("MS Windows".into());
