@@ -1,0 +1,15 @@
+[package]
+name = "dreammaker"
+version = "0.1.0"
+authors = ["Tad Hardesty <tad@platymuus.com>"]
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+xml-rs = { version = "0.7.0", optional = true }
+petgraph = { version = "0.4.9", default-features = false }
+linked-hash-map = "0.5.0"
+
+[dev-dependencies]
+walkdir = "2.0.1"

@@ -1,5 +1,7 @@
 //! DreamMaker code parsing suite
-#![allow(dead_code)]
+#[cfg(feature="xml-rs")] extern crate xml;
+extern crate petgraph;
+extern crate linked_hash_map;
 
 use std::io;
 use std::path::Path;

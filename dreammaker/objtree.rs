@@ -132,26 +132,6 @@ pub fn subpath(path: &str, parent: &str) -> bool {
     path == &parent[..parent.len() - 1] || path.starts_with(parent)
 }
 
-struct ParentIterMut<'a> {
-    graph: &'a mut Graph<Type, ()>,
-    current: Option<NodeIndex>,
-}
-
-impl<'a> ParentIterMut<'a> {
-    pub fn next(&mut self) -> Option<&mut Type> {
-        let i = match self.current.take() {
-            None => return None,
-            Some(i) => i,
-        };
-        let ty = match self.graph.node_weight_mut(i) {
-            None => return None,
-            Some(ty) => ty,
-        };
-        self.current = Some(ty.parent_type.get());
-        Some(ty)
-    }
-}
-
 #[derive(Debug)]
 pub struct ObjectTree {
     pub graph: Graph<Type, ()>,
@@ -219,8 +199,8 @@ impl ObjectTree {
     // Finalization
 
     pub fn finalize(&mut self) -> Result<(), DMError> {
-        { flame!("assign parent types"); self.assign_parent_types()?; }
-        { flame!("evaluate constants"); super::constants::evaluate_all(self)?; }
+        self.assign_parent_types()?;
+        super::constants::evaluate_all(self)?;
         Ok(())
     }
 
@@ -264,6 +244,7 @@ impl ObjectTree {
     // ------------------------------------------------------------------------
     // XML Output
 
+    #[cfg(feature="xml-rs")]
     pub fn to_xml(&self, path: &::std::path::Path) -> ::xml::writer::Result<()> {
         use xml::writer::events::XmlEvent;
 
@@ -279,6 +260,7 @@ impl ObjectTree {
         self.to_xml_ty(&mut out, NodeIndex::new(0))
     }
 
+    #[cfg(feature="xml-rs")]
     fn to_xml_ty(&self, out: &mut ::xml::EventWriter<::std::fs::File>, ty: NodeIndex) -> ::xml::writer::Result<()> {
         use xml::writer::events::XmlEvent;
         out.write(XmlEvent::start_element(::xml::name::Name::local("object")))?;

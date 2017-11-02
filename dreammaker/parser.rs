@@ -11,7 +11,6 @@ pub fn parse<I>(iter: I) -> Result<ObjectTree, DMError> where
     I: IntoIterator<Item=Result<LocatedToken, DMError>>,
     I::IntoIter: HasLocation
 {
-    flame!("parse");
     let mut parser = Parser::new(iter.into_iter());
     let mut tree = match parser.root()? {
         Some(()) => parser.tree,
@@ -715,6 +714,7 @@ impl<I> Parser<I> where
     // ------------------------------------------------------------------------
     // Procs
 
+    #[allow(dead_code)]
     fn read_any_tt(&mut self, target: &mut Vec<Token>) -> Status<()> {
         // read a single arbitrary "token tree", either a group or a single token
         let start = self.next("anything")?;

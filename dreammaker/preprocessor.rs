@@ -17,7 +17,7 @@ enum Define {
 }
 
 fn default_defines(defines: &mut HashMap<String, Define>) {
-    use dm::lexer::Token::*;
+    use super::lexer::Token::*;
     macro_rules! c {
         ($($i:ident = $($x:expr),*;)*) => {
             $(defines.insert(stringify!($i).into(), Define::Constant(vec![$($x),*]));)*

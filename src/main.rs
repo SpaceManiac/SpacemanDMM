@@ -1,25 +1,25 @@
 //! SS13 minimap generation tool
-
-extern crate xml;
-extern crate petgraph;
+extern crate dreammaker as dm;
 
 extern crate png;
 extern crate inflate;
 
-extern crate linked_hash_map;
 #[macro_use] extern crate ndarray;
+extern crate linked_hash_map;
 extern crate rand;
 
 #[cfg(feature="flame")] extern crate flame;
 
 #[macro_use] mod utils;
-pub mod dm;
 pub mod dmi;
 pub mod dmm;
 pub mod minimap;
 
 fn main() {
-    let objtree = dm::parse_environment("tgstation.dme".as_ref()).unwrap();
+    let objtree = {
+        flame!("parse");
+        dm::parse_environment("tgstation.dme".as_ref()).unwrap()
+    };
     let mut icon_cache = std::collections::HashMap::new();
 
     for path in std::env::args().skip(1) {
