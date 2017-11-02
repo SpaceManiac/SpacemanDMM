@@ -1,7 +1,11 @@
+//! The DM abstract syntax tree.
+//!
+//! Most AST types can be pretty-printed using the `Display` trait.
 use std::fmt;
 
 use linked_hash_map::LinkedHashMap;
 
+/// The unary operators, both prefix and postfix.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum UnaryOp {
     Neg,
@@ -13,10 +17,16 @@ pub enum UnaryOp {
     PostDecr,
 }
 
+/// The DM path operators.
+///
+/// Which path operator is used typically only matters at the start of a path.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum PathOp {
+    /// `/` for absolute pathing.
     Slash,
+    /// `.` for checked relative pathing.
     Dot,
+    /// `:` for unchecked relative pathing.
     Colon,
 }
 
@@ -30,35 +40,34 @@ impl fmt::Display for PathOp {
     }
 }
 
+/// A series of identifiers separated by path operators.
+pub type TypePath = Vec<(PathOp, String)>;
+
+/// The binary operators.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum BinaryOp {
-    Pow,
     Add,
     Sub,
     Mul,
     Div,
+    Pow,
     Mod,
+    Eq,
+    NotEq,
     Less,
     Greater,
     LessEq,
     GreaterEq,
-    LShift,
-    RShift,
-    Eq,
-    NotEq,
     BitAnd,
     BitXor,
     BitOr,
+    LShift,
+    RShift,
     And,
     Or,
 }
 
-impl BinaryOp {
-    pub fn assignop(self) -> Option<AssignOp> {
-        None  // TODO
-    }
-}
-
+/// The assignment operators, including augmented assignment.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum AssignOp {
     Assign,
@@ -73,14 +82,42 @@ pub enum AssignOp {
     RShiftAssign,
 }
 
-impl AssignOp {
-    pub fn binop(self) -> Option<BinaryOp> {
-        None  // TODO
+macro_rules! augmented {
+    ($($bin:ident = $aug:ident;)*) => {
+        impl BinaryOp {
+            /// Get the corresponding augmented assignment operator, if available.
+            pub fn assign_op(self) -> Option<AssignOp> {
+                match self {
+                    $(BinaryOp::$bin => Some(AssignOp::$aug),)*
+                    _ => None,
+                }
+            }
+        }
+
+        impl AssignOp {
+            /// Get the corresponding binary operator, if available.
+            pub fn binary_op(self) -> Option<BinaryOp> {
+                match self {
+                    $(AssignOp::$aug => Some(BinaryOp::$bin),)*
+                    _ => None,
+                }
+            }
+        }
     }
 }
+augmented! {
+    Add = AddAssign;
+    Sub = SubAssign;
+    Mul = MulAssign;
+    Div = DivAssign;
+    BitAnd = BitAndAssign;
+    BitOr = BitOrAssign;
+    BitXor = BitXorAssign;
+    LShift = LShiftAssign;
+    RShift = RShiftAssign;
+}
 
-pub type TypePath = Vec<(PathOp, String)>;
-
+/// A path optionally followed by a set of variables.
 #[derive(Clone, PartialEq, Debug)]
 pub struct Prefab<E=Expression> {
     pub path: TypePath,
@@ -108,10 +145,14 @@ impl<E: fmt::Display> fmt::Display for Prefab<E> {
     }
 }
 
+/// The different forms of the `new` command.
 #[derive(Clone, PartialEq, Debug)]
 pub enum NewType<E=Expression> {
+    /// Implicit type, taken from context.
     Implicit,
+    /// The name of a variable in which to find the prefab to instantiate.
     Ident(String),
+    /// A prefab to be instantiated.
     Prefab(Prefab<E>),
 }
 
@@ -125,6 +166,7 @@ impl<E: fmt::Display> fmt::Display for NewType<E> {
     }
 }
 
+/// The structure of an expression, a tree of terms and operators.
 #[derive(Clone, PartialEq, Debug)]
 pub enum Expression {
     /// An expression containing a term directly. The term is evaluated first,
@@ -174,10 +216,12 @@ pub enum Term {
     Null,
     /// A `new` call.
     New {
+        /// The type to be instantiated.
         type_: NewType,
+        /// The list of arguments to pass to the `New()` proc.
         args: Option<Vec<Expression>>,
     },
-    /// A `list` call.
+    /// A `list` call. Elements have optional associations.
     List(Vec<(Expression, Option<Expression>)>),
     /// An unscoped function call.
     Call(String, Vec<Expression>),
@@ -213,7 +257,7 @@ impl From<Expression> for Term {
     }
 }
 
-/// A "follow", an expression part which is applied to a term or another follow.
+/// An expression part which is applied to a term or another follow.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Follow {
     /// Access a field of the value.

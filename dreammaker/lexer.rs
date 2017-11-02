@@ -31,6 +31,9 @@ macro_rules! table {
 // (paren) {brace} [bracket]
 table! {
     /// A punctuation token recognized by the language.
+    ///
+    /// Not all punctuation types will actually appear in the lexer's output;
+    /// some (such as comments) are handled internally.
     table PUNCT_TABLE: &'static [u8] => Punctuation;
     // Order is significant; see read_punct below.
     b"\t",  Tab;
@@ -92,6 +95,7 @@ table! {
     b"~",	BitNot;
 }
 
+/// A single DM token.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token {
     /// An end-of-file. Exists as a convenience and is not emitted by the lexer.
@@ -102,9 +106,11 @@ pub enum Token {
     Ident(String, bool),
     /// A string literal with no interpolation.
     String(String),
-    /// Interpolation markers. Strings and expressions in-between are combined.
+    /// The opening portion of an interpolated string. Followed by an expression.
     InterpStringBegin(String),
+    /// An internal portion of an interpolated string. Preceded and followed by an expression.
     InterpStringPart(String),
+    /// The closing portion of an interpolated string. Preceded by an expression.
     InterpStringEnd(String),
     /// A resource literal, referring to a filename.
     Resource(String),
@@ -190,6 +196,7 @@ impl fmt::Display for Token {
     }
 }
 
+/// A token with a location attached.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LocatedToken {
     pub location: Location,

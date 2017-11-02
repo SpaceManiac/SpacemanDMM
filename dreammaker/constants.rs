@@ -7,6 +7,8 @@ use super::{DMError, Location, HasLocation};
 use super::objtree::*;
 use super::ast::*;
 
+/// Evaluate all the type-level variables in an object tree into constants.
+#[doc(hidden)]
 pub fn evaluate_all(tree: &mut ObjectTree) -> Result<(), DMError> {
     for ty in tree.graph.node_indices() {
         let keys: Vec<String> = tree.graph.node_weight(ty).unwrap().vars.keys().cloned().collect();
@@ -23,6 +25,7 @@ pub fn evaluate_all(tree: &mut ObjectTree) -> Result<(), DMError> {
     Ok(())
 }
 
+/// Evaluate an expression in the absence of any surrounding context.
 pub fn simple_evaluate(expr: Expression) -> Result<Constant, DMError> {
     ConstantFolder { tree: None, location: Location::default(), ty: NodeIndex::new(0) }.expr(expr, None)
 }
@@ -313,10 +316,14 @@ impl<'a> ConstantFolder<'a> {
     }
 }
 
+/// The constant functions which are represented as-is.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ConstFn {
+    /// The `icon()` type constructor.
     Icon,
+    /// The `matrix()` type constructor.
     Matrix,
+    /// The `newlist()` function, which combines `new` mapped over a `list`.
     Newlist,
 }
 
@@ -330,20 +337,34 @@ impl fmt::Display for ConstFn {
     }
 }
 
+/// A DM constant, usually a literal or simple combination of other constants.
+///
+/// This is intended to represent the degree to which constants are evaluated
+/// before being displayed in DreamMaker.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Constant {
     /// The literal `null`.
     Null(Option<TypePath>),
+    /// A `new` call.
     New {
+        /// The type to be instantiated.
         type_: NewType<Constant>,
+        /// The list of arugments to pass to the `New()` proc.
         args: Option<Vec<Constant>>,
     },
+    /// A `list` literal. Elements have optional associations.
     List(Vec<(Constant, Option<Constant>)>),
+    /// A call to a constant type constructor.
     Call(ConstFn, Vec<Constant>),
+    /// A prefab literal.
     Prefab(Prefab<Constant>),
+    /// A string literal.
     String(String),
+    /// A resource literal.
     Resource(String),
+    /// An integer literal.
     Int(i32),
+    /// A floating-point literal.
     Float(f32),
 }
 
@@ -480,17 +501,5 @@ impl fmt::Display for Constant {
             Constant::Int(val) => write!(f, "{}", val),
             Constant::Float(val) => write!(f, "{}", val),
         }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct TypedConstant {
-    pub type_hint: Option<TypePath>,
-    pub constant: Constant,
-}
-
-impl fmt::Display for TypedConstant {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.constant.fmt(f)
     }
 }

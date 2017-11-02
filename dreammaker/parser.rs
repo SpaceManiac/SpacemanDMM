@@ -7,9 +7,10 @@ use super::lexer::{LocatedToken, Token, Punctuation};
 use super::objtree::ObjectTree;
 use super::ast::*;
 
+/// Parse a token stream, in the form emitted by the indent processor, into
+/// an object tree.
 pub fn parse<I>(iter: I) -> Result<ObjectTree, DMError> where
-    I: IntoIterator<Item=Result<LocatedToken, DMError>>,
-    I::IntoIter: HasLocation
+    I: IntoIterator<Item=Result<LocatedToken, DMError>>
 {
     let mut parser = Parser::new(iter.into_iter());
     let mut tree = match parser.root()? {
@@ -186,6 +187,10 @@ oper_table! { BINARY_OPS;
 // ----------------------------------------------------------------------------
 // The parser
 
+/// A single-lookahead, recursive-descent DM parser.
+///
+/// Results are accumulated into an inner `ObjectTree`. To parse an entire
+/// environment, use the `parse` or `parse_environment` functions.
 pub struct Parser<I> {
     tree: ObjectTree,
 
@@ -205,6 +210,7 @@ impl<I> HasLocation for Parser<I> {
 impl<I> Parser<I> where
     I: Iterator<Item=Result<LocatedToken, DMError>>
 {
+    /// Construct a new parser using the given input stream.
     pub fn new(input: I) -> Parser<I> {
         Parser {
             tree: ObjectTree::with_builtins(),
@@ -465,6 +471,10 @@ impl<I> Parser<I> where
         success(Prefab { path: parts, vars })
     }
 
+    /// Parse an expression at the current position.
+    ///
+    /// If `disallow_assign` is set, assignment operators are not considered.
+    /// This is useful when parsing the left-hand side of a list association.
     pub fn expression(&mut self, disallow_assign: bool) -> Status<Expression> {
         let mut expr = leading!(self.group());
         loop {
