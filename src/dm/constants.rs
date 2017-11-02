@@ -23,6 +23,10 @@ pub fn evaluate_all(tree: &mut ObjectTree) -> Result<(), DMError> {
     Ok(())
 }
 
+pub fn simple_evaluate(expr: Expression) -> Result<Constant, DMError> {
+    ConstantFolder { tree: None, location: Location::default(), ty: NodeIndex::new(0) }.expr(expr, None)
+}
+
 enum ConstLookup {
     Found(TypePath, Constant),
     Continue(Option<NodeIndex>),
@@ -65,7 +69,8 @@ fn constant_ident_lookup(tree: &mut ObjectTree, ty: NodeIndex, ident: &str, must
         }
     };
     // evaluate full_value
-    let value = ConstantFolder { tree, location, ty }.expr(expr, if type_hint.is_empty() { None } else { Some(&type_hint) })?;
+    let value = ConstantFolder { tree: Some(tree), location, ty }
+        .expr(expr, if type_hint.is_empty() { None } else { Some(&type_hint) })?;
     // and store it into 'value', then return it
     let var = tree.graph.node_weight_mut(ty).unwrap().vars.get_mut(ident).unwrap();
     var.value.constant = Some(value.clone());
@@ -74,7 +79,7 @@ fn constant_ident_lookup(tree: &mut ObjectTree, ty: NodeIndex, ident: &str, must
 }
 
 struct ConstantFolder<'a> {
-    tree: &'a mut ObjectTree,
+    tree: Option<&'a mut ObjectTree>,
     location: Location,
     ty: NodeIndex,
 }
@@ -127,7 +132,7 @@ impl<'a> ConstantFolder<'a> {
                     full_path.push('/');  // TODO: use path ops here?
                     full_path.push_str(&each.1);
                 }
-                match self.tree.types.get(&full_path) {
+                match self.tree.as_mut().and_then(|t| t.types.get(&full_path)) {
                     Some(&idx) => self.recursive_lookup(idx, &field_name, true),
                     None => Err(self.error(format!("unknown typepath {}", full_path))),
                 }
@@ -294,7 +299,12 @@ impl<'a> ConstantFolder<'a> {
     fn recursive_lookup(&mut self, ty: NodeIndex, ident: &str, must_be_static: bool) -> Result<Constant, DMError> {
         let mut idx = Some(ty);
         while let Some(ty) = idx {
-            match constant_ident_lookup(self.tree, ty, &ident, must_be_static).map_err(|e| DMError::new(self.location, e.desc))? {
+            let location = self.location;
+            if self.tree.is_none() {
+                return Err(self.error("cannot use idents during simple_evaluate"));
+            }
+            let tree = self.tree.as_mut().unwrap();
+            match constant_ident_lookup(tree, ty, &ident, must_be_static).map_err(|e| DMError::new(location, e.desc))? {
                 ConstLookup::Found(_, v) => return Ok(v),
                 ConstLookup::Continue(i) => idx = i,
             }

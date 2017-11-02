@@ -219,8 +219,8 @@ impl ObjectTree {
     // Finalization
 
     pub fn finalize(&mut self) -> Result<(), DMError> {
-        self.assign_parent_types()?;
-        super::constants::evaluate_all(self)?;
+        { flame!("assign parent types"); self.assign_parent_types()?; }
+        { flame!("evaluate constants"); super::constants::evaluate_all(self)?; }
         Ok(())
     }
 

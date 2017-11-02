@@ -42,7 +42,7 @@ pub struct DMError {
 
 #[allow(unused_variables)]
 impl DMError {
-    fn new<S: Into<String>>(location: Location, desc: S) -> DMError {
+    pub fn new<S: Into<String>>(location: Location, desc: S) -> DMError {
         DMError {
             location,
             desc: desc.into(),

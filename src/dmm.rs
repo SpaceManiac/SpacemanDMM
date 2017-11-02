@@ -7,6 +7,7 @@ use std::fmt;
 use ndarray::{self, Array3, Axis};
 use linked_hash_map::LinkedHashMap;
 
+use dm::{DMError, Location};
 use dm::constants::Constant;
 
 #[derive(Debug)]
@@ -28,12 +29,12 @@ pub struct Prefab {
 }
 
 impl Map {
-    pub fn from_file(path: &Path) -> io::Result<Map> {
+    pub fn from_file(path: &Path) -> Result<Map, DMError> {
         flame!("Map::from_file");
         let mut map = Map {
             key_length: 0,
             dictionary: Default::default(),
-            grid: Array3::default((1, 255, 255)),
+            grid: Array3::default((1, 1, 1)),
         };
         parse_map(&mut map, File::open(path)?)?;
         Ok(map)
@@ -147,7 +148,7 @@ fn take<T: Default>(t: &mut T) -> T {
     ::std::mem::replace(t, T::default())
 }
 
-fn parse_map(map: &mut Map, f: File) -> io::Result<()> {
+fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
     use std::cmp::max;
 
     let mut chars = ::utils::Chars::new(BufReader::new(f));
@@ -314,7 +315,7 @@ fn parse_map(map: &mut Map, f: File) -> io::Result<()> {
                     max_y = max(max_y, curr_y);
                     reading_coord = Coord::Z;
                 } else {
-                    unimplemented!() // error
+                    return Err(DMError::new(Location::default(), "Incorrect number of coordinates"));
                 }
             } else if ch == ')' {
                 assert_eq!(reading_coord, Coord::Z);
@@ -325,7 +326,7 @@ fn parse_map(map: &mut Map, f: File) -> io::Result<()> {
             } else {
                 match ch.to_digit(10) {
                     Some(x) => curr_num = 10 * curr_num + x as usize,
-                    None => panic!("bad digit")
+                    None => return Err(DMError::new(Location::default(), "bad digit in map coordinate"))
                 }
             }
         } else if in_map_string {
@@ -385,16 +386,19 @@ fn base_52_reverse(ch: char) -> Option<u32> {
     }
 }
 
-fn parse_constant(input: String) -> io::Result<Constant> {
+fn parse_constant(input: String) -> Result<Constant, DMError> {
     use dm::lexer::Lexer;
     use dm::parser::Parser;
 
-    // TODO: better error handling
-    let expr = Parser::new(Lexer::new(0, input.as_bytes()))
-        .expression(true)
-        .map_err(|_| io::Error::from(io::ErrorKind::InvalidData));
-
-    unimplemented!()
+    let mut bytes = input.as_bytes();
+    let expr = match Parser::new(Lexer::new(0, &mut bytes)).expression(true)? {
+        Some(expr) => expr,
+        None => return Err(DMError::new(Location::default(), format!("not an expression: {}", input))),
+    };
+    if !bytes.is_empty() {
+        return Err(DMError::new(Location::default(), format!("leftover: {:?} {}", input, bytes.len())));
+    }
+    ::dm::constants::simple_evaluate(expr)
 }
 
 // ----------------------------------------------------------------------------

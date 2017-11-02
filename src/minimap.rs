@@ -153,11 +153,11 @@ pub fn generate(
         };
         let dir = atom.get_var("dir", objtree).to_int().unwrap_or(::dmi::SOUTH as i32) as u32;
 
-        let path: &Path = icon[1..icon.len()-1].as_ref();
+        let path: &Path = icon.as_ref();
         let icon_file = icon_cache.entry(path.to_owned())
             .or_insert_with(|| IconFile::from_file(path).unwrap());
 
-        if let Some(mut rect) = icon_file.rect_of(&icon_state[1..icon_state.len()-1], dir) {
+        if let Some(mut rect) = icon_file.rect_of(&icon_state, dir) {
             let pixel_x = atom.get_var("pixel_x", ctx.objtree).to_int().unwrap_or(0);
             let pixel_y = atom.get_var("pixel_y", ctx.objtree).to_int().unwrap_or(0) +
                 icon_file.metadata.height as i32;
@@ -467,26 +467,22 @@ fn find_type_in_direction<'a>(ctx: Context, source: &Atom, direction: u32, flags
     match source.get_var("canSmoothWith", ctx.objtree) {
         &Constant::List(ref elements) => if flags & SMOOTH_MORE != 0 {
             // smooth with canSmoothWith + subtypes
-            // TODO
-            /*for atom in atom_list {
+            for atom in atom_list {
                 let mut path = &atom.type_.path[..];
                 while !path.is_empty() {
-                    if path == key {
+                    if smoothlist_contains(elements, path) {
                         return true;
                     }
                     path = &path[..path.rfind("/").unwrap()];
                 }
-            }*/
+            }
         } else {
             // smooth only with exact types in canSmoothWith
-            // TODO
-            /*for atom in atom_list {
-                for &(ref key, _) in elements {
-                    if atom.type_.path == key {
-                        return true;
-                    }
+            for atom in atom_list {
+                if smoothlist_contains(elements, &atom.type_.path) {
+                    return true;
                 }
-            }*/
+            }
         },
         _ => {
             // smooth only with the same type
@@ -496,6 +492,16 @@ fn find_type_in_direction<'a>(ctx: Context, source: &Atom, direction: u32, flags
                 }
             }
         },
+    }
+    false
+}
+
+fn smoothlist_contains(list: &[(Constant, Option<Constant>)], desired: &str) -> bool {
+    for &(ref key, _) in list {
+        // TODO: be more specific than to_string
+        if key.to_string() == desired {
+            return true;
+        }
     }
     false
 }
