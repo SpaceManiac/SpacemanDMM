@@ -407,7 +407,7 @@ fn parse_constant(input: String) -> Result<Constant, DMError> {
 #[cfg(test)]
 mod test {
     extern crate walkdir;
-    use self::walkdir::{DirEntry, WalkDir, WalkDirIterator};
+    use self::walkdir::{DirEntry, WalkDir};
     use super::*;
 
     #[test]
@@ -421,7 +421,7 @@ mod test {
                 .unwrap_or(true)
         }
 
-        for entry in WalkDir::new("../../")
+        for entry in WalkDir::new("../tgstation")
             .into_iter()
             .filter_entry(is_visible)
         {
