@@ -303,10 +303,6 @@ impl<'a> Atom<'a> {
         })
     }
 
-    pub fn istype(&self, path: &str) -> bool {
-        subtype(&self.type_.path, path)
-    }
-
     pub fn get_var(&self, key: &str, objtree: &'a ObjectTree) -> &Constant {
         self.get_var_spec(key, objtree).unwrap_or(&NULL)
     }
@@ -347,7 +343,6 @@ impl<'a> Atom<'a> {
         self.vars.insert(key.into(), value);
     }
 }
-
 
 fn layer_of(objtree: &ObjectTree, atom: &Atom) -> i32 {
     let p = &atom.type_.path;

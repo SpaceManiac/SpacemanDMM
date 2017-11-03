@@ -125,13 +125,15 @@ fn utf8_char_width(b: u8) -> usize {
 // Flamegraphing
 
 #[cfg(feature="flame")]
+#[macro_export]
 macro_rules! flame {
     ($e:expr) => {
-        let _guard = ::utils::flame_collapse(::flame::start_guard($e));
+        let _guard = $crate::utils::flame_collapse(::flame::start_guard($e));
     }
 }
 
 #[cfg(not(feature="flame"))]
+#[macro_export]
 macro_rules! flame {
     ($e:expr) => {}
 }

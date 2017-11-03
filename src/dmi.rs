@@ -65,23 +65,6 @@ impl IconFile {
     }
 }
 
-pub fn evaluate_dir(dir: &str) -> u32 {
-    match dir {
-        "SOUTH" | "" => SOUTH,
-        "NORTH" => NORTH,
-        "EAST" => EAST,
-        "WEST" => WEST,
-        "SOUTHEAST" => SOUTHEAST,
-        "SOUTHWEST" => SOUTHWEST,
-        "NORTHEAST" => NORTHEAST,
-        "NORTHWEST" => NORTHWEST,
-        other => match other.parse::<u32>() {
-            Ok(v) => v,
-            Err(_) => SOUTH,
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct Metadata {
     pub width: u32,

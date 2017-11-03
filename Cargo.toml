@@ -3,6 +3,14 @@ name = "spaceman-dmm"
 version = "0.1.0"
 authors = ["Tad Hardesty <tad@platymuus.com>"]
 
+[[bin]]
+name = "cli"
+path = "src/cli/main.rs"
+
+[[bin]]
+name = "editor"
+path = "src/editor/main.rs"
+
 [dependencies]
 png = "0.11.0"
 inflate = "0.3.3"
@@ -10,6 +18,7 @@ ndarray = "0.10.11"
 rand = "0.3.17"
 linked-hash-map = "0.5.0"
 flame = { version = "0.2.0", optional = true }
+conrod = { version = "0.56.0", features = ["glium", "winit"] }
 dreammaker = { path = "dreammaker" }
 
 [dev-dependencies]
@@ -17,3 +26,6 @@ walkdir = "2.0.1"
 
 [profile.dev]
 opt-level = 3
+
+[profile.release]
+lto = true
