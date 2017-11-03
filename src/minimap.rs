@@ -121,6 +121,32 @@ pub fn generate(
                     let mut copy = atom.clone();
                     copy.set_var("icon_state", atom.get_var("illustration", objtree).clone());
                     overlays.push(copy);
+                } else if subtype(p, "/obj/machinery/power/apc/") {
+                    // auto-set pixel location
+                    match atom.get_var("dir", objtree) {
+                        &Constant::Int(1) => atom.set_var("pixel_y", Constant::Int(23)),
+                        &Constant::Int(2) => atom.set_var("pixel_y", Constant::Int(-23)),
+                        &Constant::Int(4) => atom.set_var("pixel_x", Constant::Int(24)),
+                        &Constant::Int(8) => atom.set_var("pixel_x", Constant::Int(-25)),
+                        _ => {}
+                    }
+                    // status overlays
+                    for &each in ["apcox-1", "apco3-2", "apco0-3", "apco1-3", "apco2-3"].iter() {
+                        let mut copy = atom.clone();
+                        copy.set_var("icon_state", Constant::string(each));
+                        overlays.push(copy);
+                    }
+                    // the terminal
+                    let mut terminal = Atom::from_type(objtree, "/obj/machinery/power/terminal", atom.loc).unwrap();
+                    terminal.copy_var("dir", &atom, objtree);
+                    atoms.push(terminal);
+                } else if subtype(p, "/obj/machinery/firealarm/") {
+                    let mut copy = atom.clone();
+                    copy.set_var("icon_state", Constant::string("overlay_0"));
+                    overlays.push(copy);
+                    copy = atom.clone();
+                    copy.set_var("icon_state", Constant::string("overlay_clear"));
+                    overlays.push(copy);
                 }
 
                 // smoothing time
@@ -193,7 +219,7 @@ pub fn generate(
                     // TODO: support #XXX
                     assert_eq!(color.len(), 7);
                     let mut sum = 0;
-                    for ch in color[2..color.len()-1].chars() {
+                    for ch in color[1..color.len()].chars() {
                         sum = 16 * sum + ch.to_digit(16).unwrap();
                     }
                     [(sum >> 16) as u8, (sum >> 8) as u8, sum as u8, 255]
@@ -362,6 +388,8 @@ fn layer_of(objtree: &ObjectTree, atom: &Atom) -> i32 {
         -5_000
     } else if subtype(p, "/obj/structure/cable/") {
         -4_000
+    } else if subtype(p, "/obj/machinery/power/terminal/") {
+        -3_500
     } else if subtype(p, "/obj/structure/lattice/") {
         -8_000
     } else if subtype(p, "/obj/machinery/navbeacon/") {
