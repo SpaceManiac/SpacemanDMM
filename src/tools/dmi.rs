@@ -10,14 +10,14 @@ const TEXT: [u8; 4] = [b't', b'E', b'X', b't'];
 const ZTXT: [u8; 4] = [b'z', b'T', b'X', b't'];
 const VERSION: &str = "4.0";
 
-pub const NORTH: u32 = 1;
-pub const SOUTH: u32 = 2;
-pub const EAST: u32 = 4;
-pub const WEST: u32 = 8;
-pub const NORTHEAST: u32 = 5;
-pub const NORTHWEST: u32 = 9;
-pub const SOUTHEAST: u32 = 6;
-pub const SOUTHWEST: u32 = 10;
+pub const NORTH: i32 = 1;
+pub const SOUTH: i32 = 2;
+pub const EAST: i32 = 4;
+pub const WEST: i32 = 8;
+pub const NORTHEAST: i32 = 5;
+pub const NORTHWEST: i32 = 9;
+pub const SOUTHEAST: i32 = 6;
+pub const SOUTHWEST: i32 = 10;
 
 type Rect = (u32, u32, u32, u32);
 
@@ -38,7 +38,7 @@ impl IconFile {
         })
     }
 
-    pub fn rect_of(&self, icon_state: &str, dir: u32) -> Option<Rect> {
+    pub fn rect_of(&self, icon_state: &str, dir: i32) -> Option<Rect> {
         let state_index = match self.metadata.state_names.get(icon_state) {
             Some(&i) => i,
             None => return None

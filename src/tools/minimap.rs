@@ -122,12 +122,13 @@ pub fn generate(
                     copy.set_var("icon_state", atom.get_var("illustration", objtree).clone());
                     overlays.push(copy);
                 } else if subtype(p, "/obj/machinery/power/apc/") {
+                    use dmi::*;
                     // auto-set pixel location
                     match atom.get_var("dir", objtree) {
-                        &Constant::Int(1) => atom.set_var("pixel_y", Constant::Int(23)),
-                        &Constant::Int(2) => atom.set_var("pixel_y", Constant::Int(-23)),
-                        &Constant::Int(4) => atom.set_var("pixel_x", Constant::Int(24)),
-                        &Constant::Int(8) => atom.set_var("pixel_x", Constant::Int(-25)),
+                        &Constant::Int(NORTH) => atom.set_var("pixel_y", Constant::Int(23)),
+                        &Constant::Int(SOUTH) => atom.set_var("pixel_y", Constant::Int(-23)),
+                        &Constant::Int(EAST) => atom.set_var("pixel_x", Constant::Int(24)),
+                        &Constant::Int(WEST) => atom.set_var("pixel_x", Constant::Int(-25)),
                         _ => {}
                     }
                     // status overlays
@@ -177,7 +178,7 @@ pub fn generate(
             &Constant::String(ref string) => string,
             _ => "",
         };
-        let dir = atom.get_var("dir", objtree).to_int().unwrap_or(::dmi::SOUTH as i32) as u32;
+        let dir = atom.get_var("dir", objtree).to_int().unwrap_or(::dmi::SOUTH);
 
         let path: &Path = icon.as_ref();
         let icon_file = icon_cache.entry(path.to_owned())
@@ -407,24 +408,22 @@ fn layer_of(objtree: &ObjectTree, atom: &Atom) -> i32 {
 // Icon smoothing subsystem
 
 // (1 << N) where N is the usual value
-const N_NORTH: u32 = 2;
-const N_SOUTH: u32 = 4;
-const N_EAST: u32 = 16;
-const N_WEST: u32 = 256;
-const N_NORTHEAST: u32 = 32;
-const N_NORTHWEST: u32 = 512;
-const N_SOUTHEAST: u32 = 64;
-const N_SOUTHWEST: u32 = 1024;
+const N_NORTH: i32 = 2;
+const N_SOUTH: i32 = 4;
+const N_EAST: i32 = 16;
+const N_WEST: i32 = 256;
+const N_NORTHEAST: i32 = 32;
+const N_NORTHWEST: i32 = 512;
+const N_SOUTHEAST: i32 = 64;
+const N_SOUTHWEST: i32 = 1024;
 
-const SMOOTH_TRUE: u32 = 1;  // smooth with exact specified types or just itself
-const SMOOTH_MORE: u32 = 2;  // smooth with all subtypes thereof
-const SMOOTH_DIAGONAL: u32 = 4;  // smooth diagonally
-const SMOOTH_BORDER: u32 = 8;  // smooth with the borders of the map
+const SMOOTH_TRUE: i32 = 1;  // smooth with exact specified types or just itself
+const SMOOTH_MORE: i32 = 2;  // smooth with all subtypes thereof
+const SMOOTH_DIAGONAL: i32 = 4;  // smooth diagonally
+const SMOOTH_BORDER: i32 = 8;  // smooth with the borders of the map
 
-fn handle_smooth<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, atom: Atom<'a>, mask: u32) {
-    let mut smooth_flags = atom.get_var("smooth", ctx.objtree).to_int().unwrap_or(0) as u32;
-
-    smooth_flags &= mask;
+fn handle_smooth<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, atom: Atom<'a>, mask: i32) {
+    let smooth_flags = mask & atom.get_var("smooth", ctx.objtree).to_int().unwrap_or(0);
     if smooth_flags & (SMOOTH_TRUE | SMOOTH_MORE) != 0 {
         let adjacencies = calculate_adjacencies(ctx, &atom, smooth_flags);
         if smooth_flags & SMOOTH_DIAGONAL != 0 {
@@ -437,7 +436,7 @@ fn handle_smooth<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, atom: Atom<'a
     }
 }
 
-fn calculate_adjacencies(ctx: Context, atom: &Atom, flags: u32) -> u32 {
+fn calculate_adjacencies(ctx: Context, atom: &Atom, flags: i32) -> i32 {
     use dmi::*;
     // TODO: anchored check
 
@@ -472,7 +471,7 @@ fn calculate_adjacencies(ctx: Context, atom: &Atom, flags: u32) -> u32 {
     adjacencies
 }
 
-fn find_type_in_direction<'a>(ctx: Context, source: &Atom, direction: u32, flags: u32) -> bool {
+fn find_type_in_direction<'a>(ctx: Context, source: &Atom, direction: i32, flags: i32) -> bool {
     use std::ptr::eq;
 
     let (dx, dy) = offset(direction);
@@ -529,7 +528,7 @@ fn smoothlist_contains(list: &[(Constant, Option<Constant>)], desired: &str) -> 
     false
 }
 
-fn cardinal_smooth<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, source: &Atom<'a>, adjacencies: u32) {
+fn cardinal_smooth<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, source: &Atom<'a>, adjacencies: i32) {
     for &(what, f1, n1, f2, n2, f3) in &[
         ("1", N_NORTH, "n", N_WEST, "w", N_NORTHWEST),
         ("2", N_NORTH, "n", N_EAST, "e", N_NORTHEAST),
@@ -559,7 +558,7 @@ fn cardinal_smooth<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, source: &At
     }
 }
 
-fn diagonal_smooth<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, source: &Atom<'a>, adjacencies: u32) {
+fn diagonal_smooth<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, source: &Atom<'a>, adjacencies: i32) {
     let presets = if adjacencies == N_NORTH|N_WEST {
         ["d-se", "d-se-0"]
     } else if adjacencies == N_NORTH|N_EAST {
@@ -626,7 +625,7 @@ fn diagonal_smooth<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, source: &At
     }
 }
 
-fn offset(direction: u32) -> (i32, i32) {
+fn offset(direction: i32) -> (i32, i32) {
     use dmi::*;
     match direction {
         0 => (0, 0),
@@ -642,7 +641,7 @@ fn offset(direction: u32) -> (i32, i32) {
     }
 }
 
-fn flip(direction: u32) -> u32 {
+fn flip(direction: i32) -> i32 {
     use dmi::*;
     match direction {
         0 => 0,
@@ -658,16 +657,16 @@ fn flip(direction: u32) -> u32 {
     }
 }
 
-fn reverse_ndir(ndir: u32) -> u32 {
+fn reverse_ndir(ndir: i32) -> i32 {
     use dmi::*;
-    const NW1: u32 = N_NORTH|N_WEST;
-    const NW2: u32 = NW1|N_NORTHWEST;
-    const NE1: u32 = N_NORTH|N_EAST;
-    const NE2: u32 = NE1|N_NORTHEAST;
-    const SW1: u32 = N_SOUTH|N_WEST;
-    const SW2: u32 = SW1|N_SOUTHWEST;
-    const SE1: u32 = N_SOUTH|N_EAST;
-    const SE2: u32 = SE1|N_SOUTHEAST;
+    const NW1: i32 = N_NORTH|N_WEST;
+    const NW2: i32 = NW1|N_NORTHWEST;
+    const NE1: i32 = N_NORTH|N_EAST;
+    const NE2: i32 = NE1|N_NORTHEAST;
+    const SW1: i32 = N_SOUTH|N_WEST;
+    const SW2: i32 = SW1|N_SOUTHWEST;
+    const SE1: i32 = N_SOUTH|N_EAST;
+    const SE2: i32 = SE1|N_SOUTHEAST;
 
     match ndir {
         N_NORTH => NORTH,
@@ -682,7 +681,7 @@ fn reverse_ndir(ndir: u32) -> u32 {
     }
 }
 
-fn left_45(dir: u32) -> u32 {
+fn left_45(dir: i32) -> i32 {
     use dmi::*;
     match dir {
         NORTH => NORTHWEST,
@@ -697,7 +696,7 @@ fn left_45(dir: u32) -> u32 {
     }
 }
 
-fn right_45(dir: u32) -> u32 {
+fn right_45(dir: i32) -> i32 {
     use dmi::*;
     match dir {
         NORTH => NORTHEAST,
@@ -718,9 +717,9 @@ fn right_45(dir: u32) -> u32 {
 fn generate_tube_overlays<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, source: &Atom<'a>) {
     use dmi::*;
 
-    let dir = source.get_var("dir", ctx.objtree).to_int().unwrap_or(::dmi::SOUTH as i32) as u32;
+    let dir = source.get_var("dir", ctx.objtree).to_int().unwrap_or(::dmi::SOUTH);
 
-    let mut fulfill = |items: &[u32]| {
+    let mut fulfill = |items: &[i32]| {
         for &dir in items {
             if dir == NORTHEAST || dir == NORTHWEST || dir == SOUTHEAST || dir == SOUTHWEST {
                 if dir & NORTH != 0 {
@@ -799,11 +798,11 @@ fn generate_tube_overlays<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, sour
     }
 }
 
-fn create_tube_overlay<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, source: &Atom<'a>, dir: u32, shift: u32) {
+fn create_tube_overlay<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, source: &Atom<'a>, dir: i32, shift: i32) {
     use dmi::*;
 
     let mut copy = Atom::from_type(ctx.objtree, "/atom", source.loc).unwrap();
-    copy.set_var("dir", Constant::Int(dir as i32));
+    copy.set_var("dir", Constant::Int(dir));
     copy.copy_var("layer", source, ctx.objtree);
     copy.copy_var("icon", source, ctx.objtree);
     if shift != 0 {
