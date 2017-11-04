@@ -8,17 +8,17 @@ pub fn main() {
     let mut events_loop = glutin::EventsLoop::new();
     let window = glutin::WindowBuilder::new()
         .with_title("SpacemanDMM")
-        .with_dimensions(1024, 768);
+        .with_dimensions(1400, 768);
     let context = glutin::ContextBuilder::new()
         .with_vsync(true)
         .with_multisampling(4);
     let display = glium::Display::new(window, context, &events_loop).unwrap();
 
-    let mut ui = conrod::UiBuilder::new([1024., 768.])
+    let mut ui = conrod::UiBuilder::new([1400., 768.])
         .theme(conrod::Theme {
             background_color: conrod::Color::Rgba(240./255., 240./255., 240./255., 1.),
             border_color: conrod::Color::Rgba(160./255., 160./255., 160./255., 1.),
-            border_width: 0.5,
+            border_width: 1.,
             .. conrod::Theme::default()
         })
         .build();
@@ -76,8 +76,11 @@ widget_ids! {
         canvas_status,
 
         canvas_objtree,
-        canvas_bar2,
+        canvas_middle,
         canvas_map,
+
+        canvas_minimap,
+        canvas_instances,
 
         text_status,
     }
@@ -87,10 +90,15 @@ fn set_ui(ref mut ui: conrod::UiCell, ids: &Ids) {
     use conrod::*;
     use conrod::widget::*;
 
+    let middle_canvas_items = [
+        (ids.canvas_minimap, Canvas::new().length(256.)),
+        (ids.canvas_instances, Canvas::new().length_weight(1.)),
+    ];
+
     let main_canvas_items = [
         (ids.canvas_objtree, Canvas::new().length(256.)),
-        (ids.canvas_bar2, Canvas::new().length(256.)),
-        (ids.canvas_map, Canvas::new().length_weight(1.).color(color::CHARCOAL)),
+        (ids.canvas_middle, Canvas::new().length(256.).flow_down(&middle_canvas_items)),
+        (ids.canvas_map, Canvas::new().length_weight(1.)),
     ];
     let main_canvas = Canvas::new()
         .length_weight(1.)
@@ -107,7 +115,7 @@ fn set_ui(ref mut ui: conrod::UiCell, ids: &Ids) {
         .set(ids.canvas_root, ui);
 
     Text::new("SpacemanDMM")
-        .top_left_of(ids.canvas_status)
+        .top_left_with_margin_on(ids.canvas_status, 1.)
         .set(ids.text_status, ui);
 
     /*FileNavigator::all("../tgstation".as_ref())

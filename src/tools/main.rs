@@ -1,7 +1,7 @@
-#[macro_use] extern crate spaceman_dmm;
+#[macro_use] extern crate dmm_tools;
 extern crate dreammaker as dm;
 
-use spaceman_dmm::*;
+use dmm_tools::*;
 
 fn main() {
     let objtree = {
