@@ -1,0 +1,20 @@
+[package]
+name = "qt-extras"
+version = "0.1.0"
+authors = ["Tad Hardesty <tad@platymuus.com>"]
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+libc = "0.2.33"
+cpp = "0.3.2"
+cpp_utils = "0.2.0"
+qt_widgets = "0.2.3"
+
+[dependencies.glium]
+default-features = false
+version = "0.18.1"
+
+[build-dependencies]
+cpp_build = "0.3.2"

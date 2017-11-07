@@ -8,9 +8,13 @@ name = "editor"
 path = "src/editor/main.rs"
 
 [dependencies]
-conrod = { version = "0.56.0", features = ["glium", "winit"] }
 dreammaker = { path = "src/dreammaker" }
 dmm-tools = { path = "src/tools" }
+qt-extras = { path = "src/qt-extras" }
+
+[dependencies.glium]
+default-features = false
+version = "0.18.1"
 
 [profile.dev]
 opt-level = 3
