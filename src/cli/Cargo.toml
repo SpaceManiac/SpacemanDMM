@@ -1,0 +1,17 @@
+[package]
+name = "cli"
+version = "0.1.0"
+authors = ["Tad Hardesty <tad@platymuus.com>"]
+
+[[bin]]
+name = "dmm-tools"
+path = "main.rs"
+
+[dependencies]
+structopt = "0.1.3"
+structopt-derive = "0.1.3"
+dreammaker = { path = "../dreammaker" }
+dmm-tools = { path = "../tools" }
+
+[features]
+flame = ["dmm-tools/flame"]
