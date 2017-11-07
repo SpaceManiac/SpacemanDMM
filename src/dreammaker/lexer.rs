@@ -225,6 +225,15 @@ struct Interpolation {
     bracket_depth: usize,
 }
 
+// Used to track specially-lexed preprocessor directives like #warn
+#[derive(Debug, PartialEq, Copy, Clone)]
+enum Directive {
+    None,
+    Hash,
+    Ordinary,
+    Stringy,
+}
+
 /// The lexer, which serves as a source of tokens through iteration.
 #[derive(Debug)]
 pub struct Lexer<R: Read> {
@@ -232,6 +241,7 @@ pub struct Lexer<R: Read> {
     input: Bytes<R>,
     location: Location,
     at_line_head: bool,
+    directive: Directive,
     interp_stack: Vec<Interpolation>,
 }
 
@@ -253,6 +263,7 @@ impl<R: Read> Lexer<R> {
                 column: 1,
             },
             at_line_head: true,
+            directive: Directive::None,
             interp_stack: Vec::new(),
         }
     }
@@ -267,6 +278,7 @@ impl<R: Read> Lexer<R> {
                     self.location.line += 1;
                     self.location.column = 1;
                     self.at_line_head = true;
+                    self.directive = Directive::None;
                 } else {
                     if ch != b'\t' && ch != b' ' && self.at_line_head {
                         self.at_line_head = false;
@@ -379,19 +391,20 @@ impl<R: Read> Lexer<R> {
         String::from_utf8(ident).map_err(|_| self.error("non-utf8 identifier")) // TODO
     }
 
-    fn next_string(&mut self) -> Result<u8, DMError> {
+    fn next_string(&mut self, start_loc: Location) -> Result<u8, DMError> {
         match self.next() {
             Ok(Some(ch)) => Ok(ch),
-            Ok(None) => Err(self.error("unterminated string")),
+            Ok(None) => Err(DMError::new(start_loc, "unterminated string")),
             Err(e) => Err(e),
         }
     }
 
     fn read_resource(&mut self) -> Result<String, DMError> {
+        let start_loc = self.location();
         let mut buf = Vec::new();
 
         loop {
-            let ch = self.next_string()?;
+            let ch = self.next_string(start_loc)?;
             if ch == b'\'' {
                 break;
             } else {
@@ -403,13 +416,14 @@ impl<R: Read> Lexer<R> {
     }
 
     fn read_string(&mut self, end: &'static [u8], interp_closed: bool) -> Result<Token, DMError> {
+        let start_loc = self.location();
         let mut buf = Vec::new();
         let mut backslash = false;
         let mut idx = 0;
         let mut interp_opened = false;
 
         loop {
-            let ch = self.next_string()?;
+            let ch = self.next_string(start_loc)?;
             if ch == end[idx] && !backslash {
                 idx += 1;
                 if idx == end.len() {
@@ -538,8 +552,18 @@ impl<R: Read> Iterator for Lexer<R> {
             let loc = self.location;
             let locate = |token| LocatedToken::new(loc, token);
 
+            if self.directive == Directive::Stringy {
+                self.directive = Directive::None;
+                self.put_back(Some(first));
+                return Some(self.read_string(b"\n", false).map(locate));
+            }
+
             let punct = try_iter!(self.read_punct(first));
             return match punct {
+                Some(Hash) if self.directive == Directive::None => {
+                    self.directive = Directive::Hash;
+                    Some(Ok(locate(Punct(Hash))))
+                }
                 Some(BlockComment) => {
                     try_iter!(self.skip_until(b"*/"));
                     continue;
@@ -578,6 +602,13 @@ impl<R: Read> Iterator for Lexer<R> {
                         let next = try_iter!(self.next());
                         self.put_back(next);
                         let ws = next == Some(b' ') || next == Some(b'\t');
+                        if self.directive == Directive::Hash {
+                            if ident == "warn" || ident == "error" {
+                                self.directive = Directive::Stringy;
+                            } else {
+                                self.directive = Directive::Ordinary;
+                            }
+                        }
                         Some(Ok(locate(Ident(ident, ws))))
                     }
                     b'\\' => {
