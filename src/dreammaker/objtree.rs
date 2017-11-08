@@ -6,11 +6,15 @@ use std::cell::Cell;
 pub use petgraph::graph::NodeIndex;
 use petgraph::graph::Graph;
 use petgraph::visit::EdgeRef;
+use petgraph::Direction;
 use linked_hash_map::LinkedHashMap;
 
 use super::ast::{Expression, TypePath, PathOp, Prefab};
 use super::constants::Constant;
 use super::{DMError, Location};
+
+// ----------------------------------------------------------------------------
+// Variables
 
 pub type Vars = LinkedHashMap<String, Constant>;
 
@@ -46,9 +50,12 @@ pub struct TypeVar {
     pub declaration: Option<VarDeclaration>,
 }
 
+// ----------------------------------------------------------------------------
+// Types
+
 #[derive(Debug, Default)]
 pub struct Type {
-    name: String,
+    pub name: String,
     pub path: String,
     pub vars: LinkedHashMap<String, TypeVar>,
     parent_type: Cell<NodeIndex>,
@@ -132,6 +139,61 @@ pub fn subpath(path: &str, parent: &str) -> bool {
     path == &parent[..parent.len() - 1] || path.starts_with(parent)
 }
 
+// ----------------------------------------------------------------------------
+// Type references
+
+#[derive(Debug, Copy, Clone)]
+pub struct TypeRef<'a> {
+    idx: NodeIndex,
+    ty: &'a Type,
+}
+
+impl<'a> TypeRef<'a> {
+    fn new(tree: &'a ObjectTree, idx: NodeIndex) -> TypeRef<'a> {
+        TypeRef {
+            idx,
+            ty: tree.graph.node_weight(idx).unwrap(),
+        }
+    }
+
+    pub fn parent(&self, objtree: &'a ObjectTree) -> Option<TypeRef<'a>> {
+        objtree.graph.neighbors_directed(self.idx, Direction::Incoming).next().map(|i| TypeRef::new(objtree, i))
+    }
+
+    pub fn parent_type(&self, objtree: &'a ObjectTree) -> Option<TypeRef<'a>> {
+        let idx = self.ty.parent_type.get();
+        objtree.graph.node_weight(idx).map(|ty| TypeRef { idx, ty })
+    }
+
+    pub fn child(&self, name: &str, objtree: &'a ObjectTree) -> Option<TypeRef<'a>> {
+        for idx in objtree.graph.neighbors(self.idx) {
+            let ty = objtree.graph.node_weight(idx).unwrap();
+            if ty.name == name {
+                return Some(TypeRef { idx, ty });
+            }
+        }
+        None
+    }
+
+    pub fn children(&self, objtree: &'a ObjectTree) -> Vec<TypeRef<'a>> {
+        let mut output = Vec::new();
+        for idx in objtree.graph.neighbors(self.idx) {
+            output.push(TypeRef::new(objtree, idx));
+        }
+        output
+    }
+}
+
+impl<'a> ::std::ops::Deref for TypeRef<'a> {
+    type Target = Type;
+    fn deref(&self) -> &Type {
+        self.ty
+    }
+}
+
+// ----------------------------------------------------------------------------
+// The object tree itself
+
 #[derive(Debug)]
 pub struct ObjectTree {
     pub graph: Graph<Type, ()>,
@@ -163,6 +225,10 @@ impl ObjectTree {
 
     // ------------------------------------------------------------------------
     // Access
+
+    pub fn root(&self) -> TypeRef {
+        TypeRef::new(self, NodeIndex::new(0))
+    }
 
     pub fn find(&self, path: &str) -> Option<&Type> {
         self.types.get(path).and_then(|&ix| self.graph.node_weight(ix))

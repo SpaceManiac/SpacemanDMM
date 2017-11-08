@@ -29,7 +29,7 @@ pub mod constants;
 ///
 /// Errors are automatically pretty-printed to stdout before they are returned.
 pub fn parse_environment(dme: &Path) -> Result<objtree::ObjectTree, DMError> {
-    let mut preprocessor = preprocessor::Preprocessor::new(dme.to_owned()).unwrap();
+    let mut preprocessor = preprocessor::Preprocessor::new(dme.to_owned())?;
     parser::parse(indents::IndentProcessor::new(&mut preprocessor)).map_err(|e| {
         pretty_print_error(&mut io::stdout(), &preprocessor, &e).unwrap();
         e
