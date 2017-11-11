@@ -5,11 +5,12 @@
 
 extern crate dreammaker as dm;
 extern crate dmm_tools;
+extern crate same_file;
 
 mod map_renderer;
 
 use std::cell::RefCell;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use dm::objtree::{ObjectTree, TypeRef};
 
@@ -26,6 +27,8 @@ use qt::core::flags::Flags;
 use qt::cpp_utils::StaticCast;
 use qt::cpp_utils::static_cast_mut;
 
+use same_file::is_same_file;
+
 fn show_error(window: &mut Widget, message: &str) {
     use qt::widgets::message_box::*;
     unsafe {
@@ -38,9 +41,16 @@ fn show_error(window: &mut Widget, message: &str) {
     }
 }
 
+struct Map {
+    path: PathBuf,
+    dmm: dmm_tools::dmm::Map,
+}
+
 struct State {
     environment_file: Option<PathBuf>,
     objtree: Option<dm::objtree::ObjectTree>,
+    maps: Vec<Map>,
+    current_map: usize,
 }
 
 impl State {
@@ -48,6 +58,8 @@ impl State {
         State {
             environment_file: None,
             objtree: None,
+            maps: Vec::new(),
+            current_map: 0,
         }
     }
 
@@ -92,6 +104,37 @@ impl State {
         }
         self.objtree = Some(objtree);
     }
+
+    unsafe fn load_map(&mut self, path: PathBuf, window: &mut Widget) {
+        println!("Map: {}", path.display());
+
+        // Verify that we're in the right environment
+        let env = detect_environment(&path);
+        println!("Detect: {:?}", env);
+        match (env, self.environment_file.as_ref()) {
+            (Some(env), Some(real_env)) => if !is_same_file(env, real_env).unwrap_or(false) { return },
+            _ => return,
+        }
+
+        let map = match dmm_tools::dmm::Map::from_file(&path) {
+            Err(e) => {
+                let message = format!("Could not load the map:\n{}\n\n{}", path.display(), e.description());
+                return show_error(window, &message);
+            }
+            Ok(map) => map,
+        };
+
+        println!("Success");
+        self.maps.push(Map {
+            path: path,
+            dmm: map,
+        });
+    }
+
+    unsafe fn close_map(&mut self, index: usize) {
+        if index >= self.maps.len() { return }
+        self.maps.remove(index);
+    }
 }
 
 unsafe fn add_children(parent: &mut TreeWidgetItem, ty: TypeRef, tree: &ObjectTree) {
@@ -125,6 +168,28 @@ macro_rules! action {
     }
 }
 
+fn detect_environment(path: &Path) -> Option<PathBuf> {
+    let mut current = path.parent();
+    while let Some(dir) = current {
+        let read_dir = match std::fs::read_dir(dir) {
+            Ok(r) => r,
+            Err(_) => return None,
+        };
+        for entry in read_dir {
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => return None,
+            };
+            let path = entry.path();
+            if path.extension() == Some("dme".as_ref()) {
+                return Some(path);
+            }
+        }
+        current = dir.parent();
+    }
+    None
+}
+
 #[allow(unused_mut)]
 fn main() {
     let mut state = RefCell::new(State::new());
@@ -155,6 +220,21 @@ fn main() {
         tree_widget.set_column_count(1);
         tree_widget.set_header_hidden(true);
 
+        // map tabs
+        let mut map_tabs = qt::widgets::tab_bar::TabBar::new();
+        let map_tabs_ptr = map_tabs.as_mut_ptr();
+        map_tabs.set_tabs_closable(true);
+        map_tabs.set_expanding(false);
+        map_tabs.set_document_mode(true);
+        let tab_close_slot = qt::core::slots::SlotCInt::new(|idx| {
+            state.borrow_mut().close_map(idx as usize);
+        });
+        map_tabs.signals().tab_close_requested().connect(&tab_close_slot);
+        let tab_select_slot = qt::core::slots::SlotCInt::new(|idx| {
+            println!("select {}", idx);
+        });
+        map_tabs.signals().current_changed().connect(&tab_select_slot);
+
         // minimap
         let mut minimap_widget = qt::glium_widget::create(map_renderer::GliumTest);
         minimap_widget.set_minimum_size((256, 256));
@@ -166,22 +246,29 @@ fn main() {
         // instances
         let mut list_view = widgets::list_view::ListView::new();
 
-        // vertical layout
-        let mut v_layout = widgets::v_box_layout::VBoxLayout::new();
-        v_layout.add_widget(qt_own!(minimap_widget));
-        v_layout.add_widget(qt_own!(tools));
-        v_layout.add_widget(qt_own!(list_view));
-
         // map
         let mut map_widget = qt::glium_widget::create(map_renderer::GliumTest);
 
-        // horizontal layout
+        // the layouts
+        let mut tools_layout = widgets::v_box_layout::VBoxLayout::new();
+        tools_layout.add_widget(qt_own!(minimap_widget));
+        tools_layout.add_widget(qt_own!(tools));
+        tools_layout.add_widget(qt_own!(list_view));
+
         let mut h_layout = widgets::h_box_layout::HBoxLayout::new();
-        h_layout.add_layout(qt_own!(v_layout));
+        h_layout.set_spacing(5);
+        h_layout.add_layout(qt_own!(tools_layout));
         h_layout.add_widget((qt_own!(map_widget), 1));
         h_layout.set_contents_margins((0, 0, 0, 0));
+
+        let mut tabbed_layout = widgets::v_box_layout::VBoxLayout::new();
+        tabbed_layout.set_spacing(0);
+        tabbed_layout.add_widget(qt_own!(map_tabs));
+        tabbed_layout.add_layout((qt_own!(h_layout), 1));
+        tabbed_layout.set_contents_margins((0, 0, 0, 0));
+
         let mut h_layout_widget = widgets::widget::Widget::new();
-        h_layout_widget.set_layout(qt_own!(h_layout));
+        h_layout_widget.set_layout(qt_own!(tabbed_layout));
 
         // root splitter
         let mut splitter = widgets::splitter::Splitter::new(());
@@ -198,7 +285,7 @@ fn main() {
         action!(menu_file, "Open Environment", (tip = "Load a DME file."), {
             let file = FileDialog::get_open_file_name_unsafe((
                 static_cast_mut(window_ptr),
-                qstr!("Open File"),
+                qstr!("Open Environment"),
                 qstr!("."),
                 qstr!("Environments (*.dme)"),
             )).to_std_string();
@@ -208,9 +295,29 @@ fn main() {
         });
         menu_file.add_menu(qstr!("Recent Environments"));
         menu_file.add_separator();
-        action!(menu_file, "New", (key = ^CTRL KeyN), (tip = "Create a new map."));
-        action!(menu_file, "Open", (key = ^CTRL KeyO), (tip = "Open a map."));
-        action!(menu_file, "Close", (key = ^CTRL KeyW), (tip = "Close the current map."));
+        action!(menu_file, "New", (key = ^CTRL KeyN), (tip = "Create a new map."), {
+            let map_tabs = &mut *map_tabs_ptr;
+            map_tabs.add_tab(qstr!("New Map"));
+        });
+        action!(menu_file, "Open", (key = ^CTRL KeyO), (tip = "Open a map."), {
+            let file = FileDialog::get_open_file_name_unsafe((
+                static_cast_mut(window_ptr),
+                qstr!("Open Map"),
+                qstr!(&match state.borrow().environment_file.as_ref().and_then(|x| x.parent()).and_then(|x| x.to_str()) {
+                    Some(dir) => dir,
+                    None => ".",
+                }),
+                qstr!("Maps (*.dmm)"),
+            )).to_std_string();
+            if !file.is_empty() {
+                state.borrow_mut().load_map(PathBuf::from(file), (*window_ptr).static_cast_mut());
+            }
+        });
+        action!(menu_file, "Close", (key = ^CTRL KeyW), (tip = "Close the current map."), {
+            let mut state = state.borrow_mut();
+            let map = state.current_map;
+            state.close_map(map);
+        });
         menu_file.add_separator();
         action!(menu_file, "Exit", (key = ^ALT KeyF4), (slot = window.slots().close()));
 
@@ -252,7 +359,7 @@ fn main() {
         // - use the specified DME, or autodetect one from the first DMM
         // - preload all maps specified belonging to that DME
         let mut preload_maps = Vec::new();
-        'arg: for arg in std::env::args_os() {
+        for arg in std::env::args_os() {
             let mut state = state.borrow_mut();
             let path = PathBuf::from(arg);
 
@@ -264,34 +371,13 @@ fn main() {
                 state.load_env(path, (*window_ptr).static_cast_mut(), &mut *tree_widget_ptr);
             } else if path.extension() == Some("dmm".as_ref()) {
                 // determine the corresponding DME
-                let detected_env = {
-                    let mut current = path.parent();
-                    'detect: loop {
-                        if let Some(dir) = current {
-                            let read_dir = match std::fs::read_dir(dir) {
-                                Ok(r) => r,
-                                Err(_) => continue 'arg,
-                            };
-                            for entry in read_dir {
-                                let entry = match entry {
-                                    Ok(e) => e,
-                                    Err(_) => continue 'arg,
-                                };
-                                let path = entry.path();
-                                if path.extension() == Some("dme".as_ref()) {
-                                    break 'detect path;
-                                }
-                            }
-
-                            current = dir.parent();
-                        } else {
-                            continue 'arg;
-                        }
-                    }
+                let detected_env = match detect_environment(&path) {
+                    Some(env) => env,
+                    None => continue,
                 };
 
                 if let Some(env_file) = state.environment_file.as_ref() {
-                    if *env_file == detected_env {
+                    if !is_same_file(env_file, detected_env).unwrap_or(false) {
                         preload_maps.push(path);
                     }
                     continue;
@@ -305,6 +391,9 @@ fn main() {
         }
 
         // TODO: If no DME is loaded, attempt to open the most recent one, failing silently
+        for map in preload_maps {
+            state.borrow_mut().load_map(map, (*window_ptr).static_cast_mut());
+        }
 
         // cede control
         Application::exec()

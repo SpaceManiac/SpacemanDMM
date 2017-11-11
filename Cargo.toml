@@ -8,6 +8,7 @@ name = "editor"
 path = "src/editor/main.rs"
 
 [dependencies]
+same-file = "1.0.0"
 dreammaker = { path = "src/dreammaker" }
 dmm-tools = { path = "src/tools" }
 qt-extras = { path = "src/qt-extras" }
