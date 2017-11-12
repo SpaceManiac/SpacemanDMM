@@ -14,3 +14,4 @@ extern crate rand;
 pub mod dmi;
 pub mod dmm;
 pub mod minimap;
+pub mod lint;

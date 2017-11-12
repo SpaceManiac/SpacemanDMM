@@ -19,9 +19,21 @@ struct Opt {
     #[structopt(short="o", default_value="data/minimaps")]
     output: String,
 
-    /* /// Build minimaps of the specified maps.
+    /// Build minimaps of the specified maps.
     #[structopt(long="minimap")]
-    minimap: bool, */
+    minimap: bool,
+
+    /// Lint and automatically fix the specified maps.
+    #[structopt(long="lint")]
+    lint: bool,
+
+    /// Dry-run rather than actually saving out changes.
+    #[structopt(short="n", long="dry-run")]
+    dry_run: bool,
+
+    /// Reformat saved maps.
+    #[structopt(long="reformat")]
+    reformat: bool,
 
     /// The list of files to process.
     files: Vec<String>,
@@ -41,14 +53,29 @@ fn main() {
         let path: &std::path::Path = path.as_ref();
         println!("{}", path.display());
         flame!(path.file_name().unwrap().to_string_lossy().into_owned());
-        let map = dmm::Map::from_file(path).unwrap();
+        let mut map = dmm::Map::from_file(path).unwrap();
 
-        for z in 0..map.dim_z() {
-            println!("    generating z={}", 1 + z);
-            let image = minimap::generate(&objtree, &map, z, &mut icon_cache).unwrap();
-            let output = format!("{}/{}-{}.png", opt.output, path.file_stem().unwrap().to_string_lossy(), 1 + z);
-            println!("    saving {}", output);
-            image.to_file(output.as_ref()).unwrap();
+        let linted_any = opt.lint && {
+            let linted = { flame!("lint"); lint::check(&objtree, &mut map) };
+            print!("{}", linted);
+            linted.any()
+        };
+        if !opt.dry_run && (linted_any || opt.reformat) {
+            println!("    saving {}", path.display());
+            flame!("save");
+            map.to_file(path).unwrap();
+        }
+
+        if opt.minimap {
+            for z in 0..map.dim_z() {
+                println!("    generating z={}", 1 + z);
+                let image = minimap::generate(&objtree, &map, z, &mut icon_cache).unwrap();
+                let output = format!("{}/{}-{}.png", opt.output, path.file_stem().unwrap().to_string_lossy(), 1 + z);
+                if !opt.dry_run {
+                    println!("    saving {}", output);
+                    image.to_file(output.as_ref()).unwrap();
+                }
+            }
         }
     }
 
