@@ -473,7 +473,7 @@ impl fmt::Display for Constant {
                 let mut first = true;
                 for &(ref key, ref val) in list.iter() {
                     if !first {
-                        write!(f, ", ")?;
+                        write!(f, ",")?;
                     }
                     first = false;
                     write!(f, "{}", key)?;
