@@ -28,16 +28,16 @@ use qt::cpp_utils::static_cast_mut;
 
 use same_file::is_same_file;
 
-fn show_error(window: &mut Widget, message: &str) {
-    use qt::widgets::message_box::*;
-    unsafe {
-        MessageBox::critical((
-            window as *mut Widget,
-            qstr!("Error"),
-            qstr!(message),
-            Flags::from_enum(StandardButton::Ok),
-        ));
-    }
+// ----------------------------------------------------------------------------
+// State layout
+
+#[derive(Debug)]
+struct State {
+    widgets: EditorWindow,
+    environment_file: Option<PathBuf>,
+    objtree: Option<dm::objtree::ObjectTree>,
+    maps: Vec<Map>,
+    current_map: usize,
 }
 
 #[derive(Debug)]
@@ -46,137 +46,7 @@ struct Map {
     dmm: dmm_tools::dmm::Map,
 }
 
-#[derive(Debug)]
-struct State {
-    widgets: EditorWindow,
-
-    environment_file: Option<PathBuf>,
-    objtree: Option<dm::objtree::ObjectTree>,
-    maps: Vec<Map>,
-    current_map: usize,
-}
-
-impl State {
-    fn new() -> State {
-        State {
-            widgets: Default::default(),
-
-            environment_file: None,
-            objtree: None,
-            maps: Vec::new(),
-            current_map: 0,
-        }
-    }
-
-    unsafe fn load_env(&mut self, path: PathBuf) {
-        println!("Environment: {}", path.display());
-
-        let mut preprocessor;
-        match dm::preprocessor::Preprocessor::new(path.clone()) {
-            Err(_) => return show_error(self.widgets.window(), &format!("Could not open for reading:\n{}", path.display())),
-            Ok(pp) => preprocessor = pp,
-        };
-
-        let objtree;
-        match dm::parser::parse(dm::indents::IndentProcessor::new(&mut preprocessor)) {
-            Err(e) => {
-                let mut message = format!("\
-                    Could not parse the environment:\n\
-                    {}\n\n\
-                    This may be caused by incorrect or unusual code, but is typically a parser bug. \
-                    Change the code to use a more common form, or report the parsing problem.\n\
-                ", path.display());
-                let mut message_buf = Vec::new();
-                let _ = dm::pretty_print_error(&mut message_buf, &preprocessor, &e);
-                message.push_str(&String::from_utf8_lossy(&message_buf[..]));
-                return show_error(self.widgets.window(), &message);
-            },
-            Ok(t) => objtree = t,
-        }
-
-        self.environment_file = Some(path);
-        {
-            let widget = self.widgets.tree();
-            widget.clear();
-            let root = objtree.root();
-            for &root_child in ["area", "turf", "obj", "mob"].iter() {
-                let ty = root.child(root_child, &objtree).expect("builtins missing");
-
-                let mut root_item = TreeWidgetItem::new(());
-                root_item.set_text(0, qstr!(&ty.name));
-                add_children(&mut root_item, ty, &objtree);
-                widget.add_top_level_item(qt_own!(root_item));
-            }
-        }
-        self.objtree = Some(objtree);
-    }
-
-    unsafe fn load_map(&mut self, path: PathBuf) {
-        println!("Map: {}", path.display());
-
-        // Verify that we're in the right environment
-        let env = detect_environment(&path);
-        println!("Detect: {:?}", env);
-        match (env, self.environment_file.as_ref()) {
-            (Some(env), Some(real_env)) => if !is_same_file(env, real_env).unwrap_or(false) { return },
-            _ => return,
-        }
-
-        let map = match dmm_tools::dmm::Map::from_file(&path) {
-            Err(e) => {
-                let message = format!("Could not load the map:\n{}\n\n{}", path.display(), e.description());
-                return show_error(self.widgets.window(), &message);
-            }
-            Ok(map) => map,
-        };
-
-        println!("Success");
-        self.maps.push(Map {
-            path: path,
-            dmm: map,
-        });
-    }
-
-    unsafe fn close_map(&mut self, index: usize) {
-        if index >= self.maps.len() { return }
-        self.maps.remove(index);
-    }
-}
-
-unsafe fn add_children(parent: &mut TreeWidgetItem, ty: TypeRef, tree: &ObjectTree) {
-    let mut children = ty.children(tree);
-    children.sort_unstable_by(|a, b| a.name.cmp(&b.name));
-    for each in children {
-        let mut child = TreeWidgetItem::new(());
-        child.set_text(0, qstr!(&each.name));
-        add_children(&mut child, each, tree);
-        parent.add_child(qt_own!(child));
-    }
-}
-
-fn detect_environment(path: &Path) -> Option<PathBuf> {
-    let mut current = path.parent();
-    while let Some(dir) = current {
-        let read_dir = match std::fs::read_dir(dir) {
-            Ok(r) => r,
-            Err(_) => return None,
-        };
-        for entry in read_dir {
-            let entry = match entry {
-                Ok(e) => e,
-                Err(_) => return None,
-            };
-            let path = entry.path();
-            if path.extension() == Some("dme".as_ref()) {
-                return Some(path);
-            }
-        }
-        current = dir.parent();
-    }
-    None
-}
-
-macro_rules! qt_state {
+macro_rules! widget_defs {
     ($name:ident { $($field:ident: $typ:ty,)* }) => {
         #[derive(Debug)]
         struct $name {
@@ -199,11 +69,14 @@ macro_rules! qt_state {
     }
 }
 
-qt_state! { EditorWindow {
+widget_defs! { EditorWindow {
     window: widgets::main_window::MainWindow,
     tree: widgets::tree_widget::TreeWidget,
     map_tabs: widgets::tab_bar::TabBar,
 }}
+
+// ----------------------------------------------------------------------------
+// Main window layout and core signals/slots
 
 #[allow(unused_mut)]
 fn main() {
@@ -272,7 +145,11 @@ fn main() {
         });
         map_tabs.signals().tab_close_requested().connect(&tab_close_slot);
         let tab_select_slot = qt::core::slots::SlotCInt::new(|idx| {
-            println!("select {}", idx);
+            // might be called by adding a new tab, just do nothing
+            if let Ok(mut state) = state_cell.try_borrow_mut() {
+                state.current_map = idx as usize;
+                state.update_current_map();
+            }
         });
         map_tabs.signals().current_changed().connect(&tab_select_slot);
 
@@ -338,7 +215,7 @@ fn main() {
         menu_file.add_menu(qstr!("Recent Environments"));
         menu_file.add_separator();
         action!(menu_file, "New", (key = ^CTRL KeyN), (tip = "Create a new map."), {
-            state!().widgets.map_tabs().add_tab(qstr!("New Map"));
+            state!().new_map();
         });
         action!(menu_file, "Open", (key = ^CTRL KeyO), (tip = "Open a map."), {
             let state = state!();
@@ -440,4 +317,167 @@ fn main() {
         drop(state);  // release the RefCell
         Application::exec()
     })
+}
+
+// ----------------------------------------------------------------------------
+// Main window state handling
+
+impl State {
+    fn new() -> State {
+        State {
+            widgets: Default::default(),
+            environment_file: None,
+            objtree: None,
+            maps: Vec::new(),
+            current_map: 0,
+        }
+    }
+
+    unsafe fn load_env(&mut self, path: PathBuf) {
+        println!("Environment: {}", path.display());
+
+        let mut preprocessor;
+        match dm::preprocessor::Preprocessor::new(path.clone()) {
+            Err(_) => return show_error(self.widgets.window(), &format!("Could not open for reading:\n{}", path.display())),
+            Ok(pp) => preprocessor = pp,
+        };
+
+        let objtree;
+        match dm::parser::parse(dm::indents::IndentProcessor::new(&mut preprocessor)) {
+            Err(e) => {
+                let mut message = format!("\
+                    Could not parse the environment:\n\
+                    {}\n\n\
+                    This may be caused by incorrect or unusual code, but is typically a parser bug. \
+                    Change the code to use a more common form, or report the parsing problem.\n\
+                ", path.display());
+                let mut message_buf = Vec::new();
+                let _ = dm::pretty_print_error(&mut message_buf, &preprocessor, &e);
+                message.push_str(&String::from_utf8_lossy(&message_buf[..]));
+                return show_error(self.widgets.window(), &message);
+            },
+            Ok(t) => objtree = t,
+        }
+
+        self.environment_file = Some(path);
+        {
+            let widget = self.widgets.tree();
+            widget.clear();
+            let root = objtree.root();
+            for &root_child in ["area", "turf", "obj", "mob"].iter() {
+                let ty = root.child(root_child, &objtree).expect("builtins missing");
+
+                let mut root_item = TreeWidgetItem::new(());
+                root_item.set_text(0, qstr!(&ty.name));
+                add_children(&mut root_item, ty, &objtree);
+                widget.add_top_level_item(qt_own!(root_item));
+            }
+        }
+        self.objtree = Some(objtree);
+    }
+
+    unsafe fn new_map(&mut self) {
+        // self.widgets.map_tabs().add_tab(qstr!("New Map"));
+    }
+
+    unsafe fn load_map(&mut self, path: PathBuf) {
+        println!("Map: {}", path.display());
+
+        // Verify that we're in the right environment
+        let env = detect_environment(&path);
+        match (env, self.environment_file.as_ref()) {
+            (Some(env), Some(real_env)) => if !is_same_file(env, real_env).unwrap_or(false) { return },
+            _ => return show_error(self.widgets.window(), "It looks like that map belongs to a different environment."),
+        }
+
+        let map = match dmm_tools::dmm::Map::from_file(&path) {
+            Err(e) => {
+                let message = format!("Could not load the map:\n{}\n\n{}", path.display(), e.description());
+                return show_error(self.widgets.window(), &message);
+            }
+            Ok(map) => map,
+        };
+
+        match path.file_name() {
+            None => return show_error(self.widgets.window(), "Weird: no filename?"),
+            Some(file_name) => { self.widgets.map_tabs().add_tab(qstr!(file_name.to_string_lossy())); }
+        }
+
+        self.current_map = self.maps.len();
+        self.widgets.map_tabs().set_current_index(self.current_map as i32);
+        self.maps.push(Map {
+            path: path,
+            dmm: map,
+        });
+        self.update_current_map();
+    }
+
+    unsafe fn close_map(&mut self, index: usize) {
+        if index >= self.maps.len() { return }
+        self.maps.remove(index);
+        self.widgets.map_tabs().remove_tab(index as i32);
+        self.update_current_map();
+    }
+
+    unsafe fn update_current_map(&mut self) {
+        if self.maps.is_empty() {
+            self.current_map = 0;
+            // clear the displays
+            return
+        }
+
+        if self.current_map >= self.maps.len() {
+            self.current_map = self.maps.len() - 1;
+        }
+
+        // ...
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Helpers
+
+unsafe fn add_children(parent: &mut TreeWidgetItem, ty: TypeRef, tree: &ObjectTree) {
+    let mut children = ty.children(tree);
+    children.sort_unstable_by(|a, b| a.name.cmp(&b.name));
+    for each in children {
+        let mut child = TreeWidgetItem::new(());
+        child.set_text(0, qstr!(&each.name));
+        add_children(&mut child, each, tree);
+        parent.add_child(qt_own!(child));
+    }
+}
+
+fn show_error(window: &mut Widget, message: &str) {
+    use qt::widgets::message_box::*;
+    unsafe {
+        MessageBox::critical((
+            window as *mut Widget,
+            qstr!("Error"),
+            qstr!(message),
+            Flags::from_enum(StandardButton::Ok),
+        ));
+    }
+}
+
+fn detect_environment(path: &Path) -> Option<PathBuf> {
+    let mut current = path.parent();
+    while let Some(dir) = current {
+        let read_dir = match std::fs::read_dir(dir) {
+            Ok(r) => r,
+            Err(_) => return None,
+        };
+        for entry in read_dir {
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => return None,
+            };
+            let path = entry.path();
+            if path.extension() == Some("dme".as_ref()) {
+                return Some(path);
+            }
+        }
+        current = dir.parent();
+    }
+    None
 }
