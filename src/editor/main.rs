@@ -18,7 +18,6 @@ use qt::widgets;
 use qt::widgets::widget::Widget;
 use qt::widgets::application::Application;
 use qt::widgets::file_dialog::FileDialog;
-use qt::widgets::tree_widget::TreeWidget;
 use qt::widgets::tree_widget_item::TreeWidgetItem;
 use qt::gui::key_sequence::KeySequence;
 use qt::core::connection::Signal;
@@ -41,12 +40,16 @@ fn show_error(window: &mut Widget, message: &str) {
     }
 }
 
+#[derive(Debug)]
 struct Map {
     path: PathBuf,
     dmm: dmm_tools::dmm::Map,
 }
 
+#[derive(Debug)]
 struct State {
+    widgets: EditorWindow,
+
     environment_file: Option<PathBuf>,
     objtree: Option<dm::objtree::ObjectTree>,
     maps: Vec<Map>,
@@ -56,6 +59,8 @@ struct State {
 impl State {
     fn new() -> State {
         State {
+            widgets: Default::default(),
+
             environment_file: None,
             objtree: None,
             maps: Vec::new(),
@@ -63,12 +68,12 @@ impl State {
         }
     }
 
-    unsafe fn load_env(&mut self, path: PathBuf, window: &mut Widget, widget: &mut TreeWidget) {
+    unsafe fn load_env(&mut self, path: PathBuf) {
         println!("Environment: {}", path.display());
 
         let mut preprocessor;
         match dm::preprocessor::Preprocessor::new(path.clone()) {
-            Err(_) => return show_error(window, &format!("Could not open for reading:\n{}", path.display())),
+            Err(_) => return show_error(self.widgets.window(), &format!("Could not open for reading:\n{}", path.display())),
             Ok(pp) => preprocessor = pp,
         };
 
@@ -84,13 +89,14 @@ impl State {
                 let mut message_buf = Vec::new();
                 let _ = dm::pretty_print_error(&mut message_buf, &preprocessor, &e);
                 message.push_str(&String::from_utf8_lossy(&message_buf[..]));
-                return show_error(window, &message);
+                return show_error(self.widgets.window(), &message);
             },
             Ok(t) => objtree = t,
         }
 
         self.environment_file = Some(path);
         {
+            let widget = self.widgets.tree();
             widget.clear();
             let root = objtree.root();
             for &root_child in ["area", "turf", "obj", "mob"].iter() {
@@ -105,7 +111,7 @@ impl State {
         self.objtree = Some(objtree);
     }
 
-    unsafe fn load_map(&mut self, path: PathBuf, window: &mut Widget) {
+    unsafe fn load_map(&mut self, path: PathBuf) {
         println!("Map: {}", path.display());
 
         // Verify that we're in the right environment
@@ -119,7 +125,7 @@ impl State {
         let map = match dmm_tools::dmm::Map::from_file(&path) {
             Err(e) => {
                 let message = format!("Could not load the map:\n{}\n\n{}", path.display(), e.description());
-                return show_error(window, &message);
+                return show_error(self.widgets.window(), &message);
             }
             Ok(map) => map,
         };
@@ -148,26 +154,6 @@ unsafe fn add_children(parent: &mut TreeWidgetItem, ty: TypeRef, tree: &ObjectTr
     }
 }
 
-macro_rules! action {
-    (@[$it:ident] (tip = $text:expr)) => {
-        $it.set_status_tip(&qstr!($text));
-    };
-    (@[$it:ident] (key = $(^$m:ident)* $k:ident)) => {
-        $it.set_shortcut(&KeySequence::new( qt::core::qt::Key::$k as i32 $(+ qt::core::qt::Modifier::$m as i32)* ));
-    };
-    (@[$it:ident] (slot = $slot:expr)) => {
-        $it.signals().triggered().connect(&$slot);
-    };
-    (@[$it:ident] $closure:block) => {
-        let slot = SlotNoArgs::new(|| $closure);
-        $it.signals().triggered().connect(&slot);
-    };
-    ($add_to:expr, $name:expr $(, $x:tt)*) => {
-        let it = &mut *$add_to.add_action(qstr!($name));
-        $(action!(@[it] $x);)*
-    }
-}
-
 fn detect_environment(path: &Path) -> Option<PathBuf> {
     let mut current = path.parent();
     while let Some(dir) = current {
@@ -190,9 +176,41 @@ fn detect_environment(path: &Path) -> Option<PathBuf> {
     None
 }
 
+macro_rules! qt_state {
+    ($name:ident { $($field:ident: $typ:ty,)* }) => {
+        #[derive(Debug)]
+        struct $name {
+            $($field: *mut $typ,)*
+        }
+
+        impl Default for $name {
+            fn default() -> Self {
+                $name {
+                    $($field: 0 as *mut $typ,)*
+                }
+            }
+        }
+
+        impl $name {
+            $(unsafe fn $field(&self) -> &mut $typ {
+                &mut *self.$field
+            })*
+        }
+    }
+}
+
+qt_state! { EditorWindow {
+    window: widgets::main_window::MainWindow,
+    tree: widgets::tree_widget::TreeWidget,
+    map_tabs: widgets::tab_bar::TabBar,
+}}
+
 #[allow(unused_mut)]
 fn main() {
-    let mut state = RefCell::new(State::new());
+    let mut state_cell = RefCell::new(State::new());
+    macro_rules! state {
+        () => {&mut *state_cell.borrow_mut()}
+    }
 
     // Determine the configuration directory
     let mut config_dir;
@@ -209,25 +227,48 @@ fn main() {
         config_dir = PathBuf::from(".");
     }
 
+    macro_rules! action {
+        (@[$it:ident] (tip = $text:expr)) => {
+            $it.set_status_tip(&qstr!($text));
+        };
+        (@[$it:ident] (key = $(^$m:ident)* $k:ident)) => {
+            $it.set_shortcut(&KeySequence::new( qt::core::qt::Key::$k as i32 $(+ qt::core::qt::Modifier::$m as i32)* ));
+        };
+        (@[$it:ident] (slot = $slot:expr)) => {
+            $it.signals().triggered().connect(&$slot);
+        };
+        (@[$it:ident] $closure:block) => {
+            let slot = SlotNoArgs::new(|| $closure);
+            $it.signals().triggered().connect(&slot);
+        };
+        ($add_to:expr, $name:expr $(, $x:tt)*) => {
+            let it = &mut *$add_to.add_action(qstr!($name));
+            $(action!(@[it] $x);)*
+        }
+    }
+
     // Initialize the GUI
     Application::create_and_exit(|_app| unsafe {
+        let mut state = state_cell.borrow_mut(); // because we need to drop it
+
         let mut window = widgets::main_window::MainWindow::new();
-        let window_ptr = window.as_mut_ptr();
+        state.widgets.window = window.as_mut_ptr();
 
         // object tree
         let mut tree_widget = widgets::tree_widget::TreeWidget::new();
-        let tree_widget_ptr = tree_widget.as_mut_ptr();
+        state.widgets.tree = tree_widget.as_mut_ptr();
         tree_widget.set_column_count(1);
         tree_widget.set_header_hidden(true);
 
         // map tabs
         let mut map_tabs = qt::widgets::tab_bar::TabBar::new();
-        let map_tabs_ptr = map_tabs.as_mut_ptr();
+        state.widgets.map_tabs = map_tabs.as_mut_ptr();
         map_tabs.set_tabs_closable(true);
         map_tabs.set_expanding(false);
         map_tabs.set_document_mode(true);
         let tab_close_slot = qt::core::slots::SlotCInt::new(|idx| {
-            state.borrow_mut().close_map(idx as usize);
+            let state = state!();
+            state.close_map(idx as usize);
         });
         map_tabs.signals().tab_close_requested().connect(&tab_close_slot);
         let tab_select_slot = qt::core::slots::SlotCInt::new(|idx| {
@@ -283,38 +324,39 @@ fn main() {
         // file menu
         let mut menu_file = &mut *menu_bar.add_menu(qstr!("File"));
         action!(menu_file, "Open Environment", (tip = "Load a DME file."), {
+            let state = state!();
             let file = FileDialog::get_open_file_name_unsafe((
-                static_cast_mut(window_ptr),
+                static_cast_mut(state.widgets.window()),
                 qstr!("Open Environment"),
                 qstr!("."),
                 qstr!("Environments (*.dme)"),
             )).to_std_string();
             if !file.is_empty() {
-                state.borrow_mut().load_env(PathBuf::from(file), (*window_ptr).static_cast_mut(), &mut *tree_widget_ptr);
+                state.load_env(PathBuf::from(file));
             }
         });
         menu_file.add_menu(qstr!("Recent Environments"));
         menu_file.add_separator();
         action!(menu_file, "New", (key = ^CTRL KeyN), (tip = "Create a new map."), {
-            let map_tabs = &mut *map_tabs_ptr;
-            map_tabs.add_tab(qstr!("New Map"));
+            state!().widgets.map_tabs().add_tab(qstr!("New Map"));
         });
         action!(menu_file, "Open", (key = ^CTRL KeyO), (tip = "Open a map."), {
+            let state = state!();
             let file = FileDialog::get_open_file_name_unsafe((
-                static_cast_mut(window_ptr),
+                static_cast_mut(state.widgets.window()),
                 qstr!("Open Map"),
-                qstr!(&match state.borrow().environment_file.as_ref().and_then(|x| x.parent()).and_then(|x| x.to_str()) {
+                qstr!(&match state.environment_file.as_ref().and_then(|x| x.parent()).and_then(|x| x.to_str()) {
                     Some(dir) => dir,
                     None => ".",
                 }),
                 qstr!("Maps (*.dmm)"),
             )).to_std_string();
             if !file.is_empty() {
-                state.borrow_mut().load_map(PathBuf::from(file), (*window_ptr).static_cast_mut());
+                state.load_map(PathBuf::from(file));
             }
         });
         action!(menu_file, "Close", (key = ^CTRL KeyW), (tip = "Close the current map."), {
-            let mut state = state.borrow_mut();
+            let state = state!();
             let map = state.current_map;
             state.close_map(map);
         });
@@ -360,7 +402,6 @@ fn main() {
         // - preload all maps specified belonging to that DME
         let mut preload_maps = Vec::new();
         for arg in std::env::args_os() {
-            let mut state = state.borrow_mut();
             let path = PathBuf::from(arg);
 
             if path.extension() == Some("dme".as_ref()) {
@@ -368,7 +409,7 @@ fn main() {
                     // only one DME may be specified
                     continue;
                 }
-                state.load_env(path, (*window_ptr).static_cast_mut(), &mut *tree_widget_ptr);
+                state.load_env(path);
             } else if path.extension() == Some("dmm".as_ref()) {
                 // determine the corresponding DME
                 let detected_env = match detect_environment(&path) {
@@ -383,7 +424,7 @@ fn main() {
                     continue;
                 }
 
-                state.load_env(detected_env, (*window_ptr).static_cast_mut(), &mut *tree_widget_ptr);
+                state.load_env(detected_env);
                 preload_maps.push(path);
             } else {
                 continue;
@@ -392,10 +433,11 @@ fn main() {
 
         // TODO: If no DME is loaded, attempt to open the most recent one, failing silently
         for map in preload_maps {
-            state.borrow_mut().load_map(map, (*window_ptr).static_cast_mut());
+            state.load_map(map);
         }
 
         // cede control
+        drop(state);  // release the RefCell
         Application::exec()
     })
 }
