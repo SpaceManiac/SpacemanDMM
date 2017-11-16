@@ -34,10 +34,16 @@ use same_file::is_same_file;
 #[derive(Debug)]
 struct State {
     widgets: EditorWindow,
-    environment_file: Option<PathBuf>,
-    objtree: Option<dm::objtree::ObjectTree>,
+    env: Option<Environment>,
     maps: Vec<Map>,
     current_map: usize,
+}
+
+#[derive(Debug)]
+struct Environment {
+    dme: PathBuf,
+    root: PathBuf,
+    objtree: dm::objtree::ObjectTree,
 }
 
 #[derive(Debug)]
@@ -73,6 +79,7 @@ widget_defs! { EditorWindow {
     window: widgets::main_window::MainWindow,
     tree: widgets::tree_widget::TreeWidget,
     map_tabs: widgets::tab_bar::TabBar,
+    menu_file: widgets::menu::Menu,
 }}
 
 // ----------------------------------------------------------------------------
@@ -109,6 +116,9 @@ fn main() {
         };
         (@[$it:ident] (slot = $slot:expr)) => {
             $it.signals().triggered().connect(&$slot);
+        };
+        (@[$it:ident] (disabled)) => {
+            $it.set_disabled(true);
         };
         (@[$it:ident] $closure:block) => {
             let slot = SlotNoArgs::new(|| $closure);
@@ -200,6 +210,31 @@ fn main() {
         let mut menu_bar = widgets::menu_bar::MenuBar::new();
         // file menu
         let mut menu_file = &mut *menu_bar.add_menu(qstr!("File"));
+        state.widgets.menu_file = menu_file;
+        action!(menu_file, "New", (key = ^CTRL KeyN), (tip = "Create a new map."), (disabled), {
+            state!().new_map();
+        });
+        action!(menu_file, "Open", (key = ^CTRL KeyO), (disabled), (tip = "Open a map."), {
+            let state = state!();
+            let file = FileDialog::get_open_file_name_unsafe((
+                static_cast_mut(state.widgets.window()),
+                qstr!("Open Map"),
+                qstr!(match state.env.as_ref() {
+                    Some(env) => env.root.display().to_string(),
+                    None => return,  // no environment, shouldn't be opening maps
+                }),
+                qstr!("Maps (*.dmm)"),
+            )).to_std_string();
+            if !file.is_empty() {
+                state.load_map(PathBuf::from(file));
+            }
+        });
+        action!(menu_file, "Close", (key = ^CTRL KeyW), (disabled), (tip = "Close the current map."), {
+            let state = state!();
+            let map = state.current_map;
+            state.close_map(map);
+        });
+        menu_file.add_separator();
         action!(menu_file, "Open Environment", (tip = "Load a DME file."), {
             let state = state!();
             let file = FileDialog::get_open_file_name_unsafe((
@@ -213,30 +248,6 @@ fn main() {
             }
         });
         menu_file.add_menu(qstr!("Recent Environments"));
-        menu_file.add_separator();
-        action!(menu_file, "New", (key = ^CTRL KeyN), (tip = "Create a new map."), {
-            state!().new_map();
-        });
-        action!(menu_file, "Open", (key = ^CTRL KeyO), (tip = "Open a map."), {
-            let state = state!();
-            let file = FileDialog::get_open_file_name_unsafe((
-                static_cast_mut(state.widgets.window()),
-                qstr!("Open Map"),
-                qstr!(&match state.environment_file.as_ref().and_then(|x| x.parent()).and_then(|x| x.to_str()) {
-                    Some(dir) => dir,
-                    None => ".",
-                }),
-                qstr!("Maps (*.dmm)"),
-            )).to_std_string();
-            if !file.is_empty() {
-                state.load_map(PathBuf::from(file));
-            }
-        });
-        action!(menu_file, "Close", (key = ^CTRL KeyW), (tip = "Close the current map."), {
-            let state = state!();
-            let map = state.current_map;
-            state.close_map(map);
-        });
         menu_file.add_separator();
         action!(menu_file, "Exit", (key = ^ALT KeyF4), (slot = window.slots().close()));
 
@@ -282,7 +293,7 @@ fn main() {
             let path = PathBuf::from(arg);
 
             if path.extension() == Some("dme".as_ref()) {
-                if state.environment_file.is_some() {
+                if state.env.is_some() {
                     // only one DME may be specified
                     continue;
                 }
@@ -294,8 +305,8 @@ fn main() {
                     None => continue,
                 };
 
-                if let Some(env_file) = state.environment_file.as_ref() {
-                    if !is_same_file(env_file, detected_env).unwrap_or(false) {
+                if let Some(env) = state.env.as_ref() {
+                    if !is_same_file(&env.dme, detected_env).unwrap_or(false) {
                         preload_maps.push(path);
                     }
                     continue;
@@ -326,8 +337,7 @@ impl State {
     fn new() -> State {
         State {
             widgets: Default::default(),
-            environment_file: None,
-            objtree: None,
+            env: None,
             maps: Vec::new(),
             current_map: 0,
         }
@@ -359,7 +369,7 @@ impl State {
             Ok(t) => objtree = t,
         }
 
-        self.environment_file = Some(path);
+        // fill the object tree
         {
             let widget = self.widgets.tree();
             widget.clear();
@@ -373,7 +383,17 @@ impl State {
                 widget.add_top_level_item(qt_own!(root_item));
             }
         }
-        self.objtree = Some(objtree);
+        self.env = Some(Environment {
+            root: path.parent().unwrap().to_owned(),
+            dme: path,
+            objtree: objtree,
+        });
+
+        // un-disable the actions
+        let actions = self.widgets.menu_file().actions();
+        for i in 0..actions.count() {
+            (**actions.at(i)).set_disabled(false);
+        }
     }
 
     unsafe fn new_map(&mut self) {
@@ -384,10 +404,15 @@ impl State {
         println!("Map: {}", path.display());
 
         // Verify that we're in the right environment
-        let env = detect_environment(&path);
-        match (env, self.environment_file.as_ref()) {
-            (Some(env), Some(real_env)) => if !is_same_file(env, real_env).unwrap_or(false) { return },
-            _ => return show_error(self.widgets.window(), "It looks like that map belongs to a different environment."),
+        let detected = detect_environment(&path);
+        match (detected, self.env.as_ref()) {
+            (Some(detected), Some(env)) => if !is_same_file(detected, &env.dme).unwrap_or(false) {
+                return show_error(self.widgets.window(), "The map belongs to a different environment.");
+            },
+            (None, Some(_)) => if !ask_warning(self.widgets.window(), "The map has no environment.\nWould you like to load it anyways?") {
+                return
+            }
+            _ => return,  // Shouldn't happen
         }
 
         let map = match dmm_tools::dmm::Map::from_file(&path) {
@@ -457,6 +482,18 @@ fn show_error(window: &mut Widget, message: &str) {
             qstr!(message),
             Flags::from_enum(StandardButton::Ok),
         ));
+    }
+}
+
+fn ask_warning(window: &mut Widget, message: &str) -> bool {
+    use qt::widgets::message_box::*;
+    unsafe {
+        MessageBox::warning((
+            window as *mut Widget,
+            qstr!("Warning"),
+            qstr!(message),
+            Flags::from_enum(StandardButton::Ok) | Flags::from_enum(StandardButton::Cancel),
+        )) == StandardButton::Ok
     }
 }
 
