@@ -2,17 +2,19 @@
 
 #[macro_use] extern crate qt_extras as qt;
 #[macro_use] extern crate glium;
+#[macro_use] extern crate serde_derive;
+extern crate serde;
+extern crate toml;
 
 extern crate dreammaker as dm;
 extern crate dmm_tools;
 extern crate same_file;
 
 mod map_renderer;
+mod config;
 
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
-
-use dm::objtree::{ObjectTree, TypeRef};
 
 use qt::widgets;
 use qt::widgets::widget::Widget;
@@ -28,12 +30,16 @@ use qt::cpp_utils::static_cast_mut;
 
 use same_file::is_same_file;
 
+use dm::objtree::{ObjectTree, TypeRef};
+use config::Config;
+
 // ----------------------------------------------------------------------------
 // State layout
 
 #[derive(Debug)]
 struct State {
     widgets: EditorWindow,
+    config: Config,
     env: Option<Environment>,
     maps: Vec<Map>,
     current_map: usize,
@@ -80,7 +86,31 @@ widget_defs! { EditorWindow {
     tree: widgets::tree_widget::TreeWidget,
     map_tabs: widgets::tab_bar::TabBar,
     menu_file: widgets::menu::Menu,
+    menu_recent: widgets::menu::Menu,
 }}
+
+macro_rules! action {
+    (@[$it:ident] (tip = $text:expr)) => {
+        $it.set_status_tip(&qstr!($text));
+    };
+    (@[$it:ident] (key = $(^$m:ident)* $k:ident)) => {
+        $it.set_shortcut(&KeySequence::new( qt::core::qt::Key::$k as i32 $(+ qt::core::qt::Modifier::$m as i32)* ));
+    };
+    (@[$it:ident] (slot = $slot:expr)) => {
+        $it.signals().triggered().connect(&$slot);
+    };
+    (@[$it:ident] (disabled)) => {
+        $it.set_disabled(true);
+    };
+    (@[$it:ident] $closure:block) => {
+        let slot = SlotNoArgs::new(|| $closure);
+        $it.signals().triggered().connect(&slot);
+    };
+    ($add_to:expr, $name:expr $(, $x:tt)*) => {
+        let _it = &mut *$add_to.add_action(qstr!($name));
+        $(action!(@[_it] $x);)*
+    }
+}
 
 // ----------------------------------------------------------------------------
 // Main window layout and core signals/slots
@@ -90,44 +120,6 @@ fn main() {
     let mut state_cell = RefCell::new(State::new());
     macro_rules! state {
         () => {&mut *state_cell.borrow_mut()}
-    }
-
-    // Determine the configuration directory
-    let mut config_dir;
-    if let Some(manifest_dir) = std::env::var_os("CARGO_MANIFEST_DIR") {
-        // If we're being run through Cargo, put runtime files in target/
-        config_dir = PathBuf::from(manifest_dir);
-        config_dir.push("target");
-    } else if let Ok(current_exe) = std::env::current_exe() {
-        // Otherwise, put runtime files adjacent to the executable
-        config_dir = current_exe;
-        config_dir.pop();
-    } else {
-        // As a fallback, use the working directory
-        config_dir = PathBuf::from(".");
-    }
-
-    macro_rules! action {
-        (@[$it:ident] (tip = $text:expr)) => {
-            $it.set_status_tip(&qstr!($text));
-        };
-        (@[$it:ident] (key = $(^$m:ident)* $k:ident)) => {
-            $it.set_shortcut(&KeySequence::new( qt::core::qt::Key::$k as i32 $(+ qt::core::qt::Modifier::$m as i32)* ));
-        };
-        (@[$it:ident] (slot = $slot:expr)) => {
-            $it.signals().triggered().connect(&$slot);
-        };
-        (@[$it:ident] (disabled)) => {
-            $it.set_disabled(true);
-        };
-        (@[$it:ident] $closure:block) => {
-            let slot = SlotNoArgs::new(|| $closure);
-            $it.signals().triggered().connect(&slot);
-        };
-        ($add_to:expr, $name:expr $(, $x:tt)*) => {
-            let it = &mut *$add_to.add_action(qstr!($name));
-            $(action!(@[it] $x);)*
-        }
     }
 
     // Initialize the GUI
@@ -247,7 +239,7 @@ fn main() {
                 state.load_env(PathBuf::from(file));
             }
         });
-        menu_file.add_menu(qstr!("Recent Environments"));
+        state.widgets.menu_recent = menu_file.add_menu(qstr!("Recent Environments"));
         menu_file.add_separator();
         action!(menu_file, "Exit", (key = ^ALT KeyF4), (slot = window.slots().close()));
 
@@ -319,12 +311,12 @@ fn main() {
             }
         }
 
-        // TODO: If no DME is loaded, attempt to open the most recent one, failing silently
         for map in preload_maps {
             state.load_map(map);
         }
 
         // cede control
+        state.finish_init();
         drop(state);  // release the RefCell
         Application::exec()
     })
@@ -337,9 +329,32 @@ impl State {
     fn new() -> State {
         State {
             widgets: Default::default(),
+            config: Config::load(),
             env: None,
             maps: Vec::new(),
             current_map: 0,
+        }
+    }
+
+    unsafe fn finish_init(&mut self) {
+        if self.env.is_none() {
+            if let Some(env_path) = self.config.recent.first().cloned() {
+                self.load_env(env_path);
+            }
+        }
+        self.update_recent();
+    }
+
+    unsafe fn update_recent(&mut self) {
+        let menu = self.widgets.menu_recent();
+        menu.clear();
+        if self.config.recent.is_empty() {
+            action!(menu, "No recent environments", (disabled));
+            return;
+        }
+
+        for (i, path) in self.config.recent.iter().enumerate() {
+            action!(menu, path.display().to_string());
         }
     }
 
@@ -383,6 +398,10 @@ impl State {
                 widget.add_top_level_item(qt_own!(root_item));
             }
         }
+        self.config.make_recent(&path);
+        self.update_recent();
+        self.config.save();
+
         self.env = Some(Environment {
             root: path.parent().unwrap().to_owned(),
             dme: path,

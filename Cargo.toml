@@ -9,6 +9,9 @@ path = "src/editor/main.rs"
 
 [dependencies]
 same-file = "1.0.0"
+toml = "0.4.5"
+serde = "1.0.21"
+serde_derive = "1.0.21"
 dreammaker = { path = "src/dreammaker" }
 dmm-tools = { path = "src/tools" }
 qt-extras = { path = "src/qt-extras" }
