@@ -6,6 +6,7 @@ pub extern crate cpp_utils;
 #[macro_use] extern crate cpp;
 
 pub mod glium_widget;
+pub mod future;
 
 pub use widgets::qt_core as core;
 pub use widgets::qt_gui as gui;
