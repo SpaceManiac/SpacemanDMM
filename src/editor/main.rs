@@ -83,10 +83,13 @@ macro_rules! widget_defs {
 
 widget_defs! { EditorWindow {
     window: widgets::main_window::MainWindow,
-    tree: widgets::tree_widget::TreeWidget,
-    map_tabs: widgets::tab_bar::TabBar,
+    status_bar: widgets::status_bar::StatusBar,
+
     menu_file: widgets::menu::Menu,
     menu_recent: widgets::menu::Menu,
+
+    tree: widgets::tree_widget::TreeWidget,
+    map_tabs: widgets::tab_bar::TabBar,
 }}
 
 macro_rules! action {
@@ -268,6 +271,7 @@ fn main() {
 
         // status bar
         let mut status_bar = widgets::status_bar::StatusBar::new();
+        state.widgets.status_bar = status_bar.as_mut_ptr();
 
         // build main window
         window.set_window_title(qstr!("SpacemanDMM"));
@@ -363,10 +367,20 @@ impl State {
         let self_ptr: *mut Self = self;
         let window_ptr = self.widgets.window;
 
+        // show the messages and lock the interface
         println!("Environment: {}", path.display());
+        self.widgets.status_bar().show_message(qstr!("Loading environment, please wait..."));
+        self.widgets.tree().set_disabled(true);
+        {
+            // disable the actions except for exit
+            let actions = self.widgets.menu_file().actions();
+            for i in 0..(actions.count() - 1) {
+                (**actions.at(i)).set_disabled(true);
+            }
+        }
 
         let path2 = path.clone();
-        qt::future::spawn(move || -> Option<ObjectTree> {
+        qt::future::spawn(move || -> Result<ObjectTree, String> {
             let mut preprocessor;
             match dm::preprocessor::Preprocessor::new(path2.clone()) {
                 Err(_) => {
@@ -423,7 +437,9 @@ impl State {
                 objtree: objtree,
             });
 
-            // un-disable the actions
+            // un-disable everything
+            this.widgets.status_bar().clear_message();
+            this.widgets.tree().set_disabled(false);
             let actions = this.widgets.menu_file().actions();
             for i in 0..actions.count() {
                 (**actions.at(i)).set_disabled(false);
