@@ -365,7 +365,6 @@ impl State {
 
     unsafe fn load_env(&mut self, path: PathBuf) {
         let self_ptr: *mut Self = self;
-        let window_ptr = self.widgets.window;
 
         // show the messages and lock the interface
         println!("Environment: {}", path.display());
@@ -384,58 +383,55 @@ impl State {
             let mut preprocessor;
             match dm::preprocessor::Preprocessor::new(path2.clone()) {
                 Err(_) => {
-                    show_error(&mut *static_cast_mut(window_ptr), &format!("Could not open for reading:\n{}", path2.display()));
-                    return None;
+                    return Err(format!("Could not open for reading:\n{}", path2.display()));
                 },
                 Ok(pp) => preprocessor = pp,
-            };
-
-            match dm::parser::parse(dm::indents::IndentProcessor::new(&mut preprocessor)) {
-                Err(e) => {
-                    let mut message = format!("\
-                        Could not parse the environment:\n\
-                        {}\n\n\
-                        This may be caused by incorrect or unusual code, but is typically a parser bug. \
-                        Change the code to use a more common form, or report the parsing problem.\n\
-                    ", path2.display());
-                    let mut message_buf = Vec::new();
-                    let _ = dm::pretty_print_error(&mut message_buf, &preprocessor, &e);
-                    message.push_str(&String::from_utf8_lossy(&message_buf[..]));
-                    show_error(&mut *static_cast_mut(window_ptr), &message);
-                    None
-                },
-                Ok(t) => Some(t)
             }
-        }, move |objtree| {
+
+            dm::parser::parse(dm::indents::IndentProcessor::new(&mut preprocessor)).map_err(|e| {
+                let mut message = format!("\
+                    Could not parse the environment:\n\
+                    {}\n\n\
+                    This may be caused by incorrect or unusual code, but is typically a parser bug. \
+                    Change the code to use a more common form, or report the parsing problem.\n\
+                ", path2.display());
+                let mut message_buf = Vec::new();
+                let _ = dm::pretty_print_error(&mut message_buf, &preprocessor, &e);
+                message.push_str(&String::from_utf8_lossy(&message_buf[..]));
+                message
+            })
+        }, move |result| {
             let this = &mut *self_ptr;
-            let objtree = match objtree {
-                Some(t) => t,
-                None => return
-            };
+            match result {
+                Ok(objtree) => {
+                    // fill the object tree
+                    {
+                        let widget = this.widgets.tree();
+                        widget.clear();
+                        let root = objtree.root();
+                        for &root_child in ["area", "turf", "obj", "mob"].iter() {
+                            let ty = root.child(root_child, &objtree).expect("builtins missing");
 
-            // fill the object tree
-            {
-                let widget = this.widgets.tree();
-                widget.clear();
-                let root = objtree.root();
-                for &root_child in ["area", "turf", "obj", "mob"].iter() {
-                    let ty = root.child(root_child, &objtree).expect("builtins missing");
+                            let mut root_item = TreeWidgetItem::new(());
+                            root_item.set_text(0, qstr!(&ty.name));
+                            add_children(&mut root_item, ty, &objtree);
+                            widget.add_top_level_item(qt_own!(root_item));
+                        }
+                    }
+                    this.config.make_recent(&path);
+                    this.update_recent();
+                    this.config.save();
 
-                    let mut root_item = TreeWidgetItem::new(());
-                    root_item.set_text(0, qstr!(&ty.name));
-                    add_children(&mut root_item, ty, &objtree);
-                    widget.add_top_level_item(qt_own!(root_item));
+                    this.env = Some(Environment {
+                        root: path.parent().unwrap().to_owned(),
+                        dme: path,
+                        objtree: objtree,
+                    });
+                }
+                Err(message) => {
+                    show_error(this.widgets.window(), &message);
                 }
             }
-            this.config.make_recent(&path);
-            this.update_recent();
-            this.config.save();
-
-            this.env = Some(Environment {
-                root: path.parent().unwrap().to_owned(),
-                dme: path,
-                objtree: objtree,
-            });
 
             // un-disable everything
             this.widgets.status_bar().clear_message();

@@ -1,21 +1,23 @@
 use std::sync::mpsc;
 use libc::c_void;
 
-// doesn't check for Send or Sync
-pub unsafe fn spawn<F1, F2, R>(task: F1, callback: F2) where
-    F1: 'static + FnOnce() -> R,
-    F2: 'static + FnOnce(R),
+pub fn spawn<F1, F2, R>(task: F1, callback: F2) where
+    F1: FnOnce() -> R + Send + 'static,
+    F2: FnOnce(R) + 'static,
+    R: Send + 'static,
 {
-    let (tx, rx) = mpsc::channel();
-    let (task, task_data) = make_callback(move || {
-        let _ = tx.send(task());
-    });
-    let (cb, cb_data) = make_callback(move || {
-        if let Ok(data) = rx.try_recv() {
-            callback(data);
-        }
-    });
-    qt_spawn_future(task, task_data, cb, cb_data);
+    unsafe {
+        let (tx, rx) = mpsc::channel();
+        let (task, task_data) = make_callback(move || {
+            let _ = tx.send(task());
+        });
+        let (cb, cb_data) = make_callback(move || {
+            if let Ok(data) = rx.try_recv() {
+                callback(data);
+            }
+        });
+        qt_spawn_future(task, task_data, cb, cb_data);
+    }
 }
 
 unsafe fn make_callback<F: FnOnce()>(f: F) -> (callback_fn, *mut c_void) {
