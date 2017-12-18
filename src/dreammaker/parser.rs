@@ -353,12 +353,9 @@ impl<I> Parser<I> where
         };
 
         // discard list size declaration
-        match self.next("[")? {
-            t @ Punct(LBracket) => {
-                self.put_back(t);
-                require!(self.ignore_group(LBracket, RBracket));
-            }
-            t => self.put_back(t),
+        while let Some(()) = self.exact(Punct(LBracket))? {
+            self.put_back(Punct(LBracket));
+            require!(self.ignore_group(LBracket, RBracket));
         }
 
         // read the contents for real
