@@ -1,0 +1,13 @@
+[package]
+name = "dm-langserver"
+version = "0.1.0"
+authors = ["Tad Hardesty <tad@platymuus.com>"]
+
+[[bin]]
+name = "dm-langserver"
+path = "main.rs"
+
+[dependencies]
+jsonrpc-core = "8.0.1"
+languageserver-types = "0.19"
+dreammaker = { path = "../dreammaker" }
