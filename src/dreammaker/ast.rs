@@ -242,7 +242,9 @@ pub enum Term {
     /// The current proc's return value (`.`).
     ReturnValue,
     /// A use of the `call()()` primitive.
-    DynamicCall(Vec<Expression>, Vec<Expression>)
+    DynamicCall(Vec<Expression>, Vec<Expression>),
+    /// An interpolated string, alternating string/expr/string/expr.
+    InterpString(String, Vec<(Expression, String)>),
 }
 
 impl From<Expression> for Term {

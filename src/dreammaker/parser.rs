@@ -418,7 +418,7 @@ impl<I> Parser<I> where
                 }));
                 let _parameters = parameters.into_iter().filter_map(|x| x).collect::<Vec<_>>();
                 let _body = require!(self.block());
-                println!("proc/{:?} ({:?}) {:?}", path, _parameters, _body);
+                println!("proc/{:?} ({:?}) {:#?}", path, _parameters, _body);
                 SUCCESS
             }
             other => {
@@ -774,6 +774,24 @@ impl<I> Parser<I> where
                 let expr = require!(self.expression(false));
                 require!(self.exact(Token::Punct(Punctuation::RParen)));
                 Term::Expr(Box::new(expr))
+            },
+
+            Token::InterpStringBegin(begin) => {
+                let mut parts = Vec::new();
+                loop {
+                    let expr = require!(self.expression(false));
+                    match self.next("interpolated string part")? {
+                        Token::InterpStringPart(part) => {
+                            parts.push((expr, part));
+                        },
+                        Token::InterpStringEnd(end) => {
+                            parts.push((expr, end));
+                            break;
+                        },
+                        _ => return self.parse_error(),
+                    }
+                }
+                Term::InterpString(begin, parts)
             },
 
             other => return self.try_another(other),
