@@ -269,3 +269,13 @@ pub enum Follow {
     /// Cast the value using the "as" operator.
     Cast(String),
 }
+
+/// A parameter declaration in the header of a proc.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Parameter {
+    pub path: Vec<String>,
+    pub name: String,
+    pub default: Option<Expression>,
+    pub as_types: Option<Vec<String>>,
+    pub in_list: Option<Expression>,
+}

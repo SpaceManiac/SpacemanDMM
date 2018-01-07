@@ -296,6 +296,13 @@ impl<I> Parser<I> where
         }
     }
 
+    fn exact_ident(&mut self, ident: &str) -> Status<()> {
+        match self.next(ident)? {
+            Token::Ident(ref i, _) if i == ident => SUCCESS,
+            other => self.try_another(other),
+        }
+    }
+
     // ------------------------------------------------------------------------
     // Object tree
 
@@ -352,11 +359,7 @@ impl<I> Parser<I> where
             parts: &path
         };
 
-        // discard list size declaration
-        while let Some(()) = self.exact(Punct(LBracket))? {
-            self.put_back(Punct(LBracket));
-            require!(self.ignore_group(LBracket, RBracket));
-        }
+        require!(self.var_annotations());
 
         // read the contents for real
         match self.next("contents")? {
@@ -372,11 +375,50 @@ impl<I> Parser<I> where
                 self.tree.add_var(self.location, new_stack.iter(), expr)?;
                 SUCCESS
             }
-            t @ Punct(LParen) => {
+            Punct(LParen) => {
                 self.tree.add_proc(self.location, new_stack.iter())?;
-                self.put_back(t);
-                require!(self.ignore_group(LParen, RParen));
-                match self.next("contents2")? {
+
+                let parameters = require!(self.comma_sep(RParen, |this| {
+                    if let Some(()) = this.exact(Punct(Ellipsis))? {
+                        return success(None);
+                    }
+
+                    // `name` or `obj/name` or `var/obj/name` or ...
+                    let (_absolute, mut path) = leading!(this.tree_path());
+                    let name = path.pop().unwrap();
+                    if path.first().map_or(false, |i| i == "var") {
+                        path.remove(0);
+                    }
+                    require!(this.var_annotations());
+                    // = <expr>
+                    let default = if let Some(()) = this.exact(Punct(Assign))? {
+                        Some(require!(this.expression(false)))
+                    } else {
+                        None
+                    };
+                    // as obj|turf
+                    let as_types = if let Some(()) = this.exact_ident("as")? {
+                        let mut as_what = vec![require!(this.ident())];
+                        while let Some(()) = this.exact(Punct(BitOr))? {
+                            as_what.push(require!(this.ident()));
+                        }
+                        Some(as_what)
+                    } else {
+                        None
+                    };
+                    // `in view(7)` or `in list("a", "b")` or ...
+                    let in_list = if let Some(()) = this.exact_ident("in")? {
+                        Some(require!(this.expression(false)))
+                    } else {
+                        None
+                    };
+                    success(Some(Parameter {
+                        path, name, default, as_types, in_list
+                    }))
+                }));
+                let parameters = parameters.into_iter().filter_map(|x| x).collect::<Vec<_>>();
+
+                match self.next("proc body")? {
                     t @ Punct(LBrace) => {
                         self.put_back(t);
                         require!(self.ignore_group(LBrace, RBrace));
@@ -415,6 +457,21 @@ impl<I> Parser<I> where
     fn root(&mut self) -> Status<()> {
         let root = PathStack { parent: None, parts: &[] };
         self.tree_entries(root, Token::Eof)
+    }
+
+    // ------------------------------------------------------------------------
+    // Statements
+
+    /// Parse list size declarations.
+    fn var_annotations(&mut self) -> Status<()> {
+        use super::lexer::Token::Punct;
+        use super::lexer::Punctuation::*;
+        // TODO: parse the declarations as expressions rather than giving up
+        while let Some(()) = self.exact(Punct(LBracket))? {
+            self.put_back(Punct(LBracket));
+            require!(self.ignore_group(LBracket, RBracket));
+        }
+        SUCCESS
     }
 
     // ------------------------------------------------------------------------
@@ -672,14 +729,14 @@ impl<I> Parser<I> where
         })
     }
 
+    /// a parenthesized, comma-separated list of expressions
     fn arguments(&mut self) -> Status<Vec<Expression>> {
-        // a parenthesized, comma-separated list of expressions
         leading!(self.exact(Token::Punct(Punctuation::LParen)));
         success(require!(self.separated(Punctuation::Comma, Punctuation::RParen, Some(Expression::from(Term::Null)), |this| this.expression(false))))
     }
 
+    /// parenthesized arguments to the list() proc
     fn list_arguments(&mut self) -> Status<Vec<(Expression, Option<Expression>)>> {
-        // a parenthesized, comma-separated list of expressions
         leading!(self.exact(Token::Punct(Punctuation::LParen)));
         success(require!(self.separated(Punctuation::Comma, Punctuation::RParen, Some((Expression::from(Term::Null), None)), |this| {
             let first_expr = require!(this.expression(true));
