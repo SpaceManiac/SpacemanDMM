@@ -416,16 +416,10 @@ impl<I> Parser<I> where
                         path, name, default, as_types, in_list
                     }))
                 }));
-                let parameters = parameters.into_iter().filter_map(|x| x).collect::<Vec<_>>();
-
-                match self.next("proc body")? {
-                    t @ Punct(LBrace) => {
-                        self.put_back(t);
-                        require!(self.ignore_group(LBrace, RBrace));
-                        SUCCESS
-                    }
-                    t => { self.put_back(t); SUCCESS }
-                }
+                let _parameters = parameters.into_iter().filter_map(|x| x).collect::<Vec<_>>();
+                let _body = require!(self.block());
+                println!("proc/{:?} ({:?}) {:?}", path, _parameters, _body);
+                SUCCESS
             }
             other => {
                 self.tree.add_entry(self.location, new_stack.iter())?;
@@ -472,6 +466,60 @@ impl<I> Parser<I> where
             require!(self.ignore_group(LBracket, RBracket));
         }
         SUCCESS
+    }
+
+    /// Parse a block
+    fn block(&mut self) -> Status<Vec<Statement>> {
+        // empty blocks e.g. proc/foo();
+        if let Some(()) = self.exact(Token::Punct(Punctuation::Semicolon))? {
+            return success(Vec::new());
+        }
+
+        require!(self.exact(Token::Punct(Punctuation::LBrace)));
+        self.separated(Punctuation::Semicolon, Punctuation::RBrace, true, |this| this.statement())
+    }
+
+    fn statement(&mut self) -> Status<Statement> {
+        // BLOCK STATEMENTS
+        if let Some(()) = self.exact_ident("if")? {
+            // statement :: 'if' '(' expression ')' block ('else' 'if' '(' expression ')' block)* ('else' block)?
+            require!(self.exact(Token::Punct(Punctuation::LParen)));
+            let expr = require!(self.expression(false));
+            require!(self.exact(Token::Punct(Punctuation::RParen)));
+            let block = require!(self.block());
+            let mut arms = vec![(expr, block)];
+
+            let mut else_arm = None;
+            while let Some(()) = self.exact_ident("else")? {
+                if let Some(()) = self.exact_ident("if")? {
+                    require!(self.exact(Token::Punct(Punctuation::LParen)));
+                    let expr = require!(self.expression(false));
+                    require!(self.exact(Token::Punct(Punctuation::RParen)));
+                    let block = require!(self.block());
+                    arms.push((expr, block));
+                } else {
+                    else_arm = Some(require!(self.block()));
+                    break
+                }
+            }
+
+            success(Statement::If(arms, else_arm))
+        } else if let Some(()) = self.exact_ident("while")? {
+            // statement :: 'while' '(' expression ')' block
+            require!(self.exact(Token::Punct(Punctuation::LParen)));
+            let expr = require!(self.expression(false));
+            require!(self.exact(Token::Punct(Punctuation::RParen)));
+            success(Statement::While(expr, require!(self.block())))
+        // SINGLE-LINE STATEMENTS
+        } else if let Some(()) = self.exact_ident("return")? {
+            // statement :: 'return' expression
+            success(Statement::Return(self.expression(false)?))
+        // EXPRESSION STATEMENTS
+        } else {
+            let expr = require!(self.expression(false));
+            // statement :: expression
+            success(Statement::Expr(expr))
+        }
     }
 
     // ------------------------------------------------------------------------
@@ -628,9 +676,15 @@ impl<I> Parser<I> where
 
         let mut follow = Vec::new();
         loop {
-            match self.follow()? {
-                Some(f) => follow.push(f),
-                None => break,
+            if let Some(()) = self.exact(Token::Punct(Punctuation::PlusPlus))? {
+                unary_ops.push(UnaryOp::PostIncr);
+            } else if let Some(()) = self.exact(Token::Punct(Punctuation::MinusMinus))? {
+                unary_ops.push(UnaryOp::PostDecr);
+            } else {
+                match self.follow()? {
+                    Some(f) => follow.push(f),
+                    None => break,
+                }
             }
         }
 
@@ -673,13 +727,35 @@ impl<I> Parser<I> where
                 }
             },
 
+            // term :: 'call' arglist arglist
+            Token::Ident(ref i, _) if i == "call" => {
+                Term::DynamicCall(require!(self.arguments()), require!(self.arguments()))
+            },
+
+            // term :: '.'
+            Token::Punct(Punctuation::Dot) => {
+                if let Some(ident) = self.ident()? {
+                    // prefab
+                    if let Some(mut prefab) = self.prefab()? {
+                        prefab.path.insert(0, (PathOp::Dot, ident));
+                        Term::Prefab(prefab)
+                    } else {
+                        Term::Prefab(Prefab {
+                            path: vec![(PathOp::Dot, ident)],
+                            vars: Default::default(),
+                        })
+                    }
+                } else {
+                    // bare dot
+                    Term::Ident(".".to_owned())
+                }
+            },
             // term :: path_lit
             t @ Token::Punct(Punctuation::Slash) |
-            t @ Token::Punct(Punctuation::Dot) |
             t @ Token::Punct(Punctuation::Colon) => {
                 self.put_back(t);
                 Term::Prefab(require!(self.prefab()))
-            }
+            },
 
             // term :: ident | str_lit | num_lit
             Token::Ident(val, _) => {

@@ -278,6 +278,7 @@ impl<'a> ConstantFolder<'a> {
             Term::Int(v) => Constant::Int(v),
             Term::Float(v) => Constant::Float(v),
             Term::Expr(expr) => self.expr(*expr, type_hint)?,
+            _ => return Err(self.error(format!("non-constant expression")))
         })
     }
 

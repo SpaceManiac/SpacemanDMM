@@ -239,6 +239,10 @@ pub enum Term {
     Float(f32),
     /// An expression contained in a term.
     Expr(Box<Expression>),
+    /// The current proc's return value (`.`).
+    ReturnValue,
+    /// A use of the `call()()` primitive.
+    DynamicCall(Vec<Expression>, Vec<Expression>)
 }
 
 impl From<Expression> for Term {
@@ -278,4 +282,12 @@ pub struct Parameter {
     pub default: Option<Expression>,
     pub as_types: Option<Vec<String>>,
     pub in_list: Option<Expression>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Statement {
+    Expr(Expression),
+    Return(Option<Expression>),
+    While(Expression, Vec<Statement>),
+    If(Vec<(Expression, Vec<Statement>)>, Option<Vec<Statement>>),
 }
