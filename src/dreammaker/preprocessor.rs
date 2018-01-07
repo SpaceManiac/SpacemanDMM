@@ -13,7 +13,7 @@ use super::{DMError, Location, HasLocation};
 #[derive(Debug, Clone)]
 enum Define {
     Constant(Vec<Token>),
-    Function(Vec<String>, Vec<Token>),
+    Function(Vec<String>, Vec<Token>, bool),
 }
 
 fn default_defines(defines: &mut HashMap<String, Define>) {
@@ -380,19 +380,33 @@ impl Preprocessor {
                         expect_token!((define_name, ws) = Token::Ident(define_name, ws));
                         let mut args = Vec::new();
                         let mut subst = Vec::new();
+                        let mut variadic = false;
                         'outer: loop {
                             match next!() {
                                 Token::Punct(Punctuation::LParen) if !ws => {
                                     loop {
+                                        if variadic {
+                                            return Err(self.error("only the last parameter of a macro may be variadic"));
+                                        }
                                         match next!() {
                                             Token::Ident(name, _) => args.push(name),
-                                            Token::Punct(Punctuation::Ellipsis) => return Err(DMError::new(self.last_input_loc, "variadic macros unsupported")),
-                                            _ => return Err(self.error("malformed macro definition"))
+                                            Token::Punct(Punctuation::Ellipsis) => {
+                                                args.push("__VA_ARGS__".to_owned());  // default
+                                                variadic = true;
+                                            }
+                                            _ => return Err(self.error("malformed macro parameters, expected name"))
                                         }
                                         match next!() {
                                             Token::Punct(Punctuation::Comma) => {}
                                             Token::Punct(Punctuation::RParen) => break,
-                                            _ => return Err(self.error("malformed macro definition"))
+                                            Token::Punct(Punctuation::Ellipsis) => {
+                                                variadic = true;
+                                                match next!() {
+                                                    Token::Punct(Punctuation::RParen) => break,
+                                                    _ => return Err(self.error("only the last parameter of a macro may be variadic"))
+                                                }
+                                            }
+                                            _ => return Err(self.error("malformed macro parameters, expected comma"))
                                         }
                                     }
                                 }
@@ -411,7 +425,7 @@ impl Preprocessor {
                         if args.is_empty() {
                             self.defines.insert(define_name, Define::Constant(subst));
                         } else {
-                            self.defines.insert(define_name, Define::Function(args, subst));
+                            self.defines.insert(define_name, Define::Function(args, subst, variadic));
                         }
                     }
                     "undef" => {
@@ -446,7 +460,7 @@ impl Preprocessor {
                         self.include_stack.stack.push(e);
                         return Ok(());
                     }
-                    Some(Define::Function(ref params, ref subst)) => {
+                    Some(Define::Function(ref params, ref subst, variadic)) => {
                         // if it's not followed by an LParen, it isn't really a function call
                         match next!() {
                             Token::Punct(Punctuation::LParen) => {}
@@ -482,6 +496,19 @@ impl Preprocessor {
                                 }
                                 _ => this_arg.push(token),
                             }
+                        }
+
+                        // check for correct number of arguments
+                        if variadic {
+                            if args.len() > params.len() {
+                                let new_arg = args.split_off(params.len() - 1).join(&Token::Punct(Punctuation::Comma));
+                                args.push(new_arg);
+                            } else if args.len() + 1 == params.len() {
+                                args.push(Vec::new());
+                            }
+                        }
+                        if args.len() != params.len() {
+                            return Err(self.error("wrong number of arguments to macro call"))
                         }
 
                         // paste them into the expansion
