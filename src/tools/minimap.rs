@@ -223,13 +223,17 @@ pub fn generate(
             // HTML color parsing
             let color = match atom.get_var("color", objtree) {
                 &Constant::String(ref color) if color.starts_with("#") => {
-                    // TODO: support #XXX
-                    assert_eq!(color.len(), 7);
                     let mut sum = 0;
                     for ch in color[1..color.len()].chars() {
                         sum = 16 * sum + ch.to_digit(16).unwrap();
                     }
-                    [(sum >> 16) as u8, (sum >> 8) as u8, sum as u8, 255]
+                    if color.len() == 7 {  // #rrggbb
+                        [(sum >> 16) as u8, (sum >> 8) as u8, sum as u8, 255]
+                    } else if color.len() == 4 {  // #rgb
+                        [(0x11 * ((sum >> 8) & 0xf)) as u8, (0x11 * ((sum >> 4) & 0xf)) as u8, (0x11 * (sum & 0xf)) as u8, 255]
+                    } else {
+                        [255, 255, 255, 255]  // invalid
+                    }
                 }
                 _ => [255, 255, 255, 255],
             };
