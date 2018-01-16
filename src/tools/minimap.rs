@@ -43,6 +43,7 @@ pub fn generate(
     // loads atoms from the prefabs on the map and adds overlays and smoothing
     let mut atoms = Vec::new();
     let mut overlays = Vec::new();
+
     //flame!("collect");
     for (y, row) in grid.axis_iter(Axis(0)).enumerate() {
         if y < min_y || y > max_y { continue }
@@ -74,13 +75,35 @@ pub fn generate(
                 }
 
                 // overlays and underlays
+                macro_rules! add_overlay {
+                    ($icon:expr) => {{
+                        let mut copy = atom.clone();
+                        copy.set_var("icon_state", Constant::string($icon));
+                        overlays.push(copy);
+                    }}
+                }
                 if subtype(p, "/obj/structure/closet/") {
                     // closet doors
-                    if let &Constant::String(ref door) = atom.get_var_notnull("icon_door", objtree)
-                            .unwrap_or_else(|| atom.get_var("icon_state", objtree)) {
-                        let mut copy = atom.clone();
-                        copy.set_var("icon_state", Constant::string(format!("{}_door", door)));
-                        overlays.push(copy);
+                    if atom.get_var("opened", objtree).to_bool() {
+                        let var = if atom.get_var("icon_door_override", objtree).to_bool() { "icon_door" } else { "icon_state" };
+                        if let &Constant::String(ref door) = atom.get_var(var, objtree) {
+                            add_overlay!(format!("{}_open", door));
+                        }
+                    } else {
+                        if let &Constant::String(ref door) = atom.get_var_notnull("icon_door", objtree)
+                                .unwrap_or_else(|| atom.get_var("icon_state", objtree)) {
+                            add_overlay!(format!("{}_door", door));
+                        }
+                        if atom.get_var("welded", objtree).to_bool() {
+                            add_overlay!("welded");
+                        }
+                        if atom.get_var("secure", objtree).to_bool() && !atom.get_var("broken", objtree).to_bool() {
+                            if atom.get_var("locked", objtree).to_bool() {
+                                add_overlay!("locked");
+                            } else {
+                                add_overlay!("unlocked");
+                            }
+                        }
                     }
                 } else if subtype(p, "/obj/machinery/computer/") || subtype(p, "/obj/machinery/power/solar_control/") {
                     // computer screens and keyboards
@@ -118,9 +141,7 @@ pub fn generate(
                         _ => "",
                     };
                     if !aboveground.is_empty() {
-                        let mut copy = atom.clone();
-                        copy.set_var("icon_state", Constant::string(aboveground));
-                        overlays.push(copy);
+                        add_overlay!(aboveground);
                         atom.set_var("layer", Constant::Int(-5));
                     }
                 } else if subtype(p, "/obj/item/storage/box/") && !subtype(p, "/obj/item/storage/box/papersack/") {
@@ -139,21 +160,15 @@ pub fn generate(
                     }
                     // status overlays
                     for &each in ["apcox-1", "apco3-2", "apco0-3", "apco1-3", "apco2-3"].iter() {
-                        let mut copy = atom.clone();
-                        copy.set_var("icon_state", Constant::string(each));
-                        overlays.push(copy);
+                        add_overlay!(each);
                     }
                     // the terminal
                     let mut terminal = Atom::from_type(objtree, "/obj/machinery/power/terminal", atom.loc).unwrap();
                     terminal.copy_var("dir", &atom, objtree);
                     atoms.push(terminal);
                 } else if subtype(p, "/obj/machinery/firealarm/") {
-                    let mut copy = atom.clone();
-                    copy.set_var("icon_state", Constant::string("overlay_0"));
-                    overlays.push(copy);
-                    copy = atom.clone();
-                    copy.set_var("icon_state", Constant::string("overlay_clear"));
-                    overlays.push(copy);
+                    add_overlay!("overlay_0");
+                    add_overlay!("overlay_clear");
                 }
 
                 // smoothing time
