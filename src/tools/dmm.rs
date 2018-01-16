@@ -46,6 +46,12 @@ impl Map {
     }
 
     #[inline]
+    pub fn dim_xyz(&self) -> (usize, usize, usize) {
+        let dim = self.grid.dim();
+        (dim.2, dim.1, dim.0)
+    }
+
+    #[inline]
     pub fn dim_z(&self) -> usize {
         self.grid.dim().0
     }

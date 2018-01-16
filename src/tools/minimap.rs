@@ -17,31 +17,37 @@ const LEGIT_POSTERS: u32 = 35;
 // Main minimap code
 
 #[derive(Clone, Copy)]
-struct Context<'a> {
-    objtree: &'a ObjectTree,
-    map: &'a Map,
-    grid: Grid<'a>,
+pub struct Context<'a> {
+    pub objtree: &'a ObjectTree,
+    pub map: &'a Map,
+    pub grid: Grid<'a>,
+    pub min: (usize, usize),
+    pub max: (usize, usize),
 }
 
 pub fn generate(
-    objtree: &ObjectTree,
-    map: &Map,
-    z: usize,
+    ctx: Context,
     icon_cache: &mut HashMap<PathBuf, IconFile>,
 ) -> Result<Image, ()> {
     use rand::Rng;
 
     flame!("minimap");
-    let grid = map.z_level(z);
-    let (len_x, len_y) = grid.dim();
-    let ctx = Context { objtree, map, grid };
+    let Context { objtree, map, grid, .. } = ctx;
+
+    // transform min/max from bottom-left-based to top-left-based
+    // probably doesn't belong here
+    let (_, len_y) = ctx.grid.dim();
+    let (min_y, max_y) = (len_y - ctx.max.1 - 1, len_y - ctx.min.1 - 1);
+    let (len_x, len_y) = (ctx.max.0 - ctx.min.0 + 1, ctx.max.1 - ctx.min.1 + 1);
 
     // loads atoms from the prefabs on the map and adds overlays and smoothing
     let mut atoms = Vec::new();
     let mut overlays = Vec::new();
     //flame!("collect");
     for (y, row) in grid.axis_iter(Axis(0)).enumerate() {
+        if y < min_y || y > max_y { continue }
         for (x, e) in row.iter().enumerate() {
+            if x < ctx.min.0 || x > ctx.max.0 { continue }
             for mut atom in get_atom_list(objtree, &map.dictionary[e], (x as u32, y as u32)) {
                 // icons which differ from their map states
                 let p = &atom.type_.path;
@@ -189,8 +195,8 @@ pub fn generate(
             let pixel_y = atom.get_var("pixel_y", ctx.objtree).to_int().unwrap_or(0) +
                 icon_file.metadata.height as i32;
             let mut loc = (
-                (atom.loc.0 * TILE_SIZE) as i32 + pixel_x,
-                (atom.loc.1 * TILE_SIZE + TILE_SIZE) as i32 - pixel_y
+                ((atom.loc.0 - ctx.min.0 as u32) * TILE_SIZE) as i32 + pixel_x,
+                ((atom.loc.1 + 1 - min_y as u32) * TILE_SIZE) as i32 - pixel_y
             );
 
             // OOB handling
