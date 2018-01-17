@@ -21,7 +21,7 @@ pub struct Map {
 pub type Grid<'a> = ndarray::ArrayBase<ndarray::ViewRepr<&'a u32>, ndarray::Dim<[usize; 2]>>;
 
 // TODO: port to ast::Prefab<Constant>
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq)]
 pub struct Prefab {
     pub path: String,
     // insertion order, sort of most of the time alphabetical but not quite

@@ -105,6 +105,12 @@ enum Command {
         /// The list of maps to process.
         files: Vec<String>,
     },
+    /// List the differing coordinates between two maps.
+    #[structopt(name="diff-maps")]
+    DiffMaps {
+        left: String,
+        right: String,
+    },
 }
 
 fn run(opt: &Opt, command: &Command, context: &mut Context) {
@@ -176,6 +182,39 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                 }
             }
         },
+        // --------------------------------------------------------------------
+        Command::DiffMaps {
+            ref left, ref right,
+        } => {
+            use std::cmp::min;
+
+            context.objtree(opt);
+
+            let path: &std::path::Path = left.as_ref();
+            println!("{}", path.display());
+            let left_map = dmm::Map::from_file(path).unwrap();
+            let path: &std::path::Path = right.as_ref();
+            println!("{}", path.display());
+            let right_map = dmm::Map::from_file(path).unwrap();
+
+            let left_dims = left_map.dim_xyz();
+            let right_dims = right_map.dim_xyz();
+            if left_dims != right_dims {
+                println!("    different size: {:?} {:?}", left_dims, right_dims);
+            }
+
+            for z in 0..min(left_dims.2, right_dims.2) {
+                for y in 0..min(left_dims.1, right_dims.1) {
+                    for x in 0..min(left_dims.0, right_dims.0) {
+                        let left_tile = &left_map.dictionary[&left_map.grid[(z, left_dims.1 - y - 1, x)]];
+                        let right_tile = &right_map.dictionary[&right_map.grid[(z, right_dims.1 - y - 1, x)]];
+                        if left_tile != right_tile {
+                            println!("    different tile: ({}, {}, {})", x + 1, y + 1, z + 1);
+                        }
+                    }
+                }
+            }
+        }
         // --------------------------------------------------------------------
     }
 }
