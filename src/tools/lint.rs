@@ -32,6 +32,7 @@ lints! {
     cable_directions = "cable directions";
     tag_empty = "empty tags";
     tag_icon = "icon tags";
+    stacked_turfs = "stacked turfs";
 }
 
 #[allow(unused_variables)]
@@ -43,7 +44,16 @@ pub fn check(
     let key_length = map.key_length;
 
     for (&key, prefabs) in map.dictionary.iter_mut() {
-        for fab in prefabs.iter_mut() {
+        let mut found_turf = false;
+        retain_mut(prefabs, |fab| {
+            if subpath(&fab.path, "/turf/") {
+                if found_turf {
+                    lints.stacked_turfs += 1;
+                    return false;
+                }
+                found_turf = true;
+            }
+
             let tag = fab.vars.get("tag").cloned();
             if let Some(Constant::String(tag)) = tag {
                 if tag.is_empty() {
@@ -63,8 +73,31 @@ pub fn check(
                     lints.cable_directions += 1;
                 }
             }
-        }
+
+            true
+        });
     }
 
     lints
+}
+
+pub fn retain_mut<T, F>(v: &mut Vec<T>, mut f: F)
+    where F: FnMut(&mut T) -> bool
+{
+    let len = v.len();
+    let mut del = 0;
+    {
+        let v = &mut **v;
+
+        for i in 0..len {
+            if !f(&mut v[i]) {
+                del += 1;
+            } else if del > 0 {
+                v.swap(i - del, i);
+            }
+        }
+    }
+    if del > 0 {
+        v.truncate(len - del);
+    }
 }
