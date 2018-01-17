@@ -8,6 +8,7 @@ use dm::objtree::subpath as subtype;
 use dm::constants::Constant;
 use dmm::{Map, Grid, Prefab};
 use dmi::{Image, IconFile};
+use render_passes::RenderPass;
 
 const TILE_SIZE: u32 = 32;
 const CONTRABAND_POSTERS: u32 = 44;
@@ -28,6 +29,7 @@ pub struct Context<'a> {
 pub fn generate(
     ctx: Context,
     icon_cache: &mut HashMap<PathBuf, IconFile>,
+    render_passes: &[Box<RenderPass>],
 ) -> Result<Image, ()> {
     use rand::Rng;
 
@@ -184,8 +186,10 @@ pub fn generate(
     //flame!("render");
     'atom: for atom in atoms {
         // At this time, space is invisible. Earlier steps need to process it.
-        if subtype(&atom.type_.path, "/turf/open/space/") {
-            continue;
+        for pass in render_passes.iter() {
+            if !pass.final_filter(&atom, objtree) {
+                continue 'atom;
+            }
         }
 
         let icon = match atom.get_var("icon", objtree) {
@@ -353,6 +357,10 @@ impl<'a> Atom<'a> {
             vars: Default::default(),
             loc,
         })
+    }
+
+    pub fn istype(&self, parent: &str) -> bool {
+        subpath(&self.type_.path, parent)
     }
 
     pub fn get_var(&self, key: &str, objtree: &'a ObjectTree) -> &Constant {

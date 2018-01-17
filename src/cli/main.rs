@@ -45,12 +45,32 @@ struct Opt {
     #[structopt(long="max")]
     max: Option<CoordArg>,
 
+    /// Enable render-passes, or "all" to only exclude those passed to --disable.
+    #[structopt(long="enable")]
+    enable: Vec<String>,
+
+    /// Disable render-passes, or "all" to only use those passed to --enable.
+    #[structopt(long="disable")]
+    disable: Vec<String>,
+
+    /// Show information about the render-pass list.
+    #[structopt(long="list-passes")]
+    list_passes: bool,
+
     /// The list of files to process.
     files: Vec<String>,
 }
 
 fn main() {
     let opt = Opt::from_args();
+
+    if opt.list_passes {
+        for pass in render_passes::RENDER_PASSES {
+            println!("{}{}: {}", pass.name, if pass.default { " (default)" } else { "" }, pass.desc);
+        }
+        return;
+    }
+    let mut render_passes = None;
 
     let objtree = {
         println!("parsing {}", opt.environment);
@@ -97,7 +117,10 @@ fn main() {
                     min: (min.x - 1, min.y - 1),
                     max: (max.x - 1, max.y - 1),
                 };
-                let image = minimap::generate(context, &mut icon_cache).unwrap();
+                if render_passes.is_none() {
+                    render_passes = Some(render_passes::configure(&opt.enable, &opt.disable));
+                }
+                let image = minimap::generate(context, &mut icon_cache, &render_passes.as_ref().unwrap()).unwrap();
                 let output = format!("{}/{}-{}.png", opt.output, path.file_stem().unwrap().to_string_lossy(), 1 + z);
                 if !opt.dry_run {
                     println!("    saving {}", output);
