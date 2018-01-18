@@ -230,10 +230,10 @@ pub fn generate(
             }
             if loc.1 < 0 {
                 rect.1 += (-loc.1) as u32;
-                rect.2 -= (-loc.1) as u32;
+                rect.3 -= (-loc.1) as u32;
                 loc.1 = 0;
             }
-            while loc.1 + rect.3 as i32 > map_image.info.width as i32 {
+            while loc.1 + rect.3 as i32 > map_image.info.height as i32 {
                 rect.3 -= 1;
                 if rect.3 == 0 { continue 'atom }
             }
