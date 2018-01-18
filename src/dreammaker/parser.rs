@@ -456,7 +456,7 @@ impl<I> Parser<I> where
         // parse vars if we find them
         let mut vars = LinkedHashMap::default();
         if self.exact(Token::Punct(Punctuation::LBrace))?.is_some() {
-            self.separated(Punctuation::Semicolon, Punctuation::RBrace, |this| {
+            self.separated(Punctuation::Semicolon, Punctuation::RBrace, Some(()), |this| {
                 let key = require!(this.ident());
                 require!(this.exact(Token::Punct(Punctuation::Assign)));
                 let value = require!(this.expression(false));
@@ -675,13 +675,13 @@ impl<I> Parser<I> where
     fn arguments(&mut self) -> Status<Vec<Expression>> {
         // a parenthesized, comma-separated list of expressions
         leading!(self.exact(Token::Punct(Punctuation::LParen)));
-        success(require!(self.comma_sep(Punctuation::RParen, |this| this.expression(false))))
+        success(require!(self.separated(Punctuation::Comma, Punctuation::RParen, Some(Expression::from(Term::Null)), |this| this.expression(false))))
     }
 
     fn list_arguments(&mut self) -> Status<Vec<(Expression, Option<Expression>)>> {
         // a parenthesized, comma-separated list of expressions
         leading!(self.exact(Token::Punct(Punctuation::LParen)));
-        success(require!(self.comma_sep(Punctuation::RParen, |this| {
+        success(require!(self.separated(Punctuation::Comma, Punctuation::RParen, Some((Expression::from(Term::Null), None)), |this| {
             let first_expr = require!(this.expression(true));
             success(if this.exact(Token::Punct(Punctuation::Assign))?.is_some() {
                 let second_expr = require!(this.expression(false));
@@ -692,27 +692,25 @@ impl<I> Parser<I> where
         })))
     }
 
-    #[inline]
-    fn comma_sep<R, F: FnMut(&mut Self) -> Status<R>>(&mut self, terminator: Punctuation, f: F) -> Status<Vec<R>> {
-        self.separated(Punctuation::Comma, terminator, f)
-    }
-
-    fn separated<R, F: FnMut(&mut Self) -> Status<R>>(&mut self, sep: Punctuation, terminator: Punctuation, mut f: F) -> Status<Vec<R>> {
+    fn separated<R: Clone, F: FnMut(&mut Self) -> Status<R>>(&mut self, sep: Punctuation, terminator: Punctuation, allow_empty: Option<R>, mut f: F) -> Status<Vec<R>> {
         let mut comma_legal = false;
         let mut elems = Vec::new();
         loop {
-            let next = self.next("list element")?;
-            if next == Token::Punct(terminator) {
+            if let Some(()) = self.exact(Token::Punct(terminator))? {
                 return success(elems);
-            } else if comma_legal && next == Token::Punct(sep) {
-                comma_legal = false;
+            } else if let Some(()) = self.exact(Token::Punct(sep))? {
+                if comma_legal {
+                    comma_legal = false;
+                } else if let Some(empty) = allow_empty.clone() {
+                    elems.push(empty);
+                } else {
+                    return self.parse_error();
+                }
             } else if !comma_legal {
-                self.put_back(next);
                 let v = f(self);
                 elems.push(self.require(v)?);
                 comma_legal = true;
             } else {
-                self.put_back(next);
                 return self.parse_error();
             }
         }
