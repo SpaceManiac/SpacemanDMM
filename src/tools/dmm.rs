@@ -65,6 +65,14 @@ impl Map {
     pub fn format_key(&self, key: u32) -> FormatKey {
         FormatKey(self.key_length, key)
     }
+
+    pub fn zero_to_one(&self, (x, y, z): (usize, usize, usize)) -> (usize, usize, usize) {
+        (x + 1, self.grid.dim().1 - y, z + 1)
+    }
+
+    pub fn one_to_zero(&self, (x, y, z): (usize, usize, usize)) -> (usize, usize, usize) {
+        (x - 1, self.grid.dim().1 - y, z - 1)
+    }
 }
 
 // ----------------------------------------------------------------------------
