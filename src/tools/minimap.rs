@@ -38,7 +38,7 @@ pub fn generate(
 
     // transform min/max from bottom-left-based to top-left-based
     // probably doesn't belong here
-    let (_, len_y) = ctx.grid.dim();
+    let (len_y, _) = ctx.grid.dim();
     let (min_y, max_y) = (len_y - ctx.max.1 - 1, len_y - ctx.min.1 - 1);
     let (len_x, len_y) = (ctx.max.0 - ctx.min.0 + 1, ctx.max.1 - ctx.min.1 + 1);
 
