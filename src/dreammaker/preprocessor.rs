@@ -350,7 +350,10 @@ impl Preprocessor {
                     "include" => {
                         expect_token!((path) = Token::String(path));
                         expect_token!(() = Token::Punct(Punctuation::Newline));
+                        #[cfg(windows)]
                         let path = PathBuf::from(path);
+                        #[cfg(unix)]
+                        let path = PathBuf::from(path.replace("\\", "/"));
 
                         for each in vec![
                             self.env_file.parent().unwrap().join(&path),

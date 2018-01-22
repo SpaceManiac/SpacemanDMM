@@ -5,8 +5,6 @@ use std::borrow::Cow;
 
 #[cfg(unix)]
 pub fn fix_case(path: &Path) -> Cow<Path> {
-    use std::ascii::AsciiExt;
-
     if path.exists() {
         return Cow::Borrowed(path);
     }
