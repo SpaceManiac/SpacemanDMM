@@ -43,6 +43,24 @@ pub fn check(
     let mut lints = Lints::default();
     let key_length = map.key_length;
 
+    for z in 0..map.dim_z() {
+        let grid = map.z_level(z);
+        for (y, row) in grid.axis_iter(::ndarray::Axis(0)).enumerate() {
+            for (x, e) in row.iter().enumerate() {
+                let prefabs = &map.dictionary[e];
+                let mut found_turf = 0;
+                for fab in prefabs {
+                    if subpath(&fab.path, "/turf/") {
+                        found_turf += 1;
+                    }
+                }
+                if found_turf != 1 {
+                    println!("    at {:?}: found {} turfs", map.zero_to_one((x, y, z)), found_turf);
+                }
+            }
+        }
+    }
+
     for (&key, prefabs) in map.dictionary.iter_mut() {
         let mut found_turf = false;
         retain_mut(prefabs, |fab| {
