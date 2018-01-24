@@ -88,6 +88,10 @@ enum Command {
         #[structopt(long="disable")]
         disable: Vec<String>,
 
+        /// Run output through pngcrush automatically. Requires pngcrush to be installed.
+        #[structopt(long="pngcrush")]
+        pngcrush: bool,
+
         /// The list of maps to process.
         files: Vec<String>,
     },
@@ -123,7 +127,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
         },
         // --------------------------------------------------------------------
         Command::Minimap {
-            ref output, min, max, ref enable, ref disable, ref files,
+            ref output, min, max, ref enable, ref disable, ref files, pngcrush,
         } => {
             context.objtree(opt);
 
@@ -155,9 +159,21 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                         max: (max.x - 1, max.y - 1),
                     };
                     let image = minimap::generate(minimap_context, &mut context.icon_cache, &render_passes).unwrap();
-                    let output = format!("{}/{}-{}.png", output, path.file_stem().unwrap().to_string_lossy(), 1 + z);
-                    println!("    saving {}", output);
-                    image.to_file(output.as_ref()).unwrap();
+                    let outfile = format!("{}/{}-{}.png", output, path.file_stem().unwrap().to_string_lossy(), 1 + z);
+                    println!("    saving {}", outfile);
+                    image.to_file(outfile.as_ref()).unwrap();
+                    if pngcrush {
+                        println!("    crushing {}", outfile);
+                        let temp = format!("{}.temp", outfile);
+                        assert!(std::process::Command::new("pngcrush")
+                            .arg("-ow")
+                            .arg(&outfile)
+                            .arg(&temp)
+                            .stderr(std::process::Stdio::null())
+                            .status()
+                            .unwrap()
+                            .success(), "pngcrush failed");
+                    }
                 }
             }
         },
