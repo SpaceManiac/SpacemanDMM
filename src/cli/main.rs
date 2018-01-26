@@ -3,6 +3,10 @@
 extern crate structopt;
 #[macro_use] extern crate structopt_derive;
 
+extern crate serde;
+extern crate serde_json;
+#[macro_use] extern crate serde_derive;
+
 extern crate dreammaker as dm;
 #[macro_use] extern crate dmm_tools;
 
@@ -114,6 +118,16 @@ enum Command {
     DiffMaps {
         left: String,
         right: String,
+    },
+    /// Show metadata information about the map.
+    #[structopt(name="map-info")]
+    MapInfo {
+        /// Output as JSON.
+        #[structopt(short="j", long="json")]
+        json: bool,
+
+        /// The list of maps to show info on.
+        files: Vec<String>,
     },
 }
 
@@ -230,7 +244,39 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                     }
                 }
             }
-        }
+        },
+        // --------------------------------------------------------------------
+        Command::MapInfo {
+            json, ref files,
+        } => {
+            if !json {
+                println!("non-JSON output is not yet supported");
+            }
+
+            #[derive(Serialize)]
+            struct Map {
+                size: (usize, usize, usize),
+                key_length: u8,
+                num_keys: usize,
+            }
+
+            let mut report = HashMap::new();
+            for path in files.iter() {
+                let path: &std::path::Path = path.as_ref();
+                let mut map = dmm::Map::from_file(path).unwrap();
+
+                let dim = map.grid.dim();
+                report.insert(path, Map {
+                    size: (dim.2, dim.1, dim.0),  // zyx -> xyz
+                    key_length: map.key_length,
+                    num_keys: map.dictionary.len(),
+                });
+            }
+
+            let stdout = std::io::stdout();
+            serde_json::to_writer(stdout.lock(), &report).unwrap();
+            println!();
+        },
         // --------------------------------------------------------------------
     }
 }
