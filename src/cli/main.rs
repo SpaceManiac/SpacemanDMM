@@ -85,12 +85,12 @@ enum Command {
         max: Option<CoordArg>,
 
         /// Enable render-passes, or "all" to only exclude those passed to --disable.
-        #[structopt(long="enable")]
-        enable: Vec<String>,
+        #[structopt(long="enable", default_value="")]
+        enable: String,
 
         /// Disable render-passes, or "all" to only use those passed to --enable.
-        #[structopt(long="disable")]
-        disable: Vec<String>,
+        #[structopt(long="disable", default_value="")]
+        disable: String,
 
         /// Run output through pngcrush automatically. Requires pngcrush to be installed.
         #[structopt(long="pngcrush")]

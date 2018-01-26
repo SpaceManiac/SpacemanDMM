@@ -26,15 +26,17 @@ pub const RENDER_PASSES: &[RenderPassInfo] = &[
     pass!(HideSpace, "hide-space", "Do not render space tiles, instead leaving transparency.", true),
 ];
 
-pub fn configure(include: &[String], exclude: &[String]) -> Vec<Box<RenderPass>> {
-    let include_all = include.iter().any(|name| name == "all");
-    let exclude_all = exclude.iter().any(|name| name == "all");
+pub fn configure(include: &str, exclude: &str) -> Vec<Box<RenderPass>> {
+    let include: Vec<&str> = include.split(",").collect();
+    let exclude: Vec<&str> = exclude.split(",").collect();
+    let include_all = include.iter().any(|&name| name == "all");
+    let exclude_all = exclude.iter().any(|&name| name == "all");
 
     let mut output = Vec::new();
     for pass in RENDER_PASSES {
-        let included = if include.iter().any(|name| name == pass.name) {
+        let included = if include.iter().any(|&name| name == pass.name) {
             true
-        } else if exclude.iter().any(|name| name == pass.name) {
+        } else if exclude.iter().any(|&name| name == pass.name) {
             false
         } else if include_all {
             true
