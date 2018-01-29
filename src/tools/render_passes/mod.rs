@@ -24,6 +24,8 @@ macro_rules! pass {
 
 pub const RENDER_PASSES: &[RenderPassInfo] = &[
     pass!(HideSpace, "hide-space", "Do not render space tiles, instead leaving transparency.", true),
+    pass!(Wires, "powernet", "Render only power cables", false),
+    pass!(Pipes, "pipenet", "Render only atmospheric pipes", false),
 ];
 
 pub fn configure(include: &[String], exclude: &[String]) -> Vec<Box<RenderPass>> {
@@ -55,5 +57,20 @@ pub struct HideSpace;
 impl RenderPass for HideSpace {
     fn final_filter(&self, atom: &Atom, _: &ObjectTree) -> bool {
         !atom.istype("/turf/open/space/")
+    }
+}
+#[derive(Default)]
+pub struct Wires;
+impl RenderPass for Wires {
+    fn final_filter(&self, atom: &Atom, _: &ObjectTree) -> bool {
+        atom.istype("/obj/structure/cable/")
+    }
+}
+
+#[derive(Default)]
+pub struct Pipes;
+impl RenderPass for Pipes {
+    fn final_filter(&self, atom: &Atom, _: &ObjectTree) -> bool {
+        atom.istype("/obj/machinery/atmospherics/pipe/")
     }
 }
