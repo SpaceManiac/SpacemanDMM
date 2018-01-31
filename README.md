@@ -31,7 +31,7 @@ Basic usage: `dmm-tools minimap -o dir/to/save/minimap path/to/map.dmm`.
 
 More detailed usage instructions are available in the `--help` output.
 
-## Recomendations
+## Recommendations
 
 The minimap output is a very large PNG (e.g. 9.3 MB for Box). You are strongly
 advised to run the resulting file through image optimization software such as
