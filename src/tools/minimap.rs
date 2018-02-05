@@ -187,7 +187,7 @@ pub fn generate(
     'atom: for atom in atoms {
         // At this time, space is invisible. Earlier steps need to process it.
         for pass in render_passes.iter() {
-            if !pass.final_filter(&atom, objtree) {
+            if !pass.late_filter(&atom, objtree) {
                 continue 'atom;
             }
         }
