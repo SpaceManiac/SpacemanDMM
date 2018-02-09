@@ -18,6 +18,10 @@ pub fn parse<I>(iter: I) -> Result<ObjectTree, DMError> where
         None => return parser.parse_error(),
     };
     tree.finalize()?;
+
+    let procs_total = parser.procs_good + parser.procs_bad;
+    println!("parsed {}/{} proc bodies ({}%)", parser.procs_good, procs_total, (parser.procs_good * 100 / procs_total));
+
     Ok(tree)
 }
 
@@ -199,6 +203,9 @@ pub struct Parser<I> {
     next: Option<Token>,
     location: Location,
     expected: Vec<String>,
+
+    procs_bad: u64,
+    procs_good: u64,
 }
 
 impl<I> HasLocation for Parser<I> {
@@ -220,6 +227,9 @@ impl<I> Parser<I> where
             next: None,
             location: Default::default(),
             expected: Vec::new(),
+
+            procs_bad: 0,
+            procs_good: 0,
         }
     }
 
@@ -378,7 +388,7 @@ impl<I> Parser<I> where
             Punct(LParen) => {
                 self.tree.add_proc(self.location, new_stack.iter())?;
 
-                let parameters = require!(self.comma_sep(RParen, |this| {
+                let parameters = require!(self.separated(Comma, RParen, None, |this| {
                     if let Some(()) = this.exact(Punct(Ellipsis))? {
                         return success(None);
                     }
@@ -417,8 +427,17 @@ impl<I> Parser<I> where
                     }))
                 }));
                 let _parameters = parameters.into_iter().filter_map(|x| x).collect::<Vec<_>>();
-                let _body = require!(self.block());
-                println!("proc/{:?} ({:?}) {:#?}", path, _parameters, _body);
+
+                // split off a subparser so we can keep parsing the objtree
+                // even when the proc body doesn't parse
+                let mut body_tt = Vec::new();
+                require!(self.read_any_tt(&mut body_tt));
+                let mut subparser = Parser::new(body_tt.iter().cloned().map(Ok));
+                if subparser.block().is_ok() {
+                    self.procs_good += 1;
+                } else {
+                    self.procs_bad += 1;
+                }
                 SUCCESS
             }
             other => {
@@ -476,7 +495,12 @@ impl<I> Parser<I> where
         }
 
         require!(self.exact(Token::Punct(Punctuation::LBrace)));
-        self.separated(Punctuation::Semicolon, Punctuation::RBrace, true, |this| this.statement())
+        let mut statements = Vec::new();
+        self.separated(Punctuation::Semicolon, Punctuation::RBrace, Some(()), |this| {
+            statements.push(require!(this.statement()));
+            SUCCESS
+        })?;
+        success(statements)
     }
 
     fn statement(&mut self) -> Status<Statement> {
@@ -870,21 +894,20 @@ impl<I> Parser<I> where
     // ------------------------------------------------------------------------
     // Procs
 
-    #[allow(dead_code)]
-    fn read_any_tt(&mut self, target: &mut Vec<Token>) -> Status<()> {
+    fn read_any_tt(&mut self, target: &mut Vec<LocatedToken>) -> Status<()> {
         // read a single arbitrary "token tree", either a group or a single token
         let start = self.next("anything")?;
         let end = match start {
             Token::Punct(Punctuation::LParen) => Punctuation::RParen,
             Token::Punct(Punctuation::LBrace) => Punctuation::RBrace,
             Token::Punct(Punctuation::LBracket) => Punctuation::RBracket,
-            other => { target.push(other); return SUCCESS; }
+            other => { target.push(LocatedToken::new(self.location(), other)); return SUCCESS; }
         };
-        target.push(start);
+        target.push(LocatedToken::new(self.location(), start));
         loop {
             match self.next("anything")? {
                 Token::Punct(p) if p == end => {
-                    target.push(Token::Punct(p));
+                    target.push(LocatedToken::new(self.location(), Token::Punct(p)));
                     return SUCCESS;
                 }
                 other => {
