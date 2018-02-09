@@ -11,8 +11,6 @@ use dmi::{Image, IconFile};
 use render_passes::RenderPass;
 
 const TILE_SIZE: u32 = 32;
-const CONTRABAND_POSTERS: u32 = 44;
-const LEGIT_POSTERS: u32 = 35;
 
 // ----------------------------------------------------------------------------
 // Main minimap code
@@ -31,8 +29,6 @@ pub fn generate(
     ctx: Context,
     icon_cache: &mut HashMap<PathBuf, IconFile>,
 ) -> Result<Image, ()> {
-    use rand::Rng;
-
     flame!("minimap");
     let Context { objtree, map, grid, render_passes, .. } = ctx;
 
@@ -63,17 +59,6 @@ pub fn generate(
                     atom.set_var("pixel_y", Constant::Int(-4));
                 } else if subtype(p, "/obj/structure/bookcase/") {
                     atom.set_var("icon_state", Constant::string("book-0"));
-                } else if subtype(p, "/obj/structure/sign/poster/contraband/random/") {
-                    atom.set_var("icon_state", Constant::string(format!("poster{}", ::rand::thread_rng().gen_range(1, 1 + CONTRABAND_POSTERS))));
-                } else if subtype(p, "/obj/structure/sign/poster/official/random/") {
-                    atom.set_var("icon_state", Constant::string(format!("poster{}_legit", ::rand::thread_rng().gen_range(1, 1 + LEGIT_POSTERS))));
-                } else if subtype(p, "/obj/structure/sign/poster/random/") {
-                    let i = 1 + ::rand::thread_rng().gen_range(0, CONTRABAND_POSTERS + LEGIT_POSTERS);
-                    if i <= CONTRABAND_POSTERS {
-                        atom.set_var("icon_state", Constant::string(format!("poster{}", i)));
-                    } else {
-                        atom.set_var("icon_state", Constant::string(format!("poster{}_legit", i - CONTRABAND_POSTERS)));
-                    }
                 }
 
                 for pass in render_passes {
@@ -334,7 +319,7 @@ pub struct Atom<'a> {
 impl<'a> Atom<'a> {
     pub fn from_prefab(objtree: &'a ObjectTree, fab: &'a Prefab, loc: (u32, u32)) -> Option<Self> {
         objtree.find(&fab.path).map(|type_| Atom {
-            type_,
+            type_: type_.get(),
             prefab: Some(&fab.vars),
             vars: Default::default(),
             loc,
@@ -343,7 +328,7 @@ impl<'a> Atom<'a> {
 
     pub fn from_type(objtree: &'a ObjectTree, path: &str, loc: (u32, u32)) -> Option<Self> {
         objtree.find(path).map(|type_| Atom {
-            type_,
+            type_: type_.get(),
             prefab: None,
             vars: Default::default(),
             loc,
@@ -365,7 +350,7 @@ impl<'a> Atom<'a> {
         }
     }
 
-    pub fn get_var_spec(&self, key: &str, objtree: &'a ObjectTree) -> Option<&Constant> {
+    fn get_var_spec(&self, key: &str, objtree: &'a ObjectTree) -> Option<&Constant> {
         if let Some(v) = self.vars.get(key) {
             return Some(v);
         }
@@ -390,7 +375,7 @@ impl<'a> Atom<'a> {
         }
     }
 
-    fn set_var<K: Into<String>>(&mut self, key: K, value: Constant) {
+    pub fn set_var<K: Into<String>>(&mut self, key: K, value: Constant) {
         self.vars.insert(key.into(), value);
     }
 }

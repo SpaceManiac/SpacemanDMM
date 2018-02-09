@@ -107,6 +107,7 @@ impl Type {
     }
 
     // Intended to be used by the constant evaluator only
+    #[doc(hidden)]
     pub fn get_value_mut(&mut self, name: &str, objtree: &ObjectTree)
         -> Option<(&mut VarValue, VarDeclaration)>
     {
@@ -182,6 +183,10 @@ impl<'a> TypeRef<'a> {
         }
         output
     }
+
+    pub fn get(&self) -> &'a Type {
+        self.ty
+    }
 }
 
 impl<'a> ::std::ops::Deref for TypeRef<'a> {
@@ -230,8 +235,8 @@ impl ObjectTree {
         TypeRef::new(self, NodeIndex::new(0))
     }
 
-    pub fn find(&self, path: &str) -> Option<&Type> {
-        self.types.get(path).and_then(|&ix| self.graph.node_weight(ix))
+    pub fn find(&self, path: &str) -> Option<TypeRef> {
+        self.types.get(path).map(|&ix| TypeRef::new(self, ix))
     }
 
     pub fn parent_of(&self, type_: &Type) -> Option<&Type> {
@@ -255,7 +260,7 @@ impl ObjectTree {
 
     pub fn type_by_constant(&self, constant: &Constant) -> Option<&Type> {
         match constant {
-            &Constant::String(ref string_path) => self.find(string_path),
+            &Constant::String(ref string_path) => self.find(string_path).map(|tr| tr.get()),
             &Constant::Prefab(Prefab { ref path, .. }) => self.type_by_path(path),
             _ => None,
         }

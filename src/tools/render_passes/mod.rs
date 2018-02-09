@@ -74,6 +74,7 @@ pub const RENDER_PASSES: &[RenderPassInfo] = &[
     pass!(HideSpace, "hide-space", "Do not render space tiles, instead leaving transparency.", true),
     pass!(HideAreas, "hide-areas", "Do not render area icons.", true),
     pass!(HideInvisible, "hide-invisible", "Do not render invisible or ephemeral objects such as mapping helpers.", true),
+    pass!(Random, "random", "Replace random spawners with one of their possibilities.", true),
     pass!(Spawners, "spawners", "Replace object spawners with their spawned objects.", true),
 ];
 
@@ -174,6 +175,52 @@ impl RenderPass for Spawners {
                 true  // don't include the original atom
             }
             _ => { false }  // TODO: complain?
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct Random;
+impl RenderPass for Random {
+    fn adjust_vars<'a>(&self,
+        atom: &mut Atom<'a>,
+        objtree: &'a ObjectTree,
+    ) {
+        use rand::Rng;
+
+        const CONTRABAND_POSTERS: u32 = 44;
+        const LEGIT_POSTERS: u32 = 35;
+
+        if atom.istype("/obj/structure/sign/poster/contraband/random/") {
+            atom.set_var("icon_state", Constant::string(format!("poster{}", ::rand::thread_rng().gen_range(1, 1 + CONTRABAND_POSTERS))));
+        } else if atom.istype("/obj/structure/sign/poster/official/random/") {
+            atom.set_var("icon_state", Constant::string(format!("poster{}_legit", ::rand::thread_rng().gen_range(1, 1 + LEGIT_POSTERS))));
+        } else if atom.istype("/obj/structure/sign/poster/random/") {
+            let i = 1 + ::rand::thread_rng().gen_range(0, CONTRABAND_POSTERS + LEGIT_POSTERS);
+            if i <= CONTRABAND_POSTERS {
+                atom.set_var("icon_state", Constant::string(format!("poster{}", i)));
+            } else {
+                atom.set_var("icon_state", Constant::string(format!("poster{}_legit", i - CONTRABAND_POSTERS)));
+            }
+        } else if atom.istype("/obj/structure/sign/barsign/") {
+            if let Some(root) = objtree.find("/datum/barsign") {
+                let mut signs = Vec::new();
+                for child in root.children(objtree) {
+                    if let Some(v) = child.vars.get("hidden") {
+                        if !v.value.constant.as_ref().map_or(false, |c| c.to_bool()) {
+                            continue
+                        }
+                    }
+                    if let Some(icon) = child.vars.get("icon") {
+                        if let Some(c) = icon.value.constant.as_ref() {
+                            signs.push(c.clone());
+                        }
+                    }
+                }
+                if let Some(c) = ::rand::thread_rng().choose(&signs) {
+                    atom.set_var("icon_state", c.clone());
+                }
+            }
         }
     }
 }
