@@ -171,8 +171,9 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                         grid: map.z_level(z),
                         min: (min.x - 1, min.y - 1),
                         max: (max.x - 1, max.y - 1),
+                        render_passes: &render_passes,
                     };
-                    let image = minimap::generate(minimap_context, &mut context.icon_cache, &render_passes).unwrap();
+                    let image = minimap::generate(minimap_context, &mut context.icon_cache).unwrap();
                     let outfile = format!("{}/{}-{}.png", output, path.file_stem().unwrap().to_string_lossy(), 1 + z);
                     println!("    saving {}", outfile);
                     image.to_file(outfile.as_ref()).unwrap();

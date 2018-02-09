@@ -24,17 +24,17 @@ pub struct Context<'a> {
     pub grid: Grid<'a>,
     pub min: (usize, usize),
     pub max: (usize, usize),
+    pub render_passes: &'a [Box<RenderPass>],
 }
 
 pub fn generate(
     ctx: Context,
     icon_cache: &mut HashMap<PathBuf, IconFile>,
-    render_passes: &[Box<RenderPass>],
 ) -> Result<Image, ()> {
     use rand::Rng;
 
     flame!("minimap");
-    let Context { objtree, map, grid, .. } = ctx;
+    let Context { objtree, map, grid, render_passes, .. } = ctx;
 
     // transform min/max from bottom-left-based to top-left-based
     // probably doesn't belong here
@@ -51,7 +51,7 @@ pub fn generate(
         if y < min_y || y > max_y { continue }
         for (x, e) in row.iter().enumerate() {
             if x < ctx.min.0 || x > ctx.max.0 { continue }
-            for mut atom in get_atom_list(objtree, &map.dictionary[e], (x as u32, y as u32)) {
+            for mut atom in get_atom_list(objtree, &map.dictionary[e], (x as u32, y as u32), render_passes) {
                 // icons which differ from their map states
                 let p = &atom.type_.path;
                 if p == "/obj/structures/table/wood/fancy/black" {
@@ -74,6 +74,10 @@ pub fn generate(
                     } else {
                         atom.set_var("icon_state", Constant::string(format!("poster{}_legit", i - CONTRABAND_POSTERS)));
                     }
+                }
+
+                for pass in render_passes {
+                    pass.adjust_vars(&mut atom, &objtree);
                 }
 
                 // overlays and underlays
@@ -173,6 +177,10 @@ pub fn generate(
                     add_overlay!("overlay_clear");
                 }
 
+                for pass in render_passes {
+                    pass.overlays(&mut atom, objtree, &mut atoms, &mut overlays);
+                }
+
                 // smoothing time
                 handle_smooth(&mut atoms, ctx, atom, !0);
                 atoms.extend(overlays.drain(..));
@@ -267,14 +275,21 @@ pub fn generate(
     Ok(map_image)
 }
 
-pub fn get_atom_list<'a>(objtree: &'a ObjectTree, prefabs: &'a [Prefab], loc: (u32, u32)) -> Vec<Atom<'a>> {
+pub fn get_atom_list<'a>(
+    objtree: &'a ObjectTree,
+    prefabs: &'a [Prefab],
+    loc: (u32, u32),
+    render_passes: &[Box<RenderPass>],
+) -> Vec<Atom<'a>> {
     flame!("get_atom_list");
     let mut result = Vec::new();
 
-    for fab in prefabs {
-        if subtype(&fab.path, "/area/") { continue }
-        let spawner = subtype(&fab.path, "/obj/effect/spawner/structure/");
-        if subtype(&fab.path, "/obj/effect/spawner/") && !spawner { continue }
+    'fab: for fab in prefabs {
+        for pass in render_passes {
+            if !pass.path_filter(&fab.path) {
+                continue 'fab;
+            }
+        }
 
         // look up the type
         let atom = match Atom::from_prefab(objtree, fab, loc) {
@@ -285,43 +300,19 @@ pub fn get_atom_list<'a>(objtree: &'a ObjectTree, prefabs: &'a [Prefab], loc: (u
             }
         };
 
-        // invisible objects and syndicate balloons are not to show
-        if atom.get_var("invisibility", objtree).to_float().unwrap_or(0.) > 60. {
-            continue;
-        }
-        if atom.get_var("icon", objtree).eq_resource("icons/obj/items_and_weapons.dmi") &&
-            atom.get_var("icon_state", objtree).eq_string("syndballoon")
-        {
-            continue
+        for pass in render_passes {
+            if !pass.early_filter(&atom, objtree) {
+                continue 'fab;
+            }
         }
 
         // convert structure spanwers to their structures
-        if spawner {
-            match atom.get_var("spawn_list", objtree) {
-                &Constant::List(ref elements) => {
-                    for &(ref key, _) in elements {
-                        // TODO: use a more civilized lookup method
-                        let mut type_key = String::new();
-                        let reference;
-                        match key {
-                            &Constant::String(ref s) => reference = s,
-                            &Constant::Prefab(ref fab) => {
-                                for each in fab.path.iter() {
-                                    use std::fmt::Write;
-                                    let _ = write!(type_key, "{}{}", each.0, each.1);
-                                }
-                                reference = &type_key;
-                            }
-                            _ => continue,
-                        }
-                        result.push(Atom::from_type(objtree, reference, loc).unwrap());
-                    }
-                }
-                _ => {}  // TODO: complain?
+        for pass in render_passes {
+            if pass.expand(&atom, objtree, &mut result) {
+                continue 'fab;
             }
-        } else {
-            result.push(atom);
         }
+        result.push(atom);
     }
 
     result
@@ -337,11 +328,11 @@ pub struct Atom<'a> {
     type_: &'a Type,
     prefab: Option<&'a Vars>,
     vars: Vars,
-    loc: (u32, u32),
+    pub loc: (u32, u32),
 }
 
 impl<'a> Atom<'a> {
-    fn from_prefab(objtree: &'a ObjectTree, fab: &'a Prefab, loc: (u32, u32)) -> Option<Self> {
+    pub fn from_prefab(objtree: &'a ObjectTree, fab: &'a Prefab, loc: (u32, u32)) -> Option<Self> {
         objtree.find(&fab.path).map(|type_| Atom {
             type_,
             prefab: Some(&fab.vars),
@@ -350,7 +341,7 @@ impl<'a> Atom<'a> {
         })
     }
 
-    fn from_type(objtree: &'a ObjectTree, path: &str, loc: (u32, u32)) -> Option<Self> {
+    pub fn from_type(objtree: &'a ObjectTree, path: &str, loc: (u32, u32)) -> Option<Self> {
         objtree.find(path).map(|type_| Atom {
             type_,
             prefab: None,
@@ -518,7 +509,7 @@ fn find_type_in_direction<'a>(ctx: Context, source: &Atom, direction: i32, flags
     // TODO: make this not call get_atom_list way too many times
     let atom_list = get_atom_list(ctx.objtree,
         &ctx.map.dictionary[&ctx.grid[ndarray::Dim([new_loc.1 as usize, new_loc.0 as usize])]],
-        new_loc);
+        new_loc, ctx.render_passes);
     match source.get_var("canSmoothWith", ctx.objtree) {
         &Constant::List(ref elements) => if flags & SMOOTH_MORE != 0 {
             // smooth with canSmoothWith + subtypes
@@ -630,7 +621,7 @@ fn diagonal_smooth<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, source: &At
                     // TODO: make this not call get_atom_list way too many times
                     let atom_list = get_atom_list(ctx.objtree,
                         &ctx.map.dictionary[&ctx.grid[ndarray::Dim([new_loc.1 as usize, new_loc.0 as usize])]],
-                        new_loc);
+                        new_loc, ctx.render_passes);
                     for mut atom in atom_list {
                         if subtype(&atom.type_.path, "/turf/open/") {
                             atom.loc = source.loc;

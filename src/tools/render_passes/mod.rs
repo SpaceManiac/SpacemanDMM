@@ -1,4 +1,5 @@
 use dm::objtree::*;
+use dm::constants::Constant;
 use minimap::Atom;
 
 /// A map rendering pass.
@@ -7,6 +8,11 @@ use minimap::Atom;
 /// appear here.
 #[allow(unused_variables)]
 pub trait RenderPass {
+    /// Filter atoms based solely on their typepath.
+    fn path_filter(&self,
+        path: &str,
+    ) -> bool { true }
+
     /// Filter atoms at the beginning of the process.
     ///
     /// Return `false` to discard the atom.
@@ -18,24 +24,24 @@ pub trait RenderPass {
     /// Expand atoms, such as spawners into the atoms they spawn.
     ///
     /// Return `true` to consume the original atom.
-    fn expand(&self,
-        atom: &Atom,
-        objtree: &ObjectTree,
-        output: &mut Vec<Atom>,
+    fn expand<'a>(&self,
+        atom: &Atom<'a>,
+        objtree: &'a ObjectTree,
+        output: &mut Vec<Atom<'a>>,
     ) -> bool { false }
 
     /// Adjust the variables of an atom.
-    fn adjust_vars(&self,
-        atom: &mut Atom,
-        objtree: &ObjectTree,
+    fn adjust_vars<'a>(&self,
+        atom: &mut Atom<'a>,
+        objtree: &'a ObjectTree,
     ) {}
 
     /// Apply overlays and underlays to an atom, in the form of pseudo-atoms.
-    fn overlays(&self,
-        atom: &mut Atom,
-        objtree: &ObjectTree,
-        underlays: &mut Vec<Atom>,
-        overlays: &mut Vec<Atom>,
+    fn overlays<'a>(&self,
+        atom: &mut Atom<'a>,
+        objtree: &'a ObjectTree,
+        underlays: &mut Vec<Atom<'a>>,
+        overlays: &mut Vec<Atom<'a>>,
     ) {}
 
     /// Filter atoms at the end of the process.
@@ -66,6 +72,9 @@ macro_rules! pass {
 
 pub const RENDER_PASSES: &[RenderPassInfo] = &[
     pass!(HideSpace, "hide-space", "Do not render space tiles, instead leaving transparency.", true),
+    pass!(HideAreas, "hide-areas", "Do not render area icons.", true),
+    pass!(HideInvisible, "hide-invisible", "Do not render invisible or ephemeral objects such as mapping helpers.", true),
+    pass!(Spawners, "spawners", "Replace object spawners with their spawned objects.", true),
 ];
 
 pub fn configure(include: &str, exclude: &str) -> Vec<Box<RenderPass>> {
@@ -99,5 +108,72 @@ pub struct HideSpace;
 impl RenderPass for HideSpace {
     fn late_filter(&self, atom: &Atom, _: &ObjectTree) -> bool {
         !atom.istype("/turf/open/space/")
+    }
+}
+
+#[derive(Default)]
+pub struct HideAreas;
+impl RenderPass for HideAreas {
+    fn path_filter(&self, path: &str) -> bool {
+        !subpath(path, "/area/")
+    }
+}
+
+#[derive(Default)]
+pub struct HideInvisible;
+impl RenderPass for HideInvisible {
+    fn early_filter(&self, atom: &Atom, objtree: &ObjectTree) -> bool {
+        // invisible objects and syndicate balloons are not to show
+        if atom.get_var("invisibility", objtree).to_float().unwrap_or(0.) > 60. {
+            return false;
+        }
+        if atom.get_var("icon", objtree).eq_resource("icons/obj/items_and_weapons.dmi") &&
+            atom.get_var("icon_state", objtree).eq_string("syndballoon") &&
+            !atom.istype("/obj/item/toy/syndicateballoon/")
+        {
+            return false;
+        }
+        true
+    }
+}
+
+#[derive(Default)]
+pub struct Spawners;
+impl RenderPass for Spawners {
+    fn path_filter(&self, path: &str) -> bool {
+        subpath(path, "/obj/effect/spawner/structure/") || !subpath(path, "/obj/effect/spawner/")
+    }
+
+    fn expand<'a>(&self,
+        atom: &Atom<'a>,
+        objtree: &'a ObjectTree,
+        output: &mut Vec<Atom<'a>>,
+    ) -> bool {
+        if !atom.istype("/obj/effect/spawner/structure/") {
+            return false;
+        }
+        match atom.get_var("spawn_list", objtree) {
+            &Constant::List(ref elements) => {
+                for &(ref key, _) in elements {
+                    // TODO: use a more civilized lookup method
+                    let mut type_key = String::new();
+                    let reference;
+                    match key {
+                        &Constant::String(ref s) => reference = s,
+                        &Constant::Prefab(ref fab) => {
+                            for each in fab.path.iter() {
+                                use std::fmt::Write;
+                                let _ = write!(type_key, "{}{}", each.0, each.1);
+                            }
+                            reference = &type_key;
+                        }
+                        _ => continue,
+                    }
+                    output.push(Atom::from_type(objtree, reference, atom.loc).unwrap());
+                }
+                true  // don't include the original atom
+            }
+            _ => { false }  // TODO: complain?
+        }
     }
 }
