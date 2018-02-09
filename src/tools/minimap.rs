@@ -57,8 +57,6 @@ pub fn generate(
                 } else if subtype(p, "/turf/closed/mineral/") {
                     atom.set_var("pixel_x", Constant::Int(-4));
                     atom.set_var("pixel_y", Constant::Int(-4));
-                } else if subtype(p, "/obj/structure/bookcase/") {
-                    atom.set_var("icon_state", Constant::string("book-0"));
                 }
 
                 for pass in render_passes {
@@ -135,10 +133,6 @@ pub fn generate(
                         add_overlay!(aboveground);
                         atom.set_var("layer", Constant::Int(-5));
                     }
-                } else if subtype(p, "/obj/item/storage/box/") && !subtype(p, "/obj/item/storage/box/papersack/") {
-                    let mut copy = atom.clone();
-                    copy.set_var("icon_state", atom.get_var("illustration", objtree).clone());
-                    overlays.push(copy);
                 } else if subtype(p, "/obj/machinery/power/apc/") {
                     use dmi::*;
                     // auto-set pixel location
@@ -157,9 +151,6 @@ pub fn generate(
                     let mut terminal = Atom::from_type(objtree, "/obj/machinery/power/terminal", atom.loc).unwrap();
                     terminal.copy_var("dir", &atom, objtree);
                     atoms.push(terminal);
-                } else if subtype(p, "/obj/machinery/firealarm/") {
-                    add_overlay!("overlay_0");
-                    add_overlay!("overlay_clear");
                 }
 
                 for pass in render_passes {

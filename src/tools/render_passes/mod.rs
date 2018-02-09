@@ -75,6 +75,7 @@ pub const RENDER_PASSES: &[RenderPassInfo] = &[
     pass!(HideAreas, "hide-areas", "Do not render area icons.", true),
     pass!(HideInvisible, "hide-invisible", "Do not render invisible or ephemeral objects such as mapping helpers.", true),
     pass!(Random, "random", "Replace random spawners with one of their possibilities.", true),
+    pass!(Pretty, "pretty", "Add the minor cosmetic overlays for various objects.", true),
     pass!(Spawners, "spawners", "Replace object spawners with their spawned objects.", true),
 ];
 
@@ -102,6 +103,12 @@ pub fn configure(include: &str, exclude: &str) -> Vec<Box<RenderPass>> {
         }
     }
     output
+}
+
+fn add_to<'a, S: Into<String>>(target: &mut Vec<Atom<'a>>, atom: &Atom<'a>, icon: S) {
+    let mut copy = atom.clone();
+    copy.set_var("icon_state", Constant::string(icon));
+    target.push(copy);
 }
 
 #[derive(Default)]
@@ -219,6 +226,50 @@ impl RenderPass for Random {
                 }
                 if let Some(c) = ::rand::thread_rng().choose(&signs) {
                     atom.set_var("icon_state", c.clone());
+                }
+            }
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct Pretty;
+impl RenderPass for Pretty {
+    fn adjust_vars<'a>(&self,
+        atom: &mut Atom<'a>,
+        _: &'a ObjectTree,
+    ) {
+        if atom.istype("/obj/structure/bookcase/") {
+            atom.set_var("icon_state", Constant::string("book-0"));
+        }
+    }
+
+    fn overlays<'a>(&self,
+        atom: &mut Atom<'a>,
+        objtree: &'a ObjectTree,
+        _: &mut Vec<Atom<'a>>,
+        overlays: &mut Vec<Atom<'a>>,
+    ) {
+        if atom.istype("/obj/item/storage/box/") && !atom.istype("/obj/item/storage/box/papersack/") {
+            let mut copy = atom.clone();
+            copy.set_var("icon_state", atom.get_var("illustration", objtree).clone());
+            overlays.push(copy);
+        } else if atom.istype("/obj/machinery/firealarm/") {
+            add_to(overlays, atom, "overlay_0");
+            add_to(overlays, atom, "overlay_clear");
+        } else if atom.istype("/obj/structure/tank_dispenser/") {
+            if let &Constant::Int(oxygen) = atom.get_var("oxygentanks", objtree) {
+                if oxygen >= 4 {
+                    add_to(overlays, atom, "oxygen-4");
+                } else if oxygen > 0 {
+                    add_to(overlays, atom, format!("oxygen-{}", oxygen));
+                }
+            }
+            if let &Constant::Int(plasma) = atom.get_var("plasmatanks", objtree) {
+                if plasma >= 5 {
+                    add_to(overlays, atom, "plasma-5");
+                } else if plasma > 0 {
+                    add_to(overlays, atom, format!("plasma-{}", plasma));
                 }
             }
         }
