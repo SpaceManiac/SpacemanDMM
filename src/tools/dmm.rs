@@ -10,15 +10,23 @@ use linked_hash_map::LinkedHashMap;
 use dm::{DMError, Location};
 use dm::constants::Constant;
 
+/// BYOND is currently limited to 65534 keys.
+/// https://secure.byond.com/forum/?post=2340796#comment23770802
+type KeyType = u16;
+
+/// An opaque map key.
+#[derive(Copy, Clone, Debug, Hash, Ord, Eq, PartialOrd, PartialEq, Default)]
+pub struct Key(u16);
+
 #[derive(Debug)]
 pub struct Map {
     pub key_length: u8,
     // sorted order
-    pub dictionary: BTreeMap<u32, Vec<Prefab>>,
-    pub grid: Array3<u32>, // Z/Y/X order
+    pub dictionary: BTreeMap<Key, Vec<Prefab>>,
+    pub grid: Array3<Key>, // Z/Y/X order
 }
 
-pub type Grid<'a> = ndarray::ArrayBase<ndarray::ViewRepr<&'a u32>, ndarray::Dim<[usize; 2]>>;
+pub type Grid<'a> = ndarray::ArrayBase<ndarray::ViewRepr<&'a Key>, ndarray::Dim<[usize; 2]>>;
 
 // TODO: port to ast::Prefab<Constant>
 #[derive(Debug, Default, PartialEq)]
@@ -62,7 +70,7 @@ impl Map {
     }
 
     #[inline]
-    pub fn format_key(&self, key: u32) -> FormatKey {
+    pub fn format_key(&self, key: Key) -> FormatKey {
         FormatKey(self.key_length, key)
     }
 
@@ -79,11 +87,11 @@ impl Map {
 // Map Writer
 
 #[derive(Copy, Clone)]
-pub struct FormatKey(u8, u32);
+pub struct FormatKey(u8, Key);
 
 impl FormatKey {
     #[inline]
-    pub fn new(key_length: u8, key: u32) -> FormatKey {
+    pub fn new(key_length: u8, key: Key) -> FormatKey {
         FormatKey(key_length, key)
     }
 }
@@ -91,9 +99,9 @@ impl FormatKey {
 impl fmt::Display for FormatKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use std::fmt::Write;
-        let FormatKey(key_length, key) = *self;
+        let FormatKey(key_length, Key(key)) = *self;
 
-        if key >= 52u32.pow(key_length as u32) {
+        if key >= 52u16.pow(key_length as u32) {
             panic!();  // TODO be more reasonable
         }
 
@@ -268,7 +276,7 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
                 let key = take(&mut curr_key);
                 let data = take(&mut curr_data);
                 curr_key_length = 0;
-                map.dictionary.insert(key, data);
+                map.dictionary.insert(Key(key), data);
                 in_data_block = false;
                 after_data_block = true;
             } else {
@@ -371,7 +379,7 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
                     }
                     let key = take(&mut curr_key);
                     curr_key_length = 0;
-                    grid.insert((curr_x, curr_y, curr_z), key);
+                    grid.insert((curr_x, curr_y, curr_z), Key(key));
                 }
             }
         } else if ch == '(' {
@@ -390,11 +398,11 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
 }
 
 #[inline]
-fn base_52_reverse(ch: char) -> Option<u32> {
+fn base_52_reverse(ch: char) -> Option<KeyType> {
     if ch >= 'a' && ch <= 'z' {
-        Some(ch as u32 - b'a' as u32)
+        Some(ch as KeyType - b'a' as KeyType)
     } else if ch >= 'A' && ch <= 'Z' {
-        Some(26 + ch as u32 - b'A' as u32)
+        Some(26 + ch as KeyType - b'A' as KeyType)
     } else {
         None
     }
