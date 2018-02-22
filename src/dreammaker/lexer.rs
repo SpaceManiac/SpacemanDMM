@@ -300,27 +300,40 @@ impl<R: Read> Lexer<R> {
         self.next = val;
     }
 
-    fn skip_until(&mut self, end: &[u8]) -> Result<(), DMError> {
-        let mut idx = 0;
-        while let Some(ch) = self.next()? {
-            if ch == end[idx] {
-                idx += 1;
-                if idx == end.len() {
-                    return Ok(())
-                }
-            } else if ch == end[0] {
-                // TODO: this is a hack to fix the '**/' situation
-                idx = 1;
-            } else {
-                idx = 0;
+    fn skip_block_comments(&mut self) -> Result<(), DMError> {
+        let mut depth = 1;
+        let mut buffer = [0, 0];
+        while depth > 0 {
+            // read one character
+            buffer[0] = buffer[1];
+            match self.next()? {
+                Some(val) => buffer[1] = val,
+                None => return Err(self.error("still skipping comments at end of file"))
+            }
+
+            if buffer == *b"/*" {
+                depth += 1;
+            } else if buffer == *b"*/" {
+                depth -= 1;
             }
         }
-        if end == b"\n" {
-            // closed by the implicit newline at the end of the file
-            Ok(())
-        } else {
-            Err(self.error("still skipping comments at end of file"))
+        Ok(())
+    }
+
+    fn skip_line_comment(&mut self) -> Result<(), DMError> {
+        let mut backslash = false;
+        while let Some(ch) = self.next()? {
+            if ch == b'\r' {
+                // not listening
+            } else if backslash {
+                backslash = false;
+            } else if ch == b'\n' {
+                break
+            } else if ch == b'\\' {
+                backslash = true;
+            }
         }
+        Ok(())
     }
 
     fn read_number_inner(&mut self, first: u8) -> Result<(bool, u32, String), DMError> {
@@ -562,11 +575,11 @@ impl<R: Read> Iterator for Lexer<R> {
                     Some(Ok(locate(Punct(Hash))))
                 }
                 Some(BlockComment) => {
-                    try_iter!(self.skip_until(b"*/"));
+                    try_iter!(self.skip_block_comments());
                     continue;
                 }
                 Some(LineComment) => {
-                    try_iter!(self.skip_until(b"\n"));
+                    try_iter!(self.skip_line_comment());
                     Some(Ok(locate(Punct(Newline))))
                 }
                 Some(SingleQuote) => Some(self.read_resource().map(|s| locate(Resource(s)))),
