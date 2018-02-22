@@ -432,6 +432,10 @@ impl<I> Parser<I> where
                 // even when the proc body doesn't parse
                 let mut body_tt = Vec::new();
                 require!(self.read_any_tt(&mut body_tt));
+                while body_tt[0].token != Punct(LBrace) && body_tt[body_tt.len() - 1].token != Punct(Semicolon) {
+                    // read repeatedly until it's a block or ends with a newline
+                    require!(self.read_any_tt(&mut body_tt));
+                }
                 let mut subparser = Parser::new(body_tt.iter().cloned().map(Ok));
                 if subparser.block().is_ok() {
                     self.procs_good += 1;
@@ -450,7 +454,7 @@ impl<I> Parser<I> where
 
     fn tree_entries(&mut self, parent: PathStack, terminator: Token) -> Status<()> {
         loop {
-            let next = self.next(format!("newline or {:?}", terminator))?;
+            let next = self.next(format!("newline, {}", terminator))?;
             if next == terminator || next == Token::Eof {
                 break
             } else if next == Token::Punct(Punctuation::Semicolon) {
