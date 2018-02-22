@@ -861,13 +861,24 @@ impl<I> Parser<I> where
     fn list_arguments(&mut self) -> Status<Vec<(Expression, Option<Expression>)>> {
         leading!(self.exact(Token::Punct(Punctuation::LParen)));
         success(require!(self.separated(Punctuation::Comma, Punctuation::RParen, Some((Expression::from(Term::Null), None)), |this| {
+            // need to strip parens to handle `list((("a" = 5)))` case
+            let mut parens = 0;
+            while let Some(()) = this.exact(Token::Punct(Punctuation::LParen))? {
+                parens += 1;
+            }
+
             let first_expr = require!(this.expression(true));
-            success(if this.exact(Token::Punct(Punctuation::Assign))?.is_some() {
+            let result = if this.exact(Token::Punct(Punctuation::Assign))?.is_some() {
                 let second_expr = require!(this.expression(false));
                 (first_expr, Some(second_expr))
             } else {
                 (first_expr, None)
-            })
+            };
+
+            for _ in 0..parens {
+                require!(this.exact(Token::Punct(Punctuation::RParen)));
+            }
+            success(result)
         })))
     }
 
