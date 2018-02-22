@@ -13,8 +13,8 @@ pub fn evaluate_all(tree: &mut ObjectTree) -> Result<(), DMError> {
     for ty in tree.graph.node_indices() {
         let keys: Vec<String> = tree.graph.node_weight(ty).unwrap().vars.keys().cloned().collect();
         for key in keys {
-            if !tree.graph.node_weight(ty).unwrap().get_declaration(&key, tree).map_or(true, |x| x.is_const_evaluable()) {
-                continue
+            if !tree.graph.node_weight(ty).unwrap().get_declaration(&key, tree).map_or(true, |x| x.is_const_evaluable() && (x.is_const || ty != NodeIndex::new(0))) {
+                continue  // skip non-constant-evaluable vars
             }
             match constant_ident_lookup(tree, ty, &key, false)? {
                 ConstLookup::Found(_, _) => {}
