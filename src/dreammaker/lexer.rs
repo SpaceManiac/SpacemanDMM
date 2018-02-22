@@ -412,7 +412,7 @@ impl<R: Read> Lexer<R> {
             }
         }
 
-        String::from_utf8(buf).map_err(|_| self.error("non-utf8 string")) // TODO
+        String::from_utf8(buf).map_err(|_| self.error("non-utf8 resource filename")) // TODO
     }
 
     fn read_string(&mut self, end: &'static [u8], interp_closed: bool) -> Result<Token, DMError> {
@@ -467,10 +467,7 @@ impl<R: Read> Lexer<R> {
                 ch => buf.push(ch),
             }
         }
-        let string = match String::from_utf8(buf) {
-            Ok(s) => s,
-            Err(_) => return Err(self.error("non-utf8 string")), // TODO
-        };
+        let string = String::from_utf8_lossy(&buf).into_owned(); // TODO
         Ok(match (interp_opened, interp_closed) {
             (true, true) => Token::InterpStringPart(string),
             (true, false) => Token::InterpStringBegin(string),
