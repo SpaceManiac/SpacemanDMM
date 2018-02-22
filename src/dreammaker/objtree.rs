@@ -403,7 +403,7 @@ impl ObjectTree {
         Ok((current, last))
     }
 
-    fn register_var<'a, I>(&mut self, location: Location, parent: NodeIndex, mut prev: &'a str, mut rest: I) -> Result<&mut TypeVar, DMError> where
+    fn register_var<'a, I>(&mut self, location: Location, parent: NodeIndex, mut prev: &'a str, mut rest: I) -> Result<Option<&mut TypeVar>, DMError> where
         I: Iterator<Item=&'a str>
     {
         let (mut is_declaration, mut is_static, mut is_const, mut is_tmp) = (false, false, false, false);
@@ -412,7 +412,7 @@ impl ObjectTree {
             is_declaration = true;
             prev = match rest.next() {
                 Some(name) => name,
-                None => return Err(DMError::new(location, "var must have a name"))
+                None => return Ok(None) // var{} block, children will be real vars
             };
             while prev == "global" || prev == "static" || prev == "tmp" || prev == "const" {
                 // TODO: store this information
@@ -421,6 +421,8 @@ impl ObjectTree {
                     is_const |= prev == "const";
                     is_tmp |= prev == "tmp";
                     prev = name;
+                } else {
+                    return Ok(None) // var/const{} block, children will be real vars
                 }
             }
         } else if is_proc_decl(prev) {
@@ -434,7 +436,7 @@ impl ObjectTree {
         }
         // TODO: track the type path
         let node = self.graph.node_weight_mut(parent).unwrap();
-        Ok(node.vars.entry(prev.to_owned()).or_insert_with(|| TypeVar {
+        Ok(Some(node.vars.entry(prev.to_owned()).or_insert_with(|| TypeVar {
             value: VarValue {
                 location,
                 expression: None,
@@ -452,7 +454,7 @@ impl ObjectTree {
             } else {
                 None
             },
-        }))
+        })))
     }
 
     // an entry which may be anything depending on the path
@@ -461,7 +463,7 @@ impl ObjectTree {
         if is_var_decl(child) {
             self.register_var(location, parent, "var", path)?;
         } else if is_proc_decl(child) {
-            return Err(DMError::new(location, "proc looks like a generic entry"))
+            // proc{} block, children will be procs
         } else {
             self.subtype_or_add(parent, child);
         }
@@ -471,10 +473,13 @@ impl ObjectTree {
     // an entry which is definitely a var because a value is specified
     pub fn add_var<'a, I: Iterator<Item=&'a str>>(&mut self, location: Location, mut path: I, expr: Expression) -> Result<(), DMError> {
         let (parent, initial) = self.get_from_path(location, &mut path)?;
-        let var = &mut self.register_var(location, parent, initial, path)?.value;
-        var.location = location;
-        var.expression = Some(expr);
-        Ok(())
+        if let Some(type_var) = self.register_var(location, parent, initial, path)? {
+            type_var.value.location = location;
+            type_var.value.expression = Some(expr);
+            Ok(())
+        } else {
+            Err(DMError::new(location, "var must have a name"))
+        }
     }
 
     // an entry which is definitely a proc because an argument list is specified
