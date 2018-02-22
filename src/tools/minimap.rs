@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map};
 use std::path::{Path, PathBuf};
 
 use ndarray::{self, Axis};
@@ -188,8 +188,16 @@ pub fn generate(
         let dir = atom.get_var("dir", objtree).to_int().unwrap_or(::dmi::SOUTH);
 
         let path: &Path = icon.as_ref();
-        let icon_file = icon_cache.entry(path.to_owned())
-            .or_insert_with(|| IconFile::from_file(path).unwrap());
+        let icon_file = match icon_cache.entry(path.to_owned()) {
+            hash_map::Entry::Occupied(entry) => entry.into_mut(),
+            hash_map::Entry::Vacant(entry) => match IconFile::from_file(path) {
+                Ok(found) => entry.insert(found),
+                Err(err) => {
+                    println!("error loading icon: {}\n{:?}", path.display(), err);
+                    break 'atom;
+                }
+            }
+        };
 
         if let Some(mut rect) = icon_file.rect_of(&icon_state, dir) {
             let pixel_x = atom.get_var("pixel_x", ctx.objtree).to_int().unwrap_or(0);

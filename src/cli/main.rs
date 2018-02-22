@@ -150,7 +150,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                 let path: &std::path::Path = path.as_ref();
                 println!("{}", path.display());
                 flame!(path.file_name().unwrap().to_string_lossy().into_owned());
-                let mut map = dmm::Map::from_file(path).unwrap();
+                let mut map = dmm::Map::from_file(path).expect("DMM file missing");
 
                 let (dim_x, dim_y, dim_z) = map.dim_xyz();
                 let mut min = min.unwrap_or(CoordArg { x: 0, y: 0, z: 0 });
@@ -174,6 +174,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                         render_passes: &render_passes,
                     };
                     let image = minimap::generate(minimap_context, &mut context.icon_cache).unwrap();
+                    std::fs::create_dir_all(output).expect("Failed to create output directory");
                     let outfile = format!("{}/{}-{}.png", output, path.file_stem().unwrap().to_string_lossy(), 1 + z);
                     println!("    saving {}", outfile);
                     image.to_file(outfile.as_ref()).unwrap();
