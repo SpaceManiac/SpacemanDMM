@@ -36,7 +36,7 @@ fn default_defines(defines: &mut HashMap<String, Define>) {
         NORTHEAST = Int(5);
         SOUTHEAST = Int(6);
         NORTHWEST = Int(9);
-        NORTHEAST = Int(10);
+        SOUTHWEST = Int(10);
 
         FLOAT_LAYER = Int(-1);
         AREA_LAYER = Int(1);
