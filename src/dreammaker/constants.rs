@@ -308,7 +308,7 @@ impl<'a> ConstantFolder<'a> {
                 return Err(self.error("cannot use idents during simple_evaluate"));
             }
             let tree = self.tree.as_mut().unwrap();
-            match constant_ident_lookup(tree, ty, &ident, must_be_static).map_err(|e| DMError::new(location, e.desc))? {
+            match constant_ident_lookup(tree, ty, &ident, must_be_static).map_err(|e| DMError::new(location, e.into_description()))? {
                 ConstLookup::Found(_, v) => return Ok(v),
                 ConstLookup::Continue(i) => idx = i,
             }
