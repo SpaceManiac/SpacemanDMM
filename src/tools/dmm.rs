@@ -10,6 +10,8 @@ use linked_hash_map::LinkedHashMap;
 use dm::{DMError, Location};
 use dm::constants::Constant;
 
+const MAX_KEY_LENGTH: u8 = 3;
+
 /// BYOND is currently limited to 65534 keys.
 /// https://secure.byond.com/forum/?post=2340796#comment23770802
 type KeyType = u16;
@@ -101,8 +103,8 @@ impl fmt::Display for FormatKey {
         use std::fmt::Write;
         let FormatKey(key_length, Key(key)) = *self;
 
-        if key >= 52u16.pow(key_length as u32) {
-            panic!();  // TODO be more reasonable
+        if key_length < MAX_KEY_LENGTH && key >= 52u16.pow(key_length as u32) {
+            panic!("Attempted to format an out-of-range key");
         }
 
         let mut current = 52usize.pow(key_length as u32 - 1);
@@ -288,7 +290,7 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
                 assert!(map.key_length == 0 || map.key_length == curr_key_length);
                 map.key_length = curr_key_length;
             } else {
-                curr_key = 52 * curr_key + base_52_reverse(ch).unwrap();
+                curr_key = advance_key(curr_key, base_52_reverse(ch)?)?;
                 curr_key_length += 1;
             }
         } else if ch == '"' {
@@ -370,7 +372,7 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
                 }
                 iter_x = 0;
             } else {
-                curr_key = 52 * curr_key + base_52_reverse(ch).unwrap();
+                curr_key = advance_key(curr_key, base_52_reverse(ch)?)?;
                 curr_key_length += 1;
                 if curr_key_length == map.key_length {
                     iter_x += 1;
@@ -397,15 +399,21 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
     Ok(())
 }
 
-#[inline]
-fn base_52_reverse(ch: char) -> Option<KeyType> {
+fn base_52_reverse(ch: char) -> Result<KeyType, DMError> {
     if ch >= 'a' && ch <= 'z' {
-        Some(ch as KeyType - b'a' as KeyType)
+        Ok(ch as KeyType - b'a' as KeyType)
     } else if ch >= 'A' && ch <= 'Z' {
-        Some(26 + ch as KeyType - b'A' as KeyType)
+        Ok(26 + ch as KeyType - b'A' as KeyType)
     } else {
-        None
+        Err(DMError::new(Location::default(), format!("Not a base-52 character: {:?}", ch)))
     }
+}
+
+fn advance_key(current: KeyType, next_digit: KeyType) -> Result<KeyType, DMError> {
+    current.checked_mul(52).and_then(|b| b.checked_add(next_digit)).ok_or_else(|| {
+        // https://secure.byond.com/forum/?post=2340796#comment23770802
+        DMError::new(Location::default(), "Key overflow, max is 'ymo'")
+    })
 }
 
 fn parse_constant(input: String) -> Result<Constant, DMError> {
