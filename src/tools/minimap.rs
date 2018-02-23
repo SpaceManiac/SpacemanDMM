@@ -391,7 +391,7 @@ fn layer_of(objtree: &ObjectTree, atom: &Atom) -> i32 {
         -1_000   // above turfs
     } else if subtype(p, "/obj/structure/disposalpipe/") {
         -6_000
-    } else if subtype(p, "/obj/machinery/atmospherics/pipe/") && p.contains("hidden") {
+    } else if subtype(p, "/obj/machinery/atmospherics/pipe/") && !p.contains("visible") {
         -5_000
     } else if subtype(p, "/obj/structure/cable/") {
         -4_000
