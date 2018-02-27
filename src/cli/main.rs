@@ -92,9 +92,13 @@ enum Command {
         #[structopt(long="disable", default_value="")]
         disable: String,
 
-        /// Run output through pngcrush automatically. Requires pngcrush to be installed.
+        /// Run output through pngcrush automatically. Requires pngcrush.
         #[structopt(long="pngcrush")]
         pngcrush: bool,
+
+        /// Run output through optipng automatically. Requires optipng.
+        #[structopt(long="optipng")]
+        optipng: bool,
 
         /// The list of maps to process.
         files: Vec<String>,
@@ -141,7 +145,8 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
         },
         // --------------------------------------------------------------------
         Command::Minimap {
-            ref output, min, max, ref enable, ref disable, ref files, pngcrush,
+            ref output, min, max, ref enable, ref disable, ref files,
+            pngcrush, optipng,
         } => {
             context.objtree(opt);
 
@@ -179,7 +184,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                     println!("    saving {}", outfile);
                     image.to_file(outfile.as_ref()).unwrap();
                     if pngcrush {
-                        println!("    crushing {}", outfile);
+                        println!("    pngcrush {}", outfile);
                         let temp = format!("{}.temp", outfile);
                         assert!(std::process::Command::new("pngcrush")
                             .arg("-ow")
@@ -189,6 +194,15 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                             .status()
                             .unwrap()
                             .success(), "pngcrush failed");
+                    }
+                    if optipng {
+                        println!("    optipng {}", outfile);
+                        assert!(std::process::Command::new("optipng")
+                            .arg(&outfile)
+                            .stderr(std::process::Stdio::null())
+                            .status()
+                            .unwrap()
+                            .success(), "optipng failed");
                     }
                 }
             }
