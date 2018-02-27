@@ -44,7 +44,14 @@ impl Context {
     fn objtree(&mut self, opt: &Opt) {
         println!("parsing {}", opt.environment);
         flame!("parse");
-        self.objtree = dm::parse_environment(opt.environment.as_ref()).unwrap();
+        match dm::parse_environment(opt.environment.as_ref()) {
+            Ok(tree) => self.objtree = tree,
+            Err(_) => {
+                // parse_environment has already pretty_printed the error message
+                println!("fatal parse error");
+                std::process::exit(1);
+            }
+        };
     }
 }
 
