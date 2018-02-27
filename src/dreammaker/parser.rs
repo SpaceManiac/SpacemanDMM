@@ -241,7 +241,7 @@ impl<I> Parser<I> where
         let got = self.next("");
         let message;
         if let Ok(got) = got {
-            message = format!("got {:?}, expected one of: {}", got, expected);
+            message = format!("got '{}', expected one of: {}", got, expected);
             self.put_back(got);
         } else {
             message = format!("i/o error, expected one of: {}", expected);
@@ -291,7 +291,7 @@ impl<I> Parser<I> where
     }
 
     fn exact(&mut self, tok: Token) -> Status<()> {
-        let next = self.next(format!("{}", tok))?;
+        let next = self.next(format!("'{}'", tok))?;
         if next == tok {
             SUCCESS
         } else {
@@ -454,7 +454,7 @@ impl<I> Parser<I> where
 
     fn tree_entries(&mut self, parent: PathStack, terminator: Token) -> Status<()> {
         loop {
-            let next = self.next(format!("newline, {}", terminator))?;
+            let next = self.next(format!("newline, '{}'", terminator))?;
             if next == terminator || next == Token::Eof {
                 break
             } else if next == Token::Punct(Punctuation::Semicolon) {
