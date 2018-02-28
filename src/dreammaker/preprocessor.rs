@@ -149,6 +149,7 @@ impl HasLocation for Include {
     }
 }
 
+#[derive(Debug)]
 struct IncludeStack {
     stack: Vec<Include>,
 }
@@ -578,9 +579,10 @@ impl Preprocessor {
                                                 }
                                                 expansion.push_back(Token::String(string));
                                             }
-                                            None => return Err(DMError::new(self.last_input_loc, "can only stringify arguments"))
+                                            None => return Err(DMError::new(self.last_input_loc, format!("can't stringify non-argument ident {:?}", argname))),
                                         }
-                                        _ => return Err(DMError::new(self.last_input_loc, "can only stringify arguments"))
+                                        Some(tok) => return Err(DMError::new(self.last_input_loc, format!("can't stringify non-ident '{}'", tok))),
+                                        None => return Err(DMError::new(self.last_input_loc, "can't stringify EOF")),
                                     }
                                 }
                                 _ => expansion.push_back(token),
