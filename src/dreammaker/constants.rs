@@ -112,7 +112,13 @@ impl<'a> ConstantFolder<'a> {
                 let rhs = self.expr(*rhs, None)?;
                 self.binary(lhs, rhs, op)?
             },
-            _ => return Err(self.error("non-constant augmented assignment")),
+            Expression::TernaryOp { cond, if_, else_ } => {
+                match self.expr(*cond, None)?.to_bool() {
+                    true => self.expr(*if_, type_hint)?,
+                    false => self.expr(*else_, type_hint)?,
+                }
+            },
+            Expression::AssignOp { .. } => return Err(self.error("non-constant augmented assignment")),
         })
     }
 

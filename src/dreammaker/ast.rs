@@ -197,6 +197,15 @@ pub enum Expression {
         /// The right-hand side of the assignment.
         rhs: Box<Expression>,
     },
+    /// A ternary operation.
+    TernaryOp {
+        /// The condition.
+        cond: Box<Expression>,
+        /// The value if the condition is truthy.
+        if_: Box<Expression>,
+        /// The value otherwise.
+        else_: Box<Expression>,
+    }
 }
 
 impl From<Term> for Expression {

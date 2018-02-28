@@ -618,13 +618,26 @@ impl<I> Parser<I> where
                 Some(info) => info,
                 None => {
                     self.put_back(next);
-                    return success(expr);
+                    break;
                 }
             };
 
             // trampoline high-strength expression parts as the lhs of the newly found op
             expr = require!(self.expression_part(expr, info, disallow_assign));
         }
+
+        if let Some(()) = self.exact(Token::Punct(Punctuation::QuestionMark))? {
+            let if_ = require!(self.expression(disallow_assign));
+            require!(self.exact(Token::Punct(Punctuation::Colon)));
+            let else_ = require!(self.expression(disallow_assign));
+            expr = Expression::TernaryOp {
+                cond: Box::new(expr),
+                if_: Box::new(if_),
+                else_: Box::new(else_),
+            };
+        }
+
+        success(expr)
     }
 
     fn expression_part(&mut self, lhs: Expression, prev_op: OpInfo, disallow_assign: bool) -> Status<Expression> {
