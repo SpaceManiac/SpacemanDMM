@@ -346,7 +346,7 @@ impl<R: Read> Lexer<R> {
         if first == b'.' {
             integer = false;
         } else if first == b'0' {
-            radix = 8; // hate. let me tell you...
+            radix = 8;  // hate. let me tell you...
             match self.next()? {
                 Some(b'x') => radix = 16,
                 ch => self.put_back(ch),
@@ -358,6 +358,7 @@ impl<R: Read> Lexer<R> {
                 Some(ch) if ch == b'.' || ch == b'e' => {
                     integer = false;
                     exponent |= ch == b'e';
+                    radix = 10;  // undo octal radix in case of 0.9
                     buf.push(ch as char);
                 }
                 Some(ch) if (ch == b'+' || ch == b'-') && exponent => {
@@ -371,7 +372,7 @@ impl<R: Read> Lexer<R> {
                         return Err(self.error("expected INF"));
                     }
                 }
-                Some(ch) if is_digit(ch) => buf.push(ch as char),
+                Some(ch) if (ch as char).is_digit(radix) => buf.push(ch as char),
                 ch => { self.put_back(ch); return Ok((integer, radix, buf)) }
             }
         }
