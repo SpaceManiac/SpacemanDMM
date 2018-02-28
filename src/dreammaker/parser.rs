@@ -20,7 +20,9 @@ pub fn parse<I>(iter: I) -> Result<ObjectTree, DMError> where
     tree.finalize()?;
 
     let procs_total = parser.procs_good + parser.procs_bad;
-    println!("parsed {}/{} proc bodies ({}%)", parser.procs_good, procs_total, (parser.procs_good * 100 / procs_total));
+    if procs_total > 0 {
+        println!("parsed {}/{} proc bodies ({}%)", parser.procs_good, procs_total, (parser.procs_good * 100 / procs_total));
+    }
 
     Ok(tree)
 }
