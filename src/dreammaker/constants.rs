@@ -18,7 +18,10 @@ pub fn evaluate_all(tree: &mut ObjectTree) -> Result<(), DMError> {
             }
             match constant_ident_lookup(tree, ty, &key, false)? {
                 ConstLookup::Found(_, _) => {}
-                ConstLookup::Continue(_) => return Err(DMError::new(Location::default(), format!("undefined {}/var/{}", tree.graph.node_weight(ty).unwrap().path, key))),
+                ConstLookup::Continue(_) => {
+                    let location = tree.graph.node_weight(ty).unwrap().vars[&key].value.location;
+                    return Err(DMError::new(location, format!("undefined var '{}'\non type '{}'", key, tree.graph.node_weight(ty).unwrap().path)));
+                }
             }
         }
     }

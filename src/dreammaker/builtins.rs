@@ -202,6 +202,23 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         client/var/verbs;
         client/var/view;
         client/var/virtual_eye;
+
+        sound;
+        sound/var/file;
+        sound/var/repeat;
+        sound/var/wait;
+        sound/var/channel;
+        sound/var/volume;
+        sound/var/frequency;
+        sound/var/pan;
+        sound/var/priority;
+        sound/var/status;
+        sound/var/x;
+        sound/var/y;
+        sound/var/z;
+        sound/var/falloff;
+        sound/var/environment;
+        sound/var/echo;
     };
 
     Ok(())
