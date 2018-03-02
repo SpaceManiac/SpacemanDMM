@@ -1,8 +1,7 @@
 //! Error, warning, and other diagnostics handling.
 
+use std::{fmt, error, io};
 use std::path::{PathBuf, Path};
-
-use super::*;
 
 /// An identifier referring to a loaded file.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
@@ -93,22 +92,27 @@ impl<'a, T: HasLocation> HasLocation for &'a mut T {
 pub struct DMError {
     location: Location,
     desc: String,
+    cause: Option<Box<error::Error>>,
 }
 
 #[allow(unused_variables)]
 impl DMError {
-    #[doc(hidden)]
     pub fn new<S: Into<String>>(location: Location, desc: S) -> DMError {
         DMError {
             location,
             desc: desc.into(),
+            cause: None,
         }
     }
 
-    fn with_cause<S, E>(location: Location, desc: S, _cause: E) -> DMError
-        where S: Into<String>, E: ::std::error::Error + 'static
+    pub fn with_cause<S, E>(location: Location, desc: S, cause: E) -> DMError
+        where S: Into<String>, E: error::Error + 'static
     {
-        Self::new(location, desc) // TODO
+        DMError {
+            location,
+            desc: desc.into(),
+            cause: Some(Box::new(cause)),
+        }
     }
 
     /// Get the location in the code at which this error was observed.
@@ -130,5 +134,21 @@ impl DMError {
 impl From<io::Error> for DMError {
     fn from(e: io::Error) -> DMError {
         DMError::with_cause(Location::default(), "i/o error", e)
+    }
+}
+
+impl fmt::Display for DMError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}:{}:{}", self.location.line, self.location.column, self.desc)
+    }
+}
+
+impl error::Error for DMError {
+    fn description(&self) -> &str {
+        &self.desc
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        self.cause.as_ref().map(|x| &**x)
     }
 }

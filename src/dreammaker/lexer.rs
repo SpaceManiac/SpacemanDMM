@@ -288,7 +288,7 @@ impl<R: Read> Lexer<R> {
 
                 Ok(Some(ch))
             }
-            Some(Err(_)) => Err(self.error("i/o error")), // TODO
+            Some(Err(err)) => Err(DMError::with_cause(self.location(), "i/o error", err)),
             None => Ok(None),
         }
     }

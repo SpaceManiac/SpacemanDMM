@@ -240,15 +240,16 @@ impl<I> Parser<I> where
 
     fn parse_error<T>(&mut self) -> Result<T, DMError> {
         let expected = self.expected.join(", ");
-        let got = self.next("");
-        let message;
-        if let Ok(got) = got {
-            message = format!("got '{}', expected one of: {}", got, expected);
-            self.put_back(got);
-        } else {
-            message = format!("i/o error, expected one of: {}", expected);
+        match self.next("") {
+            Ok(got) => {
+                let message = format!("got '{}', expected one of: {}", got, expected);
+                self.put_back(got);
+                Err(self.error(message))
+            },
+            Err(err) => {
+                Err(DMError::with_cause(self.location(), format!("i/o error, expected one of: {}", expected), err))
+            }
         }
-        Err(self.error(message))
     }
 
     fn require<T>(&mut self, t: Result<Option<T>, DMError>) -> Result<T, DMError> {
