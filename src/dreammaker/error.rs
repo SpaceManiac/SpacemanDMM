@@ -40,6 +40,15 @@ impl Context {
             &self.files[idx]
         }
     }
+
+    /// Pretty-print a `DMError` to the given output.
+    pub fn pretty_print_error<W: io::Write>(&self, w: &mut W, error: &DMError) -> io::Result<()> {
+        writeln!(w, "\n{}, line {}, column {}:",
+            self.file_path(error.location.file).display(),
+            error.location.line,
+            error.location.column)?;
+        writeln!(w, "{}\n", error.desc)
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -122,16 +131,4 @@ impl From<io::Error> for DMError {
     fn from(e: io::Error) -> DMError {
         DMError::with_cause(Location::default(), "i/o error", e)
     }
-}
-
-// ----------------------------------------------------------------------------
-// Pretty printing
-
-/// Pretty-print a `DMError` to the given output.
-pub fn pretty_print_error<W: io::Write>(w: &mut W, ctx: &Context, error: &DMError) -> io::Result<()> {
-    writeln!(w, "\n{}, line {}, column {}:",
-        ctx.file_path(error.location.file).display(),
-        error.location.line,
-        error.location.column)?;
-    writeln!(w, "{}\n", error.desc)
 }

@@ -38,7 +38,8 @@ impl Context {
                 preprocessor::Preprocessor::new(self, dme.to_owned())?
             )
         ).map_err(|e| {
-            pretty_print_error(&mut io::stdout(), self, &e).unwrap();
+            let stdout = io::stdout();
+            self.pretty_print_error(&mut stdout.lock(), &e).unwrap();
             e
         })
     }
