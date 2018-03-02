@@ -1,6 +1,46 @@
 //! Error, warning, and other diagnostics handling.
 
+use std::path::{PathBuf, Path};
+
 use super::*;
+
+/// An identifier referring to a loaded file.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub struct FileId(u32);
+
+const BAD_FILE_ID: FileId = FileId(::std::u32::MAX);
+
+impl Default for FileId {
+    fn default() -> FileId {
+        BAD_FILE_ID
+    }
+}
+
+/// A diagnostics context, tracking loaded files and any observed errors.
+#[derive(Debug, Default)]
+pub struct Context {
+    /// The list of loaded files.
+    files: Vec<PathBuf>,
+}
+
+impl Context {
+    /// Add a new file to the context and return its index.
+    pub fn register_file(&mut self, path: PathBuf) -> FileId {
+        let len = self.files.len();
+        self.files.push(path);
+        FileId(len as u32)
+    }
+
+    /// Look up a file path by its index returned from `register_file`.
+    pub fn file_path(&self, file: FileId) -> &Path {
+        let idx = file.0 as usize;
+        if idx > self.files.len() {  // includes BAD_FILE_ID
+            "(unknown)".as_ref()
+        } else {
+            &self.files[idx]
+        }
+    }
+}
 
 // ----------------------------------------------------------------------------
 // Location handling
@@ -9,7 +49,7 @@ use super::*;
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Default)]
 pub struct Location {
     /// The index into the file table.
-    pub file: u32,
+    pub file: FileId,
     /// The line number, starting at 1.
     pub line: u32,
     /// The column number, starting at 1.
@@ -88,9 +128,9 @@ impl From<io::Error> for DMError {
 // Pretty printing
 
 /// Pretty-print a `DMError` to the given output.
-pub fn pretty_print_error<W: io::Write>(w: &mut W, pp: &preprocessor::Preprocessor, error: &DMError) -> io::Result<()> {
+pub fn pretty_print_error<W: io::Write>(w: &mut W, ctx: &Context, error: &DMError) -> io::Result<()> {
     writeln!(w, "\n{}, line {}, column {}:",
-        pp.file_path(error.location.file).display(),
+        ctx.file_path(error.location.file).display(),
         error.location.line,
         error.location.column)?;
     writeln!(w, "{}\n", error.desc)

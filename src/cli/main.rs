@@ -36,6 +36,7 @@ fn main() {
 
 #[derive(Default)]
 struct Context {
+    dm_context: dm::Context,
     objtree: ObjectTree,
     icon_cache: HashMap<PathBuf, IconFile>,
 }
@@ -44,7 +45,7 @@ impl Context {
     fn objtree(&mut self, opt: &Opt) {
         println!("parsing {}", opt.environment);
         flame!("parse");
-        match dm::parse_environment(opt.environment.as_ref()) {
+        match self.dm_context.parse_environment(opt.environment.as_ref()) {
             Ok(tree) => self.objtree = tree,
             Err(_) => {
                 // parse_environment has already pretty_printed the error message

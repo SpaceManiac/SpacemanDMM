@@ -5,7 +5,7 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 
 use super::lexer::*;
-use super::{DMError, Location, HasLocation};
+use super::{DMError, Location, HasLocation, FileId, Context};
 
 // ----------------------------------------------------------------------------
 // Macro representation and predefined macros
@@ -120,7 +120,7 @@ fn default_defines(defines: &mut HashMap<String, Define>) {
 enum Include {
     File {
         path: PathBuf,
-        file: u32,
+        file: FileId,
         lexer: Lexer<BufReader<File>>,
     },
     Expansion {
@@ -131,7 +131,7 @@ enum Include {
 }
 
 impl Include {
-    fn new(path: PathBuf, idx: u32) -> io::Result<Include> {
+    fn new(path: PathBuf, idx: FileId) -> io::Result<Include> {
         Ok(Include::File {
             lexer: Lexer::new(idx, BufReader::new(File::open(&path)?)),
             file: idx,
@@ -178,11 +178,7 @@ impl HasLocation for IncludeStack {
         if let Some(include) = self.stack.last() {
             include.location()
         } else {
-            Location {
-                file: 0,
-                line: 0,
-                column: 0,
-            }
+            Location::default()
         }
     }
 }
@@ -230,10 +226,11 @@ impl Ifdef {
 }
 
 /// C-like preprocessor for DM. Expands directives and macro invocations.
-pub struct Preprocessor {
+pub struct Preprocessor<'ctx> {
+    context: &'ctx mut Context,
+
     env_file: PathBuf,
     defines: HashMap<String, Define>,
-    files: Vec<PathBuf>,
     maps: Vec<PathBuf>,
     skins: Vec<PathBuf>,
     include_stack: IncludeStack,
@@ -243,18 +240,18 @@ pub struct Preprocessor {
     output: VecDeque<Token>,
 }
 
-impl HasLocation for Preprocessor {
+impl<'ctx> HasLocation for Preprocessor<'ctx> {
     fn location(&self) -> Location {
         self.include_stack.location()
     }
 }
 
-impl Preprocessor {
-    pub fn new(env_file: PathBuf) -> io::Result<Self> {
+impl<'ctx> Preprocessor<'ctx> {
+    pub fn new(context: &'ctx mut Context, env_file: PathBuf) -> io::Result<Self> {
+        let env_id = context.register_file(env_file.clone());
         let mut pp = Preprocessor {
-            files: vec![env_file.clone()],
             include_stack: IncludeStack {
-                stack: vec![Include::new(env_file.clone(), 0)?],
+                stack: vec![Include::new(env_file.clone(), env_id)?],
             },
             env_file: env_file,
             defines: Default::default(),
@@ -263,13 +260,10 @@ impl Preprocessor {
             ifdef_stack: Default::default(),
             last_input_loc: Default::default(),
             output: Default::default(),
+            context: context,
         };
         default_defines(&mut pp.defines);
         Ok(pp)
-    }
-
-    pub fn file_path(&self, file: u32) -> &Path {
-        &self.files[file as usize]
     }
 
     fn is_disabled(&self) -> bool {
@@ -363,8 +357,7 @@ impl Preprocessor {
                         ].into_iter().rev() {
                             if !each.exists() { continue }
                             enum FileType { DMM, DMF, DM }
-                            let len = self.files.len() as u32;
-                            self.files.push(each.clone());
+                            let id = self.context.register_file(each.clone());
                             match match each.extension().and_then(|s| s.to_str()) {
                                 Some("dmm") => FileType::DMM,
                                 Some("dmf") => FileType::DMF,
@@ -373,7 +366,7 @@ impl Preprocessor {
                             } {
                                 FileType::DMM => self.maps.push(each),
                                 FileType::DMF => self.skins.push(each),
-                                FileType::DM => self.include_stack.stack.push(Include::new(each, len)?),
+                                FileType::DM => self.include_stack.stack.push(Include::new(each, id)?),
                             }
                             return Ok(());
                         }
@@ -607,7 +600,7 @@ impl Preprocessor {
     }
 }
 
-impl Iterator for Preprocessor {
+impl<'ctx> Iterator for Preprocessor<'ctx> {
     type Item = Result<LocatedToken, DMError>;
 
     fn next(&mut self) -> Option<Result<LocatedToken, DMError>> {

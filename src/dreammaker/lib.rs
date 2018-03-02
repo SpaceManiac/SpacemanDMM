@@ -28,15 +28,20 @@ pub mod objtree;
 mod builtins;
 pub mod constants;
 
-/// Run the parsing suite on a given `.dme` file, producing an object tree.
-///
-/// Errors are automatically pretty-printed to stdout before they are returned.
-pub fn parse_environment(dme: &Path) -> Result<objtree::ObjectTree, DMError> {
-    let mut preprocessor = preprocessor::Preprocessor::new(dme.to_owned())?;
-    parser::parse(indents::IndentProcessor::new(&mut preprocessor)).map_err(|e| {
-        pretty_print_error(&mut io::stdout(), &preprocessor, &e).unwrap();
-        e
-    })
+impl Context {
+    /// Run the parsing suite on a given `.dme` file, producing an object tree.
+    ///
+    /// Errors are automatically pretty-printed to stdout before they are returned.
+    pub fn parse_environment(&mut self, dme: &Path) -> Result<objtree::ObjectTree, DMError> {
+        parser::parse(
+            indents::IndentProcessor::new(
+                preprocessor::Preprocessor::new(self, dme.to_owned())?
+            )
+        ).map_err(|e| {
+            pretty_print_error(&mut io::stdout(), self, &e).unwrap();
+            e
+        })
+    }
 }
 
 // ----------------------------------------------------------------------------

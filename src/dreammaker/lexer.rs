@@ -3,7 +3,7 @@ use std::io::{Read, Bytes};
 use std::str::FromStr;
 use std::fmt;
 
-use super::{DMError, Location, HasLocation};
+use super::{DMError, Location, HasLocation, FileId};
 
 macro_rules! table {
     ($(#[$attr:meta])* table $tabname:ident: $repr:ty => $enum_:ident; $($literal:expr, $name:ident;)*) => {
@@ -253,7 +253,7 @@ impl<R: Read> HasLocation for Lexer<R> {
 
 impl<R: Read> Lexer<R> {
     /// Create a new lexer from a byte stream.
-    pub fn new(file_number: u32, source: R) -> Lexer<R> {
+    pub fn new(file_number: FileId, source: R) -> Lexer<R> {
         Lexer {
             next: None,
             input: source.bytes(),
