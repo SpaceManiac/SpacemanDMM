@@ -50,9 +50,9 @@ pub fn generate(
             for mut atom in get_atom_list(objtree, &map.dictionary[e], (x as u32, y as u32), render_passes) {
                 // icons which differ from their map states
                 let p = &atom.type_.path;
-                if p == "/obj/structures/table/wood/fancy/black" {
+                if p == "/obj/structure/table/wood/fancy/black" {
                     atom.set_var("icon", Constant::Resource("icons/obj/smooth_structures/fancy_table_black.dmi".into()));
-                } else if p == "/obj/structures/table/wood/fancy" {
+                } else if p == "/obj/structure/table/wood/fancy" {
                     atom.set_var("icon", Constant::Resource("icons/obj/smooth_structures/fancy_table.dmi".into()));
                 } else if subtype(p, "/turf/closed/mineral/") {
                     atom.set_var("pixel_x", Constant::Int(-4));
