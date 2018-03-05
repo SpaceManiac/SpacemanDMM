@@ -503,10 +503,15 @@ impl<I> Parser<I> where
 
         require!(self.exact(Token::Punct(Punctuation::LBrace)));
         let mut statements = Vec::new();
-        self.separated(Punctuation::Semicolon, Punctuation::RBrace, Some(()), |this| {
-            statements.push(require!(this.statement()));
-            SUCCESS
-        })?;
+        loop {
+            if let Some(()) = self.exact(Token::Punct(Punctuation::RBrace))? {
+                break;
+            } else if let Some(()) = self.exact(Token::Punct(Punctuation::Semicolon))? {
+                continue;
+            } else {
+                statements.push(require!(self.statement()));
+            }
+        }
         success(statements)
     }
 
@@ -543,8 +548,10 @@ impl<I> Parser<I> where
             success(Statement::While(expr, require!(self.block())))
         // SINGLE-LINE STATEMENTS
         } else if let Some(()) = self.exact_ident("return")? {
-            // statement :: 'return' expression
-            success(Statement::Return(self.expression(false)?))
+            // statement :: 'return' expression ';'
+            let expression = self.expression(false)?;
+            require!(self.exact(Token::Punct(Punctuation::Semicolon)));
+            success(Statement::Return(expression))
         // EXPRESSION STATEMENTS
         } else {
             let expr = require!(self.expression(false));
