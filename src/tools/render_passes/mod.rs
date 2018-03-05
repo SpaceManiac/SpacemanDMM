@@ -77,6 +77,7 @@ pub const RENDER_PASSES: &[RenderPassInfo] = &[
     pass!(Random, "random", "Replace random spawners with one of their possibilities.", true),
     pass!(Pretty, "pretty", "Add the minor cosmetic overlays for various objects.", true),
     pass!(Spawners, "spawners", "Replace object spawners with their spawned objects.", true),
+    pass!(FakeGlass, "fake-glass", "Add underlays to fake glass turfs.", true),
     pass!(TransitTube, "transit-tube", "Add overlays to connect transit tubes together.", true),
 ];
 
@@ -183,6 +184,28 @@ impl RenderPass for Spawners {
                 true  // don't include the original atom
             }
             _ => { false }  // TODO: complain?
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct FakeGlass;
+impl RenderPass for FakeGlass {
+    fn overlays<'a>(&self,
+        atom: &mut Atom<'a>,
+        _objtree: &'a ObjectTree,
+        underlays: &mut Vec<Atom<'a>>,
+        _overlays: &mut Vec<Atom<'a>>,
+    ) {
+        if atom.istype("/turf/closed/indestructible/fakeglass/") {
+            let mut copy = atom.clone();
+            copy.set_var("icon", Constant::string("icons/turf/floors.dmi"));
+            copy.set_var("icon_state", Constant::string("plating"));
+            underlays.push(copy);
+            copy = atom.clone();
+            copy.set_var("icon", Constant::string("icons/obj/structures.dmi"));
+            copy.set_var("icon_state", Constant::string("grille"));
+            underlays.push(copy);
         }
     }
 }
