@@ -116,6 +116,19 @@ fn add_to<'a, S: Into<String>>(target: &mut Vec<Atom<'a>>, atom: &Atom<'a>, icon
 #[derive(Default)]
 pub struct HideSpace;
 impl RenderPass for HideSpace {
+    fn expand<'a>(&self,
+        atom: &Atom<'a>,
+        objtree: &'a ObjectTree,
+        output: &mut Vec<Atom<'a>>,
+    ) -> bool {
+        if atom.istype("/turf/template_noop/") {
+            output.push(Atom::from_type(objtree, "/turf/open/space", atom.loc).unwrap());
+            true
+        } else {
+            false
+        }
+    }
+
     fn late_filter(&self, atom: &Atom, _: &ObjectTree) -> bool {
         !atom.istype("/turf/open/space/")
     }
@@ -134,7 +147,9 @@ pub struct HideInvisible;
 impl RenderPass for HideInvisible {
     fn early_filter(&self, atom: &Atom, objtree: &ObjectTree) -> bool {
         // invisible objects and syndicate balloons are not to show
-        if atom.get_var("invisibility", objtree).to_float().unwrap_or(0.) > 60. {
+        if atom.get_var("invisibility", objtree).to_float().unwrap_or(0.) > 60. ||
+            atom.istype("/obj/effect/mapping_helpers/")
+        {
             return false;
         }
         if atom.get_var("icon", objtree).eq_resource("icons/obj/items_and_weapons.dmi") &&
