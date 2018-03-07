@@ -359,7 +359,9 @@ impl Image {
 
         // loop over each [r, g, b, a] available in the relevant area
         for (mut dest, orig_src) in destination.lanes_mut(Axis(2)).into_iter().zip(source.lanes(Axis(2))) {
-            macro_rules! tint { ($i:expr) => { mul255(orig_src[$i], color[$i]) } }
+            macro_rules! tint { ($i:expr) => {
+                mul255(*orig_src.get($i).unwrap_or(&255), *color.get($i).unwrap_or(&255))
+            }}
             let src = [tint!(0), tint!(1), tint!(2), tint!(3)];
 
             // out_A = src_A + dst_A (1 - src_A)
