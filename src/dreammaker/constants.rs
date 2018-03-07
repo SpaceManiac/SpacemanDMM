@@ -47,6 +47,8 @@ pub enum ConstFn {
     Matrix,
     /// The `newlist()` function, which combines `new` mapped over a `list`.
     Newlist,
+    /// The `sound()` type constructor.
+    Sound,
 }
 
 impl Constant {
@@ -194,6 +196,7 @@ impl fmt::Display for ConstFn {
             ConstFn::Icon => "icon",
             ConstFn::Matrix => "matrix",
             ConstFn::Newlist => "newlist",
+            ConstFn::Sound => "sound",
         })
     }
 }
@@ -450,6 +453,7 @@ impl<'a> ConstantFolder<'a> {
                 "matrix" => Constant::Call(ConstFn::Matrix, self.expr_vec(args)?),
                 "newlist" => Constant::Call(ConstFn::Newlist, self.expr_vec(args)?),
                 "icon" => Constant::Call(ConstFn::Icon, self.expr_vec(args)?),
+                "sound" => Constant::Call(ConstFn::Sound, self.expr_vec(args)?),
                 // constant-evaluatable functions
                 "rgb" => {
                     use std::fmt::Write;
