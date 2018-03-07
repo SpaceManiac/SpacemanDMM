@@ -1,7 +1,8 @@
 //! Error, warning, and other diagnostics handling.
 
 use std::{fmt, error, io};
-use std::path::{PathBuf, Path};
+use std::path::PathBuf;
+use std::cell::RefCell;
 
 /// An identifier referring to a loaded file.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
@@ -19,24 +20,26 @@ impl Default for FileId {
 #[derive(Debug, Default)]
 pub struct Context {
     /// The list of loaded files.
-    files: Vec<PathBuf>,
+    files: RefCell<Vec<PathBuf>>,
 }
 
 impl Context {
     /// Add a new file to the context and return its index.
-    pub fn register_file(&mut self, path: PathBuf) -> FileId {
-        let len = self.files.len();
-        self.files.push(path);
-        FileId(len as u32)
+    pub fn register_file(&self, path: PathBuf) -> FileId {
+        let mut files = self.files.borrow_mut();
+        let len = files.len() as u32;
+        files.push(path);
+        FileId(len)
     }
 
     /// Look up a file path by its index returned from `register_file`.
-    pub fn file_path(&self, file: FileId) -> &Path {
+    pub fn file_path(&self, file: FileId) -> PathBuf {
+        let files = self.files.borrow();
         let idx = file.0 as usize;
-        if idx > self.files.len() {  // includes BAD_FILE_ID
-            "(unknown)".as_ref()
+        if idx > files.len() {  // includes BAD_FILE_ID
+            "(unknown)".into()
         } else {
-            &self.files[idx]
+            files[idx].to_owned()
         }
     }
 

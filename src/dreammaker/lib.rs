@@ -15,10 +15,10 @@ macro_rules! try_iter {
     }
 }
 
-// roughly in order of stage
 mod error;
 pub use error::*;
 
+// roughly in order of stage
 pub mod lexer;
 pub mod preprocessor;
 pub mod indents;
