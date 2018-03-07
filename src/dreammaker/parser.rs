@@ -554,8 +554,9 @@ impl<I> Parser<I> where
             success(Statement::Return(expression))
         // EXPRESSION STATEMENTS
         } else {
+            // statement :: expression ';'
             let expr = require!(self.expression(false));
-            // statement :: expression
+            require!(self.exact(Token::Punct(Punctuation::Semicolon)));
             success(Statement::Expr(expr))
         }
     }
