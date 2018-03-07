@@ -218,6 +218,14 @@ fn is_ident(ch: u8) -> bool {
     (ch >= b'a' && ch <= b'z') || (ch >= b'A' && ch <= b'Z') || ch == b'_'
 }
 
+fn from_latin1(bytes: &[u8]) -> String {
+    let mut output = String::new();
+    for &byte in bytes {
+        output.push(byte as char);
+    }
+    output
+}
+
 // Used to track nested string interpolations and know when they end.
 #[derive(Debug)]
 struct Interpolation {
@@ -404,7 +412,7 @@ impl<'ctx, R: Read> Lexer<'ctx, R> {
                 ch => { self.put_back(ch); break }
             }
         }
-        String::from_utf8(ident).map_err(|_| self.error("non-utf8 identifier")) // TODO
+        Ok(from_latin1(&ident))
     }
 
     fn next_string(&mut self, start_loc: Location) -> Result<u8, DMError> {
@@ -418,7 +426,6 @@ impl<'ctx, R: Read> Lexer<'ctx, R> {
     fn read_resource(&mut self) -> Result<String, DMError> {
         let start_loc = self.location();
         let mut buf = Vec::new();
-
         loop {
             let ch = self.next_string(start_loc)?;
             if ch == b'\'' {
@@ -427,8 +434,7 @@ impl<'ctx, R: Read> Lexer<'ctx, R> {
                 buf.push(ch);
             }
         }
-
-        String::from_utf8(buf).map_err(|_| self.error("non-utf8 resource filename")) // TODO
+        Ok(from_latin1(&buf))
     }
 
     fn read_string(&mut self, end: &'static [u8], interp_closed: bool) -> Result<Token, DMError> {
@@ -483,7 +489,8 @@ impl<'ctx, R: Read> Lexer<'ctx, R> {
                 ch => buf.push(ch),
             }
         }
-        let string = String::from_utf8_lossy(&buf).into_owned(); // TODO
+
+        let string = from_latin1(&buf);
         Ok(match (interp_opened, interp_closed) {
             (true, true) => Token::InterpStringPart(string),
             (true, false) => Token::InterpStringBegin(string),
