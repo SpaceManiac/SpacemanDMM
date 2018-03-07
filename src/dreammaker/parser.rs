@@ -546,6 +546,15 @@ impl<I> Parser<I> where
             let expr = require!(self.expression(false));
             require!(self.exact(Token::Punct(Punctuation::RParen)));
             success(Statement::While(expr, require!(self.block())))
+        } else if let Some(()) = self.exact_ident("do")? {
+            // statement :: 'do' block 'while' '(' expression ')' ';'
+            let block = require!(self.block());
+            require!(self.exact_ident("while"));
+            require!(self.exact(Token::Punct(Punctuation::LParen)));
+            let expr = require!(self.expression(false));
+            require!(self.exact(Token::Punct(Punctuation::RParen)));
+            require!(self.exact(Token::Punct(Punctuation::Semicolon)));
+            success(Statement::DoWhile(block, expr))
         // SINGLE-LINE STATEMENTS
         } else if let Some(()) = self.exact_ident("return")? {
             // statement :: 'return' expression ';'

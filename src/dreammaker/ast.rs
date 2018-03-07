@@ -300,5 +300,6 @@ pub enum Statement {
     Expr(Expression),
     Return(Option<Expression>),
     While(Expression, Vec<Statement>),
+    DoWhile(Vec<Statement>, Expression),
     If(Vec<(Expression, Vec<Statement>)>, Option<Vec<Statement>>),
 }
