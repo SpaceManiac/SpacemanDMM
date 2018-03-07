@@ -57,7 +57,7 @@ impl Context {
 
     /// Pretty-print a `DMError` to the given output.
     pub fn pretty_print_error<W: io::Write>(&self, w: &mut W, error: &DMError) -> io::Result<()> {
-        writeln!(w, "\n{}, line {}, column {}:",
+        writeln!(w, "{}, line {}, column {}:",
             self.file_path(error.location.file).display(),
             error.location.line,
             error.location.column)?;

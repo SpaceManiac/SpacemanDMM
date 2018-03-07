@@ -33,15 +33,24 @@ impl Context {
     ///
     /// Errors are automatically pretty-printed to stdout before they are returned.
     pub fn parse_environment(&mut self, dme: &Path) -> Result<objtree::ObjectTree, DMError> {
-        parser::parse(
+        let start = self.errors().len();
+        let result = parser::parse(
             indents::IndentProcessor::new(
                 preprocessor::Preprocessor::new(self, dme.to_owned())?
             )
-        ).map_err(|e| {
-            let stdout = io::stdout();
-            self.pretty_print_error(&mut stdout.lock(), &e).unwrap();
-            e
-        })
+        );
+
+        let errors = self.errors();
+        let stdout = io::stdout();
+        let stdout = &mut stdout.lock();
+        for err in &errors[start..] {
+            self.pretty_print_error(stdout, &err).expect("error writing to stdout");
+        }
+        if let Err(ref err) = result {
+            self.pretty_print_error(stdout, &err).expect("error writing to stdout");
+        }
+
+        result
     }
 }
 
