@@ -2,14 +2,14 @@
 
 use linked_hash_map::LinkedHashMap;
 
-use super::{DMError, Location, HasLocation};
+use super::{DMError, Location, HasLocation, Context};
 use super::lexer::{LocatedToken, Token, Punctuation};
 use super::objtree::ObjectTree;
 use super::ast::*;
 
 /// Parse a token stream, in the form emitted by the indent processor, into
 /// an object tree.
-pub fn parse<I>(iter: I) -> Result<ObjectTree, DMError> where
+pub fn parse<I>(context: &Context, iter: I) -> Result<ObjectTree, DMError> where
     I: IntoIterator<Item=Result<LocatedToken, DMError>>
 {
     let mut parser = Parser::new(iter.into_iter());
@@ -17,7 +17,7 @@ pub fn parse<I>(iter: I) -> Result<ObjectTree, DMError> where
         Some(()) => parser.tree,
         None => return parser.parse_error(),
     };
-    tree.finalize()?;
+    tree.finalize(context);
 
     let procs_total = parser.procs_good + parser.procs_bad;
     if procs_total > 0 {

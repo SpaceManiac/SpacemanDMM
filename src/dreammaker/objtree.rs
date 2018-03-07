@@ -11,7 +11,7 @@ use linked_hash_map::LinkedHashMap;
 
 use super::ast::{Expression, TypePath, PathOp, Prefab};
 use super::constants::Constant;
-use super::{DMError, Location};
+use super::{DMError, Location, Context};
 
 // ----------------------------------------------------------------------------
 // Variables
@@ -269,13 +269,12 @@ impl ObjectTree {
     // ------------------------------------------------------------------------
     // Finalization
 
-    pub fn finalize(&mut self) -> Result<(), DMError> {
-        self.assign_parent_types()?;
-        super::constants::evaluate_all(self)?;
-        Ok(())
+    pub(crate) fn finalize(&mut self, context: &Context) {
+        self.assign_parent_types(context);
+        super::constants::evaluate_all(context, self);
     }
 
-    fn assign_parent_types(&mut self) -> Result<(), DMError> {
+    fn assign_parent_types(&mut self, context: &Context) {
         for (path, &type_idx) in self.types.iter() {
             let type_ = self.graph.node_weight(type_idx).unwrap();
 
@@ -304,12 +303,12 @@ impl ObjectTree {
                 //}
             };
 
-            type_.parent_type.set(match self.types.get(parent_type) {
-                Some(&v) => v,
-                None => return Err(DMError::new(Location::default(), format!("bad parent_type for {}: {}", path, parent_type)))
-            });
+            if let Some(&idx) = self.types.get(parent_type) {
+                type_.parent_type.set(idx);
+            } else {
+                context.register_error(DMError::new(Location::default(), format!("bad parent_type for {}: {}", path, parent_type)));
+            }
         }
-        Ok(())
     }
 
     // ------------------------------------------------------------------------

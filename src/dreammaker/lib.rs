@@ -35,6 +35,7 @@ impl Context {
     pub fn parse_environment(&mut self, dme: &Path) -> Result<objtree::ObjectTree, DMError> {
         let start = self.errors().len();
         let result = parser::parse(
+            self,
             indents::IndentProcessor::new(
                 preprocessor::Preprocessor::new(self, dme.to_owned())?
             )

@@ -3,7 +3,7 @@ use std::fmt;
 
 use linked_hash_map::LinkedHashMap;
 
-use super::{DMError, Location, HasLocation};
+use super::{DMError, Location, HasLocation, Context};
 use super::objtree::*;
 use super::ast::*;
 
@@ -205,24 +205,23 @@ impl fmt::Display for ConstFn {
 // The constant evaluator
 
 /// Evaluate all the type-level variables in an object tree into constants.
-#[doc(hidden)]
-pub fn evaluate_all(tree: &mut ObjectTree) -> Result<(), DMError> {
+pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree) {
     for ty in tree.graph.node_indices() {
         let keys: Vec<String> = tree.graph.node_weight(ty).unwrap().vars.keys().cloned().collect();
         for key in keys {
             if !tree.graph.node_weight(ty).unwrap().get_declaration(&key, tree).map_or(true, |x| x.is_const_evaluable() && (x.is_const || ty != NodeIndex::new(0))) {
                 continue  // skip non-constant-evaluable vars
             }
-            match constant_ident_lookup(tree, ty, &key, false)? {
-                ConstLookup::Found(_, _) => {}
-                ConstLookup::Continue(_) => {
-                    let location = tree.graph.node_weight(ty).unwrap().vars[&key].value.location;
-                    return Err(DMError::new(location, format!("undefined var '{}'\non type '{}'", key, tree.graph.node_weight(ty).unwrap().path)));
+            match constant_ident_lookup(tree, ty, &key, false) {
+                Err(err) => context.register_error(err),
+                Ok(ConstLookup::Found(_, _)) => {}
+                Ok(ConstLookup::Continue(_)) => {
+                    context.register_error(DMError::new(tree.graph.node_weight(ty).unwrap().vars[&key].value.location,
+                        format!("undefined var '{}' on type '{}'", key, tree.graph.node_weight(ty).unwrap().path)));
                 }
             }
         }
     }
-    Ok(())
 }
 
 /// Evaluate an expression in the absence of any surrounding context.
