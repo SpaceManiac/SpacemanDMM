@@ -20,7 +20,7 @@ pub enum Constant {
         /// The type to be instantiated.
         type_: NewType<Constant>,
         /// The list of arugments to pass to the `New()` proc.
-        args: Option<Vec<Constant>>,
+        args: Option<Vec<(Constant, Option<Constant>)>>,
     },
     /// A `list` literal. Elements have optional associations.
     List(Vec<(Constant, Option<Constant>)>),
@@ -143,7 +143,10 @@ impl fmt::Display for Constant {
                             write!(f, ", ")?;
                         }
                         first = false;
-                        write!(f, "{}", each)?;
+                        write!(f, "{}", each.0)?;
+                        if let Some(val) = each.1.as_ref() {
+                            write!(f, " = {}", val)?;
+                        }
                     }
                     write!(f, ")")?;
                 }
@@ -312,14 +315,34 @@ impl<'a> ConstantFolder<'a> {
                     false => self.expr(*else_, type_hint)?,
                 }
             },
-            Expression::AssignOp { .. } => return Err(self.error("non-constant augmented assignment")),
+            Expression::AssignOp { .. } => return Err(self.error("non-constant assignment")),
         })
     }
 
+    /// list of expressions, keyword arguments disallowed
     fn expr_vec(&mut self, v: Vec<Expression>) -> Result<Vec<Constant>, DMError> {
         let mut out = Vec::new();
         for each in v {
             out.push(self.expr(each, None)?);
+        }
+        Ok(out)
+    }
+
+    /// arguments or keyword arguments
+    fn arguments(&mut self, v: Vec<Expression>) -> Result<Vec<(Constant, Option<Constant>)>, DMError> {
+        let mut out = Vec::new();
+        for each in v {
+            out.push(match each {
+                // handle associations
+                Expression::AssignOp { op: AssignOp::Assign, lhs, rhs } => {
+                    let key = match Term::from(*lhs) {
+                        Term::Ident(ident) => Constant::String(ident),
+                        other => self.term(other, None)?,
+                    };
+                    (key, Some(self.expr(*rhs, None)?))
+                },
+                key => (self.expr(key, None)?, None),
+            });
         }
         Ok(out)
     }
@@ -414,38 +437,13 @@ impl<'a> ConstantFolder<'a> {
                         NewType::Ident(_) => return Err(self.error("non-constant new expression")),
                     },
                     args: match args {
-                        Some(args) => Some(self.expr_vec(args)?),
+                        Some(args) => Some(self.arguments(args)?),
                         None => None,
                     },
                 }
             },
             Term::List(vec) => {
-                let element_type_path;
-                let mut element_type = None;
-                if let Some(path) = type_hint {
-                    if !path.is_empty() && path[0].1 == "list" {
-                        // TODO: remove this to_owned call by replacing
-                        // type_hint: &TypePath = &Vec<...> with &[...]
-                        element_type_path = path[1..].to_owned();
-                        element_type = Some(&element_type_path);
-                    }
-                }
-
-                let mut out = Vec::new();
-                for each in vec {
-                    out.push(match each {
-                        // handle associations
-                        Expression::AssignOp { op: AssignOp::Assign, lhs, rhs } => {
-                            let key = match Term::from(*lhs) {
-                                Term::Ident(ident) => Constant::String(ident),
-                                other => self.term(other, element_type)?,
-                            };
-                            (key, Some(self.expr(*rhs, element_type)?))
-                        },
-                        key => (self.expr(key, element_type)?, None),
-                    });
-                }
-                Constant::List(out)
+                Constant::List(self.arguments(vec)?)
             },
             Term::Call(ident, args) => match &*ident {
                 // constructors which remain as they are

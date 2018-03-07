@@ -210,10 +210,13 @@ pub enum Expression {
 
 impl From<Term> for Expression {
     fn from(term: Term) -> Expression {
-        Expression::Base {
-            unary: vec![],
-            follow: vec![],
-            term,
+        match term {
+            Term::Expr(expr) => *expr,
+            term => Expression::Base {
+                unary: vec![],
+                follow: vec![],
+                term,
+            }
         }
     }
 }
