@@ -7,6 +7,197 @@ use super::{DMError, Location, HasLocation};
 use super::objtree::*;
 use super::ast::*;
 
+/// A DM constant, usually a literal or simple combination of other constants.
+///
+/// This is intended to represent the degree to which constants are evaluated
+/// before being displayed in DreamMaker.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Constant {
+    /// The literal `null`.
+    Null(Option<TypePath>),
+    /// A `new` call.
+    New {
+        /// The type to be instantiated.
+        type_: NewType<Constant>,
+        /// The list of arugments to pass to the `New()` proc.
+        args: Option<Vec<Constant>>,
+    },
+    /// A `list` literal. Elements have optional associations.
+    List(Vec<(Constant, Option<Constant>)>),
+    /// A call to a constant type constructor.
+    Call(ConstFn, Vec<Constant>),
+    /// A prefab literal.
+    Prefab(Prefab<Constant>),
+    /// A string literal.
+    String(String),
+    /// A resource literal.
+    Resource(String),
+    /// An integer literal.
+    Int(i32),
+    /// A floating-point literal.
+    Float(f32),
+}
+
+/// The constant functions which are represented as-is.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ConstFn {
+    /// The `icon()` type constructor.
+    Icon,
+    /// The `matrix()` type constructor.
+    Matrix,
+    /// The `newlist()` function, which combines `new` mapped over a `list`.
+    Newlist,
+}
+
+impl Constant {
+    #[inline]
+    pub fn string<S: Into<String>>(s: S) -> Constant {
+        Constant::String(s.into())
+    }
+
+    pub fn contains_key(&self, key: &Constant) -> bool {
+        match self {
+            &Constant::List(ref elements) => for &(ref k, _) in elements {
+                if key == k {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+        false
+    }
+
+    pub fn index(&self, key: &Constant) -> Option<&Constant> {
+        match (self, key) {
+            (&Constant::List(ref elements), &Constant::Int(i)) => return elements.get(i as usize).map(|&(ref k, _)| k),
+            (&Constant::List(ref elements), key) => for &(ref k, ref v) in elements {
+                if key == k {
+                    return v.as_ref();
+                }
+            }
+            _ => {}
+        }
+        None
+    }
+
+    pub fn to_bool(&self) -> bool {
+        match self {
+            &Constant::Null(_) => false,
+            &Constant::Int(i) => i != 0,
+            &Constant::Float(f) => f != 0.,
+            &Constant::String(ref s) => !s.is_empty(),
+            _ => true,
+        }
+    }
+
+    pub fn to_float(&self) -> Option<f32> {
+        match self {
+            &Constant::Int(i) => Some(i as f32),
+            &Constant::Float(f) => Some(f),
+            _ => None,
+        }
+    }
+
+    pub fn to_int(&self) -> Option<i32> {
+        match self {
+            &Constant::Int(i) => Some(i),
+            &Constant::Float(f) => Some(f as i32),
+            _ => None,
+        }
+    }
+
+    pub fn eq_string(&self, string: &str) -> bool {
+        match self {
+            &Constant::String(ref s) => s == string,
+            _ => false,
+        }
+    }
+
+    pub fn eq_resource(&self, resource: &str) -> bool {
+        match self {
+            &Constant::String(ref s) |
+            &Constant::Resource(ref s) => s == resource,
+            _ => false,
+        }
+    }
+}
+
+impl Default for Constant {
+    fn default() -> Self {
+        Constant::Null(None)
+    }
+}
+
+impl fmt::Display for Constant {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Constant::Null(_) => f.write_str("null"),
+            Constant::New { ref type_, ref args } => {
+                write!(f, "new{}", type_)?;
+                // TODO: make the Vec an Option<Vec>
+                if let Some(args) = args.as_ref() {
+                    write!(f, "(")?;
+                    let mut first = true;
+                    for each in args.iter() {
+                        if !first {
+                            write!(f, ", ")?;
+                        }
+                        first = false;
+                        write!(f, "{}", each)?;
+                    }
+                    write!(f, ")")?;
+                }
+                Ok(())
+            },
+            Constant::List(ref list) => {
+                write!(f, "list(")?;
+                let mut first = true;
+                for &(ref key, ref val) in list.iter() {
+                    if !first {
+                        write!(f, ",")?;
+                    }
+                    first = false;
+                    write!(f, "{}", key)?;
+                    if let Some(val) = val.as_ref() {
+                        write!(f, " = {}", val)?;
+                    }
+                }
+                write!(f, ")")
+            },
+            Constant::Call(const_fn, ref list) => {
+                write!(f, "{}(", const_fn)?;
+                let mut first = true;
+                for each in list.iter() {
+                    if !first {
+                        write!(f, ", ")?;
+                    }
+                    first = false;
+                    write!(f, "{}", each)?;
+                }
+                write!(f, ")")
+            },
+            Constant::Prefab(ref val) => write!(f, "{}", val),
+            Constant::String(ref val) => write!(f, "\"{}\"", val),
+            Constant::Resource(ref val) => write!(f, "'{}'", val),
+            Constant::Int(val) => write!(f, "{}", val),
+            Constant::Float(val) => write!(f, "{}", val),
+        }
+    }
+}
+
+impl fmt::Display for ConstFn {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match *self {
+            ConstFn::Icon => "icon",
+            ConstFn::Matrix => "matrix",
+            ConstFn::Newlist => "newlist",
+        })
+    }
+}
+
+// ----------------------------------------------------------------------------
+// The constant evaluator
+
 /// Evaluate all the type-level variables in an object tree into constants.
 #[doc(hidden)]
 pub fn evaluate_all(tree: &mut ObjectTree) -> Result<(), DMError> {
@@ -323,193 +514,5 @@ impl<'a> ConstantFolder<'a> {
             }
         }
         Err(self.error(format!("unknown variable: {}", ident)))
-    }
-}
-
-/// The constant functions which are represented as-is.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum ConstFn {
-    /// The `icon()` type constructor.
-    Icon,
-    /// The `matrix()` type constructor.
-    Matrix,
-    /// The `newlist()` function, which combines `new` mapped over a `list`.
-    Newlist,
-}
-
-impl fmt::Display for ConstFn {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(match *self {
-            ConstFn::Icon => "icon",
-            ConstFn::Matrix => "matrix",
-            ConstFn::Newlist => "newlist",
-        })
-    }
-}
-
-/// A DM constant, usually a literal or simple combination of other constants.
-///
-/// This is intended to represent the degree to which constants are evaluated
-/// before being displayed in DreamMaker.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Constant {
-    /// The literal `null`.
-    Null(Option<TypePath>),
-    /// A `new` call.
-    New {
-        /// The type to be instantiated.
-        type_: NewType<Constant>,
-        /// The list of arugments to pass to the `New()` proc.
-        args: Option<Vec<Constant>>,
-    },
-    /// A `list` literal. Elements have optional associations.
-    List(Vec<(Constant, Option<Constant>)>),
-    /// A call to a constant type constructor.
-    Call(ConstFn, Vec<Constant>),
-    /// A prefab literal.
-    Prefab(Prefab<Constant>),
-    /// A string literal.
-    String(String),
-    /// A resource literal.
-    Resource(String),
-    /// An integer literal.
-    Int(i32),
-    /// A floating-point literal.
-    Float(f32),
-}
-
-impl Constant {
-    #[inline]
-    pub fn string<S: Into<String>>(s: S) -> Constant {
-        Constant::String(s.into())
-    }
-
-    pub fn contains_key(&self, key: &Constant) -> bool {
-        match self {
-            &Constant::List(ref elements) => for &(ref k, _) in elements {
-                if key == k {
-                    return true;
-                }
-            }
-            _ => {}
-        }
-        false
-    }
-
-    pub fn index(&self, key: &Constant) -> Option<&Constant> {
-        match (self, key) {
-            (&Constant::List(ref elements), &Constant::Int(i)) => return elements.get(i as usize).map(|&(ref k, _)| k),
-            (&Constant::List(ref elements), key) => for &(ref k, ref v) in elements {
-                if key == k {
-                    return v.as_ref();
-                }
-            }
-            _ => {}
-        }
-        None
-    }
-
-    pub fn to_bool(&self) -> bool {
-        match self {
-            &Constant::Null(_) => false,
-            &Constant::Int(i) => i != 0,
-            &Constant::Float(f) => f != 0.,
-            &Constant::String(ref s) => !s.is_empty(),
-            _ => true,
-        }
-    }
-
-    pub fn to_float(&self) -> Option<f32> {
-        match self {
-            &Constant::Int(i) => Some(i as f32),
-            &Constant::Float(f) => Some(f),
-            _ => None,
-        }
-    }
-
-    pub fn to_int(&self) -> Option<i32> {
-        match self {
-            &Constant::Int(i) => Some(i),
-            &Constant::Float(f) => Some(f as i32),
-            _ => None,
-        }
-    }
-
-    pub fn eq_string(&self, string: &str) -> bool {
-        match self {
-            &Constant::String(ref s) => s == string,
-            _ => false,
-        }
-    }
-
-    pub fn eq_resource(&self, resource: &str) -> bool {
-        match self {
-            &Constant::String(ref s) |
-            &Constant::Resource(ref s) => s == resource,
-            _ => false,
-        }
-    }
-}
-
-impl Default for Constant {
-    fn default() -> Self {
-        Constant::Null(None)
-    }
-}
-
-impl fmt::Display for Constant {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Constant::Null(_) => f.write_str("null"),
-            Constant::New { ref type_, ref args } => {
-                write!(f, "new{}", type_)?;
-                // TODO: make the Vec an Option<Vec>
-                if let Some(args) = args.as_ref() {
-                    write!(f, "(")?;
-                    let mut first = true;
-                    for each in args.iter() {
-                        if !first {
-                            write!(f, ", ")?;
-                        }
-                        first = false;
-                        write!(f, "{}", each)?;
-                    }
-                    write!(f, ")")?;
-                }
-                Ok(())
-            },
-            Constant::List(ref list) => {
-                write!(f, "list(")?;
-                let mut first = true;
-                for &(ref key, ref val) in list.iter() {
-                    if !first {
-                        write!(f, ",")?;
-                    }
-                    first = false;
-                    write!(f, "{}", key)?;
-                    if let Some(val) = val.as_ref() {
-                        write!(f, " = {}", val)?;
-                    }
-                }
-                write!(f, ")")
-            },
-            Constant::Call(const_fn, ref list) => {
-                write!(f, "{}(", const_fn)?;
-                let mut first = true;
-                for each in list.iter() {
-                    if !first {
-                        write!(f, ", ")?;
-                    }
-                    first = false;
-                    write!(f, "{}", each)?;
-                }
-                write!(f, ")")
-            },
-            Constant::Prefab(ref val) => write!(f, "{}", val),
-            Constant::String(ref val) => write!(f, "\"{}\"", val),
-            Constant::Resource(ref val) => write!(f, "'{}'", val),
-            Constant::Int(val) => write!(f, "{}", val),
-            Constant::Float(val) => write!(f, "{}", val),
-        }
     }
 }
