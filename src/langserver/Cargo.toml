@@ -9,5 +9,5 @@ path = "main.rs"
 
 [dependencies]
 jsonrpc-core = "8.0.1"
-languageserver-types = "0.19"
+languageserver-types = "0.30"
 dreammaker = { path = "../dreammaker" }
