@@ -423,7 +423,7 @@ fn parse_constant(input: String) -> Result<Constant, DMError> {
 
     let mut bytes = input.as_bytes();
     let ctx = Context::default();
-    let expr = match Parser::new(Lexer::new(&ctx, Default::default(), &mut bytes)).expression(true)? {
+    let expr = match Parser::new(Lexer::new(&ctx, Default::default(), &mut bytes)).expression()? {
         Some(expr) => expr,
         None => return Err(DMError::new(Location::default(), format!("not an expression: {}", input))),
     };

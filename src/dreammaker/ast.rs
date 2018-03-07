@@ -230,8 +230,8 @@ pub enum Term {
         /// The list of arguments to pass to the `New()` proc.
         args: Option<Vec<Expression>>,
     },
-    /// A `list` call. Elements have optional associations.
-    List(Vec<(Expression, Option<Expression>)>),
+    /// A `list` call. Associations are represented by assignment expressions.
+    List(Vec<Expression>),
     /// An unscoped function call.
     Call(String, Vec<Expression>),
     /// A prefab literal (path + vars).

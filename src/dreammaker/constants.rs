@@ -424,6 +424,8 @@ impl<'a> ConstantFolder<'a> {
                 let mut element_type = None;
                 if let Some(path) = type_hint {
                     if !path.is_empty() && path[0].1 == "list" {
+                        // TODO: remove this to_owned call by replacing
+                        // type_hint: &TypePath = &Vec<...> with &[...]
                         element_type_path = path[1..].to_owned();
                         element_type = Some(&element_type_path);
                     }
@@ -432,16 +434,15 @@ impl<'a> ConstantFolder<'a> {
                 let mut out = Vec::new();
                 for each in vec {
                     out.push(match each {
-                        (key, Some(val)) => {
-                            let key = match Term::from(key) {
-                                Term::Ident(ref ident) => {
-                                    Constant::String(ident.clone())
-                                },
+                        // handle associations
+                        Expression::AssignOp { op: AssignOp::Assign, lhs, rhs } => {
+                            let key = match Term::from(*lhs) {
+                                Term::Ident(ident) => Constant::String(ident),
                                 other => self.term(other, element_type)?,
                             };
-                            (key, Some(self.expr(val, element_type)?))
+                            (key, Some(self.expr(*rhs, element_type)?))
                         },
-                        (key, None) => (self.expr(key, element_type)?, None),
+                        key => (self.expr(key, element_type)?, None),
                     });
                 }
                 Constant::List(out)
