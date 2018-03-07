@@ -368,7 +368,6 @@ impl<'ctx, R: Read> Lexer<'ctx, R> {
                 Some(ch) if ch == b'.' || ch == b'e' => {
                     integer = false;
                     exponent |= ch == b'e';
-                    radix = 10;  // undo octal radix in case of 0.9
                     buf.push(ch as char);
                 }
                 Some(ch) if (ch == b'+' || ch == b'-') && exponent => {
@@ -382,7 +381,7 @@ impl<'ctx, R: Read> Lexer<'ctx, R> {
                         return Err(self.error("expected INF"));
                     }
                 }
-                Some(ch) if (ch as char).is_digit(radix) => buf.push(ch as char),
+                Some(ch) if (ch as char).is_digit(::std::cmp::max(radix, 10)) => buf.push(ch as char),
                 ch => { self.put_back(ch); return Ok((integer, radix, buf)) }
             }
         }
