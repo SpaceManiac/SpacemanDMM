@@ -102,10 +102,26 @@ impl<'a, T: HasLocation> HasLocation for &'a mut T {
 // ----------------------------------------------------------------------------
 // Error handling
 
+/// The possible diagnostic severities available.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub enum Severity {
+    Error = 1,
+    Warning = 2,
+    Info = 3,
+    Hint = 4,
+}
+
+impl Default for Severity {
+    fn default() -> Severity {
+        Severity::Error
+    }
+}
+
 /// An error produced during DM parsing, with location information.
 #[derive(Debug)]
 pub struct DMError {
     location: Location,
+    severity: Severity,
     desc: String,
     cause: Option<Box<error::Error>>,
 }
@@ -115,19 +131,20 @@ impl DMError {
     pub fn new<S: Into<String>>(location: Location, desc: S) -> DMError {
         DMError {
             location,
+            severity: Default::default(),
             desc: desc.into(),
             cause: None,
         }
     }
 
-    pub fn with_cause<S, E>(location: Location, desc: S, cause: E) -> DMError
-        where S: Into<String>, E: error::Error + 'static
-    {
-        DMError {
-            location,
-            desc: desc.into(),
-            cause: Some(Box::new(cause)),
-        }
+    pub fn set_cause<E: error::Error + 'static>(mut self, cause: E) -> DMError {
+        self.cause = Some(Box::new(cause));
+        self
+    }
+
+    pub fn set_severity(mut self, severity: Severity) -> DMError {
+        self.severity = severity;
+        self
     }
 
     /// Get the location in the code at which this error was observed.
@@ -148,7 +165,7 @@ impl DMError {
 
 impl From<io::Error> for DMError {
     fn from(e: io::Error) -> DMError {
-        DMError::with_cause(Location::default(), "i/o error", e)
+        DMError::new(Location::default(), "i/o error").set_cause(e)
     }
 }
 

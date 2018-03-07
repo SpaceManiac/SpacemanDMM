@@ -247,7 +247,7 @@ impl<I> Parser<I> where
                 Err(self.error(message))
             },
             Err(err) => {
-                Err(DMError::with_cause(self.location(), format!("i/o error, expected one of: {}", expected), err))
+                Err(self.error(format!("i/o error, expected one of: {}", expected)).set_cause(err))
             }
         }
     }

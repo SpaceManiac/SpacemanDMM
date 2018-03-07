@@ -298,7 +298,7 @@ impl<'ctx, R: Read> Lexer<'ctx, R> {
 
                 Ok(Some(ch))
             }
-            Some(Err(err)) => Err(DMError::with_cause(self.location(), "i/o error", err)),
+            Some(Err(err)) => Err(self.error("i/o error").set_cause(err)),
             None => Ok(None),
         }
     }
