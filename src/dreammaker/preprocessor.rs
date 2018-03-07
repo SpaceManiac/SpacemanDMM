@@ -117,11 +117,11 @@ fn default_defines(defines: &mut HashMap<String, Define>) {
 // The stack of currently #included files
 
 #[derive(Debug)]
-enum Include {
+enum Include<'ctx> {
     File {
         path: PathBuf,
         file: FileId,
-        lexer: Lexer<BufReader<File>>,
+        lexer: Lexer<'ctx, BufReader<File>>,
     },
     Expansion {
         name: String,
@@ -130,17 +130,19 @@ enum Include {
     }
 }
 
-impl Include {
-    fn new(path: PathBuf, idx: FileId) -> io::Result<Include> {
+impl<'ctx> Include<'ctx> {
+    fn new(context: &'ctx Context, path: PathBuf) -> io::Result<Include> {
+        let reader = BufReader::new(File::open(&path)?);
+        let idx = context.register_file(path.clone());
         Ok(Include::File {
-            lexer: Lexer::new(idx, BufReader::new(File::open(&path)?)),
+            lexer: Lexer::new(context, idx, reader),
             file: idx,
             path: path,
         })
     }
 }
 
-impl HasLocation for Include {
+impl<'ctx> HasLocation for Include<'ctx> {
     fn location(&self) -> Location {
         match self {
             &Include::File { ref lexer, .. } => lexer.location(),
@@ -150,11 +152,11 @@ impl HasLocation for Include {
 }
 
 #[derive(Debug)]
-struct IncludeStack {
-    stack: Vec<Include>,
+struct IncludeStack<'ctx> {
+    stack: Vec<Include<'ctx>>,
 }
 
-impl IncludeStack {
+impl<'ctx> IncludeStack<'ctx> {
     fn top_file_path(&self) -> &Path {
         for each in self.stack.iter().rev() {
             if let &Include::File { ref path, .. } = each {
@@ -173,7 +175,7 @@ impl IncludeStack {
     }
 }
 
-impl HasLocation for IncludeStack {
+impl<'ctx> HasLocation for IncludeStack<'ctx> {
     fn location(&self) -> Location {
         if let Some(include) = self.stack.last() {
             include.location()
@@ -183,7 +185,7 @@ impl HasLocation for IncludeStack {
     }
 }
 
-impl Iterator for IncludeStack {
+impl<'ctx> Iterator for IncludeStack<'ctx> {
     type Item = Result<LocatedToken, DMError>;
 
     fn next(&mut self) -> Option<Result<LocatedToken, DMError>> {
@@ -227,13 +229,13 @@ impl Ifdef {
 
 /// C-like preprocessor for DM. Expands directives and macro invocations.
 pub struct Preprocessor<'ctx> {
-    context: &'ctx mut Context,
+    context: &'ctx Context,
 
     env_file: PathBuf,
     defines: HashMap<String, Define>,
     maps: Vec<PathBuf>,
     skins: Vec<PathBuf>,
-    include_stack: IncludeStack,
+    include_stack: IncludeStack<'ctx>,
     ifdef_stack: Vec<Ifdef>,
 
     last_input_loc: Location,
@@ -247,11 +249,10 @@ impl<'ctx> HasLocation for Preprocessor<'ctx> {
 }
 
 impl<'ctx> Preprocessor<'ctx> {
-    pub fn new(context: &'ctx mut Context, env_file: PathBuf) -> io::Result<Self> {
-        let env_id = context.register_file(env_file.clone());
+    pub fn new(context: &'ctx Context, env_file: PathBuf) -> io::Result<Self> {
         let mut pp = Preprocessor {
             include_stack: IncludeStack {
-                stack: vec![Include::new(env_file.clone(), env_id)?],
+                stack: vec![Include::new(context, env_file.clone())?],
             },
             env_file: env_file,
             defines: Default::default(),
@@ -357,7 +358,6 @@ impl<'ctx> Preprocessor<'ctx> {
                         ].into_iter().rev() {
                             if !each.exists() { continue }
                             enum FileType { DMM, DMF, DM }
-                            let id = self.context.register_file(each.clone());
                             match match each.extension().and_then(|s| s.to_str()) {
                                 Some("dmm") => FileType::DMM,
                                 Some("dmf") => FileType::DMF,
@@ -366,7 +366,7 @@ impl<'ctx> Preprocessor<'ctx> {
                             } {
                                 FileType::DMM => self.maps.push(each),
                                 FileType::DMF => self.skins.push(each),
-                                FileType::DM => self.include_stack.stack.push(Include::new(each, id)?),
+                                FileType::DM => self.include_stack.stack.push(Include::new(self.context, each)?),
                             }
                             return Ok(());
                         }

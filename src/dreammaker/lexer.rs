@@ -3,7 +3,7 @@ use std::io::{Read, Bytes};
 use std::str::FromStr;
 use std::fmt;
 
-use super::{DMError, Location, HasLocation, FileId};
+use super::{DMError, Location, HasLocation, FileId, Context};
 
 macro_rules! table {
     ($(#[$attr:meta])* table $tabname:ident: $repr:ty => $enum_:ident; $($literal:expr, $name:ident;)*) => {
@@ -236,7 +236,8 @@ enum Directive {
 
 /// The lexer, which serves as a source of tokens through iteration.
 #[derive(Debug)]
-pub struct Lexer<R: Read> {
+pub struct Lexer<'ctx, R: Read> {
+    context: &'ctx Context,
     next: Option<u8>,
     input: Bytes<R>,
     location: Location,
@@ -245,16 +246,17 @@ pub struct Lexer<R: Read> {
     interp_stack: Vec<Interpolation>,
 }
 
-impl<R: Read> HasLocation for Lexer<R> {
+impl<'ctx, R: Read> HasLocation for Lexer<'ctx, R> {
     fn location(&self) -> Location {
         self.location
     }
 }
 
-impl<R: Read> Lexer<R> {
+impl<'ctx, R: Read> Lexer<'ctx, R> {
     /// Create a new lexer from a byte stream.
-    pub fn new(file_number: FileId, source: R) -> Lexer<R> {
+    pub fn new(context: &'ctx Context, file_number: FileId, source: R) -> Lexer<R> {
         Lexer {
+            context: context,
             next: None,
             input: source.bytes(),
             location: Location {
@@ -534,7 +536,7 @@ impl<R: Read> Lexer<R> {
     }
 }
 
-impl<R: Read> Iterator for Lexer<R> {
+impl<'ctx, R: Read> Iterator for Lexer<'ctx, R> {
     type Item = Result<LocatedToken, DMError>;
 
     fn next(&mut self) -> Option<Result<LocatedToken, DMError>> {

@@ -417,11 +417,13 @@ fn advance_key(current: KeyType, next_digit: KeyType) -> Result<KeyType, DMError
 }
 
 fn parse_constant(input: String) -> Result<Constant, DMError> {
+    use dm::Context;
     use dm::lexer::Lexer;
     use dm::parser::Parser;
 
     let mut bytes = input.as_bytes();
-    let expr = match Parser::new(Lexer::new(Default::default(), &mut bytes)).expression(true)? {
+    let ctx = Context::default();
+    let expr = match Parser::new(Lexer::new(&ctx, Default::default(), &mut bytes)).expression(true)? {
         Some(expr) => expr,
         None => return Err(DMError::new(Location::default(), format!("not an expression: {}", input))),
     };

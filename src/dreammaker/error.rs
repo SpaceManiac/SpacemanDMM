@@ -2,7 +2,7 @@
 
 use std::{fmt, error, io};
 use std::path::PathBuf;
-use std::cell::RefCell;
+use std::cell::{RefCell, Ref};
 
 /// An identifier referring to a loaded file.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
@@ -21,6 +21,8 @@ impl Default for FileId {
 pub struct Context {
     /// The list of loaded files.
     files: RefCell<Vec<PathBuf>>,
+    /// A list of errors, warnings, and other diagnostics generated.
+    errors: RefCell<Vec<DMError>>,
 }
 
 impl Context {
@@ -41,6 +43,16 @@ impl Context {
         } else {
             files[idx].to_owned()
         }
+    }
+
+    /// Push an error or other diagnostic to the context.
+    pub fn register_error(&self, error: DMError) {
+        self.errors.borrow_mut().push(error);
+    }
+
+    /// Access the list of diagnostics generated so far.
+    pub fn errors(&self) -> Ref<[DMError]> {
+        Ref::map(self.errors.borrow(), |x| &**x)
     }
 
     /// Pretty-print a `DMError` to the given output.
