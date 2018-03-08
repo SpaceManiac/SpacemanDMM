@@ -2,16 +2,18 @@
 
 use std::io::{self, Read, Write};
 
-pub trait Input {
+pub trait RequestRead {
     fn read(&self) -> Option<String>;
 }
 
-pub struct StdinInput;
+pub trait ResponseWrite {
+    fn respond(&self, output: String);
+}
 
-impl Input for StdinInput {
+pub struct StdIo;
+
+impl RequestRead for StdIo {
     fn read(&self) -> Option<String> {
-        use std::ascii::AsciiExt;
-
         macro_rules! check {
             ($exp:expr) => {
                 match $exp {
@@ -49,5 +51,14 @@ impl Input for StdinInput {
         let mut content = vec![0; size];
         check!(io::stdin().read_exact(&mut content));
         Some(check!(String::from_utf8(content)))
+    }
+}
+
+impl ResponseWrite for StdIo {
+    fn respond(&self, output: String) {
+        let stdout = io::stdout();
+        let mut stdout_lock = stdout.lock();
+        write!(stdout_lock, "Content-Length: {}\r\n\r\n{}", output.len(), output).unwrap();
+        stdout_lock.flush().unwrap();
     }
 }
