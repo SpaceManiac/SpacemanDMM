@@ -7,7 +7,7 @@ pub trait RequestRead {
 }
 
 pub trait ResponseWrite {
-    fn respond(&self, output: String);
+    fn write(&self, output: String);
 }
 
 pub struct StdIo;
@@ -55,7 +55,7 @@ impl RequestRead for StdIo {
 }
 
 impl ResponseWrite for StdIo {
-    fn respond(&self, output: String) {
+    fn write(&self, output: String) {
         let stdout = io::stdout();
         let mut stdout_lock = stdout.lock();
         write!(stdout_lock, "Content-Length: {}\r\n\r\n{}", output.len(), output).unwrap();

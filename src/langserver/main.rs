@@ -6,22 +6,22 @@
 //! * https://github.com/Microsoft/language-server-protocol/blob/master/versions/protocol-2-x.md
 //! * https://github.com/rust-lang-nursery/rls
 
-extern crate languageserver_types as ls_types;
+extern crate serde;
+extern crate serde_json;
+extern crate languageserver_types as langserver;
 extern crate jsonrpc_core as jsonrpc;
 extern crate dreammaker as dm;
-extern crate serde_json;
 
 mod io;
 
 use std::io::Write;
-use jsonrpc::types::{Request, Call, Response, Output, MethodCall};
+use jsonrpc::{Request, Call, Response, Output};
 
 fn main() {
     let stdio = io::StdIo;
     Engine {
         read: &stdio,
         write: &stdio,
-        outputs: Vec::new(),
     }.run()
 }
 
@@ -30,7 +30,6 @@ const VERSION: Option<jsonrpc::Version> = Some(jsonrpc::Version::V2);
 struct Engine<'a, R: 'a, W: 'a> {
     read: &'a R,
     write: &'a W,
-    outputs: Vec<Output>,
 }
 
 impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
@@ -38,39 +37,69 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         let mut debug = std::fs::File::create("debug-output.txt").unwrap();
 
         loop {
-            let message = self.read.read().expect("request read error");
-            let request: Request = serde_json::from_str(&message).expect("request invalid json");
+            let message = self.read.read().expect("request bad read");
+            let request: Request = serde_json::from_str(&message).expect("request bad from_str");
 
             writeln!(debug, "--> {:#?}", request).unwrap();
-            match request {
-                Request::Single(call) => self.handle_call(call),
-                Request::Batch(calls) => for call in calls {
-                    self.handle_call(call);
-                }
-            }
+            let mut outputs: Vec<Output> = match request {
+                Request::Single(call) => self.handle_call(call).into_iter().collect(),
+                Request::Batch(calls) => calls.into_iter().flat_map(|call| self.handle_call(call)).collect(),
+            };
 
-            let response = match self.outputs.len() {
+            let response = match outputs.len() {
                 0 => continue,  // wait for another input
-                1 => Response::Single(self.outputs.remove(0)),
-                _ => Response::Batch(self.outputs.drain(..).collect()),
+                1 => Response::Single(outputs.remove(0)),
+                _ => Response::Batch(outputs),
             };
 
             writeln!(debug, "<-- {:#?}", response).unwrap();
-            self.write.respond(serde_json::to_string(&response).expect("response invalid json"));
+            self.write.write(serde_json::to_string(&response).expect("response bad to_string"));
         }
     }
 
-    fn handle_call(&mut self, call: Call) {
+    fn issue_notification<T>(&mut self, params: T::Params) where
+        T: langserver::notification::Notification,
+        T::Params: serde::Serialize,
+    {
+        let params = serde_json::to_value(params).expect("notification bad to_value");
+        let request = Request::Single(Call::Notification(jsonrpc::Notification {
+            jsonrpc: VERSION,
+            method: T::METHOD.to_owned(),
+            params: Some(match params {
+                serde_json::Value::Null => jsonrpc::Params::None,
+                serde_json::Value::Array(x) => jsonrpc::Params::Array(x),
+                serde_json::Value::Object(x) => jsonrpc::Params::Map(x),
+                _ => panic!("notification bad value to params conversion")
+            })
+        }));
+        self.write.write(serde_json::to_string(&request).expect("notification bad to_string"))
+    }
+
+    fn handle_call(&mut self, call: Call) -> Option<Output> {
         match call {
             Call::Invalid(id) => {
-                self.outputs.push(Output::invalid_request(id, VERSION));
+                Some(Output::invalid_request(id, VERSION))
             },
-            Call::MethodCall(method_call) => self.handle_method_call(method_call),
-            Call::Notification(_notification) => {},  // TODO
+            Call::MethodCall(method_call) => {
+                let id = method_call.id.clone();
+                Some(Output::from(self.handle_method_call(method_call), id, VERSION))
+            },
+            Call::Notification(_notification) => {
+                // TODO
+                None
+            },
         }
     }
 
-    fn handle_method_call(&mut self, _call: MethodCall) {
-        // TODO
+    fn handle_method_call(&mut self, _call: jsonrpc::MethodCall) -> Result<serde_json::Value, jsonrpc::Error> {
+        self.issue_notification::<langserver::notification::ShowMessage>(langserver::ShowMessageParams {
+            typ: langserver::MessageType::Info,
+            message: "Hello, world!".to_owned(),
+        });
+        Err(jsonrpc::Error {
+            code: jsonrpc::ErrorCode::ServerError(0),
+            message: "Goodbye, world!".to_owned(),
+            data: None,
+        })
     }
 }
