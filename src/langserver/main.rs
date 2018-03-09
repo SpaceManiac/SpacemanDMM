@@ -107,6 +107,16 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
     fn handle_method_call(&mut self, call: jsonrpc::MethodCall) -> Result<serde_json::Value, jsonrpc::Error> {
         use langserver::request::*;
 
+        // "If the server receives a request... before the initialize request...
+        // the response should be an error with code: -32002"
+        if call.method != <Initialize>::METHOD && self.status == InitStatus::Starting {
+            return Err(jsonrpc::Error {
+                code: jsonrpc::ErrorCode::from(-32002),
+                message: "Method call before initialize".to_owned(),
+                data: None,
+            })
+        }
+
         let params_value = params_to_value(call.params);
 
         macro_rules! match_call {
@@ -137,6 +147,11 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
 
     fn handle_notification(&mut self, notification: jsonrpc::Notification) {
         use langserver::notification::*;
+
+        // "Notifications should be dropped, except for the exit notification"
+        if notification.method != <Exit>::METHOD && self.status != InitStatus::Running {
+            return
+        }
 
         let params_value = params_to_value(notification.params);
 
