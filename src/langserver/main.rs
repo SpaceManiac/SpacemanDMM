@@ -40,6 +40,9 @@ struct Engine<'a, R: 'a, W: 'a> {
     status: InitStatus,
     parent_pid: u64,
     root: PathBuf,
+    context: dm::Context,
+
+    debug: std::fs::File,
 }
 
 impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
@@ -50,6 +53,9 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             status: InitStatus::Starting,
             parent_pid: 0,
             root: Default::default(),
+            context: Default::default(),
+
+            debug: std::fs::File::create("debug-output.txt").expect("debug-output failure"),
         }
     }
 
@@ -61,6 +67,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         T::Params: serde::Serialize,
     {
         let params = serde_json::to_value(params).expect("notification bad to_value");
+        writeln!(self.debug, "<== {}: {:#?}", T::METHOD, params).expect("debug-output failure");
         let request = Request::Single(Call::Notification(jsonrpc::Notification {
             jsonrpc: VERSION,
             method: T::METHOD.to_owned(),
@@ -69,7 +76,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         self.write.write(serde_json::to_string(&request).expect("notification bad to_string"))
     }
 
-    fn show_message<S>(&mut self, typ: langserver::MessageType, message: S) where
+    fn show_message<S>(&mut self, typ: MessageType, message: S) where
         S: Into<String>
     {
         self.issue_notification::<langserver::notification::ShowMessage>(
@@ -81,12 +88,10 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
     // Driver
 
     fn run(mut self) {
-        let mut debug = std::fs::File::create("debug-output.txt").expect("debug-output failure");
-
         loop {
             let message = self.read.read().expect("request bad read");
 
-            writeln!(debug, "--> {}", message).expect("debug-output failure");
+            writeln!(self.debug, "--> ({}) {}", message.len(), message).expect("debug-output failure");
             let mut outputs: Vec<Output> = match serde_json::from_str(&message) {
                 Ok(Request::Single(call)) => self.handle_call(call).into_iter().collect(),
                 Ok(Request::Batch(calls)) => calls.into_iter().flat_map(|call| self.handle_call(call)).collect(),
@@ -109,7 +114,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 _ => Response::Batch(outputs),
             };
 
-            writeln!(debug, "<-- {:#?}", response).expect("debug-output failure");
+            writeln!(self.debug, "<-- {:#?}", response).expect("debug-output failure");
             self.write.write(serde_json::to_string(&response).expect("response bad to_string"));
         }
     }
@@ -124,7 +129,9 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 Some(Output::from(self.handle_method_call(method_call), id, VERSION))
             },
             Call::Notification(notification) => {
-                self.handle_notification(notification);
+                if let Err(e) = self.handle_notification(notification) {
+                    self.show_message(MessageType::Error, e.message);
+                }
                 None
             },
         }
@@ -148,10 +155,8 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         macro_rules! match_call {
             ($(|$name:ident: $what:ty| $body:block;)*) => (
                 $(if call.method == <$what>::METHOD {
-                    let $name: <$what as Request>::Params = match serde_json::from_value(params_value) {
-                        Ok(value) => value,
-                        Err(decode_error) => return Err(invalid_request(decode_error.to_string())),
-                    };
+                    let $name: <$what as Request>::Params = serde_json::from_value(params_value)
+                        .map_err(invalid_request)?;
                     let result: <$what as Request>::Result = $body;
                     Ok(serde_json::to_value(result).expect("encode problem"))
                 } else)* {
@@ -187,7 +192,6 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 } else {
                     return Err(invalid_request("must provide root_uri or root_path"))
                 }
-
                 self.status = InitStatus::Running;
                 Default::default()
             };
@@ -197,12 +201,12 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         }
     }
 
-    fn handle_notification(&mut self, notification: jsonrpc::Notification) {
+    fn handle_notification(&mut self, notification: jsonrpc::Notification) -> Result<(), jsonrpc::Error> {
         use langserver::notification::*;
 
         // "Notifications should be dropped, except for the exit notification"
         if notification.method != <Exit>::METHOD && self.status != InitStatus::Running {
-            return
+            return Ok(())
         }
 
         let params_value = params_to_value(notification.params);
@@ -210,17 +214,13 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         macro_rules! match_notify {
             ($(|$name:ident: $what:ty| $body:block;)*) => (
                 $(if notification.method == <$what>::METHOD {
-                    let $name: <$what as Notification>::Params = match serde_json::from_value(params_value) {
-                        Ok(value) => value,
-                        Err(decode_error) => {
-                            self.show_message(MessageType::Error, decode_error.to_string());
-                            return;
-                        }
-                    };
+                    let $name: <$what as Notification>::Params = serde_json::from_value(params_value)
+                        .map_err(invalid_request)?;
                     $body
                 } else)* {
                     self.show_message(MessageType::Warning, format!("Notify NYI: {}", notification.method));
                 }
+                Ok(())
             )
         }
 
@@ -229,8 +229,26 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 std::process::exit(if self.status == InitStatus::ShuttingDown { 0 } else { 1 });
             };
             |_empty: Initialized| {
-                let message = format!("Hello, world!\n{}", self.root.display());
-                self.show_message(MessageType::Info, message);
+                eprintln!("root directory: {}", self.root.display());
+                let mut environment = None;
+                for entry in std::fs::read_dir(&self.root).map_err(invalid_request)? {
+                    let entry = entry.map_err(invalid_request)?;
+                    let path = entry.path();
+                    if path.extension() == Some("dme".as_ref()) {
+                        environment = Some(path);
+                        break;
+                    }
+                }
+                if let Some(environment) = environment {
+                    eprintln!("loading environment: {}", environment.display());
+                    if self.context.parse_environment(&environment).is_ok() {
+                        self.show_message(MessageType::Info, "Environment loaded.");
+                    } else {
+                        self.show_message(MessageType::Error, "Error loading environment.");
+                    }
+                } else {
+                    self.show_message(MessageType::Error, "No DME found, language service not available.");
+                }
             };
         }
     }
