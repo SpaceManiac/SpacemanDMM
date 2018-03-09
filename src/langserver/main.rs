@@ -109,10 +109,10 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
 
         // "If the server receives a request... before the initialize request...
         // the response should be an error with code: -32002"
-        if call.method != <Initialize>::METHOD && self.status == InitStatus::Starting {
+        if call.method != <Initialize>::METHOD && self.status != InitStatus::Running {
             return Err(jsonrpc::Error {
                 code: jsonrpc::ErrorCode::from(-32002),
-                message: "Method call before initialize".to_owned(),
+                message: "method call before initialize or after shutdown".to_owned(),
                 data: None,
             })
         }
@@ -129,7 +129,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                     self.show_message(MessageType::Warning, format!("Call NYI: {}", call.method));
                     Err(jsonrpc::Error {
                         code: jsonrpc::ErrorCode::InternalError,
-                        message: "Not yet implemented".to_owned(),
+                        message: "not yet implemented".to_owned(),
                         data: None,
                     })
                 }
@@ -138,9 +138,19 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
 
         match_call! {
             |_init: Initialize| {
+                if self.status != InitStatus::Starting {
+                    return Err(jsonrpc::Error {
+                        code: jsonrpc::ErrorCode::InvalidRequest,
+                        message: "initialize called twice".to_owned(),
+                        data: None,
+                    })
+                }
                 self.show_message(MessageType::Info, "Hello, world!");
                 self.status = InitStatus::Running;
                 Default::default()
+            };
+            |_empty: Shutdown| {
+                self.status = InitStatus::ShuttingDown;
             };
         }
     }
