@@ -21,7 +21,7 @@ pub fn parse<I>(context: &Context, iter: I) -> Result<ObjectTree, DMError> where
 
     let procs_total = parser.procs_good + parser.procs_bad;
     if procs_total > 0 {
-        println!("parsed {}/{} proc bodies ({}%)", parser.procs_good, procs_total, (parser.procs_good * 100 / procs_total));
+        eprintln!("parsed {}/{} proc bodies ({}%)", parser.procs_good, procs_total, (parser.procs_good * 100 / procs_total));
     }
 
     Ok(tree)
@@ -365,7 +365,7 @@ impl<I> Parser<I> where
         // read and calculate the current path
         let (absolute, path) = leading!(self.tree_path());
         if absolute && parent.parent.is_some() {
-            println!("WARNING: {:?} inside {:?}", path, parent);
+            eprintln!("WARNING: {:?} inside {:?}", path, parent);
         }
         let new_stack = PathStack {
             parent: if absolute { None } else { Some(&parent) },
