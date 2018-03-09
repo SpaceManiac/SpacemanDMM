@@ -91,15 +91,40 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         }
     }
 
-    fn handle_method_call(&mut self, _call: jsonrpc::MethodCall) -> Result<serde_json::Value, jsonrpc::Error> {
-        self.issue_notification::<langserver::notification::ShowMessage>(langserver::ShowMessageParams {
-            typ: langserver::MessageType::Info,
-            message: "Hello, world!".to_owned(),
-        });
-        Err(jsonrpc::Error {
-            code: jsonrpc::ErrorCode::ServerError(0),
-            message: "Goodbye, world!".to_owned(),
-            data: None,
-        })
+    fn handle_method_call(&mut self, call: jsonrpc::MethodCall) -> Result<serde_json::Value, jsonrpc::Error> {
+        use langserver::request::*;
+
+        let params_value = match call.params {
+            Some(jsonrpc::Params::None) |
+            None => serde_json::Value::Null,
+            Some(jsonrpc::Params::Array(x)) => serde_json::Value::Array(x),
+            Some(jsonrpc::Params::Map(x)) => serde_json::Value::Object(x),
+        };
+
+        macro_rules! match_call {
+            ($(|$name:ident: $what:ty| $body:block;)*) => (
+                $(if call.method == <$what>::METHOD {
+                    let $name: <$what as Request>::Params = serde_json::from_value(params_value).expect("blah");
+                    let result: <$what as Request>::Result = $body;
+                    Ok(serde_json::to_value(result).expect("blah 2"))
+                } else)* {
+                    Err(jsonrpc::Error {
+                        code: jsonrpc::ErrorCode::InternalError,
+                        message: "Not yet implemented".to_owned(),
+                        data: None,
+                    })
+                }
+            )
+        }
+
+        match_call! {
+            |_init: Initialize| {
+                self.issue_notification::<langserver::notification::ShowMessage>(langserver::ShowMessageParams {
+                    typ: langserver::MessageType::Info,
+                    message: "Hello, world!".to_owned(),
+                });
+                Default::default()
+            };
+        }
     }
 }
