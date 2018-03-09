@@ -15,16 +15,14 @@ extern crate dreammaker as dm;
 mod io;
 
 use std::io::Write;
+use std::path::PathBuf;
+
 use jsonrpc::{Request, Call, Response, Output};
 use langserver::MessageType;
 
 fn main() {
     let stdio = io::StdIo;
-    Engine {
-        read: &stdio,
-        write: &stdio,
-        status: InitStatus::Starting,
-    }.run()
+    Engine::new(&stdio, &stdio).run()
 }
 
 const VERSION: Option<jsonrpc::Version> = Some(jsonrpc::Version::V2);
@@ -40,9 +38,48 @@ struct Engine<'a, R: 'a, W: 'a> {
     read: &'a R,
     write: &'a W,
     status: InitStatus,
+    parent_pid: u64,
+    root: PathBuf,
 }
 
 impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
+    fn new(read: &'a R, write: &'a W) -> Self {
+        Engine {
+            read,
+            write,
+            status: InitStatus::Starting,
+            parent_pid: 0,
+            root: Default::default(),
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // General input and output utilities
+
+    fn issue_notification<T>(&mut self, params: T::Params) where
+        T: langserver::notification::Notification,
+        T::Params: serde::Serialize,
+    {
+        let params = serde_json::to_value(params).expect("notification bad to_value");
+        let request = Request::Single(Call::Notification(jsonrpc::Notification {
+            jsonrpc: VERSION,
+            method: T::METHOD.to_owned(),
+            params: Some(value_to_params(params)),
+        }));
+        self.write.write(serde_json::to_string(&request).expect("notification bad to_string"))
+    }
+
+    fn show_message<S>(&mut self, typ: langserver::MessageType, message: S) where
+        S: Into<String>
+    {
+        self.issue_notification::<langserver::notification::ShowMessage>(
+            langserver::ShowMessageParams { typ, message: message.into() }
+        )
+    }
+
+    // ------------------------------------------------------------------------
+    // Driver
+
     fn run(mut self) {
         let mut debug = std::fs::File::create("debug-output.txt").expect("debug-output failure");
 
@@ -75,27 +112,6 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             writeln!(debug, "<-- {:#?}", response).expect("debug-output failure");
             self.write.write(serde_json::to_string(&response).expect("response bad to_string"));
         }
-    }
-
-    fn issue_notification<T>(&mut self, params: T::Params) where
-        T: langserver::notification::Notification,
-        T::Params: serde::Serialize,
-    {
-        let params = serde_json::to_value(params).expect("notification bad to_value");
-        let request = Request::Single(Call::Notification(jsonrpc::Notification {
-            jsonrpc: VERSION,
-            method: T::METHOD.to_owned(),
-            params: Some(value_to_params(params)),
-        }));
-        self.write.write(serde_json::to_string(&request).expect("notification bad to_string"))
-    }
-
-    fn show_message<S>(&mut self, typ: langserver::MessageType, message: S) where
-        S: Into<String>
-    {
-        self.issue_notification::<langserver::notification::ShowMessage>(
-            langserver::ShowMessageParams { typ, message: message.into() }
-        )
     }
 
     fn handle_call(&mut self, call: Call) -> Option<Output> {
@@ -134,11 +150,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 $(if call.method == <$what>::METHOD {
                     let $name: <$what as Request>::Params = match serde_json::from_value(params_value) {
                         Ok(value) => value,
-                        Err(decode_error) => return Err(jsonrpc::Error {
-                            code: jsonrpc::ErrorCode::InvalidRequest,
-                            message: decode_error.to_string(),
-                            data: None,
-                        })
+                        Err(decode_error) => return Err(invalid_request(decode_error.to_string())),
                     };
                     let result: <$what as Request>::Result = $body;
                     Ok(serde_json::to_value(result).expect("encode problem"))
@@ -154,15 +166,28 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         }
 
         match_call! {
-            |_init: Initialize| {
+            |init: Initialize| {
                 if self.status != InitStatus::Starting {
-                    return Err(jsonrpc::Error {
-                        code: jsonrpc::ErrorCode::InvalidRequest,
-                        message: "initialize called twice".to_owned(),
-                        data: None,
-                    })
+                    return Err(invalid_request(""))
                 }
-                self.show_message(MessageType::Info, "Hello, world!");
+
+                if let Some(id) = init.process_id {
+                    self.parent_pid = id;
+                }
+                if let Some(url) = init.root_uri {
+                    if url.scheme() != "file" {
+                        return Err(invalid_request("root must be a file:/// URI"));
+                    }
+                    match url.to_file_path() {
+                        Ok(root) => self.root = root,
+                        Err(()) => return Err(invalid_request("root must be a valid path"))
+                    }
+                } else if let Some(path) = init.root_path {
+                    self.root = PathBuf::from(path);
+                } else {
+                    return Err(invalid_request("must provide root_uri or root_path"))
+                }
+
                 self.status = InitStatus::Running;
                 Default::default()
             };
@@ -204,11 +229,15 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 std::process::exit(if self.status == InitStatus::ShuttingDown { 0 } else { 1 });
             };
             |_empty: Initialized| {
-                // todo
+                let message = format!("Hello, world!\n{}", self.root.display());
+                self.show_message(MessageType::Info, message);
             };
         }
     }
 }
+
+// ----------------------------------------------------------------------------
+// Helper functions
 
 fn params_to_value(params: Option<jsonrpc::Params>) -> serde_json::Value {
     match params {
@@ -225,5 +254,13 @@ fn value_to_params(value: serde_json::Value) -> jsonrpc::Params {
         serde_json::Value::Array(x) => jsonrpc::Params::Array(x),
         serde_json::Value::Object(x) => jsonrpc::Params::Map(x),
         _ => panic!("bad value to params conversion")
+    }
+}
+
+fn invalid_request<S: ToString>(message: S) -> jsonrpc::Error {
+    jsonrpc::Error {
+        code: jsonrpc::ErrorCode::InvalidRequest,
+        message: message.to_string(),
+        data: None,
     }
 }
