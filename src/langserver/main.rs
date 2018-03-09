@@ -44,16 +44,26 @@ struct Engine<'a, R: 'a, W: 'a> {
 
 impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
     fn run(mut self) {
-        let mut debug = std::fs::File::create("debug-output.txt").unwrap();
+        let mut debug = std::fs::File::create("debug-output.txt").expect("debug-output failure");
 
         loop {
             let message = self.read.read().expect("request bad read");
-            let request: Request = serde_json::from_str(&message).expect("request bad from_str");
 
-            writeln!(debug, "--> {:#?}", request).unwrap();
-            let mut outputs: Vec<Output> = match request {
-                Request::Single(call) => self.handle_call(call).into_iter().collect(),
-                Request::Batch(calls) => calls.into_iter().flat_map(|call| self.handle_call(call)).collect(),
+            writeln!(debug, "--> {}", message).expect("debug-output failure");
+            let mut outputs: Vec<Output> = match serde_json::from_str(&message) {
+                Ok(Request::Single(call)) => self.handle_call(call).into_iter().collect(),
+                Ok(Request::Batch(calls)) => calls.into_iter().flat_map(|call| self.handle_call(call)).collect(),
+                Err(decode_error) => {
+                    vec![Output::Failure(jsonrpc::Failure {
+                        jsonrpc: VERSION,
+                        error: jsonrpc::Error {
+                            code: jsonrpc::ErrorCode::ParseError,
+                            message: decode_error.to_string(),
+                            data: None,
+                        },
+                        id: jsonrpc::Id::Null,
+                    })]
+                }
             };
 
             let response = match outputs.len() {
@@ -62,7 +72,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 _ => Response::Batch(outputs),
             };
 
-            writeln!(debug, "<-- {:#?}", response).unwrap();
+            writeln!(debug, "<-- {:#?}", response).expect("debug-output failure");
             self.write.write(serde_json::to_string(&response).expect("response bad to_string"));
         }
     }
@@ -122,9 +132,16 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         macro_rules! match_call {
             ($(|$name:ident: $what:ty| $body:block;)*) => (
                 $(if call.method == <$what>::METHOD {
-                    let $name: <$what as Request>::Params = serde_json::from_value(params_value).expect("blah");
+                    let $name: <$what as Request>::Params = match serde_json::from_value(params_value) {
+                        Ok(value) => value,
+                        Err(decode_error) => return Err(jsonrpc::Error {
+                            code: jsonrpc::ErrorCode::InvalidRequest,
+                            message: decode_error.to_string(),
+                            data: None,
+                        })
+                    };
                     let result: <$what as Request>::Result = $body;
-                    Ok(serde_json::to_value(result).expect("blah 2"))
+                    Ok(serde_json::to_value(result).expect("encode problem"))
                 } else)* {
                     self.show_message(MessageType::Warning, format!("Call NYI: {}", call.method));
                     Err(jsonrpc::Error {
@@ -168,7 +185,13 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         macro_rules! match_notify {
             ($(|$name:ident: $what:ty| $body:block;)*) => (
                 $(if notification.method == <$what>::METHOD {
-                    let $name: <$what as Notification>::Params = serde_json::from_value(params_value).expect("blah");
+                    let $name: <$what as Notification>::Params = match serde_json::from_value(params_value) {
+                        Ok(value) => value,
+                        Err(decode_error) => {
+                            self.show_message(MessageType::Error, decode_error.to_string());
+                            return;
+                        }
+                    };
                     $body
                 } else)* {
                     self.show_message(MessageType::Warning, format!("Notify NYI: {}", notification.method));
@@ -180,14 +203,17 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             |_empty: Exit| {
                 std::process::exit(if self.status == InitStatus::ShuttingDown { 0 } else { 1 });
             };
+            |_empty: Initialized| {
+                // todo
+            };
         }
     }
 }
 
 fn params_to_value(params: Option<jsonrpc::Params>) -> serde_json::Value {
     match params {
-        Some(jsonrpc::Params::None) |
         None => serde_json::Value::Null,
+        Some(jsonrpc::Params::None) => serde_json::Value::Object(Default::default()),
         Some(jsonrpc::Params::Array(x)) => serde_json::Value::Array(x),
         Some(jsonrpc::Params::Map(x)) => serde_json::Value::Object(x),
     }
