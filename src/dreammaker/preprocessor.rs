@@ -1,6 +1,6 @@
 //! The preprocessor.
 use std::collections::{HashMap, VecDeque};
-use std::io::{self, BufReader};
+use std::io;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
@@ -121,7 +121,7 @@ enum Include<'ctx> {
     File {
         path: PathBuf,
         file: FileId,
-        lexer: Lexer<'ctx, BufReader<File>>,
+        lexer: Lexer<'ctx, io::Bytes<io::BufReader<File>>>,
     },
     Expansion {
         name: String,
@@ -132,10 +132,10 @@ enum Include<'ctx> {
 
 impl<'ctx> Include<'ctx> {
     fn new(context: &'ctx Context, path: PathBuf) -> io::Result<Include> {
-        let reader = BufReader::new(File::open(&path)?);
+        let reader = io::BufReader::new(File::open(&path)?);
         let idx = context.register_file(path.clone());
         Ok(Include::File {
-            lexer: Lexer::new(context, idx, reader),
+            lexer: Lexer::from_read(context, idx, reader),
             file: idx,
             path: path,
         })

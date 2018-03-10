@@ -1,5 +1,5 @@
 //! The lexer/tokenizer.
-use std::io::{Read, Bytes};
+use std::io;
 use std::str::FromStr;
 use std::fmt;
 
@@ -244,29 +244,36 @@ enum Directive {
 
 /// The lexer, which serves as a source of tokens through iteration.
 #[derive(Debug)]
-pub struct Lexer<'ctx, R: Read> {
+pub struct Lexer<'ctx, I> {
     context: &'ctx Context,
+    input: I,
     next: Option<u8>,
-    input: Bytes<R>,
     location: Location,
     at_line_head: bool,
     directive: Directive,
     interp_stack: Vec<Interpolation>,
 }
 
-impl<'ctx, R: Read> HasLocation for Lexer<'ctx, R> {
+impl<'ctx, I: Iterator<Item=io::Result<u8>>> HasLocation for Lexer<'ctx, I> {
     fn location(&self) -> Location {
         self.location
     }
 }
 
-impl<'ctx, R: Read> Lexer<'ctx, R> {
+impl<'ctx, R: io::Read> Lexer<'ctx, io::Bytes<R>> {
+    /// Create a new lexer from a reader.
+    pub fn from_read(context: &'ctx Context, file_number: FileId, source: R) -> Lexer<io::Bytes<R>> {
+        Lexer::new(context, file_number, source.bytes())
+    }
+}
+
+impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
     /// Create a new lexer from a byte stream.
-    pub fn new(context: &'ctx Context, file_number: FileId, source: R) -> Lexer<R> {
+    pub fn new(context: &'ctx Context, file_number: FileId, input: I) -> Lexer<I> {
         Lexer {
-            context: context,
+            context,
+            input,
             next: None,
-            input: source.bytes(),
             location: Location {
                 file: file_number,
                 line: 1,
@@ -542,7 +549,7 @@ impl<'ctx, R: Read> Lexer<'ctx, R> {
     }
 }
 
-impl<'ctx, R: Read> Iterator for Lexer<'ctx, R> {
+impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
     type Item = Result<LocatedToken, DMError>;
 
     fn next(&mut self) -> Option<Result<LocatedToken, DMError>> {

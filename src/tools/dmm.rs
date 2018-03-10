@@ -421,13 +421,13 @@ fn parse_constant(input: String) -> Result<Constant, DMError> {
     use dm::lexer::Lexer;
     use dm::parser::Parser;
 
-    let mut bytes = input.as_bytes();
+    let mut bytes = input.as_bytes().iter().map(|&x| Ok(x));
     let ctx = Context::default();
-    let expr = match Parser::new(Lexer::new(&ctx, Default::default(), &mut bytes)).expression()? {
+    let expr = match Parser::new(&ctx, Lexer::new(&ctx, Default::default(), &mut bytes)).expression()? {
         Some(expr) => expr,
         None => return Err(DMError::new(Location::default(), format!("not an expression: {}", input))),
     };
-    if !bytes.is_empty() {
+    if bytes.next().is_some() {
         return Err(DMError::new(Location::default(), format!("leftover: {:?} {}", input, bytes.len())));
     }
     ::dm::constants::simple_evaluate(expr)
