@@ -40,7 +40,9 @@ struct Engine<'a, R: 'a, W: 'a> {
     status: InitStatus,
     parent_pid: u64,
     root: PathBuf,
+
     context: dm::Context,
+    objtree: dm::objtree::ObjectTree,
 
     debug: std::fs::File,
 }
@@ -53,7 +55,9 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             status: InitStatus::Starting,
             parent_pid: 0,
             root: Default::default(),
+
             context: Default::default(),
+            objtree: Default::default(),
 
             debug: std::fs::File::create("debug-output.txt").expect("debug-output failure"),
         }
@@ -160,7 +164,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                     let result: <$what as Request>::Result = $body;
                     Ok(serde_json::to_value(result).expect("encode problem"))
                 } else)* {
-                    self.show_message(MessageType::Warning, format!("Call NYI: {}", call.method));
+                    eprintln!("Call NYI: {} -> {:?}", call.method, params_value);
                     Err(jsonrpc::Error {
                         code: jsonrpc::ErrorCode::InternalError,
                         message: "not yet implemented".to_owned(),
@@ -218,7 +222,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                         .map_err(invalid_request)?;
                     $body
                 } else)* {
-                    self.show_message(MessageType::Warning, format!("Notify NYI: {}", notification.method));
+                    eprintln!("Notify NYI: {} => {:?}", notification.method, params_value);
                 }
                 Ok(())
             )
@@ -240,11 +244,17 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                     }
                 }
                 if let Some(environment) = environment {
+                    let file_name = environment.file_name().unwrap_or("..".as_ref()).to_string_lossy();
                     eprintln!("loading environment: {}", environment.display());
-                    if self.context.parse_environment(&environment).is_ok() {
-                        self.show_message(MessageType::Info, "Environment loaded.");
-                    } else {
-                        self.show_message(MessageType::Error, "Error loading environment.");
+                    match self.context.parse_environment(&environment) {
+                        Ok(objtree) => {
+                            self.objtree = objtree;
+                            self.show_message(MessageType::Info, format!("Loaded {}", file_name));
+                        },
+                        Err(err) => {
+                            self.show_message(MessageType::Error, format!("Error loading {}", file_name));
+                            eprintln!("{:?}", err);
+                        }
                     }
                 } else {
                     self.show_message(MessageType::Error, "No DME found, language service not available.");
