@@ -14,6 +14,7 @@ extern crate jsonrpc_core as jsonrpc;
 extern crate dreammaker as dm;
 
 mod io;
+mod document;
 
 use std::io::Write;
 use std::path::PathBuf;
@@ -39,6 +40,8 @@ enum InitStatus {
 struct Engine<'a, R: 'a, W: 'a> {
     read: &'a R,
     write: &'a W,
+    docs: document::DocumentStore,
+
     status: InitStatus,
     parent_pid: u64,
     root: PathBuf,
@@ -54,6 +57,8 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         Engine {
             read,
             write,
+            docs: Default::default(),
+
             status: InitStatus::Starting,
             parent_pid: 0,
             root: Default::default(),
@@ -85,8 +90,10 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
     fn show_message<S>(&mut self, typ: MessageType, message: S) where
         S: Into<String>
     {
+        let message = message.into();
+        eprintln!("{:?}: {}", typ, message);
         self.issue_notification::<langserver::notification::ShowMessage>(
-            langserver::ShowMessageParams { typ, message: message.into() }
+            langserver::ShowMessageParams { typ, message }
         )
     }
 
@@ -144,6 +151,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
     }
 
     fn handle_method_call(&mut self, call: jsonrpc::MethodCall) -> Result<serde_json::Value, jsonrpc::Error> {
+        use langserver::*;
         use langserver::request::*;
 
         // "If the server receives a request... before the initialize request...
@@ -177,6 +185,8 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         }
 
         match_call! {
+            // ----------------------------------------------------------------
+            // basic setup
             |init: Initialize| {
                 if self.status != InitStatus::Starting {
                     return Err(invalid_request(""))
@@ -193,9 +203,14 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                     return Err(invalid_request("must provide root_uri or root_path"))
                 }
                 self.status = InitStatus::Running;
-                langserver::InitializeResult {
-                    capabilities: langserver::ServerCapabilities {
+                InitializeResult {
+                    capabilities: ServerCapabilities {
                         definition_provider: Some(true),
+                        text_document_sync: Some(TextDocumentSyncCapability::Options(TextDocumentSyncOptions {
+                            open_close: Some(true),
+                            change: Some(TextDocumentSyncKind::Full),
+                            .. Default::default()
+                        })),
                         .. Default::default()
                     }
                 }
@@ -203,16 +218,18 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             |_empty: Shutdown| {
                 self.status = InitStatus::ShuttingDown;
             };
+            // ----------------------------------------------------------------
+            // actual stuff provision
             |params: GotoDefinition| {
                 let path = url_to_path(params.text_document.uri)?;
-                let line = params.position.line;
-                let column = params.position.character;
+                let _line = params.position.line;
+                let _column = params.position.character;
 
-                Some(GotoDefinitionResponse::Scalar(langserver::Location {
+                Some(GotoDefinitionResponse::Scalar(Location {
                     uri: Url::from_file_path(path).map_err(|_| invalid_request("bad file path"))?,
-                    range: langserver::Range::new(
-                        langserver::Position::new(0, 0),
-                        langserver::Position::new(0, 20),
+                    range: Range::new(
+                        Position::new(0, 0),
+                        Position::new(0, 20),
                     ),
                 }))
             };
@@ -243,6 +260,8 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         }
 
         match_notify! {
+            // ----------------------------------------------------------------
+            // basic setup
             |_empty: Exit| {
                 std::process::exit(if self.status == InitStatus::ShuttingDown { 0 } else { 1 });
             };
@@ -273,6 +292,17 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 } else {
                     self.show_message(MessageType::Error, "No DME found, language service not available.");
                 }
+            };
+            // ----------------------------------------------------------------
+            // document content management
+            |params: DidOpenTextDocument| {
+                self.docs.open(params.text_document)?;
+            };
+            |params: DidCloseTextDocument| {
+                self.docs.close(params.text_document)?;
+            };
+            |params: DidChangeTextDocument| {
+                self.docs.change(params.text_document, params.content_changes)?;
             };
         }
     }
