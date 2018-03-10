@@ -12,7 +12,7 @@ use super::ast::*;
 pub fn parse<I>(context: &Context, iter: I) -> Result<ObjectTree, DMError> where
     I: IntoIterator<Item=Result<LocatedToken, DMError>>
 {
-    let mut parser = Parser::new(iter.into_iter());
+    let mut parser = Parser::new(context, iter.into_iter());
     let mut tree = match parser.root()? {
         Some(()) => parser.tree,
         None => return parser.parse_error(),
@@ -197,7 +197,8 @@ oper_table! { BINARY_OPS;
 ///
 /// Results are accumulated into an inner `ObjectTree`. To parse an entire
 /// environment, use the `parse` or `parse_environment` functions.
-pub struct Parser<I> {
+pub struct Parser<'ctx, I> {
+    context: &'ctx Context,
     tree: ObjectTree,
 
     input: I,
@@ -210,18 +211,19 @@ pub struct Parser<I> {
     procs_good: u64,
 }
 
-impl<I> HasLocation for Parser<I> {
+impl<'ctx, I> HasLocation for Parser<'ctx, I> {
     fn location(&self) -> Location {
         self.location
     }
 }
 
-impl<I> Parser<I> where
+impl<'ctx, I> Parser<'ctx, I> where
     I: Iterator<Item=Result<LocatedToken, DMError>>
 {
     /// Construct a new parser using the given input stream.
-    pub fn new(input: I) -> Parser<I> {
+    pub fn new(context: &'ctx Context, input: I) -> Parser<I> {
         Parser {
+            context,
             tree: ObjectTree::with_builtins(),
 
             input,
@@ -365,7 +367,8 @@ impl<I> Parser<I> where
         // read and calculate the current path
         let (absolute, path) = leading!(self.tree_path());
         if absolute && parent.parent.is_some() {
-            eprintln!("WARNING: {:?} inside {:?}", path, parent);
+            self.context.register_error(self.error(format!("nested absolute path: {:?} inside {:?}", path, parent))
+                .set_severity(super::Severity::Warning));
         }
         let new_stack = PathStack {
             parent: if absolute { None } else { Some(&parent) },
@@ -439,7 +442,7 @@ impl<I> Parser<I> where
                     // read repeatedly until it's a block or ends with a newline
                     require!(self.read_any_tt(&mut body_tt));
                 }
-                let mut subparser = Parser::new(body_tt.iter().cloned().map(Ok));
+                let mut subparser = Parser::new(self.context, body_tt.iter().cloned().map(Ok));
                 if subparser.block().is_ok() {
                     self.procs_good += 1;
                 } else {
