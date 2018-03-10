@@ -6,6 +6,7 @@
 //! * https://github.com/Microsoft/language-server-protocol/blob/master/versions/protocol-2-x.md
 //! * https://github.com/rust-lang-nursery/rls
 
+extern crate url;
 extern crate serde;
 extern crate serde_json;
 extern crate languageserver_types as langserver;
@@ -17,6 +18,7 @@ mod io;
 use std::io::Write;
 use std::path::PathBuf;
 
+use url::Url;
 use jsonrpc::{Request, Call, Response, Output};
 use langserver::MessageType;
 
@@ -184,23 +186,35 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                     self.parent_pid = id;
                 }
                 if let Some(url) = init.root_uri {
-                    if url.scheme() != "file" {
-                        return Err(invalid_request("root must be a file:/// URI"));
-                    }
-                    match url.to_file_path() {
-                        Ok(root) => self.root = root,
-                        Err(()) => return Err(invalid_request("root must be a valid path"))
-                    }
+                    self.root = url_to_path(url)?;
                 } else if let Some(path) = init.root_path {
                     self.root = PathBuf::from(path);
                 } else {
                     return Err(invalid_request("must provide root_uri or root_path"))
                 }
                 self.status = InitStatus::Running;
-                Default::default()
+                langserver::InitializeResult {
+                    capabilities: langserver::ServerCapabilities {
+                        definition_provider: Some(true),
+                        .. Default::default()
+                    }
+                }
             };
             |_empty: Shutdown| {
                 self.status = InitStatus::ShuttingDown;
+            };
+            |params: GotoDefinition| {
+                let path = url_to_path(params.text_document.uri)?;
+                let line = params.position.line;
+                let column = params.position.character;
+
+                Some(GotoDefinitionResponse::Scalar(langserver::Location {
+                    uri: Url::from_file_path(path).map_err(|_| invalid_request("bad file path"))?,
+                    range: langserver::Range::new(
+                        langserver::Position::new(0, 0),
+                        langserver::Position::new(0, 20),
+                    ),
+                }))
             };
         }
     }
@@ -291,4 +305,11 @@ fn invalid_request<S: ToString>(message: S) -> jsonrpc::Error {
         message: message.to_string(),
         data: None,
     }
+}
+
+fn url_to_path(url: Url) -> Result<PathBuf, jsonrpc::Error> {
+    if url.scheme() != "file" {
+        return Err(invalid_request("URI must have 'file' scheme"));
+    }
+    url.to_file_path().map_err(|_| invalid_request("URI must be a valid path"))
 }
