@@ -20,7 +20,7 @@ pub struct DocumentStore {
 impl DocumentStore {
     pub fn open(&mut self, doc: TextDocumentItem) -> Result<(), jsonrpc::Error> {
         let path = url_to_path(doc.uri)?;
-        match self.map.insert(path, Document { version: doc.version, text: doc.text }) {
+        match self.map.insert(path, Document::new(doc.version, doc.text)) {
             None => Ok(()),
             Some(_) => Err(invalid_request("opened a document a second time")),
         }
@@ -58,7 +58,6 @@ impl DocumentStore {
         // Make an effort to apply all changes, even if one failed.
         let mut result = Ok(());
         for change in changes {
-            eprintln!("{}", change.text);
             let this_result = document.change(change);
             if result.is_ok() {
                 result = this_result;
@@ -76,8 +75,12 @@ struct Document {
 }
 
 impl Document {
+    fn new(version: u64, text: String) -> Document {
+        Document { version, text }
+    }
+
     fn change(&mut self, change: TextDocumentContentChangeEvent) -> Result<(), jsonrpc::Error> {
-        let (_range, _range_length) = match (change.range, change.range_length) {
+        let (range, range_length) = match (change.range, change.range_length) {
             (Some(a), Some(b)) => (a, b),
             _ => {
                 // "If range and rangeLength are omitted the new text is
@@ -86,7 +89,26 @@ impl Document {
                 return Ok(());
             }
         };
-        // TODO: update the capabilities when this is implemented
-        unimplemented!()
+
+        // Find the start position. Hopefully this logic isn't too far off.
+        let mut start_pos = 0;
+        for _ in 0..range.start.line {
+            match self.text[start_pos..].find("\n") {
+                Some(next_pos) => start_pos += next_pos + 1,
+                None => return Err(invalid_request("line number apparently out of range")),
+            }
+        }
+        start_pos += range.start.character as usize;
+        splice(&mut self.text, start_pos .. start_pos + range_length as usize, &change.text);
+        Ok(())
     }
+}
+
+// Based on the unstable String::splice from libstd.
+fn splice(text: &mut String, range: ::std::ops::Range<usize>, replace_with: &str) {
+    assert!(text.is_char_boundary(range.start));
+    assert!(text.is_char_boundary(range.end));
+    unsafe {
+        text.as_mut_vec()
+    }.splice(range, replace_with.bytes());
 }

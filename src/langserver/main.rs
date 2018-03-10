@@ -208,7 +208,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                         definition_provider: Some(true),
                         text_document_sync: Some(TextDocumentSyncCapability::Options(TextDocumentSyncOptions {
                             open_close: Some(true),
-                            change: Some(TextDocumentSyncKind::Full),
+                            change: Some(TextDocumentSyncKind::Incremental),
                             .. Default::default()
                         })),
                         .. Default::default()
