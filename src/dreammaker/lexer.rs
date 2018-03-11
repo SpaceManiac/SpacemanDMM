@@ -168,10 +168,14 @@ impl Token {
         match (prev, self) {
             (&Token::Ident(_, true), _) |
             (&Token::Punct(Comma), _) => true,
-            (&Token::Ident(_, _), &Token::Punct(_)) |
-            (&Token::Ident(_, _), &Token::InterpStringEnd(_)) |
-            (&Token::Ident(_, _), &Token::InterpStringPart(_)) => false,
-            (&Token::Ident(_, _), _) => true,
+            (&Token::Ident(..), &Token::Punct(_)) |
+            (&Token::Ident(..), &Token::InterpStringEnd(_)) |
+            (&Token::Ident(..), &Token::InterpStringPart(_)) |
+            (&Token::Punct(_), &Token::Ident(..)) |
+            (&Token::InterpStringBegin(_), &Token::Ident(..)) |
+            (&Token::InterpStringPart(_), &Token::Ident(..)) => false,
+            (&Token::Ident(..), _) |
+            (_, &Token::Ident(..)) => true,
             _ => false,
         }
     }
@@ -673,19 +677,4 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
             }
         }
     }
-}
-
-#[cfg(test)]
-fn lex(f: &str) -> Vec<Token> {
-    Lexer::new(0, f.as_bytes()).map(|x| x.map(|y| y.token)).collect::<Result<Vec<_>, _>>().unwrap()
-}
-
-#[test]
-fn floats() {
-    assert_eq!(lex("0.08"), vec![Token::Float(0.08)]);
-}
-
-#[test]
-fn nested_interpolation() {
-    println!("{:?}", lex(r#""A[B"C"D]E""#));
 }

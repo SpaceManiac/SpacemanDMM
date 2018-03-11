@@ -65,12 +65,16 @@ impl Context {
     }
 
     /// Pretty-print all registered diagnostics to standard error.
-    pub fn print_all_errors(&self) {
+    ///
+    /// Returns `true` if no errors were printed, `false` if any were.
+    pub fn print_all_errors(&self) -> bool {
         let stderr = io::stderr();
         let stderr = &mut stderr.lock();
-        for err in self.errors().iter() {
+        let errors = self.errors();
+        for err in errors.iter() {
             self.pretty_print_error(stderr, &err).expect("error writing to stderr");
         }
+        errors.is_empty()
     }
 }
 
