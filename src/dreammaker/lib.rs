@@ -37,7 +37,7 @@ impl Context {
         let result = parser::parse(
             self,
             indents::IndentProcessor::new(
-                preprocessor::Preprocessor::new(self, dme.to_owned())?
+                preprocessor::Preprocessor::new(self, dme.to_owned())?.map(Ok)
             )
         );
 

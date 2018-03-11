@@ -319,24 +319,24 @@ impl<'ctx> Preprocessor<'ctx> {
                     "ifdef" => {
                         expect_token!((define_name) = Token::Ident(define_name, _));
                         expect_token!(() = Token::Punct(Punctuation::Newline));
-                        let z = self.defines.contains_key(&define_name);
-                        self.ifdef_stack.push(Ifdef::new(self.last_input_loc, z));
+                        let enabled = self.defines.contains_key(&define_name);
+                        self.ifdef_stack.push(Ifdef::new(self.last_input_loc, enabled));
                     }
                     "ifndef" => {
                         expect_token!((define_name) = Token::Ident(define_name, _));
                         expect_token!(() = Token::Punct(Punctuation::Newline));
-                        let z = !self.defines.contains_key(&define_name);
-                        self.ifdef_stack.push(Ifdef::new(self.last_input_loc, z));
+                        let enabled = !self.defines.contains_key(&define_name);
+                        self.ifdef_stack.push(Ifdef::new(self.last_input_loc, enabled));
                     }
                     "if" => {
-                        let z = self.evaluate()?;
-                        self.ifdef_stack.push(Ifdef::new(self.last_input_loc, z));
+                        let enabled = self.evaluate()?;
+                        self.ifdef_stack.push(Ifdef::new(self.last_input_loc, enabled));
                     }
                     "elseif" => {
                         let last = self.ifdef_stack.pop().ok_or_else(||
                             DMError::new(self.last_input_loc, "unmatched #elseif"))?;
-                        let z = self.evaluate()?;
-                        self.ifdef_stack.push(last.else_if(z));
+                        let enabled = self.evaluate()?;
+                        self.ifdef_stack.push(last.else_if(enabled));
                     }
                     // anything other than ifdefs may be ifdef'd out
                     _ if self.is_disabled() => {}
@@ -599,20 +599,22 @@ impl<'ctx> Preprocessor<'ctx> {
 }
 
 impl<'ctx> Iterator for Preprocessor<'ctx> {
-    type Item = Result<LocatedToken, DMError>;
+    type Item = LocatedToken;
 
-    fn next(&mut self) -> Option<Result<LocatedToken, DMError>> {
+    fn next(&mut self) -> Option<LocatedToken> {
         loop {
             if let Some(token) = self.output.pop_front() {
-                return Some(Ok(LocatedToken {
+                return Some(LocatedToken {
                     location: self.last_input_loc,
                     token: token,
-                }));
+                });
             }
 
             if let Some(tok) = self.inner_next() {
                 self.last_input_loc = tok.location;
-                try_iter!(self.real_next(tok.token));
+                if let Err(e) = self.real_next(tok.token) {
+                    self.context.register_error(e);
+                }
             } else {
                 while let Some(ifdef) = self.ifdef_stack.pop() {
                     self.context.register_error(DMError::new(ifdef.location, "unterminated #if/#ifdef")

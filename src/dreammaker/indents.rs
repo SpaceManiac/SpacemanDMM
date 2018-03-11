@@ -21,14 +21,14 @@ pub struct IndentProcessor<I> {
     eof_yielded: bool,
 }
 
-impl<I: HasLocation> HasLocation for IndentProcessor<I> {
+impl<I> HasLocation for IndentProcessor<I> {
     fn location(&self) -> Location {
-        self.inner.location()
+        self.last_input_loc
     }
 }
 
 impl<I> IndentProcessor<I> where
-    I: Iterator<Item=Result<LocatedToken, DMError>> + HasLocation
+    I: Iterator<Item=Result<LocatedToken, DMError>>
 {
     pub fn new<J: IntoIterator<Item=Result<LocatedToken, DMError>, IntoIter=I>>(inner: J) -> Self {
         IndentProcessor {
@@ -162,7 +162,7 @@ impl<I> IndentProcessor<I> where
 }
 
 impl<I> Iterator for IndentProcessor<I> where
-    I: Iterator<Item=Result<LocatedToken, DMError>> + HasLocation
+    I: Iterator<Item=Result<LocatedToken, DMError>>
 {
     type Item = Result<LocatedToken, DMError>;
 
