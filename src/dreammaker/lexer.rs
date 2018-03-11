@@ -325,7 +325,10 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
             buffer[0] = buffer[1];
             match self.next()? {
                 Some(val) => buffer[1] = val,
-                None => return Err(self.error("still skipping comments at end of file"))
+                None => {
+                    self.context.register_error(self.error("still skipping comments at end of file"));
+                    break;
+                }
             }
 
             if buffer == *b"/*" {
@@ -380,13 +383,20 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                 Some(ch) if (ch == b'+' || ch == b'-') && exponent => {
                     buf.push(ch as char);
                 }
-                Some(b'#') => {
-                    let (i, n, f) = (self.next()?, self.next()?, self.next()?);
-                    if i == Some(b'I') && n == Some(b'N') && f == Some(b'F') {
-                        return Ok((false, 10, "inf".to_owned()));
-                    } else {
-                        return Err(self.error("expected INF"));
+                Some(b'#') if !integer => {
+                    buf.push('#');  // Keep pushing to `buf` in case of error.
+                    for &expect in b"INF" {
+                        match self.next()? {
+                            Some(ch) if ch == expect => continue,
+                            Some(ch) => buf.push(ch as char),
+                            None => {}
+                        }
+                        // Not what we expected, throw it up the line so that
+                        // f32::from_str will error.
+                        return Ok((false, 10, buf));
                     }
+                    // Got "1.#INF", change it to "inf" for read_number.
+                    return Ok((false, 10, "inf".to_owned()));
                 }
                 Some(ch) if (ch as char).is_digit(::std::cmp::max(radix, 10)) => buf.push(ch as char),
                 ch => { self.put_back(ch); return Ok((integer, radix, buf)) }
@@ -399,13 +409,21 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         if integer {
             match i32::from_str_radix(&buf, radix) {
                 Ok(val) => Ok(Token::Int(val)),
-                Err(_) => Err(self.error(format!("bad base-{} integer: {}", radix, buf))), // TODO
+                Err(e) => {
+                    self.context.register_error(self.error(
+                        format!("bad base-{} integer \"{}\": {}", radix, buf, e)));
+                    Ok(Token::Int(0))  // fallback
+                }
             }
         } else {
             // ignore radix
             match f32::from_str(&buf) {
                 Ok(val) => Ok(Token::Float(val)),
-                Err(_) => Err(self.error(format!("bad float: {}", buf))), // TODO
+                Err(e) => {
+                    self.context.register_error(self.error(
+                        format!("bad float \"{}\": {}", buf, e)));
+                    Ok(Token::Float(0.0))  // fallback
+                }
             }
         }
     }
@@ -556,6 +574,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
         use self::Token::*;
         use self::Punctuation::*;
         let mut skip_newlines = false;
+        let mut found_illegal = false;
         loop {
             let first = match self.skip_ws(skip_newlines) {
                 Ok(Some(t)) => t,
@@ -642,7 +661,13 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                         skip_newlines = true;
                         continue;
                     }
-                    _ => Some(Err(self.error(format!("illegal byte '{}' (0x{:x})", first as char, first))))
+                    _ => {
+                        if !found_illegal {
+                            self.context.register_error(self.error(format!("illegal byte 0x{:x}", first)));
+                            found_illegal = true;
+                        }
+                        continue;
+                    }
                 }
             }
         }
