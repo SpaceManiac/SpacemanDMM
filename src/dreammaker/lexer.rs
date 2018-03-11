@@ -449,7 +449,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         let mut buf = Vec::new();
         loop {
             match self.next() {
-                Some(b'\\') => break,
+                Some(b'\'') => break,
                 Some(ch) => buf.push(ch),
                 None => {
                     self.context.register_error(DMError::new(start_loc, "unterminated resource literal"));

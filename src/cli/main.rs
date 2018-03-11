@@ -47,9 +47,8 @@ impl Context {
         flame!("parse");
         match self.dm_context.parse_environment(opt.environment.as_ref()) {
             Ok(tree) => self.objtree = tree,
-            Err(_) => {
-                // parse_environment has already pretty_printed the error message
-                println!("fatal parse error");
+            Err(e) => {
+                println!("fatal parse error: {}", e);
                 std::process::exit(1);
             }
         };
