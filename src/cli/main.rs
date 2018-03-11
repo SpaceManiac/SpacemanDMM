@@ -84,7 +84,11 @@ struct Opt {
 enum Command {
     /// Show information about the render-pass list.
     #[structopt(name = "list-passes")]
-    ListPasses,
+    ListPasses {
+        /// Output as JSON.
+        #[structopt(short="j", long="json")]
+        json: bool,
+    },
     /// Dump the object tree to an XML file.
     #[cfg(feature="xml")]
     #[structopt(name = "objtree")]
@@ -162,20 +166,37 @@ enum Command {
 fn run(opt: &Opt, command: &Command, context: &mut Context) {
     match *command {
         // --------------------------------------------------------------------
-        Command::ListPasses => {
-            println!("default passes:");
-            let mut non_default = Vec::new();
-            for pass in render_passes::RENDER_PASSES {
-                if pass.default {
-                    println!("{}: {}", pass.name, pass.desc);
-                } else {
-                    non_default.push(pass);
+        Command::ListPasses { json } => {
+            if json {
+                #[derive(Serialize)]
+                struct Pass<'a> {
+                    name: &'a str,
+                    desc: &'a str,
+                    default: bool,
                 }
-            }
-            if !non_default.is_empty() {
-                println!("\nadditional passes:");
-                for pass in non_default {
-                    println!("{}: {}", pass.name, pass.desc);
+
+                let mut report = Vec::new();
+                for &render_passes::RenderPassInfo {
+                    name, desc, default, new: _,
+                } in render_passes::RENDER_PASSES {
+                    report.push(Pass { name, desc, default });
+                }
+                output_json(&report);
+            } else {
+                println!("default passes:");
+                let mut non_default = Vec::new();
+                for pass in render_passes::RENDER_PASSES {
+                    if pass.default {
+                        println!("{}: {}", pass.name, pass.desc);
+                    } else {
+                        non_default.push(pass);
+                    }
+                }
+                if !non_default.is_empty() {
+                    println!("\nadditional passes:");
+                    for pass in non_default {
+                        println!("{}: {}", pass.name, pass.desc);
+                    }
                 }
             }
         },
@@ -314,7 +335,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             json, ref files,
         } => {
             if !json {
-                println!("non-JSON output is not yet supported");
+                eprintln!("non-JSON output is not yet supported");
             }
 
             #[derive(Serialize)]
@@ -336,10 +357,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                     num_keys: map.dictionary.len(),
                 });
             }
-
-            let stdout = std::io::stdout();
-            serde_json::to_writer(stdout.lock(), &report).unwrap();
-            println!();
+            output_json(&report);
         },
         // --------------------------------------------------------------------
     }
@@ -390,4 +408,10 @@ fn clamp(val: usize, min: usize, max: usize) -> usize {
     } else {
         val
     }
+}
+
+fn output_json<T: serde::Serialize>(t: &T) {
+    let stdout = std::io::stdout();
+    serde_json::to_writer(stdout.lock(), t).unwrap();
+    println!();
 }
