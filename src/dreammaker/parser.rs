@@ -9,22 +9,26 @@ use super::ast::*;
 
 /// Parse a token stream, in the form emitted by the indent processor, into
 /// an object tree.
-pub fn parse<I>(context: &Context, iter: I) -> Result<ObjectTree, DMError> where
+///
+/// Compilation failures will return a best-effort parse, and diagnostics will
+/// be registered with the provided `Context`.
+pub fn parse<I>(context: &Context, iter: I) -> ObjectTree where
     I: IntoIterator<Item=Result<LocatedToken, DMError>>
 {
     let mut parser = Parser::new(context, iter.into_iter());
-    let mut tree = match parser.root()? {
-        Some(()) => parser.tree,
-        None => return parser.parse_error(),
-    };
-    tree.finalize(context);
+    match parser.root() {
+        Ok(Some(())) => {}
+        Ok(None) => context.register_error(parser.parse_error_inner()),
+        Err(err) => context.register_error(err),
+    }
 
     let procs_total = parser.procs_good + parser.procs_bad;
     if procs_total > 0 {
         eprintln!("parsed {}/{} proc bodies ({}%)", parser.procs_good, procs_total, (parser.procs_good * 100 / procs_total));
     }
 
-    Ok(tree)
+    parser.tree.finalize(context);
+    parser.tree
 }
 
 type Ident = String;
@@ -240,18 +244,22 @@ impl<'ctx, I> Parser<'ctx, I> where
     // ------------------------------------------------------------------------
     // Basic setup
 
-    fn parse_error<T>(&mut self) -> Result<T, DMError> {
+    fn parse_error_inner(&mut self) -> DMError {
         let expected = self.expected.join(", ");
         match self.next("") {
             Ok(got) => {
                 let message = format!("got '{}', expected one of: {}", got, expected);
                 self.put_back(got);
-                Err(self.error(message))
+                self.error(message)
             },
             Err(err) => {
-                Err(self.error(format!("i/o error, expected one of: {}", expected)).set_cause(err))
+                self.error(format!("i/o error, expected one of: {}", expected)).set_cause(err)
             }
         }
+    }
+
+    fn parse_error<T>(&mut self) -> Result<T, DMError> {
+        Err(self.parse_error_inner())
     }
 
     fn require<T>(&mut self, t: Result<Option<T>, DMError>) -> Result<T, DMError> {

@@ -46,9 +46,15 @@ impl Context {
         println!("parsing {}", opt.environment);
         flame!("parse");
         match self.dm_context.parse_environment(opt.environment.as_ref()) {
-            Ok(tree) => self.objtree = tree,
+            Ok(tree) => {
+                self.objtree = tree;
+                self.dm_context.print_all_errors();
+                if !self.dm_context.errors().is_empty() {
+                    println!("there were some parsing errors; render may be inaccurate")
+                }
+            },
             Err(e) => {
-                println!("fatal parse error: {}", e);
+                eprintln!("i/o error opening environment:\n{}", e);
                 std::process::exit(1);
             }
         };

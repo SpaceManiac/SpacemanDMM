@@ -63,6 +63,15 @@ impl Context {
             error.location.column)?;
         writeln!(w, "{}\n", error.desc)
     }
+
+    /// Pretty-print all registered diagnostics to standard error.
+    pub fn print_all_errors(&self) {
+        let stderr = io::stderr();
+        let stderr = &mut stderr.lock();
+        for err in self.errors().iter() {
+            self.pretty_print_error(stderr, &err).expect("error writing to stderr");
+        }
+    }
 }
 
 // ----------------------------------------------------------------------------

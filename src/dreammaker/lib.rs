@@ -32,26 +32,15 @@ pub mod constants;
 impl Context {
     /// Run the parsing suite on a given `.dme` file, producing an object tree.
     ///
-    /// Errors are automatically pretty-printed to stderr before they are returned.
-    pub fn parse_environment(&mut self, dme: &Path) -> Result<objtree::ObjectTree, DMError> {
-        let start = self.errors().len();
-        let result = parser::parse(self,
+    /// Will only return failure on an `io::Error`. Compilation failures will
+    /// return a best-effort parse. Call `print_all_errors` to pretty-print
+    /// errors to standard error.
+    pub fn parse_environment(&mut self, dme: &Path) -> io::Result<objtree::ObjectTree> {
+        Ok(parser::parse(self,
             indents::IndentProcessor::new(self,
                 preprocessor::Preprocessor::new(self, dme.to_owned())?
             ).map(Ok)
-        );
-
-        let errors = self.errors();
-        let stderr = io::stderr();
-        let stderr = &mut stderr.lock();
-        for err in &errors[start..] {
-            self.pretty_print_error(stderr, &err).expect("error writing to stderr");
-        }
-        if let Err(ref err) = result {
-            self.pretty_print_error(stderr, &err).expect("error writing to stderr");
-        }
-
-        result
+        ))
     }
 }
 
