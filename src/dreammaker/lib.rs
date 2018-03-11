@@ -6,6 +6,7 @@ extern crate linked_hash_map;
 use std::io;
 use std::path::Path;
 
+#[allow(unused_macros)]
 macro_rules! try_iter {
     ($e:expr) => {
         match $e {
@@ -36,8 +37,8 @@ impl Context {
         let start = self.errors().len();
         let result = parser::parse(self,
             indents::IndentProcessor::new(self,
-                preprocessor::Preprocessor::new(self, dme.to_owned())?.map(Ok)
-            )
+                preprocessor::Preprocessor::new(self, dme.to_owned())?
+            ).map(Ok)
         );
 
         let errors = self.errors();

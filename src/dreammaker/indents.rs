@@ -1,7 +1,7 @@
 //! The indentation processor.
 use std::collections::VecDeque;
 
-use super::{DMError, Location, HasLocation, Context};
+use super::{Location, HasLocation, Context};
 use super::lexer::{LocatedToken, Token, Punctuation};
 
 /// Eliminates blank lines, parses and validates indentation, braces, and semicolons.
@@ -29,9 +29,9 @@ impl<'ctx, I> HasLocation for IndentProcessor<'ctx, I> {
 }
 
 impl<'ctx, I> IndentProcessor<'ctx, I> where
-    I: Iterator<Item=Result<LocatedToken, DMError>>
+    I: Iterator<Item=LocatedToken>
 {
-    pub fn new<J: IntoIterator<Item=Result<LocatedToken, DMError>, IntoIter=I>>(context: &'ctx Context, inner: J) -> Self {
+    pub fn new<J: IntoIterator<Item=LocatedToken, IntoIter=I>>(context: &'ctx Context, inner: J) -> Self {
         IndentProcessor {
             context,
             inner: inner.into_iter(),
@@ -45,7 +45,7 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
     }
 
     #[inline]
-    fn inner_next(&mut self) -> Option<Result<LocatedToken, DMError>> {
+    fn inner_next(&mut self) -> Option<LocatedToken> {
         self.inner.next()
     }
 
@@ -172,21 +172,20 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
 }
 
 impl<'ctx, I> Iterator for IndentProcessor<'ctx, I> where
-    I: Iterator<Item=Result<LocatedToken, DMError>>
+    I: Iterator<Item=LocatedToken>
 {
-    type Item = Result<LocatedToken, DMError>;
+    type Item = LocatedToken;
 
-    fn next(&mut self) -> Option<Result<LocatedToken, DMError>> {
+    fn next(&mut self) -> Option<LocatedToken> {
         loop {
             if let Some(token) = self.output.pop_front() {
-                return Some(Ok(LocatedToken {
+                return Some(LocatedToken {
                     location: self.last_input_loc,
                     token: token,
-                }));
+                });
             }
 
             if let Some(tok) = self.inner_next() {
-                let tok = try_iter!(tok);
                 self.last_input_loc = tok.location;
                 self.real_next(tok.token);
             } else if self.eof_yielded {
