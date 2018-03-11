@@ -194,7 +194,7 @@ pub fn generate(
                 Ok(found) => entry.insert(found),
                 Err(err) => {
                     println!("error loading icon: {}\n{:?}", path.display(), err);
-                    break 'atom;
+                    continue 'atom;
                 }
             }
         };
