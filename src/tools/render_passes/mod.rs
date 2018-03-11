@@ -2,8 +2,9 @@ use dm::objtree::*;
 use dm::constants::Constant;
 use minimap::Atom;
 
-mod transit_tube;
-mod random;
+pub mod transit_tube;
+pub mod random;
+pub mod structures;
 
 /// A map rendering pass.
 ///
@@ -79,9 +80,10 @@ pub const RENDER_PASSES: &[RenderPassInfo] = &[
     pass!(HideInvisible, "hide-invisible", "Do not render invisible or ephemeral objects such as mapping helpers.", true),
     pass!(random::Random, "random", "Replace random spawners with one of their possibilities.", true),
     pass!(Pretty, "pretty", "Add the minor cosmetic overlays for various objects.", true),
-    pass!(Spawners, "spawners", "Replace object spawners with their spawned objects.", true),
+    pass!(structures::Spawners, "spawners", "Replace object spawners with their spawned objects.", true),
     pass!(FakeGlass, "fake-glass", "Add underlays to fake glass turfs.", true),
     pass!(transit_tube::TransitTube, "transit-tube", "Add overlays to connect transit tubes together.", true),
+    pass!(structures::GravityGen, "gravity-gen", "Expand the gravity generator to the full structure.", true),
 ];
 
 pub fn configure(include: &str, exclude: &str) -> Vec<Box<RenderPass>> {
@@ -162,47 +164,6 @@ impl RenderPass for HideInvisible {
             return false;
         }
         true
-    }
-}
-
-#[derive(Default)]
-pub struct Spawners;
-impl RenderPass for Spawners {
-    fn path_filter(&self, path: &str) -> bool {
-        subpath(path, "/obj/effect/spawner/structure/") || !subpath(path, "/obj/effect/spawner/")
-    }
-
-    fn expand<'a>(&self,
-        atom: &Atom<'a>,
-        objtree: &'a ObjectTree,
-        output: &mut Vec<Atom<'a>>,
-    ) -> bool {
-        if !atom.istype("/obj/effect/spawner/structure/") {
-            return false;
-        }
-        match atom.get_var("spawn_list", objtree) {
-            &Constant::List(ref elements) => {
-                for &(ref key, _) in elements {
-                    // TODO: use a more civilized lookup method
-                    let mut type_key = String::new();
-                    let reference;
-                    match key {
-                        &Constant::String(ref s) => reference = s,
-                        &Constant::Prefab(ref fab) => {
-                            for each in fab.path.iter() {
-                                use std::fmt::Write;
-                                let _ = write!(type_key, "{}{}", each.0, each.1);
-                            }
-                            reference = &type_key;
-                        }
-                        _ => continue,
-                    }
-                    output.push(Atom::from_type(objtree, reference, atom.loc).unwrap());
-                }
-                true  // don't include the original atom
-            }
-            _ => { false }  // TODO: complain?
-        }
     }
 }
 
