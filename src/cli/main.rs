@@ -163,8 +163,20 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
     match *command {
         // --------------------------------------------------------------------
         Command::ListPasses => {
+            println!("default passes:");
+            let mut non_default = Vec::new();
             for pass in render_passes::RENDER_PASSES {
-                println!("{}{}: {}", pass.name, if pass.default { " (default)" } else { "" }, pass.desc);
+                if pass.default {
+                    println!("{}: {}", pass.name, pass.desc);
+                } else {
+                    non_default.push(pass);
+                }
+            }
+            if !non_default.is_empty() {
+                println!("\nadditional passes:");
+                for pass in non_default {
+                    println!("{}: {}", pass.name, pass.desc);
+                }
             }
         },
         // --------------------------------------------------------------------
