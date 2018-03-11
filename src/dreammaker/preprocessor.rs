@@ -5,7 +5,7 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 
 use super::lexer::*;
-use super::{DMError, Location, HasLocation, FileId, Context};
+use super::{DMError, Location, HasLocation, FileId, Context, Severity};
 
 // ----------------------------------------------------------------------------
 // Macro representation and predefined macros
@@ -211,19 +211,20 @@ impl<'ctx> Iterator for IncludeStack<'ctx> {
 // The main preprocessor
 
 struct Ifdef {
+    location: Location,
     active: bool,
     chain_active: bool,
 }
 
 impl Ifdef {
-    fn new(active: bool) -> Ifdef {
-        Ifdef { active, chain_active: active }
+    fn new(location: Location, active: bool) -> Ifdef {
+        Ifdef { location, active, chain_active: active }
     }
     fn else_(self) -> Ifdef {
-        Ifdef { active: !self.active, chain_active: true }
+        Ifdef { location: self.location, active: !self.active, chain_active: true }
     }
     fn else_if(self, active: bool) -> Ifdef {
-        Ifdef { active, chain_active: self.chain_active || active }
+        Ifdef { location: self.location, active, chain_active: self.chain_active || active }
     }
 }
 
@@ -319,17 +320,17 @@ impl<'ctx> Preprocessor<'ctx> {
                         expect_token!((define_name) = Token::Ident(define_name, _));
                         expect_token!(() = Token::Punct(Punctuation::Newline));
                         let z = self.defines.contains_key(&define_name);
-                        self.ifdef_stack.push(Ifdef::new(z));
+                        self.ifdef_stack.push(Ifdef::new(self.last_input_loc, z));
                     }
                     "ifndef" => {
                         expect_token!((define_name) = Token::Ident(define_name, _));
                         expect_token!(() = Token::Punct(Punctuation::Newline));
                         let z = !self.defines.contains_key(&define_name);
-                        self.ifdef_stack.push(Ifdef::new(z));
+                        self.ifdef_stack.push(Ifdef::new(self.last_input_loc, z));
                     }
                     "if" => {
                         let z = self.evaluate()?;
-                        self.ifdef_stack.push(Ifdef::new(z));
+                        self.ifdef_stack.push(Ifdef::new(self.last_input_loc, z));
                     }
                     "elseif" => {
                         let last = self.ifdef_stack.pop().ok_or_else(||
@@ -613,6 +614,10 @@ impl<'ctx> Iterator for Preprocessor<'ctx> {
                 self.last_input_loc = tok.location;
                 try_iter!(self.real_next(tok.token));
             } else {
+                while let Some(ifdef) = self.ifdef_stack.pop() {
+                    self.context.register_error(DMError::new(ifdef.location, "unterminated #if/#ifdef")
+                        .set_severity(Severity::Warning));
+                }
                 return None;
             }
         }
