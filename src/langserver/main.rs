@@ -222,16 +222,22 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             // actual stuff provision
             |params: GotoDefinition| {
                 let path = url_to_path(params.text_document.uri)?;
-                let _line = params.position.line;
-                let _column = params.position.character;
-
-                Some(GotoDefinitionResponse::Scalar(Location {
-                    uri: Url::from_file_path(path).map_err(|_| invalid_request("bad file path"))?,
-                    range: Range::new(
-                        Position::new(0, 0),
-                        Position::new(0, 20),
-                    ),
-                }))
+                let contents = self.docs.get_contents(&path).map_err(invalid_request)?;
+                let offset = document::total_offset(&contents, params.position.line, params.position.character)?;
+                let word = document::find_word(&contents, offset);
+                if word.is_empty() {
+                    None
+                } else if word == "datum" {
+                    Some(GotoDefinitionResponse::Scalar(Location {
+                        uri: Url::from_file_path(path).map_err(|_| invalid_request("bad file path"))?,
+                        range: Range::new(
+                            Position::new(0, 0),
+                            Position::new(0, 0),
+                        ),
+                    }))
+                } else {
+                    None
+                }
             };
         }
     }
