@@ -18,3 +18,4 @@ dmm-tools = { path = "../tools" }
 
 [features]
 flame = ["dmm-tools/flame"]
+xml = ["dreammaker/xml-rs"]

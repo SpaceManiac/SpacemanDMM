@@ -32,6 +32,8 @@ fn main() {
         println!("Saving flame graph");
         flame::dump_html(&mut std::io::BufWriter::new(std::fs::File::create(format!("{}/flame-graph.html", opt.output)).unwrap())).unwrap();
     }
+
+    std::process::exit(context.exit_status);
 }
 
 #[derive(Default)]
@@ -39,6 +41,7 @@ struct Context {
     dm_context: dm::Context,
     objtree: ObjectTree,
     icon_cache: HashMap<PathBuf, IconFile>,
+    exit_status: i32,
 }
 
 impl Context {
@@ -82,6 +85,14 @@ enum Command {
     /// Show information about the render-pass list.
     #[structopt(name = "list-passes")]
     ListPasses,
+    /// Dump the object tree to an XML file.
+    #[cfg(feature="xml")]
+    #[structopt(name = "objtree")]
+    ObjectTree {
+        /// The output filename.
+        #[structopt(default_value="objtree.xml")]
+        output: String,
+    },
     /// Build minimaps of the specified maps.
     #[structopt(name = "minimap")]
     Minimap {
@@ -154,6 +165,18 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
         Command::ListPasses => {
             for pass in render_passes::RENDER_PASSES {
                 println!("{}{}: {}", pass.name, if pass.default { " (default)" } else { "" }, pass.desc);
+            }
+        },
+        // --------------------------------------------------------------------
+        #[cfg(feature="xml")]
+        Command::ObjectTree { ref output } => {
+            context.objtree(opt);
+            match context.objtree.to_xml(output) {
+                Ok(()) => println!("saved {}", output),
+                Err(e) => {
+                    println!("i/o error saving {}:\n{}", output, e);
+                    context.exit_status = 1;
+                }
             }
         },
         // --------------------------------------------------------------------
