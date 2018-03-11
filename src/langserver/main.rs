@@ -18,6 +18,7 @@ mod document;
 
 use std::io::Write;
 use std::path::PathBuf;
+use std::collections::HashMap;
 
 use url::Url;
 use jsonrpc::{Request, Call, Response, Output};
@@ -229,7 +230,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                     None
                 } else if word == "datum" {
                     Some(GotoDefinitionResponse::Scalar(Location {
-                        uri: Url::from_file_path(path).map_err(|_| invalid_request("bad file path"))?,
+                        uri: path_to_url(path)?,
                         range: Range::new(
                             Position::new(0, 0),
                             Position::new(0, 0),
@@ -295,6 +296,38 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                             eprintln!("{:?}", err);
                         }
                     }
+
+                    // initial diagnostics pump
+                    let mut map: HashMap<_, Vec<_>> = HashMap::new();
+                    for error in self.context.errors().iter() {
+                        let loc = error.location();
+                        let pos = langserver::Position {
+                            line: loc.line.saturating_sub(1) as u64,
+                            character: loc.column.saturating_sub(1) as u64,
+                        };
+                        let diag = langserver::Diagnostic {
+                            message: error.description().to_owned(),
+                            severity: Some(convert_severity(error.severity())),
+                            range: langserver::Range {
+                                start: pos,
+                                end: pos,
+                            },
+                            .. Default::default()
+                        };
+                        map.entry(self.context.file_path(loc.file))
+                            .or_insert_with(Default::default)
+                            .push(diag);
+                    }
+
+                    for (path, diagnostics) in map {
+                        let joined_path = self.root.join(path);
+                        self.issue_notification::<langserver::notification::PublishDiagnostics>(
+                            langserver::PublishDiagnosticsParams {
+                                uri: path_to_url(joined_path)?,
+                                diagnostics,
+                            }
+                        );
+                    }
                 } else {
                     self.show_message(MessageType::Error, "No DME found, language service not available.");
                 }
@@ -348,4 +381,20 @@ fn url_to_path(url: Url) -> Result<PathBuf, jsonrpc::Error> {
         return Err(invalid_request("URI must have 'file' scheme"));
     }
     url.to_file_path().map_err(|_| invalid_request("URI must be a valid path"))
+}
+
+fn path_to_url(path: PathBuf) -> Result<Url, jsonrpc::Error> {
+    let formatted = path.display().to_string();
+    Url::from_file_path(path).map_err(|_| invalid_request(format!(
+        "bad file path: {}", formatted,
+    )))
+}
+
+fn convert_severity(severity: dm::Severity) -> langserver::DiagnosticSeverity {
+    match severity {
+        dm::Severity::Error => langserver::DiagnosticSeverity::Error,
+        dm::Severity::Warning => langserver::DiagnosticSeverity::Warning,
+        dm::Severity::Info => langserver::DiagnosticSeverity::Information,
+        dm::Severity::Hint => langserver::DiagnosticSeverity::Hint,
+    }
 }

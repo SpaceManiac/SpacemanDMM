@@ -161,6 +161,11 @@ impl DMError {
         self.location
     }
 
+    /// Get the severity of this diagnostic.
+    pub fn severity(&self) -> Severity {
+        self.severity
+    }
+
     /// Get the description associated with this error.
     pub fn description(&self) -> &str {
         &self.desc
