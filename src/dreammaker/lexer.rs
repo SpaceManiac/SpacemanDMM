@@ -285,9 +285,9 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         }
     }
 
-    fn next(&mut self) -> Result<Option<u8>, DMError> {
+    fn next(&mut self) -> Option<u8> {
         if let Some(next) = self.next.take() {
-            return Ok(Some(next));
+            return Some(next);
         }
         match self.input.next() {
             Some(Ok(ch)) => {
@@ -303,10 +303,14 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                     self.location.column += 1;
                 }
 
-                Ok(Some(ch))
+                Some(ch)
             }
-            Some(Err(err)) => Err(self.error("i/o error").set_cause(err)),
-            None => Ok(None),
+            Some(Err(err)) => {
+                // I/O error is effectively EOF.
+                self.context.register_error(self.error("i/o error").set_cause(err));
+                None
+            }
+            None => None,
         }
     }
 
@@ -317,13 +321,13 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         self.next = val;
     }
 
-    fn skip_block_comments(&mut self) -> Result<(), DMError> {
+    fn skip_block_comments(&mut self) {
         let mut depth = 1;
         let mut buffer = [0, 0];
         while depth > 0 {
             // read one character
             buffer[0] = buffer[1];
-            match self.next()? {
+            match self.next() {
                 Some(val) => buffer[1] = val,
                 None => {
                     self.context.register_error(self.error("still skipping comments at end of file"));
@@ -337,12 +341,11 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                 depth -= 1;
             }
         }
-        Ok(())
     }
 
-    fn skip_line_comment(&mut self) -> Result<(), DMError> {
+    fn skip_line_comment(&mut self) {
         let mut backslash = false;
-        while let Some(ch) = self.next()? {
+        while let Some(ch) = self.next() {
             if ch == b'\r' {
                 // not listening
             } else if backslash {
@@ -353,10 +356,9 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                 backslash = true;
             }
         }
-        Ok(())
     }
 
-    fn read_number_inner(&mut self, first: u8) -> Result<(bool, u32, String), DMError> {
+    fn read_number_inner(&mut self, first: u8) -> (bool, u32, String) {
         let mut integer = true;
         let mut exponent = false;
         let mut radix = 10;
@@ -367,13 +369,13 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
             integer = false;
         } else if first == b'0' {
             radix = 8;  // hate. let me tell you...
-            match self.next()? {
+            match self.next() {
                 Some(b'x') => radix = 16,
                 ch => self.put_back(ch),
             }
         }
         loop {
-            match self.next()? {
+            match self.next() {
                 Some(b'_') => {},
                 Some(ch) if ch == b'.' || ch == b'e' => {
                     integer = false;
@@ -386,82 +388,79 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                 Some(b'#') if !integer => {
                     buf.push('#');  // Keep pushing to `buf` in case of error.
                     for &expect in b"INF" {
-                        match self.next()? {
+                        match self.next() {
                             Some(ch) if ch == expect => continue,
                             Some(ch) => buf.push(ch as char),
                             None => {}
                         }
                         // Not what we expected, throw it up the line so that
                         // f32::from_str will error.
-                        return Ok((false, 10, buf));
+                        return (false, 10, buf);
                     }
                     // Got "1.#INF", change it to "inf" for read_number.
-                    return Ok((false, 10, "inf".to_owned()));
+                    return (false, 10, "inf".to_owned());
                 }
                 Some(ch) if (ch as char).is_digit(::std::cmp::max(radix, 10)) => buf.push(ch as char),
-                ch => { self.put_back(ch); return Ok((integer, radix, buf)) }
+                ch => {
+                    self.put_back(ch);
+                    return (integer, radix, buf);
+                }
             }
         }
     }
 
-    fn read_number(&mut self, first: u8) -> Result<Token, DMError> {
-        let (integer, radix, buf) = self.read_number_inner(first)?;
+    fn read_number(&mut self, first: u8) -> Token {
+        let (integer, radix, buf) = self.read_number_inner(first);
         if integer {
             match i32::from_str_radix(&buf, radix) {
-                Ok(val) => Ok(Token::Int(val)),
+                Ok(val) => Token::Int(val),
                 Err(e) => {
                     self.context.register_error(self.error(
                         format!("bad base-{} integer \"{}\": {}", radix, buf, e)));
-                    Ok(Token::Int(0))  // fallback
+                    Token::Int(0)  // fallback
                 }
             }
         } else {
             // ignore radix
             match f32::from_str(&buf) {
-                Ok(val) => Ok(Token::Float(val)),
+                Ok(val) => Token::Float(val),
                 Err(e) => {
                     self.context.register_error(self.error(
                         format!("bad float \"{}\": {}", buf, e)));
-                    Ok(Token::Float(0.0))  // fallback
+                    Token::Float(0.0)  // fallback
                 }
             }
         }
     }
 
-    fn read_ident(&mut self, first: u8) -> Result<String, DMError> {
+    fn read_ident(&mut self, first: u8) -> String {
         let mut ident = vec![first];
         loop {
-            match self.next()? {
+            match self.next() {
                 Some(ch) if is_ident(ch) || is_digit(ch) => ident.push(ch),
                 ch => { self.put_back(ch); break }
             }
         }
-        Ok(from_latin1(&ident))
+        from_latin1(&ident)
     }
 
-    fn next_string(&mut self, start_loc: Location) -> Result<u8, DMError> {
-        match self.next() {
-            Ok(Some(ch)) => Ok(ch),
-            Ok(None) => Err(DMError::new(start_loc, "unterminated string")),
-            Err(e) => Err(e),
-        }
-    }
-
-    fn read_resource(&mut self) -> Result<String, DMError> {
+    fn read_resource(&mut self) -> String {
         let start_loc = self.location();
         let mut buf = Vec::new();
         loop {
-            let ch = self.next_string(start_loc)?;
-            if ch == b'\'' {
-                break;
-            } else {
-                buf.push(ch);
+            match self.next() {
+                Some(b'\\') => break,
+                Some(ch) => buf.push(ch),
+                None => {
+                    self.context.register_error(DMError::new(start_loc, "unterminated resource literal"));
+                    break;
+                }
             }
         }
-        Ok(from_latin1(&buf))
+        from_latin1(&buf)
     }
 
-    fn read_string(&mut self, end: &'static [u8], interp_closed: bool) -> Result<Token, DMError> {
+    fn read_string(&mut self, end: &'static [u8], interp_closed: bool) -> Token {
         let start_loc = self.location();
         let mut buf = Vec::new();
         let mut backslash = false;
@@ -469,7 +468,13 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         let mut interp_opened = false;
 
         loop {
-            let ch = self.next_string(start_loc)?;
+            let ch = match self.next() {
+                Some(ch) => ch,
+                None => {
+                    self.context.register_error(DMError::new(start_loc, "unterminated string literal"));
+                    break;
+                }
+            };
             if ch == end[idx] && !backslash {
                 idx += 1;
                 if idx == end.len() {
@@ -487,8 +492,8 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
             match ch {
                 b'\r' | b'\n' if backslash => {
                     backslash = false;
-                    let next = self.skip_ws(true)?;
-                    self.put_back(next)
+                    let next = self.skip_ws(true);
+                    self.put_back(next);
                 },
                 /*b'"' | b'\'' | b'\\' | b'[' | b']' if backslash => {
                     backslash = false;
@@ -515,15 +520,15 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         }
 
         let string = from_latin1(&buf);
-        Ok(match (interp_opened, interp_closed) {
+        match (interp_opened, interp_closed) {
             (true, true) => Token::InterpStringPart(string),
             (true, false) => Token::InterpStringBegin(string),
             (false, true) => Token::InterpStringEnd(string),
             (false, false) => Token::String(string),
-        })
+        }
     }
 
-    fn read_punct(&mut self, first: u8) -> Result<Option<Punctuation>, DMError> {
+    fn read_punct(&mut self, first: u8) -> Option<Punctuation> {
         // requires that PUNCT_TABLE be ordered, shorter entries be first,
         // and all entries with >1 character also have their prefix in the table
         let mut items: Vec<_> = PUNCT_TABLE.iter()
@@ -531,7 +536,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
             .take_while(|&&(tok, _)| tok[0] == first)
             .collect();
         if items.len() == 0 {
-            return Ok(None)
+            return None
         }
 
         let mut candidate;
@@ -539,29 +544,29 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         loop {
             candidate = Some(items[0].1);
             if items.len() == 1 {
-                return Ok(candidate)
+                return candidate
             }
-            match self.next()? {
+            match self.next() {
                 Some(b) => needle.push(b),
-                None => return Ok(candidate), // EOF
+                None => return candidate,  // EOF
             }
             items.retain(|&&(tok, _)| tok.starts_with(&needle));
             if items.len() == 0 {
                 self.put_back(needle.last().cloned());
-                return Ok(candidate)
+                return candidate
             }
         }
     }
 
-    fn skip_ws(&mut self, skip_newlines: bool) -> Result<Option<u8>, DMError> {
+    fn skip_ws(&mut self, skip_newlines: bool) -> Option<u8> {
         let mut skip_newlines = if skip_newlines { 2 } else { 0 };
         loop {
-            match self.next()? {
+            match self.next() {
                 Some(b'\r') => {},
                 Some(b' ') |
                 Some(b'\t') if !self.at_line_head || skip_newlines > 0 => {},
                 Some(b'\n') if skip_newlines == 2 => { skip_newlines = 1; },
-                ch => return Ok(ch)
+                ch => return ch
             }
         }
     }
@@ -577,8 +582,8 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
         let mut found_illegal = false;
         loop {
             let first = match self.skip_ws(skip_newlines) {
-                Ok(Some(t)) => t,
-                Ok(None) => {
+                Some(t) => t,
+                None => {
                     // always end with a newline
                     if !self.at_line_head {
                         self.at_line_head = true;
@@ -590,7 +595,6 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                         return None;
                     }
                 }
-                Err(e) => return Some(Err(e)),
             };
             skip_newlines = false;
 
@@ -600,26 +604,26 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
             if self.directive == Directive::Stringy {
                 self.directive = Directive::None;
                 self.put_back(Some(first));
-                return Some(self.read_string(b"\n", false).map(locate));
+                return Some(Ok(locate(self.read_string(b"\n", false))));
             }
 
-            let punct = try_iter!(self.read_punct(first));
+            let punct = self.read_punct(first);
             return match punct {
                 Some(Hash) if self.directive == Directive::None => {
                     self.directive = Directive::Hash;
                     Some(Ok(locate(Punct(Hash))))
                 }
                 Some(BlockComment) => {
-                    try_iter!(self.skip_block_comments());
+                    self.skip_block_comments();
                     continue;
                 }
                 Some(LineComment) => {
-                    try_iter!(self.skip_line_comment());
+                    self.skip_line_comment();
                     Some(Ok(locate(Punct(Newline))))
                 }
-                Some(SingleQuote) => Some(self.read_resource().map(|s| locate(Resource(s)))),
-                Some(DoubleQuote) => Some(self.read_string(b"\"", false).map(locate)),
-                Some(BlockString) => Some(self.read_string(b"\"}", false).map(locate)),
+                Some(SingleQuote) => Some(Ok(locate(Resource(self.read_resource())))),
+                Some(DoubleQuote) => Some(Ok(locate(self.read_string(b"\"", false)))),
+                Some(BlockString) => Some(Ok(locate(self.read_string(b"\"}", false)))),
                 Some(LBracket) => {
                     if let Some(interp) = self.interp_stack.last_mut() {
                         interp.bracket_depth += 1;
@@ -630,7 +634,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                     if let Some(mut interp) = self.interp_stack.pop() {
                         interp.bracket_depth -= 1;
                         if interp.bracket_depth == 0 {
-                            return Some(self.read_string(interp.end, true).map(locate));
+                            return Some(Ok(locate(self.read_string(interp.end, true))));
                         }
                         self.interp_stack.push(interp);
                     }
@@ -638,13 +642,10 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                 }
                 Some(v) => Some(Ok(locate(Punct(v)))),
                 None => match first {
-                    b'0'...b'9' => Some(self.read_number(first).map(|n| locate(n))),
+                    b'0'...b'9' => Some(Ok(locate(self.read_number(first)))),
                     b'_' | b'a'...b'z' | b'A'...b'Z' => {
-                        let ident = match self.read_ident(first) {
-                            Ok(ident) => ident,
-                            Err(e) => return Some(Err(e)),
-                        };
-                        let next = try_iter!(self.next());
+                        let ident = self.read_ident(first);
+                        let next = self.next();
                         self.put_back(next);
                         let ws = next == Some(b' ') || next == Some(b'\t');
                         if self.directive == Directive::Hash {
