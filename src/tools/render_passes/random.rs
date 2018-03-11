@@ -37,6 +37,19 @@ impl RenderPass for Random {
                     return true;  // consumed
                 }
             }
+        } else if atom.istype("/obj/item/bedsheet/random/") {
+            if let Some(root) = objtree.find("/obj/item/bedsheet") {
+                let mut sheets = vec![root.get()];  // basic bedsheet is included
+                for child in root.children(objtree) {
+                    if child.name != "random" {
+                        sheets.push(child.get());
+                    }
+                }
+                if let Some(replacement) = rng.choose(&sheets) {
+                    output.push(Atom::from_type_ref(replacement, atom.loc));
+                    return true;  // consumed
+                }
+            }
         }
         false
     }
@@ -89,6 +102,9 @@ impl RenderPass for Random {
                     atom.set_var("icon_state", c.clone());
                 }
             }
+        } else if atom.istype("/obj/item/lipstick/random/") {
+            atom.set_var("icon_state", Constant::string("lipstick"));
+            // random color is not outwardly visible
         }
     }
 }
