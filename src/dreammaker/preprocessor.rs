@@ -355,16 +355,29 @@ impl<'ctx> Preprocessor<'ctx> {
                             path,
                         ].into_iter().rev() {
                             if !each.exists() { continue }
+                            // Wacky construct is used to let go of the borrow
+                            // of `each` so it can be used in the second half.
                             enum FileType { DMM, DMF, DM }
                             match match each.extension().and_then(|s| s.to_str()) {
                                 Some("dmm") => FileType::DMM,
                                 Some("dmf") => FileType::DMF,
                                 Some("dm") => FileType::DM,
-                                e => return Err(DMError::new(self.last_input_loc, format!("unknown file type {:?}", e))),
+                                Some(ext) => {
+                                    self.context.register_error(DMError::new(self.last_input_loc, format!("unknown extension {:?}", ext)));
+                                    return Ok(());
+                                }
+                                None => {
+                                    self.context.register_error(DMError::new(self.last_input_loc, "filename"));
+                                    return Ok(());
+                                }
                             } {
                                 FileType::DMM => self.maps.push(each),
                                 FileType::DMF => self.skins.push(each),
-                                FileType::DM => self.include_stack.stack.push(Include::new(self.context, each)?),
+                                FileType::DM => match Include::new(self.context, each) {
+                                    Ok(include) => self.include_stack.stack.push(include),
+                                    Err(e) => self.context.register_error(DMError::new(self.last_input_loc,
+                                        "failed to open file").set_cause(e)),
+                                },
                             }
                             return Ok(());
                         }
