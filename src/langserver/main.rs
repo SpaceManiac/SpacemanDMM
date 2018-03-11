@@ -3,7 +3,7 @@
 //! Based on:
 //!
 //! * https://langserver.org/
-//! * https://github.com/Microsoft/language-server-protocol/blob/master/versions/protocol-2-x.md
+//! * https://microsoft.github.io/language-server-protocol/specification
 //! * https://github.com/rust-lang-nursery/rls
 
 extern crate url;
