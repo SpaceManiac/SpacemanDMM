@@ -573,9 +573,9 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
 }
 
 impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
-    type Item = Result<LocatedToken, DMError>;
+    type Item = LocatedToken;
 
-    fn next(&mut self) -> Option<Result<LocatedToken, DMError>> {
+    fn next(&mut self) -> Option<LocatedToken> {
         use self::Token::*;
         use self::Punctuation::*;
         let mut skip_newlines = false;
@@ -587,10 +587,10 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                     // always end with a newline
                     if !self.at_line_head {
                         self.at_line_head = true;
-                        return Some(Ok(LocatedToken {
+                        return Some(LocatedToken {
                             location: self.location(),
                             token: Token::Punct(Punctuation::Newline),
-                        }))
+                        })
                     } else {
                         return None;
                     }
@@ -604,14 +604,14 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
             if self.directive == Directive::Stringy {
                 self.directive = Directive::None;
                 self.put_back(Some(first));
-                return Some(Ok(locate(self.read_string(b"\n", false))));
+                return Some(locate(self.read_string(b"\n", false)));
             }
 
             let punct = self.read_punct(first);
             return match punct {
                 Some(Hash) if self.directive == Directive::None => {
                     self.directive = Directive::Hash;
-                    Some(Ok(locate(Punct(Hash))))
+                    Some(locate(Punct(Hash)))
                 }
                 Some(BlockComment) => {
                     self.skip_block_comments();
@@ -619,30 +619,30 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                 }
                 Some(LineComment) => {
                     self.skip_line_comment();
-                    Some(Ok(locate(Punct(Newline))))
+                    Some(locate(Punct(Newline)))
                 }
-                Some(SingleQuote) => Some(Ok(locate(Resource(self.read_resource())))),
-                Some(DoubleQuote) => Some(Ok(locate(self.read_string(b"\"", false)))),
-                Some(BlockString) => Some(Ok(locate(self.read_string(b"\"}", false)))),
+                Some(SingleQuote) => Some(locate(Resource(self.read_resource()))),
+                Some(DoubleQuote) => Some(locate(self.read_string(b"\"", false))),
+                Some(BlockString) => Some(locate(self.read_string(b"\"}", false))),
                 Some(LBracket) => {
                     if let Some(interp) = self.interp_stack.last_mut() {
                         interp.bracket_depth += 1;
                     }
-                    Some(Ok(locate(Punct(LBracket))))
+                    Some(locate(Punct(LBracket)))
                 }
                 Some(RBracket) => {
                     if let Some(mut interp) = self.interp_stack.pop() {
                         interp.bracket_depth -= 1;
                         if interp.bracket_depth == 0 {
-                            return Some(Ok(locate(self.read_string(interp.end, true))));
+                            return Some(locate(self.read_string(interp.end, true)));
                         }
                         self.interp_stack.push(interp);
                     }
-                    Some(Ok(locate(Punct(RBracket))))
+                    Some(locate(Punct(RBracket)))
                 }
-                Some(v) => Some(Ok(locate(Punct(v)))),
+                Some(v) => Some(locate(Punct(v))),
                 None => match first {
-                    b'0'...b'9' => Some(Ok(locate(self.read_number(first)))),
+                    b'0'...b'9' => Some(locate(self.read_number(first))),
                     b'_' | b'a'...b'z' | b'A'...b'Z' => {
                         let ident = self.read_ident(first);
                         let next = self.next();
@@ -655,7 +655,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                                 self.directive = Directive::Ordinary;
                             }
                         }
-                        Some(Ok(locate(Ident(ident, ws))))
+                        Some(locate(Ident(ident, ws)))
                     }
                     b'\\' => {
                         self.at_line_head = false;

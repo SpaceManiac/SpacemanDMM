@@ -186,18 +186,18 @@ impl<'ctx> HasLocation for IncludeStack<'ctx> {
 }
 
 impl<'ctx> Iterator for IncludeStack<'ctx> {
-    type Item = Result<LocatedToken, DMError>;
+    type Item = LocatedToken;
 
-    fn next(&mut self) -> Option<Result<LocatedToken, DMError>> {
+    fn next(&mut self) -> Option<LocatedToken> {
         loop {
             match self.stack.last_mut() {
                 Some(&mut Include::File { ref mut lexer, .. }) => match lexer.next() {
-                    Some(Err(e)) => return Some(Err(e)),
-                    Some(Ok(t)) => return Some(Ok(t)),
+                    //Some(Err(e)) => return Some(Err(e)),
+                    Some(t) => return Some(t),
                     None => {} // fall through
                 }
                 Some(&mut Include::Expansion { ref mut tokens, location, .. }) => match tokens.pop_front() {
-                    Some(token) => return Some(Ok(LocatedToken { location, token })),
+                    Some(token) => return Some(LocatedToken { location, token }),
                     None => {} // fall through
                 }
                 None => return None,
@@ -271,7 +271,7 @@ impl<'ctx> Preprocessor<'ctx> {
         self.ifdef_stack.iter().any(|x| !x.active)
     }
 
-    fn inner_next(&mut self) -> Option<Result<LocatedToken, DMError>> {
+    fn inner_next(&mut self) -> Option<LocatedToken> {
         self.include_stack.next()
     }
 
@@ -286,10 +286,7 @@ impl<'ctx> Preprocessor<'ctx> {
         macro_rules! next {
             () => {
                 match self.inner_next() {
-                    Some(Ok(x)) => {
-                        x.token
-                    }
-                    Some(Err(e)) => return Err(e),
+                    Some(x) => x.token,
                     None => return Err(self.error("unexpected EOF"))
                 }
             }
@@ -613,7 +610,6 @@ impl<'ctx> Iterator for Preprocessor<'ctx> {
             }
 
             if let Some(tok) = self.inner_next() {
-                let tok = try_iter!(tok);
                 self.last_input_loc = tok.location;
                 try_iter!(self.real_next(tok.token));
             } else {
