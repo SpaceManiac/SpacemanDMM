@@ -228,15 +228,53 @@ impl RenderPass for FakeGlass {
 #[derive(Default)]
 pub struct Random;
 impl RenderPass for Random {
+    fn expand<'a>(&self,
+        atom: &Atom<'a>,
+        objtree: &'a ObjectTree,
+        output: &mut Vec<Atom<'a>>,
+    ) -> bool {
+        use rand::Rng;
+        let mut rng = ::rand::thread_rng();
+
+        if atom.istype("/obj/machinery/vending/snack/random/") {
+            if let Some(root) = objtree.find("/obj/machinery/vending/snack") {
+                let mut machines = Vec::new();
+                for child in root.children(objtree) {
+                    if child.name != "random" {
+                        machines.push(child.get());
+                    }
+                }
+                if let Some(replacement) = rng.choose(&machines) {
+                    output.push(Atom::from_type_ref(replacement, atom.loc));
+                    return true;  // consumed
+                }
+            }
+        } else if atom.istype("/obj/machinery/vending/cola/random/") {
+            if let Some(root) = objtree.find("/obj/machinery/vending/cola") {
+                let mut machines = Vec::new();
+                for child in root.children(objtree) {
+                    if child.name != "random" {
+                        machines.push(child.get());
+                    }
+                }
+                if let Some(replacement) = rng.choose(&machines) {
+                    output.push(Atom::from_type_ref(replacement, atom.loc));
+                    return true;  // consumed
+                }
+            }
+        }
+        false
+    }
+
     fn adjust_vars<'a>(&self,
         atom: &mut Atom<'a>,
         objtree: &'a ObjectTree,
     ) {
         use rand::Rng;
+        let mut rng = ::rand::thread_rng();
 
         const CONTRABAND_POSTERS: u32 = 44;
         const LEGIT_POSTERS: u32 = 35;
-        let mut rng = ::rand::thread_rng();
 
         if atom.istype("/obj/structure/sign/poster/contraband/random/") {
             atom.set_var("icon_state", Constant::string(format!("poster{}", rng.gen_range(1, 1 + CONTRABAND_POSTERS))));

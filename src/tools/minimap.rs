@@ -332,6 +332,15 @@ impl<'a> Atom<'a> {
         })
     }
 
+    pub fn from_type_ref(type_: &'a Type, loc: (u32, u32)) -> Self {
+        Atom {
+            type_: type_,
+            prefab: None,
+            vars: Default::default(),
+            loc
+        }
+    }
+
     pub fn istype(&self, parent: &str) -> bool {
         subpath(&self.type_.path, parent)
     }
