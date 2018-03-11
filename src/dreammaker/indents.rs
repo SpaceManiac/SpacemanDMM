@@ -1,13 +1,14 @@
 //! The indentation processor.
 use std::collections::VecDeque;
 
-use super::{DMError, Location, HasLocation};
+use super::{DMError, Location, HasLocation, Context};
 use super::lexer::{LocatedToken, Token, Punctuation};
 
 /// Eliminates blank lines, parses and validates indentation, braces, and semicolons.
 ///
 /// After processing, no Newline, Tab, or Space tokens remain.
-pub struct IndentProcessor<I> {
+pub struct IndentProcessor<'ctx, I> {
+    context: &'ctx Context,
     inner: I,
 
     last_input_loc: Location,
@@ -21,17 +22,18 @@ pub struct IndentProcessor<I> {
     eof_yielded: bool,
 }
 
-impl<I> HasLocation for IndentProcessor<I> {
+impl<'ctx, I> HasLocation for IndentProcessor<'ctx, I> {
     fn location(&self) -> Location {
         self.last_input_loc
     }
 }
 
-impl<I> IndentProcessor<I> where
+impl<'ctx, I> IndentProcessor<'ctx, I> where
     I: Iterator<Item=Result<LocatedToken, DMError>>
 {
-    pub fn new<J: IntoIterator<Item=Result<LocatedToken, DMError>, IntoIter=I>>(inner: J) -> Self {
+    pub fn new<J: IntoIterator<Item=Result<LocatedToken, DMError>, IntoIter=I>>(context: &'ctx Context, inner: J) -> Self {
         IndentProcessor {
+            context,
             inner: inner.into_iter(),
             last_input_loc: Location::default(),
             output: VecDeque::new(),
@@ -47,7 +49,7 @@ impl<I> IndentProcessor<I> where
         self.inner.next()
     }
 
-    fn real_next(&mut self, read: Token) -> Result<(), DMError> {
+    fn real_next(&mut self, read: Token) {
         // handle whitespace
         match read {
             Token::Punct(Punctuation::Newline) => {
@@ -55,14 +57,14 @@ impl<I> IndentProcessor<I> where
                     self.current_spaces = Some(0);
                 }
                 // semicolons are placed by the first token on the next line
-                return Ok(());
+                return;
             }
             Token::Punct(Punctuation::Tab) |
             Token::Punct(Punctuation::Space) => {
                 if let Some(spaces) = self.current_spaces.as_mut() {
                     *spaces += 1;
                 }
-                return Ok(());
+                return;
             }
             _ => {}
         }
@@ -80,9 +82,7 @@ impl<I> IndentProcessor<I> where
         }
 
         // handle indentation
-        if let Some(spaces) = self.current_spaces {
-            self.current_spaces = None;
-
+        if let Some(spaces) = self.current_spaces.take() {
             let (indents, new_indents);
             match self.current {
                 None => {
@@ -102,7 +102,11 @@ impl<I> IndentProcessor<I> where
                         new_indents = 0;
                     } else {
                         if spaces % spaces_per_indent != 0 {
-                            return Err(self.error("inconsistent indentation"));
+                            // Register the error, but cross our fingers and
+                            // hope that truncating division will approximate
+                            // a sane situation.
+                            self.context.register_error(self.error(format!(
+                                "inconsistent indentation: {} % {} != 0", spaces, spaces_per_indent)));
                         }
                         new_indents = spaces / spaces_per_indent;
                         self.current = Some((spaces_per_indent, new_indents));
@@ -114,8 +118,12 @@ impl<I> IndentProcessor<I> where
                 // single indent
                 self.output.push_back(Token::Punct(Punctuation::LBrace));
             } else if indents < new_indents {
-                // multiple indent is an error
-                return Err(self.error("inconsistent indentation"));
+                // multiple indent is an error, register it but let it work
+                self.context.register_error(self.error(format!(
+                    "inconsistent multiple indentation: {} > 1", new_indents - indents)));
+                for _ in indents..new_indents {
+                    self.output.push_back(Token::Punct(Punctuation::LBrace));
+                }
             } else if indents == new_indents + 1 {
                 // single unindent
                 self.output.push_back(Token::Punct(Punctuation::Semicolon));
@@ -142,7 +150,10 @@ impl<I> IndentProcessor<I> where
             }
             Token::Punct(Punctuation::RBrace) => {
                 self.current = match self.current {
-                    None => return Err(self.error("unmatched right brace")),
+                    None => {
+                        self.context.register_error(self.error("unmatched right brace"));
+                        None
+                    }
                     Some((_, 1)) => None,
                     Some((x, y)) => Some((x, y - 1)),
                 };
@@ -157,11 +168,10 @@ impl<I> IndentProcessor<I> where
         }
 
         self.output.push_back(read);
-        Ok(())
     }
 }
 
-impl<I> Iterator for IndentProcessor<I> where
+impl<'ctx, I> Iterator for IndentProcessor<'ctx, I> where
     I: Iterator<Item=Result<LocatedToken, DMError>>
 {
     type Item = Result<LocatedToken, DMError>;
@@ -178,7 +188,7 @@ impl<I> Iterator for IndentProcessor<I> where
             if let Some(tok) = self.inner_next() {
                 let tok = try_iter!(tok);
                 self.last_input_loc = tok.location;
-                try_iter!(self.real_next(tok.token));
+                self.real_next(tok.token);
             } else if self.eof_yielded {
                 return None;
             } else {

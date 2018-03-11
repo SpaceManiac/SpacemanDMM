@@ -34,9 +34,8 @@ impl Context {
     /// Errors are automatically pretty-printed to stderr before they are returned.
     pub fn parse_environment(&mut self, dme: &Path) -> Result<objtree::ObjectTree, DMError> {
         let start = self.errors().len();
-        let result = parser::parse(
-            self,
-            indents::IndentProcessor::new(
+        let result = parser::parse(self,
+            indents::IndentProcessor::new(self,
                 preprocessor::Preprocessor::new(self, dme.to_owned())?.map(Ok)
             )
         );
