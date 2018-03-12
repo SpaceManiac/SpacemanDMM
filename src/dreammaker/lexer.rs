@@ -186,7 +186,6 @@ impl fmt::Display for Token {
         use self::Token::*;
         match *self {
             Eof => f.write_str("__EOF__"),
-            Punct(Punctuation::Tab) => f.write_str("    "),
             Punct(p) => f.write_str(::std::str::from_utf8(p.value()).unwrap()),
             Ident(ref i, _) => f.write_str(i),
             String(ref i) => write!(f, "\"{}\"", i),
@@ -252,8 +251,10 @@ pub struct Lexer<'ctx, I> {
     context: &'ctx Context,
     input: I,
     next: Option<u8>,
+    /// The location of the last character returned by `next()`.
     location: Location,
     at_line_head: bool,
+    at_line_end: bool,
     directive: Directive,
     interp_stack: Vec<Interpolation>,
 }
@@ -281,9 +282,10 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
             location: Location {
                 file: file_number,
                 line: 1,
-                column: 1,
+                column: 0,
             },
             at_line_head: true,
+            at_line_end: false,
             directive: Directive::None,
             interp_stack: Vec::new(),
         }
@@ -293,20 +295,23 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         if let Some(next) = self.next.take() {
             return Some(next);
         }
+
+        if self.at_line_end {
+            self.at_line_end = false;
+            self.at_line_head = true;
+            self.location.line += 1;
+            self.location.column = 0;
+            self.directive = Directive::None;
+        }
+
         match self.input.next() {
             Some(Ok(ch)) => {
                 if ch == b'\n' {
-                    self.location.line += 1;
-                    self.location.column = 1;
-                    self.at_line_head = true;
-                    self.directive = Directive::None;
-                } else {
-                    if ch != b'\t' && ch != b' ' && self.at_line_head {
-                        self.at_line_head = false;
-                    }
-                    self.location.column += 1;
+                    self.at_line_end = true;
+                } else if ch != b'\t' && ch != b' ' && self.at_line_head {
+                    self.at_line_head = false;
                 }
-
+                self.location.column += 1;
                 Some(ch)
             }
             Some(Err(err)) => {
@@ -539,7 +544,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
             .skip_while(|&&(tok, _)| tok[0] != first)
             .take_while(|&&(tok, _)| tok[0] == first)
             .collect();
-        if items.len() == 0 {
+        if items.is_empty() {
             return None
         }
 
@@ -555,7 +560,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                 None => return candidate,  // EOF
             }
             items.retain(|&&(tok, _)| tok.starts_with(&needle));
-            if items.len() == 0 {
+            if items.is_empty() {
                 self.put_back(needle.last().cloned());
                 return candidate
             }
@@ -591,6 +596,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                     // always end with a newline
                     if !self.at_line_head {
                         self.at_line_head = true;
+                        self.location.column += 1;
                         return Some(LocatedToken {
                             location: self.location(),
                             token: Token::Punct(Punctuation::Newline),
