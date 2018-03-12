@@ -394,9 +394,10 @@ impl<'ctx, I> Parser<'ctx, I> where
                 SUCCESS
             }
             Punct(Assign) => {
+                let location = self.location;
                 let expr = require!(self.expression());
                 require!(self.exact(Punct(Semicolon)));
-                self.tree.add_var(self.location, new_stack.iter(), expr)?;
+                self.tree.add_var(location, new_stack.iter(), expr)?;
                 SUCCESS
             }
             Punct(LParen) => {

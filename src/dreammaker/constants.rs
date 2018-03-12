@@ -369,9 +369,9 @@ impl<'a> ConstantFolder<'a> {
                 if cast != "text" {
                     return Err(self.error(format!("cannot cast string to {:?}", cast)));
                 }
-                Ok(Constant::String(string))  // TODO: remove redundant clone
+                Ok(Constant::String(string))
             }
-            (term, follow) => Err(self.error(format!("non-constant expression followers: {:?}.{:?}", term, follow)))
+            (term, follow) => Err(self.error(format!("non-constant expression follower: {} {:?}", term, follow)))
         }
     }
 
@@ -386,7 +386,7 @@ impl<'a> ConstantFolder<'a> {
             // float ops
             (UnaryOp::Neg, Float(i)) => Float(-i),
             // unsupported
-            (op, term) => return Err(self.error(format!("non-constant unary operation: {:?} {:?}", op, term))),
+            (op, term) => return Err(self.error(format!("non-constant unary operation: {}", op.around(&term)))),
         })
     }
 
@@ -424,7 +424,7 @@ impl<'a> ConstantFolder<'a> {
 
         match (op, lhs, rhs) {
             (BinaryOp::Add, String(lhs), String(rhs)) => Ok(String(lhs + &rhs)),
-            (op, lhs, rhs) => Err(self.error(format!("non-constant binary operation: {:?} {:?} {:?}", lhs, op, rhs)))
+            (op, lhs, rhs) => Err(self.error(format!("non-constant {:?}: {} {} {}", op, lhs, op, rhs)))
         }
     }
 
