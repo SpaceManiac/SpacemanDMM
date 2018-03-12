@@ -13,17 +13,38 @@ fn simple_location_test() {
 
     proc/Init()
         world.log <<  new/   obj()
+
+/var/foo = bar
 "##.trim();
 
     let context = Default::default();
     let located_tokens: Vec<_> = Lexer::new(&context, Default::default(), code.bytes().map(Ok)).collect();
+    assert!(context.print_all_errors());
 
+    println!("---- lexer ----");
     for token in located_tokens.iter() {
         println!("{}:{}: {:?}", token.location.line, token.location.column, token.token);
     }
 
+    let reconstructed = reconstruct(&located_tokens, false);
+    if reconstructed.trim() != code {
+        println!("{}", reconstructed);
+        panic!("Some lines differed");
+    }
+
+    println!("---- indent processor ----");
+    let indented_tokens: Vec<_> = dm::indents::IndentProcessor::new(&context, located_tokens).collect();
+    assert!(context.print_all_errors());
+    for token in indented_tokens.iter() {
+        println!("{}:{}: {:?}", token.location.line, token.location.column, token.token);
+    }
+    let reconstructed = reconstruct(&indented_tokens, true);
+    println!("{}", reconstructed);
+}
+
+fn reconstruct(tokens: &[LocatedToken], iffy: bool) -> String {
     let mut reconstructed = Vec::new();
-    for token in located_tokens {
+    for token in tokens.iter() {
         use std::fmt::Write;
 
         let line = token.location.line.checked_sub(1).unwrap() as usize;
@@ -37,7 +58,7 @@ fn simple_location_test() {
         }
 
         let this_line = &mut reconstructed[line];
-        if this_line.len() > column {
+        if this_line.len() > column && !iffy {
             panic!("column numbers went backwards: line {}, so far {:?}", line + 1, this_line);
         }
         while this_line.len() < column {
@@ -45,10 +66,10 @@ fn simple_location_test() {
         }
         write!(this_line, "{}", token.token).unwrap();
     }
-
-    let reconstructed = reconstructed.join("");
-    if reconstructed.trim() != code {
-        println!("{}", reconstructed);
-        panic!("Some lines differed");
+    for each in reconstructed.iter_mut() {
+        if !each.ends_with("\n") {
+            each.push('\n');
+        }
     }
+    reconstructed.join("")
 }
