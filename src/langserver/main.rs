@@ -9,6 +9,7 @@
 extern crate url;
 extern crate serde;
 extern crate serde_json;
+extern crate petgraph;
 extern crate languageserver_types as langserver;
 extern crate jsonrpc_core as jsonrpc;
 extern crate dreammaker as dm;
@@ -23,6 +24,7 @@ use std::collections::HashMap;
 use url::Url;
 use jsonrpc::{Request, Call, Response, Output};
 use langserver::MessageType;
+use petgraph::visit::IntoNodeReferences;
 
 fn main() {
     let stdio = io::StdIo;
@@ -207,6 +209,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 InitializeResult {
                     capabilities: ServerCapabilities {
                         definition_provider: Some(true),
+                        workspace_symbol_provider: Some(true),
                         text_document_sync: Some(TextDocumentSyncCapability::Options(TextDocumentSyncOptions {
                             open_close: Some(true),
                             change: Some(TextDocumentSyncKind::Incremental),
@@ -238,6 +241,33 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                     }))
                 } else {
                     None
+                }
+            };
+            |params: WorkspaceSymbol| {
+                let query = params.query;
+                eprintln!("{:?}", query);
+                if query.is_empty() {
+                    None
+                } else {
+                    let mut results = Vec::new();
+                    let slash = query.contains("/");
+                    for (_idx, ty) in self.objtree.graph.node_references() {
+                        if ty.name.starts_with(&query) || (slash && ty.path.contains(&query)) {
+                            results.push(SymbolInformation {
+                                name: ty.path.clone(),
+                                kind: SymbolKind::Class,
+                                location: Location {
+                                    uri: path_to_url(self.root.clone())?,
+                                    range: Range::new(
+                                        Position::new(0, 0),
+                                        Position::new(0, 0),
+                                    ),
+                                },
+                                container_name: None,
+                            });
+                        }
+                    }
+                    Some(results)
                 }
             };
         }
