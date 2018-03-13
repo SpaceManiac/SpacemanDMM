@@ -1,7 +1,6 @@
 //! The object tree representation, used as a parsing target.
 
 use std::collections::BTreeMap;
-use std::cell::Cell;
 
 pub use petgraph::graph::NodeIndex;
 use petgraph::graph::Graph;
@@ -53,21 +52,22 @@ pub struct TypeVar {
 // ----------------------------------------------------------------------------
 // Types
 
+const BAD_NODE_INDEX: usize = ::std::usize::MAX;
+
 #[derive(Debug, Default)]
 pub struct Type {
     pub name: String,
     pub path: String,
     pub vars: LinkedHashMap<String, TypeVar>,
-    parent_type: Cell<NodeIndex>,
+    parent_type: NodeIndex,
 }
 
 impl Type {
     pub fn parent_type(&self) -> Option<NodeIndex> {
-        let idx = self.parent_type.get();
-        if idx == NodeIndex::new(::std::usize::MAX) {
+        if self.parent_type == NodeIndex::new(BAD_NODE_INDEX) {
             None
         } else {
-            Some(idx)
+            Some(self.parent_type)
         }
     }
 
@@ -119,7 +119,7 @@ impl Type {
                         break Some(decl.clone());
                     }
                 }
-                match objtree.graph.node_weight(current.parent_type.get()) {
+                match objtree.graph.node_weight(current.parent_type) {
                     None => break None,
                     Some(x) => current = x,
                 }
@@ -162,7 +162,7 @@ impl<'a> TypeRef<'a> {
     }
 
     pub fn parent_type(&self, objtree: &'a ObjectTree) -> Option<TypeRef<'a>> {
-        let idx = self.ty.parent_type.get();
+        let idx = self.ty.parent_type;
         objtree.graph.node_weight(idx).map(|ty| TypeRef { idx, ty })
     }
 
@@ -215,7 +215,7 @@ impl Default for ObjectTree {
             name: String::new(),
             path: String::new(),
             vars: Default::default(),
-            parent_type: Cell::new(NodeIndex::new(::std::usize::MAX)),
+            parent_type: NodeIndex::new(BAD_NODE_INDEX),
         });
         tree
     }
@@ -240,7 +240,7 @@ impl ObjectTree {
     }
 
     pub fn parent_of(&self, type_: &Type) -> Option<&Type> {
-        self.graph.node_weight(type_.parent_type.get())
+        self.graph.node_weight(type_.parent_type)
     }
 
     pub fn type_by_path(&self, path: &TypePath) -> Option<&Type> {
@@ -276,38 +276,41 @@ impl ObjectTree {
 
     fn assign_parent_types(&mut self, context: &Context) {
         for (path, &type_idx) in self.types.iter() {
-            let type_ = self.graph.node_weight(type_idx).unwrap();
-
-            let parent_type = if path == "/datum" {
-                // parented to the root type
-                type_.parent_type.set(NodeIndex::new(0));
-                continue;
-            } else if path == "/atom" {
-                "/datum"
-            } else if path == "/turf" {
-                "/atom"
-            } else if path == "/area" {
-                "/atom"
-            } else if path == "/obj" {
-                "/atom/movable"
-            } else if path == "/mob" {
-                "/atom/movable"
+            let idx = if path == "/datum" {
+                NodeIndex::new(0)
             } else {
-                // TODO
-                /*match type_.vars.get("parent_type") {
-                    Some(name) => name,
-                    None => */match path.rfind("/").unwrap() {
-                        0 => "/datum",
-                        idx => &path[..idx],
-                    }
-                //}
+                let parent_type = if path == "/atom" {
+                    "/datum"
+                } else if path == "/turf" {
+                    "/atom"
+                } else if path == "/area" {
+                    "/atom"
+                } else if path == "/obj" {
+                    "/atom/movable"
+                } else if path == "/mob" {
+                    "/atom/movable"
+                } else {
+                    // TODO
+                    /*match type_.vars.get("parent_type") {
+                        Some(name) => name,
+                        None => */match path.rfind("/").unwrap() {
+                            0 => "/datum",
+                            idx => &path[..idx],
+                        }
+                    //}
+                };
+
+                if let Some(&idx) = self.types.get(parent_type) {
+                    idx
+                } else {
+                    context.register_error(DMError::new(Location::default(), format!("bad parent_type for {}: {}", path, parent_type)));
+                    continue;
+                }
             };
 
-            if let Some(&idx) = self.types.get(parent_type) {
-                type_.parent_type.set(idx);
-            } else {
-                context.register_error(DMError::new(Location::default(), format!("bad parent_type for {}: {}", path, parent_type)));
-            }
+            self.graph.node_weight_mut(type_idx)
+                .unwrap()
+                .parent_type = idx;
         }
     }
 
@@ -375,7 +378,7 @@ impl ObjectTree {
             name: child.to_owned(),
             path: path.clone(),
             vars: Default::default(),
-            parent_type: Cell::new(NodeIndex::new(::std::usize::MAX)),
+            parent_type: NodeIndex::new(BAD_NODE_INDEX),
         });
         self.graph.add_edge(parent, node, ());
         self.types.insert(path, node);
