@@ -1,5 +1,6 @@
 //! CLI tools, including a map renderer, using the same backend as the editor.
 
+extern crate rayon;
 extern crate structopt;
 #[macro_use] extern crate structopt_derive;
 
@@ -11,14 +12,14 @@ extern crate dreammaker as dm;
 #[macro_use] extern crate dmm_tools;
 
 use std::fmt;
-use std::path::PathBuf;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicIsize, Ordering};
+use std::path::Path;
 
 use structopt::StructOpt;
 
 use dm::objtree::ObjectTree;
 use dmm_tools::*;
-use dmm_tools::dmi::IconFile;
 
 // ----------------------------------------------------------------------------
 // Main driver
@@ -33,15 +34,15 @@ fn main() {
         flame::dump_html(&mut std::io::BufWriter::new(std::fs::File::create(format!("{}/flame-graph.html", opt.output)).unwrap())).unwrap();
     }
 
-    std::process::exit(context.exit_status);
+    std::process::exit(context.exit_status.into_inner() as i32);
 }
 
 #[derive(Default)]
 struct Context {
     dm_context: dm::Context,
     objtree: ObjectTree,
-    icon_cache: HashMap<PathBuf, IconFile>,
-    exit_status: i32,
+    icon_cache: icon_cache::IconCache,
+    exit_status: AtomicIsize,
 }
 
 impl Context {
@@ -119,6 +120,10 @@ enum Command {
         /// Disable render-passes, or "all" to only use those passed to --enable.
         #[structopt(long="disable", default_value="")]
         disable: String,
+
+        /// Set the number of jobs to run in parallel.
+        #[structopt(long="jobs", default_value="1")]
+        jobs: usize,
 
         /// Run output through pngcrush automatically. Requires pngcrush.
         #[structopt(long="pngcrush")]
@@ -215,16 +220,27 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
         // --------------------------------------------------------------------
         Command::Minimap {
             ref output, min, max, ref enable, ref disable, ref files,
-            pngcrush, optipng,
+            jobs, pngcrush, optipng,
         } => {
             context.objtree(opt);
+            let objtree = &context.objtree;
+            let icon_cache = &context.icon_cache;
+            let errors = &context.exit_status;
 
-            let render_passes = dmm_tools::render_passes::configure(enable, disable);
-            for path in files.iter() {
-                let path: &std::path::Path = path.as_ref();
+            let render_passes = &dmm_tools::render_passes::configure(enable, disable);
+            let paths: Vec<&Path> = files.iter().map(|p| p.as_ref()).collect();
+
+            let perform_job = move |path: &Path| {
                 println!("{}", path.display());
                 flame!(path.file_name().unwrap().to_string_lossy().into_owned());
-                let mut map = dmm::Map::from_file(path).expect("DMM file missing");
+                let map = match dmm::Map::from_file(path) {
+                    Ok(map) => map,
+                    Err(e) => {
+                        eprintln!("Failed to load {}:\n{}", path.display(), e);
+                        errors.fetch_add(1, Ordering::Relaxed);
+                        return;
+                    }
+                };
 
                 let (dim_x, dim_y, dim_z) = map.dim_xyz();
                 let mut min = min.unwrap_or(CoordArg { x: 0, y: 0, z: 0 });
@@ -240,15 +256,19 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                 for z in (min.z - 1)..(max.z) {
                     println!("    generating z={}", 1 + z);
                     let minimap_context = minimap::Context {
-                        objtree: &context.objtree,
+                        objtree: &objtree,
                         map: &map,
                         grid: map.z_level(z),
                         min: (min.x - 1, min.y - 1),
                         max: (max.x - 1, max.y - 1),
                         render_passes: &render_passes,
                     };
-                    let image = minimap::generate(minimap_context, &mut context.icon_cache).unwrap();
-                    std::fs::create_dir_all(output).expect("Failed to create output directory");
+                    let image = minimap::generate(minimap_context, icon_cache).unwrap();
+                    if let Err(e) = std::fs::create_dir_all(output) {
+                        eprintln!("Failed to create output directory {}:\n{}", output, e);
+                        errors.fetch_add(1, Ordering::Relaxed);
+                        return;
+                    }
                     let outfile = format!("{}/{}-{}.png", output, path.file_stem().unwrap().to_string_lossy(), 1 + z);
                     println!("    saving {}", outfile);
                     image.to_file(outfile.as_ref()).unwrap();
@@ -273,6 +293,23 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                             .unwrap()
                             .success(), "optipng failed");
                     }
+                }
+            };
+
+            if jobs > 1 {
+                // Suboptimal due to mixing I/O in with what's meant for CPU
+                // tasks, but it should get the job done for now.
+                rayon::scope(|scope| {
+                    for path in paths {
+                        let perform_job = &perform_job;
+                        scope.spawn(move |_scope| {
+                            perform_job(path);
+                        });
+                    }
+                });
+            } else {
+                for path in paths {
+                    perform_job(path);
                 }
             }
         },
