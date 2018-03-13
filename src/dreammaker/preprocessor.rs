@@ -252,17 +252,17 @@ impl<'ctx> HasLocation for Preprocessor<'ctx> {
 impl<'ctx> Preprocessor<'ctx> {
     pub fn new(context: &'ctx Context, env_file: PathBuf) -> io::Result<Self> {
         let mut pp = Preprocessor {
+            context,
+            env_file: env_file.clone(),
             include_stack: IncludeStack {
-                stack: vec![Include::new(context, env_file.clone())?],
+                stack: vec![Include::new(context, env_file)?],
             },
-            env_file: env_file,
             defines: Default::default(),
             maps: Default::default(),
             skins: Default::default(),
             ifdef_stack: Default::default(),
             last_input_loc: Default::default(),
             output: Default::default(),
-            context: context,
         };
         default_defines(&mut pp.defines);
         Ok(pp)
@@ -430,6 +430,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                 }
                             }
                         }
+                        self.context.register_define(define_name.clone(), self.last_input_loc);
                         if args.is_empty() {
                             self.defines.insert(define_name, Define::Constant(subst));
                         } else {

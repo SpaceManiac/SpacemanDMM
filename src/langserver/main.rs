@@ -100,6 +100,21 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         )
     }
 
+    fn file_url(&self, file: dm::FileId) -> Result<Url, jsonrpc::Error> {
+        path_to_url(self.root.join(self.context.file_path(file)))
+    }
+
+    fn convert_location(&self, loc: dm::Location) -> Result<langserver::Location, jsonrpc::Error> {
+        let pos = langserver::Position {
+            line: loc.line.saturating_sub(1) as u64,
+            character: loc.column.saturating_sub(1) as u64,
+        };
+        Ok(langserver::Location {
+            uri: self.file_url(loc.file)?,
+            range: langserver::Range::new(pos, pos),
+        })
+    }
+
     // ------------------------------------------------------------------------
     // Driver
 
@@ -244,12 +259,27 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 }
             };
             |params: WorkspaceSymbol| {
+                const MAX_SYMBOLS_PER_TYPE: usize = 15;
+
                 let query = params.query;
                 eprintln!("{:?}", query);
+                let mut results = Vec::new();
                 if query.is_empty() {
                     None
                 } else {
-                    let mut results = Vec::new();
+                    let upperquery = query.to_uppercase();
+                    for &(ref name, location) in self.context.defines().iter() {
+                        if name.to_uppercase().contains(&upperquery) {
+                            results.push(SymbolInformation {
+                                name: name.to_owned(),
+                                kind: SymbolKind::Constant,
+                                location: self.convert_location(location)?,
+                                container_name: None,
+                            });
+                            if results.len() >= MAX_SYMBOLS_PER_TYPE { break }
+                        }
+                    }
+
                     let slash = query.contains("/");
                     for (_idx, ty) in self.objtree.graph.node_references() {
                         if ty.name.starts_with(&query) || (slash && ty.path.contains(&query)) {
@@ -265,6 +295,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                                 },
                                 container_name: None,
                             });
+                            if results.len() >= 2 * MAX_SYMBOLS_PER_TYPE { break }
                         }
                     }
                     Some(results)
