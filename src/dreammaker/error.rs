@@ -148,7 +148,7 @@ pub struct DMError {
     location: Location,
     severity: Severity,
     desc: String,
-    cause: Option<Box<error::Error>>,
+    cause: Option<Box<error::Error + Send>>,
 }
 
 #[allow(unused_variables)]
@@ -162,7 +162,7 @@ impl DMError {
         }
     }
 
-    pub fn set_cause<E: error::Error + 'static>(mut self, cause: E) -> DMError {
+    pub fn set_cause<E: error::Error + Send + 'static>(mut self, cause: E) -> DMError {
         self.cause = Some(Box::new(cause));
         self
     }
@@ -211,6 +211,6 @@ impl error::Error for DMError {
     }
 
     fn cause(&self) -> Option<&error::Error> {
-        self.cause.as_ref().map(|x| &**x)
+        self.cause.as_ref().map(|x| &**x as &error::Error)
     }
 }

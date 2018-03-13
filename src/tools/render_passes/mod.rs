@@ -11,7 +11,7 @@ pub mod structures;
 /// These methods are applied to any given atom in roughly the order they
 /// appear here.
 #[allow(unused_variables)]
-pub trait RenderPass {
+pub trait RenderPass: Sync {
     /// Filter atoms based solely on their typepath.
     fn path_filter(&self,
         path: &str,
