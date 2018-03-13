@@ -259,7 +259,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 }
             };
             |params: WorkspaceSymbol| {
-                const MAX_SYMBOLS_PER_TYPE: usize = 15;
+                const MAX_SYMBOLS_PER_TYPE: usize = 20;
 
                 let query = params.query;
                 eprintln!("{:?}", query);
@@ -286,13 +286,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                             results.push(SymbolInformation {
                                 name: ty.path.clone(),
                                 kind: SymbolKind::Class,
-                                location: Location {
-                                    uri: path_to_url(self.root.clone())?,
-                                    range: Range::new(
-                                        Position::new(0, 0),
-                                        Position::new(0, 0),
-                                    ),
-                                },
+                                location: self.convert_location(ty.location)?,
                                 container_name: None,
                             });
                             if results.len() >= 2 * MAX_SYMBOLS_PER_TYPE { break }

@@ -58,6 +58,7 @@ const BAD_NODE_INDEX: usize = ::std::usize::MAX;
 pub struct Type {
     pub name: String,
     pub path: String,
+    pub location: Location,
     pub vars: LinkedHashMap<String, TypeVar>,
     parent_type: NodeIndex,
 }
@@ -214,6 +215,7 @@ impl Default for ObjectTree {
         tree.graph.add_node(Type {
             name: String::new(),
             path: String::new(),
+            location: Default::default(),
             vars: Default::default(),
             parent_type: NodeIndex::new(BAD_NODE_INDEX),
         });
@@ -364,7 +366,7 @@ impl ObjectTree {
     // ------------------------------------------------------------------------
     // Parsing
 
-    fn subtype_or_add(&mut self, parent: NodeIndex, child: &str) -> NodeIndex {
+    fn subtype_or_add(&mut self, location: Location, parent: NodeIndex, child: &str) -> NodeIndex {
         for edge in self.graph.edges(parent) {
             let target = edge.target();
             if self.graph.node_weight(target).unwrap().name == child {
@@ -378,6 +380,7 @@ impl ObjectTree {
             name: child.to_owned(),
             path: path.clone(),
             vars: Default::default(),
+            location: location,
             parent_type: NodeIndex::new(BAD_NODE_INDEX),
         });
         self.graph.add_edge(parent, node, ());
@@ -395,7 +398,7 @@ impl ObjectTree {
             return Ok((current, last));
         }
         for each in path {
-            current = self.subtype_or_add(current, last);
+            current = self.subtype_or_add(location, current, last);
             last = each;
             if is_decl(last) {
                 break;
@@ -467,7 +470,7 @@ impl ObjectTree {
         } else if is_proc_decl(child) {
             // proc{} block, children will be procs
         } else {
-            self.subtype_or_add(parent, child);
+            self.subtype_or_add(location, parent, child);
         }
         Ok(())
     }
