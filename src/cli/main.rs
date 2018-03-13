@@ -27,6 +27,12 @@ use dmm_tools::*;
 fn main() {
     let opt = Opt::from_args();
     let mut context = Context::default();
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(opt.jobs)
+        .build_global()
+        .expect("failed to initialize thread pool");
+    context.parallel = opt.jobs != 1;
+
     run(&opt, &opt.command, &mut context);
 
     #[cfg(feature="flame")] {
@@ -43,6 +49,7 @@ struct Context {
     objtree: ObjectTree,
     icon_cache: icon_cache::IconCache,
     exit_status: AtomicIsize,
+    parallel: bool,
 }
 
 impl Context {
@@ -73,6 +80,11 @@ struct Opt {
 
     #[structopt(short="v", long="verbose")]
     verbose: bool,
+
+    /// Set the number of threads to be used for parallel execution when
+    /// possible. A value of 0 will select automatically, and 1 will be serial.
+    #[structopt(long="jobs", default_value="1")]
+    jobs: usize,
 
     #[structopt(subcommand)]
     command: Command,
@@ -120,10 +132,6 @@ enum Command {
         /// Disable render-passes, or "all" to only use those passed to --enable.
         #[structopt(long="disable", default_value="")]
         disable: String,
-
-        /// Set the number of jobs to run in parallel.
-        #[structopt(long="jobs", default_value="1")]
-        jobs: usize,
 
         /// Run output through pngcrush automatically. Requires pngcrush.
         #[structopt(long="pngcrush")]
@@ -220,24 +228,31 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
         // --------------------------------------------------------------------
         Command::Minimap {
             ref output, min, max, ref enable, ref disable, ref files,
-            jobs, pngcrush, optipng,
+            pngcrush, optipng,
         } => {
             context.objtree(opt);
-            let objtree = &context.objtree;
-            let icon_cache = &context.icon_cache;
-            let errors = &context.exit_status;
+            let Context { ref objtree, ref icon_cache, ref exit_status, parallel, .. } = *context;
 
             let render_passes = &dmm_tools::render_passes::configure(enable, disable);
             let paths: Vec<&Path> = files.iter().map(|p| p.as_ref()).collect();
 
             let perform_job = move |path: &Path| {
-                println!("{}", path.display());
+                let prefix = if parallel {
+                    let mut filename = path.file_name().unwrap().to_string_lossy().into_owned();
+                    filename.push_str(": ");
+                    println!("{}{}", filename, path.display());
+                    filename
+                } else {
+                    println!("{}", path.display());
+                    "    ".to_owned()
+                };
+
                 flame!(path.file_name().unwrap().to_string_lossy().into_owned());
                 let map = match dmm::Map::from_file(path) {
                     Ok(map) => map,
                     Err(e) => {
                         eprintln!("Failed to load {}:\n{}", path.display(), e);
-                        errors.fetch_add(1, Ordering::Relaxed);
+                        exit_status.fetch_add(1, Ordering::Relaxed);
                         return;
                     }
                 };
@@ -251,10 +266,10 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                 max.x = clamp(max.x, min.x, dim_x);
                 max.y = clamp(max.y, min.y, dim_y);
                 max.z = clamp(max.z, min.z, dim_z);
-                println!("    rendering from {} to {}", min, max);
+                println!("{}rendering from {} to {}", prefix, min, max);
 
                 for z in (min.z - 1)..(max.z) {
-                    println!("    generating z={}", 1 + z);
+                    println!("{}generating z={}", prefix, 1 + z);
                     let minimap_context = minimap::Context {
                         objtree: &objtree,
                         map: &map,
@@ -266,11 +281,11 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                     let image = minimap::generate(minimap_context, icon_cache).unwrap();
                     if let Err(e) = std::fs::create_dir_all(output) {
                         eprintln!("Failed to create output directory {}:\n{}", output, e);
-                        errors.fetch_add(1, Ordering::Relaxed);
+                        exit_status.fetch_add(1, Ordering::Relaxed);
                         return;
                     }
                     let outfile = format!("{}/{}-{}.png", output, path.file_stem().unwrap().to_string_lossy(), 1 + z);
-                    println!("    saving {}", outfile);
+                    println!("{}saving {}", prefix, outfile);
                     image.to_file(outfile.as_ref()).unwrap();
                     if pngcrush {
                         println!("    pngcrush {}", outfile);
@@ -285,7 +300,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                             .success(), "pngcrush failed");
                     }
                     if optipng {
-                        println!("    optipng {}", outfile);
+                        println!("{}optipng {}", prefix, outfile);
                         assert!(std::process::Command::new("optipng")
                             .arg(&outfile)
                             .stderr(std::process::Stdio::null())
@@ -296,21 +311,13 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                 }
             };
 
-            if jobs > 1 {
+            if parallel {
+                use rayon::iter::{IntoParallelIterator, ParallelIterator};
                 // Suboptimal due to mixing I/O in with what's meant for CPU
                 // tasks, but it should get the job done for now.
-                rayon::scope(|scope| {
-                    for path in paths {
-                        let perform_job = &perform_job;
-                        scope.spawn(move |_scope| {
-                            perform_job(path);
-                        });
-                    }
-                });
+                paths.into_par_iter().for_each(perform_job);
             } else {
-                for path in paths {
-                    perform_job(path);
-                }
+                paths.into_iter().for_each(perform_job);
             }
         },
         // --------------------------------------------------------------------
@@ -339,8 +346,6 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             ref left, ref right,
         } => {
             use std::cmp::min;
-
-            context.objtree(opt);
 
             let path: &std::path::Path = left.as_ref();
             println!("{}", path.display());
