@@ -1,5 +1,4 @@
-use std::collections::{HashMap, hash_map};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use ndarray::{self, Axis};
 
@@ -7,8 +6,9 @@ use dm::objtree::*;
 use dm::objtree::subpath as subtype;
 use dm::constants::Constant;
 use dmm::{Map, Grid, Prefab};
-use dmi::{Image, IconFile};
+use dmi::Image;
 use render_passes::RenderPass;
+use icon_cache::IconCache;
 
 const TILE_SIZE: u32 = 32;
 
@@ -27,7 +27,7 @@ pub struct Context<'a> {
 
 pub fn generate(
     ctx: Context,
-    icon_cache: &mut HashMap<PathBuf, IconFile>,
+    icon_cache: &IconCache,
 ) -> Result<Image, ()> {
     flame!("minimap");
     let Context { objtree, map, grid, render_passes, .. } = ctx;
@@ -188,15 +188,9 @@ pub fn generate(
         let dir = atom.get_var("dir", objtree).to_int().unwrap_or(::dmi::SOUTH);
 
         let path: &Path = icon.as_ref();
-        let icon_file = match icon_cache.entry(path.to_owned()) {
-            hash_map::Entry::Occupied(entry) => entry.into_mut(),
-            hash_map::Entry::Vacant(entry) => match IconFile::from_file(path) {
-                Ok(found) => entry.insert(found),
-                Err(err) => {
-                    println!("error loading icon: {}\n{:?}", path.display(), err);
-                    continue 'atom;
-                }
-            }
+        let icon_file = match icon_cache.retrieve_shared(path) {
+            Some(icon_file) => icon_file,
+            None => continue 'atom,
         };
 
         if let Some(mut rect) = icon_file.rect_of(&icon_state, dir) {
