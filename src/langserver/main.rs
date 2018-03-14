@@ -259,8 +259,6 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 }
             };
             |params: WorkspaceSymbol| {
-                const MAX_SYMBOLS_PER_TYPE: usize = 20;
-
                 let query = params.query;
                 eprintln!("{:?}", query);
                 let mut results = Vec::new();
@@ -276,7 +274,6 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                                 location: self.convert_location(location)?,
                                 container_name: None,
                             });
-                            if results.len() >= MAX_SYMBOLS_PER_TYPE { break }
                         }
                     }
 
@@ -289,7 +286,19 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                                 location: self.convert_location(ty.location)?,
                                 container_name: None,
                             });
-                            if results.len() >= 2 * MAX_SYMBOLS_PER_TYPE { break }
+                        }
+
+                        for (var_name, tv) in ty.vars.iter() {
+                            if let Some(decl) = tv.declaration.as_ref() {
+                                if var_name.starts_with(&query) {
+                                    results.push(SymbolInformation {
+                                        name: var_name.clone(),
+                                        kind: SymbolKind::Field,
+                                        location: self.convert_location(decl.location)?,
+                                        container_name: Some(ty.path.clone()),
+                                    });
+                                }
+                            }
                         }
                     }
                     Some(results)
