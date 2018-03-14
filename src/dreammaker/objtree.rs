@@ -49,6 +49,23 @@ pub struct TypeVar {
     pub declaration: Option<VarDeclaration>,
 }
 
+#[derive(Debug, Clone)]
+pub struct ProcDeclaration {
+    pub location: Location,
+    pub is_verb: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct ProcValue {
+    pub location: Location,
+}
+
+#[derive(Debug, Clone)]
+pub struct TypeProc {
+    pub value: ProcValue,
+    pub declaration: Option<ProcDeclaration>,
+}
+
 // ----------------------------------------------------------------------------
 // Types
 
@@ -60,6 +77,7 @@ pub struct Type {
     pub path: String,
     pub location: Location,
     pub vars: LinkedHashMap<String, TypeVar>,
+    pub procs: LinkedHashMap<String, TypeProc>,
     parent_type: NodeIndex,
 }
 
@@ -217,6 +235,7 @@ impl Default for ObjectTree {
             path: String::new(),
             location: Default::default(),
             vars: Default::default(),
+            procs: Default::default(),
             parent_type: NodeIndex::new(BAD_NODE_INDEX),
         });
         tree
@@ -380,6 +399,7 @@ impl ObjectTree {
             name: child.to_owned(),
             path: path.clone(),
             vars: Default::default(),
+            procs: Default::default(),
             location: location,
             parent_type: NodeIndex::new(BAD_NODE_INDEX),
         });
@@ -439,7 +459,6 @@ impl ObjectTree {
             type_path.push((PathOp::Slash, prev.to_owned()));
             prev = each;
         }
-        // TODO: track the type path
         let node = self.graph.node_weight_mut(parent).unwrap();
         Ok(Some(node.vars.entry(prev.to_owned()).or_insert_with(|| TypeVar {
             value: VarValue {
@@ -459,6 +478,19 @@ impl ObjectTree {
             } else {
                 None
             },
+        })))
+    }
+
+    fn register_proc(&mut self, location: Location, parent: NodeIndex, name: &str, is_verb: Option<bool>) -> Result<Option<&mut TypeProc>, DMError> {
+        let node = self.graph.node_weight_mut(parent).unwrap();
+        Ok(Some(node.procs.entry(name.to_owned()).or_insert_with(|| TypeProc {
+            value: ProcValue {
+                location,
+            },
+            declaration: is_verb.map(|is_verb| ProcDeclaration {
+                location,
+                is_verb,
+            }),
         })))
     }
 
@@ -490,7 +522,9 @@ impl ObjectTree {
     // an entry which is definitely a proc because an argument list is specified
     pub fn add_proc<'a, I: Iterator<Item=&'a str>>(&mut self, location: Location, mut path: I) -> Result<(), DMError> {
         let (parent, mut proc_name) = self.get_from_path(location, &mut path)?;
+        let mut is_verb = None;
         if is_proc_decl(proc_name) {
+            is_verb = Some(proc_name == "verb");
             proc_name = match path.next() {
                 Some(name) => name,
                 None => return Err(DMError::new(location, "proc must have a name"))
@@ -501,9 +535,13 @@ impl ObjectTree {
         if path.next().is_some() {
             return Err(DMError::new(location, "proc name must be a single identifier"))
         }
-        // TODO: keep track of procs
-        let _ = (parent, proc_name);
-        Ok(())
+
+        if let Some(type_proc) = self.register_proc(location, parent, proc_name, is_verb)? {
+            type_proc.value.location = location;
+            Ok(())
+        } else {
+            Err(DMError::new(location, "proc must have a name"))
+        }
     }
 }
 

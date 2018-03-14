@@ -278,7 +278,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                     }
 
                     let slash = query.contains("/");
-                    for (_idx, ty) in self.objtree.graph.node_references() {
+                    for (idx, ty) in self.objtree.graph.node_references() {
                         if ty.name.starts_with(&query) || (slash && ty.path.contains(&query)) {
                             results.push(SymbolInformation {
                                 name: ty.path.clone(),
@@ -297,6 +297,25 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                                         location: self.convert_location(decl.location)?,
                                         container_name: Some(ty.path.clone()),
                                     });
+                                }
+                            }
+                        }
+
+                        for (proc_name, pv) in ty.procs.iter() {
+                            if let Some(decl) = pv.declaration.as_ref() {
+                                if proc_name.starts_with(&query) {
+                                    results.push(SymbolInformation {
+                                        name: proc_name.clone(),
+                                        kind: if idx.index() == 0 {
+                                            SymbolKind::Function
+                                        } else if ["init", "New", "Initialize"].contains(&&**proc_name) {
+                                            SymbolKind::Constructor
+                                        } else {
+                                            SymbolKind::Method
+                                        },
+                                        location: self.convert_location(decl.location)?,
+                                        container_name: Some(ty.path.clone()),
+                                    })
                                 }
                             }
                         }
