@@ -16,6 +16,7 @@ extern crate dreammaker as dm;
 
 mod io;
 mod document;
+mod symbol_search;
 
 use std::io::Write;
 use std::path::PathBuf;
@@ -259,15 +260,12 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 }
             };
             |params: WorkspaceSymbol| {
-                let query = params.query;
-                eprintln!("{:?}", query);
-                let mut results = Vec::new();
-                if query.is_empty() {
-                    None
-                } else {
-                    let upperquery = query.to_uppercase();
+                let query = symbol_search::Query::parse(&params.query);
+                eprintln!("{:?} -> {:?}", params.query, query);
+                if let Some(query) = query {
+                    let mut results = Vec::new();
                     for &(ref name, location) in self.context.defines().iter() {
-                        if name.to_uppercase().contains(&upperquery) {
+                        if query.matches_define(name) {
                             results.push(SymbolInformation {
                                 name: name.to_owned(),
                                 kind: SymbolKind::Constant,
@@ -277,9 +275,8 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                         }
                     }
 
-                    let slash = query.contains("/");
                     for (idx, ty) in self.objtree.graph.node_references() {
-                        if ty.name.starts_with(&query) || (slash && ty.path.contains(&query)) {
+                        if query.matches_type(&ty.name, &ty.path) {
                             results.push(SymbolInformation {
                                 name: ty.path.clone(),
                                 kind: SymbolKind::Class,
@@ -288,9 +285,12 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                             });
                         }
 
+                        if !query.matches_on_type(&ty.path) {
+                            continue;
+                        }
                         for (var_name, tv) in ty.vars.iter() {
                             if let Some(decl) = tv.declaration.as_ref() {
-                                if var_name.starts_with(&query) {
+                                if query.matches_var(&var_name) {
                                     results.push(SymbolInformation {
                                         name: var_name.clone(),
                                         kind: SymbolKind::Field,
@@ -303,7 +303,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
 
                         for (proc_name, pv) in ty.procs.iter() {
                             if let Some(decl) = pv.declaration.as_ref() {
-                                if proc_name.starts_with(&query) {
+                                if query.matches_proc(&proc_name, decl.is_verb) {
                                     results.push(SymbolInformation {
                                         name: proc_name.clone(),
                                         kind: if idx.index() == 0 {
@@ -315,12 +315,14 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                                         },
                                         location: self.convert_location(decl.location)?,
                                         container_name: Some(ty.path.clone()),
-                                    })
+                                    });
                                 }
                             }
                         }
                     }
                     Some(results)
+                } else {
+                    None
                 }
             };
         }
