@@ -262,8 +262,10 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             |params: WorkspaceSymbol| {
                 let query = symbol_search::Query::parse(&params.query);
                 eprintln!("{:?} -> {:?}", params.query, query);
+
                 if let Some(query) = query {
                     let mut results = Vec::new();
+                    let start = std::time::Instant::now();
                     for &(ref name, location) in self.context.defines().iter() {
                         if query.matches_define(name) {
                             results.push(SymbolInformation {
@@ -320,6 +322,12 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                             }
                         }
                     }
+                    let elapsed = start.elapsed();
+                    eprintln!("    {} results in {}.{:03}s", results.len(), elapsed.as_secs(), elapsed.subsec_nanos() / 1_000_000);
+                    // TODO: break if the query is too general, e.g. `obj/` on
+                    // tgstation has 9100+ results. Search is very fast but
+                    // serialization is very slow (30+ seconds).
+                    results.truncate(200);
                     Some(results)
                 } else {
                     None
