@@ -28,6 +28,20 @@ use langserver::MessageType;
 use petgraph::visit::IntoNodeReferences;
 
 fn main() {
+    eprintln!("dm-langserver {}  Copyright (C) 2017  Tad Hardesty", env!("CARGO_PKG_VERSION"));
+    eprintln!("This program comes with ABSOLUTELY NO WARRANTY. This is free software,");
+    eprintln!("and you are welcome to redistribute it under the conditions of the GNU");
+    eprintln!("General Public License version 3.");
+    eprintln!();
+    match std::env::current_exe() {
+        Ok(path) => eprintln!("executable: {}", path.display()),
+        Err(e) => eprintln!("exe check failure: {}", e),
+    }
+    match std::env::current_dir() {
+        Ok(path) => eprintln!("directory: {}", path.display()),
+        Err(e) => eprintln!("dir check failure: {}", e),
+    }
+
     let stdio = io::StdIo;
     Engine::new(&stdio, &stdio).run()
 }
@@ -366,7 +380,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 std::process::exit(if self.status == InitStatus::ShuttingDown { 0 } else { 1 });
             };
             |_empty: Initialized| {
-                eprintln!("root directory: {}", self.root.display());
+                eprintln!("workspace root: {}", self.root.display());
                 let mut environment = None;
                 for entry in std::fs::read_dir(&self.root).map_err(invalid_request)? {
                     let entry = entry.map_err(invalid_request)?;
@@ -378,7 +392,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 }
                 if let Some(environment) = environment {
                     let file_name = environment.file_name().unwrap_or("..".as_ref()).to_string_lossy();
-                    eprintln!("loading environment: {}", environment.display());
+                    eprintln!("environment: {}", environment.display());
                     match self.context.parse_environment(&environment) {
                         Ok(objtree) => {
                             self.objtree = objtree;
