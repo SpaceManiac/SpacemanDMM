@@ -280,10 +280,10 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                     for (idx, ty) in self.objtree.graph.node_references() {
                         if query.matches_type(&ty.name, &ty.path) {
                             results.push(SymbolInformation {
-                                name: ty.path.clone(),
+                                name: ty.name.clone(),
                                 kind: SymbolKind::Class,
                                 location: self.convert_location(ty.location)?,
-                                container_name: None,
+                                container_name: Some(ty.path.clone()),
                             });
                         }
 
