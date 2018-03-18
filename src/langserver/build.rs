@@ -17,7 +17,7 @@ fn main() {
 }
 
 fn read_commit() -> Result<String, git2::Error> {
-    let repo = git2::Repository::open_from_env()?;
+    let repo = git2::Repository::discover(".")?;
     let hash = repo.head()?.peel_to_commit()?.id().to_string();
     Ok(hash)
 }
