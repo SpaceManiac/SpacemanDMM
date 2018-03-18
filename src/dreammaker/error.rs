@@ -8,11 +8,19 @@ use std::cell::{RefCell, Ref};
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct FileId(u32);
 
-const BAD_FILE_ID: FileId = FileId(::std::u32::MAX);
+const FILEID_BAD: FileId = FileId(::std::u32::MAX);
+const FILEID_BUILTINS: FileId = FileId(0xfffffffe);
 
 impl Default for FileId {
     fn default() -> FileId {
-        BAD_FILE_ID
+        FILEID_BAD
+    }
+}
+
+impl FileId {
+    #[inline]
+    pub fn builtins() -> FileId {
+        FILEID_BUILTINS
     }
 }
 
@@ -38,9 +46,12 @@ impl Context {
 
     /// Look up a file path by its index returned from `register_file`.
     pub fn file_path(&self, file: FileId) -> PathBuf {
+        if file == FILEID_BUILTINS {
+            return "(builtins)".into();
+        }
         let files = self.files.borrow();
         let idx = file.0 as usize;
-        if idx > files.len() {  // includes BAD_FILE_ID
+        if idx > files.len() {
             "(unknown)".into()
         } else {
             files[idx].to_owned()

@@ -133,13 +133,18 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         path_to_url(self.root.join(self.context.file_path(file)))
     }
 
-    fn convert_location(&self, loc: dm::Location) -> Result<langserver::Location, jsonrpc::Error> {
+    fn convert_location(&self, loc: dm::Location, one: &str, two: &str, three: &str) -> Result<langserver::Location, jsonrpc::Error> {
         let pos = langserver::Position {
             line: loc.line.saturating_sub(1) as u64,
             character: loc.column.saturating_sub(1) as u64,
         };
         Ok(langserver::Location {
-            uri: self.file_url(loc.file)?,
+            uri: if loc.file == dm::FileId::builtins() {
+                Url::parse(&format!("https://secure.byond.com/docs/ref/info.html#{}{}{}", one, two, three))
+                    .map_err(invalid_request)?
+            } else {
+                self.file_url(loc.file)?
+            },
             range: langserver::Range::new(pos, pos),
         })
     }
@@ -299,7 +304,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                             results.push(SymbolInformation {
                                 name: name.to_owned(),
                                 kind: SymbolKind::Constant,
-                                location: self.convert_location(location)?,
+                                location: self.convert_location(location, "/DM", "/preprocessor/", name)?,
                                 container_name: None,
                             });
                         }
@@ -310,8 +315,8 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                             results.push(SymbolInformation {
                                 name: ty.name.clone(),
                                 kind: SymbolKind::Class,
-                                location: self.convert_location(ty.location)?,
-                                container_name: Some(ty.path.clone()),
+                                location: self.convert_location(ty.location, &ty.path, "", "")?,
+                                container_name: Some(ty.path[..ty.path.len() - ty.name.len() - 1].to_owned()),
                             });
                         }
 
@@ -324,7 +329,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                                     results.push(SymbolInformation {
                                         name: var_name.clone(),
                                         kind: SymbolKind::Field,
-                                        location: self.convert_location(decl.location)?,
+                                        location: self.convert_location(decl.location, &ty.path, "/var/", var_name)?,
                                         container_name: Some(ty.path.clone()),
                                     });
                                 }
@@ -343,7 +348,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                                         } else {
                                             SymbolKind::Method
                                         },
-                                        location: self.convert_location(decl.location)?,
+                                        location: self.convert_location(decl.location, &ty.path, "/proc/", proc_name)?,
                                         container_name: Some(ty.path.clone()),
                                     });
                                 }
@@ -352,10 +357,10 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                     }
                     let elapsed = start.elapsed();
                     eprintln!("    {} results in {}.{:03}s", results.len(), elapsed.as_secs(), elapsed.subsec_nanos() / 1_000_000);
-                    // TODO: break if the query is too general, e.g. `obj/` on
-                    // tgstation has 9100+ results. Search is very fast but
-                    // serialization is very slow (30+ seconds).
-                    results.truncate(200);
+                    #[cfg(debug_assertions)] {
+                        // Serializing all these to the debug log is very slow.
+                        results.truncate(100);
+                    }
                     Some(results)
                 } else {
                     None

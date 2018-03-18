@@ -2,20 +2,26 @@
 
 use super::objtree::*;
 use super::ast::*;
-use super::{Location, DMError};
+use super::{Location, FileId, DMError};
 
 /// Register BYOND builtins into the specified object tree.
 pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
+    let location = Location {
+        file: FileId::builtins(),
+        line: 1,
+        column: 1,
+    };
+
     macro_rules! entries {
         ($($($elem:ident)/ * $(= $val:expr)*;)*) => {
             $(loop {
                 #![allow(unreachable_code)]
                 let elems = [$(stringify!($elem)),*];
                 $(
-                    tree.add_var(Location::default(), elems.iter().cloned(), $val)?;
+                    tree.add_var(location, elems.iter().cloned(), $val)?;
                     break;
                 )*
-                tree.add_entry(Location::default(), elems.iter().cloned())?;
+                tree.add_entry(location, elems.iter().cloned())?;
                 break;
             })*
         }
