@@ -105,6 +105,9 @@ impl RenderPass for Random {
         } else if atom.istype("/obj/item/lipstick/random/") {
             atom.set_var("icon_state", Constant::string("lipstick"));
             // random color is not outwardly visible
+        } else if atom.istype("/obj/item/device/tape/random/") {
+            let icon = format!("tape_{}", rng.choose(&["white", "blue", "red", "yellow", "purple"]).unwrap());
+            atom.set_var("icon_state", Constant::string(icon));
         }
     }
 }
