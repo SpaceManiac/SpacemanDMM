@@ -18,7 +18,6 @@ mod io;
 mod document;
 mod symbol_search;
 
-use std::io::Write;
 use std::path::PathBuf;
 use std::collections::HashMap;
 
@@ -55,6 +54,18 @@ enum InitStatus {
     ShuttingDown,
 }
 
+#[cfg(debug_assertions)]
+macro_rules! dbgwriteln {
+    ($($t:tt)*) => {{
+        use std::io::Write;
+        writeln!($($t)*).expect("debug-output failure")
+    }}
+}
+#[cfg(not(debug_assertions))]
+macro_rules! dbgwriteln {
+    ($($t:tt)*) => {}
+}
+
 struct Engine<'a, R: 'a, W: 'a> {
     read: &'a R,
     write: &'a W,
@@ -67,6 +78,7 @@ struct Engine<'a, R: 'a, W: 'a> {
     context: dm::Context,
     objtree: dm::objtree::ObjectTree,
 
+    #[cfg(debug_assertions)]
     debug: std::fs::File,
 }
 
@@ -84,6 +96,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             context: Default::default(),
             objtree: Default::default(),
 
+            #[cfg(debug_assertions)]
             debug: std::fs::File::create("debug-output.txt").expect("debug-output failure"),
         }
     }
@@ -96,7 +109,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         T::Params: serde::Serialize,
     {
         let params = serde_json::to_value(params).expect("notification bad to_value");
-        writeln!(self.debug, "<== {}: {:#?}", T::METHOD, params).expect("debug-output failure");
+        dbgwriteln!(self.debug, "<== {}: {:#?}", T::METHOD, params);
         let request = Request::Single(Call::Notification(jsonrpc::Notification {
             jsonrpc: VERSION,
             method: T::METHOD.to_owned(),
@@ -137,7 +150,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         loop {
             let message = self.read.read().expect("request bad read");
 
-            writeln!(self.debug, "--> ({}) {}", message.len(), message).expect("debug-output failure");
+            dbgwriteln!(self.debug, "--> ({}) {}", message.len(), message);
             let mut outputs: Vec<Output> = match serde_json::from_str(&message) {
                 Ok(Request::Single(call)) => self.handle_call(call).into_iter().collect(),
                 Ok(Request::Batch(calls)) => calls.into_iter().flat_map(|call| self.handle_call(call)).collect(),
@@ -160,7 +173,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 _ => Response::Batch(outputs),
             };
 
-            writeln!(self.debug, "<-- {:#?}", response).expect("debug-output failure");
+            dbgwriteln!(self.debug, "<-- {:#?}", response);
             self.write.write(serde_json::to_string(&response).expect("response bad to_string"));
         }
     }
