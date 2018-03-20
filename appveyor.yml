@@ -1,0 +1,23 @@
+pull_requests:
+  do_not_increment_build_number: true
+version: '{build}'
+branches:
+  only:
+  - master
+environment:
+  matrix:
+    - BUILD_POSTFIX: "--all"
+    - BUILD_POSTFIX: "--all --release"
+shallow_clone: true
+image: Visual Studio 2017
+cache:
+  - target\debug\deps -> Cargo.lock
+  - target\release\deps -> Cargo.lock
+install:
+  - curl -sSf -o rustup-init.exe https://win.rustup.rs
+  - rustup-init.exe --default-host x86_64-pc-windows-msvc --default-toolchain stable -y
+  - set PATH=%PATH%;C:\Users\appveyor\.cargo\bin
+  - rustc -Vv
+  - cargo -V
+build_script:
+  - cargo build %BUILD_POSTFIX%
