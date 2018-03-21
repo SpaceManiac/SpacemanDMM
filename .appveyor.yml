@@ -11,8 +11,8 @@ environment:
 shallow_clone: true
 image: Visual Studio 2017
 cache:
-  - target\debug\deps -> Cargo.lock
-  - target\release\deps -> Cargo.lock
+  - C:\Users\appveyor\.cargo
+  - target\
 install:
   - curl -sSf -o rustup-init.exe https://win.rustup.rs
   - rustup-init.exe --default-host x86_64-pc-windows-msvc --default-toolchain stable -y
