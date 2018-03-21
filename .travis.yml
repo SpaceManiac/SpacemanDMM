@@ -1,0 +1,16 @@
+language: rust
+rust:
+  - stable
+branches:
+  only:
+    - master
+env:
+  - BUILD_POSTFIX: "--all"
+  - BUILD_POSTFIX: "--all --release"
+cache: cargo
+install:
+  - rustc -Vv
+  - cargo -V
+script:
+  - cargo build --verbose $BUILD_POSTFIX
+  - cargo test --verbose $BUILD_POSTFIX

@@ -20,4 +20,5 @@ install:
   - rustc -Vv
   - cargo -V
 build_script:
-  - cargo build %BUILD_POSTFIX%
+  - cargo build --verbose %BUILD_POSTFIX%
+  - cargo test --verbose %BUILD_POSTFIX%
