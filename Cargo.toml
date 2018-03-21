@@ -2,9 +2,9 @@
 members = [
     "src/cli",
     "src/dreammaker",
-    "src/editor",
+    #"src/editor",
     "src/langserver",
-    "src/qt-extras",
+    #"src/qt-extras",
     "src/tools",
 ]
 
