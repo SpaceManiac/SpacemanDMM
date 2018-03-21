@@ -76,6 +76,7 @@ pub struct Type {
     pub name: String,
     pub path: String,
     pub location: Location,
+    location_specificity: usize,
     pub vars: LinkedHashMap<String, TypeVar>,
     pub procs: LinkedHashMap<String, TypeProc>,
     parent_type: NodeIndex,
@@ -234,6 +235,7 @@ impl Default for ObjectTree {
             name: String::new(),
             path: String::new(),
             location: Default::default(),
+            location_specificity: 0,
             vars: Default::default(),
             procs: Default::default(),
             parent_type: NodeIndex::new(BAD_NODE_INDEX),
@@ -385,10 +387,15 @@ impl ObjectTree {
     // ------------------------------------------------------------------------
     // Parsing
 
-    fn subtype_or_add(&mut self, location: Location, parent: NodeIndex, child: &str) -> NodeIndex {
-        for edge in self.graph.edges(parent) {
-            let target = edge.target();
-            if self.graph.node_weight(target).unwrap().name == child {
+    fn subtype_or_add(&mut self, location: Location, parent: NodeIndex, child: &str, len: usize) -> NodeIndex {
+        let mut neighbors = self.graph.neighbors(parent).detach();
+        while let Some(target) = neighbors.next_node(&self.graph) {
+            let node = self.graph.node_weight_mut(target).unwrap();
+            if node.name == child {
+                if node.location_specificity > len {
+                    node.location_specificity = len;
+                    node.location = location;
+                }
                 return target;
             }
         }
@@ -401,6 +408,7 @@ impl ObjectTree {
             vars: Default::default(),
             procs: Default::default(),
             location: location,
+            location_specificity: len,
             parent_type: NodeIndex::new(BAD_NODE_INDEX),
         });
         self.graph.add_edge(parent, node, ());
@@ -408,7 +416,7 @@ impl ObjectTree {
         node
     }
 
-    fn get_from_path<'a, I: Iterator<Item=&'a str>>(&mut self, location: Location, mut path: I) -> Result<(NodeIndex, &'a str), DMError> {
+    fn get_from_path<'a, I: Iterator<Item=&'a str>>(&mut self, location: Location, mut path: I, len: usize) -> Result<(NodeIndex, &'a str), DMError> {
         let mut current = NodeIndex::new(0);
         let mut last = match path.next() {
             Some(name) => name,
@@ -418,7 +426,7 @@ impl ObjectTree {
             return Ok((current, last));
         }
         for each in path {
-            current = self.subtype_or_add(location, current, last);
+            current = self.subtype_or_add(location, current, last, len);
             last = each;
             if is_decl(last) {
                 break;
@@ -495,21 +503,21 @@ impl ObjectTree {
     }
 
     // an entry which may be anything depending on the path
-    pub fn add_entry<'a, I: Iterator<Item=&'a str>>(&mut self, location: Location, mut path: I) -> Result<(), DMError> {
-        let (parent, child) = self.get_from_path(location, &mut path)?;
+    pub fn add_entry<'a, I: Iterator<Item=&'a str>>(&mut self, location: Location, mut path: I, len: usize) -> Result<(), DMError> {
+        let (parent, child) = self.get_from_path(location, &mut path, len)?;
         if is_var_decl(child) {
             self.register_var(location, parent, "var", path)?;
         } else if is_proc_decl(child) {
             // proc{} block, children will be procs
         } else {
-            self.subtype_or_add(location, parent, child);
+            self.subtype_or_add(location, parent, child, len);
         }
         Ok(())
     }
 
     // an entry which is definitely a var because a value is specified
-    pub fn add_var<'a, I: Iterator<Item=&'a str>>(&mut self, location: Location, mut path: I, expr: Expression) -> Result<(), DMError> {
-        let (parent, initial) = self.get_from_path(location, &mut path)?;
+    pub fn add_var<'a, I: Iterator<Item=&'a str>>(&mut self, location: Location, mut path: I, len: usize, expr: Expression) -> Result<(), DMError> {
+        let (parent, initial) = self.get_from_path(location, &mut path, len)?;
         if let Some(type_var) = self.register_var(location, parent, initial, path)? {
             type_var.value.location = location;
             type_var.value.expression = Some(expr);
@@ -520,8 +528,8 @@ impl ObjectTree {
     }
 
     // an entry which is definitely a proc because an argument list is specified
-    pub fn add_proc<'a, I: Iterator<Item=&'a str>>(&mut self, location: Location, mut path: I) -> Result<(), DMError> {
-        let (parent, mut proc_name) = self.get_from_path(location, &mut path)?;
+    pub fn add_proc<'a, I: Iterator<Item=&'a str>>(&mut self, location: Location, mut path: I, len: usize) -> Result<(), DMError> {
+        let (parent, mut proc_name) = self.get_from_path(location, &mut path, len)?;
         let mut is_verb = None;
         if is_proc_decl(proc_name) {
             is_verb = Some(proc_name == "verb");

@@ -86,6 +86,10 @@ impl<'a> PathStack<'a> {
             rest,
         }
     }
+
+    fn len(&self) -> usize {
+        self.parts.len() + self.parent.as_ref().map_or(0, |p| p.len())
+    }
 }
 
 struct PathStackIter<'a> {
@@ -388,7 +392,7 @@ impl<'ctx, I> Parser<'ctx, I> where
         // read the contents for real
         match self.next("contents")? {
             t @ Punct(LBrace) => {
-                self.tree.add_entry(self.location, new_stack.iter())?;
+                self.tree.add_entry(self.location, new_stack.iter(), new_stack.len())?;
                 self.put_back(t);
                 require!(self.tree_block(new_stack));
                 SUCCESS
@@ -397,11 +401,11 @@ impl<'ctx, I> Parser<'ctx, I> where
                 let location = self.location;
                 let expr = require!(self.expression());
                 require!(self.exact(Punct(Semicolon)));
-                self.tree.add_var(location, new_stack.iter(), expr)?;
+                self.tree.add_var(location, new_stack.iter(), new_stack.len(), expr)?;
                 SUCCESS
             }
             Punct(LParen) => {
-                self.tree.add_proc(self.location, new_stack.iter())?;
+                self.tree.add_proc(self.location, new_stack.iter(), new_stack.len())?;
 
                 let parameters = require!(self.separated(Comma, RParen, None, |this| {
                     if let Some(()) = this.exact(Punct(Ellipsis))? {
@@ -460,7 +464,7 @@ impl<'ctx, I> Parser<'ctx, I> where
                 SUCCESS
             }
             other => {
-                self.tree.add_entry(self.location, new_stack.iter())?;
+                self.tree.add_entry(self.location, new_stack.iter(), new_stack.len())?;
                 self.put_back(other);
                 SUCCESS
             }

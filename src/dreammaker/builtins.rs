@@ -18,10 +18,10 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
                 #![allow(unreachable_code)]
                 let elems = [$(stringify!($elem)),*];
                 $(
-                    tree.add_var(location, elems.iter().cloned(), $val)?;
+                    tree.add_var(location, elems.iter().cloned(), elems.len(), $val)?;
                     break;
                 )*
-                tree.add_entry(location, elems.iter().cloned())?;
+                tree.add_entry(location, elems.iter().cloned(), elems.len())?;
                 break;
             })*
         }
