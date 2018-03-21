@@ -4,7 +4,6 @@ use dm::lexer::*;
 use dm::lexer::Token::*;
 use dm::lexer::Punctuation::*;
 
-#[cfg(test)]
 fn lex(f: &str) -> Vec<Token> {
     let context = Default::default();
     let result = Lexer::new(&context, Default::default(), f.bytes().map(Ok))

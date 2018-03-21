@@ -385,38 +385,3 @@ impl Image {
 fn mul255(x: u8, y: u8) -> u8 {
     (x as u16 * y as u16 / 255) as u8
 }
-
-// ----------------------------------------------------------------------------
-// Tests
-
-#[cfg(test)]
-mod test {
-    extern crate walkdir;
-    use self::walkdir::{DirEntry, WalkDir};
-    use super::*;
-
-    #[test]
-    fn parse_all_dmi() {
-        fn is_visible(entry: &DirEntry) -> bool {
-            entry.path()
-                .file_name()
-                .unwrap_or("".as_ref())
-                .to_str()
-                .map(|s| !s.starts_with("."))
-                .unwrap_or(true)
-        }
-
-        for entry in WalkDir::new("../tgstation")
-            .into_iter()
-            .filter_entry(is_visible)
-        {
-            let entry = entry.unwrap();
-            if entry.file_type().is_file() && entry.path().extension() == Some("dmi".as_ref()) {
-                println!("{:?}", entry.path());
-                let md = read_metadata(entry.path()).unwrap();
-                println!("{}", md);
-                parse_metadata(&md);
-            }
-        }
-    }
-}

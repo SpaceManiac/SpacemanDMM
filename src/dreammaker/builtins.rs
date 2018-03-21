@@ -229,10 +229,3 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
 
     Ok(())
 }
-
-#[test]
-fn check_builtins() {
-    let mut tree = ObjectTree::default();
-    register_builtins(&mut tree).unwrap();
-    println!("{:#?}", tree);
-}

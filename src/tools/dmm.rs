@@ -432,36 +432,3 @@ fn parse_constant(input: String) -> Result<Constant, DMError> {
     }
     ::dm::constants::simple_evaluate(expr)
 }
-
-// ----------------------------------------------------------------------------
-// Tests
-
-#[cfg(test)]
-mod test {
-    extern crate walkdir;
-    use self::walkdir::{DirEntry, WalkDir};
-    use super::*;
-
-    #[test]
-    fn parse_all_dmm() {
-        fn is_visible(entry: &DirEntry) -> bool {
-            entry.path()
-                .file_name()
-                .unwrap_or("".as_ref())
-                .to_str()
-                .map(|s| !s.starts_with("."))
-                .unwrap_or(true)
-        }
-
-        for entry in WalkDir::new("../tgstation")
-            .into_iter()
-            .filter_entry(is_visible)
-        {
-            let entry = entry.unwrap();
-            if entry.file_type().is_file() && entry.path().extension() == Some("dmm".as_ref()) {
-                println!("{:?}", entry.path());
-                Map::from_file(entry.path()).unwrap();
-            }
-        }
-    }
-}
