@@ -352,10 +352,13 @@ impl<'ctx, I> Parser<'ctx, I> where
         });
         // followed by ('/' ident)*
         loop {
-            match self.next("path separator")? {
+            match self.next("'/'")? {
                 Token::Punct(Punctuation::Slash) => {}
-                //Token::Punct(Punctuation::Dot) => {}
-                //Token::Punct(Punctuation::Colon) => {}
+                Token::Punct(p @ Punctuation::Dot) |
+                Token::Punct(p @ Punctuation::Colon) => {
+                    self.context.register_error(self.error(format!("path separated by '{}', should be '/'", p))
+                        .set_severity(super::Severity::Warning));
+                }
                 t => { self.put_back(t); break; }
             }
             if let Some(i) = self.ident()? {

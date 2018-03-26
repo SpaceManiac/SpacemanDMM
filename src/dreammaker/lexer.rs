@@ -95,6 +95,12 @@ table! {
     b"~",	BitNot;
 }
 
+impl fmt::Display for Punctuation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(::std::str::from_utf8(self.value()).unwrap())
+    }
+}
+
 /// A single DM token.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token {
@@ -186,7 +192,7 @@ impl fmt::Display for Token {
         use self::Token::*;
         match *self {
             Eof => f.write_str("__EOF__"),
-            Punct(p) => f.write_str(::std::str::from_utf8(p.value()).unwrap()),
+            Punct(p) => write!(f, "{}", p),
             Ident(ref i, _) => f.write_str(i),
             String(ref i) => write!(f, "\"{}\"", i),
             InterpStringBegin(ref i) => write!(f, "\"{}[", i),
