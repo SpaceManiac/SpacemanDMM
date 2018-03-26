@@ -253,6 +253,7 @@ pub struct Lexer<'ctx, I> {
     next: Option<u8>,
     /// The location of the last character returned by `next()`.
     location: Location,
+    final_newline: bool,
     at_line_head: bool,
     at_line_end: bool,
     directive: Directive,
@@ -284,6 +285,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                 line: 1,
                 column: 0,
             },
+            final_newline: false,
             at_line_head: true,
             at_line_end: false,
             directive: Directive::None,
@@ -594,8 +596,8 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                 Some(t) => t,
                 None => {
                     // always end with a newline
-                    if !self.at_line_head {
-                        self.at_line_head = true;
+                    if !self.final_newline {
+                        self.final_newline = true;
                         self.location.column += 1;
                         return Some(LocatedToken {
                             location: self.location(),
