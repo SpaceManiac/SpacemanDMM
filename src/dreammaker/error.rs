@@ -6,10 +6,11 @@ use std::cell::{RefCell, Ref};
 
 /// An identifier referring to a loaded file.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub struct FileId(u32);
+pub struct FileId(u16);
 
-const FILEID_BAD: FileId = FileId(::std::u32::MAX);
-const FILEID_BUILTINS: FileId = FileId(0xfffffffe);
+const FILEID_MAX: FileId = FileId(0xfffd);
+const FILEID_BUILTINS: FileId = FileId(0xfffe);
+const FILEID_BAD: FileId = FileId(0xffff);
 
 impl Default for FileId {
     fn default() -> FileId {
@@ -39,7 +40,10 @@ impl Context {
     /// Add a new file to the context and return its index.
     pub fn register_file(&self, path: PathBuf) -> FileId {
         let mut files = self.files.borrow_mut();
-        let len = files.len() as u32;
+        if files.len() > FILEID_MAX.0 as usize {
+            panic!("file limit of {} exceeded", FILEID_MAX.0);
+        }
+        let len = files.len() as u16;
         files.push(path);
         FileId(len)
     }
@@ -112,7 +116,14 @@ pub struct Location {
     /// The line number, starting at 1.
     pub line: u32,
     /// The column number, starting at 1.
-    pub column: u32,
+    pub column: u16,
+}
+
+impl Location {
+    /// Pack this Location for use in `u64`-keyed structures.
+    pub fn pack(self) -> u64 {
+        ((self.file.0 as u64) << 48) | ((self.line as u64) << 16) | (self.column as u64)
+    }
 }
 
 /// A trait for types which may yield location information.

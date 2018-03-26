@@ -301,7 +301,10 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         if self.at_line_end {
             self.at_line_end = false;
             self.at_line_head = true;
-            self.location.line += 1;
+            match self.location.line.checked_add(1) {
+                Some(new) => self.location.line = new,
+                None => panic!("per-file line limit of {} exceeded", self.location.line),
+            }
             self.location.column = 0;
             self.directive = Directive::None;
         }
@@ -313,7 +316,10 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                 } else if ch != b'\t' && ch != b' ' && self.at_line_head {
                     self.at_line_head = false;
                 }
-                self.location.column += 1;
+                match self.location.column.checked_add(1) {
+                    Some(new) => self.location.column = new,
+                    None => panic!("per-line column limit of {} exceeded", self.location.column),
+                }
                 Some(ch)
             }
             Some(Err(err)) => {
