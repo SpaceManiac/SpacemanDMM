@@ -1,3 +1,4 @@
+use std::collections::Bound;
 use range::RangeInclusive;
 use node::{Node, height};
 use iterators::RangePairIter;
@@ -194,11 +195,9 @@ impl<K: Ord, V> IntervalTree<K, V> {
 ///
 /// ```
     pub fn range(&self, range: RangeInclusive<K>) -> RangePairIter<K, V> {
-        RangePairIter::new(self, range)
+        RangePairIter::new(self, Bound::Included(range.start), Bound::Included(range.end))
     }
-}
 
-impl<V> IntervalTree<u64, V> {
 /// This function will return a read only iterator for all (key,value) pairs in the tree.
 /// # Examples
 /// ```
@@ -208,8 +207,8 @@ impl<V> IntervalTree<u64, V> {
 /// }
 ///
 /// ```
-    pub fn iter(&self) -> RangePairIter<u64, V> {
-        RangePairIter::new(self, ::range(0, 0xffff_ffff_ffff_ffff))
+    pub fn iter(&self) -> RangePairIter<K, V> {
+        RangePairIter::new(self, Bound::Unbounded, Bound::Unbounded)
     }
 }
 

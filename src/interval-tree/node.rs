@@ -6,19 +6,9 @@ pub struct Node<K, V> {
     pub key: RangeInclusive<K>,
     pub data: V,
     height: u32,
-    max: K,
+    pub max: K,
     pub left: Option<Box<Node<K, V>>>,
     pub right:Option<Box<Node<K, V>>>,
-}
-
-impl<K: Ord, V> Node<K, V> {
-    pub fn right_subtree_relevant(&self, range: &RangeInclusive<K>) -> bool {
-        range.end >= self.key.start
-    }
-
-    pub fn left_subtree_relevant(&self, range: &RangeInclusive<K>) -> bool {
-        self.max >= range.start
-    }
 }
 
 impl<K: Ord + Clone, V> Node<K, V> {

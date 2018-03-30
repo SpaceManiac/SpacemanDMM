@@ -1,5 +1,3 @@
-use std::cmp;
-
 #[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord, Copy)]
 /// A range bounded inclusively below and above (`start..=end`).
 ///
@@ -24,6 +22,7 @@ impl<Idx: Ord> RangeInclusive<Idx> {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn intersect<Idx: Ord>(lhs: &RangeInclusive<Idx>, rhs: &RangeInclusive<Idx>) -> bool {
-    cmp::max(&lhs.start, &rhs.start) <= cmp::min(&lhs.end, &rhs.end)
+    ::std::cmp::max(&lhs.start, &rhs.start) <= ::std::cmp::min(&lhs.end, &rhs.end)
 }
