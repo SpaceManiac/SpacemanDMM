@@ -262,6 +262,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "interval-tree"
+version = "0.8.0"
+dependencies = [
+ "rand 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "time 0.1.39 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "itertools"
 version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
