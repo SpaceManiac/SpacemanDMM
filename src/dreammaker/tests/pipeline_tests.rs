@@ -40,7 +40,7 @@ fn check_indentor() {
 fn check_parser() {
     let context = Context::default();
     with_test_dme(&context, |mut preprocessor| {
-        let _tree = parser::parse(&context, indents::IndentProcessor::new(&context, &mut preprocessor).map(Ok));
+        let _tree = parser::parse(&context, indents::IndentProcessor::new(&context, &mut preprocessor));
         assert!(context.print_all_errors());
 
         println!("\n--------\nSuccess!\n--------");

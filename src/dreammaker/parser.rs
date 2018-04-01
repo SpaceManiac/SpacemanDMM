@@ -13,7 +13,7 @@ use super::ast::*;
 /// Compilation failures will return a best-effort parse, and diagnostics will
 /// be registered with the provided `Context`.
 pub fn parse<I>(context: &Context, iter: I) -> ObjectTree where
-    I: IntoIterator<Item=Result<LocatedToken, DMError>>
+    I: IntoIterator<Item=LocatedToken>
 {
     let mut parser = Parser::new(context, iter.into_iter());
     match parser.root() {
@@ -226,7 +226,7 @@ impl<'ctx, I> HasLocation for Parser<'ctx, I> {
 }
 
 impl<'ctx, I> Parser<'ctx, I> where
-    I: Iterator<Item=Result<LocatedToken, DMError>>
+    I: Iterator<Item=LocatedToken>
 {
     /// Construct a new parser using the given input stream.
     pub fn new(context: &'ctx Context, input: I) -> Parser<I> {
@@ -276,12 +276,11 @@ impl<'ctx, I> Parser<'ctx, I> where
 
     fn next<S: Into<String>>(&mut self, expected: S) -> Result<Token, DMError> {
         let tok = self.next.take().map_or_else(|| match self.input.next() {
-            Some(Ok(token)) => {
+            Some(token) => {
                 self.expected.clear();
                 self.location = token.location;
                 Ok(token.token)
             }
-            Some(Err(e)) => Err(e),
             None => {
                 if !self.eof {
                     self.eof = true;
@@ -458,7 +457,7 @@ impl<'ctx, I> Parser<'ctx, I> where
                     // read repeatedly until it's a block or ends with a newline
                     require!(self.read_any_tt(&mut body_tt));
                 }
-                let mut subparser = Parser::new(self.context, body_tt.iter().cloned().map(Ok));
+                let mut subparser = Parser::new(self.context, body_tt.iter().cloned());
                 if subparser.block().is_ok() {
                     self.procs_good += 1;
                 } else {

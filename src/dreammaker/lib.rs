@@ -39,7 +39,7 @@ impl Context {
         Ok(parser::parse(self,
             indents::IndentProcessor::new(self,
                 preprocessor::Preprocessor::new(self, dme.to_owned())?
-            ).map(Ok)
+            )
         ))
     }
 }
