@@ -2,6 +2,7 @@
 #[cfg(feature="xml-rs")] extern crate xml;
 extern crate petgraph;
 extern crate linked_hash_map;
+extern crate interval_tree;
 
 use std::io;
 use std::path::Path;
@@ -24,6 +25,7 @@ pub mod lexer;
 pub mod preprocessor;
 pub mod indents;
 pub mod parser;
+pub mod annotation;
 pub mod ast;
 pub mod objtree;
 mod builtins;

@@ -124,6 +124,23 @@ impl Location {
     pub fn pack(self) -> u64 {
         ((self.file.0 as u64) << 48) | ((self.line as u64) << 16) | (self.column as u64)
     }
+
+    /// Return the predecessor of this `Location`.
+    pub fn pred(mut self) -> Location {
+        if self.column != 0 {
+            self.column -= 1;
+        } else if self.line != 0 {
+            self.column = !0;
+            self.line -= 1;
+        } else if self.file.0 != 0 {
+            self.column = !0;
+            self.line = !0;
+            self.file.0 -= 1;
+        } else {
+            panic!("cannot take pred() of lowest possible Location")
+        }
+        self
+    }
 }
 
 /// A trait for types which may yield location information.

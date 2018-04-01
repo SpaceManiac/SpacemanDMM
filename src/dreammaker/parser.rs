@@ -5,6 +5,7 @@ use linked_hash_map::LinkedHashMap;
 use super::{DMError, Location, HasLocation, Context};
 use super::lexer::{LocatedToken, Token, Punctuation};
 use super::objtree::ObjectTree;
+use super::annotation::*;
 use super::ast::*;
 
 /// Parse a token stream, in the form emitted by the indent processor, into
@@ -205,8 +206,9 @@ oper_table! { BINARY_OPS;
 ///
 /// Results are accumulated into an inner `ObjectTree`. To parse an entire
 /// environment, use the `parse` or `parse_environment` functions.
-pub struct Parser<'ctx, I> {
+pub struct Parser<'ctx, 'an, I> {
     context: &'ctx Context,
+    annotations: Option<&'an mut AnnotationTree>,
     tree: ObjectTree,
 
     input: I,
@@ -219,19 +221,20 @@ pub struct Parser<'ctx, I> {
     procs_good: u64,
 }
 
-impl<'ctx, I> HasLocation for Parser<'ctx, I> {
+impl<'ctx, 'an, I> HasLocation for Parser<'ctx, 'an, I> {
     fn location(&self) -> Location {
         self.location
     }
 }
 
-impl<'ctx, I> Parser<'ctx, I> where
+impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     I: Iterator<Item=LocatedToken>
 {
     /// Construct a new parser using the given input stream.
     pub fn new(context: &'ctx Context, input: I) -> Parser<I> {
         Parser {
             context,
+            annotations: None,
             tree: ObjectTree::with_builtins(),
 
             input,
@@ -243,6 +246,18 @@ impl<'ctx, I> Parser<'ctx, I> where
             procs_bad: 0,
             procs_good: 0,
         }
+    }
+
+    pub fn run(mut self) {
+        match self.root() {
+            Ok(Some(())) => {}
+            Ok(None) => self.context.register_error(self.parse_error_inner()),
+            Err(err) => self.context.register_error(err),
+        }
+    }
+
+    pub fn annotate_to(&mut self, annotations: &'an mut AnnotationTree) {
+        self.annotations = Some(annotations);
     }
 
     // ------------------------------------------------------------------------
@@ -290,7 +305,10 @@ impl<'ctx, I> Parser<'ctx, I> where
                 }
             }
         }, Ok);
-        self.expected.push(expected.into());
+        let what = expected.into();
+        if !what.is_empty() {
+            self.expected.push(what);
+        }
         tok
     }
 
@@ -299,6 +317,20 @@ impl<'ctx, I> Parser<'ctx, I> where
             panic!("cannot put_back twice")
         }
         self.next = Some(tok);
+    }
+
+    fn updated_location(&mut self) -> Location {
+        if let Ok(token) = self.next("") {
+            self.put_back(token);
+        }
+        self.location
+    }
+
+    fn annotate<F: FnOnce() -> Annotation>(&mut self, start: Location, f: F) {
+        let end = self.updated_location();
+        if let Some(dest) = self.annotations.as_mut() {
+            dest.insert(start..end, f());
+        }
     }
 
     fn try_another<T>(&mut self, tok: Token) -> Status<T> {
@@ -316,8 +348,12 @@ impl<'ctx, I> Parser<'ctx, I> where
     }
 
     fn ident(&mut self) -> Status<Ident> {
+        let start = self.updated_location();
         match self.next("identifier")? {
-            Token::Ident(i, _) => Ok(Some(i)),
+            Token::Ident(i, _) => {
+                self.annotate(start, || Annotation::Ident(i.clone()));
+                Ok(Some(i))
+            },
             other => self.try_another(other),
         }
     }
@@ -337,6 +373,7 @@ impl<'ctx, I> Parser<'ctx, I> where
         // path_sep :: '/' | '.'
         let mut absolute = false;
         let mut parts = Vec::new();
+        let start = self.updated_location();
 
         // handle leading slash
         if let Some(_) = self.exact(Token::Punct(Punctuation::Slash))? {
@@ -365,6 +402,7 @@ impl<'ctx, I> Parser<'ctx, I> where
             }
         }
 
+        self.annotate(start, || Annotation::TreePath(parts.clone()));
         success((absolute, parts))
     }
 
@@ -396,7 +434,9 @@ impl<'ctx, I> Parser<'ctx, I> where
             t @ Punct(LBrace) => {
                 self.tree.add_entry(self.location, new_stack.iter(), new_stack.len())?;
                 self.put_back(t);
+                let start = self.updated_location();
                 require!(self.tree_block(new_stack));
+                self.annotate(start, || Annotation::TreeBlock(new_stack.iter().map(|t| t.to_owned()).collect()));
                 SUCCESS
             }
             Punct(Assign) => {
