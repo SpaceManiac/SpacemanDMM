@@ -13,7 +13,9 @@ pub fn default_defines(defines: &mut HashMap<String, Define>) {
 
     macro_rules! c {
         ($($i:ident = $($x:expr),*;)*) => {
-            $(defines.insert(stringify!($i).into(), Define::Constant { subst: vec![$($x),*] });)*
+            $(
+                assert!(defines.insert(stringify!($i).into(), Define::Constant { subst: vec![$($x),*] }).is_none());
+            )*
         }
     }
     c! {
@@ -70,6 +72,11 @@ pub fn default_defines(defines: &mut HashMap<String, Define>) {
         SEE_THRU = Int(512);
         SEE_BLACKNESS = Int(1024);
 
+        SEEINVIS = Int(2);
+        SEEMOBS = Int(4);
+        SEEOBJS = Int(8);
+        SEETURFS = Int(16);
+
         LONG_GLIDE = Int(1);
         RESET_COLOR = Int(2);
         RESET_ALPHA = Int(4);
@@ -94,6 +101,17 @@ pub fn default_defines(defines: &mut HashMap<String, Define>) {
         EYE_PERSPECTIVE = Int(1);
         EDGE_PERSPECTIVE = Int(2);
 
+        MATRIX_COPY = Int(0);
+        MATRIX_MULTIPLY = Int(1);
+        MATRIX_ADD = Int(2);
+        MATRIX_SUBTRACT = Int(3);
+        MATRIX_INVERT = Int(4);
+        MATRIX_ROTATE = Int(5);
+        MATRIX_SCALE = Int(6);
+        MATRIX_TRANSLATE = Int(7);
+        MATRIX_INTERPOLATE = Int(8);
+        MATRIX_MODIFY = Int(128);
+
         MOUSE_ACTIVE_POINTER = Int(1);
 
         MS_WINDOWS = String("MS Windows".into());
@@ -114,13 +132,22 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         column: 1,
     };
 
+    macro_rules! ignore {
+        ($($x:tt)*) => {}
+    }
+
     macro_rules! entries {
-        ($($($elem:ident)/ * $(= $val:expr)*;)*) => {
+        ($($($elem:ident)/ * $(($($arg:ident),*))* $(= $val:expr)*;)*) => {
             $(loop {
                 #![allow(unreachable_code)]
                 let elems = [$(stringify!($elem)),*];
                 $(
                     tree.add_var(location, elems.iter().cloned(), elems.len() + 1, $val)?;
+                    break;
+                )*
+                $(
+                    tree.add_proc(location, elems.iter().cloned(), elems.len() + 1)?;
+                    $(ignore!($arg);)*
                     break;
                 )*
                 tree.add_entry(location, elems.iter().cloned(), elems.len() + 1)?;
@@ -316,17 +343,55 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         sound/var/repeat;
         sound/var/wait;
         sound/var/channel;
-        sound/var/volume;
-        sound/var/frequency;
-        sound/var/pan;
-        sound/var/priority;
-        sound/var/status;
-        sound/var/x;
-        sound/var/y;
-        sound/var/z;
-        sound/var/falloff;
-        sound/var/environment;
+        sound/var/frequency = int!(0);
+        sound/var/pan = int!(0);
+        sound/var/volume = int!(100);
+        sound/var/priority = int!(0);
+        sound/var/status = int!(0);
+        sound/var/environment = int!(-1);
         sound/var/echo;
+        sound/var/x = int!(0);
+        sound/var/y = int!(0);
+        sound/var/z = int!(0);
+        sound/var/falloff = int!(1);
+        sound/New(file, repeat, wait, channel, volume);
+
+        matrix;
+        matrix/var/a;
+        matrix/var/b;
+        matrix/var/c;
+        matrix/var/d;
+        matrix/var/e;
+        matrix/var/f;
+        matrix/New();
+        matrix/proc/Multiply(m);
+        matrix/proc/Add(m);
+        matrix/proc/Subtract(m);
+        matrix/proc/Invert();
+        matrix/proc/Turn(a);
+        matrix/proc/Scale(x, y);
+        matrix/proc/Translate(x, y);
+        matrix/proc/Interpolate(m2, t);
+
+        exception;
+        exception/var/name;
+        exception/var/desc;
+        exception/var/file;
+        exception/var/line;
+        exception/New(name, file, line);
+
+        regex/var/name;
+        regex/var/flags;
+        regex/var/text;
+        regex/var/match;
+        regex/var/list/group;
+        regex/var/index;
+        regex/var/next;
+        regex/New(text, flags);
+        regex/proc/Find(text, start, end);
+        regex/proc/Replace(text, rep, start, end);
+
+        mutable_appearance/parent_type = path!(/image);
     };
 
     Ok(())
