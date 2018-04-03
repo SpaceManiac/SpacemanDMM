@@ -12,15 +12,22 @@ use super::{DMError, Location, HasLocation, FileId, Context, Severity};
 
 #[derive(Debug, Clone)]
 enum Define {
-    Constant(Vec<Token>),
-    Function(Vec<String>, Vec<Token>, bool),
+    Constant {
+        subst: Vec<Token>,
+    },
+    Function {
+        params: Vec<String>,
+        subst: Vec<Token>,
+        variadic: bool,
+    },
 }
 
 fn default_defines(defines: &mut HashMap<String, Define>) {
     use super::lexer::Token::*;
+
     macro_rules! c {
         ($($i:ident = $($x:expr),*;)*) => {
-            $(defines.insert(stringify!($i).into(), Define::Constant(vec![$($x),*]));)*
+            $(defines.insert(stringify!($i).into(), Define::Constant { subst: vec![$($x),*] });)*
         }
     }
     c! {
@@ -386,7 +393,7 @@ impl<'ctx> Preprocessor<'ctx> {
                     // both constant and function defines
                     "define" => {
                         expect_token!((define_name, ws) = Token::Ident(define_name, ws));
-                        let mut args = Vec::new();
+                        let mut params = Vec::new();
                         let mut subst = Vec::new();
                         let mut variadic = false;
                         'outer: loop {
@@ -397,9 +404,9 @@ impl<'ctx> Preprocessor<'ctx> {
                                             return Err(self.error("only the last parameter of a macro may be variadic"));
                                         }
                                         match next!() {
-                                            Token::Ident(name, _) => args.push(name),
+                                            Token::Ident(name, _) => params.push(name),
                                             Token::Punct(Punctuation::Ellipsis) => {
-                                                args.push("__VA_ARGS__".to_owned());  // default
+                                                params.push("__VA_ARGS__".to_owned());  // default
                                                 variadic = true;
                                             }
                                             _ => return Err(self.error("malformed macro parameters, expected name"))
@@ -431,10 +438,10 @@ impl<'ctx> Preprocessor<'ctx> {
                             }
                         }
                         self.context.register_define(define_name.clone(), self.last_input_loc);
-                        if args.is_empty() {
-                            self.defines.insert(define_name, Define::Constant(subst));
+                        if params.is_empty() {
+                            self.defines.insert(define_name, Define::Constant { subst });
                         } else {
-                            self.defines.insert(define_name, Define::Function(args, subst, variadic));
+                            self.defines.insert(define_name, Define::Function { params, subst, variadic });
                         }
                     }
                     "undef" => {
@@ -460,7 +467,7 @@ impl<'ctx> Preprocessor<'ctx> {
             Token::Ident(ref ident, _) if ident != self.include_stack.top_no_expand() => {
                 // if it's a define, perform the substitution
                 match self.defines.get(ident).cloned() { // TODO
-                    Some(Define::Constant(subst)) => {
+                    Some(Define::Constant { subst }) => {
                         let e = Include::Expansion {
                             name: ident.to_owned(),
                             tokens: subst.into_iter().collect(),
@@ -469,7 +476,7 @@ impl<'ctx> Preprocessor<'ctx> {
                         self.include_stack.stack.push(e);
                         return Ok(());
                     }
-                    Some(Define::Function(ref params, ref subst, variadic)) => {
+                    Some(Define::Function { ref params, ref subst, variadic }) => {
                         // if it's not followed by an LParen, it isn't really a function call
                         match next!() {
                             Token::Punct(Punctuation::LParen) => {}
