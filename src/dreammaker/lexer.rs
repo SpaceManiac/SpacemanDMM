@@ -686,6 +686,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                         skip_newlines = true;
                         continue;
                     }
+                    b'@' => continue,  // TODO: parse these rather than ignoring them
                     _ => {
                         if !found_illegal {
                             self.context.register_error(self.error(format!("illegal byte 0x{:x}", first)));
