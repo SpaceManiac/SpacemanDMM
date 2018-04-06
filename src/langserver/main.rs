@@ -259,6 +259,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                     capabilities: ServerCapabilities {
                         definition_provider: Some(true),
                         workspace_symbol_provider: Some(true),
+                        hover_provider: Some(true),
                         text_document_sync: Some(TextDocumentSyncCapability::Options(TextDocumentSyncOptions {
                             open_close: Some(true),
                             change: Some(TextDocumentSyncKind::Incremental),
@@ -365,6 +366,32 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 } else {
                     None
                 }
+            };
+            |params: HoverRequest| {
+                let path = url_to_path(params.text_document.uri)?;
+                let contents = self.docs.read(&path).map_err(invalid_request)?;
+
+                let context = Default::default();
+                let lexer = dm::lexer::Lexer::from_read(&context, Default::default(), contents);
+                let indent = dm::indents::IndentProcessor::new(&context, lexer);
+                let mut annotations = dm::annotation::AnnotationTree::default();
+                {
+                    let mut parser = dm::parser::Parser::new(&context, indent);
+                    parser.annotate_to(&mut annotations);
+                    parser.run();
+                }
+
+                Some(Hover {
+                    range: None,
+                    contents: HoverContents::Markup(MarkupContent {
+                        kind: MarkupKind::Markdown,
+                        value: format!("```\n{}\n```", annotations.get_location(dm::Location {
+                            file: Default::default(),
+                            line: params.position.line as u32 + 1,
+                            column: params.position.character as u16 + 1,
+                        }).map(|(_, x)| format!("{:?}", x)).collect::<Vec<_>>().join("\n")),
+                    }),
+                })
             };
         }
     }
