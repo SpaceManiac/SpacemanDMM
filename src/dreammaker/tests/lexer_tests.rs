@@ -9,7 +9,7 @@ fn lex(f: &str) -> Vec<Token> {
     let result = Lexer::new(&context, Default::default(), f.bytes().map(Ok))
         .map(|t| t.token)
         .collect();
-    assert!(context.errors().is_empty());
+    assert!(context.print_all_errors());
     result
 }
 

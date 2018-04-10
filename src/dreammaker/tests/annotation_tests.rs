@@ -30,7 +30,7 @@ fn annotation_basic() {
         parser.annotate_to(&mut annotations);
         parser.run();
     }
-    context.print_all_errors();
+    assert!(context.print_all_errors());
     println!("len: {}", annotations.len());
     for each in annotations.get_location(Location {
         file: Default::default(),
