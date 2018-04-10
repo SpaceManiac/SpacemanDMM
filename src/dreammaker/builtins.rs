@@ -1,20 +1,25 @@
 //! BYOND built-in types, procs, and vars.
 
-use std::collections::HashMap;
-
 use super::objtree::*;
 use super::ast::*;
 use super::{Location, FileId, DMError};
-use super::preprocessor::Define;
+use super::preprocessor::{DefineMap, Define};
 
 /// Register BYOND builtin macros to the given define map.
-pub fn default_defines(defines: &mut HashMap<String, Define>) {
+pub fn default_defines(defines: &mut DefineMap) {
     use super::lexer::Token::*;
+    let location = Location {
+        file: FileId::builtins(),
+        line: 1,
+        column: 1,
+    };
 
     macro_rules! c {
         ($($i:ident = $($x:expr),*;)*) => {
             $(
-                assert!(defines.insert(stringify!($i).into(), Define::Constant { subst: vec![$($x),*] }).is_none());
+                assert!(defines.insert(
+                    stringify!($i).into(), (location, Define::Constant { subst: vec![$($x),*] })
+                ).is_none());
             )*
         }
     }

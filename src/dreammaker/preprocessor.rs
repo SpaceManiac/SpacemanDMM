@@ -4,13 +4,15 @@ use std::io;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
+use interval_tree::{IntervalTree, range};
+
 use super::lexer::*;
 use super::{DMError, Location, HasLocation, FileId, Context, Severity};
 
 // ----------------------------------------------------------------------------
 // Macro representation and predefined macros
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Define {
     Constant {
         subst: Vec<Token>,
@@ -20,6 +22,26 @@ pub enum Define {
         subst: Vec<Token>,
         variadic: bool,
     },
+}
+
+pub type DefineHistory = IntervalTree<Location, (String, Define)>;
+pub type DefineMap = HashMap<String, (Location, Define)>;
+
+/// Cut a DefineMap from the state of a DefineHistory at the given location.
+fn active_at_location(history: &DefineHistory, location: Location) -> DefineMap {
+    history
+        .range(range(location, location))
+        .map(|(range, &(ref name, ref define))| (name.clone(), (range.start, define.clone())))
+        .collect()
+}
+
+/// Test whether two DefineMaps are equal, ignoring definition locations.
+fn defines_equal(lhs: &DefineMap, rhs: &DefineMap) -> bool {
+    if lhs.len() != rhs.len() {
+        return false;
+    }
+
+    lhs.iter().all(|(key, &(_, ref value))| rhs.get(key).map_or(false, |&(_, ref v)| *value == *v))
 }
 
 // ----------------------------------------------------------------------------
@@ -142,7 +164,8 @@ pub struct Preprocessor<'ctx> {
     context: &'ctx Context,
 
     env_file: PathBuf,
-    defines: HashMap<String, Define>,
+    history: DefineHistory,
+    defines: DefineMap,
     maps: Vec<PathBuf>,
     skins: Vec<PathBuf>,
     include_stack: IncludeStack<'ctx>,
@@ -159,6 +182,7 @@ impl<'ctx> HasLocation for Preprocessor<'ctx> {
 }
 
 impl<'ctx> Preprocessor<'ctx> {
+    /// Create a new preprocessor from the given Context and environment file.
     pub fn new(context: &'ctx Context, env_file: PathBuf) -> io::Result<Self> {
         let mut pp = Preprocessor {
             context,
@@ -166,6 +190,7 @@ impl<'ctx> Preprocessor<'ctx> {
             include_stack: IncludeStack {
                 stack: vec![Include::new(context, env_file)?],
             },
+            history: Default::default(),
             defines: Default::default(),
             maps: Default::default(),
             skins: Default::default(),
@@ -176,6 +201,59 @@ impl<'ctx> Preprocessor<'ctx> {
         super::builtins::default_defines(&mut pp.defines);
         Ok(pp)
     }
+
+    /// Move all active defines to the define history.
+    pub fn finalize(&mut self) {
+        let mut i = 0;
+        for (name, (start, define)) in self.defines.drain() {
+            // Give each define its own end column in order to avoid key
+            // collisions in the interval tree.
+            i += 1;
+            let end = Location {
+                file: FileId::default(),
+                line: !0,
+                column: i,
+            };
+            self.history.insert(range(start, end), (name, define));
+        }
+    }
+
+    /// Fork a child preprocessor from this preprocessor's historic state at
+    /// the start of the given file.
+    pub fn branch_at_file(&self, file: FileId) -> Preprocessor<'ctx> {
+        let location = Location { file, line: 0, column: 0 };
+        let defines = active_at_location(&self.history, location);
+
+        Preprocessor {
+            context: self.context,
+            env_file: self.env_file.clone(),
+            include_stack: IncludeStack { stack: Vec::new() },
+            history: Default::default(),  // TODO: support branching a second time
+            defines,
+            maps: Default::default(),
+            skins: Default::default(),
+            ifdef_stack: Default::default(),  // should be fine
+            last_input_loc: location,
+            output: Default::default(),
+        }
+    }
+
+    /// Check whether this preprocessor's state as of the end of the given file
+    /// matches the given child preprocessor.
+    pub fn matches_end_of_file(&self, file: FileId, other: &Preprocessor) -> bool {
+        let location = Location { file, line: !0, column: !0 };
+        let defines = active_at_location(&self.history, location);
+        defines_equal(&defines, &other.defines)
+    }
+
+    /// Push a DM file to the top of this preprocessor's stack.
+    pub fn push_file(&mut self, path: PathBuf) -> io::Result<()> {
+        self.include_stack.stack.push(Include::new(self.context, path)?);
+        Ok(())
+    }
+
+    // ------------------------------------------------------------------------
+    // Internal utilities
 
     fn is_disabled(&self) -> bool {
         self.ifdef_stack.iter().any(|x| !x.active)
@@ -189,6 +267,10 @@ impl<'ctx> Preprocessor<'ctx> {
         // TODO: read until Newline and evaluate that expression
         //println!("#if {:?}", self.location());
         Ok(false)
+    }
+
+    fn move_to_history(&mut self, name: String, previous: (Location, Define)) {
+        self.history.insert(range(previous.0, self.last_input_loc), (name, previous.1));
     }
 
     #[allow(unreachable_code)]
@@ -340,16 +422,30 @@ impl<'ctx> Preprocessor<'ctx> {
                             }
                         }
                         self.context.register_define(define_name.clone(), self.last_input_loc);
-                        if params.is_empty() {
-                            self.defines.insert(define_name, Define::Constant { subst });
+                        let define = if params.is_empty() {
+                            Define::Constant { subst }
                         } else {
-                            self.defines.insert(define_name, Define::Function { params, subst, variadic });
+                            Define::Function { params, subst, variadic }
+                        };
+                        if let Some(previous) = self.defines.insert(define_name.clone(), (self.last_input_loc, define)) {
+                            // DM doesn't issue a warning for this, but it's usually a mistake, so let's
+                            self.context.register_error(DMError::new(self.last_input_loc,
+                                format!("macro redefined: {}", define_name)).set_severity(Severity::Warning));
+                            self.context.register_error(DMError::new(previous.0,
+                                "previous definition").set_severity(Severity::Hint));
+                            self.move_to_history(define_name, previous);
                         }
                     }
                     "undef" => {
                         expect_token!((define_name) = Token::Ident(define_name, _));
                         expect_token!(() = Token::Punct(Punctuation::Newline));
-                        self.defines.remove(&define_name); // TODO: warn if none
+                        if let Some(previous) = self.defines.remove(&define_name) {
+                            self.move_to_history(define_name, previous);
+                        } else {
+                            self.context.register_error(DMError::new(self.last_input_loc,
+                                format!("macro undefined while not defined: {}", define_name)
+                            ).set_severity(Severity::Warning));
+                        }
                     }
                     "warning" | "warn" => {
                         expect_token!((text) = Token::String(text));
@@ -373,7 +469,7 @@ impl<'ctx> Preprocessor<'ctx> {
             Token::Ident(ref ident, _) if ident != self.include_stack.top_no_expand() => {
                 // if it's a define, perform the substitution
                 match self.defines.get(ident).cloned() { // TODO
-                    Some(Define::Constant { subst }) => {
+                    Some((_, Define::Constant { subst })) => {
                         let e = Include::Expansion {
                             name: ident.to_owned(),
                             tokens: subst.into_iter().collect(),
@@ -382,7 +478,7 @@ impl<'ctx> Preprocessor<'ctx> {
                         self.include_stack.stack.push(e);
                         return Ok(());
                     }
-                    Some(Define::Function { ref params, ref subst, variadic }) => {
+                    Some((_, Define::Function { ref params, ref subst, variadic })) => {
                         // if it's not followed by an LParen, it isn't really a function call
                         match next!() {
                             Token::Punct(Punctuation::LParen) => {}
