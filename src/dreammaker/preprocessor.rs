@@ -351,10 +351,14 @@ impl<'ctx> Preprocessor<'ctx> {
                         expect_token!(() = Token::Punct(Punctuation::Newline));
                         self.defines.remove(&define_name); // TODO: warn if none
                     }
-                    "warning" | "warn" | "error" => {
-                        // TODO: report warnings as warnings rather than errors
+                    "warning" | "warn" => {
                         expect_token!((text) = Token::String(text));
-                        return Err(DMError::new(self.last_input_loc, format!("#{} {}", ident, text)));
+                        self.context.register_error(DMError::new(self.last_input_loc, format!("#{} {}", ident, text))
+                            .set_severity(Severity::Warning));
+                    }
+                    "error" => {
+                        expect_token!((text) = Token::String(text));
+                        self.context.register_error(DMError::new(self.last_input_loc, format!("#{} {}", ident, text)));
                     }
                     // none of this other stuff should even exist
                     _ => return Err(DMError::new(self.last_input_loc, format!("unknown directive: #{}", ident)))
