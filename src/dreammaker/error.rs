@@ -8,8 +8,9 @@ use std::cell::{RefCell, Ref};
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct FileId(u16);
 
-const FILEID_MAX: FileId = FileId(0xfffd);
-const FILEID_BUILTINS: FileId = FileId(0xfffe);
+const FILEID_BUILTINS: FileId = FileId(0x0000);
+const FILEID_MIN: FileId = FileId(0x0001);
+const FILEID_MAX: FileId = FileId(0xfffe);
 const FILEID_BAD: FileId = FileId(0xffff);
 
 impl Default for FileId {
@@ -45,7 +46,7 @@ impl Context {
         }
         let len = files.len() as u16;
         files.push(path);
-        FileId(len)
+        FileId(len + FILEID_MIN.0)
     }
 
     /// Look up a file path by its index returned from `register_file`.
@@ -53,8 +54,8 @@ impl Context {
         if file == FILEID_BUILTINS {
             return "(builtins)".into();
         }
+        let idx = (file.0 - FILEID_MIN.0) as usize;
         let files = self.files.borrow();
-        let idx = file.0 as usize;
         if idx > files.len() {
             "(unknown)".into()
         } else {
@@ -88,7 +89,7 @@ impl Context {
             self.file_path(error.location.file).display(),
             error.location.line,
             error.location.column)?;
-        writeln!(w, "{}\n", error.desc)
+        writeln!(w, "{}: {}\n", error.severity, error.desc)
     }
 
     /// Pretty-print all registered diagnostics to standard error.
@@ -178,6 +179,17 @@ pub enum Severity {
 impl Default for Severity {
     fn default() -> Severity {
         Severity::Error
+    }
+}
+
+impl fmt::Display for Severity {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Severity::Error => f.write_str("error"),
+            Severity::Warning => f.write_str("warning"),
+            Severity::Info => f.write_str("info"),
+            Severity::Hint => f.write_str("hint"),
+        }
     }
 }
 
