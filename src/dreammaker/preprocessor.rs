@@ -24,24 +24,85 @@ pub enum Define {
     },
 }
 
+/// An interval tree representing historic macro definitions.
 pub type DefineHistory = IntervalTree<Location, (String, Define)>;
-pub type DefineMap = HashMap<String, (Location, Define)>;
 
-/// Cut a DefineMap from the state of a DefineHistory at the given location.
-fn active_at_location(history: &DefineHistory, location: Location) -> DefineMap {
-    history
-        .range(range(location, location))
-        .map(|(range, &(ref name, ref define))| (name.clone(), (range.start, define.clone())))
-        .collect()
+/// A map from macro names to their locations and definitions.
+///
+/// Redefinitions of macros push to a stack, and undefining the macro returns
+/// it to the previous entry in the stack, only fully undefining it when the
+/// stack is exhausted.
+#[derive(Debug, Clone, Default)]
+pub struct DefineMap {
+    inner: HashMap<String, Vec<(Location, Define)>>,
 }
 
-/// Test whether two DefineMaps are equal, ignoring definition locations.
-fn defines_equal(lhs: &DefineMap, rhs: &DefineMap) -> bool {
-    if lhs.len() != rhs.len() {
-        return false;
+impl DefineMap {
+    /// Returns the number of elements in the map.
+    pub fn len(&self) -> usize {
+        self.inner.len()
     }
 
-    lhs.iter().all(|(key, &(_, ref value))| rhs.get(key).map_or(false, |&(_, ref v)| *value == *v))
+    /// Returns true if the map contains a value for the specified key.
+    pub fn contains_key(&self, key: &str) -> bool {
+        self.inner.get(key).map_or(false, |v| !v.is_empty())
+    }
+
+    /// Returns a reference to the value corresponding to the key.
+    pub fn get(&self, key: &str) -> Option<&(Location, Define)> {
+        self.inner.get(key).and_then(|v| v.last())
+    }
+
+    /// Inserts a key-value pair into the map.
+    ///
+    /// Returns `None` if the key was not present, or its most recent location
+    /// if it was.
+    pub fn insert(&mut self, key: String, value: (Location, Define)) -> Option<Location> {
+        let stack = self.inner.entry(key).or_insert_with(Default::default);
+        let result = stack.last().map(|&(loc, _)| loc);
+        stack.push(value);
+        result
+    }
+
+    /// Removes a key from the map, returning the value at the key if the key
+    /// was previously in the map.
+    pub fn remove(&mut self, key: &str) -> Option<(Location, Define)> {
+        let (remove, result);
+        match self.inner.get_mut(key) {
+            None => return None,
+            Some(stack) => {
+                result = stack.pop();
+                remove = stack.is_empty();
+            }
+        }
+        if remove {
+            self.inner.remove(key);
+        }
+        result
+    }
+
+    /// Cut a DefineMap from the state of a DefineHistory at the given location.
+    fn from_history(history: &DefineHistory, location: Location) -> DefineMap {
+        let mut map = DefineMap::default();
+        for (range, &(ref name, ref define)) in history.range(range(location, location)) {
+            map.insert(name.clone(), (range.start, define.clone()));
+        }
+        map
+    }
+
+    /// Test whether two DefineMaps are equal, ignoring definition locations.
+    fn equals(&self, rhs: &DefineMap) -> bool {
+        if self.len() != rhs.len() {
+            return false;
+        }
+
+        self.inner.iter().all(|(key, value)| rhs.inner.get(key).map_or(false, |v| {
+            if value.len() != v.len() {
+                return false;
+            }
+            value.iter().zip(v.iter()).all(|(lhs, rhs)| lhs.1 == rhs.1)
+        }))
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -205,24 +266,26 @@ impl<'ctx> Preprocessor<'ctx> {
     /// Move all active defines to the define history.
     pub fn finalize(&mut self) {
         let mut i = 0;
-        for (name, (start, define)) in self.defines.drain() {
-            // Give each define its own end column in order to avoid key
-            // collisions in the interval tree.
-            i += 1;
-            let end = Location {
-                file: FileId::default(),
-                line: !0,
-                column: i,
-            };
-            self.history.insert(range(start, end), (name, define));
+        for (name, vector) in self.defines.inner.drain() {
+            for (start, define) in vector {
+                // Give each define its own end column in order to avoid key
+                // collisions in the interval tree.
+                i += 1;
+                let end = Location {
+                    file: FileId::default(),
+                    line: !0,
+                    column: i,
+                };
+                self.history.insert(range(start, end), (name.clone(), define));
+            }
         }
     }
 
-    /// Fork a child preprocessor from this preprocessor's historic state at
+    /// Branch a child preprocessor from this preprocessor's historic state at
     /// the start of the given file.
     pub fn branch_at_file(&self, file: FileId) -> Preprocessor<'ctx> {
         let location = Location { file, line: 0, column: 0 };
-        let defines = active_at_location(&self.history, location);
+        let defines = DefineMap::from_history(&self.history, location);
 
         Preprocessor {
             context: self.context,
@@ -242,8 +305,8 @@ impl<'ctx> Preprocessor<'ctx> {
     /// matches the given child preprocessor.
     pub fn matches_end_of_file(&self, file: FileId, other: &Preprocessor) -> bool {
         let location = Location { file, line: !0, column: !0 };
-        let defines = active_at_location(&self.history, location);
-        defines_equal(&defines, &other.defines)
+        let defines = DefineMap::from_history(&self.history, location);
+        defines.equals(&other.defines)
     }
 
     /// Push a DM file to the top of this preprocessor's stack.
@@ -427,13 +490,12 @@ impl<'ctx> Preprocessor<'ctx> {
                         } else {
                             Define::Function { params, subst, variadic }
                         };
-                        if let Some(previous) = self.defines.insert(define_name.clone(), (self.last_input_loc, define)) {
+                        if let Some(previous_loc) = self.defines.insert(define_name.clone(), (self.last_input_loc, define)) {
                             // DM doesn't issue a warning for this, but it's usually a mistake, so let's
                             self.context.register_error(DMError::new(self.last_input_loc,
                                 format!("macro redefined: {}", define_name)).set_severity(Severity::Warning));
-                            self.context.register_error(DMError::new(previous.0,
+                            self.context.register_error(DMError::new(previous_loc,
                                 "previous definition").set_severity(Severity::Hint));
-                            self.move_to_history(define_name, previous);
                         }
                     }
                     "undef" => {
