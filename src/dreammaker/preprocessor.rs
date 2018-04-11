@@ -338,10 +338,11 @@ impl<'ctx> Preprocessor<'ctx> {
 
     #[allow(unreachable_code)]
     fn real_next(&mut self, read: Token) -> Result<(), DMError> {
+        let mut _last_expected_loc = self.last_input_loc;
         macro_rules! next {
             () => {
                 match self.inner_next() {
-                    Some(x) => x.token,
+                    Some(x) => { _last_expected_loc = x.location; x.token },
                     None => return Err(self.error("unexpected EOF"))
                 }
             }
@@ -440,6 +441,7 @@ impl<'ctx> Preprocessor<'ctx> {
                     // both constant and function defines
                     "define" => {
                         expect_token!((define_name, ws) = Token::Ident(define_name, ws));
+                        let define_name_loc = _last_expected_loc;
                         let mut params = Vec::new();
                         let mut subst = Vec::new();
                         let mut variadic = false;
@@ -484,27 +486,28 @@ impl<'ctx> Preprocessor<'ctx> {
                                 }
                             }
                         }
-                        self.context.register_define(define_name.clone(), self.last_input_loc);
+                        self.context.register_define(define_name.clone(), define_name_loc);
                         let define = if params.is_empty() {
                             Define::Constant { subst }
                         } else {
                             Define::Function { params, subst, variadic }
                         };
-                        if let Some(previous_loc) = self.defines.insert(define_name.clone(), (self.last_input_loc, define)) {
+                        if let Some(previous_loc) = self.defines.insert(define_name.clone(), (define_name_loc, define)) {
                             // DM doesn't issue a warning for this, but it's usually a mistake, so let's
-                            self.context.register_error(DMError::new(self.last_input_loc,
+                            self.context.register_error(DMError::new(define_name_loc,
                                 format!("macro redefined: {}", define_name)).set_severity(Severity::Warning));
                             self.context.register_error(DMError::new(previous_loc,
-                                "previous definition").set_severity(Severity::Hint));
+                                "previous definition").set_severity(Severity::Info));
                         }
                     }
                     "undef" => {
                         expect_token!((define_name) = Token::Ident(define_name, _));
+                        let define_name_loc = _last_expected_loc;
                         expect_token!(() = Token::Punct(Punctuation::Newline));
                         if let Some(previous) = self.defines.remove(&define_name) {
                             self.move_to_history(define_name, previous);
                         } else {
-                            self.context.register_error(DMError::new(self.last_input_loc,
+                            self.context.register_error(DMError::new(define_name_loc,
                                 format!("macro undefined while not defined: {}", define_name)
                             ).set_severity(Severity::Warning));
                         }
