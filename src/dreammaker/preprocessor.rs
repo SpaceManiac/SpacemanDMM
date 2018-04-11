@@ -113,7 +113,7 @@ enum Include<'ctx> {
     File {
         path: PathBuf,
         file: FileId,
-        lexer: Lexer<'ctx, io::Bytes<io::BufReader<File>>>,
+        lexer: Lexer<'ctx, io::Bytes<Box<io::Read>>>,
     },
     Expansion {
         name: String,
@@ -127,7 +127,7 @@ impl<'ctx> Include<'ctx> {
         let reader = io::BufReader::new(File::open(&path)?);
         let idx = context.register_file(path.clone());
         Ok(Include::File {
-            lexer: Lexer::from_read(context, idx, reader),
+            lexer: Lexer::from_read(context, idx, Box::new(reader)),
             file: idx,
             path: path,
         })
@@ -317,9 +317,14 @@ impl<'ctx> Preprocessor<'ctx> {
     }
 
     /// Push a DM file to the top of this preprocessor's stack.
-    pub fn push_file(&mut self, path: PathBuf) -> io::Result<()> {
-        self.include_stack.stack.push(Include::new(self.context, path)?);
-        Ok(())
+    pub fn push_file<R: io::Read + 'static>(&mut self, path: PathBuf, read: R) -> FileId {
+        let idx = self.context.register_file(path.clone());
+        self.include_stack.stack.push(Include::File {
+            lexer: Lexer::from_read(self.context, idx, Box::new(read)),
+            file: idx,
+            path,
+        });
+        idx
     }
 
     // ------------------------------------------------------------------------

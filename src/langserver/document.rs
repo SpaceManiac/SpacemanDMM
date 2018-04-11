@@ -1,10 +1,11 @@
 //! Utilities for managing the text document synchronization facilities of the
 //! language server protocol.
 
-use std::io::{self, Read};
+use std::io::{self, Read, BufRead};
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use jsonrpc;
 use langserver::{TextDocumentItem, TextDocumentIdentifier,
@@ -87,9 +88,9 @@ impl DocumentStore {
     }
 
     #[allow(dead_code)]
-    pub fn read<'a>(&'a self, path: &Path) -> io::Result<Box<io::Read + 'a>> {
+    pub fn read(&self, path: &Path) -> io::Result<Box<io::Read>> {
         match self.map.get(path) {
-            Some(document) => Ok(Box::new(document.text.as_bytes()) as Box<io::Read>),
+            Some(document) => Ok(Box::new(Cursor::new(document.text.clone())) as Box<io::Read>),
             None => ::std::fs::File::open(path).map(|f| Box::new(f) as Box<io::Read>),
         }
     }
@@ -98,12 +99,12 @@ impl DocumentStore {
 /// The internal representation of document contents received from the client.
 struct Document {
     version: u64,
-    text: String,
+    text: Rc<String>,
 }
 
 impl Document {
     fn new(version: u64, text: String) -> Document {
-        Document { version, text }
+        Document { version, text: Rc::new(text) }
     }
 
     fn change(&mut self, change: TextDocumentContentChangeEvent) -> Result<(), jsonrpc::Error> {
@@ -112,13 +113,13 @@ impl Document {
             _ => {
                 // "If range and rangeLength are omitted the new text is
                 // considered to be the full content of the document."
-                self.text = change.text;
+                self.text = Rc::new(change.text);
                 return Ok(());
             }
         };
 
         let start_pos = total_offset(&self.text, range.start.line, range.start.character)?;
-        splice(&mut self.text, start_pos .. start_pos + range_length as usize, &change.text);
+        splice(Rc::make_mut(&mut self.text), start_pos .. start_pos + range_length as usize, &change.text);
         Ok(())
     }
 }
@@ -186,4 +187,40 @@ pub fn find_word(text: &str, offset: usize) -> &str {
 
 fn is_ident(ch: char) -> bool {
     (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_'
+}
+
+/// An adaptation of `std::io::Cursor` which works on an `Rc<String>`, which
+/// sadly does not satisfy `AsRef<u8>`.
+struct Cursor {
+    inner: Rc<String>,
+    pos: u64,
+}
+
+impl Cursor {
+    fn new(inner: Rc<String>) -> Cursor {
+        Cursor { inner, pos: 0 }
+    }
+}
+
+impl Read for Cursor {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let n = Read::read(&mut self.fill_buf()?, buf)?;
+        self.pos += n as u64;
+        Ok(n)
+    }
+
+    fn read_exact(&mut self, buf: &mut [u8]) -> io::Result<()> {
+        let n = buf.len();
+        Read::read_exact(&mut self.fill_buf()?, buf)?;
+        self.pos += n as u64;
+        Ok(())
+    }
+}
+
+impl BufRead for Cursor {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        let amt = ::std::cmp::min(self.pos, self.inner.as_ref().len() as u64);
+        Ok(&self.inner.as_bytes()[(amt as usize)..])
+    }
+    fn consume(&mut self, amt: usize) { self.pos += amt as u64; }
 }
