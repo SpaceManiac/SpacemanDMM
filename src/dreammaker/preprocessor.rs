@@ -281,6 +281,11 @@ impl<'ctx> Preprocessor<'ctx> {
         }
     }
 
+    /// Access the define history. Will be incomplete until finalized.
+    pub fn history(&self) -> &DefineHistory {
+        &self.history
+    }
+
     /// Branch a child preprocessor from this preprocessor's historic state at
     /// the start of the given file.
     pub fn branch_at_file(&self, file: FileId) -> Preprocessor<'ctx> {
@@ -486,7 +491,6 @@ impl<'ctx> Preprocessor<'ctx> {
                                 }
                             }
                         }
-                        self.context.register_define(define_name.clone(), define_name_loc);
                         let define = if params.is_empty() {
                             Define::Constant { subst }
                         } else {

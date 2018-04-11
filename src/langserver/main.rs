@@ -160,6 +160,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         };
 
         self.objtree = dm::parser::parse(ctx, dm::indents::IndentProcessor::new(ctx, &mut pp));
+        pp.finalize();
         self.preprocessor = Some(pp);
         self.show_message(MessageType::Info, format!("Loaded {}", file_name));
 
@@ -323,14 +324,16 @@ handle_method_call! {
 
         let mut results = Vec::new();
         let start = std::time::Instant::now();
-        for &(ref name, location) in self.context.defines().iter() {
-            if query.matches_define(name) {
-                results.push(SymbolInformation {
-                    name: name.to_owned(),
-                    kind: SymbolKind::Constant,
-                    location: self.convert_location(location, "/DM", "/preprocessor/", name)?,
-                    container_name: None,
-                });
+        if let Some(ref preprocessor) = self.preprocessor {
+            for (range, &(ref name, _)) in preprocessor.history().iter() {
+                if query.matches_define(name) {
+                    results.push(SymbolInformation {
+                        name: name.to_owned(),
+                        kind: SymbolKind::Constant,
+                        location: self.convert_location(range.start, "/DM", "/preprocessor/", name)?,
+                        container_name: None,
+                    });
+                }
             }
         }
 

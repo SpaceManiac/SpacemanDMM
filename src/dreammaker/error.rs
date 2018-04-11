@@ -33,8 +33,6 @@ pub struct Context {
     files: RefCell<Vec<PathBuf>>,
     /// A list of errors, warnings, and other diagnostics generated.
     errors: RefCell<Vec<DMError>>,
-    /// A list of all preprocessor symbols in the project.
-    defines: RefCell<Vec<(String, Location)>>,
 }
 
 impl Context {
@@ -71,16 +69,6 @@ impl Context {
     /// Access the list of diagnostics generated so far.
     pub fn errors(&self) -> Ref<[DMError]> {
         Ref::map(self.errors.borrow(), |x| &**x)
-    }
-
-    /// Push a preprocessor symbol to the symbol list.
-    pub fn register_define(&self, name: String, location: Location) {
-        self.defines.borrow_mut().push((name, location));
-    }
-
-    /// Access the list of preprocessor symbols.
-    pub fn defines(&self) -> Ref<[(String, Location)]> {
-        Ref::map(self.defines.borrow(), |x| &**x)
     }
 
     /// Pretty-print a `DMError` to the given output.
