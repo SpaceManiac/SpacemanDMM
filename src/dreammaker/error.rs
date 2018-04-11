@@ -1,8 +1,9 @@
 //! Error, warning, and other diagnostics handling.
 
 use std::{fmt, error, io};
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 use std::cell::{RefCell, Ref};
+use std::collections::HashMap;
 
 /// An identifier referring to a loaded file.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
@@ -31,6 +32,8 @@ impl FileId {
 pub struct Context {
     /// The list of loaded files.
     files: RefCell<Vec<PathBuf>>,
+    /// Reverse mapping from paths to file numbers.
+    reverse_files: RefCell<HashMap<PathBuf, FileId>>,
     /// A list of errors, warnings, and other diagnostics generated.
     errors: RefCell<Vec<DMError>>,
 }
@@ -38,13 +41,23 @@ pub struct Context {
 impl Context {
     /// Add a new file to the context and return its index.
     pub fn register_file(&self, path: PathBuf) -> FileId {
+        if let Some(id) = self.reverse_files.borrow().get(&path).cloned() {
+            return id;
+        }
         let mut files = self.files.borrow_mut();
         if files.len() > FILEID_MAX.0 as usize {
             panic!("file limit of {} exceeded", FILEID_MAX.0);
         }
         let len = files.len() as u16;
-        files.push(path);
-        FileId(len + FILEID_MIN.0)
+        files.push(path.clone());
+        let id = FileId(len + FILEID_MIN.0);
+        self.reverse_files.borrow_mut().insert(path, id);
+        id
+    }
+
+    /// Look up a file's ID by its path, without inserting it.
+    pub fn get_file(&self, path: &Path) -> Option<FileId> {
+        self.reverse_files.borrow().get(path).cloned()
     }
 
     /// Look up a file path by its index returned from `register_file`.
