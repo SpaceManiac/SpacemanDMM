@@ -43,7 +43,8 @@ fn main() {
     }
 
     let stdio = io::StdIo;
-    Engine::new(&stdio, &stdio).run()
+    let context = Default::default();
+    Engine::new(&stdio, &stdio, &context).run()
 }
 
 const VERSION: Option<jsonrpc::Version> = Some(jsonrpc::Version::V2);
@@ -76,7 +77,8 @@ struct Engine<'a, R: 'a, W: 'a> {
     parent_pid: u64,
     root: PathBuf,
 
-    context: dm::Context,
+    context: &'a dm::Context,
+    preprocessor: Option<dm::preprocessor::Preprocessor<'a>>,
     objtree: dm::objtree::ObjectTree,
 
     #[cfg(debug_assertions)]
@@ -84,7 +86,7 @@ struct Engine<'a, R: 'a, W: 'a> {
 }
 
 impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
-    fn new(read: &'a R, write: &'a W) -> Self {
+    fn new(read: &'a R, write: &'a W, context: &'a dm::Context) -> Self {
         Engine {
             read,
             write,
@@ -94,7 +96,8 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             parent_pid: 0,
             root: Default::default(),
 
-            context: Default::default(),
+            context,
+            preprocessor: None,
             objtree: Default::default(),
 
             #[cfg(debug_assertions)]
@@ -147,6 +150,63 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             },
             range: langserver::Range::new(pos, pos),
         })
+    }
+
+    // ------------------------------------------------------------------------
+    // Environment tracking
+
+    fn parse_environment(&mut self, environment: PathBuf) -> Result<(), jsonrpc::Error> {
+        // handle the parsing
+        let file_name = environment.file_name().unwrap_or("..".as_ref()).to_string_lossy();
+        eprintln!("environment: {}", environment.display());
+
+        let ctx = self.context;
+        let mut pp = match dm::preprocessor::Preprocessor::new(ctx, environment.clone()) {
+            Ok(pp) => pp,
+            Err(err) => {
+                self.show_message(MessageType::Error, format!("Error loading {}", file_name));
+                eprintln!("{:?}", err);
+                return Ok(());
+            }
+        };
+
+        self.objtree = dm::parser::parse(ctx, dm::indents::IndentProcessor::new(ctx, &mut pp));
+        self.preprocessor = Some(pp);
+        self.show_message(MessageType::Info, format!("Loaded {}", file_name));
+
+        // initial diagnostics pump
+        let mut map: HashMap<_, Vec<_>> = HashMap::new();
+        for error in self.context.errors().iter() {
+            let loc = error.location();
+            let pos = langserver::Position {
+                line: loc.line.saturating_sub(1) as u64,
+                character: loc.column.saturating_sub(1) as u64,
+            };
+            let diag = langserver::Diagnostic {
+                message: error.description().to_owned(),
+                severity: Some(convert_severity(error.severity())),
+                range: langserver::Range {
+                    start: pos,
+                    end: pos,
+                },
+                .. Default::default()
+            };
+            map.entry(self.context.file_path(loc.file))
+                .or_insert_with(Default::default)
+                .push(diag);
+        }
+
+        for (path, diagnostics) in map {
+            let joined_path = self.root.join(path);
+            self.issue_notification::<langserver::notification::PublishDiagnostics>(
+                langserver::PublishDiagnosticsParams {
+                    uri: path_to_url(joined_path)?,
+                    diagnostics,
+                }
+            );
+        }
+
+        Ok(())
     }
 
     // ------------------------------------------------------------------------
@@ -437,50 +497,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                     }
                 }
                 if let Some(environment) = environment {
-                    let file_name = environment.file_name().unwrap_or("..".as_ref()).to_string_lossy();
-                    eprintln!("environment: {}", environment.display());
-                    match self.context.parse_environment(&environment) {
-                        Ok(objtree) => {
-                            self.objtree = objtree;
-                            self.show_message(MessageType::Info, format!("Loaded {}", file_name));
-                        },
-                        Err(err) => {
-                            self.show_message(MessageType::Error, format!("Error loading {}", file_name));
-                            eprintln!("{:?}", err);
-                        }
-                    }
-
-                    // initial diagnostics pump
-                    let mut map: HashMap<_, Vec<_>> = HashMap::new();
-                    for error in self.context.errors().iter() {
-                        let loc = error.location();
-                        let pos = langserver::Position {
-                            line: loc.line.saturating_sub(1) as u64,
-                            character: loc.column.saturating_sub(1) as u64,
-                        };
-                        let diag = langserver::Diagnostic {
-                            message: error.description().to_owned(),
-                            severity: Some(convert_severity(error.severity())),
-                            range: langserver::Range {
-                                start: pos,
-                                end: pos,
-                            },
-                            .. Default::default()
-                        };
-                        map.entry(self.context.file_path(loc.file))
-                            .or_insert_with(Default::default)
-                            .push(diag);
-                    }
-
-                    for (path, diagnostics) in map {
-                        let joined_path = self.root.join(path);
-                        self.issue_notification::<langserver::notification::PublishDiagnostics>(
-                            langserver::PublishDiagnosticsParams {
-                                uri: path_to_url(joined_path)?,
-                                diagnostics,
-                            }
-                        );
-                    }
+                    self.parse_environment(environment)?;
                 } else {
                     self.show_message(MessageType::Error, "No DME found, language service not available.");
                 }

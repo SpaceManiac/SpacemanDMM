@@ -37,7 +37,7 @@ impl Context {
     /// Will only return failure on an `io::Error`. Compilation failures will
     /// return a best-effort parse. Call `print_all_errors` to pretty-print
     /// errors to standard error.
-    pub fn parse_environment(&mut self, dme: &Path) -> io::Result<objtree::ObjectTree> {
+    pub fn parse_environment(&self, dme: &Path) -> io::Result<objtree::ObjectTree> {
         Ok(parser::parse(self,
             indents::IndentProcessor::new(self,
                 preprocessor::Preprocessor::new(self, dme.to_owned())?
