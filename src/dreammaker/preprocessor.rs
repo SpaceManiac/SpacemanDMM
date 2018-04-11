@@ -143,7 +143,7 @@ impl<'ctx> HasLocation for Include<'ctx> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct IncludeStack<'ctx> {
     stack: Vec<Include<'ctx>>,
 }
@@ -202,6 +202,7 @@ impl<'ctx> Iterator for IncludeStack<'ctx> {
 // ----------------------------------------------------------------------------
 // The main preprocessor
 
+#[derive(Debug)]
 struct Ifdef {
     location: Location,
     active: bool,
@@ -220,6 +221,7 @@ impl Ifdef {
     }
 }
 
+#[derive(Debug)]
 /// C-like preprocessor for DM. Expands directives and macro invocations.
 pub struct Preprocessor<'ctx> {
     context: &'ctx Context,

@@ -252,7 +252,6 @@ enum Directive {
 }
 
 /// The lexer, which serves as a source of tokens through iteration.
-#[derive(Debug)]
 pub struct Lexer<'ctx, I> {
     context: &'ctx Context,
     input: I,
@@ -264,6 +263,22 @@ pub struct Lexer<'ctx, I> {
     at_line_end: bool,
     directive: Directive,
     interp_stack: Vec<Interpolation>,
+}
+
+impl<'ctx, I> fmt::Debug for Lexer<'ctx, I> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.debug_struct("Lexer")
+            .field("context", self.context)
+            // input omitted
+            .field("next", &self.next)
+            .field("location", &self.location)
+            .field("final_newline", &self.final_newline)
+            .field("at_line_head", &self.at_line_head)
+            .field("at_line_end", &self.at_line_end)
+            .field("directive", &self.directive)
+            .field("interp_stack", &self.interp_stack)
+            .finish()
+    }
 }
 
 impl<'ctx, I: Iterator<Item=io::Result<u8>>> HasLocation for Lexer<'ctx, I> {
