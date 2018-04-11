@@ -14,6 +14,7 @@ extern crate languageserver_types as langserver;
 extern crate jsonrpc_core as jsonrpc;
 extern crate dreammaker as dm;
 
+#[macro_use] mod macros;
 mod io;
 mod document;
 mod symbol_search;
@@ -54,18 +55,6 @@ enum InitStatus {
     Starting,
     Running,
     ShuttingDown,
-}
-
-#[cfg(debug_assertions)]
-macro_rules! dbgwriteln {
-    ($($t:tt)*) => {{
-        use std::io::Write;
-        writeln!($($t)*).expect("debug-output failure")
-    }}
-}
-#[cfg(not(debug_assertions))]
-macro_rules! dbgwriteln {
-    ($($t:tt)*) => {}
 }
 
 struct Engine<'a, R: 'a, W: 'a> {
@@ -261,259 +250,209 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             },
         }
     }
+}
 
-    fn handle_method_call(&mut self, call: jsonrpc::MethodCall) -> Result<serde_json::Value, jsonrpc::Error> {
-        use langserver::*;
-        use langserver::request::*;
-
-        // "If the server receives a request... before the initialize request...
-        // the response should be an error with code: -32002"
-        if call.method != <Initialize>::METHOD && self.status != InitStatus::Running {
-            return Err(jsonrpc::Error {
-                code: jsonrpc::ErrorCode::from(-32002),
-                message: "method call before initialize or after shutdown".to_owned(),
-                data: None,
-            })
+handle_method_call! {
+    // ------------------------------------------------------------------------
+    // basic setup
+    on Initialize(&mut self, init) {
+        if self.status != InitStatus::Starting {
+            return Err(invalid_request(""))
         }
 
-        let params_value = params_to_value(call.params);
-
-        macro_rules! match_call {
-            ($(|$name:ident: $what:ty| $body:block;)*) => (
-                $(if call.method == <$what>::METHOD {
-                    let $name: <$what as Request>::Params = serde_json::from_value(params_value)
-                        .map_err(invalid_request)?;
-                    let result: <$what as Request>::Result = $body;
-                    Ok(serde_json::to_value(result).expect("encode problem"))
-                } else)* {
-                    eprintln!("Call NYI: {} -> {:?}", call.method, params_value);
-                    Err(jsonrpc::Error {
-                        code: jsonrpc::ErrorCode::InternalError,
-                        message: "not yet implemented".to_owned(),
-                        data: None,
-                    })
-                }
-            )
+        if let Some(id) = init.process_id {
+            self.parent_pid = id;
         }
-
-        match_call! {
-            // ----------------------------------------------------------------
-            // basic setup
-            |init: Initialize| {
-                if self.status != InitStatus::Starting {
-                    return Err(invalid_request(""))
-                }
-
-                if let Some(id) = init.process_id {
-                    self.parent_pid = id;
-                }
-                if let Some(url) = init.root_uri {
-                    self.root = url_to_path(url)?;
-                } else if let Some(path) = init.root_path {
-                    self.root = PathBuf::from(path);
-                } else {
-                    return Err(invalid_request("must provide root_uri or root_path"))
-                }
-                self.status = InitStatus::Running;
-                InitializeResult {
-                    capabilities: ServerCapabilities {
-                        definition_provider: Some(true),
-                        workspace_symbol_provider: Some(true),
-                        hover_provider: Some(true),
-                        text_document_sync: Some(TextDocumentSyncCapability::Options(TextDocumentSyncOptions {
-                            open_close: Some(true),
-                            change: Some(TextDocumentSyncKind::Incremental),
-                            .. Default::default()
-                        })),
-                        .. Default::default()
-                    }
-                }
-            };
-            |_empty: Shutdown| {
-                self.status = InitStatus::ShuttingDown;
-            };
-            // ----------------------------------------------------------------
-            // actual stuff provision
-            |params: GotoDefinition| {
-                let path = url_to_path(params.text_document.uri)?;
-                let contents = self.docs.get_contents(&path).map_err(invalid_request)?;
-                let offset = document::total_offset(&contents, params.position.line, params.position.character)?;
-                let word = document::find_word(&contents, offset);
-                if word.is_empty() {
-                    None
-                } else if word == "datum" {
-                    Some(GotoDefinitionResponse::Scalar(Location {
-                        uri: path_to_url(path)?,
-                        range: Range::new(
-                            Position::new(0, 0),
-                            Position::new(0, 0),
-                        ),
-                    }))
-                } else {
-                    None
-                }
-            };
-            |params: WorkspaceSymbol| {
-                let query = symbol_search::Query::parse(&params.query);
-                eprintln!("{:?} -> {:?}", params.query, query);
-
-                if let Some(query) = query {
-                    let mut results = Vec::new();
-                    let start = std::time::Instant::now();
-                    for &(ref name, location) in self.context.defines().iter() {
-                        if query.matches_define(name) {
-                            results.push(SymbolInformation {
-                                name: name.to_owned(),
-                                kind: SymbolKind::Constant,
-                                location: self.convert_location(location, "/DM", "/preprocessor/", name)?,
-                                container_name: None,
-                            });
-                        }
-                    }
-
-                    for (idx, ty) in self.objtree.graph.node_references() {
-                        if query.matches_type(&ty.name, &ty.path) {
-                            results.push(SymbolInformation {
-                                name: ty.name.clone(),
-                                kind: SymbolKind::Class,
-                                location: self.convert_location(ty.location, &ty.path, "", "")?,
-                                container_name: Some(ty.path[..ty.path.len() - ty.name.len() - 1].to_owned()),
-                            });
-                        }
-
-                        if !query.matches_on_type(&ty.path) {
-                            continue;
-                        }
-                        for (var_name, tv) in ty.vars.iter() {
-                            if let Some(decl) = tv.declaration.as_ref() {
-                                if query.matches_var(&var_name) {
-                                    results.push(SymbolInformation {
-                                        name: var_name.clone(),
-                                        kind: SymbolKind::Field,
-                                        location: self.convert_location(decl.location, &ty.path, "/var/", var_name)?,
-                                        container_name: Some(ty.path.clone()),
-                                    });
-                                }
-                            }
-                        }
-
-                        for (proc_name, pv) in ty.procs.iter() {
-                            if let Some(decl) = pv.declaration.as_ref() {
-                                if query.matches_proc(&proc_name, decl.is_verb) {
-                                    results.push(SymbolInformation {
-                                        name: proc_name.clone(),
-                                        kind: if idx.index() == 0 {
-                                            SymbolKind::Function
-                                        } else if ["init", "New", "Initialize"].contains(&&**proc_name) {
-                                            SymbolKind::Constructor
-                                        } else {
-                                            SymbolKind::Method
-                                        },
-                                        location: self.convert_location(decl.location, &ty.path, "/proc/", proc_name)?,
-                                        container_name: Some(ty.path.clone()),
-                                    });
-                                }
-                            }
-                        }
-                    }
-                    let elapsed = start.elapsed();
-                    eprintln!("    {} results in {}.{:03}s", results.len(), elapsed.as_secs(), elapsed.subsec_nanos() / 1_000_000);
-                    #[cfg(debug_assertions)] {
-                        // Serializing all these to the debug log is very slow.
-                        results.truncate(100);
-                    }
-                    Some(results)
-                } else {
-                    None
-                }
-            };
-            |params: HoverRequest| {
-                let path = url_to_path(params.text_document.uri)?;
-                let contents = self.docs.read(&path).map_err(invalid_request)?;
-
-                let context = Default::default();
-                let lexer = dm::lexer::Lexer::from_read(&context, Default::default(), contents);
-                let indent = dm::indents::IndentProcessor::new(&context, lexer);
-                let mut annotations = dm::annotation::AnnotationTree::default();
-                {
-                    let mut parser = dm::parser::Parser::new(&context, indent);
-                    parser.annotate_to(&mut annotations);
-                    parser.run();
-                }
-
-                Some(Hover {
-                    range: None,
-                    contents: HoverContents::Markup(MarkupContent {
-                        kind: MarkupKind::Markdown,
-                        value: format!("```\n{}\n```", annotations.get_location(dm::Location {
-                            file: Default::default(),
-                            line: params.position.line as u32 + 1,
-                            column: params.position.character as u16 + 1,
-                        }).map(|(_, x)| format!("{:?}", x)).collect::<Vec<_>>().join("\n")),
-                    }),
-                })
-            };
+        if let Some(url) = init.root_uri {
+            self.root = url_to_path(url)?;
+        } else if let Some(path) = init.root_path {
+            self.root = PathBuf::from(path);
+        } else {
+            return Err(invalid_request("must provide root_uri or root_path"))
+        }
+        self.status = InitStatus::Running;
+        InitializeResult {
+            capabilities: ServerCapabilities {
+                definition_provider: Some(true),
+                workspace_symbol_provider: Some(true),
+                hover_provider: Some(true),
+                text_document_sync: Some(TextDocumentSyncCapability::Options(TextDocumentSyncOptions {
+                    open_close: Some(true),
+                    change: Some(TextDocumentSyncKind::Incremental),
+                    .. Default::default()
+                })),
+                .. Default::default()
+            }
         }
     }
 
-    fn handle_notification(&mut self, notification: jsonrpc::Notification) -> Result<(), jsonrpc::Error> {
-        use langserver::notification::*;
+    on Shutdown(&mut self, ()) {
+        self.status = InitStatus::ShuttingDown;
+    }
 
-        // "Notifications should be dropped, except for the exit notification"
-        if notification.method != <Exit>::METHOD && self.status != InitStatus::Running {
-            return Ok(())
+    // ------------------------------------------------------------------------
+    // actual stuff provision
+    on GotoDefinition(&mut self, params) {
+        let path = url_to_path(params.text_document.uri)?;
+        let contents = self.docs.get_contents(&path).map_err(invalid_request)?;
+        let offset = document::total_offset(&contents, params.position.line, params.position.character)?;
+        let word = document::find_word(&contents, offset);
+        if word.is_empty() {
+            None
+        } else if word == "datum" {
+            Some(GotoDefinitionResponse::Scalar(Location {
+                uri: path_to_url(path)?,
+                range: Range::new(
+                    Position::new(0, 0),
+                    Position::new(0, 0),
+                ),
+            }))
+        } else {
+            None
+        }
+    }
+
+    on WorkspaceSymbol(&mut self, params) {
+        let query = symbol_search::Query::parse(&params.query);
+        eprintln!("{:?} -> {:?}", params.query, query);
+
+        let query = match query {
+            Some(query) => query,
+            None => return Ok(None),
+        };
+
+        let mut results = Vec::new();
+        let start = std::time::Instant::now();
+        for &(ref name, location) in self.context.defines().iter() {
+            if query.matches_define(name) {
+                results.push(SymbolInformation {
+                    name: name.to_owned(),
+                    kind: SymbolKind::Constant,
+                    location: self.convert_location(location, "/DM", "/preprocessor/", name)?,
+                    container_name: None,
+                });
+            }
         }
 
-        let params_value = params_to_value(notification.params);
+        for (idx, ty) in self.objtree.graph.node_references() {
+            if query.matches_type(&ty.name, &ty.path) {
+                results.push(SymbolInformation {
+                    name: ty.name.clone(),
+                    kind: SymbolKind::Class,
+                    location: self.convert_location(ty.location, &ty.path, "", "")?,
+                    container_name: Some(ty.path[..ty.path.len() - ty.name.len() - 1].to_owned()),
+                });
+            }
 
-        macro_rules! match_notify {
-            ($(|$name:ident: $what:ty| $body:block;)*) => (
-                $(if notification.method == <$what>::METHOD {
-                    let $name: <$what as Notification>::Params = serde_json::from_value(params_value)
-                        .map_err(invalid_request)?;
-                    $body
-                } else)* {
-                    eprintln!("Notify NYI: {} => {:?}", notification.method, params_value);
-                }
-                Ok(())
-            )
-        }
-
-        match_notify! {
-            // ----------------------------------------------------------------
-            // basic setup
-            |_empty: Exit| {
-                std::process::exit(if self.status == InitStatus::ShuttingDown { 0 } else { 1 });
-            };
-            |_empty: Initialized| {
-                eprintln!("workspace root: {}", self.root.display());
-                let mut environment = None;
-                for entry in std::fs::read_dir(&self.root).map_err(invalid_request)? {
-                    let entry = entry.map_err(invalid_request)?;
-                    let path = entry.path();
-                    if path.extension() == Some("dme".as_ref()) {
-                        environment = Some(path);
-                        break;
+            if !query.matches_on_type(&ty.path) {
+                continue;
+            }
+            for (var_name, tv) in ty.vars.iter() {
+                if let Some(decl) = tv.declaration.as_ref() {
+                    if query.matches_var(&var_name) {
+                        results.push(SymbolInformation {
+                            name: var_name.clone(),
+                            kind: SymbolKind::Field,
+                            location: self.convert_location(decl.location, &ty.path, "/var/", var_name)?,
+                            container_name: Some(ty.path.clone()),
+                        });
                     }
                 }
-                if let Some(environment) = environment {
-                    self.parse_environment(environment)?;
-                } else {
-                    self.show_message(MessageType::Error, "No DME found, language service not available.");
+            }
+
+            for (proc_name, pv) in ty.procs.iter() {
+                if let Some(decl) = pv.declaration.as_ref() {
+                    if query.matches_proc(&proc_name, decl.is_verb) {
+                        results.push(SymbolInformation {
+                            name: proc_name.clone(),
+                            kind: if idx.index() == 0 {
+                                SymbolKind::Function
+                            } else if ["init", "New", "Initialize"].contains(&&**proc_name) {
+                                SymbolKind::Constructor
+                            } else {
+                                SymbolKind::Method
+                            },
+                            location: self.convert_location(decl.location, &ty.path, "/proc/", proc_name)?,
+                            container_name: Some(ty.path.clone()),
+                        });
+                    }
                 }
-            };
-            // ----------------------------------------------------------------
-            // document content management
-            |params: DidOpenTextDocument| {
-                self.docs.open(params.text_document)?;
-            };
-            |params: DidCloseTextDocument| {
-                self.docs.close(params.text_document)?;
-            };
-            |params: DidChangeTextDocument| {
-                self.docs.change(params.text_document, params.content_changes)?;
-            };
+            }
         }
+        let elapsed = start.elapsed();
+        eprintln!("    {} results in {}.{:03}s", results.len(), elapsed.as_secs(), elapsed.subsec_nanos() / 1_000_000);
+        #[cfg(debug_assertions)] {
+            // Serializing all these to the debug log is very slow.
+            results.truncate(100);
+        }
+        Some(results)
+    }
+
+    on HoverRequest(&mut self, params) {
+        let path = url_to_path(params.text_document.uri)?;
+        let contents = self.docs.read(&path).map_err(invalid_request)?;
+
+        let context = Default::default();
+        let lexer = dm::lexer::Lexer::from_read(&context, Default::default(), contents);
+        let indent = dm::indents::IndentProcessor::new(&context, lexer);
+        let mut annotations = dm::annotation::AnnotationTree::default();
+        {
+            let mut parser = dm::parser::Parser::new(&context, indent);
+            parser.annotate_to(&mut annotations);
+            parser.run();
+        }
+
+        Some(Hover {
+            range: None,
+            contents: HoverContents::Markup(MarkupContent {
+                kind: MarkupKind::Markdown,
+                value: format!("```\n{}\n```", annotations.get_location(dm::Location {
+                    file: Default::default(),
+                    line: params.position.line as u32 + 1,
+                    column: params.position.character as u16 + 1,
+                }).map(|(_, x)| format!("{:?}", x)).collect::<Vec<_>>().join("\n")),
+            }),
+        })
+    }
+}
+
+handle_notification! {
+    // ------------------------------------------------------------------------
+    // basic setup
+    on Exit(&mut self, ()) {
+        std::process::exit(if self.status == InitStatus::ShuttingDown { 0 } else { 1 });
+    }
+
+    on Initialized(&mut self, _ignored) {
+        eprintln!("workspace root: {}", self.root.display());
+        let mut environment = None;
+        for entry in std::fs::read_dir(&self.root).map_err(invalid_request)? {
+            let entry = entry.map_err(invalid_request)?;
+            let path = entry.path();
+            if path.extension() == Some("dme".as_ref()) {
+                environment = Some(path);
+                break;
+            }
+        }
+        if let Some(environment) = environment {
+            self.parse_environment(environment)?;
+        } else {
+            self.show_message(MessageType::Error, "No DME found, language service not available.");
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // document content management
+    on DidOpenTextDocument(&mut self, params) {
+        self.docs.open(params.text_document)?;
+    }
+
+    on DidCloseTextDocument(&mut self, params) {
+        self.docs.close(params.text_document)?;
+    }
+
+    on DidChangeTextDocument(&mut self, params) {
+        self.docs.change(params.text_document, params.content_changes)?;
     }
 }
 
