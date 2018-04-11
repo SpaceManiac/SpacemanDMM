@@ -290,14 +290,14 @@ impl<'ctx> Preprocessor<'ctx> {
 
     /// Branch a child preprocessor from this preprocessor's historic state at
     /// the start of the given file.
-    pub fn branch_at_file(&self, file: FileId) -> Preprocessor<'ctx> {
+    pub fn branch_at_file<'ctx2>(&self, file: FileId, context: &'ctx2 Context) -> Preprocessor<'ctx2> {
         let location = Location { file, line: 0, column: 0 };
         let defines = DefineMap::from_history(&self.history, location);
 
         Preprocessor {
-            context: self.context,
+            context: context,
             env_file: self.env_file.clone(),
-            include_stack: IncludeStack { stack: Vec::new() },
+            include_stack: Default::default(),
             history: Default::default(),  // TODO: support branching a second time
             defines,
             maps: Default::default(),
