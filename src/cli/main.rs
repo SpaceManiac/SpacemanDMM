@@ -25,7 +25,13 @@ use dmm_tools::*;
 // Main driver
 
 fn main() {
-    let opt = Opt::from_args();
+    let opt = Opt::from_clap(&Opt::clap()
+        .long_version(concat!(
+            env!("CARGO_PKG_VERSION"), "\n",
+            include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")),
+        ).trim_right())
+        .get_matches());
+
     let mut context = Context::default();
     rayon::ThreadPoolBuilder::new()
         .num_threads(opt.jobs)
@@ -73,7 +79,11 @@ impl Context {
 }
 
 #[derive(StructOpt, Debug)]
-#[structopt(name="dmm-tools")]
+#[structopt(name="dmm-tools",
+author="Copyright (C) 2017-2018  Tad Hardesty",
+about="This program comes with ABSOLUTELY NO WARRANTY. This is free software,
+and you are welcome to redistribute it under the conditions of the GNU
+General Public License version 3.")]
 struct Opt {
     /// The environment file to operate under.
     #[structopt(short="e", long="env", default_value="tgstation.dme")]
