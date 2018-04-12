@@ -330,6 +330,22 @@ impl<'ctx> Preprocessor<'ctx> {
     // ------------------------------------------------------------------------
     // Internal utilities
 
+    fn in_environment(&self) -> bool {
+        for include in self.include_stack.stack.iter().rev() {
+            if let Include::File { ref path, .. } = *include {
+                return *path == self.env_file;
+            }
+        }
+        false
+    }
+
+    fn is_defined(&self, name: &str) -> bool {
+        match name {
+            "__MAIN__" => self.in_environment(),
+            _ => self.defines.contains_key(name),
+        }
+    }
+
     fn is_disabled(&self) -> bool {
         self.ifdef_stack.iter().any(|x| !x.active)
     }
@@ -386,13 +402,13 @@ impl<'ctx> Preprocessor<'ctx> {
                     "ifdef" => {
                         expect_token!((define_name) = Token::Ident(define_name, _));
                         expect_token!(() = Token::Punct(Punctuation::Newline));
-                        let enabled = self.defines.contains_key(&define_name);
+                        let enabled = self.is_defined(&define_name);
                         self.ifdef_stack.push(Ifdef::new(self.last_input_loc, enabled));
                     }
                     "ifndef" => {
                         expect_token!((define_name) = Token::Ident(define_name, _));
                         expect_token!(() = Token::Punct(Punctuation::Newline));
-                        let enabled = !self.defines.contains_key(&define_name);
+                        let enabled = !self.is_defined(&define_name);
                         self.ifdef_stack.push(Ifdef::new(self.last_input_loc, enabled));
                     }
                     "if" => {
@@ -503,14 +519,17 @@ impl<'ctx> Preprocessor<'ctx> {
                         } else {
                             Define::Function { params, subst, variadic }
                         };
-                        if let Some(previous_loc) = self.defines.insert(define_name.clone(), (define_name_loc, define)) {
-                            // DM doesn't issue a warning for this, but it's usually a mistake, so let's.
-                            // FILE_DIR is handled specially and sometimes makes sense to define multiple times.
-                            if define_name != "FILE_DIR" {
-                                self.context.register_error(DMError::new(define_name_loc,
-                                    format!("macro redefined: {}", define_name)).set_severity(Severity::Warning));
-                                self.context.register_error(DMError::new(previous_loc,
-                                    "previous definition").set_severity(Severity::Info));
+                        // DEBUG can only be defined in the root .dme file
+                        if define_name != "DEBUG" || self.in_environment() {
+                            if let Some(previous_loc) = self.defines.insert(define_name.clone(), (define_name_loc, define)) {
+                                // DM doesn't issue a warning for this, but it's usually a mistake, so let's.
+                                // FILE_DIR is handled specially and sometimes makes sense to define multiple times.
+                                if define_name != "FILE_DIR" {
+                                    self.context.register_error(DMError::new(define_name_loc,
+                                        format!("macro redefined: {}", define_name)).set_severity(Severity::Warning));
+                                    self.context.register_error(DMError::new(previous_loc,
+                                        "previous definition").set_severity(Severity::Info));
+                                }
                             }
                         }
                     }
