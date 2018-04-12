@@ -69,9 +69,6 @@ struct Engine<'a, R: 'a, W: 'a> {
     context: &'a dm::Context,
     preprocessor: Option<dm::preprocessor::Preprocessor<'a>>,
     objtree: dm::objtree::ObjectTree,
-
-    #[cfg(debug_assertions)]
-    debug: std::fs::File,
 }
 
 impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
@@ -88,9 +85,6 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             context,
             preprocessor: None,
             objtree: Default::default(),
-
-            #[cfg(debug_assertions)]
-            debug: std::fs::File::create("debug-output.txt").expect("debug-output failure"),
         }
     }
 
@@ -102,7 +96,6 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         T::Params: serde::Serialize,
     {
         let params = serde_json::to_value(params).expect("notification bad to_value");
-        dbgwriteln!(self.debug, "<== {}: {:#?}", T::METHOD, params);
         let request = Request::Single(Call::Notification(jsonrpc::Notification {
             jsonrpc: VERSION,
             method: T::METHOD.to_owned(),
@@ -206,7 +199,6 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         loop {
             let message = self.read.read().expect("request bad read");
 
-            dbgwriteln!(self.debug, "--> ({}) {}", message.len(), message);
             let mut outputs: Vec<Output> = match serde_json::from_str(&message) {
                 Ok(Request::Single(call)) => self.handle_call(call).into_iter().collect(),
                 Ok(Request::Batch(calls)) => calls.into_iter().flat_map(|call| self.handle_call(call)).collect(),
@@ -229,7 +221,6 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 _ => Response::Batch(outputs),
             };
 
-            dbgwriteln!(self.debug, "<-- {:#?}", response);
             self.write.write(serde_json::to_string(&response).expect("response bad to_string"));
         }
     }
@@ -384,10 +375,6 @@ handle_method_call! {
         }
         let elapsed = start.elapsed();
         eprintln!("    {} results in {}.{:03}s", results.len(), elapsed.as_secs(), elapsed.subsec_nanos() / 1_000_000);
-        #[cfg(debug_assertions)] {
-            // Serializing all these to the debug log is very slow.
-            results.truncate(100);
-        }
         Some(results)
     }
 

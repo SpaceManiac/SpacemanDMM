@@ -1,18 +1,5 @@
 //! Utility macros.
 
-#[cfg(debug_assertions)]
-macro_rules! dbgwriteln {
-    ($($t:tt)*) => {{
-        use std::io::Write;
-        writeln!($($t)*).expect("debug-output failure")
-    }}
-}
-
-#[cfg(not(debug_assertions))]
-macro_rules! dbgwriteln {
-    ($($t:tt)*) => {}
-}
-
 macro_rules! handle_method_call {
     ($(on $what:ident(&mut $self:ident, $p:pat) $b:block)*) => {
         impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
