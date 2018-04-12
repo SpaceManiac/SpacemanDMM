@@ -73,6 +73,7 @@ impl Context {
 }
 
 #[derive(StructOpt, Debug)]
+#[structopt(name="dmm-tools")]
 struct Opt {
     /// The environment file to operate under.
     #[structopt(short="e", long="env", default_value="tgstation.dme")]
