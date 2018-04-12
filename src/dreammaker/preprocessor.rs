@@ -504,11 +504,14 @@ impl<'ctx> Preprocessor<'ctx> {
                             Define::Function { params, subst, variadic }
                         };
                         if let Some(previous_loc) = self.defines.insert(define_name.clone(), (define_name_loc, define)) {
-                            // DM doesn't issue a warning for this, but it's usually a mistake, so let's
-                            self.context.register_error(DMError::new(define_name_loc,
-                                format!("macro redefined: {}", define_name)).set_severity(Severity::Warning));
-                            self.context.register_error(DMError::new(previous_loc,
-                                "previous definition").set_severity(Severity::Info));
+                            // DM doesn't issue a warning for this, but it's usually a mistake, so let's.
+                            // FILE_DIR is handled specially and sometimes makes sense to define multiple times.
+                            if define_name != "FILE_DIR" {
+                                self.context.register_error(DMError::new(define_name_loc,
+                                    format!("macro redefined: {}", define_name)).set_severity(Severity::Warning));
+                                self.context.register_error(DMError::new(previous_loc,
+                                    "previous definition").set_severity(Severity::Info));
+                            }
                         }
                     }
                     "undef" => {
