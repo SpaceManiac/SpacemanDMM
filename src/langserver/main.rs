@@ -379,44 +379,50 @@ handle_method_call! {
     }
 
     on HoverRequest(&mut self, params) {
-        let path = url_to_path(params.text_document.uri)?;
-        let contents = self.docs.read(&path).map_err(invalid_request)?;
+        #[cfg(debug_assertions)] {
+            let path = url_to_path(params.text_document.uri)?;
+            let contents = self.docs.read(&path).map_err(invalid_request)?;
 
-        let preprocessor = match self.preprocessor {
-            Some(ref pp) => pp,
-            None => { eprintln!("no preprocessor"); return Ok(None); }
-        };
-        let stripped = match path.strip_prefix(&self.root) {
-            Err(_) => { eprintln!("outside workspace: {}", path.display()); return Ok(None); },
-            Ok(path) => path
-        };
-        let file_id = match self.context.get_file(&stripped) {
-            None => { eprintln!("unregistered: {}", stripped.display()); return Ok(None); },
-            Some(id) => id
-        };
+            let preprocessor = match self.preprocessor {
+                Some(ref pp) => pp,
+                None => { eprintln!("no preprocessor"); return Ok(None); }
+            };
+            let stripped = match path.strip_prefix(&self.root) {
+                Err(_) => { eprintln!("outside workspace: {}", path.display()); return Ok(None); },
+                Ok(path) => path
+            };
+            let file_id = match self.context.get_file(&stripped) {
+                None => { eprintln!("unregistered: {}", stripped.display()); return Ok(None); },
+                Some(id) => id
+            };
 
-        let context = Default::default();
-        let mut preprocessor = preprocessor.branch_at_file(file_id, &context);
-        let file_id = preprocessor.push_file(stripped.to_owned(), contents);
-        let indent = dm::indents::IndentProcessor::new(&context, preprocessor);
-        let mut annotations = dm::annotation::AnnotationTree::default();
-        {
-            let mut parser = dm::parser::Parser::new(&context, indent);
-            parser.annotate_to(&mut annotations);
-            parser.run();
+            let context = Default::default();
+            let mut preprocessor = preprocessor.branch_at_file(file_id, &context);
+            let file_id = preprocessor.push_file(stripped.to_owned(), contents);
+            let indent = dm::indents::IndentProcessor::new(&context, preprocessor);
+            let mut annotations = dm::annotation::AnnotationTree::default();
+            {
+                let mut parser = dm::parser::Parser::new(&context, indent);
+                parser.annotate_to(&mut annotations);
+                parser.run();
+            }
+
+            Some(Hover {
+                range: None,
+                contents: HoverContents::Markup(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: format!("```\n{}\n```", annotations.get_location(dm::Location {
+                        file: file_id,
+                        line: params.position.line as u32 + 1,
+                        column: params.position.character as u16 + 1,
+                    }).map(|(_, x)| format!("{:?}", x)).collect::<Vec<_>>().join("\n")),
+                }),
+            })
         }
-
-        Some(Hover {
-            range: None,
-            contents: HoverContents::Markup(MarkupContent {
-                kind: MarkupKind::Markdown,
-                value: format!("```\n{}\n```", annotations.get_location(dm::Location {
-                    file: file_id,
-                    line: params.position.line as u32 + 1,
-                    column: params.position.character as u16 + 1,
-                }).map(|(_, x)| format!("{:?}", x)).collect::<Vec<_>>().join("\n")),
-            }),
-        })
+        #[cfg(not(debug_assertions))] {
+            let _ = params;
+            None
+        }
     }
 }
 
