@@ -528,7 +528,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                     self.context.register_error(DMError::new(define_name_loc,
                                         format!("macro redefined: {}", define_name)).set_severity(Severity::Warning));
                                     self.context.register_error(DMError::new(previous_loc,
-                                        "previous definition").set_severity(Severity::Info));
+                                        format!("previous definition of {}", define_name)).set_severity(Severity::Info));
                                 }
                             }
                         }
