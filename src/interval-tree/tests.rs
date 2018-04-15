@@ -48,21 +48,21 @@ fn test_empty(){
 }
 
 #[test]
-fn test_delete(){
+fn test_remove(){
     let data = 1337;
     let mut t = IntervalTree::<i32>::new();
     t.insert(RangeInclusive::new(1,1), data);
     t.insert(RangeInclusive::new(2,2), data+1);
     t.insert(RangeInclusive::new(3,3), data+2);
-    t.delete(RangeInclusive::new(1,1));
+    t.remove(RangeInclusive::new(1,1));
     assert!(!t.contains(RangeInclusive::new(1,1)));
     assert!( t.contains(RangeInclusive::new(2,2)));
     assert!( t.contains(RangeInclusive::new(3,3)));
-    t.delete(RangeInclusive::new(2,2));
+    t.remove(RangeInclusive::new(2,2));
     assert!(!t.contains(RangeInclusive::new(1,1)));
     assert!(!t.contains(RangeInclusive::new(2,2)));
     assert!( t.contains(RangeInclusive::new(3,3)));
-    t.delete(RangeInclusive::new(3,3));
+    t.remove(RangeInclusive::new(3,3));
     assert!(!t.contains(RangeInclusive::new(1,1)));
     assert!(!t.contains(RangeInclusive::new(2,2)));
     assert!(!t.contains(RangeInclusive::new(3,3)));
@@ -77,8 +77,8 @@ fn test_performance(){
     for _ in 1..10000 {
         t.insert(RangeInclusive::new(1,1), data);
         t.insert(RangeInclusive::new(20000,20000), data+1);
-        t.delete(RangeInclusive::new(1,1));
-        t.delete(RangeInclusive::new(20000,20000));
+        t.remove(RangeInclusive::new(1,1));
+        t.remove(RangeInclusive::new(20000,20000));
     }
     let end = PreciseTime::now();
     let diff_simple = start.to(end).num_milliseconds();
@@ -90,8 +90,8 @@ fn test_performance(){
     for _ in 1..10000 {
         t.insert(RangeInclusive::new(1,1), data);
         t.insert(RangeInclusive::new(20000,20000), data+1);
-        t.delete(RangeInclusive::new(1,1));
-        t.delete(RangeInclusive::new(20000,20000));
+        t.remove(RangeInclusive::new(1,1));
+        t.remove(RangeInclusive::new(20000,20000));
     }
     let end_2 = PreciseTime::now();
     let diff_full = start_2.to(end_2).num_milliseconds();
@@ -183,7 +183,7 @@ fn test_range_iter_nontrivial(){
             //assert!(t.test_theban_interval_tree());
         } else {
             set.remove(&range);
-            t.delete(range);
+            t.remove(range);
             assert!(!t.contains(range));
             //assert!(t.test_theban_interval_tree());
         };

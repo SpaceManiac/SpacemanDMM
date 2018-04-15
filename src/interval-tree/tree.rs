@@ -84,13 +84,13 @@ impl<K: Ord + Clone, V> IntervalTree<K, V> {
 ///
 /// let mut t=interval_tree::IntervalTree::<u64, i32>::new();
 /// t.insert(interval_tree::range(2,2),25);
-/// t.delete(interval_tree::range(2,2));
+/// t.remove(interval_tree::range(2,2));
 /// assert!(t.empty());
 /// // deleting nonexistant keys doesn't do anything
-/// t.delete(interval_tree::range(3,3));
+/// t.remove(interval_tree::range(3,3));
 /// assert!(t.empty());
 /// ```
-    pub fn delete(&mut self, key: RangeInclusive<K>) {
+    pub fn remove(&mut self, key: RangeInclusive<K>) {
         match self.root.take() {
             Some(box_to_node) => self.root = box_to_node.delete(key),
             None => return
@@ -238,7 +238,7 @@ mod tests {
                 assert!(t.contains(range));
                 assert!(is_interval_tree(&t.root));
             } else {
-                t.delete(range);
+                t.remove(range);
                 assert!(!t.contains(range));
                 assert!(is_interval_tree(&t.root));
             };
