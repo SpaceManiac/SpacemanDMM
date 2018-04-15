@@ -3,7 +3,7 @@ use std::io;
 use std::str::FromStr;
 use std::fmt;
 
-use super::{DMError, Location, HasLocation, FileId, Context};
+use super::{DMError, Location, HasLocation, FileId, Context, Severity};
 
 macro_rules! table {
     ($(#[$attr:meta])* table $tabname:ident: $repr:ty => $enum_:ident; $($literal:expr, $name:ident;)*) => {
@@ -450,14 +450,27 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
     fn read_number(&mut self, first: u8) -> Token {
         let (integer, radix, buf) = self.read_number_inner(first);
         if integer {
-            match i32::from_str_radix(&buf, radix) {
-                Ok(val) => Token::Int(val),
-                Err(e) => {
-                    self.context.register_error(self.error(
-                        format!("bad base-{} integer \"{}\": {}", radix, buf, e)));
-                    Token::Int(0)  // fallback
+            let original_error = match i32::from_str_radix(&buf, radix) {
+                Ok(val) => return Token::Int(val),
+                Err(e) => e,
+            };
+            // Try to parse it as a float instead - this will catch numbers
+            // that are formatted like integers but are out of the range of our
+            // integer type.
+            if radix == 10 {
+                if let Ok(val) = f32::from_str(&buf) {
+                    let val_str = val.to_string();
+                    if val_str != buf {
+                        self.context.register_error(self.error(
+                            format!("precision loss of integer constant: \"{}\" to {}", buf, val)
+                        ).set_severity(Severity::Warning));
+                    }
+                    return Token::Float(val)
                 }
             }
+            self.context.register_error(self.error(
+                format!("bad base-{} integer \"{}\": {}", radix, buf, original_error)));
+            Token::Int(0)  // fallback
         } else {
             // ignore radix
             match f32::from_str(&buf) {
