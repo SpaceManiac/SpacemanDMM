@@ -84,6 +84,8 @@ pub const RENDER_PASSES: &[RenderPassInfo] = &[
     pass!(FakeGlass, "fake-glass", "Add underlays to fake glass turfs.", true),
     pass!(transit_tube::TransitTube, "transit-tube", "Add overlays to connect transit tubes together.", true),
     pass!(structures::GravityGen, "gravity-gen", "Expand the gravity generator to the full structure.", true),
+    pass!(Wires, "only-powernet", "Render only power cables.", false),
+    pass!(Pipes, "only-pipenet", "Render only atmospheric pipes.", false),
 ];
 
 pub fn configure(include: &str, exclude: &str) -> Vec<Box<RenderPass>> {
@@ -230,5 +232,21 @@ impl RenderPass for Pretty {
                 }
             }
         }
+    }
+}
+
+#[derive(Default)]
+pub struct Wires;
+impl RenderPass for Wires {
+    fn late_filter(&self, atom: &Atom, _: &ObjectTree) -> bool {
+        atom.istype("/obj/structure/cable/")
+    }
+}
+
+#[derive(Default)]
+pub struct Pipes;
+impl RenderPass for Pipes {
+    fn late_filter(&self, atom: &Atom, _: &ObjectTree) -> bool {
+        atom.istype("/obj/machinery/atmospherics/pipe/")
     }
 }
