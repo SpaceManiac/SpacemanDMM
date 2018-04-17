@@ -20,7 +20,7 @@ dmm-tools = { path = "../tools" }
 
 [build-dependencies]
 chrono = "0.4.0"
-git2 = { version = "0.6", default-features = false }
+git2 = { version = "0.7", default-features = false }
 
 [features]
 flame = ["dmm-tools/flame"]

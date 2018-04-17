@@ -8,7 +8,7 @@ path = "lib.rs"
 
 [dependencies]
 png = "0.11.0"
-inflate = "0.3.3"
+inflate = "0.4.1"
 ndarray = "0.11.1"
 rand = "0.4.2"
 linked-hash-map = "0.5.0"
