@@ -592,6 +592,21 @@ impl<'ctx> Preprocessor<'ctx> {
                     self.danger_idents.0.insert(ident.clone(), self.last_input_loc);
                 }
 
+                // substitute special macros
+                if ident == "__FILE__" {
+                    for include in self.include_stack.stack.iter().rev() {
+                        if let Include::File { ref path, .. } = *include {
+                            self.output.push_back(Token::String(path.display().to_string()));
+                            return Ok(());
+                        }
+                    }
+                    self.output.push_back(Token::String(String::new()));
+                    return Ok(());
+                } else if ident == "__LINE__" {
+                    self.output.push_back(Token::Int(self.last_input_loc.line as i32));
+                    return Ok(());
+                }
+
                 // if it's a define, perform the substitution
                 match self.defines.get(ident).cloned() { // TODO
                     Some((_, Define::Constant { subst })) => {
