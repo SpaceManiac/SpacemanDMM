@@ -225,17 +225,22 @@ impl Ifdef {
 /// C-like preprocessor for DM. Expands directives and macro invocations.
 pub struct Preprocessor<'ctx> {
     context: &'ctx Context,
-
     env_file: PathBuf,
+
+    include_stack: IncludeStack<'ctx>,
+    last_input_loc: Location,
+    output: VecDeque<Token>,
+    ifdef_stack: Vec<Ifdef>,
+
     history: DefineHistory,
     defines: DefineMap,
     maps: Vec<PathBuf>,
     skins: Vec<PathBuf>,
-    include_stack: IncludeStack<'ctx>,
-    ifdef_stack: Vec<Ifdef>,
 
-    last_input_loc: Location,
-    output: VecDeque<Token>,
+    // .0 is being written, .1 is being read
+    last_printable_input_loc: Location,
+    danger_idents: (HashMap<String, Location>, HashMap<String, Location>),
+    in_interp_string: u32,
 }
 
 impl<'ctx> HasLocation for Preprocessor<'ctx> {
@@ -259,7 +264,10 @@ impl<'ctx> Preprocessor<'ctx> {
             skins: Default::default(),
             ifdef_stack: Default::default(),
             last_input_loc: Default::default(),
+            last_printable_input_loc: Default::default(),
             output: Default::default(),
+            danger_idents: Default::default(),
+            in_interp_string: 0,
         };
         super::builtins::default_defines(&mut pp.defines);
         Ok(pp)
@@ -304,7 +312,10 @@ impl<'ctx> Preprocessor<'ctx> {
             skins: Default::default(),
             ifdef_stack: Default::default(),  // should be fine
             last_input_loc: location,
+            last_printable_input_loc: location,
             output: Default::default(),
+            danger_idents: Default::default(),
+            in_interp_string: 0,
         }
     }
 
@@ -362,6 +373,15 @@ impl<'ctx> Preprocessor<'ctx> {
 
     fn move_to_history(&mut self, name: String, previous: (Location, Define)) {
         self.history.insert(range(previous.0, self.last_input_loc), (name, previous.1));
+    }
+
+    fn check_danger_ident(&mut self, name: &str, kind: &str) {
+        if let Some(loc) = self.danger_idents.1.get(name) {
+            self.context.register_error(DMError::new(*loc, format!(
+                "macro {:?} used immediately before being {}:\n\
+                https://secure.byond.com/forum/?post=2072419", name, kind
+            )).set_severity(Severity::Warning));
+        }
     }
 
     #[allow(unreachable_code)]
@@ -470,6 +490,7 @@ impl<'ctx> Preprocessor<'ctx> {
                     "define" => {
                         expect_token!((define_name, ws) = Token::Ident(define_name, ws));
                         let define_name_loc = _last_expected_loc;
+                        self.check_danger_ident(&define_name, "defined");
                         let mut params = Vec::new();
                         let mut subst = Vec::new();
                         let mut variadic = false;
@@ -536,6 +557,7 @@ impl<'ctx> Preprocessor<'ctx> {
                     "undef" => {
                         expect_token!((define_name) = Token::Ident(define_name, _));
                         let define_name_loc = _last_expected_loc;
+                        self.check_danger_ident(&define_name, "undefined");
                         expect_token!(() = Token::Punct(Punctuation::Newline));
                         if let Some(previous) = self.defines.remove(&define_name) {
                             self.move_to_history(define_name, previous);
@@ -565,6 +587,11 @@ impl<'ctx> Preprocessor<'ctx> {
             _ if self.is_disabled() => return Ok(()),
             // identifiers may be macros
             Token::Ident(ref ident, _) if ident != self.include_stack.top_no_expand() => {
+                // lint for BYOND bug
+                if self.in_interp_string > 0 {
+                    self.danger_idents.0.insert(ident.clone(), self.last_input_loc);
+                }
+
                 // if it's a define, perform the substitution
                 match self.defines.get(ident).cloned() { // TODO
                     Some((_, Define::Constant { subst })) => {
@@ -711,6 +738,8 @@ impl<'ctx> Preprocessor<'ctx> {
                     None => {}
                 }
             }
+            Token::InterpStringBegin(_) => self.in_interp_string += 1,
+            Token::InterpStringEnd(_) => self.in_interp_string -= 1,
             // everything else is itself
             _ => {}
         }
@@ -732,6 +761,19 @@ impl<'ctx> Iterator for Preprocessor<'ctx> {
             }
 
             if let Some(tok) = self.inner_next() {
+                // linting for https://secure.byond.com/forum/?post=2072419
+                if !tok.token.is_whitespace() {
+                    if tok.location.file != self.last_printable_input_loc.file ||
+                        tok.location.line > self.last_printable_input_loc.line
+                    {
+                        // swap read/write buffers
+                        ::std::mem::swap(&mut self.danger_idents.0, &mut self.danger_idents.1);
+                        self.danger_idents.0.clear();
+                    }
+                    self.last_printable_input_loc = tok.location;
+                }
+
+                // update last_input_loc and attempt to process the input token
                 self.last_input_loc = tok.location;
                 if let Err(e) = self.real_next(tok.token) {
                     self.context.register_error(e);

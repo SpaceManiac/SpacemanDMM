@@ -185,6 +185,17 @@ impl Token {
             _ => false,
         }
     }
+
+    /// Check whether this token is whitespace.
+    pub fn is_whitespace(&self) -> bool {
+        match *self {
+            Token::Punct(Punctuation::Tab) |
+            Token::Punct(Punctuation::Newline) |
+            Token::Punct(Punctuation::Space) |
+            Token::Eof => true,
+            _ => false
+        }
+    }
 }
 
 impl fmt::Display for Token {
