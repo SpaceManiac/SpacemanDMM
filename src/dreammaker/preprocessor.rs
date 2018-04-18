@@ -237,9 +237,8 @@ pub struct Preprocessor<'ctx> {
     maps: Vec<PathBuf>,
     skins: Vec<PathBuf>,
 
-    // .0 is being written, .1 is being read
     last_printable_input_loc: Location,
-    danger_idents: (HashMap<String, Location>, HashMap<String, Location>),
+    danger_idents: HashMap<String, Location>,
     in_interp_string: u32,
 }
 
@@ -376,7 +375,7 @@ impl<'ctx> Preprocessor<'ctx> {
     }
 
     fn check_danger_ident(&mut self, name: &str, kind: &str) {
-        if let Some(loc) = self.danger_idents.1.get(name) {
+        if let Some(loc) = self.danger_idents.get(name) {
             self.context.register_error(DMError::new(*loc, format!(
                 "macro {:?} used immediately before being {}:\n\
                 https://secure.byond.com/forum/?post=2072419", name, kind
@@ -589,7 +588,7 @@ impl<'ctx> Preprocessor<'ctx> {
             Token::Ident(ref ident, _) if ident != self.include_stack.top_no_expand() => {
                 // lint for BYOND bug
                 if self.in_interp_string > 0 {
-                    self.danger_idents.0.insert(ident.clone(), self.last_input_loc);
+                    self.danger_idents.insert(ident.clone(), self.last_input_loc);
                 }
 
                 // substitute special macros
@@ -777,13 +776,11 @@ impl<'ctx> Iterator for Preprocessor<'ctx> {
 
             if let Some(tok) = self.inner_next() {
                 // linting for https://secure.byond.com/forum/?post=2072419
-                if !tok.token.is_whitespace() {
+                if !tok.token.is_whitespace() && tok.token != Token::Punct(Punctuation::Hash) {
                     if tok.location.file != self.last_printable_input_loc.file ||
                         tok.location.line > self.last_printable_input_loc.line
                     {
-                        // swap read/write buffers
-                        ::std::mem::swap(&mut self.danger_idents.0, &mut self.danger_idents.1);
-                        self.danger_idents.0.clear();
+                        self.danger_idents.clear();
                     }
                     self.last_printable_input_loc = tok.location;
                 }
