@@ -9,6 +9,7 @@
 extern crate url;
 extern crate serde;
 extern crate serde_json;
+#[macro_use] extern crate serde_derive;
 extern crate petgraph;
 extern crate languageserver_types as langserver;
 extern crate jsonrpc_core as jsonrpc;
@@ -18,6 +19,7 @@ extern crate dreammaker as dm;
 mod io;
 mod document;
 mod symbol_search;
+mod extras;
 
 use std::path::PathBuf;
 use std::collections::HashMap;
@@ -114,6 +116,15 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         )
     }
 
+    fn show_status<S>(&mut self, message: S) where
+        S: Into<String>
+    {
+        self.issue_notification::<extras::WindowStatus>(extras::WindowStatusParams {
+            environment: None,
+            tasks: vec![message.into()],
+        });
+    }
+
     fn file_url(&self, file: dm::FileId) -> Result<Url, jsonrpc::Error> {
         path_to_url(self.root.join(self.context.file_path(file)))
     }
@@ -139,14 +150,30 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
 
     fn parse_environment(&mut self, environment: PathBuf) -> Result<(), jsonrpc::Error> {
         // handle the parsing
-        let file_name = environment.file_name().unwrap_or("..".as_ref()).to_string_lossy();
         eprintln!("environment: {}", environment.display());
+        if let Some(stem) = environment.file_stem() {
+            self.issue_notification::<extras::WindowStatus>(extras::WindowStatusParams {
+                environment: Some(stem.to_string_lossy().into_owned()),
+                tasks: vec!["loading".to_owned()],
+            })
+        } else {
+            self.show_status("loading");
+        }
 
         let ctx = self.context;
         let mut pp = match dm::preprocessor::Preprocessor::new(ctx, environment.clone()) {
             Ok(pp) => pp,
             Err(err) => {
-                self.show_message(MessageType::Error, format!("Error loading {}", file_name));
+                use std::error::Error;
+                self.issue_notification::<langserver::notification::PublishDiagnostics>(
+                    langserver::PublishDiagnosticsParams {
+                        uri: path_to_url(environment)?,
+                        diagnostics: vec![langserver::Diagnostic {
+                            message: err.description().to_owned(),
+                            .. Default::default()
+                        }],
+                    }
+                );
                 eprintln!("{:?}", err);
                 return Ok(());
             }
@@ -155,7 +182,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         self.objtree = dm::parser::parse(ctx, dm::indents::IndentProcessor::new(ctx, &mut pp));
         pp.finalize();
         self.preprocessor = Some(pp);
-        self.show_message(MessageType::Info, format!("Loaded {}", file_name));
+        self.issue_notification::<extras::WindowStatus>(Default::default());
 
         // initial diagnostics pump
         let mut map: HashMap<_, Vec<_>> = HashMap::new();
@@ -447,7 +474,7 @@ handle_notification! {
         if let Some(environment) = environment {
             self.parse_environment(environment)?;
         } else {
-            self.show_message(MessageType::Error, "No DME found, language service not available.");
+            self.show_status("no .dme file");
         }
     }
 
