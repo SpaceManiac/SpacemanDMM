@@ -136,7 +136,6 @@ impl fmt::Display for Constant {
             Constant::Null(_) => f.write_str("null"),
             Constant::New { ref type_, ref args } => {
                 write!(f, "new{}", type_)?;
-                // TODO: make the Vec an Option<Vec>
                 if let Some(args) = args.as_ref() {
                     write!(f, "(")?;
                     let mut first = true;
