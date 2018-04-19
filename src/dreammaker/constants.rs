@@ -225,8 +225,8 @@ pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree) {
 }
 
 /// Evaluate an expression in the absence of any surrounding context.
-pub fn simple_evaluate(expr: Expression) -> Result<Constant, DMError> {
-    ConstantFolder { tree: None, location: Location::default(), ty: NodeIndex::new(0) }.expr(expr, None)
+pub fn simple_evaluate(location: Location, expr: Expression) -> Result<Constant, DMError> {
+    ConstantFolder { tree: None, location, ty: NodeIndex::new(0) }.expr(expr, None)
 }
 
 enum ConstLookup {

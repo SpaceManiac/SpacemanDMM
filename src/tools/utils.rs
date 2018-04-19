@@ -42,11 +42,13 @@ pub fn fix_case(path: &Path) -> Cow<Path> {
 // Copy-paste of std::io::Chars for stability
 use std::io::{self, Read, ErrorKind};
 
+#[allow(dead_code)]
 pub struct Chars<R> {
     inner: R,
 }
 
 impl<R> Chars<R> {
+    #[allow(dead_code)]
     pub fn new(inner: R) -> Chars<R> {
         Chars { inner }
     }

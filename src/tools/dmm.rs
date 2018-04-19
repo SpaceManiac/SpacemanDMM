@@ -7,7 +7,8 @@ use std::fmt;
 use ndarray::{self, Array3, Axis};
 use linked_hash_map::LinkedHashMap;
 
-use dm::{DMError, Location};
+use dm::{DMError, Location, HasLocation};
+use dm::lexer::{LocationTracker, from_latin1};
 use dm::constants::Constant;
 
 const MAX_KEY_LENGTH: u8 = 3;
@@ -46,7 +47,9 @@ impl Map {
             dictionary: Default::default(),
             grid: Array3::default((1, 1, 1)),
         };
-        parse_map(&mut map, File::open(path)?)?;
+        parse_map(&mut map, File::open(path).map_err(|e| {
+            DMError::new(Location::default(), "i/o error").set_cause(e)
+        })?)?;
         Ok(map)
     }
 
@@ -173,9 +176,10 @@ fn take<T: Default>(t: &mut T) -> T {
 }
 
 fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
+    use std::io::Read;
     use std::cmp::max;
 
-    let mut chars = ::utils::Chars::new(BufReader::new(f));
+    let mut chars = LocationTracker::new(Default::default(), BufReader::new(f).bytes());
 
     let mut in_comment_line = false;
     let mut comment_trigger = false;
@@ -183,8 +187,8 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
     // dictionary
     let mut curr_data = Vec::new();
     let mut curr_prefab = Prefab::default();
-    let mut curr_var = String::new();
-    let mut curr_datum = String::new();
+    let mut curr_var = Vec::new();
+    let mut curr_datum = Vec::new();
     let mut curr_key = 0;
     let mut curr_key_length = 0;
 
@@ -196,20 +200,19 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
     let mut escaping = false;
     let mut skip_whitespace = false;
 
-    for ch in chars.by_ref() {
+    while let Some(ch) = chars.next() {
         let ch = ch?;
-
-        if ch == '\n' || ch == '\r' {
+        if ch == b'\n' || ch == b'\r' {
             in_comment_line = false;
             comment_trigger = false;
             continue
         } else if in_comment_line {
             continue
-        } else if ch == '\t' {
+        } else if ch == b'\t' {
             continue
         }
 
-        if ch == '/' && !in_quote_block {
+        if ch == b'/' && !in_quote_block {
             if comment_trigger {
                 in_comment_line = true;
                 continue;
@@ -223,56 +226,61 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
         if in_data_block {
             if in_varedit_block {
                 if in_quote_block {
-                    if ch == '\\' {
+                    if ch == b'\\' {
                         curr_datum.push(ch);
                         escaping = true;
                     } else if escaping {
                         curr_datum.push(ch);
                         escaping = false;
-                    } else if ch == '"' {
+                    } else if ch == b'"' {
                         curr_datum.push(ch);
                         in_quote_block = false;
                     } else {
                         curr_datum.push(ch);
                     }
                 } else { // in_quote_block
-                    if skip_whitespace && ch == ' ' {
+                    if skip_whitespace && ch == b' ' {
                         skip_whitespace = false;
                         continue;
                     }
                     skip_whitespace = false;
 
-                    if ch == '"' {
+                    if ch == b'"' {
                         curr_datum.push(ch);
                         in_quote_block = true;
-                    } else if ch == '=' && curr_var.is_empty() {
+                    } else if ch == b'=' && curr_var.is_empty() {
                         curr_var = take(&mut curr_datum);
-                        let length = curr_var.trim_right().len();
+                        let mut length = curr_var.len();
+                        while length > 0 && (curr_var[length-1] as char).is_whitespace() {
+                            length -= 1;
+                        }
                         curr_var.truncate(length);
                         skip_whitespace = true;
-                    } else if ch == ';' {
-                        curr_prefab.vars.insert(take(&mut curr_var), parse_constant(take(&mut curr_datum))?);
+                    } else if ch == b';' {
+                        curr_prefab.vars.insert(from_latin1(&take(&mut curr_var)),
+                            parse_constant(chars.location(), take(&mut curr_datum))?);
                         skip_whitespace = true;
-                    } else if ch == '}' {
+                    } else if ch == b'}' {
                         if !curr_var.is_empty() {
-                            curr_prefab.vars.insert(take(&mut curr_var), parse_constant(take(&mut curr_datum))?);
+                            curr_prefab.vars.insert(from_latin1(&take(&mut curr_var)),
+                                parse_constant(chars.location(), take(&mut curr_datum))?);
                         }
                         in_varedit_block = false;
                     } else {
                         curr_datum.push(ch);
                     }
                 }
-            } else if ch == '{' {
-                curr_prefab.path = take(&mut curr_datum);
+            } else if ch == b'{' {
+                curr_prefab.path = from_latin1(&take(&mut curr_datum));
                 in_varedit_block = true;
-            } else if ch == ',' {
+            } else if ch == b',' {
                 if curr_prefab.path.is_empty() && !curr_datum.is_empty() {
-                    curr_prefab.path = take(&mut curr_datum);
+                    curr_prefab.path = from_latin1(&take(&mut curr_datum));
                 }
                 curr_data.push(take(&mut curr_prefab));
-            } else if ch == ')' {
+            } else if ch == b')' {
                 if curr_prefab.path.is_empty() && !curr_datum.is_empty() {
-                    curr_prefab.path = take(&mut curr_datum);
+                    curr_prefab.path = from_latin1(&take(&mut curr_datum));
                 }
                 curr_data.push(take(&mut curr_prefab));
                 let key = take(&mut curr_key);
@@ -285,7 +293,7 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
                 curr_datum.push(ch);
             }
         } else if in_key_block {
-            if ch == '"' {
+            if ch == b'"' {
                 in_key_block = false;
                 assert!(map.key_length == 0 || map.key_length == curr_key_length);
                 map.key_length = curr_key_length;
@@ -293,10 +301,10 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
                 curr_key = advance_key(curr_key, base_52_reverse(ch)?)?;
                 curr_key_length += 1;
             }
-        } else if ch == '"' {
+        } else if ch == b'"' {
             in_key_block = true;
             after_data_block = false;
-        } else if ch == '(' {
+        } else if ch == b'(' {
             if after_data_block {
                 curr_key = 0;
                 curr_key_length = 0;
@@ -325,10 +333,10 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
     let mut in_map_string = false;
     let mut adjust_y = true;
 
-    for ch in chars {
+    while let Some(ch) = chars.next() {
         let ch = ch?;
         if in_coord_block {
-            if ch == ',' {
+            if ch == b',' {
                 if reading_coord == Coord::X {
                     curr_x = take(&mut curr_num);
                     max_x = max(max_x, curr_x);
@@ -341,26 +349,26 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
                 } else {
                     return Err(DMError::new(Location::default(), "Incorrect number of coordinates"));
                 }
-            } else if ch == ')' {
+            } else if ch == b')' {
                 assert_eq!(reading_coord, Coord::Z);
                 curr_z = take(&mut curr_num);
                 max_z = max(max_z, curr_z);
                 in_coord_block = false;
                 reading_coord = Coord::X;
             } else {
-                match ch.to_digit(10) {
+                match (ch as char).to_digit(10) {
                     Some(x) => curr_num = 10 * curr_num + x as usize,
                     None => return Err(DMError::new(Location::default(), "bad digit in map coordinate"))
                 }
             }
         } else if in_map_string {
-            if ch == '"' {
+            if ch == b'"' {
                 in_map_string = false;
                 adjust_y = true;
                 curr_y -= 1;
-            } else if ch == '\r' {
+            } else if ch == b'\r' {
                 // nothing
-            } else if ch == '\n' {
+            } else if ch == b'\n' {
                 if adjust_y {
                     adjust_y = false;
                 } else {
@@ -384,9 +392,9 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
                     grid.insert((curr_x, curr_y, curr_z), Key(key));
                 }
             }
-        } else if ch == '(' {
+        } else if ch == b'(' {
             in_coord_block = true;
-        } else if ch == '"' {
+        } else if ch == b'"' {
             in_map_string = true;
         }
     }
@@ -399,13 +407,13 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
     Ok(())
 }
 
-fn base_52_reverse(ch: char) -> Result<KeyType, DMError> {
-    if ch >= 'a' && ch <= 'z' {
+fn base_52_reverse(ch: u8) -> Result<KeyType, DMError> {
+    if ch >= b'a' && ch <= b'z' {
         Ok(ch as KeyType - b'a' as KeyType)
-    } else if ch >= 'A' && ch <= 'Z' {
+    } else if ch >= b'A' && ch <= b'Z' {
         Ok(26 + ch as KeyType - b'A' as KeyType)
     } else {
-        Err(DMError::new(Location::default(), format!("Not a base-52 character: {:?}", ch)))
+        Err(DMError::new(Location::default(), format!("Not a base-52 character: {:?}", ch as char)))
     }
 }
 
@@ -416,19 +424,19 @@ fn advance_key(current: KeyType, next_digit: KeyType) -> Result<KeyType, DMError
     })
 }
 
-fn parse_constant(input: String) -> Result<Constant, DMError> {
+fn parse_constant(location: Location, input: Vec<u8>) -> Result<Constant, DMError> {
     use dm::Context;
     use dm::lexer::Lexer;
     use dm::parser::Parser;
 
-    let mut bytes = input.as_bytes().iter().map(|&x| Ok(x));
+    let mut bytes = input.iter().map(|&x| Ok(x));
     let ctx = Context::default();
     let expr = match Parser::new(&ctx, Lexer::new(&ctx, Default::default(), &mut bytes)).expression()? {
         Some(expr) => expr,
-        None => return Err(DMError::new(Location::default(), format!("not an expression: {}", input))),
+        None => return Err(DMError::new(location, format!("not an expression: {}", from_latin1(&input)))),
     };
     if bytes.next().is_some() {
-        return Err(DMError::new(Location::default(), format!("leftover: {:?} {}", input, bytes.len())));
+        return Err(DMError::new(location, format!("leftover: {:?} {}", from_latin1(&input), bytes.len())));
     }
-    ::dm::constants::simple_evaluate(expr)
+    ::dm::constants::simple_evaluate(location, expr)
 }

@@ -245,12 +245,6 @@ impl DMError {
     }
 }
 
-impl From<io::Error> for DMError {
-    fn from(e: io::Error) -> DMError {
-        DMError::new(Location::default(), "i/o error").set_cause(e)
-    }
-}
-
 impl fmt::Display for DMError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}:{}:{}", self.location.line, self.location.column, self.desc)

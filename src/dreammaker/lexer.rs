@@ -238,7 +238,8 @@ fn is_ident(ch: u8) -> bool {
     (ch >= b'a' && ch <= b'z') || (ch >= b'A' && ch <= b'Z') || ch == b'_'
 }
 
-fn from_latin1(bytes: &[u8]) -> String {
+/// Convert the input bytes to a `String` assuming Latin-1 encoding.
+pub fn from_latin1(bytes: &[u8]) -> String {
     let mut output = String::new();
     for &byte in bytes {
         output.push(byte as char);
