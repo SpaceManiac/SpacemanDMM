@@ -2,6 +2,7 @@
 use std::io;
 use std::str::FromStr;
 use std::fmt;
+use std::borrow::Cow;
 
 use super::{DMError, Location, HasLocation, FileId, Context, Severity};
 
@@ -239,12 +240,37 @@ fn is_ident(ch: u8) -> bool {
 }
 
 /// Convert the input bytes to a `String` assuming Latin-1 encoding.
-pub fn from_latin1(bytes: &[u8]) -> String {
-    let mut output = String::new();
-    for &byte in bytes {
+pub fn from_latin1(mut bytes: Vec<u8>) -> String {
+    let non_ascii = bytes.iter().filter(|&&i| i > 0x7f).count();
+    if non_ascii == 0 {
+        match String::from_utf8(bytes) {
+            Ok(v) => return v,
+            // shouldn't happen, but try to produce a sensible result anyways
+            Err(e) => bytes = e.into_bytes(),
+        }
+    }
+
+    let mut output = String::with_capacity(bytes.len() + non_ascii);
+    for &byte in bytes.iter() {
         output.push(byte as char);
     }
     output
+}
+
+/// Convert the input bytes to a `String` assuming Latin-1 encoding.
+pub fn from_latin1_borrowed(bytes: &[u8]) -> Cow<str> {
+    let non_ascii = bytes.iter().filter(|&&i| i > 0x7f).count();
+    if non_ascii == 0 {
+        if let Ok(v) = ::std::str::from_utf8(bytes) {
+            return Cow::Borrowed(v);
+        }
+    }
+
+    let mut output = String::with_capacity(bytes.len() + non_ascii);
+    for &byte in bytes.iter() {
+        output.push(byte as char);
+    }
+    Cow::Owned(output)
 }
 
 // Used to track nested string interpolations and know when they end.
@@ -558,7 +584,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                 ch => { self.put_back(ch); break }
             }
         }
-        from_latin1(&ident)
+        from_latin1(ident)
     }
 
     fn read_resource(&mut self) -> String {
@@ -574,7 +600,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                 }
             }
         }
-        from_latin1(&buf)
+        from_latin1(buf)
     }
 
     fn read_string(&mut self, end: &'static [u8], interp_closed: bool) -> Token {
@@ -636,7 +662,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
             }
         }
 
-        let string = from_latin1(&buf);
+        let string = from_latin1(buf);
         match (interp_opened, interp_closed) {
             (true, true) => Token::InterpStringPart(string),
             (true, false) => Token::InterpStringBegin(string),

@@ -8,7 +8,7 @@ use ndarray::{self, Array3, Axis};
 use linked_hash_map::LinkedHashMap;
 
 use dm::{DMError, Location, HasLocation};
-use dm::lexer::{LocationTracker, from_latin1};
+use dm::lexer::{LocationTracker, from_latin1, from_latin1_borrowed};
 use dm::constants::Constant;
 
 const MAX_KEY_LENGTH: u8 = 3;
@@ -257,12 +257,12 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
                         curr_var.truncate(length);
                         skip_whitespace = true;
                     } else if ch == b';' {
-                        curr_prefab.vars.insert(from_latin1(&take(&mut curr_var)),
+                        curr_prefab.vars.insert(from_latin1(take(&mut curr_var)),
                             parse_constant(chars.location(), take(&mut curr_datum))?);
                         skip_whitespace = true;
                     } else if ch == b'}' {
                         if !curr_var.is_empty() {
-                            curr_prefab.vars.insert(from_latin1(&take(&mut curr_var)),
+                            curr_prefab.vars.insert(from_latin1(take(&mut curr_var)),
                                 parse_constant(chars.location(), take(&mut curr_datum))?);
                         }
                         in_varedit_block = false;
@@ -271,16 +271,16 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
                     }
                 }
             } else if ch == b'{' {
-                curr_prefab.path = from_latin1(&take(&mut curr_datum));
+                curr_prefab.path = from_latin1(take(&mut curr_datum));
                 in_varedit_block = true;
             } else if ch == b',' {
                 if curr_prefab.path.is_empty() && !curr_datum.is_empty() {
-                    curr_prefab.path = from_latin1(&take(&mut curr_datum));
+                    curr_prefab.path = from_latin1(take(&mut curr_datum));
                 }
                 curr_data.push(take(&mut curr_prefab));
             } else if ch == b')' {
                 if curr_prefab.path.is_empty() && !curr_datum.is_empty() {
-                    curr_prefab.path = from_latin1(&take(&mut curr_datum));
+                    curr_prefab.path = from_latin1(take(&mut curr_datum));
                 }
                 curr_data.push(take(&mut curr_prefab));
                 let key = take(&mut curr_key);
@@ -433,10 +433,10 @@ fn parse_constant(location: Location, input: Vec<u8>) -> Result<Constant, DMErro
     let ctx = Context::default();
     let expr = match Parser::new(&ctx, Lexer::new(&ctx, Default::default(), &mut bytes)).expression()? {
         Some(expr) => expr,
-        None => return Err(DMError::new(location, format!("not an expression: {}", from_latin1(&input)))),
+        None => return Err(DMError::new(location, format!("not an expression: {}", from_latin1_borrowed(&input)))),
     };
     if bytes.next().is_some() {
-        return Err(DMError::new(location, format!("leftover: {:?} {}", from_latin1(&input), bytes.len())));
+        return Err(DMError::new(location, format!("leftover: {:?} {}", from_latin1_borrowed(&input), bytes.len())));
     }
     ::dm::constants::simple_evaluate(location, expr)
 }
