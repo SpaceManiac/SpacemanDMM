@@ -262,16 +262,88 @@ enum Directive {
     Stringy,
 }
 
+/// A wrapper for an input stream which tracks line and column numbers.
+///
+/// All characters, including tabs, are considered to occupy one column
+/// regardless of position.
+///
+/// `io::Error`s are converted to `DMError`s which include the location.
+pub struct LocationTracker<I> {
+    inner: I,
+    /// The location of the last character returned by `next()`.
+    location: Location,
+    at_line_end: bool,
+}
+
+impl<I> LocationTracker<I> {
+    pub fn new(file_number: FileId, inner: I) -> LocationTracker<I> {
+        LocationTracker {
+            inner,
+            location: Location {
+                file: file_number,
+                line: 0,
+                column: 0,
+            },
+            at_line_end: true,
+        }
+    }
+}
+
+impl<I> fmt::Debug for LocationTracker<I> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.debug_struct("LocationTracker")
+            // inner omitted
+            .field("location", &self.location)
+            .field("at_line_end", &self.at_line_end)
+            .finish()
+    }
+}
+
+impl<I> HasLocation for LocationTracker<I> {
+    fn location(&self) -> Location {
+        self.location
+    }
+}
+
+impl<I: Iterator<Item=io::Result<u8>>> Iterator for LocationTracker<I> {
+    type Item = Result<u8, DMError>;
+
+    fn next(&mut self) -> Option<Result<u8, DMError>> {
+        if self.at_line_end {
+            self.at_line_end = false;
+            match self.location.line.checked_add(1) {
+                Some(new) => self.location.line = new,
+                None => panic!("per-file line limit of {} exceeded", self.location.line),
+            }
+            self.location.column = 0;
+        }
+
+        match self.inner.next() {
+            None => None,
+            Some(Ok(ch)) => {
+                if ch == b'\n' {
+                    self.at_line_end = true;
+                }
+                match self.location.column.checked_add(1) {
+                    Some(new) => self.location.column = new,
+                    None => panic!("per-line column limit of {} exceeded", self.location.column),
+                }
+                Some(Ok(ch))
+            }
+            Some(Err(e)) => {
+                Some(Err(DMError::new(self.location, "i/o error").set_cause(e)))
+            }
+        }
+    }
+}
+
 /// The lexer, which serves as a source of tokens through iteration.
 pub struct Lexer<'ctx, I> {
     context: &'ctx Context,
-    input: I,
+    input: LocationTracker<I>,
     next: Option<u8>,
-    /// The location of the last character returned by `next()`.
-    location: Location,
     final_newline: bool,
     at_line_head: bool,
-    at_line_end: bool,
     directive: Directive,
     interp_stack: Vec<Interpolation>,
 }
@@ -280,12 +352,10 @@ impl<'ctx, I> fmt::Debug for Lexer<'ctx, I> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("Lexer")
             .field("context", self.context)
-            // input omitted
+            .field("input", &self.input)
             .field("next", &self.next)
-            .field("location", &self.location)
             .field("final_newline", &self.final_newline)
             .field("at_line_head", &self.at_line_head)
-            .field("at_line_end", &self.at_line_end)
             .field("directive", &self.directive)
             .field("interp_stack", &self.interp_stack)
             .finish()
@@ -293,8 +363,9 @@ impl<'ctx, I> fmt::Debug for Lexer<'ctx, I> {
 }
 
 impl<'ctx, I: Iterator<Item=io::Result<u8>>> HasLocation for Lexer<'ctx, I> {
+    #[inline]
     fn location(&self) -> Location {
-        self.location
+        self.input.location
     }
 }
 
@@ -310,16 +381,10 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
     pub fn new(context: &'ctx Context, file_number: FileId, input: I) -> Lexer<I> {
         Lexer {
             context,
-            input,
+            input: LocationTracker::new(file_number, input),
             next: None,
-            location: Location {
-                file: file_number,
-                line: 1,
-                column: 0,
-            },
             final_newline: false,
             at_line_head: true,
-            at_line_end: false,
             directive: Directive::None,
             interp_stack: Vec::new(),
         }
@@ -330,36 +395,25 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
             return Some(next);
         }
 
-        if self.at_line_end {
-            self.at_line_end = false;
+        let previous_loc = self.location();
+        let result = self.input.next();
+        if self.location().line > previous_loc.line {
             self.at_line_head = true;
-            match self.location.line.checked_add(1) {
-                Some(new) => self.location.line = new,
-                None => panic!("per-file line limit of {} exceeded", self.location.line),
-            }
-            self.location.column = 0;
             self.directive = Directive::None;
         }
-
-        match self.input.next() {
+        match result {
+            None => None,
             Some(Ok(ch)) => {
-                if ch == b'\n' {
-                    self.at_line_end = true;
-                } else if ch != b'\t' && ch != b' ' && self.at_line_head {
+                if ch != b'\t' && ch != b' ' {
                     self.at_line_head = false;
-                }
-                match self.location.column.checked_add(1) {
-                    Some(new) => self.location.column = new,
-                    None => panic!("per-line column limit of {} exceeded", self.location.column),
                 }
                 Some(ch)
             }
             Some(Err(err)) => {
                 // I/O error is effectively EOF.
-                self.context.register_error(self.error("i/o error").set_cause(err));
+                self.context.register_error(err);
                 None
             }
-            None => None,
         }
     }
 
@@ -649,9 +703,10 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                     // always end with a newline
                     if !self.final_newline {
                         self.final_newline = true;
-                        self.location.column += 1;
+                        let mut location = self.location();
+                        location.column += 1;
                         return Some(LocatedToken {
-                            location: self.location(),
+                            location: location,
                             token: Token::Punct(Punctuation::Newline),
                         })
                     } else {
@@ -661,7 +716,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
             };
             skip_newlines = false;
 
-            let loc = self.location;
+            let loc = self.location();
             let locate = |token| LocatedToken::new(loc, token);
 
             if self.directive == Directive::Stringy {

@@ -21,6 +21,9 @@ fn simple_location_test() {
     let located_tokens: Vec<_> = Lexer::new(&context, Default::default(), code.bytes().map(Ok)).collect();
     assert!(context.print_all_errors());
 
+    assert_eq!(located_tokens[0].location.line, 1);
+    assert_eq!(located_tokens[0].location.column, 1);
+
     println!("---- lexer ----");
     for token in located_tokens.iter() {
         println!("{}:{}: {:?}", token.location.line, token.location.column, token.token);
