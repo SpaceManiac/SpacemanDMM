@@ -130,6 +130,27 @@ impl Default for Constant {
     }
 }
 
+impl From<i32> for Constant {
+    fn from(value: i32) -> Constant {
+        Constant::Int(value)
+    }
+}
+
+impl From<f32> for Constant {
+    fn from(value: f32) -> Constant {
+        Constant::Float(value)
+    }
+}
+
+impl From<bool> for Constant {
+    fn from(value: bool) -> Constant {
+        match value {
+            true => Constant::Int(1),
+            false => Constant::Int(0),
+        }
+    }
+}
+
 impl fmt::Display for Constant {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -395,10 +416,10 @@ impl<'a> ConstantFolder<'a> {
         macro_rules! numeric {
             ($name:ident $oper:tt) => {
                 match (op, lhs, rhs) {
-                    (BinaryOp::$name, Int(lhs), Int(rhs)) => return Ok(Int(lhs $oper rhs)),
-                    (BinaryOp::$name, Int(lhs), Float(rhs)) => return Ok(Float(lhs as f32 $oper rhs)),
-                    (BinaryOp::$name, Float(lhs), Int(rhs)) => return Ok(Float(lhs $oper rhs as f32)),
-                    (BinaryOp::$name, Float(lhs), Float(rhs)) => return Ok(Float(lhs $oper rhs)),
+                    (BinaryOp::$name, Int(lhs), Int(rhs)) => return Ok(Constant::from(lhs $oper rhs)),
+                    (BinaryOp::$name, Int(lhs), Float(rhs)) => return Ok(Constant::from((lhs as f32) $oper rhs)),
+                    (BinaryOp::$name, Float(lhs), Int(rhs)) => return Ok(Constant::from(lhs $oper (rhs as f32))),
+                    (BinaryOp::$name, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs $oper rhs)),
                     (_, lhs_, rhs_) => { lhs = lhs_; rhs = rhs_; }
                 }
             }
@@ -407,6 +428,10 @@ impl<'a> ConstantFolder<'a> {
         numeric!(Sub -);
         numeric!(Mul *);
         numeric!(Div /);
+        numeric!(Less <);
+        numeric!(LessEq <=);
+        numeric!(Greater >);
+        numeric!(GreaterEq >=);
 
         macro_rules! integer {
             ($name:ident $oper:tt) => {
@@ -423,6 +448,8 @@ impl<'a> ConstantFolder<'a> {
 
         match (op, lhs, rhs) {
             (BinaryOp::Add, String(lhs), String(rhs)) => Ok(String(lhs + &rhs)),
+            (BinaryOp::Eq, lhs, rhs) => Ok(Constant::from(lhs == rhs)),
+            (BinaryOp::NotEq, lhs, rhs) => Ok(Constant::from(lhs != rhs)),
             (op, lhs, rhs) => Err(self.error(format!("non-constant {:?}: {} {} {}", op, lhs, op, rhs)))
         }
     }
@@ -506,7 +533,7 @@ impl<'a> ConstantFolder<'a> {
         while let Some(ty) = idx {
             let location = self.location;
             if self.tree.is_none() {
-                return Err(self.error("cannot use idents during simple_evaluate"));
+                return Err(self.error("cannot reference variables in this context"));
             }
             let tree = self.tree.as_mut().unwrap();
             match constant_ident_lookup(tree, ty, &ident, must_be_static).map_err(|e| DMError::new(location, e.into_description()))? {

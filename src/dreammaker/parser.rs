@@ -19,7 +19,7 @@ pub fn parse<I>(context: &Context, iter: I) -> ObjectTree where
     let mut parser = Parser::new(context, iter.into_iter());
     match parser.root() {
         Ok(Some(())) => {}
-        Ok(None) => context.register_error(parser.parse_error_inner()),
+        Ok(None) => context.register_error(parser.describe_parse_error()),
         Err(err) => context.register_error(err),
     }
 
@@ -251,7 +251,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     pub fn run(mut self) {
         match self.root() {
             Ok(Some(())) => {}
-            Ok(None) => self.context.register_error(self.parse_error_inner()),
+            Ok(None) => self.context.register_error(self.describe_parse_error()),
             Err(err) => self.context.register_error(err),
         }
     }
@@ -263,7 +263,8 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     // ------------------------------------------------------------------------
     // Basic setup
 
-    fn parse_error_inner(&mut self) -> DMError {
+    // Call this to get a DMError in the event of an entry point returning None
+    pub fn describe_parse_error(&mut self) -> DMError {
         let expected = self.expected.join(", ");
         match self.next("") {
             Ok(got) => {
@@ -278,7 +279,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     }
 
     fn parse_error<T>(&mut self) -> Result<T, DMError> {
-        Err(self.parse_error_inner())
+        Err(self.describe_parse_error())
     }
 
     fn require<T>(&mut self, t: Result<Option<T>, DMError>) -> Result<T, DMError> {

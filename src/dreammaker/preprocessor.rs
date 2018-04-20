@@ -364,10 +364,39 @@ impl<'ctx> Preprocessor<'ctx> {
         self.include_stack.next()
     }
 
-    fn evaluate(&mut self) -> Result<bool, DMError> {
-        // TODO: read until Newline and evaluate that expression
-        //println!("#if {:?}", self.location());
-        Ok(false)
+    fn evaluate_inner(&mut self) -> Result<bool, DMError> {
+        // pump real_next to fill output until we get a real newline on input
+        let start = self.last_input_loc;
+        while let Some(tok) = self.inner_next() {
+            self.last_input_loc = tok.location;
+
+            if let Token::Punct(Punctuation::Newline) = tok.token {
+                break
+            }
+
+            if let Err(e) = self.real_next(tok.token) {
+                self.context.register_error(e);
+            }
+        }
+
+        let mut parser = ::parser::Parser::new(self.context,
+            self.output.drain(..).map(|token| LocatedToken::new(start, token)));
+        let expr = match parser.expression()? {
+            Some(expr) => expr,
+            None => return Err(parser.describe_parse_error()),
+        };
+        Ok(::constants::simple_evaluate(start, expr)?.to_bool())
+    }
+
+    fn evaluate(&mut self) -> bool {
+        // always succeed in order to avoid phantom "unmatched #endif" messages
+        match self.evaluate_inner() {
+            Ok(value) => value,
+            Err(err) => {
+                self.context.register_error(err);
+                false
+            }
+        }
     }
 
     fn move_to_history(&mut self, name: String, previous: (Location, Define)) {
@@ -431,13 +460,13 @@ impl<'ctx> Preprocessor<'ctx> {
                         self.ifdef_stack.push(Ifdef::new(self.last_input_loc, enabled));
                     }
                     "if" => {
-                        let enabled = self.evaluate()?;
+                        let enabled = self.evaluate();
                         self.ifdef_stack.push(Ifdef::new(self.last_input_loc, enabled));
                     }
                     "elseif" => {
                         let last = self.ifdef_stack.pop().ok_or_else(||
                             DMError::new(self.last_input_loc, "unmatched #elseif"))?;
-                        let enabled = self.evaluate()?;
+                        let enabled = self.evaluate();
                         self.ifdef_stack.push(last.else_if(enabled));
                     }
                     // anything other than ifdefs may be ifdef'd out
