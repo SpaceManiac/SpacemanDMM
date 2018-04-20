@@ -213,11 +213,11 @@ impl Ifdef {
     fn new(location: Location, active: bool) -> Ifdef {
         Ifdef { location, active, chain_active: active }
     }
-    fn else_(self) -> Ifdef {
-        Ifdef { location: self.location, active: !self.active, chain_active: true }
+    fn else_(self, location: Location) -> Ifdef {
+        Ifdef { location, active: !self.active, chain_active: true }
     }
-    fn else_if(self, active: bool) -> Ifdef {
-        Ifdef { location: self.location, active, chain_active: self.chain_active || active }
+    fn else_if(self, location: Location, active: bool) -> Ifdef {
+        Ifdef { location, active, chain_active: self.chain_active || active }
     }
 }
 
@@ -231,6 +231,7 @@ pub struct Preprocessor<'ctx> {
     last_input_loc: Location,
     output: VecDeque<Token>,
     ifdef_stack: Vec<Ifdef>,
+    ifdef_history: IntervalTree<Location, bool>,
 
     history: DefineHistory,
     defines: DefineMap,
@@ -262,6 +263,7 @@ impl<'ctx> Preprocessor<'ctx> {
             maps: Default::default(),
             skins: Default::default(),
             ifdef_stack: Default::default(),
+            ifdef_history: Default::default(),
             last_input_loc: Default::default(),
             last_printable_input_loc: Default::default(),
             output: Default::default(),
@@ -295,6 +297,11 @@ impl<'ctx> Preprocessor<'ctx> {
         &self.history
     }
 
+    /// Access the ifdef history.
+    pub fn ifdef_history(&self) -> &IntervalTree<Location, bool> {
+        &self.ifdef_history
+    }
+
     /// Branch a child preprocessor from this preprocessor's historic state at
     /// the start of the given file.
     pub fn branch_at_file<'ctx2>(&self, file: FileId, context: &'ctx2 Context) -> Preprocessor<'ctx2> {
@@ -310,6 +317,7 @@ impl<'ctx> Preprocessor<'ctx> {
             maps: Default::default(),
             skins: Default::default(),
             ifdef_stack: Default::default(),  // should be fine
+            ifdef_history: Default::default(),
             last_input_loc: location,
             last_printable_input_loc: location,
             output: Default::default(),
@@ -338,7 +346,7 @@ impl<'ctx> Preprocessor<'ctx> {
     }
 
     // ------------------------------------------------------------------------
-    // Internal utilities
+    // Macro definition handling
 
     fn in_environment(&self) -> bool {
         for include in self.include_stack.stack.iter().rev() {
@@ -356,12 +364,22 @@ impl<'ctx> Preprocessor<'ctx> {
         }
     }
 
+    fn move_to_history(&mut self, name: String, previous: (Location, Define)) {
+        self.history.insert(range(previous.0, self.last_input_loc), (name, previous.1));
+    }
+
+    // ------------------------------------------------------------------------
+    // Conditional compilation handling
+
     fn is_disabled(&self) -> bool {
         self.ifdef_stack.iter().any(|x| !x.active)
     }
 
-    fn inner_next(&mut self) -> Option<LocatedToken> {
-        self.include_stack.next()
+    fn pop_ifdef(&mut self) -> Option<Ifdef> {
+        self.ifdef_stack.pop().map(|ifdef| {
+            self.ifdef_history.insert(range(ifdef.location, self.last_input_loc), ifdef.active);
+            ifdef
+        })
     }
 
     fn evaluate_inner(&mut self) -> Result<bool, DMError> {
@@ -399,9 +417,8 @@ impl<'ctx> Preprocessor<'ctx> {
         }
     }
 
-    fn move_to_history(&mut self, name: String, previous: (Location, Define)) {
-        self.history.insert(range(previous.0, self.last_input_loc), (name, previous.1));
-    }
+    // ------------------------------------------------------------------------
+    // Internal utilities
 
     fn check_danger_ident(&mut self, name: &str, kind: &str) {
         if let Some(loc) = self.danger_idents.get(name) {
@@ -410,6 +427,10 @@ impl<'ctx> Preprocessor<'ctx> {
                 https://secure.byond.com/forum/?post=2072419", name, kind
             )).set_severity(Severity::Warning));
         }
+    }
+
+    fn inner_next(&mut self) -> Option<LocatedToken> {
+        self.include_stack.next()
     }
 
     #[allow(unreachable_code)]
@@ -439,13 +460,13 @@ impl<'ctx> Preprocessor<'ctx> {
                 match &ident[..] {
                     // ifdefs
                     "endif" => {
-                        self.ifdef_stack.pop().ok_or_else(||
+                        self.pop_ifdef().ok_or_else(||
                             DMError::new(self.last_input_loc, "unmatched #endif"))?;
                     }
                     "else" => {
-                        let last = self.ifdef_stack.pop().ok_or_else(||
+                        let last = self.pop_ifdef().ok_or_else(||
                             DMError::new(self.last_input_loc, "unmatched #else"))?;
-                        self.ifdef_stack.push(last.else_());
+                        self.ifdef_stack.push(last.else_(self.last_input_loc));
                     }
                     "ifdef" => {
                         expect_token!((define_name) = Token::Ident(define_name, _));
@@ -464,10 +485,10 @@ impl<'ctx> Preprocessor<'ctx> {
                         self.ifdef_stack.push(Ifdef::new(self.last_input_loc, enabled));
                     }
                     "elseif" => {
-                        let last = self.ifdef_stack.pop().ok_or_else(||
+                        let last = self.pop_ifdef().ok_or_else(||
                             DMError::new(self.last_input_loc, "unmatched #elseif"))?;
                         let enabled = self.evaluate();
-                        self.ifdef_stack.push(last.else_if(enabled));
+                        self.ifdef_stack.push(last.else_if(self.last_input_loc, enabled));
                     }
                     // anything other than ifdefs may be ifdef'd out
                     _ if self.is_disabled() => {}
@@ -820,7 +841,7 @@ impl<'ctx> Iterator for Preprocessor<'ctx> {
                     self.context.register_error(e);
                 }
             } else {
-                while let Some(ifdef) = self.ifdef_stack.pop() {
+                while let Some(ifdef) = self.pop_ifdef() {
                     self.context.register_error(DMError::new(ifdef.location, "unterminated #if/#ifdef")
                         .set_severity(Severity::Warning));
                 }

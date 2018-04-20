@@ -101,6 +101,9 @@ impl Context {
         let stderr = &mut stderr.lock();
         let errors = self.errors();
         for err in errors.iter() {
+            if err.severity == Severity::Hint {
+                continue;
+            }
             self.pretty_print_error(stderr, &err).expect("error writing to stderr");
         }
         errors.is_empty()
