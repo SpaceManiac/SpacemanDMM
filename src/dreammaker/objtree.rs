@@ -351,7 +351,7 @@ impl ObjectTree {
                     idx
                 } else {
                     context.register_error(DMError::new(location, format!("bad parent type for {}: {}", path, parent_type)));
-                    NodeIndex(0)  // on bad parent_type, fall back to the root
+                    NodeIndex::new(0)  // on bad parent_type, fall back to the root
                 }
             };
 
