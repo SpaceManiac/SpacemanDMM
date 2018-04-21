@@ -299,9 +299,11 @@ impl ObjectTree {
 
     fn assign_parent_types(&mut self, context: &Context) {
         for (path, &type_idx) in self.types.iter() {
+            let mut location = self.graph.node_weight(type_idx).unwrap().location;
             let idx = if path == "/datum" {
                 NodeIndex::new(0)
             } else {
+                let mut parent_type_buf;
                 let parent_type = if path == "/atom" {
                     "/datum"
                 } else if path == "/turf" {
@@ -313,21 +315,43 @@ impl ObjectTree {
                 } else if path == "/mob" {
                     "/atom/movable"
                 } else {
-                    // TODO
-                    /*match type_.vars.get("parent_type") {
-                        Some(name) => name,
-                        None => */match path.rfind("/").unwrap() {
-                            0 => "/datum",
-                            idx => &path[..idx],
+                    let mut parent_type = match path.rfind("/").unwrap() {
+                        0 => "/datum",
+                        idx => &path[..idx],
+                    };
+                    if let Some(name) = self.graph.node_weight(type_idx).unwrap().vars.get("parent_type") {
+                        location = name.value.location;
+                        if let Some(expr) = name.value.expression.clone() {
+                            match ::constants::simple_evaluate(name.value.location, expr) {
+                                Ok(Constant::String(s)) => {
+                                    parent_type_buf = s;
+                                    parent_type = &parent_type_buf;
+                                }
+                                Ok(Constant::Prefab(Prefab { ref path, ref vars })) if vars.is_empty() => {
+                                    parent_type_buf = String::new();
+                                    for (_, piece) in path.iter() {
+                                        parent_type_buf.push('/');
+                                        parent_type_buf.push_str(&piece);
+                                    }
+                                    parent_type = &parent_type_buf;
+                                }
+                                Ok(other) => {
+                                    context.register_error(DMError::new(location, format!("bad parent_type: {}", other)));
+                                }
+                                Err(e) => {
+                                    context.register_error(e);
+                                }
+                            }
                         }
-                    //}
+                    }
+                    parent_type
                 };
 
                 if let Some(&idx) = self.types.get(parent_type) {
                     idx
                 } else {
-                    context.register_error(DMError::new(Location::default(), format!("bad parent_type for {}: {}", path, parent_type)));
-                    continue;
+                    context.register_error(DMError::new(location, format!("bad parent type for {}: {}", path, parent_type)));
+                    NodeIndex(0)  // on bad parent_type, fall back to the root
                 }
             };
 

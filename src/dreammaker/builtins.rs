@@ -465,6 +465,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         regex/proc/Find(text, start, end);
         regex/proc/Replace(text, rep, start, end);
 
+        image;
         mutable_appearance/parent_type = path!(/image);
     };
 
