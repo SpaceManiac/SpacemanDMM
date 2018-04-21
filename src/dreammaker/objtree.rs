@@ -329,7 +329,7 @@ impl ObjectTree {
                                 }
                                 Ok(Constant::Prefab(Prefab { ref path, ref vars })) if vars.is_empty() => {
                                     parent_type_buf = String::new();
-                                    for (_, piece) in path.iter() {
+                                    for &(_, ref piece) in path.iter() {
                                         parent_type_buf.push('/');
                                         parent_type_buf.push_str(&piece);
                                     }
