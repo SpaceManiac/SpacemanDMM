@@ -4,6 +4,8 @@ use std::path::Path;
 use std::collections::BTreeMap;
 
 use ndarray::Array3;
+use lodepng::{self, RGBA};
+use lodepng::ffi::{State as PngState, ColorType};
 use png::OutputInfo;
 
 const TEXT: [u8; 4] = [b't', b'E', b'X', b't'];
@@ -32,9 +34,34 @@ pub struct IconFile {
 impl IconFile {
     pub fn from_file(path: &Path) -> io::Result<IconFile> {
         let path = &::utils::fix_case(path);
+        let mut decoder = PngState::new();
+        decoder.info_raw.colortype = ColorType::RGBA;
+        decoder.info_raw.set_bitdepth(8);
+        decoder.remember_unknown_chunks(false);
+        let bitmap = match decoder.decode_file(path) {
+            Ok(::lodepng::Image::RGBA(bitmap)) => bitmap,
+            Ok(_) => return Err(io::Error::new(io::ErrorKind::InvalidData, "not RGBA")),
+            Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidData, e)),
+        };
+
+        let mut metadata = Metadata {
+            width: bitmap.width as u32,
+            height: bitmap.height as u32,
+            states: Vec::new(),
+            state_names: BTreeMap::new(),
+        };
+        for (key, value) in decoder.info_png().text_keys_cstr() {
+            if key.to_str() == Ok("Description") {
+                if let Ok(value) = value.to_str() {
+                    metadata = parse_metadata(value);
+                }
+                break;
+            }
+        }
+
         Ok(IconFile {
-            metadata: Metadata::from_file(path)?,
-            image: Image::from_file(path)?,
+            metadata: metadata,
+            image: Image::from_rgba(bitmap),
         })
     }
 
@@ -304,6 +331,29 @@ impl Image {
         };
         Image {
             data: Array3::zeros((height as usize, width as usize, 4)),
+            info,
+        }
+    }
+
+    fn from_rgba(bitmap: lodepng::Bitmap<RGBA>) -> Image {
+        let info = OutputInfo {
+            width: bitmap.width as u32,
+            height: bitmap.height as u32,
+            color_type: ::png::ColorType::RGBA,
+            bit_depth: ::png::BitDepth::Eight,
+            line_size: bitmap.width * 4,
+        };
+        Image {
+            data: Array3::from_shape_fn((bitmap.height, bitmap.width, 4), |(y, x, c)| {
+                let rgba = bitmap.buffer[y * bitmap.width + x];
+                match c {
+                    0 => rgba.r,
+                    1 => rgba.g,
+                    2 => rgba.b,
+                    3 => rgba.a,
+                    _ => unreachable!(),
+                }
+            }),
             info,
         }
     }

@@ -2,6 +2,7 @@
 extern crate dreammaker as dm;
 
 extern crate png;
+extern crate lodepng;
 extern crate inflate;
 
 #[macro_use] extern crate ndarray;
