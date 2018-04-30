@@ -8,8 +8,6 @@ use lodepng::{self, RGBA};
 use lodepng::ffi::{State as PngState, ColorType};
 use png::OutputInfo;
 
-const TEXT: [u8; 4] = [b't', b'E', b'X', b't'];
-const ZTXT: [u8; 4] = [b'z', b'T', b'X', b't'];
 const VERSION: &str = "4.0";
 
 pub const NORTH: i32 = 1;
@@ -132,9 +130,19 @@ pub enum Frames {
 }
 
 impl Metadata {
+    /// Read the metadata from a given file.
+    ///
+    /// Prefer to call `IconFile::from_file`, which can read both metadata and
+    /// image contents at one time.
     pub fn from_file(path: &Path) -> io::Result<Metadata> {
         let text = read_metadata(path)?;
         Ok(parse_metadata(&text))
+    }
+
+    /// Parse metadata from a `Description` string.
+    #[inline]
+    pub fn from_str(data: &str) -> Metadata {
+        parse_metadata(data)
     }
 }
 
@@ -169,51 +177,27 @@ impl Frames {
 // ----------------------------------------------------------------------------
 // Metadata parser
 
-// Unfortunately the png library is young enough that we have to do this in two
-// shots, or reimplement a ton of stuff, if we want to read the metadata *and*
-// the image.
+fn read_metadata(path: &Path) -> io::Result<String> {
+    let path = &::utils::fix_case(path);
+    let mut decoder = PngState::new();
+    decoder.remember_unknown_chunks(false);
+    match decoder.decode_file(path) {
+        Ok(_) => {}
+        Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidData, e)),
+    }
 
-pub fn read_metadata(path: &Path) -> io::Result<String> {
-    use std::io::Read;
-    use png::{StreamingDecoder, Decoded};
-
-    let mut contents = Vec::new();
-    File::open(path)?.read_to_end(&mut contents)?;
-
-    let mut slice = &contents[..];
-    let mut decoder = StreamingDecoder::new();
-    let mut chunk = Vec::new();
-
-    loop {
-        let (size, decoded) = decoder.update(slice)?;
-        slice = &slice[size..];
-        match decoded {
-            Decoded::ChunkBegin(_, _) => chunk.clear(),
-            Decoded::PartialChunk(TEXT, data) |
-            Decoded::PartialChunk(ZTXT, data) => {
-                chunk.extend_from_slice(data);
+    for (key, value) in decoder.info_png().text_keys_cstr() {
+        if key.to_str() == Ok("Description") {
+            if let Ok(value) = value.to_str() {
+                return Ok(value.to_owned());
             }
-            Decoded::ChunkComplete(_, TEXT) => {
-                let first_zero = chunk.iter().position(|&x| x == 0).unwrap();
-                if &chunk[..first_zero] == &b"Description"[..] {
-                    return Ok(String::from_utf8_lossy(&chunk[first_zero + 1..]).into_owned());
-                }
-            }
-            Decoded::ChunkComplete(_, ZTXT) => {
-                let first_zero = chunk.iter().position(|&x| x == 0).unwrap();
-                if &chunk[..first_zero] == &b"Description"[..] {
-                    let rest = &chunk[first_zero + 2..];
-                    let decompressed = ::inflate::inflate_bytes_zlib(rest).unwrap();
-                    return Ok(String::from_utf8_lossy(&decompressed).into_owned());
-                }
-            }
-            Decoded::Nothing | Decoded::ImageEnd => return Ok(String::new()),
-            _ => {}
         }
     }
+
+    Ok(String::new())
 }
 
-pub fn parse_metadata(data: &str) -> Metadata {
+fn parse_metadata(data: &str) -> Metadata {
     if data.is_empty() {
         return Metadata {
             width: 32,
@@ -358,26 +342,24 @@ impl Image {
         }
     }
 
+    /// Read an `Image` from a file.
+    ///
+    /// Prefer to call `IconFile::from_file`, which can read both metadata and
+    /// image contents at one time.
     pub fn from_file(path: &Path) -> io::Result<Image> {
-        use png::{Decoder, BitDepth};
+        let path = &::utils::fix_case(path);
+        let mut decoder = PngState::new();
+        decoder.info_raw.colortype = ColorType::RGBA;
+        decoder.info_raw.set_bitdepth(8);
+        decoder.read_text_chunks(false);
+        decoder.remember_unknown_chunks(false);
+        let bitmap = match decoder.decode_file(path) {
+            Ok(::lodepng::Image::RGBA(bitmap)) => bitmap,
+            Ok(_) => return Err(io::Error::new(io::ErrorKind::InvalidData, "not RGBA")),
+            Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidData, e)),
+        };
 
-        let (info, mut reader) = Decoder::new(File::open(path)?).read_info()?;
-        let mut buffer = vec![0u8; reader.output_buffer_size()];
-        reader.next_frame(&mut buffer)?;
-
-        let mut bytes_per_pixel = info.color_type.samples();
-        match info.bit_depth {
-            BitDepth::One => bytes_per_pixel /= 8,
-            BitDepth::Two => bytes_per_pixel /= 4,
-            BitDepth::Four => bytes_per_pixel /= 2,
-            BitDepth::Eight => {}
-            BitDepth::Sixteen => bytes_per_pixel *= 2,
-        }
-
-        Ok(Image {
-            data: Array3::from_shape_vec((info.height as usize, info.width as usize, bytes_per_pixel), buffer).unwrap(),
-            info,
-        })
+        Ok(Image::from_rgba(bitmap))
     }
 
     pub fn to_file(&self, path: &Path) -> io::Result<()> {
