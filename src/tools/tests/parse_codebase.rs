@@ -45,8 +45,6 @@ fn parse_all_dmm() {
 #[test]
 fn parse_all_dmi() {
     files_with_extension("dmi", |path| {
-        let md = dmi::read_metadata(path).unwrap();
-        println!("{}", md);
-        dmi::parse_metadata(&md);
+        dmi::Metadata::from_file(path).unwrap();
     });
 }
