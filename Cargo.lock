@@ -159,6 +159,7 @@ version = "0.1.0"
 dependencies = [
  "interval-tree 0.8.0",
  "linked-hash-map 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lodepng 2.1.5 (git+https://github.com/kornelski/lodepng-rust?rev=v2.1.5)",
  "petgraph 0.4.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "walkdir 2.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "xml-rs 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",

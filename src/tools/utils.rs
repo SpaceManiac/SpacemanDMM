@@ -1,44 +1,4 @@
 // ----------------------------------------------------------------------------
-// tgcode is full of case-sensitivity problems
-use std::path::Path;
-use std::borrow::Cow;
-
-#[cfg(unix)]
-pub fn fix_case(path: &Path) -> Cow<Path> {
-    if path.exists() {
-        return Cow::Borrowed(path);
-    }
-
-    let parent = match path.parent() {
-        Some(x) => x,
-        None => return Cow::Borrowed(path),
-    };
-
-    for entry in match parent.read_dir() {
-        Ok(x) => x,
-        Err(_) => return Cow::Borrowed(path),
-    } {
-        let entry = match entry {
-            Ok(x) => x,
-            Err(_) => return Cow::Borrowed(path),
-        };
-        let epath = entry.path();
-        let epath_str = epath.display().to_string();
-        let path_str = path.display().to_string();
-        if epath_str.eq_ignore_ascii_case(&path_str) {
-            return Cow::Owned(epath);
-        }
-    }
-    Cow::Borrowed(path)
-}
-
-#[cfg(windows)]
-#[inline(always)]
-pub fn fix_case(path: &Path) -> Cow<Path> {
-    Cow::Borrowed(path)
-}
-
-// ----------------------------------------------------------------------------
 // Copy-paste of std::io::Chars for stability
 use std::io::{self, Read, ErrorKind};
 
