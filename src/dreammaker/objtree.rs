@@ -113,6 +113,17 @@ impl Type {
         child.is_subtype_of(self, objtree)
     }
 
+    pub fn get_value<'a>(&'a self, name: &str, objtree: &'a ObjectTree) -> Option<&'a VarValue> {
+        let mut current = Some(self);
+        while let Some(ty) = current {
+            if let Some(var) = ty.vars.get(name) {
+                return Some(&var.value);
+            }
+            current = objtree.parent_of(ty);
+        }
+        None
+    }
+
     pub fn get_declaration<'a>(&'a self, name: &str, objtree: &'a ObjectTree) -> Option<&'a VarDeclaration> {
         let mut current = Some(self);
         while let Some(ty) = current {

@@ -1,5 +1,6 @@
 //! The constant folder/evaluator, used by the preprocessor and object tree.
 use std::fmt;
+use std::path::Path;
 
 use linked_hash_map::LinkedHashMap;
 
@@ -120,6 +121,14 @@ impl Constant {
             &Constant::String(ref s) |
             &Constant::Resource(ref s) => s == resource,
             _ => false,
+        }
+    }
+
+    pub fn as_path(&self) -> Option<&Path> {
+        match self {
+            &Constant::String(ref s) |
+            &Constant::Resource(ref s) => Some(s.as_ref()),
+            _ => None,
         }
     }
 }

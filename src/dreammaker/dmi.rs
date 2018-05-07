@@ -2,7 +2,6 @@ use std::io;
 use std::path::Path;
 use std::collections::BTreeMap;
 
-use lodepng;
 use lodepng::ffi::{State as PngState};
 
 const VERSION: &str = "4.0";
