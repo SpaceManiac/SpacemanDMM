@@ -484,9 +484,9 @@ impl<'ctx> Preprocessor<'ctx> {
                         let enabled = self.evaluate();
                         self.ifdef_stack.push(Ifdef::new(self.last_input_loc, enabled));
                     }
-                    "elseif" => {
+                    "elif" => {
                         let last = self.pop_ifdef().ok_or_else(||
-                            DMError::new(self.last_input_loc, "unmatched #elseif"))?;
+                            DMError::new(self.last_input_loc, "unmatched #elif"))?;
                         let enabled = self.evaluate();
                         self.ifdef_stack.push(last.else_if(self.last_input_loc, enabled));
                     }
