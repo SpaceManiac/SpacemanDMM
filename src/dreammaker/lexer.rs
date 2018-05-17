@@ -530,7 +530,10 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                     // Got "1.#INF", change it to "inf" for read_number.
                     return (false, 10, "inf".to_owned());
                 }
-                Some(ch) if (ch as char).is_digit(::std::cmp::max(radix, 10)) => buf.push(ch as char),
+                Some(ch) if (ch as char).is_digit(::std::cmp::max(radix, 10)) => {
+                    exponent = false;
+                    buf.push(ch as char);
+                }
                 ch => {
                     self.put_back(ch);
                     return (integer, radix, buf);
