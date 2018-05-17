@@ -403,7 +403,7 @@ impl<'ctx> Preprocessor<'ctx> {
             Some(expr) => expr,
             None => return Err(parser.describe_parse_error()),
         };
-        Ok(::constants::simple_evaluate(start, expr)?.to_bool())
+        Ok(::constants::preprocessor_evaluate(start, expr, &self.defines)?.to_bool())
     }
 
     fn evaluate(&mut self) -> bool {

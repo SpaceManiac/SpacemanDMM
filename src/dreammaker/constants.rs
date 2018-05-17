@@ -7,6 +7,7 @@ use linked_hash_map::LinkedHashMap;
 use super::{DMError, Location, HasLocation, Context};
 use super::objtree::*;
 use super::ast::*;
+use super::preprocessor::DefineMap;
 
 /// A DM constant, usually a literal or simple combination of other constants.
 ///
@@ -255,7 +256,12 @@ pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree) {
 
 /// Evaluate an expression in the absence of any surrounding context.
 pub fn simple_evaluate(location: Location, expr: Expression) -> Result<Constant, DMError> {
-    ConstantFolder { tree: None, location, ty: NodeIndex::new(0) }.expr(expr, None)
+    ConstantFolder { tree: None, location, ty: NodeIndex::new(0), defines: None }.expr(expr, None)
+}
+
+/// Evaluate an expression in the preprocessor, with `defined()` available.
+pub fn preprocessor_evaluate(location: Location, expr: Expression, defines: &DefineMap) -> Result<Constant, DMError> {
+    ConstantFolder { tree: None, location, ty: NodeIndex::new(0), defines: Some(defines) }.expr(expr, None)
 }
 
 enum ConstLookup {
@@ -300,7 +306,7 @@ fn constant_ident_lookup(tree: &mut ObjectTree, ty: NodeIndex, ident: &str, must
         }
     };
     // evaluate full_value
-    let value = ConstantFolder { tree: Some(tree), location, ty }
+    let value = ConstantFolder { tree: Some(tree), defines: None, location, ty }
         .expr(expr, if type_hint.is_empty() { None } else { Some(&type_hint) })?;
     // and store it into 'value', then return it
     let var = tree.graph.node_weight_mut(ty).unwrap().vars.get_mut(ident).unwrap();
@@ -311,6 +317,7 @@ fn constant_ident_lookup(tree: &mut ObjectTree, ty: NodeIndex, ident: &str, must
 
 struct ConstantFolder<'a> {
     tree: Option<&'a mut ObjectTree>,
+    defines: Option<&'a DefineMap>,
     location: Location,
     ty: NodeIndex,
 }
@@ -506,6 +513,20 @@ impl<'a> ConstantFolder<'a> {
                     }
                     Constant::String(result)
                 },
+                "defined" if self.defines.is_some() => {
+                    let defines = self.defines.unwrap();  // annoying, but keeps the match clean
+                    if args.len() != 1 {
+                        return Err(self.error("malformed defined() call"));
+                    }
+                    match args[0] {
+                        Expression::Base { ref unary, term: Term::Ident(ref ident), ref follow }
+                            if unary.is_empty() && follow.is_empty()
+                        => {
+                            Constant::Int(if defines.contains_key(ident) { 1 } else { 0 })
+                        }
+                        _ => return Err(self.error("malformed defined() call"))
+                    }
+                }
                 // other functions are no-goes
                 _ => return Err(self.error(format!("non-constant function call: {}", ident)))
             },
