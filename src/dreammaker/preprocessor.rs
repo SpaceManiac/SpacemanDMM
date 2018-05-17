@@ -214,10 +214,10 @@ impl Ifdef {
         Ifdef { location, active, chain_active: active }
     }
     fn else_(self, location: Location) -> Ifdef {
-        Ifdef { location, active: !self.active, chain_active: true }
+        Ifdef { location, active: !self.chain_active, chain_active: true }
     }
     fn else_if(self, location: Location, active: bool) -> Ifdef {
-        Ifdef { location, active, chain_active: self.chain_active || active }
+        Ifdef { location, active: !self.chain_active && active, chain_active: self.chain_active || active }
     }
 }
 
