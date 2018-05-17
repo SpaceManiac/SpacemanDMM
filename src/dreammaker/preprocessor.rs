@@ -526,7 +526,13 @@ impl<'ctx> Preprocessor<'ctx> {
                                 FileType::DMM => self.maps.push(each),
                                 FileType::DMF => self.skins.push(each),
                                 FileType::DM => match Include::new(self.context, each) {
-                                    Ok(include) => self.include_stack.stack.push(include),
+                                    Ok(include) => {
+                                        // A phantom newline keeps the include
+                                        // directive being indented from making
+                                        // the first line of the file indented.
+                                        self.output.push_back(Token::Punct(Punctuation::Newline));
+                                        self.include_stack.stack.push(include);
+                                    }
                                     Err(e) => self.context.register_error(DMError::new(self.last_input_loc,
                                         "failed to open file").set_cause(e)),
                                 },
