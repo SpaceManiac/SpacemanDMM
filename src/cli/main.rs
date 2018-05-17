@@ -24,6 +24,8 @@ use dmm_tools::*;
 // ----------------------------------------------------------------------------
 // Main driver
 
+const DEFAULT_DME: &str = "tgstation.dme";
+
 fn main() {
     let opt = Opt::from_clap(&Opt::clap()
         .long_version(concat!(
@@ -60,9 +62,17 @@ struct Context {
 
 impl Context {
     fn objtree(&mut self, opt: &Opt) {
-        println!("parsing {}", opt.environment);
+        let pathbuf;
+        let environment: &std::path::Path = match opt.environment {
+            Some(ref env) => env.as_ref(),
+            None => match detect_environment() {
+                Ok(Some(found)) => { pathbuf = found; &pathbuf },
+                _ => DEFAULT_DME.as_ref(),
+            }
+        };
+        println!("parsing {}", environment.display());
         flame!("parse");
-        match self.dm_context.parse_environment(opt.environment.as_ref()) {
+        match self.dm_context.parse_environment(environment) {
             Ok(tree) => {
                 self.objtree = tree;
                 self.dm_context.print_all_errors();
@@ -78,6 +88,21 @@ impl Context {
     }
 }
 
+fn detect_environment() -> std::io::Result<Option<std::path::PathBuf>> {
+    for entry in std::fs::read_dir(".")? {
+        if let Ok(entry) = entry {
+            let name = entry.file_name();
+            if {
+                let utf8_name = name.to_string_lossy();
+                utf8_name.ends_with(".dme") && utf8_name != DEFAULT_DME
+            } {
+                return Ok(Some(name.into()));
+            }
+        }
+    }
+    Ok(None)
+}
+
 #[derive(StructOpt, Debug)]
 #[structopt(name="dmm-tools",
 author="Copyright (C) 2017-2018  Tad Hardesty",
@@ -86,8 +111,8 @@ and you are welcome to redistribute it under the conditions of the GNU
 General Public License version 3.")]
 struct Opt {
     /// The environment file to operate under.
-    #[structopt(short="e", long="env", default_value="tgstation.dme")]
-    environment: String,
+    #[structopt(short="e", long="env")]
+    environment: Option<String>,
 
     #[structopt(short="v", long="verbose")]
     verbose: bool,
