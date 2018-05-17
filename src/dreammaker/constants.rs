@@ -452,6 +452,7 @@ impl<'a> ConstantFolder<'a> {
         }
         integer!(BitOr |);
         integer!(BitAnd &);
+        integer!(BitXor ^);
         integer!(LShift <<);
         integer!(RShift >>);
 
