@@ -147,7 +147,7 @@ dependencies = [
  "flame 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "inflate 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "linked-hash-map 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "lodepng 2.1.5 (git+https://github.com/kornelski/lodepng-rust?rev=v2.1.5)",
+ "lodepng 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "ndarray 0.11.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "walkdir 2.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -159,7 +159,7 @@ version = "0.1.0"
 dependencies = [
  "interval-tree 0.8.0",
  "linked-hash-map 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "lodepng 2.1.5 (git+https://github.com/kornelski/lodepng-rust?rev=v2.1.5)",
+ "lodepng 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "petgraph 0.4.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "walkdir 2.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "xml-rs 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -341,7 +341,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "lodepng"
 version = "2.1.5"
-source = "git+https://github.com/kornelski/lodepng-rust?rev=v2.1.5#51352f034384140ae06bfe4463aa8e3d5baab558"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "libc 0.2.40 (registry+https://github.com/rust-lang/crates.io-index)",
  "rgb 0.8.7 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -766,7 +766,7 @@ dependencies = [
 "checksum libgit2-sys 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)" = "1ecbd6428006c321c29b6c8a895f0d90152f1cf4fd8faab69fc436a3d9594f63"
 "checksum libz-sys 1.0.18 (registry+https://github.com/rust-lang/crates.io-index)" = "87f737ad6cc6fd6eefe3d9dc5412f1573865bded441300904d2f42269e140f16"
 "checksum linked-hash-map 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)" = "70fb39025bc7cdd76305867c4eccf2f2dcf6e9a57f5b21a93e1c2d86cd03ec9e"
-"checksum lodepng 2.1.5 (git+https://github.com/kornelski/lodepng-rust?rev=v2.1.5)" = "<none>"
+"checksum lodepng 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "20b9f5396fc505b84841953e03a76a1fce948d8df43c2e5609cff511b3a70e52"
 "checksum log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)" = "e19e8d5c34a3e0e2223db8e060f9e8264aeeb5c5fc64a4ee9965c062211c024b"
 "checksum log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "89f010e843f2b1a31dbd316b3b8d443758bc634bed37aabade59c686d644e0a2"
 "checksum matches 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)" = "100aabe6b8ff4e4a7e32c1c13523379802df0772b82466207ac25b013f193376"
