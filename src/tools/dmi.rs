@@ -1,10 +1,12 @@
 use std::io;
+use std::fs::File;
 use std::path::Path;
 use std::collections::BTreeMap;
 
 use ndarray::Array3;
 use lodepng::{self, RGBA};
 use lodepng::ffi::{State as PngState, ColorType};
+use png::OutputInfo;
 
 pub const NORTH: i32 = 1;
 pub const SOUTH: i32 = 2;
@@ -34,9 +36,10 @@ impl IconFile {
         decoder.info_raw.colortype = ColorType::RGBA;
         decoder.info_raw.set_bitdepth(8);
         decoder.remember_unknown_chunks(false);
-        let bitmap = match decoder.decode_file(path).map_err(lodepng_error)? {
-            ::lodepng::Image::RGBA(bitmap) => bitmap,
-            _ => return Err(io::Error::new(io::ErrorKind::InvalidData, "not RGBA")),
+        let bitmap = match decoder.decode_file(path) {
+            Ok(::lodepng::Image::RGBA(bitmap)) => bitmap,
+            Ok(_) => return Err(io::Error::new(io::ErrorKind::InvalidData, "not RGBA")),
+            Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidData, e)),
         };
 
         let mut metadata = Metadata {
@@ -80,7 +83,7 @@ impl IconFile {
         };
 
         let icon_index = state.offset as u32 + dir_idx;
-        let icon_count = self.image.size().0 as u32 / self.metadata.width;
+        let icon_count = self.image.info.width / self.metadata.width;
         let (icon_x, icon_y) = (icon_index % icon_count, icon_index / icon_count);
         Some((icon_x * self.metadata.width, icon_y * self.metadata.height,
             self.metadata.width, self.metadata.height))
@@ -92,17 +95,33 @@ impl IconFile {
 // Image manipulation
 
 pub struct Image {
+    pub info: ::png::OutputInfo,
     pub data: Array3<u8>,
 }
 
 impl Image {
     pub fn new_rgba(width: u32, height: u32) -> Image {
+        let info = OutputInfo {
+            width,
+            height,
+            color_type: ::png::ColorType::RGBA,
+            bit_depth: ::png::BitDepth::Eight,
+            line_size: width as usize * 4,
+        };
         Image {
             data: Array3::zeros((height as usize, width as usize, 4)),
+            info,
         }
     }
 
     fn from_rgba(bitmap: lodepng::Bitmap<RGBA>) -> Image {
+        let info = OutputInfo {
+            width: bitmap.width as u32,
+            height: bitmap.height as u32,
+            color_type: ::png::ColorType::RGBA,
+            bit_depth: ::png::BitDepth::Eight,
+            line_size: bitmap.width * 4,
+        };
         Image {
             data: Array3::from_shape_fn((bitmap.height, bitmap.width, 4), |(y, x, c)| {
                 let rgba = bitmap.buffer[y * bitmap.width + x];
@@ -114,6 +133,7 @@ impl Image {
                     _ => unreachable!(),
                 }
             }),
+            info,
         }
     }
 
@@ -128,28 +148,27 @@ impl Image {
         decoder.info_raw.set_bitdepth(8);
         decoder.read_text_chunks(false);
         decoder.remember_unknown_chunks(false);
-        let bitmap = match decoder.decode_file(path).map_err(lodepng_error)? {
-            ::lodepng::Image::RGBA(bitmap) => bitmap,
-            _ => return Err(io::Error::new(io::ErrorKind::InvalidData, "not RGBA")),
+        let bitmap = match decoder.decode_file(path) {
+            Ok(::lodepng::Image::RGBA(bitmap)) => bitmap,
+            Ok(_) => return Err(io::Error::new(io::ErrorKind::InvalidData, "not RGBA")),
+            Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidData, e)),
         };
 
         Ok(Image::from_rgba(bitmap))
     }
 
-    /// Write this `Image` to a file.
-    ///
-    /// Call ``.
     pub fn to_file(&self, path: &Path) -> io::Result<()> {
+        use png::{Encoder, HasParameters};
         //flame!("Image::to_file");
 
-        let (height, width, _) = self.data.dim();
-        lodepng::encode32_file(path, self.data.as_slice().unwrap(), width, height)
-            .map_err(lodepng_error)
-    }
+        let mut encoder = Encoder::new(File::create(path)?, self.info.width, self.info.height);
+        encoder.set(self.info.bit_depth);
+        encoder.set(self.info.color_type);
+        let mut writer = encoder.write_header()?;
+        // TODO: metadata with write_chunk()
 
-    pub fn size(&self) -> (usize, usize) {
-        let (height, width, _) = self.data.dim();
-        (width, height)
+        writer.write_image_data(self.data.as_slice().unwrap())?;
+        Ok(())
     }
 
     pub fn composite(&mut self, other: &Image, pos: (u32, u32), crop: Rect, color: [u8; 4]) {
@@ -192,8 +211,4 @@ impl Image {
 #[inline]
 fn mul255(x: u8, y: u8) -> u8 {
     (x as u16 * y as u16 / 255) as u8
-}
-
-fn lodepng_error(error: lodepng::Error) -> io::Error {
-    io::Error::new(io::ErrorKind::InvalidData, error)
 }

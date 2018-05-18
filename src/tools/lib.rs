@@ -1,6 +1,7 @@
 //! SS13 minimap generation tool
 extern crate dreammaker as dm;
 
+extern crate png;
 extern crate lodepng;
 extern crate inflate;
 
