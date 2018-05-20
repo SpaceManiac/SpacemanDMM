@@ -13,7 +13,7 @@ serde = "1.0.27"
 serde_json = "1.0.10"
 serde_derive = "1.0.27"
 jsonrpc-core = "8.0.1"
-languageserver-types = "0.36"
+languageserver-types = "0.41"
 dreammaker = { path = "../dreammaker" }
 petgraph = { version = "0.4.9", default-features = false }
 
