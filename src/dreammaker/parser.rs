@@ -2,7 +2,7 @@
 
 use linked_hash_map::LinkedHashMap;
 
-use super::{DMError, Location, HasLocation, Context};
+use super::{DMError, Location, HasLocation, Context, Severity};
 use super::lexer::{LocatedToken, Token, Punctuation};
 use super::objtree::ObjectTree;
 use super::annotation::*;
@@ -28,7 +28,8 @@ pub fn parse<I>(context: &Context, iter: I) -> ObjectTree where
         eprintln!("parsed {}/{} proc bodies ({}%)", parser.procs_good, procs_total, (parser.procs_good * 100 / procs_total));
     }
 
-    parser.tree.finalize(context);
+    let sloppy = context.errors().iter().any(|p| p.severity() == Severity::Error);
+    parser.tree.finalize(context, sloppy);
     parser.tree
 }
 
