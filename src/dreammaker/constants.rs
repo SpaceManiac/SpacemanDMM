@@ -448,6 +448,13 @@ impl<'a> ConstantFolder<'a> {
         numeric!(LessEq <=);
         numeric!(Greater >);
         numeric!(GreaterEq >=);
+        match (op, lhs, rhs) {
+            (BinaryOp::Pow, Int(lhs), Int(rhs)) if rhs >= 0 => return Ok(Constant::from(lhs.pow(rhs as u32))),
+            (BinaryOp::Pow, Int(lhs), Float(rhs)) => return Ok(Constant::from((lhs as f32).powf(rhs))),
+            (BinaryOp::Pow, Float(lhs), Int(rhs)) => return Ok(Constant::from(lhs.powi(rhs))),
+            (BinaryOp::Pow, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs.powf(rhs))),
+            (_, lhs_, rhs_) => { lhs = lhs_; rhs = rhs_; }
+        }
 
         macro_rules! integer {
             ($name:ident $oper:tt) => {
