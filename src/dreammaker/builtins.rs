@@ -339,10 +339,16 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         atom/movable/proc/Uncrossed(/*atom/movable*/O);
 
         area/parent_type = path!(/atom);
+        area/layer = int!(1);
+
         turf/parent_type = path!(/atom);
+        turf/layer = int!(2);
+
         obj/parent_type = path!(/atom/movable);
+        obj/layer = int!(3);
 
         mob/parent_type = path!(/atom/movable);
+        mob/layer = int!(4);
         mob/var/ckey;
         mob/var/client/client;
         mob/var/list/group;
@@ -573,7 +579,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         image/var/underlays;
         image/var/overlays;
         image/var/atom/loc;
-        image/var/layer;
+        image/var/layer = int!(5);
         image/var/maptext;
         image/var/maptext_width;
         image/var/maptext_height;

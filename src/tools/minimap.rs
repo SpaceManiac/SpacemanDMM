@@ -414,7 +414,10 @@ fn layer_of(objtree: &ObjectTree, atom: &Atom) -> i32 {
         match atom.get_var("layer", objtree) {
             &Constant::Int(i) => (i % 1000) * 1000,
             &Constant::Float(f) => ((f % 1000.) * 1000.) as i32,
-            other => panic!("not a layer: {:?}", other),
+            other => {
+                eprintln!("not a layer: {:?} on {:?}", other, atom.type_.path);
+                2_000
+            }
         }
     }
 }
