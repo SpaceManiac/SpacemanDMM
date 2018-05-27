@@ -70,6 +70,7 @@ fn test_remove(){
 }
 
 #[test]
+#[ignore]
 fn test_performance(){
     let mut t = IntervalTree::<i32>::new();
     let data = 1337;
