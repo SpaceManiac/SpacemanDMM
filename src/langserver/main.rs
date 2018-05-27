@@ -30,6 +30,8 @@ use langserver::MessageType;
 use petgraph::visit::IntoNodeReferences;
 
 fn main() {
+    std::env::set_var("RUST_BACKTRACE", "1");
+
     eprintln!("dm-langserver {}  Copyright (C) 2017-2018  Tad Hardesty", env!("CARGO_PKG_VERSION"));
     eprintln!("This program comes with ABSOLUTELY NO WARRANTY. This is free software,");
     eprintln!("and you are welcome to redistribute it under the conditions of the GNU");
@@ -356,7 +358,7 @@ handle_method_call! {
         }
 
         for (idx, ty) in self.objtree.graph.node_references() {
-            if query.matches_type(&ty.name, &ty.path) {
+            if query.matches_type(&ty.name, &ty.path) && idx.index() != 0 {
                 results.push(SymbolInformation {
                     name: ty.name.clone(),
                     kind: SymbolKind::Class,

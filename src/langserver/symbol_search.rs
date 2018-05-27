@@ -13,20 +13,20 @@ pub enum Query {
 impl Query {
     /// Parse a symbol query.
     pub fn parse(query: &str) -> Option<Query> {
-        if query.is_empty() || query == "#" || query == "/" {
+        if !any_alphanumeric(query) {
             return None
         }
         Some(if query.starts_with("#") {
             Query::Define(query[1..].to_lowercase())
         } else if query.starts_with("var/") {
             let query = &query["var/".len()..];
-            if query.is_empty() {
+            if !any_alphanumeric(query) {
                 return None
             }
             Query::Var(query.to_lowercase())
         } else if query.starts_with("proc/") {
             let query = &query["proc/".len()..];
-            if query.is_empty() {
+            if !any_alphanumeric(query) {
                 return None
             }
             Query::Proc(query.to_lowercase())
@@ -86,4 +86,8 @@ fn starts_with<'a>(fulltext: &'a str, query: &'a str) -> bool {
 
     let mut query_chars = simplify(query);
     simplify(fulltext).zip(&mut query_chars).all(|(a, b)| a == b) && query_chars.next().is_none()
+}
+
+fn any_alphanumeric(text: &str) -> bool {
+    text.chars().flat_map(|c| c.to_lowercase()).any(|c| c.is_alphanumeric())
 }
