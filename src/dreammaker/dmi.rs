@@ -123,25 +123,20 @@ fn read_metadata(path: &Path) -> io::Result<String> {
 }
 
 fn parse_metadata(data: &str) -> Metadata {
+    let mut metadata = Metadata {
+        width: 32,
+        height: 32,
+        states: Vec::new(),
+        state_names: BTreeMap::new(),
+    };
     if data.is_empty() {
-        return Metadata {
-            width: 32,
-            height: 32,
-            states: Vec::new(),
-            state_names: BTreeMap::new(),
-        };
+        return metadata;
     }
 
     let mut lines = data.lines();
     assert_eq!(lines.next().unwrap(), "# BEGIN DMI");
     assert_eq!(lines.next().unwrap(), &format!("version = {}", VERSION));
 
-    let mut metadata = Metadata {
-        width: 0,
-        height: 0,
-        states: Vec::new(),
-        state_names: BTreeMap::new(),
-    };
     metadata.state_names.insert(String::new(), 0);
     let mut state: Option<State> = None;
     let mut frames_so_far = 0;
