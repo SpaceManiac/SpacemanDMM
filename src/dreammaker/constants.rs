@@ -125,6 +125,13 @@ impl Constant {
         }
     }
 
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            &Constant::String(ref s) => Some(s.as_ref()),
+            _ => None,
+        }
+    }
+
     pub fn as_path(&self) -> Option<&Path> {
         match self {
             &Constant::String(ref s) |
