@@ -10,6 +10,7 @@ pub type Iter<'a> = RangePairIter<'a, Location, Annotation>;
 pub enum Annotation {
     TreeBlock(Vec<String>),
     TreePath(Vec<String>),
+    ProcBody(Vec<String>),
     Ident(String),
 }
 

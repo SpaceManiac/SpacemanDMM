@@ -456,12 +456,14 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
 
                 // split off a subparser so we can keep parsing the objtree
                 // even when the proc body doesn't parse
+                let start = self.location;
                 let mut body_tt = Vec::new();
                 require!(self.read_any_tt(&mut body_tt));
                 while body_tt[0].token != Punct(LBrace) && body_tt[body_tt.len() - 1].token != Punct(Semicolon) {
                     // read repeatedly until it's a block or ends with a newline
                     require!(self.read_any_tt(&mut body_tt));
                 }
+                self.annotate(start, || Annotation::ProcBody(new_stack.iter().map(|t| t.to_owned()).collect()));
                 let mut subparser = Parser::new(self.context, body_tt.iter().cloned());
                 if subparser.block().is_ok() {
                     self.procs_good += 1;
