@@ -451,44 +451,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             Punct(LParen) => {
                 self.tree.add_proc(self.location, new_stack.iter(), new_stack.len())?;
 
-                let parameters = require!(self.separated(Comma, RParen, None, |this| {
-                    if let Some(()) = this.exact(Punct(Ellipsis))? {
-                        return success(None);
-                    }
-
-                    // `name` or `obj/name` or `var/obj/name` or ...
-                    let (_absolute, mut path) = leading!(this.tree_path());
-                    let name = path.pop().unwrap();
-                    if path.first().map_or(false, |i| i == "var") {
-                        path.remove(0);
-                    }
-                    require!(this.var_annotations());
-                    // = <expr>
-                    let default = if let Some(()) = this.exact(Punct(Assign))? {
-                        Some(require!(this.expression()))
-                    } else {
-                        None
-                    };
-                    // as obj|turf
-                    let as_types = if let Some(()) = this.exact_ident("as")? {
-                        let mut as_what = vec![require!(this.ident())];
-                        while let Some(()) = this.exact(Punct(BitOr))? {
-                            as_what.push(require!(this.ident()));
-                        }
-                        Some(as_what)
-                    } else {
-                        None
-                    };
-                    // `in view(7)` or `in list("a", "b")` or ...
-                    let in_list = if let Some(()) = this.exact_ident("in")? {
-                        Some(require!(this.expression()))
-                    } else {
-                        None
-                    };
-                    success(Some(Parameter {
-                        path, name, default, as_types, in_list
-                    }))
-                }));
+                let parameters = require!(self.separated(Comma, RParen, None, Parser::proc_parameter));
                 let _parameters = parameters.into_iter().filter_map(|x| x).collect::<Vec<_>>();
 
                 // split off a subparser so we can keep parsing the objtree
@@ -513,6 +476,48 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 SUCCESS
             }
         }
+    }
+
+    fn proc_parameter(&mut self) -> Status<Option<Parameter>> {
+        use super::lexer::Token::*;
+        use super::lexer::Punctuation::*;
+
+        if let Some(()) = self.exact(Punct(Ellipsis))? {
+            return success(None);
+        }
+
+        // `name` or `obj/name` or `var/obj/name` or ...
+        let (_absolute, mut path) = leading!(self.tree_path());
+        let name = path.pop().unwrap();
+        if path.first().map_or(false, |i| i == "var") {
+            path.remove(0);
+        }
+        require!(self.var_annotations());
+        // = <expr>
+        let default = if let Some(()) = self.exact(Punct(Assign))? {
+            Some(require!(self.expression()))
+        } else {
+            None
+        };
+        // as obj|turf
+        let as_types = if let Some(()) = self.exact_ident("as")? {
+            let mut as_what = vec![require!(self.ident())];
+            while let Some(()) = self.exact(Punct(BitOr))? {
+                as_what.push(require!(self.ident()));
+            }
+            Some(as_what)
+        } else {
+            None
+        };
+        // `in view(7)` or `in list("a", "b")` or ...
+        let in_list = if let Some(()) = self.exact_ident("in")? {
+            Some(require!(self.expression()))
+        } else {
+            None
+        };
+        success(Some(Parameter {
+            path, name, default, as_types, in_list
+        }))
     }
 
     fn tree_entries(&mut self, parent: PathStack, terminator: Token) -> Status<()> {
