@@ -22,7 +22,7 @@ mod symbol_search;
 mod extras;
 
 use std::path::PathBuf;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use url::Url;
 use jsonrpc::{Request, Call, Response, Output};
@@ -129,6 +129,14 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
 
     fn file_url(&self, file: dm::FileId) -> Result<Url, jsonrpc::Error> {
         path_to_url(self.root.join(self.context.file_path(file)))
+    }
+
+    fn location_link(&self, loc: dm::Location) -> String {
+        if loc.file == dm::FileId::builtins() {
+            String::new()
+        } else {
+            format!("file:{}#{}", self.root.join(self.context.file_path(loc.file)).display(), loc.line)
+        }
     }
 
     fn convert_location(&self, loc: dm::Location, one: &str, two: &str, three: &str) -> Result<langserver::Location, jsonrpc::Error> {
@@ -408,49 +416,112 @@ handle_method_call! {
     }
 
     on HoverRequest(&mut self, params) {
-        #[cfg(debug_assertions)] {
-            let path = url_to_path(params.text_document.uri)?;
-            let contents = self.docs.read(&path).map_err(invalid_request)?;
+        let path = url_to_path(params.text_document.uri)?;
+        let contents = self.docs.read(&path).map_err(invalid_request)?;
 
-            let preprocessor = match self.preprocessor {
-                Some(ref pp) => pp,
-                None => { eprintln!("no preprocessor"); return Ok(None); }
-            };
-            let stripped = match path.strip_prefix(&self.root) {
-                Err(_) => { eprintln!("outside workspace: {}", path.display()); return Ok(None); },
-                Ok(path) => path
-            };
-            let file_id = match self.context.get_file(&stripped) {
-                None => { eprintln!("unregistered: {}", stripped.display()); return Ok(None); },
-                Some(id) => id
-            };
+        // TODO: cache this junk
+        let preprocessor = match self.preprocessor {
+            Some(ref pp) => pp,
+            None => { eprintln!("no preprocessor"); return Ok(None); }
+        };
+        let stripped = match path.strip_prefix(&self.root) {
+            Err(_) => { eprintln!("outside workspace: {}", path.display()); return Ok(None); },
+            Ok(path) => path
+        };
+        let file_id = match self.context.get_file(&stripped) {
+            None => { eprintln!("unregistered: {}", stripped.display()); return Ok(None); },
+            Some(id) => id
+        };
 
-            let context = Default::default();
-            let mut preprocessor = preprocessor.branch_at_file(file_id, &context);
-            let file_id = preprocessor.push_file(stripped.to_owned(), contents);
-            let indent = dm::indents::IndentProcessor::new(&context, preprocessor);
-            let mut annotations = dm::annotation::AnnotationTree::default();
-            {
-                let mut parser = dm::parser::Parser::new(&context, indent);
-                parser.annotate_to(&mut annotations);
-                parser.run();
+        let context = Default::default();
+        let mut preprocessor = preprocessor.branch_at_file(file_id, &context);
+        let file_id = preprocessor.push_file(stripped.to_owned(), contents);
+        let indent = dm::indents::IndentProcessor::new(&context, preprocessor);
+        let mut annotations = dm::annotation::AnnotationTree::default();
+        {
+            let mut parser = dm::parser::Parser::new(&context, indent);
+            parser.annotate_to(&mut annotations);
+            parser.run();
+        }
+
+        let location = dm::Location {
+            file: file_id,
+            line: params.position.line as u32 + 1,
+            column: params.position.character as u16 + 1,
+        };
+        let mut results = Vec::new();
+        for (_range, annotation) in annotations.get_location(location) {
+            use dm::annotation::Annotation;
+            #[cfg(debug_assertions)] {
+                results.push(format!("{:?}", annotation));
             }
+            match annotation {
+                Annotation::Variable(path) if !path.is_empty() => {
+                    let objtree = &self.objtree;
+                    let mut current = objtree.root();
+                    let (last, most) = path.split_last().unwrap();
+                    for part in most {
+                        if part == "var" { break }
+                        if let Some(child) = current.child(part, objtree) {
+                            current = child;
+                        } else {
+                            break;
+                        }
+                    }
 
+                    let mut infos = VecDeque::new();
+                    let mut next = Some(current);
+                    while let Some(current) = next {
+                        if let Some(var) = current.vars.get(last) {
+                            let constant = if let Some(ref constant) = var.value.constant {
+                                format!("  \n= `{}`", constant)
+                            } else {
+                                String::new()
+                            };
+                            let path = if current.path.is_empty() {
+                                "(global)"
+                            } else {
+                                &current.path
+                            };
+                            infos.push_front(format!("[{}]({}){}", path, self.location_link(var.value.location), constant));
+                            if let Some(ref decl) = var.declaration {
+                                let mut declaration = String::new();
+                                declaration.push_str("var");
+                                if decl.is_static {
+                                    declaration.push_str("/static");
+                                }
+                                if decl.is_const {
+                                    declaration.push_str("/const");
+                                }
+                                if decl.is_tmp {
+                                    declaration.push_str("/tmp");
+                                }
+                                for (_, bit) in decl.type_path.iter() {
+                                    declaration.push('/');
+                                    declaration.push_str(&bit);
+                                }
+                                declaration.push_str("/**");
+                                declaration.push_str(last);
+                                declaration.push_str("**");
+                                infos.push_front(declaration);
+                            }
+                        }
+                        next = current.parent_type(objtree);
+                    }
+                    if !infos.is_empty() {
+                        results.push(infos.into_iter().collect::<Vec<_>>().join("\n\n"));
+                    }
+                }
+                _ => {}
+            }
+        }
+        if results.is_empty() {
+            None
+        } else {
             Some(Hover {
                 range: None,
-                contents: HoverContents::Markup(MarkupContent {
-                    kind: MarkupKind::Markdown,
-                    value: format!("```\n{}\n```", annotations.get_location(dm::Location {
-                        file: file_id,
-                        line: params.position.line as u32 + 1,
-                        column: params.position.character as u16 + 1,
-                    }).map(|(_, x)| format!("{:?}", x)).collect::<Vec<_>>().join("\n")),
-                }),
+                contents: HoverContents::Array(results.into_iter().map(MarkedString::String).collect()),
             })
-        }
-        #[cfg(not(debug_assertions))] {
-            let _ = params;
-            None
         }
     }
 }

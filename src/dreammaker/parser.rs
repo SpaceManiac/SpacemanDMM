@@ -89,8 +89,16 @@ impl<'a> PathStack<'a> {
         }
     }
 
+    fn contains(&self, keyword: &str) -> bool {
+        self.iter().any(|x| x == keyword)
+    }
+
     fn len(&self) -> usize {
         self.parts.len() + self.parent.as_ref().map_or(0, |p| p.len())
+    }
+
+    fn to_vec(&self) -> Vec<String> {
+        self.iter().map(|t| t.to_owned()).collect()
     }
 }
 
@@ -418,6 +426,8 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         use super::lexer::Token::*;
         use super::lexer::Punctuation::*;
 
+        let entry_start = self.updated_location();
+
         // read and calculate the current path
         let (absolute, path) = leading!(self.tree_path());
         if absolute && parent.parent.is_some() {
@@ -438,7 +448,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 self.put_back(t);
                 let start = self.updated_location();
                 require!(self.tree_block(new_stack));
-                self.annotate(start, || Annotation::TreeBlock(new_stack.iter().map(|t| t.to_owned()).collect()));
+                self.annotate(start, || Annotation::TreeBlock(new_stack.to_vec()));
                 SUCCESS
             }
             Punct(Assign) => {
@@ -446,6 +456,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 let expr = require!(self.expression());
                 require!(self.exact(Punct(Semicolon)));
                 self.tree.add_var(location, new_stack.iter(), new_stack.len(), expr)?;
+                self.annotate(entry_start, || Annotation::Variable(new_stack.to_vec()));
                 SUCCESS
             }
             Punct(LParen) => {
@@ -456,14 +467,15 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
 
                 // split off a subparser so we can keep parsing the objtree
                 // even when the proc body doesn't parse
-                let start = self.location;
+                self.annotate(entry_start, || Annotation::ProcHeader(new_stack.to_vec()));
+                let start = self.updated_location();
                 let mut body_tt = Vec::new();
                 require!(self.read_any_tt(&mut body_tt));
                 while body_tt[0].token != Punct(LBrace) && body_tt[body_tt.len() - 1].token != Punct(Semicolon) {
                     // read repeatedly until it's a block or ends with a newline
                     require!(self.read_any_tt(&mut body_tt));
                 }
-                self.annotate(start, || Annotation::ProcBody(new_stack.iter().map(|t| t.to_owned()).collect()));
+                self.annotate(start, || Annotation::ProcBody(new_stack.to_vec()));
                 let mut subparser = Parser::new(self.context, body_tt.iter().cloned());
                 if subparser.block().is_ok() {
                     self.procs_good += 1;
@@ -475,6 +487,9 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             other => {
                 self.tree.add_entry(self.location, new_stack.iter(), new_stack.len())?;
                 self.put_back(other);
+                if new_stack.contains("var") {
+                    self.annotate(entry_start, || Annotation::Variable(new_stack.to_vec()));
+                }
                 SUCCESS
             }
         }
@@ -960,7 +975,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     /// a parenthesized, comma-separated list of expressions
     fn arguments(&mut self) -> Status<Vec<Expression>> {
         leading!(self.exact(Token::Punct(Punctuation::LParen)));
-        success(require!(self.separated(Punctuation::Comma, Punctuation::RParen, Some(Expression::from(Term::Null)), |this| this.expression())))
+        success(require!(self.separated(Punctuation::Comma, Punctuation::RParen, Some(Expression::from(Term::Null)), Parser::expression)))
     }
 
     fn separated<R: Clone, F: FnMut(&mut Self) -> Status<R>>(&mut self, sep: Punctuation, terminator: Punctuation, allow_empty: Option<R>, mut f: F) -> Status<Vec<R>> {
