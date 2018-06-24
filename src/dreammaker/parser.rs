@@ -349,7 +349,12 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     }
 
     fn exact(&mut self, tok: Token) -> Status<()> {
-        let next = self.next(format!("'{}'", tok))?;
+        let message = if tok == Token::Eof {
+            "EOF".to_owned()
+        } else {
+            format!("'{}'", tok)
+        };
+        let next = self.next(message)?;
         if next == tok {
             SUCCESS
         } else {
@@ -539,7 +544,12 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
 
     fn tree_entries(&mut self, parent: PathStack, terminator: Token) -> Status<()> {
         loop {
-            let next = self.next(format!("newline, '{}'", terminator))?;
+            let message = if terminator == Token::Eof {
+                "newline".to_owned()
+            } else {
+                format!("newline, '{}'", terminator)
+            };
+            let next = self.next(message)?;
             if next == terminator || next == Token::Eof {
                 break
             } else if next == Token::Punct(Punctuation::Semicolon) {
