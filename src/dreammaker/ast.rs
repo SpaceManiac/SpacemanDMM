@@ -363,13 +363,31 @@ pub enum Follow {
 }
 
 /// A parameter declaration in the header of a proc.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Parameter {
     pub path: Vec<String>,
     pub name: String,
     pub default: Option<Expression>,
     pub as_types: Option<Vec<String>>,
     pub in_list: Option<Expression>,
+}
+
+impl fmt::Display for Parameter {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        for each in self.path.iter() {
+            write!(fmt, "{}/", each)?;
+        }
+        fmt.write_str(&self.name)?;
+        if let Some(ref as_types) = self.as_types {
+            fmt.write_str(" as ")?;
+            let mut first = true;
+            for each in as_types.iter() {
+                write!(fmt, "{}{}", if first { "" } else { "|" }, each)?;
+                first = false;
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

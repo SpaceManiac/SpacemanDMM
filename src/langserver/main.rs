@@ -534,7 +534,19 @@ handle_method_call! {
                             } else {
                                 &current.path
                             };
-                            infos.push_front(format!("[{}]({})", path, self.location_link(proc.value.location)));
+                            let mut message = format!("[{}]({})  \n{}(", path, self.location_link(proc.value.location), last);
+                            let mut first = true;
+                            for each in proc.value.parameters.iter() {
+                                use std::fmt::Write;
+                                if first {
+                                    first = false;
+                                } else {
+                                    message.push_str(", ");
+                                }
+                                let _ = write!(message, "{}", each);
+                            }
+                            message.push_str(")");
+                            infos.push_front(message);
                             if let Some(ref decl) = proc.declaration {
                                 let mut declaration = String::new();
                                 declaration.push_str(if decl.is_verb { "verb" } else { "proc" });

@@ -465,10 +465,9 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 SUCCESS
             }
             Punct(LParen) => {
-                self.tree.add_proc(self.location, new_stack.iter(), new_stack.len())?;
-
+                let location = self.location;
                 let parameters = require!(self.separated(Comma, RParen, None, Parser::proc_parameter));
-                let _parameters = parameters.into_iter().filter_map(|x| x).collect::<Vec<_>>();
+                self.tree.add_proc(location, new_stack.iter(), new_stack.len(), parameters)?;
 
                 // split off a subparser so we can keep parsing the objtree
                 // even when the proc body doesn't parse
@@ -500,12 +499,15 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         }
     }
 
-    fn proc_parameter(&mut self) -> Status<Option<Parameter>> {
+    fn proc_parameter(&mut self) -> Status<Parameter> {
         use super::lexer::Token::*;
         use super::lexer::Punctuation::*;
 
         if let Some(()) = self.exact(Punct(Ellipsis))? {
-            return success(None);
+            return success(Parameter {
+                name: "...".to_owned(),
+                .. Default::default()
+            });
         }
 
         // `name` or `obj/name` or `var/obj/name` or ...
@@ -537,9 +539,9 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         } else {
             None
         };
-        success(Some(Parameter {
+        success(Parameter {
             path, name, default, as_types, in_list
-        }))
+        })
     }
 
     fn tree_entries(&mut self, parent: PathStack, terminator: Token) -> Status<()> {

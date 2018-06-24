@@ -120,10 +120,6 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         column: 1,
     };
 
-    macro_rules! ignore {
-        ($($x:tt)*) => {}
-    }
-
     macro_rules! entries {
         ($($($elem:ident)/ * $(($($arg:ident),*))* $(= $val:expr)*;)*) => {
             $(loop {
@@ -134,8 +130,9 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
                     break;
                 )*
                 $(
-                    tree.add_proc(location, elems.iter().cloned(), elems.len() + 1)?;
-                    $(ignore!($arg);)*
+                    tree.add_proc(location, elems.iter().cloned(), elems.len() + 1, vec![$(
+                        Parameter { name: stringify!($arg).to_owned(), .. Default::default() }
+                    ),*])?;
                     break;
                 )*
                 tree.add_entry(location, elems.iter().cloned(), elems.len() + 1)?;

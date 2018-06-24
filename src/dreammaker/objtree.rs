@@ -8,7 +8,7 @@ use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 use linked_hash_map::LinkedHashMap;
 
-use super::ast::{Expression, TypePath, PathOp, Prefab};
+use super::ast::{Expression, TypePath, PathOp, Prefab, Parameter};
 use super::constants::Constant;
 use super::{DMError, Location, Context};
 
@@ -58,6 +58,7 @@ pub struct ProcDeclaration {
 #[derive(Debug, Clone)]
 pub struct ProcValue {
     pub location: Location,
+    pub parameters: Vec<Parameter>,
 }
 
 #[derive(Debug, Clone)]
@@ -524,11 +525,12 @@ impl ObjectTree {
         })))
     }
 
-    fn register_proc(&mut self, location: Location, parent: NodeIndex, name: &str, is_verb: Option<bool>) -> Result<Option<&mut TypeProc>, DMError> {
+    fn register_proc(&mut self, location: Location, parent: NodeIndex, name: &str, is_verb: Option<bool>, parameters: Vec<Parameter>) -> Result<Option<&mut TypeProc>, DMError> {
         let node = self.graph.node_weight_mut(parent).unwrap();
         Ok(Some(node.procs.entry(name.to_owned()).or_insert_with(|| TypeProc {
             value: ProcValue {
                 location,
+                parameters,
             },
             declaration: is_verb.map(|is_verb| ProcDeclaration {
                 location,
@@ -563,7 +565,7 @@ impl ObjectTree {
     }
 
     // an entry which is definitely a proc because an argument list is specified
-    pub fn add_proc<'a, I: Iterator<Item=&'a str>>(&mut self, location: Location, mut path: I, len: usize) -> Result<(), DMError> {
+    pub fn add_proc<'a, I: Iterator<Item=&'a str>>(&mut self, location: Location, mut path: I, len: usize, parameters: Vec<Parameter>) -> Result<(), DMError> {
         let (parent, mut proc_name) = self.get_from_path(location, &mut path, len)?;
         let mut is_verb = None;
         if is_proc_decl(proc_name) {
@@ -579,7 +581,7 @@ impl ObjectTree {
             return Err(DMError::new(location, "proc name must be a single identifier"))
         }
 
-        if let Some(type_proc) = self.register_proc(location, parent, proc_name, is_verb)? {
+        if let Some(type_proc) = self.register_proc(location, parent, proc_name, is_verb, parameters)? {
             type_proc.value.location = location;
             Ok(())
         } else {
