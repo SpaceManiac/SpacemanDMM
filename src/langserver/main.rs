@@ -512,6 +512,44 @@ handle_method_call! {
                         results.push(infos.into_iter().collect::<Vec<_>>().join("\n\n"));
                     }
                 }
+                Annotation::ProcHeader(path) if !path.is_empty() => {
+                    let objtree = &self.objtree;
+                    let mut current = objtree.root();
+                    let (last, most) = path.split_last().unwrap();
+                    for part in most {
+                        if part == "proc" || part == "verb" { break }
+                        if let Some(child) = current.child(part, objtree) {
+                            current = child;
+                        } else {
+                            break;
+                        }
+                    }
+
+                    let mut infos = VecDeque::new();
+                    let mut next = Some(current);
+                    while let Some(current) = next {
+                        if let Some(proc) = current.procs.get(last) {
+                            let path = if current.path.is_empty() {
+                                "(global)"
+                            } else {
+                                &current.path
+                            };
+                            infos.push_front(format!("[{}]({})", path, self.location_link(proc.value.location)));
+                            if let Some(ref decl) = proc.declaration {
+                                let mut declaration = String::new();
+                                declaration.push_str(if decl.is_verb { "verb" } else { "proc" });
+                                declaration.push_str("/**");
+                                declaration.push_str(last);
+                                declaration.push_str("**");
+                                infos.push_front(declaration);
+                            }
+                        }
+                        next = current.parent_type(objtree);
+                    }
+                    if !infos.is_empty() {
+                        results.push(infos.into_iter().collect::<Vec<_>>().join("\n\n"));
+                    }
+                }
                 _ => {}
             }
         }
