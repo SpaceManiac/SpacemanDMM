@@ -135,7 +135,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         if loc.file == dm::FileId::builtins() {
             String::new()
         } else {
-            format!("file:{}#{}", self.root.join(self.context.file_path(loc.file)).display(), loc.line)
+            format!("file:{}#{}", self.root.join(self.context.file_path(loc.file)).display().to_string().replace("\\", "/"), loc.line)
         }
     }
 
