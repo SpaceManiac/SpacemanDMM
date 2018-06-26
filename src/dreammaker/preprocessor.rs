@@ -237,6 +237,7 @@ pub struct Preprocessor<'ctx> {
     defines: DefineMap,
     maps: Vec<PathBuf>,
     skins: Vec<PathBuf>,
+    scripts: Vec<PathBuf>,
 
     last_printable_input_loc: Location,
     danger_idents: HashMap<String, Location>,
@@ -262,6 +263,7 @@ impl<'ctx> Preprocessor<'ctx> {
             defines: Default::default(),
             maps: Default::default(),
             skins: Default::default(),
+            scripts: Default::default(),
             ifdef_stack: Default::default(),
             ifdef_history: Default::default(),
             last_input_loc: Default::default(),
@@ -316,6 +318,7 @@ impl<'ctx> Preprocessor<'ctx> {
             defines,
             maps: Default::default(),
             skins: Default::default(),
+            scripts: Default::default(),
             ifdef_stack: Default::default(),  // should be fine
             ifdef_history: Default::default(),
             last_input_loc: location,
@@ -509,10 +512,11 @@ impl<'ctx> Preprocessor<'ctx> {
                             if !each.exists() { continue }
                             // Wacky construct is used to let go of the borrow
                             // of `each` so it can be used in the second half.
-                            enum FileType { DMM, DMF, DM }
+                            enum FileType { DMM, DMF, DMS, DM }
                             match match each.extension().and_then(|s| s.to_str()) {
                                 Some("dmm") => FileType::DMM,
                                 Some("dmf") => FileType::DMF,
+                                Some("dms") => FileType::DMS,
                                 Some("dm") => FileType::DM,
                                 Some(ext) => {
                                     self.context.register_error(DMError::new(self.last_input_loc, format!("unknown extension {:?}", ext)));
@@ -525,6 +529,7 @@ impl<'ctx> Preprocessor<'ctx> {
                             } {
                                 FileType::DMM => self.maps.push(each),
                                 FileType::DMF => self.skins.push(each),
+                                FileType::DMS => self.scripts.push(each),
                                 FileType::DM => match Include::new(self.context, each) {
                                     Ok(include) => {
                                         // A phantom newline keeps the include
