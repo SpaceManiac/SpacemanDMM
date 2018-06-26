@@ -493,6 +493,8 @@ impl<'a> ConstantFolder<'a> {
             (BinaryOp::Add, String(lhs), String(rhs)) => Ok(String(lhs + &rhs)),
             (BinaryOp::Eq, lhs, rhs) => Ok(Constant::from(lhs == rhs)),
             (BinaryOp::NotEq, lhs, rhs) => Ok(Constant::from(lhs != rhs)),
+            (BinaryOp::And, lhs, rhs) => Ok(if lhs.to_bool() { rhs } else { lhs }),
+            (BinaryOp::Or, lhs, rhs) => Ok(if lhs.to_bool() { lhs } else { rhs }),
             (op, lhs, rhs) => Err(self.error(format!("non-constant {:?}: {} {} {}", op, lhs, op, rhs)))
         }
     }
