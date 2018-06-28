@@ -30,7 +30,7 @@ fn annotation_basic() {
         parser.annotate_to(&mut annotations);
         parser.run();
     }
-    assert!(context.print_all_errors());
+    assert!(context.print_all_errors(dm::Severity::Info));
     println!("len: {}", annotations.len());
     for each in annotations.get_location(Location {
         file: Default::default(),

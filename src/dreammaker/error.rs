@@ -96,15 +96,14 @@ impl Context {
     /// Pretty-print all registered diagnostics to standard error.
     ///
     /// Returns `true` if no errors were printed, `false` if any were.
-    pub fn print_all_errors(&self) -> bool {
+    pub fn print_all_errors(&self, min_severity: Severity) -> bool {
         let stderr = io::stderr();
         let stderr = &mut stderr.lock();
         let errors = self.errors();
         for err in errors.iter() {
-            if err.severity == Severity::Hint {
-                continue;
+            if err.severity <= min_severity {
+                self.pretty_print_error(stderr, &err).expect("error writing to stderr");
             }
-            self.pretty_print_error(stderr, &err).expect("error writing to stderr");
         }
         errors.is_empty()
     }

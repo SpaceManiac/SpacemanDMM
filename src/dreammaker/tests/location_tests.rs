@@ -19,7 +19,7 @@ fn simple_location_test() {
 
     let context = Default::default();
     let located_tokens: Vec<_> = Lexer::new(&context, Default::default(), code.bytes().map(Ok)).collect();
-    assert!(context.print_all_errors());
+    assert!(context.print_all_errors(dm::Severity::Info));
 
     assert_eq!(located_tokens[0].location.line, 1);
     assert_eq!(located_tokens[0].location.column, 1);
@@ -37,7 +37,7 @@ fn simple_location_test() {
 
     println!("---- indent processor ----");
     let indented_tokens: Vec<_> = dm::indents::IndentProcessor::new(&context, located_tokens).collect();
-    assert!(context.print_all_errors());
+    assert!(context.print_all_errors(dm::Severity::Info));
     for token in indented_tokens.iter() {
         println!("{}:{}: {:?}", token.location.line, token.location.column, token.token);
     }
