@@ -402,6 +402,7 @@ impl<'ctx> Preprocessor<'ctx> {
 
         let mut parser = ::parser::Parser::new(self.context,
             self.output.drain(..).map(|token| LocatedToken::new(start, token)));
+        parser.set_fallback_location(start);
         let expr = match parser.expression()? {
             Some(expr) => expr,
             None => return Err(parser.describe_parse_error()),

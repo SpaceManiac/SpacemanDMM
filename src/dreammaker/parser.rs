@@ -269,6 +269,11 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         self.annotations = Some(annotations);
     }
 
+    pub fn set_fallback_location(&mut self, fallback: Location) {
+        assert!(self.location == Default::default());
+        self.location = fallback;
+    }
+
     // ------------------------------------------------------------------------
     // Basic setup
 
