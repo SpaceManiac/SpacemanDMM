@@ -468,7 +468,13 @@ impl<'a> ConstantFolder<'a> {
         numeric!(Greater >);
         numeric!(GreaterEq >=);
         match (op, lhs, rhs) {
-            (BinaryOp::Pow, Int(lhs), Int(rhs)) if rhs >= 0 => return Ok(Constant::from(lhs.pow(rhs as u32))),
+            (BinaryOp::Pow, Int(lhs), Int(rhs)) if rhs >= 0 => {
+                // protect against panics from out-of-bounds pow
+                if rhs >= 2 && (i32::max_value() as f32).log(lhs as f32) < rhs as f32 {
+                    return Err(self.error(format!("out-of-range {:?}: {} {} {}", op, lhs, op, rhs)));
+                }
+                return Ok(Constant::from(lhs.pow(rhs as u32)))
+            }
             (BinaryOp::Pow, Int(lhs), Float(rhs)) => return Ok(Constant::from((lhs as f32).powf(rhs))),
             (BinaryOp::Pow, Float(lhs), Int(rhs)) => return Ok(Constant::from(lhs.powi(rhs))),
             (BinaryOp::Pow, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs.powf(rhs))),
