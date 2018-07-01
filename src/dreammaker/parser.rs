@@ -502,11 +502,13 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 }
                 self.annotate(start, || Annotation::ProcBody(new_stack.to_vec()));
                 let mut subparser = Parser::new(self.context, body_tt.iter().cloned());
-                if subparser.block().is_ok() {
+                let result = subparser.block();
+                if result.is_ok() {
                     self.procs_good += 1;
                 } else {
                     self.procs_bad += 1;
                 }
+                self.annotate(start, || Annotation::ProcBodyDetails(result.map(|ok| ok.unwrap_or_default())));
                 SUCCESS
             }
             other => {
