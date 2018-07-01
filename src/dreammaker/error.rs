@@ -113,12 +113,23 @@ impl Context {
         let stderr = io::stderr();
         let stderr = &mut stderr.lock();
         let errors = self.errors();
+        let mut printed = false;
         for err in errors.iter() {
             if err.severity <= min_severity {
                 self.pretty_print_error(stderr, &err).expect("error writing to stderr");
+                printed = true;
             }
         }
-        errors.is_empty()
+        printed
+    }
+
+    /// Print messages and panic if there were any errors.
+    #[inline]
+    #[doc(hidden)]
+    pub fn assert_success(&self) {
+        if self.print_all_errors(Severity::Info) {
+            panic!("there were parse errors");
+        }
     }
 }
 

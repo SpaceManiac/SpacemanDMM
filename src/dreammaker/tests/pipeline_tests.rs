@@ -22,7 +22,7 @@ fn check_preprocessor() {
     with_test_dme(&context, |mut preprocessor| {
         let mut string = Vec::new();
         pretty_print(&mut string, preprocessor.by_ref().map(|t| t.token), true).unwrap();
-        assert!(context.print_all_errors(Severity::Info));
+        context.assert_success();
     });
 }
 
@@ -32,7 +32,7 @@ fn check_indentor() {
     with_test_dme(&context, |mut preprocessor| {
         let mut string = Vec::new();
         pretty_print(&mut string, indents::IndentProcessor::new(&context, &mut preprocessor).map(|t| t.token), true).unwrap();
-        assert!(context.print_all_errors(Severity::Info));
+        context.assert_success();
     });
 }
 
@@ -41,7 +41,7 @@ fn check_parser() {
     let context = Context::default();
     with_test_dme(&context, |mut preprocessor| {
         let _tree = parser::parse(&context, indents::IndentProcessor::new(&context, &mut preprocessor));
-        assert!(context.print_all_errors(Severity::Info));
+        context.assert_success();
 
         println!("\n--------\nSuccess!\n--------");
         #[cfg(feature="xml")] {
