@@ -389,22 +389,32 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     // Object tree
 
     fn tree_path(&mut self) -> Status<(bool, Vec<Ident>)> {
-        // path :: '/'? ident (path_sep ident?)*
-        // path_sep :: '/' | '.'
+        // path :: '/'? ident ('/' ident?)*
         let mut absolute = false;
+        let mut spurious_lead = false;
         let mut parts = Vec::new();
         let start = self.updated_location();
 
         // handle leading slash
-        if let Some(_) = self.exact(Token::Punct(Punctuation::Slash))? {
-            absolute = true;
+        match self.next("'/'")? {
+            Token::Punct(Punctuation::Slash) => absolute = true,
+            Token::Punct(p @ Punctuation::Dot) |
+            Token::Punct(p @ Punctuation::Colon) => {
+                spurious_lead = true;
+                self.context.register_error(self.error(format!("path started by '{}', should be unprefixed", p))
+                    .set_severity(Severity::Warning));
+            }
+            t => { self.put_back(t); }
         }
 
         // expect at least one ident
         parts.push(match self.ident()? {
             Some(i) => i,
-            None if !absolute => return Ok(None),
-            None => return self.parse_error(),
+            None if !(absolute || spurious_lead) => return Ok(None),
+            None => {
+                self.context.register_error(self.error("path has no effect"));
+                return success((absolute, Vec::new()));
+            }
         });
         // followed by ('/' ident)*
         loop {
@@ -413,7 +423,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 Token::Punct(p @ Punctuation::Dot) |
                 Token::Punct(p @ Punctuation::Colon) => {
                     self.context.register_error(self.error(format!("path separated by '{}', should be '/'", p))
-                        .set_severity(super::Severity::Warning));
+                        .set_severity(Severity::Warning));
                 }
                 t => { self.put_back(t); break; }
             }
@@ -442,7 +452,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         let (absolute, path) = leading!(self.tree_path());
         if absolute && parent.parent.is_some() {
             self.context.register_error(self.error(format!("nested absolute path: {:?} inside {:?}", path, parent))
-                .set_severity(super::Severity::Warning));
+                .set_severity(Severity::Warning));
         }
         let new_stack = PathStack {
             parent: if absolute { None } else { Some(&parent) },
