@@ -131,10 +131,19 @@ impl<'a> Iterator for PathStackIter<'a> {
 
 #[derive(Debug, Clone, Copy)]
 struct OpInfo {
-    strength: u8,
+    strength: i8,
     right_binding: bool,
     token: Punctuation,
     oper: Op,
+}
+
+impl OpInfo {
+    fn matches(&self, token: &Token) -> bool {
+        match *token {
+            Token::Punct(p) => p == self.token,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -746,10 +755,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         loop {
             // try to read the next operator
             let next = self.next("binary operator")?;
-            let &info = match match next {
-                Token::Punct(p) => BINARY_OPS.iter().find(|op| op.token == p),
-                _ => None,
-            } {
+            let &info = match BINARY_OPS.iter().find(|op| op.matches(&next)) {
                 Some(info) => info,
                 None => {
                     self.put_back(next);
@@ -784,14 +790,11 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         loop {
             // try to read the next operator...
             let next = self.next("binary operator")?;
-            let &info = match match next {
-                Token::Punct(p) => BINARY_OPS.iter().find(|op| op.token == p),
-                _ => None
-            } {
+            let &info = match BINARY_OPS.iter().find(|op| op.matches(&next)) {
                 Some(info) => info,
                 None => {
                     self.put_back(next);
-                    break
+                    break;
                 }
             };
 
