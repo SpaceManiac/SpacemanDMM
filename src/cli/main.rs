@@ -72,10 +72,10 @@ impl Context {
         };
         println!("parsing {}", environment.display());
         flame!("parse");
+        self.dm_context.set_print_severity(Some(dm::Severity::Error));
         match self.dm_context.parse_environment(environment) {
             Ok(tree) => {
                 self.objtree = tree;
-                self.dm_context.print_all_errors(dm::Severity::Error);
                 if !self.dm_context.errors().is_empty() {
                     println!("there were some parsing errors; render may be inaccurate")
                 }

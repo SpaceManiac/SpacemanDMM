@@ -36,6 +36,8 @@ pub struct Context {
     reverse_files: RefCell<HashMap<PathBuf, FileId>>,
     /// A list of errors, warnings, and other diagnostics generated.
     errors: RefCell<Vec<DMError>>,
+    /// Severity at and above which errors will be printed immediately.
+    print_severity: Option<Severity>,
 }
 
 impl Context {
@@ -76,12 +78,23 @@ impl Context {
 
     /// Push an error or other diagnostic to the context.
     pub fn register_error(&self, error: DMError) {
+        if let Some(severity) = self.print_severity {
+            if error.severity <= severity {
+                let stderr = io::stderr();
+                self.pretty_print_error(&mut stderr.lock(), &error).expect("error writing to stderr");
+            }
+        }
         self.errors.borrow_mut().push(error);
     }
 
     /// Access the list of diagnostics generated so far.
     pub fn errors(&self) -> Ref<[DMError]> {
         Ref::map(self.errors.borrow(), |x| &**x)
+    }
+
+    /// Set a severity at and above which errors will be printed immediately.
+    pub fn set_print_severity(&mut self, print_severity: Option<Severity>) {
+        self.print_severity = print_severity;
     }
 
     /// Pretty-print a `DMError` to the given output.
