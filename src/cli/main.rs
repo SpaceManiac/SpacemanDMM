@@ -35,6 +35,7 @@ fn main() {
         .get_matches());
 
     let mut context = Context::default();
+    context.dm_context.set_print_severity(Some(dm::Severity::Error));
     rayon::ThreadPoolBuilder::new()
         .num_threads(opt.jobs)
         .build_global()
@@ -72,7 +73,6 @@ impl Context {
         };
         println!("parsing {}", environment.display());
         flame!("parse");
-        self.dm_context.set_print_severity(Some(dm::Severity::Error));
         match self.dm_context.parse_environment(environment) {
             Ok(tree) => {
                 self.objtree = tree;
@@ -145,6 +145,13 @@ enum Command {
         /// The output filename.
         #[structopt(default_value="objtree.xml")]
         output: String,
+    },
+    /// Check the environment for errors and warnings.
+    #[structopt(name = "check")]
+    Check {
+        /// The minimum severity to print, of "error", "warning", "info", "hint".
+        #[structopt(long="severity", default_value="hint")]
+        severity: String,
     },
     /// Build minimaps of the specified maps.
     #[structopt(name = "minimap")]
@@ -260,6 +267,16 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                     context.exit_status = 1;
                 }
             }
+        },
+        // --------------------------------------------------------------------
+        Command::Check { ref severity } => {
+            context.dm_context.set_print_severity(Some(match severity.as_str() {
+                "error" => dm::Severity::Error,
+                "warning" => dm::Severity::Warning,
+                "info" => dm::Severity::Info,
+                _ => dm::Severity::Hint,
+            }));
+            context.objtree(opt);
         },
         // --------------------------------------------------------------------
         Command::Minimap {
