@@ -464,7 +464,9 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         // read the contents for real
         match self.next("contents")? {
             t @ Punct(LBrace) => {
-                self.tree.add_entry(self.location, new_stack.iter(), new_stack.len())?;
+                if let Err(e) = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len()) {
+                    self.context.register_error(e);
+                }
                 self.put_back(t);
                 let start = self.updated_location();
                 require!(self.tree_block(new_stack));
@@ -475,14 +477,18 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 let location = self.location;
                 let expr = require!(self.expression());
                 require!(self.exact(Punct(Semicolon)));
-                self.tree.add_var(location, new_stack.iter(), new_stack.len(), expr)?;
+                if let Err(e) = self.tree.add_var(location, new_stack.iter(), new_stack.len(), expr) {
+                    self.context.register_error(e);
+                }
                 self.annotate(entry_start, || Annotation::Variable(new_stack.to_vec()));
                 SUCCESS
             }
             Punct(LParen) => {
                 let location = self.location;
                 let parameters = require!(self.separated(Comma, RParen, None, Parser::proc_parameter));
-                self.tree.add_proc(location, new_stack.iter(), new_stack.len(), parameters)?;
+                if let Err(e) = self.tree.add_proc(location, new_stack.iter(), new_stack.len(), parameters) {
+                    self.context.register_error(e);
+                }
 
                 // split off a subparser so we can keep parsing the objtree
                 // even when the proc body doesn't parse
@@ -504,7 +510,9 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 SUCCESS
             }
             other => {
-                self.tree.add_entry(self.location, new_stack.iter(), new_stack.len())?;
+                if let Err(e) = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len()) {
+                    self.context.register_error(e);
+                }
                 self.put_back(other);
                 if new_stack.contains("var") {
                     self.annotate(entry_start, || Annotation::Variable(new_stack.to_vec()));
