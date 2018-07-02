@@ -150,7 +150,7 @@ enum Command {
     #[structopt(name = "check")]
     Check {
         /// The minimum severity to print, of "error", "warning", "info", "hint".
-        #[structopt(long="severity", default_value="hint")]
+        #[structopt(long="severity", default_value="info")]
         severity: String,
     },
     /// Build minimaps of the specified maps.

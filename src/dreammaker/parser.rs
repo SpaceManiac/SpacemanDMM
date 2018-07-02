@@ -601,7 +601,12 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 } else {
                     self.procs_bad += 1;
                 }
-                self.annotate(start, || Annotation::ProcBodyDetails(result));
+                // TODO: remove this #[cfg] when proc body parsing is more robust
+                #[cfg(debug_assertions)]
+                match result {
+                    Ok(body) => self.annotate(start, || Annotation::ProcBodyDetails(body)),
+                    Err(err) => self.context.register_error(err.set_severity(Severity::Hint)),
+                }
                 SUCCESS
             }
             other => {

@@ -2,7 +2,7 @@
 //! elements at those positions.
 
 use interval_tree::{IntervalTree, RangePairIter, RangeInclusive, range};
-use super::{Location, DMError};
+use super::Location;
 use super::ast::Statement;
 
 pub type Iter<'a> = RangePairIter<'a, Location, Annotation>;
@@ -14,7 +14,7 @@ pub enum Annotation {
     Variable(Vec<String>),
     ProcHeader(Vec<String>),
     ProcBody(Vec<String>),
-    ProcBodyDetails(Result<Vec<Statement>, DMError>),
+    ProcBodyDetails(Vec<Statement>),
     Ident(String),
 }
 
