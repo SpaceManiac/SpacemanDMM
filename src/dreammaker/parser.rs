@@ -965,34 +965,6 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             leading!(self.term())
         };
 
-        // Handle the tightly-scoped versions of the "in" operator.
-        let term = match term {
-            Term::Call(name, args) => {
-                if name == "input" {
-                    // read "as" and "in" clauses
-                    let (input_type, in_list) = require!(self.input_specifier());
-                    Term::Input { args, input_type, in_list: in_list.map(Box::new) }
-                } else if name == "locate" {
-                    // warn against this mistake
-                    if let Some(&Expression::BinaryOp { op: BinaryOp::In, .. } ) = args.get(0) {
-                        self.context.register_error(self.error("bad 'locate(in)', should be 'locate() in'")
-                            .set_severity(Severity::Warning));
-                    }
-
-                    // read "in" clause
-                    let in_list = if let Some(()) = self.exact(Token::Punct(Punctuation::In))? {
-                        Some(Box::new(require!(self.expression())))
-                    } else {
-                        None
-                    };
-                    Term::Locate { args, in_list }
-                } else {
-                    Term::Call(name, args)
-                }
-            }
-            other => other,
-        };
-
         // Read follows
         let mut follow = Vec::new();
         loop {
@@ -1048,19 +1020,52 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             },
 
             // term :: 'list' list_lit
-            Token::Ident(ref i, _) if i == "list" => {
-                // TODO: list arguments are actually subtly different, but
-                // we're going to pretend they're not to make code simpler, and
-                // anyone relying on the difference needs to fix their garbage
-                match self.arguments()? {
-                    Some(args) => Term::List(args),
-                    None => Term::Ident("list".to_owned()),
-                }
+            // TODO: list arguments are actually subtly different, but
+            // we're going to pretend they're not to make code simpler, and
+            // anyone relying on the difference needs to fix their garbage
+            Token::Ident(ref i, _) if i == "list" => match self.arguments()? {
+                Some(args) => Term::List(args),
+                None => Term::Ident(i.to_owned()),
             },
 
             // term :: 'call' arglist arglist
             Token::Ident(ref i, _) if i == "call" => {
                 Term::DynamicCall(require!(self.arguments()), require!(self.arguments()))
+            },
+
+            // term :: 'input' arglist input_specifier
+            Token::Ident(ref i, _) if i == "input" => match self.arguments()? {
+                Some(args) => {
+                    let (input_type, in_list) = require!(self.input_specifier());
+                    Term::Input { args, input_type, in_list: in_list.map(Box::new) }
+                }
+                None => Term::Ident(i.to_owned())
+            },
+
+            // term :: 'locate' arglist ('in' expression)?
+            Token::Ident(ref i, _) if i == "locate" => match self.arguments()? {
+                Some(args) => {
+                    // warn against this mistake
+                    if let Some(&Expression::BinaryOp { op: BinaryOp::In, .. } ) = args.get(0) {
+                        self.context.register_error(self.error("bad 'locate(in)', should be 'locate() in'")
+                            .set_severity(Severity::Warning));
+                    }
+
+                    // read "in" clause
+                    let in_list = if let Some(()) = self.exact(Token::Punct(Punctuation::In))? {
+                        Some(Box::new(require!(self.expression())))
+                    } else {
+                        None
+                    };
+                    Term::Locate { args, in_list }
+                }
+                None => Term::Ident(i.to_owned())
+            },
+
+            // term :: ident arglist | ident
+            Token::Ident(i, _) => match self.arguments()? {
+                Some(args) => Term::Call(i, args),
+                None => Term::Ident(i),
             },
 
             // term :: '.'
@@ -1088,13 +1093,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 Term::Prefab(require!(self.prefab()))
             },
 
-            // term :: ident | str_lit | num_lit
-            Token::Ident(val, _) => {
-                match self.arguments()? {
-                    Some(args) => Term::Call(val, args),
-                    None => Term::Ident(val),
-                }
-            },
+            // term :: str_lit | num_lit
             Token::String(val) => Term::String(val),
             Token::Resource(val) => Term::Resource(val),
             Token::Int(val) => Term::Int(val),
