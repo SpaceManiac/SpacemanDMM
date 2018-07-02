@@ -268,6 +268,36 @@ impl Strength {
 }
 
 // ----------------------------------------------------------------------------
+// Token-tree-based skip and recovery handling
+
+#[derive(Debug, Copy, Clone)]
+enum TTKind {
+    Paren,   // ()
+    Brace,   // {}
+    Bracket, // []
+}
+
+impl TTKind {
+    fn from_token(token: &Token) -> Option<TTKind> {
+        match *token {
+            Token::Punct(Punctuation::LParen) => Some(TTKind::Paren),
+            Token::Punct(Punctuation::LBrace) => Some(TTKind::Brace),
+            Token::Punct(Punctuation::LBracket) => Some(TTKind::Bracket),
+            _ => None,
+        }
+    }
+
+    fn is_end(&self, token: &Token) -> bool {
+        match (self, token) {
+            (&TTKind::Paren, &Token::Punct(Punctuation::RParen)) => true,
+            (&TTKind::Brace, &Token::Punct(Punctuation::RBrace)) => true,
+            (&TTKind::Bracket, &Token::Punct(Punctuation::RBracket)) => true,
+            _ => false,
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
 // The parser
 
 /// A single-lookahead, recursive-descent DM parser.
@@ -1099,23 +1129,20 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     fn read_any_tt(&mut self, target: &mut Vec<LocatedToken>) -> Status<()> {
         // read a single arbitrary "token tree", either a group or a single token
         let start = self.next("anything")?;
-        let end = match start {
-            Token::Punct(Punctuation::LParen) => Punctuation::RParen,
-            Token::Punct(Punctuation::LBrace) => Punctuation::RBrace,
-            Token::Punct(Punctuation::LBracket) => Punctuation::RBracket,
-            other => { target.push(LocatedToken::new(self.location(), other)); return SUCCESS; }
-        };
+        let kind = TTKind::from_token(&start);
         target.push(LocatedToken::new(self.location(), start));
+        let kind = match kind {
+            Some(k) => k,
+            None => return SUCCESS,
+        };
         loop {
-            match self.next("anything")? {
-                Token::Punct(p) if p == end => {
-                    target.push(LocatedToken::new(self.location(), Token::Punct(p)));
-                    return SUCCESS;
-                }
-                other => {
-                    self.put_back(other);
-                    require!(self.read_any_tt(target));
-                }
+            let token = self.next("anything")?;
+            if kind.is_end(&token) {
+                target.push(LocatedToken::new(self.location(), token));
+                return SUCCESS;
+            } else {
+                self.put_back(token);
+                require!(self.read_any_tt(target));
             }
         }
     }
