@@ -6,6 +6,7 @@ use node::Node;
 enum Visiting {
     Left,
     Center,
+    Middle(usize),
     Right,
 }
 
@@ -24,7 +25,6 @@ impl<'a, K: Ord, V> RangePairIter<'a, K, V> {
             stack.push((&**root, Visiting::Left));
         }
         RangePairIter { start, end, stack }
-
     }
 
     fn visit_left(&mut self, node: &'a Node<K, V>) {
@@ -54,22 +54,27 @@ impl<'a, K: Ord, V> RangePairIter<'a, K, V> {
         }
     }
 
-    fn visit_center(&mut self, node: &'a Node<K, V>) -> Option<&'a Node<K, V>>{
-        self.stack.push((node, Visiting::Right));
+    fn visit_center(&mut self, node: &'a Node<K, V>) {
         if intersect(&self.start, &self.end, &node.key) {
-            Some(node)
+            self.stack.push((node, Visiting::Middle(0)));
         } else {
-            None
+            self.stack.push((node, Visiting::Right));
         }
     }
 
-    fn get_next_node(&mut self) -> Option<&'a Node<K, V>>{
+    fn get_next_node(&mut self) -> Option<(&'a Node<K, V>, usize)> {
         while let Some((node, state)) = self.stack.pop() {
             match state {
                 Visiting::Left => self.visit_left(node),
                 Visiting::Right => self.visit_right(node),
-                Visiting::Center => if let Some(node) = self.visit_center(node) {
-                    return Some(node)
+                Visiting::Center => self.visit_center(node),
+                Visiting::Middle(i) => {
+                    if i >= node.data.len() {
+                        self.stack.push((node, Visiting::Right));
+                    } else {
+                        self.stack.push((node, Visiting::Middle(i + 1)));
+                        return Some((node, i))
+                    }
                 }
             }
         }
@@ -81,7 +86,7 @@ impl<'a, K: Ord + Clone, V> Iterator for RangePairIter<'a, K, V> {
     type Item = (RangeInclusive<K>, &'a V);
 
     fn next(&mut self) -> Option<(RangeInclusive<K>, &'a V)> {
-        self.get_next_node().map(|n| (n.key.clone(), &n.data))
+        self.get_next_node().map(|(n, i)| (n.key.clone(), &n.data[i]))
     }
 }
 

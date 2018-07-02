@@ -57,17 +57,18 @@ impl<K, V> IntervalTree<K, V> {
 }
 
 impl<K: Ord + Clone, V> IntervalTree<K, V> {
-/// This function will insert the key,value pair into the tree, overwriting the old data if the key is allready
-/// part of the tree.
+/// This function will insert the key,value pair into the tree, appending to
+/// the old data if the key is already part of the tree.
+///
 /// # Examples
 /// ```
 /// extern crate interval_tree;
 ///
 /// let mut t=interval_tree::IntervalTree::<u64, i32>::new();
 /// t.insert(interval_tree::range(2,2),25);
-/// assert_eq!(t.get(interval_tree::range(2,2)), Some(&25));
+/// assert_eq!(t.get(interval_tree::range(2,2)), Some(&[25][..]));
 /// t.insert(interval_tree::range(2,2),30);
-/// assert_eq!(t.get(interval_tree::range(2,2)), Some(&30));
+/// assert_eq!(t.get(interval_tree::range(2,2)), Some(&[25, 30][..]));
 /// ```
     pub fn insert(&mut self, key: RangeInclusive<K>, data: V) {
         self.root = Some(match self.root.take() {
@@ -105,11 +106,11 @@ impl<K: Ord + Clone, V> IntervalTree<K, V> {
 ///
 /// let mut t=interval_tree::IntervalTree::<u64, i32>::new();
 /// t.insert(interval_tree::range(2,2),25);
-/// assert_eq!(t.get(interval_tree::range(2,2)), Some(&25));
+/// assert_eq!(t.get(interval_tree::range(2,2)), Some(&[25][..]));
 /// assert_eq!(t.get(interval_tree::range(3,3)), None);
 ///
 /// ```
-    pub fn get(&self, key: RangeInclusive<K>) -> Option<&V> {
+    pub fn get(&self, key: RangeInclusive<K>) -> Option<&[V]> {
         match self.root {
             Some(ref box_to_node) => box_to_node.search(&key),
             None => None
@@ -124,11 +125,11 @@ impl<K: Ord + Clone, V> IntervalTree<K, V> {
 ///
 /// let mut t=interval_tree::IntervalTree::<u64, i32>::new();
 /// t.insert(interval_tree::range(2,2),25);
-/// assert_eq!(t.get_or(interval_tree::range(2,2),&2000), &25);
-/// assert_eq!(t.get_or(interval_tree::range(3,3),&2000), &2000);
+/// assert_eq!(t.get_or(interval_tree::range(2,2),&[2000]), &[25]);
+/// assert_eq!(t.get_or(interval_tree::range(3,3),&[2000]), &[2000]);
 ///
 /// ```
-    pub fn get_or<'a>(&'a self, key: RangeInclusive<K>, default: &'a V) -> &'a V {
+    pub fn get_or<'a>(&'a self, key: RangeInclusive<K>, default: &'a [V]) -> &'a [V] {
         self.get(key).unwrap_or(default)
     }
 
@@ -157,10 +158,10 @@ impl<K: Ord + Clone, V> IntervalTree<K, V> {
 /// t.insert(interval_tree::range(2,2),25);
 /// t.insert(interval_tree::range(3,3),50);
 /// assert_eq!(t.min().unwrap().0, &interval_tree::range(2,2));
-/// assert_eq!(t.min().unwrap().1, &25);
+/// assert_eq!(t.min().unwrap().1, &[25]);
 ///
 /// ```
-    pub fn min<'a>(&'a self) -> Option<(&'a RangeInclusive<K>, &'a V)> {
+    pub fn min<'a>(&'a self) -> Option<(&'a RangeInclusive<K>, &'a [V])> {
         self.root.as_ref().map(|n| n.min_pair())
     }
 
@@ -174,10 +175,10 @@ impl<K: Ord + Clone, V> IntervalTree<K, V> {
 /// t.insert(interval_tree::range(2,2),25);
 /// t.insert(interval_tree::range(3,3),50);
 /// assert_eq!(t.max().unwrap().0, &interval_tree::range(3,3));
-/// assert_eq!(t.max().unwrap().1, &50);
+/// assert_eq!(t.max().unwrap().1, &[50]);
 ///
 /// ```
-    pub fn max<'a>(&'a self) -> Option<(&'a RangeInclusive<K>, &'a V)> {
+    pub fn max<'a>(&'a self) -> Option<(&'a RangeInclusive<K>, &'a [V])> {
         self.root.as_ref().map(|n| n.max_pair())
     }
 }

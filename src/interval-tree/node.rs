@@ -4,7 +4,7 @@ use range::RangeInclusive;
 #[derive(Debug, Clone)]
 pub struct Node<K, V> {
     pub key: RangeInclusive<K>,
-    pub data: V,
+    pub data: Vec<V>,
     height: u32,
     pub max: K,
     pub left: Option<Box<Node<K, V>>>,
@@ -13,7 +13,7 @@ pub struct Node<K, V> {
 
 impl<K: Ord + Clone, V> Node<K, V> {
     pub fn new(key: RangeInclusive<K>, data: V) -> Self {
-        Node { max: key.end.clone(), key: key, data: data, height: 1, left: None, right: None }
+        Node { max: key.end.clone(), key: key, data: vec![data], height: 1, left: None, right: None }
     }
 
     fn diff_of_successors_height(&self) -> i32 {
@@ -40,12 +40,12 @@ impl<K: Ord + Clone, V> Node<K, V> {
     }
 
     ///returns the minimal key,value pair within this tree
-    pub fn min_pair(&self) -> (&RangeInclusive<K>,&V) {
+    pub fn min_pair(&self) -> (&RangeInclusive<K>,&[V]) {
         self.left.as_ref().map_or((&self.key,&self.data), |n| n.min_pair())
     }
 
     ///returns the maximal key,value pair within this tree
-    pub fn max_pair(&self) -> (&RangeInclusive<K>,&V) {
+    pub fn max_pair(&self) -> (&RangeInclusive<K>,&[V]) {
         self.right.as_ref().map_or((&self.key,&self.data), |n| n.max_pair())
     }
 
@@ -170,12 +170,12 @@ impl<K: Ord + Clone, V> Node<K, V> {
     }
 
     /// returns a read only reference to the data stored under key in the tree given by root
-    pub fn search(&self, key: &RangeInclusive<K>) -> Option<&V> {
+    pub fn search(&self, key: &RangeInclusive<K>) -> Option<&[V]> {
         self.search_pair(key).map(|(_, v)| v)
     }
 
     /// returns a read only reference paie to the data stored under key in the tree given by root
-    pub fn search_pair(&self, key: &RangeInclusive<K>) -> Option<(&RangeInclusive<K>, &V)>{
+    pub fn search_pair(&self, key: &RangeInclusive<K>) -> Option<(&RangeInclusive<K>, &[V])>{
         match self.key.cmp(key) {
             Ordering::Equal => Some((&self.key, &self.data)),
             Ordering::Less => self.right.as_ref().map_or(None, |succ| succ.search_pair(key)),
@@ -188,7 +188,7 @@ impl<K: Ord + Clone, V> Node<K, V> {
     /// root may now differ due to rotations, thus the old root is moved into the function)
     pub fn insert(mut self: Box<Self>, key: RangeInclusive<K>, data: V) -> Box<Self> {
         match self.key.cmp(&key) {
-            Ordering::Equal => { self.data  = data; return self },
+            Ordering::Equal => { self.data.push(data); return self },
             Ordering::Less =>    self.right = Node::insert_in_successor(self.right.take(), key, data),
             Ordering::Greater => self.left  = Node::insert_in_successor(self.left.take(),  key, data)
         }
@@ -225,7 +225,7 @@ fn subtree_max<V>(node: &Option<Box<Node<V>>>) -> u64 {
 }
 
 ///returns the smallest key and value after the given key.
-pub fn min_after<'a,V>(key: &RangeInclusive<u64>, root: &'a Box<Node<V>>) -> Option<(&'a RangeInclusive<u64>,&'a V)> {
+pub fn min_after<'a,V>(key: &RangeInclusive<u64>, root: &'a Box<Node<V>>) -> Option<(&'a RangeInclusive<u64>,&'a [V])> {
     match root.key.cmp(key){
         Ordering::Equal =>  root.right.as_ref().map_or(None, |succ| Some(succ.min_pair())),
         Ordering::Less =>   root.right.as_ref().map_or(None, |succ| min_after(key, succ)),
@@ -239,18 +239,18 @@ pub fn min_after<'a,V>(key: &RangeInclusive<u64>, root: &'a Box<Node<V>>) -> Opt
 }
 
 ///returns the minimal value within this tree
-pub fn min<V>(root: &Box<Node<V>>) -> &V {
+pub fn min<V>(root: &Box<Node<V>>) -> &[V] {
     root.left.as_ref().map_or(&root.data, min)
 }
 
 ///returns the minimal value within this tree
-pub fn max<V>(root: &Box<Node<V>>) -> &V {
+pub fn max<V>(root: &Box<Node<V>>) -> &[V] {
     root.right.as_ref().map_or(&root.data, max)
 }
 
 
 fn simple_tree(size: i32) -> Box<Node<i32>> {
-    let mut t = Box::new(Node::<i32>{key: RangeInclusive::new(1,1), data: 1337, height: 0, max: 1, left:None, right: None});
+    let mut t = Box::new(Node::<i32>{key: RangeInclusive::new(1,1), data: vec![1337], height: 0, max: 1, left:None, right: None});
     for x in 2..size+1 {
         t = t.insert(RangeInclusive::new(x as u64, x as u64 ),1337+x-1)
     }
@@ -275,8 +275,8 @@ pub fn is_interval_tree<V>(root: &Option<Box<Node<V>>>) -> bool {
 
 #[test]
 fn simple_tree_operations() {
-    let mut t = Box::new(Node::<i32>{key: RangeInclusive::new(3,3), data: 4, max:3, height: 2,
-        left: Some(Box::new(Node::<i32>{key: RangeInclusive::new(2,2), data: 5, height:1, max: 2, left: None, right: None})),
+    let mut t = Box::new(Node::<i32>{key: RangeInclusive::new(3,3), data: vec![4], max:3, height: 2,
+        left: Some(Box::new(Node::<i32>{key: RangeInclusive::new(2,2), data: vec![5], height:1, max: 2, left: None, right: None})),
         right: None});
     assert!(is_interval_node(&t));
     assert!( contains::<i32>(&RangeInclusive::new(3,3),&t) );
@@ -293,7 +293,7 @@ fn simple_tree_operations() {
 
 #[test]
 fn rotations_on_tree(){
-    let mut t = Box::new(Node::<i32>{key: RangeInclusive::new(1,1), data: 1337, height: 1, max: 1, left: None, right: None});
+    let mut t = Box::new(Node::<i32>{key: RangeInclusive::new(1,1), data: vec![1337], height: 1, max: 1, left: None, right: None});
     for i in 2..255 {
         t = t.insert(RangeInclusive::new(i,i),1337);
         assert!(is_interval_node(&t));
@@ -366,8 +366,8 @@ fn test_delete(){
 #[test]
 fn test_min_max() {
     let t = simple_tree(50);
-    assert_eq!(min(&t),&1337);
-    assert_eq!(max(&t),&(1337+50-1));
+    assert_eq!(min(&t),&[1337]);
+    assert_eq!(max(&t),&[1337+50-1]);
     assert_eq!(t.max_pair().0,&RangeInclusive::new(50,50));
     assert_eq!(t.min_pair().0,&RangeInclusive::new(1,1));
 }
