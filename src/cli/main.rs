@@ -76,9 +76,6 @@ impl Context {
         match self.dm_context.parse_environment(environment) {
             Ok(tree) => {
                 self.objtree = tree;
-                if !self.dm_context.errors().is_empty() {
-                    println!("there were some parsing errors; render may be inaccurate")
-                }
             },
             Err(e) => {
                 eprintln!("i/o error opening environment:\n{}", e);
@@ -270,13 +267,15 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
         },
         // --------------------------------------------------------------------
         Command::Check { ref severity } => {
-            context.dm_context.set_print_severity(Some(match severity.as_str() {
+            let severity = match severity.as_str() {
                 "error" => dm::Severity::Error,
                 "warning" => dm::Severity::Warning,
                 "info" => dm::Severity::Info,
                 _ => dm::Severity::Hint,
-            }));
+            };
+            context.dm_context.set_print_severity(Some(severity));
             context.objtree(opt);
+            *context.exit_status.get_mut() = context.dm_context.errors().iter().filter(|e| e.severity() <= severity).count() as isize;
         },
         // --------------------------------------------------------------------
         Command::Minimap {
@@ -284,6 +283,9 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             pngcrush, optipng,
         } => {
             context.objtree(opt);
+            if context.dm_context.errors().iter().filter(|e| e.severity() <= dm::Severity::Error).next().is_some() {
+                println!("there were some parsing errors; render may be inaccurate")
+            }
             let Context { ref objtree, ref icon_cache, ref exit_status, parallel, .. } = *context;
 
             let render_passes = &dmm_tools::render_passes::configure(enable, disable);
