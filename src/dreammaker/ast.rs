@@ -466,4 +466,12 @@ pub enum Statement {
     While(Expression, Vec<Statement>),
     DoWhile(Vec<Statement>, Expression),
     If(Vec<(Expression, Vec<Statement>)>, Option<Vec<Statement>>),
+    Var {
+        is_static: bool,
+        is_const: bool,
+        is_tmp: bool,
+        type_path: TypePath,
+        name: String,
+        value: Option<Expression>,
+    }
 }
