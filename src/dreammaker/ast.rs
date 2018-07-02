@@ -311,6 +311,17 @@ pub enum Term {
     },
     /// A `list` call. Associations are represented by assignment expressions.
     List(Vec<Expression>),
+    /// An `input` call.
+    Input {
+        args: Vec<Expression>,
+        input_type: InputType, // as
+        in_list: Option<Box<Expression>>, // in
+    },
+    /// A `locate` call.
+    Locate {
+        args: Vec<Expression>,
+        in_list: Option<Box<Expression>>, // in
+    },
     /// An unscoped function call.
     Call(String, Vec<Expression>),
     /// A prefab literal (path + vars).

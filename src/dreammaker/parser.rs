@@ -570,11 +570,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             Punct(Assign) => {
                 let location = self.location;
                 let expr = require!(self.expression());
-                if let Some(()) = self.exact_ident("as")? {
-                    // Handles `var/foo = "" as text`
-                    let _ = require!(self.input_type());
-                }
-                // TODO: "in" can appear here
+                let _ = require!(self.input_specifier());
                 require!(self.exact(Punct(Semicolon)));
                 if let Err(e) = self.tree.add_var(location, new_stack.iter(), new_stack.len(), expr) {
                     self.context.register_error(e);
@@ -647,18 +643,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         } else {
             None
         };
-        // as obj|turf
-        let input_type = if let Some(()) = self.exact_ident("as")? {
-            require!(self.input_type())
-        } else {
-            InputType::default()
-        };
-        // `in view(7)` or `in list("a", "b")` or ...
-        let in_list = if let Some(()) = self.exact(Punct(In))? {
-            Some(require!(self.expression()))
-        } else {
-            None
-        };
+        let (input_type, in_list) = require!(self.input_specifier());
         success(Parameter {
             path, name, default, input_type, in_list
         })
@@ -706,6 +691,23 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             require!(self.ignore_group(LBracket, RBracket));
         }
         SUCCESS
+    }
+
+    /// Parse an optional 'as' input_type and 'in' expression pair.
+    fn input_specifier(&mut self) -> Status<(InputType, Option<Expression>)> {
+        // as obj|turf
+        let input_type = if let Some(()) = self.exact_ident("as")? {
+            require!(self.input_type())
+        } else {
+            InputType::default()
+        };
+        // `in view(7)` or `in list("a", "b")` or ...
+        let in_list = if let Some(()) = self.exact(Token::Punct(Punctuation::In))? {
+            Some(require!(self.expression()))
+        } else {
+            None
+        };
+        success((input_type, in_list))
     }
 
     /// Parse a verb input type. Used by proc params and the input() form.
@@ -944,7 +946,9 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         })
     }
 
+    // parse an Expression::Base (unary ops, term, follows)
     fn group(&mut self) -> Status<Expression> {
+        // read unary ops
         let mut unary_ops = Vec::new();
         loop {
             match self.next("unary operator")? {
@@ -961,6 +965,35 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             leading!(self.term())
         };
 
+        // Handle the tightly-scoped versions of the "in" operator.
+        let term = match term {
+            Term::Call(name, args) => {
+                if name == "input" {
+                    // read "as" and "in" clauses
+                    let (input_type, in_list) = require!(self.input_specifier());
+                    Term::Input { args, input_type, in_list: in_list.map(Box::new) }
+                } else if name == "locate" {
+                    // warn against this mistake
+                    if let Some(&Expression::BinaryOp { op: BinaryOp::In, .. } ) = args.get(0) {
+                        self.context.register_error(self.error("bad 'locate(in)', should be 'locate() in'")
+                            .set_severity(Severity::Warning));
+                    }
+
+                    // read "in" clause
+                    let in_list = if let Some(()) = self.exact(Token::Punct(Punctuation::In))? {
+                        Some(Box::new(require!(self.expression())))
+                    } else {
+                        None
+                    };
+                    Term::Locate { args, in_list }
+                } else {
+                    Term::Call(name, args)
+                }
+            }
+            other => other,
+        };
+
+        // Read follows
         let mut follow = Vec::new();
         loop {
             if let Some(()) = self.exact(Token::Punct(Punctuation::PlusPlus))? {
