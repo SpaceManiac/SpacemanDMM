@@ -131,8 +131,7 @@ impl<'a> Iterator for PathStackIter<'a> {
 
 #[derive(Debug, Clone, Copy)]
 struct OpInfo {
-    strength: i8,
-    right_binding: bool,
+    strength: Strength,
     token: Punctuation,
     oper: Op,
 }
@@ -140,7 +139,7 @@ struct OpInfo {
 impl OpInfo {
     fn matches(&self, token: &Token) -> bool {
         match *token {
-            Token::Punct(p) => p == self.token,
+            Token::Punct(p) => self.token == p,
             _ => false,
         }
     }
@@ -162,59 +161,110 @@ impl Op {
 }
 
 macro_rules! oper_table {
-    (@elem ($strength:expr, $right:expr, $kind:ident, $op:ident)) => {
+    (@elem ($strength:ident) ($kind:ident, $op:ident)) => {
         OpInfo {
-            strength: $strength,
-            right_binding: $right,
+            strength: Strength::$strength,
             token: Punctuation::$op,
             oper: Op::$kind($kind::$op),
         }
     };
-    (@elem ($strength:expr, $right:expr, $kind:ident, $op:ident = $punct:ident)) => {
+    (@elem ($strength:ident) ($kind:ident, $op:ident = $punct:ident)) => {
         OpInfo {
-            strength: $strength,
-            right_binding: $right,
+            strength: Strength::$strength,
             token: Punctuation::$punct,
             oper: Op::$kind($kind::$op),
         }
     };
-    ($name:ident; $($child:tt,)*) => {
-        const $name: &'static [OpInfo] = &[ $(oper_table!(@elem $child),)* ];
+    ($name:ident; $($strength:ident {$($child:tt,)*})*) => {
+        #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+        enum Strength {
+            $($strength),*
+        }
+
+        const $name: &'static [OpInfo] = &[
+            $($(
+                oper_table!(@elem ($strength) $child),
+            )*)*
+        ];
     }
 }
 
+// Highest precedence is first in the list, to match the reference.
 oper_table! { BINARY_OPS;
-    (11, false, BinaryOp, Pow), //
-    (10, false, BinaryOp, Mul), //
-    (10, false, BinaryOp, Div = Slash), //
-    (10, false, BinaryOp, Mod),
-    (9,  false, BinaryOp, Add),
-    (9,  false, BinaryOp, Sub),
-    (8,  false, BinaryOp, Less),
-    (8,  false, BinaryOp, Greater),
-    (8,  false, BinaryOp, LessEq),
-    (8,  false, BinaryOp, GreaterEq),
-    (7,  false, BinaryOp, LShift),
-    (7,  false, BinaryOp, RShift),
-    (6,  false, BinaryOp, Eq),
-    (6,  false, BinaryOp, NotEq), //
-    (6,  false, BinaryOp, NotEq = LessGreater),
-    (5,  false, BinaryOp, BitAnd),
-    (5,  false, BinaryOp, BitXor),
-    (5,  false, BinaryOp, BitOr),
-    (4,  false, BinaryOp, And),
-    (3,  false, BinaryOp, Or),
-    // TODO: tertiary op here
-    (0,  true,  AssignOp, Assign),
-    (0,  true,  AssignOp, AddAssign),
-    (0,  true,  AssignOp, SubAssign),
-    (0,  true,  AssignOp, MulAssign),
-    (0,  true,  AssignOp, DivAssign),
-    (0,  true,  AssignOp, BitAndAssign),
-    (0,  true,  AssignOp, BitOrAssign),
-    (0,  true,  AssignOp, BitXorAssign),
-    (0,  true,  AssignOp, LShiftAssign),
-    (0,  true,  AssignOp, RShiftAssign),
+    // () . : /        // here . : / are path operators
+    // []
+    // . : ?. :
+    // ~ ! - ++ --     // unary operators
+    // **
+    Pow {
+        (BinaryOp, Pow),
+    }
+    // * / %
+    Mul {
+        (BinaryOp, Mul), //
+        (BinaryOp, Div = Slash), //
+        (BinaryOp, Mod),
+    }
+    // + -
+    Add {
+        (BinaryOp, Add),
+        (BinaryOp, Sub),
+    }
+    // < <= > >=
+    Compare {
+        (BinaryOp, Less),
+        (BinaryOp, Greater),
+        (BinaryOp, LessEq),
+        (BinaryOp, GreaterEq),
+    }
+    // << >>
+    Shift {
+        (BinaryOp, LShift),
+        (BinaryOp, RShift),
+    }
+    // == != <> ~= ~!
+    Equality {
+        (BinaryOp, Eq),
+        (BinaryOp, NotEq), //
+        (BinaryOp, NotEq = LessGreater),
+    }
+    // & ^ |
+    Bitwise {
+        (BinaryOp, BitAnd),
+        (BinaryOp, BitXor),
+        (BinaryOp, BitOr),
+    }
+    // &&
+    And {
+        (BinaryOp, And),
+    }
+    // ||
+    Or {
+        (BinaryOp, Or),
+    }
+    // ?               // ternary a ? b : c
+    // = += -= -= *= /= %= &= |= ^= <<= >>=
+    Assign {
+        (AssignOp, Assign),
+        (AssignOp, AddAssign),
+        (AssignOp, SubAssign),
+        (AssignOp, MulAssign),
+        (AssignOp, DivAssign),
+        (AssignOp, BitAndAssign),
+        (AssignOp, BitOrAssign),
+        (AssignOp, BitXorAssign),
+        (AssignOp, LShiftAssign),
+        (AssignOp, RShiftAssign),
+    }
+}
+
+impl Strength {
+    fn right_binding(self) -> bool {
+        match self {
+            Strength::Assign => true,
+            _ => false,
+        }
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -798,12 +848,13 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 }
             };
 
+            // Strength is in reverse order: A < B means A binds tighter
             match info.strength.cmp(&prev_op.strength) {
-                Ordering::Greater => {
+                Ordering::Less => {
                     // the operator is stronger than us... recurse down
                     rhs = require!(self.expression_part(rhs, info));
                 }
-                Ordering::Less => {
+                Ordering::Greater => {
                     // the operator is weaker than us... return up
                     self.put_back(Token::Punct(info.token));
                     break;
@@ -818,7 +869,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         }
 
         // everything in 'ops' should be the same strength
-        success(if prev_op.right_binding {
+        success(if prev_op.strength.right_binding() {
             let mut result = rhs;
             for (op, bit) in ops.into_iter().zip(bits.into_iter()).rev() {
                 result = op.build(Box::new(bit), Box::new(result));
