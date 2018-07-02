@@ -830,7 +830,8 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
 
             let (input_types, in_list) = require!(self.input_specifier());
             if !input_types.is_empty() || in_list.is_some() {
-                self.context.register_error(self.error("input specifier has no effect here"))
+                self.context.register_error(self.error("input specifier has no effect here")
+                    .set_severity(Severity::Warning));
             }
 
             require!(self.exact(Token::Punct(Punctuation::Semicolon)));
@@ -1107,6 +1108,11 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             Token::Ident(i, _) => match self.arguments()? {
                 Some(args) => Term::Call(i, args),
                 None => Term::Ident(i),
+            },
+
+            // term :: '..' arglist
+            Token::Punct(Punctuation::Super) => {
+                Term::ParentCall(require!(self.arguments()))
             },
 
             // term :: '.'
