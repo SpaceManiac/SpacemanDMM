@@ -420,12 +420,6 @@ impl<'a> ConstantFolder<'a> {
                     None => Err(self.error(format!("unknown typepath {}", full_path))),
                 }
             }
-            (Constant::String(string), Follow::Cast(cast)) => {
-                if cast != "text" {
-                    return Err(self.error(format!("cannot cast string to {:?}", cast)));
-                }
-                Ok(Constant::String(string))
-            }
             (term, follow) => Err(self.error(format!("non-constant expression follower: {} {:?}", term, follow)))
         }
     }

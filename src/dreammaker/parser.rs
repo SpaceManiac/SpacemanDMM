@@ -570,6 +570,11 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             Punct(Assign) => {
                 let location = self.location;
                 let expr = require!(self.expression());
+                if let Some(()) = self.exact_ident("as")? {
+                    // Handles `var/foo = "" as text`
+                    let _ = require!(self.input_type());
+                }
+                // TODO: "in" can appear here
                 require!(self.exact(Punct(Semicolon)));
                 if let Err(e) = self.tree.add_var(location, new_stack.iter(), new_stack.len(), expr) {
                     self.context.register_error(e);
@@ -1107,11 +1112,6 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 require!(self.exact(Token::Punct(Punctuation::RBracket)));
                 Follow::Index(Box::new(expr))
             },
-            // follow :: 'as' ident
-            Token::Ident(ref ident, _) if ident == "as" => {
-                let cast = require!(self.ident());
-                Follow::Cast(cast)
-            }
             other => return self.try_another(other)
         })
     }

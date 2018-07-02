@@ -360,8 +360,6 @@ pub enum Follow {
     Index(Box<Expression>),
     /// Call a method of the value.
     Call(String, Vec<Expression>),
-    /// Cast the value using the "as" operator.
-    Cast(String),
 }
 
 /// A parameter declaration in the header of a proc.
