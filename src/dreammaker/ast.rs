@@ -364,15 +364,28 @@ impl From<Expression> for Term {
     }
 }
 
+/// The possible kinds of index operators, for both fields and methods.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum IndexKind {
+    /// `a.b`
+    Dot,
+    /// `a:b`
+    Colon,
+    /// `a?.b`
+    SafeDot,
+    /// `a?:b`
+    SafeColon,
+}
+
 /// An expression part which is applied to a term or another follow.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Follow {
-    /// Access a field of the value.
-    Field(String),
     /// Index the value by an expression.
     Index(Box<Expression>),
+    /// Access a field of the value.
+    Field(IndexKind, String),
     /// Call a method of the value.
-    Call(String, Vec<Expression>),
+    Call(IndexKind, String, Vec<Expression>),
 }
 
 /// A parameter declaration in the header of a proc.

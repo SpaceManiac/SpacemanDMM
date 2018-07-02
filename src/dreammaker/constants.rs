@@ -406,10 +406,13 @@ impl<'a> ConstantFolder<'a> {
 
     fn follow(&mut self, term: Constant, follow: Follow) -> Result<Constant, DMError> {
         match (term, follow) {
-            // Meant to handle the GLOB.SCI_FREQ case.
+            // Meant to handle the GLOB.SCI_FREQ case:
+            //     /datum/globals/var/static/SCI_FREQ = 1351
+            //     /var/datum/globals/GLOB = null
+            //     /obj/var/freq = GLOB.SCI_FREQ   // initial() is 1351
             // If it's a reference to a type-hinted value, look up the field in
             // its static variables (but not non-static variables).
-            (Constant::Null(Some(type_hint)), Follow::Field(field_name)) => {
+            (Constant::Null(Some(type_hint)), Follow::Field(_, field_name)) => {
                 let mut full_path = String::new();
                 for each in type_hint {
                     full_path.push('/');  // TODO: use path ops here?

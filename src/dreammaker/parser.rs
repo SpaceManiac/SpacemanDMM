@@ -1176,22 +1176,30 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     }
 
     fn follow(&mut self) -> Status<Follow> {
-        success(match self.next("field, index, or function call")? {
-            // follow :: '.' ident
-            Token::Punct(Punctuation::Dot) => {
-                let ident = require!(self.ident());
-                match self.arguments()? {
-                    Some(args) => Follow::Call(ident, args),
-                    None => Follow::Field(ident),
-                }
-            }
+        match self.next("index, field, method call")? {
             // follow :: '[' expression ']'
             Token::Punct(Punctuation::LBracket) => {
                 let expr = require!(self.expression());
                 require!(self.exact(Token::Punct(Punctuation::RBracket)));
-                Follow::Index(Box::new(expr))
+                success(Follow::Index(Box::new(expr)))
             },
-            other => return self.try_another(other)
+
+            // follow :: '.' ident arglist?
+            // TODO: only apply these rules if there is no whitespace around the punctuation
+            Token::Punct(Punctuation::Dot) => self.follow_index(IndexKind::Dot),
+            //Token::Punct(Punctuation::Colon) => self.follow_index(IndexKind::Colon),
+            Token::Punct(Punctuation::SafeDot) => self.follow_index(IndexKind::SafeDot),
+            Token::Punct(Punctuation::SafeColon) => self.follow_index(IndexKind::SafeColon),
+
+            other => return self.try_another(other),
+        }
+    }
+
+    fn follow_index(&mut self, kind: IndexKind) -> Status<Follow> {
+        let ident = require!(self.ident());
+        success(match self.arguments()? {
+            Some(args) => Follow::Call(kind, ident, args),
+            None => Follow::Field(kind, ident),
         })
     }
 
