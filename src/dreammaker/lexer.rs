@@ -83,6 +83,8 @@ table! {
     b">>",	RShift;
     b">>=",	RShiftAssign;
     b"?",   QuestionMark;
+    b"?.",  SafeDot;
+    b"?:",  SafeColon;
     b"[",	LBracket;
     b"]",	RBracket;
     b"^",	BitXor;
@@ -94,6 +96,8 @@ table! {
     b"||",	Or;
     b"}",	RBrace;
     b"~",	BitNot;
+    // Keywords - not checked by read_punct
+    b"in",  In;
 }
 
 impl fmt::Display for Punctuation {
@@ -678,7 +682,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         // requires that PUNCT_TABLE be ordered, shorter entries be first,
         // and all entries with >1 character also have their prefix in the table
         let mut items: Vec<_> = PUNCT_TABLE.iter()
-            .skip_while(|&&(tok, _)| tok[0] != first)
+            .skip_while(|&&(tok, _)| tok[0] < first)
             .take_while(|&&(tok, _)| tok[0] == first)
             .collect();
         if items.is_empty() {
@@ -801,6 +805,12 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                                 self.directive = Directive::Stringy;
                             } else {
                                 self.directive = Directive::Ordinary;
+                            }
+                        }
+                        // check keywords
+                        for &(name, value) in PUNCT_TABLE.iter() {
+                            if name == ident.as_bytes() {
+                                return Some(locate(Punct(value)))
                             }
                         }
                         Some(locate(Ident(ident, ws)))

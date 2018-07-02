@@ -618,7 +618,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             None
         };
         // `in view(7)` or `in list("a", "b")` or ...
-        let in_list = if let Some(()) = self.exact_ident("in")? {
+        let in_list = if let Some(()) = self.exact(Punct(In))? {
             Some(require!(self.expression()))
         } else {
             None
