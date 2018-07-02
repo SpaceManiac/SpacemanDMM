@@ -370,7 +370,7 @@ pub struct Parameter {
     pub path: Vec<String>,
     pub name: String,
     pub default: Option<Expression>,
-    pub as_types: Option<Vec<String>>,
+    pub input_type: InputType,
     pub in_list: Option<Expression>,
 }
 
@@ -380,18 +380,76 @@ impl fmt::Display for Parameter {
             write!(fmt, "{}/", each)?;
         }
         fmt.write_str(&self.name)?;
-        if let Some(ref as_types) = self.as_types {
-            fmt.write_str(" as ")?;
-            let mut first = true;
-            for each in as_types.iter() {
-                write!(fmt, "{}{}", if first { "" } else { "|" }, each)?;
-                first = false;
-            }
+        if !self.input_type.is_empty() {
+            write!(fmt, " as {}", self.input_type)?;
         }
         Ok(())
     }
 }
 
+macro_rules! type_table {
+    ($(#[$attr:meta])* pub struct $name:ident; $($txt:expr, $i:ident, $val:expr;)*) => {
+        bitflags! {
+            $(#[$attr])*
+            /// A type specifier for verb arguments and input() calls.
+            pub struct $name: u32 {
+                $(const $i = $val;)*
+            }
+        }
+
+        impl $name {
+            pub fn from_str(text: &str) -> Option<Self> {
+                match text {
+                    $(
+                        $txt => Some($name::$i),
+                    )*
+                    _ => None,
+                }
+            }
+        }
+
+        impl fmt::Display for $name {
+            fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+                let mut first = true;
+                $(
+                    if self.contains($name::$i) {
+                        write!(fmt, "{}{}", if first { "" } else { "|" }, $txt)?;
+                        first = false;
+                    }
+                )*
+                let _ = first;
+                Ok(())
+            }
+        }
+    }
+}
+
+type_table! {
+    /// A type specifier for verb arguments and input() calls.
+    #[derive(Default)]
+    pub struct InputType;
+
+    // These values can be known with an invocation such as:
+    //     src << as(command_text)
+    "mob",          MOB,          1 << 0;
+    "obj",          OBJ,          1 << 1;
+    "text",         TEXT,         1 << 2;
+    "num",          NUM,          1 << 3;
+    "file",         FILE,         1 << 4;
+    "turf",         TURF,         1 << 5;
+    "key",          KEY,          1 << 6;
+    "null",         NULL,         1 << 7;
+    "area",         AREA,         1 << 8;
+    "icon",         ICON,         1 << 9;
+    "sound",        SOUND,        1 << 10;
+    "message",      MESSAGE,      1 << 11;
+    "anything",     ANYTHING,     1 << 12;
+    "password",     PASSWORD,     1 << 15;
+    "command_text", COMMAND_TEXT, 1 << 16;
+    "color",        COLOR,        1 << 17;
+}
+
+/// A statement in a proc body.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
     Expr(Expression),

@@ -12,6 +12,7 @@ xml-rs = { version = "0.8.0", optional = true }
 petgraph = { version = "0.4.9", default-features = false }
 linked-hash-map = "0.5.0"
 lodepng = "2.1.5"
+bitflags = "1.0.3"
 
 [dev-dependencies]
 walkdir = "2.0.1"

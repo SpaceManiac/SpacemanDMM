@@ -643,14 +643,10 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             None
         };
         // as obj|turf
-        let as_types = if let Some(()) = self.exact_ident("as")? {
-            let mut as_what = vec![require!(self.ident())];
-            while let Some(()) = self.exact(Punct(BitOr))? {
-                as_what.push(require!(self.ident()));
-            }
-            Some(as_what)
+        let input_type = if let Some(()) = self.exact_ident("as")? {
+            require!(self.input_type())
         } else {
-            None
+            InputType::default()
         };
         // `in view(7)` or `in list("a", "b")` or ...
         let in_list = if let Some(()) = self.exact(Punct(In))? {
@@ -659,7 +655,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             None
         };
         success(Parameter {
-            path, name, default, as_types, in_list
+            path, name, default, input_type, in_list
         })
     }
 
@@ -705,6 +701,28 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             require!(self.ignore_group(LBracket, RBracket));
         }
         SUCCESS
+    }
+
+    /// Parse a verb input type. Used by proc params and the input() form.
+    fn input_type(&mut self) -> Status<InputType> {
+        let ident = leading!(self.ident());
+        let mut as_what = match InputType::from_str(&ident) {
+            Some(what) => what,
+            None => {
+                self.context.register_error(self.error(format!("bad input type: '{}'", ident)));
+                InputType::default()
+            }
+        };
+        while let Some(()) = self.exact(Token::Punct(Punctuation::BitOr))? {
+            let ident = require!(self.ident());
+            match InputType::from_str(&ident) {
+                Some(what) => as_what |= what,
+                None => {
+                    self.context.register_error(self.error(format!("bad input type: '{}'", ident)));
+                }
+            }
+        }
+        success(as_what)
     }
 
     /// Parse a block
