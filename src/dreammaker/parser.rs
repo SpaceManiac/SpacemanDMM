@@ -17,11 +17,7 @@ pub fn parse<I>(context: &Context, iter: I) -> ObjectTree where
     I: IntoIterator<Item=LocatedToken>
 {
     let mut parser = Parser::new(context, iter.into_iter());
-    match parser.root() {
-        Ok(Some(())) => {}
-        Ok(None) => context.register_error(parser.describe_parse_error()),
-        Err(err) => context.register_error(err),
-    }
+    parser.run();
 
     let procs_total = parser.procs_good + parser.procs_bad;
     if procs_total > 0 {
@@ -351,11 +347,10 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         }
     }
 
-    pub fn run(mut self) {
-        match self.root() {
-            Ok(Some(())) => {}
-            Ok(None) => self.context.register_error(self.describe_parse_error()),
-            Err(err) => self.context.register_error(err),
+    pub fn run(&mut self) {
+        let root = self.root();
+        if let Err(e) = self.require(root) {
+            self.context.register_error(e);
         }
     }
 
@@ -372,7 +367,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     // Basic setup
 
     // Call this to get a DMError in the event of an entry point returning None
-    pub fn describe_parse_error(&mut self) -> DMError {
+    fn describe_parse_error(&mut self) -> DMError {
         let expected = self.expected.join(", ");
         match self.next("") {
             Ok(got) => {
@@ -390,7 +385,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         Err(self.describe_parse_error())
     }
 
-    fn require<T>(&mut self, t: Result<Option<T>, DMError>) -> Result<T, DMError> {
+    pub fn require<T>(&mut self, t: Result<Option<T>, DMError>) -> Result<T, DMError> {
         match t {
             Ok(Some(v)) => Ok(v),
             Ok(None) => self.parse_error(),
@@ -596,14 +591,17 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                     require!(self.read_any_tt(&mut body_tt));
                 }
                 self.annotate(start, || Annotation::ProcBody(new_stack.to_vec()));
-                let mut subparser = Parser::new(self.context, body_tt.iter().cloned());
-                let result = subparser.block();
+                let result = {
+                    let mut subparser = Parser::new(self.context, body_tt.iter().cloned());
+                    let block = subparser.block();
+                    subparser.require(block)
+                };
                 if result.is_ok() {
                     self.procs_good += 1;
                 } else {
                     self.procs_bad += 1;
                 }
-                self.annotate(start, || Annotation::ProcBodyDetails(result.map(|ok| ok.unwrap_or_default())));
+                self.annotate(start, || Annotation::ProcBodyDetails(result));
                 SUCCESS
             }
             other => {
