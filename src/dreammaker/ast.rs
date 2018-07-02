@@ -94,6 +94,7 @@ pub enum BinaryOp {
     RShift,
     And,
     Or,
+    In,
 }
 
 impl fmt::Display for BinaryOp {
@@ -119,6 +120,7 @@ impl fmt::Display for BinaryOp {
             RShift => ">>",
             And => "&&",
             Or => "||",
+            In => "in",
         })
     }
 }

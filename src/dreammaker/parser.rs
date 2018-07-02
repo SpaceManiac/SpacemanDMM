@@ -256,6 +256,11 @@ oper_table! { BINARY_OPS;
         (AssignOp, LShiftAssign),
         (AssignOp, RShiftAssign),
     }
+    // "in" is special and has different precedence in different contexts
+    In {
+        // N.B. the RHS of "in" is evaluated before the LHS
+        (BinaryOp, In),
+    }
 }
 
 impl Strength {
