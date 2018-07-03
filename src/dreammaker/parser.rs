@@ -864,6 +864,15 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             } else {
                 Err(self.error("for-in-list must start with variable"))
             }
+        } else if let Some(()) = self.exact_ident("spawn")? {
+            let expr;
+            if let Some(()) = self.exact(Token::Punct(Punctuation::LParen))? {
+                expr = self.expression()?;
+                require!(self.exact(Token::Punct(Punctuation::RParen)));
+            } else {
+                expr = None;
+            }
+            success(Statement::Spawn(expr, require!(self.block())))
         // SINGLE-LINE STATEMENTS
         } else if let Some(()) = self.exact_ident("set")? {
             let name = require!(self.ident());

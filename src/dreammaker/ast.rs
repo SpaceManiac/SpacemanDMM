@@ -553,6 +553,7 @@ pub enum Statement {
         value: Option<Expression>,
     },
     Setting(String, SettingMode, Expression),
+    Spawn(Option<Expression>, Vec<Statement>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
