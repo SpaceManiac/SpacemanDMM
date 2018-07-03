@@ -552,4 +552,11 @@ pub enum Statement {
         name: String,
         value: Option<Expression>,
     },
+    Setting(String, SettingMode, Expression),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SettingMode {
+    Assign,
+    In,
 }

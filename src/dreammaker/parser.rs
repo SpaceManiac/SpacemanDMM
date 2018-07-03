@@ -862,6 +862,19 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 Err(self.error("for-in-list must start with variable"))
             }
         // SINGLE-LINE STATEMENTS
+        } else if let Some(()) = self.exact_ident("set")? {
+            let name = require!(self.ident());
+            let mode = if let Some(()) = self.exact(Token::Punct(Punctuation::Assign))? {
+                SettingMode::Assign
+            } else if let Some(()) = self.exact(Token::Punct(Punctuation::In))? {
+                SettingMode::In
+            } else {
+                return self.parse_error();
+            };
+            let value = require!(self.expression());
+            require!(self.exact(Token::Punct(Punctuation::Semicolon)));
+            // TODO: warn on weird values for these
+            success(Statement::Setting(name, mode, value))
         } else {
             let result = leading!(self.simple_statement(false));
             require!(self.exact(Token::Punct(Punctuation::Semicolon)));
