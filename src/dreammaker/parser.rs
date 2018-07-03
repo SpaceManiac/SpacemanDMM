@@ -994,6 +994,8 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 Token::Punct(Punctuation::Sub) => unary_ops.push(UnaryOp::Neg),
                 Token::Punct(Punctuation::Not) => unary_ops.push(UnaryOp::Not),
                 Token::Punct(Punctuation::BitNot) => unary_ops.push(UnaryOp::BitNot),
+                Token::Punct(Punctuation::PlusPlus) => unary_ops.push(UnaryOp::PreIncr),
+                Token::Punct(Punctuation::MinusMinus) => unary_ops.push(UnaryOp::PreDecr),
                 other => { self.put_back(other); break }
             }
         }
