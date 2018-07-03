@@ -524,6 +524,12 @@ pub enum Statement {
     While(Expression, Vec<Statement>),
     DoWhile(Vec<Statement>, Expression),
     If(Vec<(Expression, Vec<Statement>)>, Option<Vec<Statement>>),
+    ForLoop {
+        init: Option<Box<Statement>>,
+        test: Option<Expression>,
+        inc: Option<Box<Statement>>,
+        block: Vec<Statement>,
+    },
     Var {
         var_type: VarType,
         name: String,

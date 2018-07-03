@@ -796,16 +796,39 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             require!(self.exact(Token::Punct(Punctuation::RParen)));
             require!(self.exact(Token::Punct(Punctuation::Semicolon)));
             success(Statement::DoWhile(block, expr))
+        } else if let Some(()) = self.exact_ident("for")? {
+            // for (Var [as Type] [in List]) Statement
+            // for (Init, Test, Inc) Statement
+            // for (Var in Low to High)
+            // for (Var = Low to High)
+            require!(self.exact(Token::Punct(Punctuation::LParen)));
+
+            let init = self.simple_statement(true)?;
+            if let Some(()) = self.comma_or_semicolon()? {
+                // three-pronged loop form
+                let test = self.expression()?;
+                require!(self.comma_or_semicolon());
+                let inc = self.simple_statement(false)?;
+                require!(self.exact(Token::Punct(Punctuation::RParen)));
+                success(Statement::ForLoop {
+                    init: init.map(Box::new),
+                    test,
+                    inc: inc.map(Box::new),
+                    block: require!(self.block()),
+                })
+            } else {
+                Err(self.error("'for' loop must start with statement"))
+            }
         // SINGLE-LINE STATEMENTS
         } else {
-            let result = leading!(self.simple_statement());
+            let result = leading!(self.simple_statement(false));
             require!(self.exact(Token::Punct(Punctuation::Semicolon)));
             success(result)
         }
     }
 
     // Single-line statements. Can appear in for loops. Followed by a semicolon.
-    fn simple_statement(&mut self) -> Status<Statement> {
+    fn simple_statement(&mut self, in_for: bool) -> Status<Statement> {
         if let Some(()) = self.exact_ident("var")? {
             // statement :: 'var' type_path name ('=' value)
             let type_path_start = self.location();
@@ -828,7 +851,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             };
 
             let (input_types, in_list) = require!(self.input_specifier());
-            if !input_types.is_empty() || in_list.is_some() {
+            if (!input_types.is_empty() || in_list.is_some()) && !in_for {
                 self.context.register_error(self.error("input specifier has no effect here")
                     .set_severity(Severity::Warning));
             }
@@ -842,8 +865,17 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         } else {
             // statement :: expression ';'
             let expr = leading!(self.expression());
-            require!(self.exact(Token::Punct(Punctuation::Semicolon)));
             success(Statement::Expr(expr))
+        }
+    }
+
+    fn comma_or_semicolon(&mut self) -> Status<()> {
+        if let Some(()) = self.exact(Token::Punct(Punctuation::Comma))? {
+            SUCCESS
+        } else if let Some(()) = self.exact(Token::Punct(Punctuation::Semicolon))? {
+            SUCCESS
+        } else {
+            Ok(None)
         }
     }
 
