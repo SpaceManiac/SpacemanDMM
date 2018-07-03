@@ -248,7 +248,7 @@ pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree, sloppy: boo
     for ty in tree.graph.node_indices() {
         let keys: Vec<String> = tree.graph.node_weight(ty).unwrap().vars.keys().cloned().collect();
         for key in keys {
-            if !tree.graph.node_weight(ty).unwrap().get_declaration(&key, tree).map_or(true, |x| x.is_const_evaluable() && (x.is_const || ty != NodeIndex::new(0))) {
+            if !tree.graph.node_weight(ty).unwrap().get_declaration(&key, tree).map_or(true, |x| x.var_type.is_const_evaluable() && (x.var_type.is_const || ty != NodeIndex::new(0))) {
                 continue  // skip non-constant-evaluable vars
             }
             match constant_ident_lookup(tree, ty, &key, false) {
@@ -302,23 +302,23 @@ fn constant_ident_lookup(tree: &mut ObjectTree, ty: NodeIndex, ident: &str, must
         match type_.vars.get_mut(ident) {
             None => { return Ok(ConstLookup::Continue(parent)); }
             Some(var) => match var.value.constant.clone() {
-                Some(constant) => { return Ok(ConstLookup::Found(decl.type_path.clone(), constant)); }
+                Some(constant) => { return Ok(ConstLookup::Found(decl.var_type.type_path.clone(), constant)); }
                 None => match var.value.expression.clone() {
                     Some(expr) => {
                         if var.value.being_evaluated {
                             return Err(DMError::new(var.value.location, format!("recursive constant reference: {}", ident)));
-                        } else if !decl.is_const_evaluable() {
+                        } else if !decl.var_type.is_const_evaluable() {
                             return Err(DMError::new(var.value.location, format!("non-const variable: {}", ident)));
-                        } else if !decl.is_static && must_be_static {
+                        } else if !decl.var_type.is_static && must_be_static {
                             return Err(DMError::new(var.value.location, format!("non-static variable: {}", ident)));
                         }
                         var.value.being_evaluated = true;
-                        (var.value.location, decl.type_path, expr)
+                        (var.value.location, decl.var_type.type_path, expr)
                     }
                     None => {
-                        let c = Constant::Null(Some(decl.type_path.clone()));
+                        let c = Constant::Null(Some(decl.var_type.type_path.clone()));
                         var.value.constant = Some(c.clone());
-                        return Ok(ConstLookup::Found(decl.type_path, c));
+                        return Ok(ConstLookup::Found(decl.var_type.type_path, c));
                     }
                 }
             }

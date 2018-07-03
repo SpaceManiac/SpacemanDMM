@@ -2,6 +2,7 @@
 //!
 //! Most AST types can be pretty-printed using the `Display` trait.
 use std::fmt;
+use std::iter::FromIterator;
 
 use linked_hash_map::LinkedHashMap;
 
@@ -473,6 +474,48 @@ type_table! {
     "color",        COLOR,        1 << 17;
 }
 
+/// A type which may be ascribed to a `var`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct VarType {
+    pub is_static: bool,
+    pub is_const: bool,
+    pub is_tmp: bool,
+    pub type_path: TypePath,
+}
+
+impl VarType {
+    #[inline]
+    pub fn is_const_evaluable(&self) -> bool {
+        self.is_const || (!self.is_static && !self.is_tmp)
+    }
+}
+
+impl FromIterator<String> for VarType {
+    fn from_iter<T: IntoIterator<Item=String>>(iter: T) -> Self {
+        Self::from_iter(iter.into_iter().map(|p| (PathOp::Slash, p)))
+    }
+}
+
+impl FromIterator<(PathOp, String)> for VarType {
+    fn from_iter<T: IntoIterator<Item=(PathOp, String)>>(iter: T) -> Self {
+        let (mut is_static, mut is_const, mut is_tmp) = (false, false, false);
+        let type_path = iter.into_iter()
+            .skip_while(|(_, p)| {
+                if p == "global" || p == "static" {
+                    is_static = true; true
+                } else if p == "const" {
+                    is_const = true; true
+                } else if p == "tmp" {
+                    is_tmp = true; true
+                } else {
+                    false
+                }
+            })
+            .collect();
+        VarType { is_static, is_const, is_tmp, type_path }
+    }
+}
+
 /// A statement in a proc body.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
@@ -482,11 +525,8 @@ pub enum Statement {
     DoWhile(Vec<Statement>, Expression),
     If(Vec<(Expression, Vec<Statement>)>, Option<Vec<Statement>>),
     Var {
-        is_static: bool,
-        is_const: bool,
-        is_tmp: bool,
-        type_path: TypePath,
+        var_type: VarType,
         name: String,
         value: Option<Expression>,
-    }
+    },
 }

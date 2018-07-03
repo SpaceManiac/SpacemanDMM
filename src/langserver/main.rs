@@ -487,16 +487,16 @@ handle_method_call! {
                             if let Some(ref decl) = var.declaration {
                                 let mut declaration = String::new();
                                 declaration.push_str("var");
-                                if decl.is_static {
+                                if decl.var_type.is_static {
                                     declaration.push_str("/static");
                                 }
-                                if decl.is_const {
+                                if decl.var_type.is_const {
                                     declaration.push_str("/const");
                                 }
-                                if decl.is_tmp {
+                                if decl.var_type.is_tmp {
                                     declaration.push_str("/tmp");
                                 }
-                                for (_, bit) in decl.type_path.iter() {
+                                for (_, bit) in decl.var_type.type_path.iter() {
                                     declaration.push('/');
                                     declaration.push_str(&bit);
                                 }

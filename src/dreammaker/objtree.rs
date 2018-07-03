@@ -8,7 +8,7 @@ use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 use linked_hash_map::LinkedHashMap;
 
-use super::ast::{Expression, TypePath, PathOp, Prefab, Parameter};
+use super::ast::{Expression, VarType, TypePath, PathOp, Prefab, Parameter};
 use super::constants::Constant;
 use super::{DMError, Location, Context};
 
@@ -19,18 +19,8 @@ pub type Vars = LinkedHashMap<String, Constant>;
 
 #[derive(Debug, Clone)]
 pub struct VarDeclaration {
-    pub is_static: bool,
-    pub is_const: bool,
-    pub is_tmp: bool,
-    pub type_path: TypePath,
+    pub var_type: VarType,
     pub location: Location,
-}
-
-impl VarDeclaration {
-    #[inline]
-    pub fn is_const_evaluable(&self) -> bool {
-        self.is_const || (!self.is_static && !self.is_tmp)
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -513,10 +503,12 @@ impl ObjectTree {
             },
             declaration: if is_declaration {
                 Some(VarDeclaration {
-                    is_static,
-                    is_const,
-                    is_tmp,
-                    type_path,
+                    var_type: VarType {
+                        is_static,
+                        is_const,
+                        is_tmp,
+                        type_path,
+                    },
                     location,
                 })
             } else {

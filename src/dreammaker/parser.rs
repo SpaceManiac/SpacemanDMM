@@ -799,28 +799,18 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         // SINGLE-LINE STATEMENTS
         } else if let Some(()) = self.exact_ident("var")? {
             // statement :: 'var' type_path name ('=' value)
+            let type_path_start = self.location();
             let (_, mut tree_path) = require!(self.tree_path());
             let name = match tree_path.pop() {
                 Some(name) => name,
                 None => return Err(self.error("'var' must be followed by a name"))
             };
-            let (mut is_static, mut is_const, mut is_tmp) = (false, false, false);
-            let type_path = tree_path.into_iter()
-                .skip_while(|p| {
-                    if p == "global" || p == "static" {
-                        is_static = true; true
-                    } else if p == "const" {
-                        is_const = true; true
-                    } else if p == "tmp" {
-                        self.context.register_error(self.error("var/tmp has no effect here")
-                            .set_severity(Severity::Warning));
-                        is_tmp = true; true
-                    } else {
-                        false
-                    }
-                })
-                .map(|p| (PathOp::Slash, p))
-                .collect();
+
+            let var_type = tree_path.into_iter().collect::<VarType>();
+            if var_type.is_tmp {
+                self.context.register_error(DMError::new(type_path_start, "var/tmp has no effect here")
+                    .set_severity(Severity::Warning));
+            }
 
             let value = if let Some(()) = self.exact(Token::Punct(Punctuation::Assign))? {
                 Some(require!(self.expression()))
@@ -835,7 +825,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             }
 
             require!(self.exact(Token::Punct(Punctuation::Semicolon)));
-            success(Statement::Var { is_static, is_const, is_tmp, type_path, name, value })
+            success(Statement::Var { var_type, name, value })
         } else if let Some(()) = self.exact_ident("return")? {
             // statement :: 'return' expression ';'
             let expression = self.expression()?;
