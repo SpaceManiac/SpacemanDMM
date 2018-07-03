@@ -797,7 +797,16 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             require!(self.exact(Token::Punct(Punctuation::Semicolon)));
             success(Statement::DoWhile(block, expr))
         // SINGLE-LINE STATEMENTS
-        } else if let Some(()) = self.exact_ident("var")? {
+        } else {
+            let result = leading!(self.simple_statement());
+            require!(self.exact(Token::Punct(Punctuation::Semicolon)));
+            success(result)
+        }
+    }
+
+    // Single-line statements. Can appear in for loops. Followed by a semicolon.
+    fn simple_statement(&mut self) -> Status<Statement> {
+        if let Some(()) = self.exact_ident("var")? {
             // statement :: 'var' type_path name ('=' value)
             let type_path_start = self.location();
             let (_, mut tree_path) = require!(self.tree_path());
@@ -824,17 +833,15 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                     .set_severity(Severity::Warning));
             }
 
-            require!(self.exact(Token::Punct(Punctuation::Semicolon)));
             success(Statement::Var { var_type, name, value })
         } else if let Some(()) = self.exact_ident("return")? {
             // statement :: 'return' expression ';'
             let expression = self.expression()?;
-            require!(self.exact(Token::Punct(Punctuation::Semicolon)));
             success(Statement::Return(expression))
         // EXPRESSION STATEMENTS
         } else {
             // statement :: expression ';'
-            let expr = require!(self.expression());
+            let expr = leading!(self.expression());
             require!(self.exact(Token::Punct(Punctuation::Semicolon)));
             success(Statement::Expr(expr))
         }
