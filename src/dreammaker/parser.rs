@@ -737,23 +737,26 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
 
     /// Parse a block
     fn block(&mut self) -> Status<Vec<Statement>> {
-        // empty blocks e.g. proc/foo();
-        if let Some(()) = self.exact(Token::Punct(Punctuation::Semicolon))? {
-            return success(Vec::new());
-        }
-
-        require!(self.exact(Token::Punct(Punctuation::LBrace)));
-        let mut statements = Vec::new();
-        loop {
-            if let Some(()) = self.exact(Token::Punct(Punctuation::RBrace))? {
-                break;
-            } else if let Some(()) = self.exact(Token::Punct(Punctuation::Semicolon))? {
-                continue;
-            } else {
-                statements.push(require!(self.statement()));
+        if let Some(()) = self.exact(Token::Punct(Punctuation::LBrace))? {
+            let mut statements = Vec::new();
+            loop {
+                if let Some(()) = self.exact(Token::Punct(Punctuation::RBrace))? {
+                    break;
+                } else if let Some(()) = self.exact(Token::Punct(Punctuation::Semicolon))? {
+                    continue;
+                } else {
+                    statements.push(require!(self.statement()));
+                }
             }
+            success(statements)
+        } else if let Some(()) = self.exact(Token::Punct(Punctuation::Semicolon))? {
+            // empty blocks: proc/foo();
+            return success(Vec::new());
+        } else {
+            // and one-line blocks: if(1) neat();
+            let statement = require!(self.statement());
+            return success(vec![statement]);
         }
-        success(statements)
     }
 
     fn statement(&mut self) -> Status<Statement> {
