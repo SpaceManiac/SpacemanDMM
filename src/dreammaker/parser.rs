@@ -802,10 +802,9 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             // for (Var in Low to High)
             // for (Var = Low to High)
             require!(self.exact(Token::Punct(Punctuation::LParen)));
-
             let init = self.simple_statement(true)?;
             if let Some(()) = self.comma_or_semicolon()? {
-                // three-pronged loop form
+                // three-pronged loop form ("for loop")
                 let test = self.expression()?;
                 require!(self.comma_or_semicolon());
                 let inc = self.simple_statement(false)?;
@@ -816,8 +815,51 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                     inc: inc.map(Box::new),
                     block: require!(self.block()),
                 })
+            } else if let Some(init) = init {
+                // in-list form ("for list")
+                let (var_type, name) = match init {
+                    Statement::Var { var_type, name, value: Some(value) } => {
+                        // for(var/a = 1 to
+                        require!(self.exact_ident("to"));
+                        return success(require!(self.for_range(Some(var_type), name, value)));
+                    },
+                    Statement::Var { var_type, name, value: None } => { (Some(var_type), name) },
+                    Statement::Expr(Expression::Base { unary, term: Term::Ident(name), follow }) => {
+                        if !unary.is_empty() || !follow.is_empty() {
+                            return Err(self.error("for-list must start with variable"));
+                        }
+                        (None, name)
+                    }
+                    _ => return Err(self.error("for-list must start with variable")),
+                };
+
+                let input_type = if let Some(()) = self.exact_ident("as")? {
+                    // for(var/a as obj
+                    require!(self.input_type())
+                } else {
+                    InputType::default()
+                };
+
+                let in_list = if let Some(()) = self.exact(Token::Punct(Punctuation::In))? {
+                    let value = require!(self.expression());
+                    if let Some(()) = self.exact_ident("to")? {
+                        return success(require!(self.for_range(var_type, name, value)));
+                    }
+                    Some(value)
+                } else {
+                    None
+                };
+
+                require!(self.exact(Token::Punct(Punctuation::RParen)));
+                success(Statement::ForList {
+                    var_type,
+                    name,
+                    input_type,
+                    in_list,
+                    block: require!(self.block()),
+                })
             } else {
-                Err(self.error("'for' loop must start with statement"))
+                Err(self.error("for-in-list must start with variable"))
             }
         // SINGLE-LINE STATEMENTS
         } else {
@@ -849,9 +891,12 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             } else {
                 None
             };
-
-            let (input_types, in_list) = require!(self.input_specifier());
-            if (!input_types.is_empty() || in_list.is_some()) && !in_for {
+            let (input_types, in_list) = if !in_for {
+                require!(self.input_specifier())
+            } else {
+                (InputType::default(), None)
+            };
+            if !input_types.is_empty() || in_list.is_some() {
                 self.context.register_error(self.error("input specifier has no effect here")
                     .set_severity(Severity::Warning));
             }
@@ -867,6 +912,30 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             let expr = leading!(self.expression());
             success(Statement::Expr(expr))
         }
+    }
+
+    // for(var/a = 1 to
+    // for(var/a in 1 to
+    fn for_range(&mut self, var_type: Option<VarType>, name: String, start: Expression) -> Status<Statement> {
+        // to 20
+        let end = require!(self.expression());
+        // step 2
+        let step = if let Some(()) = self.exact_ident("step")? {
+            Some(require!(self.expression()))
+        } else {
+            None
+        };
+        // )
+        require!(self.exact(Token::Punct(Punctuation::RParen)));
+        // {...}
+        success(Statement::ForRange {
+            var_type,
+            name,
+            start,
+            end,
+            step,
+            block: require!(self.block()),
+        })
     }
 
     fn comma_or_semicolon(&mut self) -> Status<()> {

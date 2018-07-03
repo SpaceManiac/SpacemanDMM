@@ -530,6 +530,23 @@ pub enum Statement {
         inc: Option<Box<Statement>>,
         block: Vec<Statement>,
     },
+    ForList {
+        var_type: Option<VarType>,
+        name: String,
+        /// If zero, uses the declared type of the variable.
+        input_type: InputType,
+        /// Defaults to 'world'.
+        in_list: Option<Expression>,
+        block: Vec<Statement>,
+    },
+    ForRange {
+        var_type: Option<VarType>,
+        name: String,
+        start: Expression,
+        end: Expression,
+        step: Option<Expression>,
+        block: Vec<Statement>,
+    },
     Var {
         var_type: VarType,
         name: String,
