@@ -556,7 +556,7 @@ pub enum Statement {
     },
     Setting(String, SettingMode, Expression),
     Spawn(Option<Expression>, Vec<Statement>),
-    Switch(Expression, Vec<(Case, Vec<Statement>)>),
+    Switch(Expression, Vec<(Vec<Case>, Vec<Statement>)>, Option<Vec<Statement>>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -569,5 +569,4 @@ pub enum SettingMode {
 pub enum Case {
     Exact(Expression),
     Range(Expression, Expression),
-    Else,
 }

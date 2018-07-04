@@ -882,21 +882,20 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             let mut cases = Vec::new();
             while let Some(()) = self.exact_ident("if")? {
                 require!(self.exact(Token::Punct(Punctuation::LParen)));
-                let first = require!(self.expression());
-                let case = if let Some(()) = self.exact_ident("to")? {
-                    Case::Range(first, require!(self.expression()))
-                } else {
-                    Case::Exact(first)
-                };
-                require!(self.exact(Token::Punct(Punctuation::RParen)));
+                let what = require!(self.separated(Punctuation::Comma, Punctuation::RParen, None, Parser::case));
+                if what.is_empty() {
+                    self.context.register_error(self.error("switch case cannot be empty"));
+                }
                 let block = require!(self.block());
-                cases.push((case, block));
+                cases.push((what, block));
             }
-            if let Some(()) = self.exact_ident("else")? {
-                cases.push((Case::Else, require!(self.block())));
-            }
+            let default = if let Some(()) = self.exact_ident("else")? {
+                Some(require!(self.block()))
+            } else {
+                None
+            };
             require!(self.exact(Token::Punct(Punctuation::RBrace)));
-            success(Statement::Switch(expr, cases))
+            success(Statement::Switch(expr, cases, default))
         // SINGLE-LINE STATEMENTS
         } else if let Some(()) = self.exact_ident("set")? {
             let name = require!(self.ident());
@@ -994,6 +993,15 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             SUCCESS
         } else {
             Ok(None)
+        }
+    }
+
+    fn case(&mut self) -> Status<Case> {
+        let first = require!(self.expression());
+        if let Some(()) = self.exact_ident("to")? {
+            success(Case::Range(first, require!(self.expression())))
+        } else {
+            success(Case::Exact(first))
         }
     }
 
