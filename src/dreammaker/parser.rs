@@ -928,6 +928,8 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 None => return Err(self.error("'var' must be followed by a name"))
             };
 
+            require!(self.var_annotations());
+
             let var_type = tree_path.into_iter().collect::<VarType>();
             if var_type.is_tmp {
                 self.context.register_error(DMError::new(type_path_start, "var/tmp has no effect here")
