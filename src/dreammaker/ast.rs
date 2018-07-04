@@ -346,7 +346,7 @@ pub enum Term {
     /// A use of the `call()()` primitive.
     DynamicCall(Vec<Expression>, Vec<Expression>),
     /// An interpolated string, alternating string/expr/string/expr.
-    InterpString(String, Vec<(Expression, String)>),
+    InterpString(String, Vec<(Option<Expression>, String)>),
 }
 
 impl From<Expression> for Term {

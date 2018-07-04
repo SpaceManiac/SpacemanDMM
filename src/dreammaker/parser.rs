@@ -1281,8 +1281,8 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             Token::InterpStringBegin(begin) => {
                 let mut parts = Vec::new();
                 loop {
-                    let expr = require!(self.expression());
-                    match self.next("interpolated string part")? {
+                    let expr = self.expression()?;
+                    match self.next("']'")? {
                         Token::InterpStringPart(part) => {
                             parts.push((expr, part));
                         },
