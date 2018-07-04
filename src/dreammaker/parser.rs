@@ -223,6 +223,8 @@ oper_table! { BINARY_OPS;
         (BinaryOp, Eq),
         (BinaryOp, NotEq), //
         (BinaryOp, NotEq = LessGreater),
+        (BinaryOp, Equiv),
+        (BinaryOp, NotEquiv),
     }
     // & ^ |
     Bitwise {

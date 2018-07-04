@@ -97,6 +97,8 @@ table! {
     b"||",	Or;
     b"}",	RBrace;
     b"~",	BitNot;
+    b"~!",  NotEquiv;
+    b"~=",  Equiv;
     // Keywords - not checked by read_punct
     b"in",  In;
 }
