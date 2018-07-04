@@ -873,6 +873,29 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 expr = None;
             }
             success(Statement::Spawn(expr, require!(self.block())))
+        } else if let Some(()) = self.exact_ident("switch")? {
+            require!(self.exact(Token::Punct(Punctuation::LParen)));
+            let expr = require!(self.expression());
+            require!(self.exact(Token::Punct(Punctuation::RParen)));
+            require!(self.exact(Token::Punct(Punctuation::LBrace)));
+            let mut cases = Vec::new();
+            while let Some(()) = self.exact_ident("if")? {
+                require!(self.exact(Token::Punct(Punctuation::LParen)));
+                let first = require!(self.expression());
+                let case = if let Some(()) = self.exact_ident("to")? {
+                    Case::Range(first, require!(self.expression()))
+                } else {
+                    Case::Exact(first)
+                };
+                require!(self.exact(Token::Punct(Punctuation::RParen)));
+                let block = require!(self.block());
+                cases.push((case, block));
+            }
+            if let Some(()) = self.exact_ident("else")? {
+                cases.push((Case::Else, require!(self.block())));
+            }
+            require!(self.exact(Token::Punct(Punctuation::RBrace)));
+            success(Statement::Switch(expr, cases))
         // SINGLE-LINE STATEMENTS
         } else if let Some(()) = self.exact_ident("set")? {
             let name = require!(self.ident());
