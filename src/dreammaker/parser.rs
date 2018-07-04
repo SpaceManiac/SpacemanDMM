@@ -246,6 +246,7 @@ oper_table! { BINARY_OPS;
         (AssignOp, SubAssign),
         (AssignOp, MulAssign),
         (AssignOp, DivAssign),
+        (AssignOp, ModAssign),
         (AssignOp, BitAndAssign),
         (AssignOp, BitOrAssign),
         (AssignOp, BitXorAssign),

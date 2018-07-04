@@ -46,6 +46,7 @@ table! {
     b"#",   Hash;
     b"##",  TokenPaste;
     b"%",	Mod;
+    b"%=",  ModAssign;
     b"&",	BitAnd;
     b"&&",	And;
     b"&=",	BitAndAssign;
