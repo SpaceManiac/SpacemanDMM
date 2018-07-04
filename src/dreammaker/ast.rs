@@ -523,6 +523,7 @@ impl FromIterator<(PathOp, String)> for VarType {
 pub enum Statement {
     Expr(Expression),
     Return(Option<Expression>),
+    Throw(Expression),
     While(Expression, Vec<Statement>),
     DoWhile(Vec<Statement>, Expression),
     If(Vec<(Expression, Vec<Statement>)>, Option<Vec<Statement>>),

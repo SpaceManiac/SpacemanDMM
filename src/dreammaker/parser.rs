@@ -954,6 +954,10 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             // statement :: 'return' expression ';'
             let expression = self.expression()?;
             success(Statement::Return(expression))
+        } else if let Some(()) = self.exact_ident("throw")? {
+            // statement :: 'throw' expression ';'
+            let expression = require!(self.expression());
+            success(Statement::Throw(expression))
         // EXPRESSION STATEMENTS
         } else {
             // statement :: expression ';'
