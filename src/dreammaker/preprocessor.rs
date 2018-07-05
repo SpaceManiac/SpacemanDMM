@@ -395,7 +395,7 @@ impl<'ctx> Preprocessor<'ctx> {
                 break
             }
 
-            if let Err(e) = self.real_next(tok.token) {
+            if let Err(e) = self.real_next(tok.token, true) {
                 self.context.register_error(e);
             }
         }
@@ -436,7 +436,7 @@ impl<'ctx> Preprocessor<'ctx> {
     }
 
     #[allow(unreachable_code)]
-    fn real_next(&mut self, read: Token) -> Result<(), DMError> {
+    fn real_next(&mut self, read: Token, inside_condition: bool) -> Result<(), DMError> {
         let mut _last_expected_loc = self.last_input_loc;
         macro_rules! next {
             () => {
@@ -459,7 +459,7 @@ impl<'ctx> Preprocessor<'ctx> {
             "if", "ifdef", "ifndef", "elif", "else", "endif",
             "include", "define", "undef", "warn", "error",
         ];
-        let disabled = self.is_disabled();
+        let disabled = !inside_condition && self.is_disabled();
         match read {
             Token::Punct(Punctuation::Hash) => {
                 // preprocessor directive, next thing ought to be an ident
@@ -663,7 +663,7 @@ impl<'ctx> Preprocessor<'ctx> {
                 return Ok(());
             }
             // anything other than directives may be ifdef'd out
-            _ if self.is_disabled() => return Ok(()),
+            _ if disabled => return Ok(()),
             // identifiers may be macros
             Token::Ident(ref ident, _) if ident != self.include_stack.top_no_expand() => {
                 // lint for BYOND bug
@@ -867,7 +867,7 @@ impl<'ctx> Iterator for Preprocessor<'ctx> {
 
                 // update last_input_loc and attempt to process the input token
                 self.last_input_loc = tok.location;
-                if let Err(e) = self.real_next(tok.token) {
+                if let Err(e) = self.real_next(tok.token, false) {
                     self.context.register_error(e);
                 }
             } else {
