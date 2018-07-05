@@ -455,6 +455,11 @@ impl<'ctx> Preprocessor<'ctx> {
             }
         }
 
+        const ALL_DIRECTIVES: &[&str] = &[
+            "if", "ifdef", "ifndef", "elif", "else", "endif",
+            "include", "define", "undef", "warn", "error",
+        ];
+        let disabled = self.is_disabled();
         match read {
             Token::Punct(Punctuation::Hash) => {
                 // preprocessor directive, next thing ought to be an ident
@@ -492,9 +497,11 @@ impl<'ctx> Preprocessor<'ctx> {
                         let enabled = self.evaluate();
                         self.ifdef_stack.push(last.else_if(self.last_input_loc, enabled));
                     }
+                    // --------------------------------------------------------
                     // anything other than ifdefs may be ifdef'd out
-                    _ if self.is_disabled() => {}
+                    // --------------------------------------------------------
                     // include searches relevant paths for files
+                    "include" if disabled => {}
                     "include" => {
                         expect_token!((path) = Token::String(path));
                         expect_token!(() = Token::Punct(Punctuation::Newline));
@@ -546,6 +553,7 @@ impl<'ctx> Preprocessor<'ctx> {
                         return Err(self.error("failed to find file"));
                     }
                     // both constant and function defines
+                    "define" if disabled => {}
                     "define" => {
                         expect_token!((define_name, ws) = Token::Ident(define_name, ws));
                         let define_name_loc = _last_expected_loc;
@@ -613,6 +621,7 @@ impl<'ctx> Preprocessor<'ctx> {
                             }
                         }
                     }
+                    "undef" if disabled => {}
                     "undef" => {
                         expect_token!((define_name) = Token::Ident(define_name, _));
                         let define_name_loc = _last_expected_loc;
@@ -626,17 +635,28 @@ impl<'ctx> Preprocessor<'ctx> {
                             ).set_severity(Severity::Warning));
                         }
                     }
-                    "warning" | "warn" => {
+                    "warn" if disabled => {}
+                    "warn" => {
                         expect_token!((text) = Token::String(text));
                         self.context.register_error(DMError::new(self.last_input_loc, format!("#{} {}", ident, text))
                             .set_severity(Severity::Warning));
                     }
+                    "error" if disabled => {}
                     "error" => {
                         expect_token!((text) = Token::String(text));
                         self.context.register_error(DMError::new(self.last_input_loc, format!("#{} {}", ident, text)));
                     }
                     // none of this other stuff should even exist
-                    _ => return Err(DMError::new(self.last_input_loc, format!("unknown directive: #{}", ident)))
+                    other => {
+                        let mut meant = "";
+                        for each in ALL_DIRECTIVES {
+                            if other.starts_with(each) && each.len() > meant.len() {
+                                meant = each;
+                            }
+                        }
+                        return Err(DMError::new(self.last_input_loc, format!("unknown directive: #{}{}{}", ident,
+                            if !meant.is_empty() { ", did you mean #" } else { "" }, meant)));
+                    }
                 }
                 // yield a newline
                 self.output.push_back(Token::Punct(Punctuation::Newline));
@@ -852,8 +872,7 @@ impl<'ctx> Iterator for Preprocessor<'ctx> {
                 }
             } else {
                 while let Some(ifdef) = self.pop_ifdef() {
-                    self.context.register_error(DMError::new(ifdef.location, "unterminated #if/#ifdef")
-                        .set_severity(Severity::Warning));
+                    self.context.register_error(DMError::new(ifdef.location, "unterminated #if/#ifdef"));
                 }
                 return None;
             }
