@@ -125,7 +125,7 @@ enum Include<'ctx> {
 impl<'ctx> Include<'ctx> {
     fn new(context: &'ctx Context, path: PathBuf) -> io::Result<Include> {
         let reader = io::BufReader::new(File::open(&path)?);
-        let idx = context.register_file(path.clone());
+        let idx = context.register_file(&path);
         Ok(Include::File {
             lexer: Lexer::from_read(context, idx, Box::new(reader)),
             file: idx,
@@ -339,7 +339,7 @@ impl<'ctx> Preprocessor<'ctx> {
 
     /// Push a DM file to the top of this preprocessor's stack.
     pub fn push_file<R: io::Read + 'static>(&mut self, path: PathBuf, read: R) -> FileId {
-        let idx = self.context.register_file(path.clone());
+        let idx = self.context.register_file(&path);
         self.include_stack.stack.push(Include::File {
             lexer: Lexer::from_read(self.context, idx, Box::new(read)),
             file: idx,
@@ -505,38 +505,37 @@ impl<'ctx> Preprocessor<'ctx> {
                     "include" => {
                         expect_token!((path) = Token::String(path));
                         expect_token!(() = Token::Punct(Punctuation::Newline));
-                        #[cfg(windows)]
-                        let path = PathBuf::from(path);
-                        #[cfg(unix)]
                         let path = PathBuf::from(path.replace("\\", "/"));
 
-                        for each in vec![
+                        for candidate in vec![
                             self.env_file.parent().unwrap().join(&path),
                             self.include_stack.top_file_path().parent().unwrap().join(&path),
                             path,
                         ].into_iter().rev() {
-                            if !each.exists() { continue }
-                            // Wacky construct is used to let go of the borrow
-                            // of `each` so it can be used in the second half.
+                            if !candidate.exists() { continue }
+                            // Double-match is used to let go of the borrow of
+                            // `candidate` so it can be used in the second half.
                             enum FileType { DMM, DMF, DMS, DM }
-                            match match each.extension().and_then(|s| s.to_str()) {
+                            match match candidate.extension().and_then(|s| s.to_str()) {
                                 Some("dmm") => FileType::DMM,
                                 Some("dmf") => FileType::DMF,
                                 Some("dms") => FileType::DMS,
                                 Some("dm") => FileType::DM,
                                 Some(ext) => {
-                                    self.context.register_error(DMError::new(self.last_input_loc, format!("unknown extension {:?}", ext)));
+                                    self.context.register_error(DMError::new(self.last_input_loc, format!("unknown extension '.{:?}'", ext)));
                                     return Ok(());
                                 }
                                 None => {
-                                    self.context.register_error(DMError::new(self.last_input_loc, "filename"));
+                                    self.context.register_error(DMError::new(self.last_input_loc, "filename has no extension"));
                                     return Ok(());
                                 }
                             } {
-                                FileType::DMM => self.maps.push(each),
-                                FileType::DMF => self.skins.push(each),
-                                FileType::DMS => self.scripts.push(each),
-                                FileType::DM => match Include::new(self.context, each) {
+                                FileType::DMM => self.maps.push(candidate),
+                                FileType::DMF => self.skins.push(candidate),
+                                FileType::DMS => self.scripts.push(candidate),
+                                // TODO: warn if a file is double-included, and
+                                // don't include it a second time
+                                FileType::DM => match Include::new(self.context, candidate) {
                                     Ok(include) => {
                                         // A phantom newline keeps the include
                                         // directive being indented from making
@@ -550,7 +549,8 @@ impl<'ctx> Preprocessor<'ctx> {
                             }
                             return Ok(());
                         }
-                        return Err(self.error("failed to find file"));
+                        self.context.register_error(DMError::new(self.last_input_loc, "failed to find file"));
+                        return Ok(());
                     }
                     // both constant and function defines
                     "define" if disabled => {}

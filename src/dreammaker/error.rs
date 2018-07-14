@@ -42,8 +42,8 @@ pub struct Context {
 
 impl Context {
     /// Add a new file to the context and return its index.
-    pub fn register_file(&self, path: PathBuf) -> FileId {
-        if let Some(id) = self.reverse_files.borrow().get(&path).cloned() {
+    pub fn register_file(&self, path: &Path) -> FileId {
+        if let Some(id) = self.reverse_files.borrow().get(path).cloned() {
             return id;
         }
         let mut files = self.files.borrow_mut();
@@ -51,9 +51,9 @@ impl Context {
             panic!("file limit of {} exceeded", FILEID_MAX.0);
         }
         let len = files.len() as u16;
-        files.push(path.clone());
+        files.push(path.to_owned());
         let id = FileId(len + FILEID_MIN.0);
-        self.reverse_files.borrow_mut().insert(path, id);
+        self.reverse_files.borrow_mut().insert(path.to_owned(), id);
         id
     }
 
