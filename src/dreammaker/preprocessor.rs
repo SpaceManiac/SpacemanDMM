@@ -123,14 +123,18 @@ enum Include<'ctx> {
 }
 
 impl<'ctx> Include<'ctx> {
-    fn new(context: &'ctx Context, path: PathBuf) -> io::Result<Include> {
+    fn from_file(context: &'ctx Context, path: PathBuf) -> io::Result<Include> {
         let reader = io::BufReader::new(File::open(&path)?);
+        Ok(Include::from_read(context, path, Box::new(reader)))
+    }
+
+    fn from_read(context: &'ctx Context, path: PathBuf, read: Box<io::Read>) -> Include {
         let idx = context.register_file(&path);
-        Ok(Include::File {
-            lexer: Lexer::from_read(context, idx, Box::new(reader)),
+        Include::File {
             file: idx,
+            lexer: Lexer::from_read(context, idx, read),
             path: path,
-        })
+        }
     }
 }
 
@@ -253,14 +257,28 @@ impl<'ctx> HasLocation for Preprocessor<'ctx> {
 impl<'ctx> Preprocessor<'ctx> {
     /// Create a new preprocessor from the given Context and environment file.
     pub fn new(context: &'ctx Context, env_file: PathBuf) -> io::Result<Self> {
-        let mut pp = Preprocessor {
+        // Buffer the entire environment file. Large environments take a while
+        // to load and locking it for the whole time is somewhat inconvenient.
+        let mut buffer = Vec::new();
+        {
+            use std::io::Read;
+            let mut file = File::open(&env_file)?;
+            file.read_to_end(&mut buffer)?;
+        }
+        let include = Include::from_read(context, env_file.clone(), Box::new(io::Cursor::new(buffer)));
+
+        // Load the built-in macros.
+        let mut defines = DefineMap::default();
+        super::builtins::default_defines(&mut defines);
+
+        Ok(Preprocessor {
             context,
-            env_file: env_file.clone(),
+            env_file,
             include_stack: IncludeStack {
-                stack: vec![Include::new(context, env_file)?],
+                stack: vec![include],
             },
             history: Default::default(),
-            defines: Default::default(),
+            defines,
             maps: Default::default(),
             skins: Default::default(),
             scripts: Default::default(),
@@ -271,9 +289,7 @@ impl<'ctx> Preprocessor<'ctx> {
             output: Default::default(),
             danger_idents: Default::default(),
             in_interp_string: 0,
-        };
-        super::builtins::default_defines(&mut pp.defines);
-        Ok(pp)
+        })
     }
 
     /// Move all active defines to the define history.
@@ -535,7 +551,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                 FileType::DMS => self.scripts.push(candidate),
                                 // TODO: warn if a file is double-included, and
                                 // don't include it a second time
-                                FileType::DM => match Include::new(self.context, candidate) {
+                                FileType::DM => match Include::from_file(self.context, candidate) {
                                     Ok(include) => {
                                         // A phantom newline keeps the include
                                         // directive being indented from making
