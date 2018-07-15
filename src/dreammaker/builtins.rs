@@ -241,12 +241,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         var/const/BLEND_SUBTRACT = int!(3);
         var/const/BLEND_MULTIPLY = int!(4);
 
-        // __root
-        var/type;
-        var/parent_type;
-        var/tag;
-        var/vars;
-
+        // global procs
         proc/abs(A);
         proc/addtext(Arg1, Arg2/*, ...*/);
         proc/alert(Usr/*=usr*/,Message,Title,Button1/*="Ok"*/,Button2,Button3);
@@ -402,7 +397,12 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         list/proc/Swap(Index1, Index2);
         list/var/len;
 
+        // all types pseudo-inherit vars and procs from /datum
         datum;
+        datum/var/type;
+        datum/var/parent_type;
+        datum/var/tag;
+        datum/var/vars;
         datum/proc/New();
         datum/proc/Del();
         datum/proc/Read(/*savefile*/F);
