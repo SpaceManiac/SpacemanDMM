@@ -121,7 +121,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
     };
 
     macro_rules! entries {
-        ($($($elem:ident)/ * $(($($arg:ident),*))* $(= $val:expr)*;)*) => {
+        ($($($elem:ident)/ * $(($($arg:ident $(= $ignored:expr)*),*))* $(= $val:expr)*;)*) => {
             $(loop {
                 #![allow(unreachable_code)]
                 let elems = [$(stringify!($elem)),*];
@@ -246,6 +246,161 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         var/parent_type;
         var/tag;
         var/vars;
+
+        proc/abs(A);
+        proc/addtext(Arg1, Arg2/*, ...*/);
+        proc/alert(Usr/*=usr*/,Message,Title,Button1/*="Ok"*/,Button2,Button3);
+        proc/animate(Object, vars, time, loop, easing, flags);  // +2 forms
+        proc/arccos(X);
+        proc/arcsin(X);
+        proc/arglist(List);  // special form
+        proc/ascii2text(N);
+        proc/block(Start,End);
+        proc/bounds(Ref/*=src*/, Dist/*=0*/);  // +2 forms
+        proc/bounds_dist(Ref, Target);
+        proc/browse(Body,Options);
+        proc/browse_rsc(File,FileName);
+        proc/ckey(Key);
+        proc/ckeyEx(Text);
+        proc/cmptext(T1,T2/*,...*/);
+        proc/cmptextEx(T1,T2/*,...*/);
+        proc/copytext(T,Start/*=1*/,End/*=0*/);
+        proc/cos(X);
+        proc/fcopy(Src,Dst);
+        proc/fcopy_rsc(File);
+        proc/fdel(File);
+        proc/fexists(File);
+        proc/file(Path);
+        proc/file2text(File);
+        proc/filter(type, parameters/*, ...*/);
+        proc/findlasttext(Haystack,Needle,Start=0,End=1);
+        proc/findlasttextEx(Haystack,Needle,Start=0,End=1);
+        proc/findtext(Haystack,Needle,Start=1,End=0);
+        proc/findtextEx(Haystack,Needle,Start=1,End=0);
+        proc/flick(Icon,Object);
+        proc/flist(Path);
+        proc/ftp(File,Name);
+        proc/get_dir(Loc1,Loc2);
+        proc/get_dist(Loc1,Loc2);
+        proc/get_step(Ref,Dir);
+        proc/get_step_away(Ref,Trg,Max=5);
+        proc/get_step_rand(Ref);
+        proc/get_step_to(Ref,Trg,Min=0);
+        proc/get_step_towards(Ref,Trg);
+        proc/hascall(Object,ProcName);
+        proc/hearers(Depth=world.view,Center=usr);
+        proc/html_decode(HtmlText);
+        proc/html_encode(PlainText);
+        proc/icon(icon,state,dir,frame,moving);  // SNA
+        proc/icon_states(Icon, mode=0);
+        proc/image(icon,loc,icon_state,layer,dir);  // SNA
+        proc/initial(Var);  // special form
+        proc/input(Usr=usr,Message,Title,Default)/*as Type in List*/;  // special form
+        proc/isarea(Loc1, Loc2/*,...*/);
+        proc/isfile(File);
+        proc/isicon(Icon);
+        proc/isloc(Loc1, Loc2/*,...*/);
+        proc/ismob(Loc1, Loc2/*,...*/);
+        proc/isnull(Val);
+        proc/isnum(Val);
+        proc/isobj(Loc1, Loc2/*,...*/);
+        proc/ispath(Val,Type); // +1 form
+        proc/issaved(Var);  // special form? FALSE for global, const, tmp
+        proc/istext(Val);
+        proc/isturf(Loc1, Loc2/*,...*/);
+        proc/istype(Val,Type);
+        proc/jointext(List,Glue,Start=1,End=0);
+        proc/json_decode(JSON);
+        proc/json_encode(Value);
+        proc/length(E);
+        proc/link(url);
+        proc/list(A,B,C/*,...*/);  // +1 form
+        proc/list2params(List);
+        proc/locate(Type)/*in Container*/;  // +3 forms
+        proc/log(X=2.718, Y);
+        proc/lowertext(T);
+        proc/matrix();  // +2 forms
+        proc/max(A,B,C/*,...*/);
+        proc/md5(T);
+        proc/min(A,B,C/*,...*/);
+        proc/missile(Type,Start,End);
+        proc/new/*Type*/(Args);  // special form
+        proc/newlist(A,B,C/*,...*/);
+        proc/nonspantext(Haystack,Needles,Start=1);
+        proc/num2text(N,SigFig=6);
+        proc/obounds(Ref=src, Dist=0);  // +1 form
+        proc/ohearers(Depth=world.view,Center=usr);
+        proc/orange(Dist,Center=usr);
+        proc/output(msg, control);
+        proc/oview(Dist,Center=usr);
+        proc/oviewers(Depth=world.view,Center=usr);
+        proc/params2list(Params);
+        proc/pick(Val1,Val2/*,...*/);  // also has a special form
+        proc/prob(P);
+        proc/rand(L=0,H);  // +1 form
+        proc/rand_seed(Seed);
+        proc/range(Dist,Center=usr);
+        proc/regex(pattern, flags);  // +1 form
+        proc/REGEX_QUOTE(text);
+        proc/REGEX_QUOTE_REPLACEMENT(text);
+        proc/replacetext(Haystack,Needle,Replacement,Start=1,End=0);
+        proc/replacetextEx(Haystack,Needle,Replacement,Start=1,End=0);
+        proc/rgb(R,G,B,A=null);
+        proc/roll(ndice=1,sides);  // +1 form
+        proc/round(A,B=null);
+        proc/run(File);
+        proc/shell(Command);
+        proc/shutdown(Addr,Natural=0);
+        proc/sin(X);
+        proc/sleep(Delay);
+        proc/sorttext(T1,T2/*,...*/);
+        proc/sorttextEx(T1,T2/*,...*/);
+        proc/sound(file,repeat=0,wait,channel,volume);  // SNA
+        proc/spantext(Haystack,Needles,Start=1);
+        proc/splittext(Text,Delimiter,Start=1,End=0,include_delimiters=0);
+        proc/sqrt(A);
+        proc/startup(File,Port=0,Options/*,...*/);
+        proc/stat(Name,Value);
+        proc/statpanel(Panel,Name,Value);
+        proc/step(Ref,Dir,Speed=0);
+        proc/step_away(Ref,Trg,Max=5,Speed=0);
+        proc/step_rand(Ref,Speed=0);
+        proc/step_to(Ref,Trg,Min=0,Speed=0);
+        proc/step_towards(Ref,Trg,Speed);
+        proc/text(FormatText,Args);
+        proc/text2ascii(T,pos=1);
+        proc/text2file(Text,File);
+        proc/text2num(T);
+        proc/text2path(T);
+        proc/time2text(timestamp,format);
+        proc/turn(Dir,Angle);  // +2 forms
+        proc/typesof(Type1,Type2/*,...*/);
+        proc/uppertext(T);
+        proc/url_decode(UrlText);
+        proc/url_encode(PlainText, format=0);
+        proc/view(Dist=5,Center=usr);
+        proc/viewers(Depth=world.view,Center=usr);
+        proc/walk(Ref,Dir,Lag=0,Speed=0);
+        proc/walk_away(Ref,Trg,Max=5,Lag=0,Speed=0);
+        proc/walk_rand(Ref,Lag=0,Speed=0);
+        proc/walk_to(Ref,Trg,Min=0,Lag=0,Speed=0);
+        proc/walk_towards(Ref,Trg,Lag=0,Speed=0);
+        proc/winclone(player, window_name, clone_name);
+        proc/winexists(player, control_id);
+        proc/winget(player, control_id, params);
+        proc/winset(player, control_id, params);
+        proc/winshow(player, window, show=1);
+
+        list;
+        list/proc/Add(Item1, Item2/*,...*/);
+        list/proc/Copy(Start=1, End=0);
+        list/proc/Cut(Start=1, End=0);
+        list/proc/Find(Elem, Start=1, End=0);
+        list/proc/Insert(Index, Item1, Item2/*,...*/);
+        list/proc/Join(Glue, Start=1, End=0);
+        list/proc/Remove(Item1, Item2/*,...*/);
+        list/proc/Swap(Index1, Index2);
+        list/var/len;
 
         datum;
         datum/proc/New();
