@@ -1,6 +1,7 @@
 //! A simple [interval tree] implementation.
 //!
 //! [interval tree]: https://en.wikipedia.org/wiki/Interval_tree#Augmented_tree
+#![forbid(unsafe_code)]
 
 mod range;
 mod node;

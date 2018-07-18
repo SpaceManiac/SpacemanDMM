@@ -5,6 +5,7 @@
 //! * https://langserver.org/
 //! * https://microsoft.github.io/language-server-protocol/specification
 //! * https://github.com/rust-lang-nursery/rls
+#![forbid(unsafe_code)]
 
 extern crate url;
 extern crate serde;
