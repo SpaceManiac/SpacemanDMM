@@ -1,5 +1,4 @@
 //! Parsing suite for DreamMaker, the language of the BYOND game engine.
-#[cfg(feature="xml-rs")] extern crate xml;
 extern crate petgraph;
 extern crate linked_hash_map;
 extern crate interval_tree;

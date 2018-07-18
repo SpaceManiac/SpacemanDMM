@@ -24,4 +24,3 @@ git2 = { version = "0.7", default-features = false }
 
 [features]
 flame = ["dmm-tools/flame"]
-xml = ["dreammaker/xml-rs"]

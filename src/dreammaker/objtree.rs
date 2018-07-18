@@ -364,53 +364,6 @@ impl ObjectTree {
     }
 
     // ------------------------------------------------------------------------
-    // XML Output
-
-    #[cfg(feature="xml-rs")]
-    pub fn to_xml(&self, path: &::std::path::Path) -> ::xml::writer::Result<()> {
-        use xml::writer::events::XmlEvent;
-
-        let mut out = ::xml::EventWriter::new_with_config(::std::fs::File::create(path)?, ::xml::EmitterConfig {
-            perform_indent: true,
-            .. Default::default()
-        });
-        out.write(XmlEvent::StartDocument {
-            version: ::xml::common::XmlVersion::Version10,
-            encoding: None,
-            standalone: None,
-        })?;
-        self.to_xml_ty(&mut out, NodeIndex::new(0))
-    }
-
-    #[cfg(feature="xml-rs")]
-    fn to_xml_ty(&self, out: &mut ::xml::EventWriter<::std::fs::File>, ty: NodeIndex) -> ::xml::writer::Result<()> {
-        use xml::writer::events::XmlEvent;
-        out.write(XmlEvent::start_element(::xml::name::Name::local("object")))?;
-        {
-            let node = self.graph.node_weight(ty).unwrap();
-            out.write(&*node.name)?;
-
-            for (key, val) in node.vars.iter() {
-                out.write(XmlEvent::start_element(::xml::name::Name::local("var")))?;
-                out.write(&**key)?;
-                if let Some(ref value) = val.value.constant {
-                    out.write(XmlEvent::start_element(::xml::name::Name::local("val")))?;
-                    out.write(&*value.to_string())?;
-                    out.write(XmlEvent::end_element())?;
-                }
-                out.write(XmlEvent::end_element())?;
-            }
-        }
-        let mut neighbors = self.graph.neighbors(ty).collect::<Vec<_>>();
-        neighbors.sort();
-        for child in neighbors {
-            self.to_xml_ty(out, child)?;
-        }
-        out.write(XmlEvent::end_element())?;
-        Ok(())
-    }
-
-    // ------------------------------------------------------------------------
     // Parsing
 
     fn subtype_or_add(&mut self, location: Location, parent: NodeIndex, child: &str, len: usize) -> NodeIndex {

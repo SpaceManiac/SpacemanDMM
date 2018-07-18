@@ -135,14 +135,6 @@ enum Command {
         #[structopt(short="j", long="json")]
         json: bool,
     },
-    /// Dump the object tree to an XML file.
-    #[cfg(feature="xml")]
-    #[structopt(name = "objtree")]
-    ObjectTree {
-        /// The output filename.
-        #[structopt(default_value="objtree.xml")]
-        output: String,
-    },
     /// Check the environment for errors and warnings.
     #[structopt(name = "check")]
     Check {
@@ -250,18 +242,6 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                     for pass in non_default {
                         println!("{}: {}", pass.name, pass.desc);
                     }
-                }
-            }
-        },
-        // --------------------------------------------------------------------
-        #[cfg(feature="xml")]
-        Command::ObjectTree { ref output } => {
-            context.objtree(opt);
-            match context.objtree.to_xml(output) {
-                Ok(()) => println!("saved {}", output),
-                Err(e) => {
-                    println!("i/o error saving {}:\n{}", output, e);
-                    context.exit_status = 1;
                 }
             }
         },
