@@ -29,7 +29,6 @@ pub fn generate(
     ctx: Context,
     icon_cache: &IconCache,
 ) -> Result<Image, ()> {
-    flame!("minimap");
     let Context { objtree, map, grid, render_passes, .. } = ctx;
 
     // transform min/max from bottom-left-based to top-left-based
@@ -42,7 +41,6 @@ pub fn generate(
     let mut atoms = Vec::new();
     let mut overlays = Vec::new();
 
-    //flame!("collect");
     for (y, row) in grid.axis_iter(Axis(0)).enumerate() {
         if y < min_y || y > max_y { continue }
         for (x, e) in row.iter().enumerate() {
@@ -165,7 +163,6 @@ pub fn generate(
     // sorts the atom list and renders them onto the output image
     atoms.sort_by_key(|a| layer_of(objtree, a));
     let mut map_image = Image::new_rgba(len_x as u32 * TILE_SIZE, len_y as u32 * TILE_SIZE);
-    //flame!("render");
     'atom: for atom in atoms {
         // At this time, space is invisible. Earlier steps need to process it.
         for pass in render_passes.iter() {
@@ -263,7 +260,6 @@ pub fn get_atom_list<'a>(
     loc: (u32, u32),
     render_passes: &[Box<RenderPass>],
 ) -> Vec<Atom<'a>> {
-    flame!("get_atom_list");
     let mut result = Vec::new();
 
     'fab: for fab in prefabs {

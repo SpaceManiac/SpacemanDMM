@@ -80,29 +80,3 @@ static UTF8_CHAR_WIDTH: [u8; 256] = [
 fn utf8_char_width(b: u8) -> usize {
     return UTF8_CHAR_WIDTH[b as usize] as usize;
 }
-
-// ----------------------------------------------------------------------------
-// Flamegraphing
-
-#[cfg(feature="flame")]
-#[macro_export]
-macro_rules! flame {
-    ($e:expr) => {
-        let _guard = $crate::utils::flame_collapse(::flame::start_guard($e));
-    }
-}
-
-#[cfg(not(feature="flame"))]
-#[macro_export]
-macro_rules! flame {
-    ($e:expr) => {}
-}
-
-#[cfg(feature="flame")]
-pub fn flame_collapse(mut g: ::flame::SpanGuard) -> ::flame::SpanGuard {
-    {
-        let g2 = unsafe { ::std::mem::transmute::<&mut _, &mut (Option<Cow<'static, str>>, bool)>(&mut g) };
-        g2.1 = true;
-    }
-    g
-}

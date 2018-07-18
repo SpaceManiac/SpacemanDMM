@@ -159,7 +159,6 @@ impl Image {
 
     pub fn to_file(&self, path: &Path) -> io::Result<()> {
         use png::{Encoder, HasParameters};
-        //flame!("Image::to_file");
 
         let mut encoder = Encoder::new(File::create(path)?, self.info.width, self.info.height);
         encoder.set(self.info.bit_depth);
@@ -173,7 +172,6 @@ impl Image {
 
     pub fn composite(&mut self, other: &Image, pos: (u32, u32), crop: Rect, color: [u8; 4]) {
         use ndarray::Axis;
-        //flame!("Image::composite");
 
         let mut destination = self.data.slice_mut(s![
             pos.1 as isize .. (pos.1 + crop.3) as isize,

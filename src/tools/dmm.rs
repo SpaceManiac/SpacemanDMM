@@ -41,7 +41,6 @@ pub struct Prefab {
 
 impl Map {
     pub fn from_file(path: &Path) -> Result<Map, DMError> {
-        flame!("Map::from_file");
         let mut map = Map {
             key_length: 0,
             dictionary: Default::default(),

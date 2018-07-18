@@ -9,7 +9,7 @@ extern crate serde_json;
 #[macro_use] extern crate serde_derive;
 
 extern crate dreammaker as dm;
-#[macro_use] extern crate dmm_tools;
+extern crate dmm_tools;
 
 use std::fmt;
 use std::collections::HashMap;
@@ -44,11 +44,6 @@ fn main() {
 
     run(&opt, &opt.command, &mut context);
 
-    #[cfg(feature="flame")] {
-        println!("Saving flame graph");
-        flame::dump_html(&mut std::io::BufWriter::new(std::fs::File::create(format!("{}/flame-graph.html", opt.output)).unwrap())).unwrap();
-    }
-
     std::process::exit(context.exit_status.into_inner() as i32);
 }
 
@@ -72,7 +67,6 @@ impl Context {
             }
         };
         println!("parsing {}", environment.display());
-        flame!("parse");
         match self.dm_context.parse_environment(environment) {
             Ok(tree) => {
                 self.objtree = tree;
@@ -282,7 +276,6 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                     "    ".to_owned()
                 };
 
-                flame!(path.file_name().unwrap().to_string_lossy().into_owned());
                 let map = match dmm::Map::from_file(path) {
                     Ok(map) => map,
                     Err(e) => {
@@ -364,14 +357,12 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             for path in files.iter() {
                 let path: &std::path::Path = path.as_ref();
                 println!("{}", path.display());
-                flame!(path.file_name().unwrap().to_string_lossy().into_owned());
                 let mut map = dmm::Map::from_file(path).unwrap();
 
-                let linted = { flame!("lint"); lint::check(&context.objtree, &mut map) };
+                let linted = lint::check(&context.objtree, &mut map);
                 print!("{}", linted);
                 if !dry_run && (linted.any() || reformat) {
                     println!("    saving {}", path.display());
-                    flame!("save");
                     map.to_file(path).unwrap();
                 }
             }
