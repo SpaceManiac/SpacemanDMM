@@ -119,18 +119,9 @@ impl Document {
         };
 
         let start_pos = total_offset(&self.text, range.start.line, range.start.character)?;
-        splice(Rc::make_mut(&mut self.text), start_pos .. start_pos + range_length as usize, &change.text);
+        Rc::make_mut(&mut self.text).replace_range(start_pos .. start_pos + range_length as usize, &change.text);
         Ok(())
     }
-}
-
-// Based on the unstable String::splice from libstd.
-fn splice(text: &mut String, range: ::std::ops::Range<usize>, replace_with: &str) {
-    assert!(text.is_char_boundary(range.start));
-    assert!(text.is_char_boundary(range.end));
-    unsafe {
-        text.as_mut_vec()
-    }.splice(range, replace_with.bytes());
 }
 
 /// Find the offset into the given text at which the given zero-indexed line
