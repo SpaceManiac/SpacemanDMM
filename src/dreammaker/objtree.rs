@@ -291,6 +291,13 @@ impl ObjectTree {
         }
     }
 
+    pub fn recurse<F: FnMut(TypeRef)>(&self, ty: TypeRef, f: &mut F) {
+        f(ty);
+        for child in ty.children(self) {
+            self.recurse(child, f);
+        }
+    }
+
     // ------------------------------------------------------------------------
     // Finalization
 
