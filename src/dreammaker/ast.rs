@@ -291,6 +291,17 @@ pub enum Expression {
     }
 }
 
+impl Expression {
+    /// If this expression consists of a single term, return it.
+    pub fn as_term(&self) -> Option<&Term> {
+        match self {
+            &Expression::Base { ref unary, ref follow, ref term }
+                if unary.is_empty() && follow.is_empty() => Some(term),
+            _ => None,
+        }
+    }
+}
+
 impl From<Term> for Expression {
     fn from(term: Term) -> Expression {
         match term {
