@@ -463,7 +463,7 @@ handle_method_call! {
                     let (last, most) = path.split_last().unwrap();
                     for part in most {
                         if part == "var" { break }
-                        if let Some(child) = current.child(part, objtree) {
+                        if let Some(child) = current.child(part) {
                             current = child;
                         } else {
                             break;
@@ -507,7 +507,7 @@ handle_method_call! {
                                 infos.push_front(declaration);
                             }
                         }
-                        next = current.parent_type(objtree);
+                        next = current.parent_type();
                     }
                     if !infos.is_empty() {
                         results.push(infos.into_iter().collect::<Vec<_>>().join("\n\n"));
@@ -519,7 +519,7 @@ handle_method_call! {
                     let (last, most) = path.split_last().unwrap();
                     for part in most {
                         if part == "proc" || part == "verb" { break }
-                        if let Some(child) = current.child(part, objtree) {
+                        if let Some(child) = current.child(part) {
                             current = child;
                         } else {
                             break;
@@ -557,7 +557,7 @@ handle_method_call! {
                                 infos.push_front(declaration);
                             }
                         }
-                        next = current.parent_type(objtree);
+                        next = current.parent_type();
                     }
                     if !infos.is_empty() {
                         results.push(infos.into_iter().collect::<Vec<_>>().join("\n\n"));

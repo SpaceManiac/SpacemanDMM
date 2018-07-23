@@ -167,54 +167,65 @@ pub fn subpath(path: &str, parent: &str) -> bool {
 
 #[derive(Debug, Copy, Clone)]
 pub struct TypeRef<'a> {
+    tree: &'a ObjectTree,
     idx: NodeIndex,
-    ty: &'a Type,
 }
 
 impl<'a> TypeRef<'a> {
+    #[inline]
     fn new(tree: &'a ObjectTree, idx: NodeIndex) -> TypeRef<'a> {
-        TypeRef {
-            idx,
-            ty: tree.graph.node_weight(idx).unwrap(),
-        }
+        TypeRef { tree, idx }
     }
 
-    pub fn parent(&self, objtree: &'a ObjectTree) -> Option<TypeRef<'a>> {
-        objtree.graph.neighbors_directed(self.idx, Direction::Incoming).next().map(|i| TypeRef::new(objtree, i))
+    /// Find the parent **path**, without taking `parent_type` into account.
+    pub fn parent(&self) -> Option<TypeRef<'a>> {
+        self.tree.graph.neighbors_directed(self.idx, Direction::Incoming).next().map(|i| TypeRef::new(self.tree, i))
     }
 
-    pub fn parent_type(&self, objtree: &'a ObjectTree) -> Option<TypeRef<'a>> {
-        let idx = self.ty.parent_type;
-        objtree.graph.node_weight(idx).map(|ty| TypeRef { idx, ty })
+    /// Find the parent **type** based on `parent_type` var, or parent path if unspecified.
+    pub fn parent_type(&self) -> Option<TypeRef<'a>> {
+        let idx = self.parent_type;
+        self.tree.graph.node_weight(idx).map(|_| TypeRef::new(self.tree, idx))
     }
 
-    pub fn child(&self, name: &str, objtree: &'a ObjectTree) -> Option<TypeRef<'a>> {
-        for idx in objtree.graph.neighbors(self.idx) {
-            let ty = objtree.graph.node_weight(idx).unwrap();
+    /// Find a child **path** with the given name, if it exists.
+    pub fn child(&self, name: &str) -> Option<TypeRef<'a>> {
+        for idx in self.tree.graph.neighbors(self.idx) {
+            let ty = self.tree.graph.node_weight(idx).unwrap();
             if ty.name == name {
-                return Some(TypeRef { idx, ty });
+                return Some(TypeRef::new(self.tree, idx));
             }
         }
         None
     }
 
-    pub fn children(&self, objtree: &'a ObjectTree) -> Vec<TypeRef<'a>> {
+    /// Iterate over all child **paths**.
+    pub fn children(&self) -> Vec<TypeRef<'a>> {
         let mut output = Vec::new();
-        for idx in objtree.graph.neighbors(self.idx) {
-            output.push(TypeRef::new(objtree, idx));
+        for idx in self.tree.graph.neighbors(self.idx) {
+            output.push(TypeRef::new(self.tree, idx));
         }
         output
     }
 
+    /// Recursively visit this and all child **paths**.
+    pub fn recurse<F: FnMut(TypeRef)>(&self, f: &mut F) {
+        f(*self);
+        for child in self.children() {
+            child.recurse(f);
+        }
+    }
+
+    #[inline]
     pub fn get(&self) -> &'a Type {
-        self.ty
+        self.tree.graph.node_weight(self.idx).unwrap()
     }
 }
 
 impl<'a> ::std::ops::Deref for TypeRef<'a> {
     type Target = Type;
     fn deref(&self) -> &Type {
-        self.ty
+        self.get()
     }
 }
 
@@ -288,13 +299,6 @@ impl ObjectTree {
             &Constant::String(ref string_path) => self.find(string_path).map(|tr| tr.get()),
             &Constant::Prefab(Prefab { ref path, .. }) => self.type_by_path(path),
             _ => None,
-        }
-    }
-
-    pub fn recurse<F: FnMut(TypeRef)>(&self, ty: TypeRef, f: &mut F) {
-        f(ty);
-        for child in ty.children(self) {
-            self.recurse(child, f);
         }
     }
 

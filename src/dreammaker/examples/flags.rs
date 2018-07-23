@@ -12,7 +12,7 @@ fn main() {
     // Used to check https://github.com/tgstation/tgstation/pull/38171
     // for mistakes transferring between `flags_1` and `item_flags`.
     println!("---- item_flags example ----");
-    objtree.recurse(objtree.find("/obj/item").expect("no root"), &mut |ty| {
+    objtree.find("/obj/item").expect("no root").recurse(&mut |ty| {
         print!("{}: ", ty.path);
         let mut flags_1 = ty.get_value("flags_1", objtree).expect("flags_1").constant.as_ref().expect("f1c").to_int().unwrap_or(0);
         let mut item_flags = ty.get_value("item_flags", objtree).expect("item_flags").constant.as_ref().expect("ofc").to_int().unwrap_or(0);
@@ -43,14 +43,14 @@ fn main() {
     // Used to check https://github.com/tgstation/tgstation/pull/38116
     // for changes to any machinery types's `anchored` value, and to find
     // machinery for which `anchored = TRUE` was then redundant.
-    objtree.recurse(objtree.find("/obj/machinery").expect("no root"), &mut |ty| {
+    objtree.find("/obj/machinery").expect("no root").recurse(&mut |ty| {
         // print every type's `anchored` value for diffing
         let var = ty.get_value("anchored", objtree).unwrap();
         let anch = var.constant.as_ref().unwrap().to_bool();
         println!("{} -> {}", ty.path, anch);
 
         // print location info for any type with a redundant `anchored = TRUE`
-        if anch && ty.parent(objtree).unwrap().get_value("anchored", objtree).unwrap().constant.as_ref().unwrap().to_bool() {
+        if anch && ty.parent().unwrap().get_value("anchored", objtree).unwrap().constant.as_ref().unwrap().to_bool() {
             println!("{}:{}", ctx.file_path(var.location.file).display(), var.location.line);
         }
     });

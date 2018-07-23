@@ -14,7 +14,7 @@ impl RenderPass for Random {
         if atom.istype("/obj/machinery/vending/snack/random/") {
             if let Some(root) = objtree.find("/obj/machinery/vending/snack") {
                 let mut machines = Vec::new();
-                for child in root.children(objtree) {
+                for child in root.children() {
                     if child.name != "random" {
                         machines.push(child.get());
                     }
@@ -27,7 +27,7 @@ impl RenderPass for Random {
         } else if atom.istype("/obj/machinery/vending/cola/random/") {
             if let Some(root) = objtree.find("/obj/machinery/vending/cola") {
                 let mut machines = Vec::new();
-                for child in root.children(objtree) {
+                for child in root.children() {
                     if child.name != "random" {
                         machines.push(child.get());
                     }
@@ -40,7 +40,7 @@ impl RenderPass for Random {
         } else if atom.istype("/obj/item/bedsheet/random/") {
             if let Some(root) = objtree.find("/obj/item/bedsheet") {
                 let mut sheets = vec![root.get()];  // basic bedsheet is included
-                for child in root.children(objtree) {
+                for child in root.children() {
                     if child.name != "random" {
                         sheets.push(child.get());
                     }
@@ -86,7 +86,7 @@ impl RenderPass for Random {
         } else if atom.istype("/obj/structure/sign/barsign/") {
             if let Some(root) = objtree.find("/datum/barsign") {
                 let mut signs = Vec::new();
-                for child in root.children(objtree) {
+                for child in root.children() {
                     if let Some(v) = child.vars.get("hidden") {
                         if !v.value.constant.as_ref().map_or(false, |c| c.to_bool()) {
                             continue
