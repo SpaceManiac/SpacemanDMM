@@ -460,12 +460,8 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     }
 
     fn ident(&mut self) -> Status<Ident> {
-        let start = self.updated_location();
         match self.next("identifier")? {
-            Token::Ident(i, _) => {
-                self.annotate(start, || Annotation::Ident(i.clone()));
-                Ok(Some(i))
-            },
+            Token::Ident(i, _) => Ok(Some(i)),
             other => self.try_another(other),
         }
     }

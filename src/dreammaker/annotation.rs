@@ -15,7 +15,6 @@ pub enum Annotation {
     ProcHeader(Vec<String>),
     ProcBody(Vec<String>),
     ProcBodyDetails(Vec<Statement>),
-    Ident(String),
 }
 
 pub struct AnnotationTree {
