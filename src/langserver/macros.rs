@@ -89,3 +89,14 @@ macro_rules! handle_notification {
         }
     }
 }
+
+macro_rules! if_annotation {
+    ($p:pat in $a:expr; $b:block) => {
+        for (_, thing) in $a.clone() {
+            if let $p = thing {
+                $b
+                break
+            }
+        }
+    }
+}

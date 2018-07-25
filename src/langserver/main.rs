@@ -363,26 +363,6 @@ handle_method_call! {
 
     // ------------------------------------------------------------------------
     // actual stuff provision
-    on GotoDefinition(&mut self, params) {
-        let path = url_to_path(params.text_document.uri)?;
-        let contents = self.docs.get_contents(&path).map_err(invalid_request)?;
-        let offset = document::total_offset(&contents, params.position.line, params.position.character)?;
-        let word = document::find_word(&contents, offset);
-        if word.is_empty() {
-            None
-        } else if word == "datum" {
-            Some(GotoDefinitionResponse::Scalar(Location {
-                uri: path_to_url(path)?,
-                range: Range::new(
-                    Position::new(0, 0),
-                    Position::new(0, 0),
-                ),
-            }))
-        } else {
-            None
-        }
-    }
-
     on WorkspaceSymbol(&mut self, params) {
         let query = symbol_search::Query::parse(&params.query);
         eprintln!("{:?} -> {:?}", params.query, query);
@@ -460,13 +440,13 @@ handle_method_call! {
     on HoverRequest(&mut self, params) {
         let path = url_to_path(params.text_document.uri)?;
         let (file_id, annotations) = self.get_annotations(&path)?;
-
         let location = dm::Location {
             file: file_id,
             line: params.position.line as u32 + 1,
             column: params.position.character as u16 + 1,
         };
         let mut results = Vec::new();
+
         for (_range, annotation) in annotations.get_location(location) {
             use dm::annotation::Annotation;
             #[cfg(debug_assertions)] {
@@ -589,6 +569,44 @@ handle_method_call! {
                 range: None,
                 contents: HoverContents::Array(results.into_iter().map(MarkedString::String).collect()),
             })
+        }
+    }
+
+    on GotoDefinition(&mut self, params) {
+        use dm::annotation::Annotation;
+
+        let path = url_to_path(params.text_document.uri)?;
+        let (file_id, annotations) = self.get_annotations(&path)?;
+        let location = dm::Location {
+            file: file_id,
+            line: params.position.line as u32 + 1,
+            column: params.position.character as u16 + 1,
+        };
+        let mut results = Vec::new();
+
+        let iter = annotations.get_location(location);
+        if_annotation! { Annotation::TreePath(absolute, parts) in iter; {
+            let mut parts = &parts[..];
+            if_annotation! { Annotation::InSequence(idx) in iter; {
+                parts = &parts[..idx+1];
+            }}
+
+            let mut prefix_parts = &[][..];
+            if !absolute {
+                if_annotation! { Annotation::TreeBlock(parts) in iter; {
+                    prefix_parts = parts;
+                }}
+            }
+
+            if let Some(ty) = self.objtree.type_by_path(prefix_parts.iter().chain(parts.iter())) {
+                results.push(self.convert_location(ty.location, &ty.path, "", "")?);
+            }
+        }}
+
+        if results.is_empty() {
+            None
+        } else {
+            Some(GotoDefinitionResponse::Array(results))
         }
     }
 }
