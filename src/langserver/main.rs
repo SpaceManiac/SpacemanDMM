@@ -22,13 +22,18 @@ mod document;
 mod symbol_search;
 mod extras;
 
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 use std::collections::{HashMap, VecDeque};
+use std::collections::hash_map::Entry;
+use std::rc::Rc;
 
 use url::Url;
 use jsonrpc::{Request, Call, Response, Output};
 use langserver::MessageType;
 use petgraph::visit::IntoNodeReferences;
+
+use dm::FileId;
+use dm::annotation::AnnotationTree;
 
 fn main() {
     std::env::set_var("RUST_BACKTRACE", "1");
@@ -74,6 +79,8 @@ struct Engine<'a, R: 'a, W: 'a> {
     context: &'a dm::Context,
     preprocessor: Option<dm::preprocessor::Preprocessor<'a>>,
     objtree: dm::objtree::ObjectTree,
+
+    annotations: HashMap<PathBuf, (FileId, Rc<AnnotationTree>)>,
 }
 
 impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
@@ -90,6 +97,8 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             context,
             preprocessor: None,
             objtree: Default::default(),
+
+            annotations: Default::default(),
         }
     }
 
@@ -228,6 +237,38 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         }
 
         Ok(())
+    }
+
+    fn get_annotations(&mut self, path: &Path) -> Result<(FileId, Rc<AnnotationTree>), jsonrpc::Error> {
+        Ok(match self.annotations.entry(path.to_owned()) {
+            Entry::Occupied(o) => o.get().clone(),
+            Entry::Vacant(v) => {
+                let stripped = match path.strip_prefix(&self.root) {
+                    Ok(path) => path,
+                    Err(_) => return Err(invalid_request(format!("outside workspace: {}", path.display()))),
+                };
+                let preprocessor = match self.preprocessor {
+                    Some(ref pp) => pp,
+                    None => return Err(invalid_request("no preprocessor")),
+                };
+                let file_id = match self.context.get_file(&stripped) {
+                    Some(id) => id,
+                    None => return Err(invalid_request(format!("unregistered: {}", stripped.display()))),
+                };
+                let context = Default::default();
+                let mut preprocessor = preprocessor.branch_at_file(file_id, &context);
+                let contents = self.docs.read(path).map_err(invalid_request)?;
+                let file_id = preprocessor.push_file(stripped.to_owned(), contents);
+                let indent = dm::indents::IndentProcessor::new(&context, preprocessor);
+                let mut annotations = dm::annotation::AnnotationTree::default();
+                {
+                    let mut parser = dm::parser::Parser::new(&context, indent);
+                    parser.annotate_to(&mut annotations);
+                    parser.run();
+                }
+                v.insert((file_id, Rc::new(annotations))).clone()
+            }
+        })
     }
 
     // ------------------------------------------------------------------------
@@ -418,32 +459,7 @@ handle_method_call! {
 
     on HoverRequest(&mut self, params) {
         let path = url_to_path(params.text_document.uri)?;
-        let contents = self.docs.read(&path).map_err(invalid_request)?;
-
-        // TODO: cache this junk
-        let preprocessor = match self.preprocessor {
-            Some(ref pp) => pp,
-            None => { eprintln!("no preprocessor"); return Ok(None); }
-        };
-        let stripped = match path.strip_prefix(&self.root) {
-            Err(_) => { eprintln!("outside workspace: {}", path.display()); return Ok(None); },
-            Ok(path) => path
-        };
-        let file_id = match self.context.get_file(&stripped) {
-            None => { eprintln!("unregistered: {}", stripped.display()); return Ok(None); },
-            Some(id) => id
-        };
-
-        let context = Default::default();
-        let mut preprocessor = preprocessor.branch_at_file(file_id, &context);
-        let file_id = preprocessor.push_file(stripped.to_owned(), contents);
-        let indent = dm::indents::IndentProcessor::new(&context, preprocessor);
-        let mut annotations = dm::annotation::AnnotationTree::default();
-        {
-            let mut parser = dm::parser::Parser::new(&context, indent);
-            parser.annotate_to(&mut annotations);
-            parser.run();
-        }
+        let (file_id, annotations) = self.get_annotations(&path)?;
 
         let location = dm::Location {
             file: file_id,
@@ -584,7 +600,7 @@ handle_notification! {
         std::process::exit(if self.status == InitStatus::ShuttingDown { 0 } else { 1 });
     }
 
-    on Initialized(&mut self, _ignored) {
+    on Initialized(&mut self, _) {
         eprintln!("workspace root: {}", self.root.display());
         let mut environment = None;
         for entry in std::fs::read_dir(&self.root).map_err(invalid_request)? {
@@ -609,11 +625,13 @@ handle_notification! {
     }
 
     on DidCloseTextDocument(&mut self, params) {
-        self.docs.close(params.text_document)?;
+        let path = self.docs.close(params.text_document)?;
+        self.annotations.remove(&path);
     }
 
     on DidChangeTextDocument(&mut self, params) {
-        self.docs.change(params.text_document, params.content_changes)?;
+        let path = self.docs.change(params.text_document, params.content_changes)?;
+        self.annotations.remove(&path);
     }
 }
 

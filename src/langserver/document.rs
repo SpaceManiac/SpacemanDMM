@@ -29,10 +29,10 @@ impl DocumentStore {
         }
     }
 
-    pub fn close(&mut self, id: TextDocumentIdentifier) -> Result<(), jsonrpc::Error> {
+    pub fn close(&mut self, id: TextDocumentIdentifier) -> Result<PathBuf, jsonrpc::Error> {
         let path = url_to_path(id.uri)?;
         match self.map.remove(&path) {
-            Some(_) => Ok(()),
+            Some(_) => Ok(path),
             None => Err(invalid_request("cannot close non-opened document")),
         }
     }
@@ -40,7 +40,7 @@ impl DocumentStore {
     pub fn change(&mut self,
         doc_id: VersionedTextDocumentIdentifier,
         changes: Vec<TextDocumentContentChangeEvent>,
-    ) -> Result<(), jsonrpc::Error> {
+    ) -> Result<PathBuf, jsonrpc::Error> {
         let path = url_to_path(doc_id.uri)?;
 
         // "If a versioned text document identifier is sent from the server to
@@ -65,11 +65,10 @@ impl DocumentStore {
         document.version = new_version;
 
         // Make an effort to apply all changes, even if one failed.
-        let mut result = Ok(());
+        let mut result = Ok(path);
         for change in changes {
-            let this_result = document.change(change);
-            if result.is_ok() {
-                result = this_result;
+            if let Err(e) = document.change(change) {
+                result = Err(e);
             }
         }
         result
