@@ -1044,15 +1044,19 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     // distinct from a tree_path, path must begin with a path separator and can
     // use any path separator rather than just slash, AND can be followed by vars
     fn prefab(&mut self) -> Status<Prefab> {
+        self.prefab_ex(Vec::new())
+    }
+
+    fn prefab_ex(&mut self, mut parts: TypePath) -> Status<Prefab> {
         // path :: path_sep ident (path_sep ident?)*
         // path_sep :: '/' | '.' | ':'
         let start = self.updated_location();
 
         // expect at least one path element
-        let mut parts = Vec::new();
+        let len = parts.len();
         parts.push((
             leading!(self.path_separator()),
-            require!(self.ident_in_seq(0)),
+            require!(self.ident_in_seq(len)),
         ));
 
         // followed by more path elements, empty ones ignored
@@ -1314,15 +1318,8 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             Token::Punct(Punctuation::Dot) => {
                 if let Some(ident) = self.ident()? {
                     // prefab
-                    if let Some(mut prefab) = self.prefab()? {
-                        prefab.path.insert(0, (PathOp::Dot, ident));
-                        Term::Prefab(prefab)
-                    } else {
-                        Term::Prefab(Prefab {
-                            path: vec![(PathOp::Dot, ident)],
-                            vars: Default::default(),
-                        })
-                    }
+                    // TODO: arrange for this ident to end up in the prefab's annotation
+                    Term::Prefab(require!(self.prefab_ex(vec![(PathOp::Dot, ident)])))
                 } else {
                     // bare dot
                     self.annotate(start, || Annotation::ReturnVal);
