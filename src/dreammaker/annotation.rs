@@ -3,18 +3,26 @@
 
 use interval_tree::{IntervalTree, RangePairIter, RangeInclusive, range};
 use super::Location;
-use super::ast::Statement;
+use super::ast::*;
 
 pub type Iter<'a> = RangePairIter<'a, Location, Annotation>;
 
 #[derive(Debug)]
 pub enum Annotation {
+    // contextual information
     TreeBlock(Vec<String>),
-    TreePath(Vec<String>),
+    TreePath(bool, Vec<String>),
+    TypePath(TypePath),
     Variable(Vec<String>),
     ProcHeader(Vec<String>),
     ProcBody(Vec<String>),
-    ProcBodyDetails(Vec<Statement>),
+
+    // local information about a specific token
+    UnscopedCall(String),
+    UnscopedVar(String),
+    ParentCall,  // ..
+    ReturnVal,  // .
+    InSequence(usize),  // where in TreePath or TypePath is this ident
 }
 
 pub struct AnnotationTree {

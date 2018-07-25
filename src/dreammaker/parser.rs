@@ -1,5 +1,7 @@
 //! Minimalist parser which turns a token stream into an object tree.
 
+use std::ops::Range;
+
 use linked_hash_map::LinkedHashMap;
 
 use super::{DMError, Location, HasLocation, Context, Severity};
@@ -433,10 +435,15 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         self.location
     }
 
+    #[inline]
     fn annotate<F: FnOnce() -> Annotation>(&mut self, start: Location, f: F) {
         let end = self.updated_location();
+        self.annotate_precise(start..end, f);
+    }
+
+    fn annotate_precise<F: FnOnce() -> Annotation>(&mut self, range: Range<Location>, f: F) {
         if let Some(dest) = self.annotations.as_mut() {
-            dest.insert(start..end, f());
+            dest.insert(range, f());
         }
     }
 
@@ -462,6 +469,17 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     fn ident(&mut self) -> Status<Ident> {
         match self.next("identifier")? {
             Token::Ident(i, _) => Ok(Some(i)),
+            other => self.try_another(other),
+        }
+    }
+
+    fn ident_in_seq(&mut self, idx: usize) -> Status<Ident> {
+        let start = self.updated_location();
+        match self.next("identifier")? {
+            Token::Ident(i, _) => {
+                self.annotate(start, || Annotation::InSequence(idx));
+                Ok(Some(i))
+            },
             other => self.try_another(other),
         }
     }
@@ -496,7 +514,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         }
 
         // expect at least one ident
-        parts.push(match self.ident()? {
+        parts.push(match self.ident_in_seq(0)? {
             Some(i) => i,
             None if !(absolute || spurious_lead) => return Ok(None),
             None => {
@@ -515,12 +533,12 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 }
                 t => { self.put_back(t); break; }
             }
-            if let Some(i) = self.ident()? {
+            if let Some(i) = self.ident_in_seq(parts.len())? {
                 parts.push(i);
             }
         }
 
-        self.annotate(start, || Annotation::TreePath(parts.clone()));
+        self.annotate(start, || Annotation::TreePath(absolute, parts.clone()));
         success((absolute, parts))
     }
 
@@ -591,7 +609,10 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 }
                 self.annotate(start, || Annotation::ProcBody(new_stack.to_vec()));
                 let result = {
-                    let mut subparser = Parser::new(self.context, body_tt.iter().cloned());
+                    let mut subparser: Parser<'ctx, '_, _> = Parser::new(self.context, body_tt.iter().cloned());
+                    if let Some(a) = self.annotations.as_mut() {
+                        subparser.annotations = Some(&mut *a);
+                    }
                     let block = subparser.block();
                     subparser.require(block)
                 };
@@ -600,11 +621,10 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 } else {
                     self.procs_bad += 1;
                 }
-                // TODO: remove this #[cfg] when proc body parsing is more robust
-                #[cfg(debug_assertions)]
-                match result {
-                    Ok(body) => self.annotate(start, || Annotation::ProcBodyDetails(body)),
-                    Err(err) => self.context.register_error(err.set_severity(Severity::Hint)),
+                if let Err(err) = result {
+                    // TODO: change Hint to Error when the last failing procs
+                    // in tgstation are fixed
+                    self.context.register_error(err.set_severity(Severity::Hint));
                 }
                 SUCCESS
             }
@@ -1026,24 +1046,27 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     fn prefab(&mut self) -> Status<Prefab> {
         // path :: path_sep ident (path_sep ident?)*
         // path_sep :: '/' | '.' | ':'
+        let start = self.updated_location();
 
         // expect at least one path element
         let mut parts = Vec::new();
         parts.push((
             leading!(self.path_separator()),
-            require!(self.ident()),
+            require!(self.ident_in_seq(0)),
         ));
 
         // followed by more path elements, empty ones ignored
         loop {
             if let Some(sep) = self.path_separator()? {
-                if let Some(ident) = self.ident()? {
+                if let Some(ident) = self.ident_in_seq(parts.len())? {
                     parts.push((sep, ident));
                 }
             } else {
                 break;
             }
         }
+
+        self.annotate(start, || Annotation::TypePath(parts.clone()));
 
         // parse vars if we find them
         let mut vars = LinkedHashMap::default();
@@ -1201,6 +1224,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     fn term(&mut self) -> Status<Term> {
         use super::lexer::Punctuation::*;
 
+        let start = self.updated_location();
         success(match self.next("term")? {
             // term :: 'new' (ident | abs-path)? arglist?
             Token::Ident(ref i, _) if i == "new" => {
@@ -1266,13 +1290,23 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             },
 
             // term :: ident arglist | ident
-            Token::Ident(i, _) => match self.arguments()? {
-                Some(args) => Term::Call(i, args),
-                None => Term::Ident(i),
+            Token::Ident(i, _) => {
+                let first_token = self.updated_location();
+                match self.arguments()? {
+                    Some(args) => {
+                        self.annotate_precise(start..first_token, || Annotation::UnscopedCall(i.clone()));
+                        Term::Call(i, args)
+                    },
+                    None => {
+                        self.annotate(start, || Annotation::UnscopedVar(i.clone()));
+                        Term::Ident(i)
+                    },
+                }
             },
 
             // term :: '..' arglist
             Token::Punct(Punctuation::Super) => {
+                self.annotate(start, || Annotation::ParentCall);
                 Term::ParentCall(require!(self.arguments()))
             },
 
@@ -1291,6 +1325,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                     }
                 } else {
                     // bare dot
+                    self.annotate(start, || Annotation::ReturnVal);
                     Term::Ident(".".to_owned())
                 }
             },
