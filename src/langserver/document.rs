@@ -1,5 +1,6 @@
 //! Utilities for managing the text document synchronization facilities of the
 //! language server protocol.
+#![allow(dead_code)]
 
 use std::io::{self, Read, BufRead};
 use std::borrow::Cow;
@@ -86,7 +87,6 @@ impl DocumentStore {
         }
     }
 
-    #[allow(dead_code)]
     pub fn read(&self, path: &Path) -> io::Result<Box<io::Read>> {
         match self.map.get(path) {
             Some(document) => Ok(Box::new(Cursor::new(document.text.clone())) as Box<io::Read>),
