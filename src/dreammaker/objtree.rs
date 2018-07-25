@@ -8,7 +8,7 @@ use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 use linked_hash_map::LinkedHashMap;
 
-use super::ast::{Expression, VarType, TypePath, PathOp, Prefab, Parameter};
+use super::ast::{Expression, VarType, PathOp, Prefab, Parameter};
 use super::constants::Constant;
 use super::{DMError, Location, Context};
 
@@ -279,12 +279,15 @@ impl ObjectTree {
         self.graph.node_weight(type_.parent_type)
     }
 
-    pub fn type_by_path(&self, path: &TypePath) -> Option<&Type> {
+    pub fn type_by_path<I>(&self, path: I) -> Option<&Type>
+        where I: IntoIterator, I::Item: AsRef<str>
+    {
         let mut current = NodeIndex::new(0);
-        'outer: for &(_, ref each) in path {
+        'outer: for each in path {
+            let each = each.as_ref();
             for edge in self.graph.edges(current) {
                 let target = edge.target();
-                if self.graph.node_weight(target).unwrap().name == *each {
+                if self.graph.node_weight(target).unwrap().name == each {
                     current = target;
                     continue 'outer;
                 }
@@ -297,7 +300,7 @@ impl ObjectTree {
     pub fn type_by_constant(&self, constant: &Constant) -> Option<&Type> {
         match constant {
             &Constant::String(ref string_path) => self.find(string_path).map(|tr| tr.get()),
-            &Constant::Prefab(Prefab { ref path, .. }) => self.type_by_path(path),
+            &Constant::Prefab(Prefab { ref path, .. }) => self.type_by_path(path.iter().map(|(_, item)| item)),
             _ => None,
         }
     }
