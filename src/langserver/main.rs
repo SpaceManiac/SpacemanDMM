@@ -585,16 +585,23 @@ handle_method_call! {
         let mut results = Vec::new();
 
         let iter = annotations.get_location(location);
-        if_annotation! { Annotation::TreePath(absolute, parts) in iter; {
+        if_annotation! { Annotation::TreePath(mut absolute, parts) in iter; {
             let mut parts = &parts[..];
             if_annotation! { Annotation::InSequence(idx) in iter; {
                 parts = &parts[..idx+1];
             }}
+            if let Some(i) = parts.iter().position(|x| x == "var") {
+                parts = &parts[i+1..];
+                absolute = true;
+            }
 
             let mut prefix_parts = &[][..];
             if !absolute {
                 if_annotation! { Annotation::TreeBlock(parts) in iter; {
                     prefix_parts = parts;
+                    if let Some(i) = prefix_parts.iter().position(|x| x == "var") {
+                        prefix_parts = &prefix_parts[i+1..];
+                    }
                 }}
             }
 
