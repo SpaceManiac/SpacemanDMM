@@ -653,10 +653,13 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         }
 
         // `name` or `obj/name` or `var/obj/name` or ...
+        let leading_loc = self.updated_location();
         let (_absolute, mut path) = leading!(self.tree_path());
         let name = path.pop().unwrap();
         if path.first().map_or(false, |i| i == "var") {
             path.remove(0);
+            self.context.register_error(DMError::new(leading_loc, "'var/' is unnecessary here")
+                .set_severity(Severity::Hint));
         }
         require!(self.var_annotations());
         // = <expr>
