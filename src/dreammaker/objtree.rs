@@ -88,23 +88,9 @@ impl Type {
         subpath(&self.path, parent)
     }
 
-    /// Checks whether this type is a subtype of the given type.
-    pub fn is_subtype_of(&self, parent: &Type, objtree: &ObjectTree) -> bool {
-        let mut current = Some(self);
-        while let Some(ty) = current.take() {
-            if ::std::ptr::eq(ty, parent) { return true }
-            current = objtree.parent_of(ty);
-        }
-        false
-    }
-
-    /// Checks whether this type is a supertype (inclusive) of the given type.
-    #[inline]
-    pub fn is_supertype_of(&self, child: &Type, objtree: &ObjectTree) -> bool {
-        child.is_subtype_of(self, objtree)
-    }
-
-    pub fn get_value<'a>(&'a self, name: &str, objtree: &'a ObjectTree) -> Option<&'a VarValue> {
+    // Used in the constant evaluator which holds an &mut ObjectTree and thus
+    // can't be used with TypeRef.
+    pub(crate) fn get_value<'a>(&'a self, name: &str, objtree: &'a ObjectTree) -> Option<&'a VarValue> {
         let mut current = Some(self);
         while let Some(ty) = current {
             if let Some(var) = ty.vars.get(name) {
@@ -115,7 +101,7 @@ impl Type {
         None
     }
 
-    pub fn get_declaration<'a>(&'a self, name: &str, objtree: &'a ObjectTree) -> Option<&'a VarDeclaration> {
+    pub(crate) fn get_declaration<'a>(&'a self, name: &str, objtree: &'a ObjectTree) -> Option<&'a VarDeclaration> {
         let mut current = Some(self);
         while let Some(ty) = current {
             if let Some(var) = ty.vars.get(name) {
@@ -126,33 +112,6 @@ impl Type {
             current = objtree.parent_of(ty);
         }
         None
-    }
-
-    // Intended to be used by the constant evaluator only
-    #[doc(hidden)]
-    pub fn get_value_mut(&mut self, name: &str, objtree: &ObjectTree)
-        -> Option<(&mut VarValue, VarDeclaration)>
-    {
-        match {
-            let mut current = &*self;
-            loop {
-                if let Some(var) = current.vars.get(name) {
-                    if let Some(decl) = var.declaration.as_ref() {
-                        break Some(decl.clone());
-                    }
-                }
-                match objtree.graph.node_weight(current.parent_type) {
-                    None => break None,
-                    Some(x) => current = x,
-                }
-            }
-        } {
-            None => None,
-            Some(decl) => match self.vars.get_mut(name) {
-                Some(var) => Some((&mut var.value, decl)),
-                None => None,
-            }
-        }
     }
 }
 
@@ -175,6 +134,11 @@ impl<'a> TypeRef<'a> {
     #[inline]
     fn new(tree: &'a ObjectTree, idx: NodeIndex) -> TypeRef<'a> {
         TypeRef { tree, idx }
+    }
+
+    #[inline]
+    pub fn get(&self) -> &'a Type {
+        self.tree.graph.node_weight(self.idx).unwrap()
     }
 
     /// Find the parent **path**, without taking `parent_type` into account.
@@ -217,13 +181,13 @@ impl<'a> TypeRef<'a> {
     }
 
     /// Navigate the tree according to the given path operator.
-    pub fn navigate(&self, op: PathOp, name: &str) -> Option<TypeRef<'a>> {
+    pub fn navigate(self, op: PathOp, name: &str) -> Option<TypeRef<'a>> {
         match op {
             // '/' always looks for a direct child
             PathOp::Slash => self.child(name),
             // '.' looks for a child of us or of any of our parents
             PathOp::Dot => {
-                let mut next = Some(*self);
+                let mut next = Some(self);
                 while let Some(current) = next {
                     if let Some(child) = current.child(name) {
                         return Some(child);
@@ -249,9 +213,24 @@ impl<'a> TypeRef<'a> {
         }
     }
 
+    /// Checks whether this type is a subtype of the given type.
+    pub fn is_subtype_of(self, parent: &Type) -> bool {
+        let mut current = Some(self);
+        while let Some(ty) = current.take() {
+            if ::std::ptr::eq(ty.get(), parent) { return true }
+            current = ty.parent_type();
+        }
+        false
+    }
+
     #[inline]
-    pub fn get(&self) -> &'a Type {
-        self.tree.graph.node_weight(self.idx).unwrap()
+    pub fn get_value(self, name: &str) -> Option<&'a VarValue> {
+        self.get().get_value(name, self.tree)
+    }
+
+    #[inline]
+    pub fn get_declaration(self, name: &str) -> Option<&'a VarDeclaration> {
+        self.get().get_declaration(name, self.tree)
     }
 }
 
