@@ -313,12 +313,19 @@ impl ObjectTree {
         where I: IntoIterator, I::Item: AsRef<str>
     {
         let mut current = NodeIndex::new(0);
+        let mut first = true;
         'outer: for each in path {
             let each = each.as_ref();
+
             for edge in self.graph.edges(current) {
                 let target = edge.target();
                 if self.graph.node_weight(target).unwrap().name == each {
                     current = target;
+                    if each == "list" && first {
+                        // any lookup under list/ is list/
+                        break 'outer;
+                    }
+                    first = false;
                     continue 'outer;
                 }
             }
