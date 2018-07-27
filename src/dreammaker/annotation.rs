@@ -16,6 +16,7 @@ pub enum Annotation {
     Variable(Vec<String>),
     ProcHeader(Vec<String>),
     ProcBody(Vec<String>),
+    LocalVarScope(VarType, String),
 
     // local information about a specific token
     UnscopedCall(String),

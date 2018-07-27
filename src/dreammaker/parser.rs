@@ -761,7 +761,8 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
 
     /// Parse a block
     fn block(&mut self) -> Status<Vec<Statement>> {
-        if let Some(()) = self.exact(Token::Punct(Punctuation::LBrace))? {
+        let mut vars = Vec::new();
+        let result = if let Some(()) = self.exact(Token::Punct(Punctuation::LBrace))? {
             let mut statements = Vec::new();
             loop {
                 if let Some(()) = self.exact(Token::Punct(Punctuation::RBrace))? {
@@ -769,21 +770,25 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 } else if let Some(()) = self.exact(Token::Punct(Punctuation::Semicolon))? {
                     continue;
                 } else {
-                    statements.push(require!(self.statement()));
+                    statements.push(require!(self.statement(&mut vars)));
                 }
             }
-            success(statements)
+            statements
         } else if let Some(()) = self.exact(Token::Punct(Punctuation::Semicolon))? {
             // empty blocks: proc/foo();
-            return success(Vec::new());
+            Vec::new()
         } else {
             // and one-line blocks: if(1) neat();
-            let statement = require!(self.statement());
-            return success(vec![statement]);
+            let statement = require!(self.statement(&mut vars));
+            vec![statement]
+        };
+        for (loc, var_type, name) in vars {
+            self.annotate(loc, || Annotation::LocalVarScope(var_type, name));
         }
+        success(result)
     }
 
-    fn statement(&mut self) -> Status<Statement> {
+    fn statement(&mut self, vars: &mut Vec<(Location, VarType, String)>) -> Status<Statement> {
         // BLOCK STATEMENTS
         if let Some(()) = self.exact_ident("if")? {
             // statement :: 'if' '(' expression ')' block ('else' 'if' '(' expression ')' block)* ('else' block)?
@@ -829,12 +834,12 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             // for (Var in Low to High)
             // for (Var = Low to High)
             require!(self.exact(Token::Punct(Punctuation::LParen)));
-            let init = self.simple_statement(true)?;
+            let init = self.simple_statement(true, vars)?;
             if let Some(()) = self.comma_or_semicolon()? {
                 // three-pronged loop form ("for loop")
                 let test = self.expression()?;
                 require!(self.comma_or_semicolon());
-                let inc = self.simple_statement(false)?;
+                let inc = self.simple_statement(false, vars)?;
                 require!(self.exact(Token::Punct(Punctuation::RParen)));
                 success(Statement::ForLoop {
                     init: init.map(Box::new),
@@ -934,14 +939,14 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             // TODO: warn on weird values for these
             success(Statement::Setting(name, mode, value))
         } else {
-            let result = leading!(self.simple_statement(false));
+            let result = leading!(self.simple_statement(false, vars));
             require!(self.exact(Token::Punct(Punctuation::Semicolon)));
             success(result)
         }
     }
 
     // Single-line statements. Can appear in for loops. Followed by a semicolon.
-    fn simple_statement(&mut self, in_for: bool) -> Status<Statement> {
+    fn simple_statement(&mut self, in_for: bool, vars: &mut Vec<(Location, VarType, String)>) -> Status<Statement> {
         if let Some(()) = self.exact_ident("var")? {
             // statement :: 'var' type_path name ('=' value)
             let type_path_start = self.location();
@@ -957,6 +962,10 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             if var_type.is_tmp {
                 self.context.register_error(DMError::new(type_path_start, "var/tmp has no effect here")
                     .set_severity(Severity::Warning));
+            }
+
+            if self.annotations.is_some() {
+                vars.push((self.location, var_type.clone(), name.clone()));
             }
 
             let value = if let Some(()) = self.exact(Token::Punct(Punctuation::Assign))? {

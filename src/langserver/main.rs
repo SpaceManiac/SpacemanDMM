@@ -12,6 +12,7 @@ extern crate serde;
 extern crate serde_json;
 #[macro_use] extern crate serde_derive;
 extern crate petgraph;
+extern crate interval_tree;
 extern crate languageserver_types as langserver;
 extern crate jsonrpc_core as jsonrpc;
 extern crate dreammaker as dm;
@@ -69,6 +70,8 @@ enum InitStatus {
     ShuttingDown,
 }
 
+type Span = interval_tree::RangeInclusive<dm::Location>;
+
 struct Engine<'a, R: 'a, W: 'a> {
     read: &'a R,
     write: &'a W,
@@ -82,7 +85,7 @@ struct Engine<'a, R: 'a, W: 'a> {
     preprocessor: Option<dm::preprocessor::Preprocessor<'a>>,
     objtree: dm::objtree::ObjectTree,
 
-    annotations: HashMap<PathBuf, (FileId, Rc<AnnotationTree>)>,
+    annotations: HashMap<PathBuf, (FileId, FileId, Rc<AnnotationTree>)>,
 }
 
 impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
@@ -241,7 +244,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         Ok(())
     }
 
-    fn get_annotations(&mut self, path: &Path) -> Result<(FileId, Rc<AnnotationTree>), jsonrpc::Error> {
+    fn get_annotations(&mut self, path: &Path) -> Result<(FileId, FileId, Rc<AnnotationTree>), jsonrpc::Error> {
         Ok(match self.annotations.entry(path.to_owned()) {
             Entry::Occupied(o) => o.get().clone(),
             Entry::Vacant(v) => {
@@ -253,12 +256,12 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                     Some(ref pp) => pp,
                     None => return Err(invalid_request("no preprocessor")),
                 };
-                let file_id = match self.context.get_file(&stripped) {
+                let real_file_id = match self.context.get_file(&stripped) {
                     Some(id) => id,
                     None => return Err(invalid_request(format!("unregistered: {}", stripped.display()))),
                 };
                 let context = Default::default();
-                let mut preprocessor = preprocessor.branch_at_file(file_id, &context);
+                let mut preprocessor = preprocessor.branch_at_file(real_file_id, &context);
                 let contents = self.docs.read(path).map_err(invalid_request)?;
                 let file_id = preprocessor.push_file(stripped.to_owned(), contents);
                 let indent = dm::indents::IndentProcessor::new(&context, preprocessor);
@@ -268,7 +271,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                     parser.annotate_to(&mut annotations);
                     parser.run();
                 }
-                v.insert((file_id, Rc::new(annotations))).clone()
+                v.insert((real_file_id, file_id, Rc::new(annotations))).clone()
             }
         })
     }
@@ -309,7 +312,19 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         (found, proc_name)
     }
 
-    fn find_unscoped_var<'b>(&'b self, ty: Option<TypeRef<'b>>, proc_name: Option<&'b str>, var_name: &str) -> UnscopedVar<'b> {
+    fn find_unscoped_var<'b, I>(&'b self, iter: &I, ty: Option<TypeRef<'b>>, proc_name: Option<&'b str>, var_name: &str) -> UnscopedVar<'b>
+        where I: Iterator<Item=(Span, &'b Annotation)> + Clone
+    {
+        // local variables
+        for (span, annotation) in iter.clone() {
+            if let Annotation::LocalVarScope(var_type, name) = annotation {
+                if name == var_name {
+                    return UnscopedVar::Local { loc: span.start, var_type }
+                }
+            }
+        }
+
+        // proc parameters
         let ty = ty.unwrap_or(self.objtree.root());
         if let Some(proc_name) = proc_name {
             if let Some(proc) = ty.get().procs.get(proc_name) {
@@ -320,6 +335,8 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 }
             }
         }
+
+        // type variables (implicit `src.` and `globals.`)
         let mut next = Some(ty);
         while let Some(ty) = next {
             if let Some(var) = ty.get().vars.get(var_name) {
@@ -330,26 +347,30 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         UnscopedVar::None
     }
 
-    fn find_scoped_type<'b>(&'b self, mut next: Option<TypeRef<'b>>, proc_name: Option<&str>, priors: &[String]) -> Option<TypeRef<'b>> {
+    fn find_scoped_type<'b, I>(&'b self, iter: &I, priors: &[String]) -> Option<TypeRef<'b>>
+        where I: Iterator<Item=(Span, &'b Annotation)> + Clone
+    {
+        let (mut next, proc_name) = self.find_type_context(iter);
         // find the first; check the global scope, parameters, and "src"
-        let mut iter = priors.iter();
-        let first = match iter.next() {
+        let mut priors = priors.iter();
+        let first = match priors.next() {
             Some(i) => i,
             None => return None,
         };
         if first != "src" {
-            next = match self.find_unscoped_var(next, proc_name, first) {
+            next = match self.find_unscoped_var(iter, next, proc_name, first) {
                 UnscopedVar::Parameter { param, .. } => self.objtree.type_by_path(&param.path),
                 UnscopedVar::Variable { ty, .. } => match ty.get_declaration(first) {
                     Some(decl) => self.objtree.type_by_path(&decl.var_type.type_path),
                     None => None,
-                }
+                },
+                UnscopedVar::Local { var_type, .. } => self.objtree.type_by_path(&var_type.type_path),
                 UnscopedVar::None => None,
             };
         }
 
         // find the rest; only look on the type we've found
-        for var_name in iter {
+        for var_name in priors {
             if let Some(current) = next.take() {
                 if let Some(decl) = current.get_declaration(var_name) {
                     next = self.objtree.type_by_path(&decl.var_type.type_path);
@@ -529,7 +550,7 @@ handle_method_call! {
 
     on HoverRequest(&mut self, params) {
         let path = url_to_path(params.text_document.uri)?;
-        let (file_id, annotations) = self.get_annotations(&path)?;
+        let (_, file_id, annotations) = self.get_annotations(&path)?;
         let location = dm::Location {
             file: file_id,
             line: params.position.line as u32 + 1,
@@ -663,7 +684,7 @@ handle_method_call! {
 
     on GotoDefinition(&mut self, params) {
         let path = url_to_path(params.text_document.uri)?;
-        let (file_id, annotations) = self.get_annotations(&path)?;
+        let (real_file_id, file_id, annotations) = self.get_annotations(&path)?;
         let location = dm::Location {
             file: file_id,
             line: params.position.line as u32 + 1,
@@ -765,20 +786,22 @@ handle_method_call! {
 
         if_annotation! { Annotation::UnscopedVar(var_name) in iter; {
             let (ty, proc_name) = self.find_type_context(&iter);
-            match self.find_unscoped_var(ty, proc_name, var_name) {
+            match self.find_unscoped_var(&iter, ty, proc_name, var_name) {
                 UnscopedVar::Parameter { ty, proc, param } => {
                     results.push(self.convert_location(param.location, &ty.path, "/proc/", proc)?);
-                }
+                },
                 UnscopedVar::Variable { ty, var } => {
                     results.push(self.convert_location(var.value.location, &ty.path, "/var/", var_name)?);
-                }
+                },
+                UnscopedVar::Local { loc, .. } => {
+                    results.push(self.convert_location(dm::Location { file: real_file_id, ..loc }, "", "", "")?);
+                },
                 UnscopedVar::None => {}
             }
         }}
 
         if_annotation! { Annotation::ScopedCall(priors, proc_name) in iter; {
-            let (ty, proc_ctx) = self.find_type_context(&iter);
-            let mut next = self.find_scoped_type(ty, proc_ctx, priors);
+            let mut next = self.find_scoped_type(&iter, priors);
             while let Some(ty) = next {
                 if ty.path.is_empty() {  // root
                     break;
@@ -792,8 +815,7 @@ handle_method_call! {
         }}
 
         if_annotation! { Annotation::ScopedVar(priors, var_name) in iter; {
-            let (ty, proc_ctx) = self.find_type_context(&iter);
-            let mut next = self.find_scoped_type(ty, proc_ctx, priors);
+            let mut next = self.find_scoped_type(&iter, priors);
             while let Some(ty) = next {
                 if ty.path.is_empty() {  // root
                     break;
@@ -917,6 +939,10 @@ enum UnscopedVar<'a> {
     Variable {
         ty: TypeRef<'a>,
         var: &'a dm::objtree::TypeVar,
+    },
+    Local {
+        loc: dm::Location,
+        var_type: &'a dm::ast::VarType,
     },
     None,
 }
