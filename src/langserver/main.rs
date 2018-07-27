@@ -736,6 +736,11 @@ handle_method_call! {
             if_annotation! { Annotation::InSequence(idx) in iter; {
                 parts = &parts[..idx+1];
             }}
+            // if we're on the right side of a 'list/', start the lookup there
+            match parts.split_first() {
+                Some(((PathOp::Slash, kwd), rest)) if kwd == "list" && !rest.is_empty() => parts = rest,
+                _ => {}
+            }
 
             // use the first path op to select the starting type of the lookup
             let mut ty = match parts[0].0 {
