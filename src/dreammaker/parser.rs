@@ -339,7 +339,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         Parser {
             context,
             annotations: None,
-            tree: ObjectTree::with_builtins(),
+            tree: ObjectTree::default(),
 
             input,
             eof: false,
@@ -353,6 +353,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     }
 
     pub fn run(&mut self) {
+        self.tree.register_builtins();
         let root = self.root();
         if let Err(e) = self.require(root) {
             self.context.register_error(e);

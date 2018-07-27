@@ -63,7 +63,7 @@ pub struct TypeProc {
 
 const BAD_NODE_INDEX: usize = ::std::usize::MAX;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Type {
     pub name: String,
     pub path: String,
@@ -288,10 +288,8 @@ impl Default for ObjectTree {
 }
 
 impl ObjectTree {
-    pub fn with_builtins() -> Self {
-        let mut tree = Self::default();
-        super::builtins::register_builtins(&mut tree).unwrap();
-        tree
+    pub fn register_builtins(&mut self) {
+        super::builtins::register_builtins(self).expect("register_builtins failed");
     }
 
     // ------------------------------------------------------------------------
