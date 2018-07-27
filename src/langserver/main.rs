@@ -330,6 +330,37 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         UnscopedVar::None
     }
 
+    fn find_scoped_type<'b>(&'b self, mut next: Option<TypeRef<'b>>, proc_name: Option<&str>, priors: &[String]) -> Option<TypeRef<'b>> {
+        // find the first; check the global scope, parameters, and "src"
+        let mut iter = priors.iter();
+        let first = match iter.next() {
+            Some(i) => i,
+            None => return None,
+        };
+        if first != "src" {
+            next = match self.find_unscoped_var(next, proc_name, first) {
+                UnscopedVar::Parameter { param, .. } => self.objtree.type_by_path(&param.path),
+                UnscopedVar::Variable { ty, .. } => match ty.get_declaration(first) {
+                    Some(decl) => self.objtree.type_by_path(&decl.var_type.type_path),
+                    None => None,
+                }
+                UnscopedVar::None => None,
+            };
+        }
+
+        // find the rest; only look on the type we've found
+        for var_name in iter {
+            if let Some(current) = next.take() {
+                if let Some(decl) = current.get_declaration(var_name) {
+                    next = self.objtree.type_by_path(&decl.var_type.type_path);
+                }
+            } else {
+                break
+            }
+        }
+        next
+    }
+
     // ------------------------------------------------------------------------
     // Driver
 
@@ -742,6 +773,36 @@ handle_method_call! {
                     results.push(self.convert_location(var.value.location, &ty.path, "/var/", var_name)?);
                 }
                 UnscopedVar::None => {}
+            }
+        }}
+
+        if_annotation! { Annotation::ScopedCall(priors, proc_name) in iter; {
+            let (ty, proc_ctx) = self.find_type_context(&iter);
+            let mut next = self.find_scoped_type(ty, proc_ctx, priors);
+            while let Some(ty) = next {
+                if ty.path.is_empty() {  // root
+                    break;
+                }
+                if let Some(proc) = ty.procs.get(proc_name) {
+                    results.push(self.convert_location(proc.value.location, &ty.path, "/proc/", proc_name)?);
+                    break;
+                }
+                next = ty.parent_type();
+            }
+        }}
+
+        if_annotation! { Annotation::ScopedVar(priors, var_name) in iter; {
+            let (ty, proc_ctx) = self.find_type_context(&iter);
+            let mut next = self.find_scoped_type(ty, proc_ctx, priors);
+            while let Some(ty) = next {
+                if ty.path.is_empty() {  // root
+                    break;
+                }
+                if let Some(var) = ty.vars.get(var_name) {
+                    results.push(self.convert_location(var.value.location, &ty.path, "/var/", var_name)?);
+                    break;
+                }
+                next = ty.parent_type();
             }
         }}
 
