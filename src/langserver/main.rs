@@ -33,6 +33,7 @@ use langserver::MessageType;
 use petgraph::visit::IntoNodeReferences;
 
 use dm::FileId;
+use dm::ast::PathOp;
 use dm::annotation::AnnotationTree;
 
 fn main() {
@@ -587,9 +588,11 @@ handle_method_call! {
         let iter = annotations.get_location(location);
         if_annotation! { Annotation::TreePath(mut absolute, parts) in iter; {
             let mut parts = &parts[..];
+            // cut off the part of the path we haven't selected
             if_annotation! { Annotation::InSequence(idx) in iter; {
                 parts = &parts[..idx+1];
             }}
+            // if we're on the right side of a 'var/', start the lookup there
             if let Some(i) = parts.iter().position(|x| x == "var") {
                 parts = &parts[i+1..];
                 absolute = true;
@@ -600,12 +603,81 @@ handle_method_call! {
                 if_annotation! { Annotation::TreeBlock(parts) in iter; {
                     prefix_parts = parts;
                     if let Some(i) = prefix_parts.iter().position(|x| x == "var") {
+                        // if we're inside a 'var' block, start the lookup there
                         prefix_parts = &prefix_parts[i+1..];
                     }
                 }}
             }
 
             if let Some(ty) = self.objtree.type_by_path(prefix_parts.iter().chain(parts.iter())) {
+                results.push(self.convert_location(ty.location, &ty.path, "", "")?);
+            }
+        }}
+
+        if_annotation! { Annotation::TypePath(parts) in iter; {
+            let mut parts = &parts[..];
+            // cut off the part of the path we haven't selected
+            if_annotation! { Annotation::InSequence(idx) in iter; {
+                parts = &parts[..idx+1];
+            }}
+
+            // use the first path op to select the starting type of the lookup
+            let mut ty = match parts[0].0 {
+                PathOp::Colon => break,  // never finds anything, apparently?
+                PathOp::Slash => self.objtree.root(),
+                PathOp::Dot => {
+                    let mut found = None;
+                    if_annotation! { Annotation::ProcBody(ref proc_path) in iter; {
+                        // chop off proc name and 'proc/' or 'verb/' if it's there
+                        // TODO: factor this logic somewhere
+                        let mut proc_path = &proc_path[..];
+                        proc_path = &proc_path[..proc_path.len() - 1];
+                        match proc_path.split_last() {
+                            Some((kwd, rest)) if kwd == "proc" || kwd == "verb" => proc_path = rest,
+                            _ => {}
+                        }
+                        found = self.objtree.type_by_path(proc_path);
+                    }}
+                    if found.is_none() {
+                        if_annotation! { Annotation::TreeBlock(tree_path) in iter; {
+                            // cut off if we're in a declaration block
+                            let mut tree_path = &tree_path[..];
+                            match tree_path.split_last() {
+                                Some((kwd, rest)) if kwd == "proc" || kwd == "verb" || kwd == "var" => tree_path = rest,
+                                _ => {}
+                            }
+                            found = self.objtree.type_by_path(tree_path);
+                        }}
+                    }
+                    match found {
+                        None => break,
+                        Some(found) => found,
+                    }
+                }
+            };
+
+            // follow the path ops until we hit 'proc' or 'verb'
+            let mut proc_name = None;
+            let mut iter = parts.iter();
+            while let Some(&(op, ref name)) = iter.next() {
+                if name == "proc" || name == "verb" {
+                    proc_name = iter.next().map(|t| &t.1);
+                    break;
+                }
+                if let Some(next) = ty.navigate(op, name) {
+                    ty = next;
+                } else {
+                    break;
+                }
+            }
+            if let Some(proc_name) = proc_name {
+                // '/datum/proc/proc_name'
+                if let Some(proc) = ty.procs.get(proc_name) {
+                    results.push(self.convert_location(proc.value.location, &ty.path, "/proc/", proc_name)?);
+                }
+                // TODO: check parent types if not found
+            } else {
+                // just a type path
                 results.push(self.convert_location(ty.location, &ty.path, "", "")?);
             }
         }}
