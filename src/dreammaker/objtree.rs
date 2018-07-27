@@ -1,6 +1,7 @@
 //! The object tree representation, used as a parsing target.
 
 use std::collections::BTreeMap;
+use std::fmt;
 
 pub use petgraph::graph::NodeIndex;
 use petgraph::graph::Graph;
@@ -124,7 +125,7 @@ pub fn subpath(path: &str, parent: &str) -> bool {
 // ----------------------------------------------------------------------------
 // Type references
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Copy, Clone)]
 pub struct TypeRef<'a> {
     tree: &'a ObjectTree,
     idx: NodeIndex,
@@ -249,6 +250,12 @@ impl<'a> ::std::ops::Deref for TypeRef<'a> {
     type Target = Type;
     fn deref(&self) -> &Type {
         self.get()
+    }
+}
+
+impl<'a> fmt::Debug for TypeRef<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}({})", self.path, self.idx.index())
     }
 }
 
