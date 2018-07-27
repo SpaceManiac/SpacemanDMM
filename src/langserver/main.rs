@@ -357,7 +357,11 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             Some(i) => i,
             None => return None,
         };
-        if first != "src" {
+        if first == "usr" {
+            next = self.objtree.find("/mob");
+        } else if first == "global" {
+            next = Some(self.objtree.root());
+        } else if first != "src" {
             next = match self.find_unscoped_var(iter, next, proc_name, first) {
                 UnscopedVar::Parameter { param, .. } => self.objtree.type_by_path(&param.path),
                 UnscopedVar::Variable { ty, .. } => match ty.get_declaration(first) {
@@ -812,10 +816,12 @@ handle_method_call! {
         },
         Annotation::ScopedVar(priors, var_name) => {
             let mut next = self.find_scoped_type(&iter, priors);
+            let mut first = true;
             while let Some(ty) = next {
-                if ty.path.is_empty() {  // root
+                if ty.path.is_empty() && !first {  // root
                     break;
                 }
+                first = false;
                 if let Some(var) = ty.vars.get(var_name) {
                     results.push(self.convert_location(var.value.location, &ty.path, "/var/", var_name)?);
                     break;
