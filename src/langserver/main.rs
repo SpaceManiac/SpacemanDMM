@@ -34,7 +34,8 @@ use petgraph::visit::IntoNodeReferences;
 
 use dm::FileId;
 use dm::ast::PathOp;
-use dm::annotation::AnnotationTree;
+use dm::annotation::{Annotation, AnnotationTree};
+use dm::objtree::TypeRef;
 
 fn main() {
     std::env::set_var("RUST_BACKTRACE", "1");
@@ -261,7 +262,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 let contents = self.docs.read(path).map_err(invalid_request)?;
                 let file_id = preprocessor.push_file(stripped.to_owned(), contents);
                 let indent = dm::indents::IndentProcessor::new(&context, preprocessor);
-                let mut annotations = dm::annotation::AnnotationTree::default();
+                let mut annotations = AnnotationTree::default();
                 {
                     let mut parser = dm::parser::Parser::new(&context, indent);
                     parser.annotate_to(&mut annotations);
@@ -270,6 +271,42 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 v.insert((file_id, Rc::new(annotations))).clone()
             }
         })
+    }
+
+    fn find_type_context<'b, I, Ign>(&self, iter: I) -> (Option<TypeRef>, Option<&'b str>)
+        where I: Iterator<Item=(Ign, &'b Annotation)> + Clone
+    {
+        let mut found = None;
+        let mut proc_name = None;
+        if_annotation! { Annotation::ProcBody(ref proc_path) in iter; {
+            // chop off proc name and 'proc/' or 'verb/' if it's there
+            // TODO: factor this logic somewhere
+            let mut proc_path = &proc_path[..];
+            match proc_path.split_last() {
+                Some((name, rest)) => {
+                    proc_name = Some(name.as_str());
+                    proc_path = rest;
+                }
+                _ => {}
+            }
+            match proc_path.split_last() {
+                Some((kwd, rest)) if kwd == "proc" || kwd == "verb" => proc_path = rest,
+                _ => {}
+            }
+            found = self.objtree.type_by_path(proc_path);
+        }}
+        if found.is_none() {
+            if_annotation! { Annotation::TreeBlock(tree_path) in iter; {
+                // cut off if we're in a declaration block
+                let mut tree_path = &tree_path[..];
+                match tree_path.split_last() {
+                    Some((kwd, rest)) if kwd == "proc" || kwd == "verb" || kwd == "var" => tree_path = rest,
+                    _ => {}
+                }
+                found = self.objtree.type_by_path(tree_path);
+            }}
+        }
+        (found, proc_name)
     }
 
     // ------------------------------------------------------------------------
@@ -449,7 +486,6 @@ handle_method_call! {
         let mut results = Vec::new();
 
         for (_range, annotation) in annotations.get_location(location) {
-            use dm::annotation::Annotation;
             #[cfg(debug_assertions)] {
                 results.push(format!("{:?}", annotation));
             }
@@ -574,8 +610,6 @@ handle_method_call! {
     }
 
     on GotoDefinition(&mut self, params) {
-        use dm::annotation::Annotation;
-
         let path = url_to_path(params.text_document.uri)?;
         let (file_id, annotations) = self.get_annotations(&path)?;
         let location = dm::Location {
@@ -631,32 +665,9 @@ handle_method_call! {
                 PathOp::Colon => break,  // never finds anything, apparently?
                 PathOp::Slash => self.objtree.root(),
                 PathOp::Dot => {
-                    let mut found = None;
-                    if_annotation! { Annotation::ProcBody(ref proc_path) in iter; {
-                        // chop off proc name and 'proc/' or 'verb/' if it's there
-                        // TODO: factor this logic somewhere
-                        let mut proc_path = &proc_path[..];
-                        proc_path = &proc_path[..proc_path.len() - 1];
-                        match proc_path.split_last() {
-                            Some((kwd, rest)) if kwd == "proc" || kwd == "verb" => proc_path = rest,
-                            _ => {}
-                        }
-                        found = self.objtree.type_by_path(proc_path);
-                    }}
-                    if found.is_none() {
-                        if_annotation! { Annotation::TreeBlock(tree_path) in iter; {
-                            // cut off if we're in a declaration block
-                            let mut tree_path = &tree_path[..];
-                            match tree_path.split_last() {
-                                Some((kwd, rest)) if kwd == "proc" || kwd == "verb" || kwd == "var" => tree_path = rest,
-                                _ => {}
-                            }
-                            found = self.objtree.type_by_path(tree_path);
-                        }}
-                    }
-                    match found {
-                        None => break,
-                        Some(found) => found,
+                    match self.find_type_context(iter.clone()) {
+                        (Some(base), _) => base,
+                        (None, _) => self.objtree.root(),
                     }
                 }
             };
