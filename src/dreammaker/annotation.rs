@@ -20,6 +20,8 @@ pub enum Annotation {
     // local information about a specific token
     UnscopedCall(String),
     UnscopedVar(String),
+    ScopedCall(Vec<String>, String),
+    ScopedVar(Vec<String>, String),
     ParentCall,  // ..
     ReturnVal,  // .
     InSequence(usize),  // where in TreePath or TypePath is this ident

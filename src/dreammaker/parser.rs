@@ -1194,10 +1194,11 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             }
         }
 
+        let mut belongs_to = Vec::new();
         let term = if unary_ops.len() > 0 {
-            require!(self.term())
+            require!(self.term(&mut belongs_to))
         } else {
-            leading!(self.term())
+            leading!(self.term(&mut belongs_to))
         };
 
         // Read follows
@@ -1208,7 +1209,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             } else if let Some(()) = self.exact(Token::Punct(Punctuation::MinusMinus))? {
                 unary_ops.push(UnaryOp::PostDecr);
             } else {
-                match self.follow()? {
+                match self.follow(&mut belongs_to)? {
                     Some(f) => follow.push(f),
                     None => break,
                 }
@@ -1230,7 +1231,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         })
     }
 
-    fn term(&mut self) -> Status<Term> {
+    fn term(&mut self, belongs_to: &mut Vec<String>) -> Status<Term> {
         use super::lexer::Punctuation::*;
 
         let start = self.updated_location();
@@ -1307,6 +1308,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                         Term::Call(i, args)
                     },
                     None => {
+                        belongs_to.push(i.clone());
                         self.annotate(start, || Annotation::UnscopedVar(i.clone()));
                         Term::Ident(i)
                     },
@@ -1373,7 +1375,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         })
     }
 
-    fn follow(&mut self) -> Status<Follow> {
+    fn follow(&mut self, belongs_to: &mut Vec<String>) -> Status<Follow> {
         match self.next("index, field, method call")? {
             // follow :: '[' expression ']'
             Token::Punct(Punctuation::LBracket) => {
@@ -1384,20 +1386,36 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
 
             // follow :: '.' ident arglist?
             // TODO: only apply these rules if there is no whitespace around the punctuation
-            Token::Punct(Punctuation::Dot) => self.follow_index(IndexKind::Dot),
+            Token::Punct(Punctuation::Dot) => self.follow_index(IndexKind::Dot, belongs_to),
             //Token::Punct(Punctuation::Colon) => self.follow_index(IndexKind::Colon),
-            Token::Punct(Punctuation::SafeDot) => self.follow_index(IndexKind::SafeDot),
-            Token::Punct(Punctuation::SafeColon) => self.follow_index(IndexKind::SafeColon),
+            Token::Punct(Punctuation::SafeDot) => self.follow_index(IndexKind::SafeDot, belongs_to),
+            Token::Punct(Punctuation::SafeColon) => self.follow_index(IndexKind::SafeColon, belongs_to),
 
             other => return self.try_another(other),
         }
     }
 
-    fn follow_index(&mut self, kind: IndexKind) -> Status<Follow> {
+    fn follow_index(&mut self, kind: IndexKind, belongs_to: &mut Vec<String>) -> Status<Follow> {
+        let start = self.updated_location();
         let ident = require!(self.ident());
+        let end = self.updated_location();
+
         success(match self.arguments()? {
-            Some(args) => Follow::Call(kind, ident, args),
-            None => Follow::Field(kind, ident),
+            Some(args) => {
+                if !belongs_to.is_empty() {
+                    let past = ::std::mem::replace(belongs_to, Vec::new());
+                    self.annotate_precise(start..end, || Annotation::ScopedCall(past, ident.clone()));
+                }
+                Follow::Call(kind, ident, args)
+            },
+            None => {
+                if !belongs_to.is_empty() {
+                    let past = belongs_to.clone();
+                    self.annotate_precise(start..end, || Annotation::ScopedVar(past, ident.clone()));
+                    belongs_to.push(ident.clone());
+                }
+                Follow::Field(kind, ident)
+            },
         })
     }
 
