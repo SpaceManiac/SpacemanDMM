@@ -597,6 +597,11 @@ handle_method_call! {
                 parts = &parts[i+1..];
                 absolute = true;
             }
+            // if we're on the right side of a 'list/', start the lookup there
+            match parts.split_first() {
+                Some((kwd, rest)) if kwd == "list" && !rest.is_empty() => parts = rest,
+                _ => {}
+            }
 
             let mut prefix_parts = &[][..];
             if !absolute {
@@ -657,11 +662,11 @@ handle_method_call! {
             };
 
             // follow the path ops until we hit 'proc' or 'verb'
-            let mut proc_name = None;
             let mut iter = parts.iter();
+            let mut is_proc = false;
             while let Some(&(op, ref name)) = iter.next() {
                 if name == "proc" || name == "verb" {
-                    proc_name = iter.next().map(|t| &t.1);
+                    is_proc = true;
                     break;
                 }
                 if let Some(next) = ty.navigate(op, name) {
@@ -670,12 +675,14 @@ handle_method_call! {
                     break;
                 }
             }
-            if let Some(proc_name) = proc_name {
-                // '/datum/proc/proc_name'
-                if let Some(proc) = ty.procs.get(proc_name) {
-                    results.push(self.convert_location(proc.value.location, &ty.path, "/proc/", proc_name)?);
-                }
-                // TODO: check parent types if not found
+            if is_proc {
+                if let Some((_, proc_name)) = iter.next() {
+                    // '/datum/proc/proc_name'
+                    if let Some(proc) = ty.procs.get(proc_name) {
+                        results.push(self.convert_location(proc.value.location, &ty.path, "/proc/", proc_name)?);
+                    }
+                    // TODO: check parent types if not found
+                }  // else '/datum/proc', no results
             } else {
                 // just a type path
                 results.push(self.convert_location(ty.location, &ty.path, "", "")?);
