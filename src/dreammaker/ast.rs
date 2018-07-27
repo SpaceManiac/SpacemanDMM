@@ -6,6 +6,8 @@ use std::iter::FromIterator;
 
 use linked_hash_map::LinkedHashMap;
 
+use error::Location;
+
 /// The unary operators, both prefix and postfix.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum UnaryOp {
@@ -414,6 +416,7 @@ pub struct Parameter {
     pub default: Option<Expression>,
     pub input_type: InputType,
     pub in_list: Option<Expression>,
+    pub location: Location,
 }
 
 impl fmt::Display for Parameter {

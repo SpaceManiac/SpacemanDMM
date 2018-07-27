@@ -648,6 +648,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         if let Some(()) = self.exact(Punct(Ellipsis))? {
             return success(Parameter {
                 name: "...".to_owned(),
+                location: self.location,
                 .. Default::default()
             });
         }
@@ -661,6 +662,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             self.context.register_error(DMError::new(leading_loc, "'var/' is unnecessary here")
                 .set_severity(Severity::Hint));
         }
+        let location = self.location;
         require!(self.var_annotations());
         // = <expr>
         let default = if let Some(()) = self.exact(Punct(Assign))? {
@@ -670,7 +672,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         };
         let (input_type, in_list) = require!(self.input_specifier());
         success(Parameter {
-            path, name, default, input_type, in_list
+            path, name, default, input_type, in_list, location
         })
     }
 

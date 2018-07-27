@@ -712,15 +712,29 @@ handle_method_call! {
         }}
 
         if_annotation! { Annotation::UnscopedVar(var_name) in iter; {
-            let (ty, _) = self.find_type_context(&iter);
-            let mut next = ty.or(Some(self.objtree.root()));
-            // TODO: check the proc parameters first
-            while let Some(ty) = next {
-                if let Some(var) = ty.vars.get(var_name) {
-                    results.push(self.convert_location(var.value.location, &ty.path, "/var/", var_name)?);
-                    break;
+            let (ty, proc_name) = self.find_type_context(&iter);
+            let ty = ty.unwrap_or(self.objtree.root());
+            let mut found_parameter = false;
+            if let Some(proc_name) = proc_name {
+                if let Some(proc) = ty.procs.get(proc_name) {
+                    for param in proc.value.parameters.iter() {
+                        if &param.name == var_name {
+                            results.push(self.convert_location(param.location, &ty.path, "/proc/", proc_name)?);
+                            found_parameter = true;
+                            break
+                        }
+                    }
                 }
-                next = ty.parent_type();
+            }
+            if !found_parameter {
+                let mut next = Some(ty);
+                while let Some(ty) = next {
+                    if let Some(var) = ty.vars.get(var_name) {
+                        results.push(self.convert_location(var.value.location, &ty.path, "/var/", var_name)?);
+                        break;
+                    }
+                    next = ty.parent_type();
+                }
             }
         }}
 
