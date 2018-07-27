@@ -693,7 +693,8 @@ handle_method_call! {
         let mut results = Vec::new();
 
         let iter = annotations.get_location(location);
-        if_annotation! { Annotation::TreePath(mut absolute, parts) in iter; {
+        match_annotation! { iter;
+        Annotation::TreePath(mut absolute, parts) => {
             let mut parts = &parts[..];
             // cut off the part of the path we haven't selected
             if_annotation! { Annotation::InSequence(idx) in iter; {
@@ -724,9 +725,8 @@ handle_method_call! {
             if let Some(ty) = self.objtree.type_by_path(prefix_parts.iter().chain(parts.iter())) {
                 results.push(self.convert_location(ty.location, &ty.path, "", "")?);
             }
-        }}
-
-        if_annotation! { Annotation::TypePath(parts) in iter; {
+        },
+        Annotation::TypePath(parts) => {
             let mut parts = &parts[..];
             // cut off the part of the path we haven't selected
             if_annotation! { Annotation::InSequence(idx) in iter; {
@@ -770,9 +770,8 @@ handle_method_call! {
                 // just a type path
                 results.push(self.convert_location(ty.location, &ty.path, "", "")?);
             }
-        }}
-
-        if_annotation! { Annotation::UnscopedCall(proc_name) in iter; {
+        },
+        Annotation::UnscopedCall(proc_name) => {
             let (ty, _) = self.find_type_context(&iter);
             let mut next = ty.or(Some(self.objtree.root()));
             while let Some(ty) = next {
@@ -782,9 +781,8 @@ handle_method_call! {
                 }
                 next = ty.parent_type();
             }
-        }}
-
-        if_annotation! { Annotation::UnscopedVar(var_name) in iter; {
+        },
+        Annotation::UnscopedVar(var_name) => {
             let (ty, proc_name) = self.find_type_context(&iter);
             match self.find_unscoped_var(&iter, ty, proc_name, var_name) {
                 UnscopedVar::Parameter { ty, proc, param } => {
@@ -798,9 +796,8 @@ handle_method_call! {
                 },
                 UnscopedVar::None => {}
             }
-        }}
-
-        if_annotation! { Annotation::ScopedCall(priors, proc_name) in iter; {
+        },
+        Annotation::ScopedCall(priors, proc_name) => {
             let mut next = self.find_scoped_type(&iter, priors);
             while let Some(ty) = next {
                 if ty.path.is_empty() {  // root
@@ -812,9 +809,8 @@ handle_method_call! {
                 }
                 next = ty.parent_type();
             }
-        }}
-
-        if_annotation! { Annotation::ScopedVar(priors, var_name) in iter; {
+        },
+        Annotation::ScopedVar(priors, var_name) => {
             let mut next = self.find_scoped_type(&iter, priors);
             while let Some(ty) = next {
                 if ty.path.is_empty() {  // root
@@ -826,7 +822,8 @@ handle_method_call! {
                 }
                 next = ty.parent_type();
             }
-        }}
+        },
+        }
 
         if results.is_empty() {
             None
