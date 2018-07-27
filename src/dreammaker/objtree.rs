@@ -137,7 +137,7 @@ impl<'a> TypeRef<'a> {
     }
 
     #[inline]
-    pub fn get(&self) -> &'a Type {
+    pub fn get(self) -> &'a Type {
         self.tree.graph.node_weight(self.idx).unwrap()
     }
 
@@ -231,6 +231,17 @@ impl<'a> TypeRef<'a> {
     #[inline]
     pub fn get_declaration(self, name: &str) -> Option<&'a VarDeclaration> {
         self.get().get_declaration(name, self.tree)
+    }
+
+    pub fn get_proc(self, name: &str) -> Option<&'a ProcValue> {
+        let mut current: Option<TypeRef<'a>> = Some(self);
+        while let Some(ty) = current {
+            if let Some(proc) = ty.get().procs.get(name) {
+                return Some(&proc.value);
+            }
+            current = ty.parent_type();
+        }
+        None
     }
 }
 

@@ -273,7 +273,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         })
     }
 
-    fn find_type_context<'b, I, Ign>(&self, iter: I) -> (Option<TypeRef>, Option<&'b str>)
+    fn find_type_context<'b, I, Ign>(&self, iter: &I) -> (Option<TypeRef>, Option<&'b str>)
         where I: Iterator<Item=(Ign, &'b Annotation)> + Clone
     {
         let mut found = None;
@@ -665,7 +665,7 @@ handle_method_call! {
                 PathOp::Colon => break,  // never finds anything, apparently?
                 PathOp::Slash => self.objtree.root(),
                 PathOp::Dot => {
-                    match self.find_type_context(iter.clone()) {
+                    match self.find_type_context(&iter) {
                         (Some(base), _) => base,
                         (None, _) => self.objtree.root(),
                     }
@@ -689,14 +689,25 @@ handle_method_call! {
             if is_proc {
                 if let Some((_, proc_name)) = iter.next() {
                     // '/datum/proc/proc_name'
-                    if let Some(proc) = ty.procs.get(proc_name) {
-                        results.push(self.convert_location(proc.value.location, &ty.path, "/proc/", proc_name)?);
+                    if let Some(proc) = ty.get_proc(proc_name) {
+                        results.push(self.convert_location(proc.location, &ty.path, "/proc/", proc_name)?);
                     }
-                    // TODO: check parent types if not found
                 }  // else '/datum/proc', no results
             } else {
                 // just a type path
                 results.push(self.convert_location(ty.location, &ty.path, "", "")?);
+            }
+        }}
+
+        if_annotation! { Annotation::UnscopedCall(proc_name) in iter; {
+            let (ty, _) = self.find_type_context(&iter);
+            let mut next = ty.or(Some(self.objtree.root()));
+            while let Some(ty) = next {
+                if let Some(proc) = ty.procs.get(proc_name) {
+                    results.push(self.convert_location(proc.value.location, &ty.path, "/proc/", proc_name)?);
+                    break;
+                }
+                next = ty.parent_type();
             }
         }}
 
