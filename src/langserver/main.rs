@@ -175,6 +175,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
 
     fn parse_environment(&mut self, environment: PathBuf) -> Result<(), jsonrpc::Error> {
         // handle the parsing
+        let start = std::time::Instant::now();
         eprintln!("environment: {}", environment.display());
         if let Some(stem) = environment.file_stem() {
             self.issue_notification::<extras::WindowStatus>(extras::WindowStatusParams {
@@ -208,6 +209,8 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         pp.finalize();
         self.preprocessor = Some(pp);
         self.issue_notification::<extras::WindowStatus>(Default::default());
+        let elapsed = start.elapsed();
+        eprintln!("parsed in {}.{:03}s", elapsed.as_secs(), elapsed.subsec_nanos() / 1_000_000);
 
         // initial diagnostics pump
         let mut map: HashMap<_, Vec<_>> = HashMap::new();
