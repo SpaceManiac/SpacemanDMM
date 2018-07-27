@@ -309,6 +309,27 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         (found, proc_name)
     }
 
+    fn find_unscoped_var<'b>(&'b self, ty: Option<TypeRef<'b>>, proc_name: Option<&'b str>, var_name: &str) -> UnscopedVar<'b> {
+        let ty = ty.unwrap_or(self.objtree.root());
+        if let Some(proc_name) = proc_name {
+            if let Some(proc) = ty.get().procs.get(proc_name) {
+                for param in proc.value.parameters.iter() {
+                    if &param.name == var_name {
+                        return UnscopedVar::Parameter { ty, proc: proc_name, param };
+                    }
+                }
+            }
+        }
+        let mut next = Some(ty);
+        while let Some(ty) = next {
+            if let Some(var) = ty.get().vars.get(var_name) {
+                return UnscopedVar::Variable { ty, var };
+            }
+            next = ty.parent_type();
+        }
+        UnscopedVar::None
+    }
+
     // ------------------------------------------------------------------------
     // Driver
 
@@ -713,28 +734,14 @@ handle_method_call! {
 
         if_annotation! { Annotation::UnscopedVar(var_name) in iter; {
             let (ty, proc_name) = self.find_type_context(&iter);
-            let ty = ty.unwrap_or(self.objtree.root());
-            let mut found_parameter = false;
-            if let Some(proc_name) = proc_name {
-                if let Some(proc) = ty.procs.get(proc_name) {
-                    for param in proc.value.parameters.iter() {
-                        if &param.name == var_name {
-                            results.push(self.convert_location(param.location, &ty.path, "/proc/", proc_name)?);
-                            found_parameter = true;
-                            break
-                        }
-                    }
+            match self.find_unscoped_var(ty, proc_name, var_name) {
+                UnscopedVar::Parameter { ty, proc, param } => {
+                    results.push(self.convert_location(param.location, &ty.path, "/proc/", proc)?);
                 }
-            }
-            if !found_parameter {
-                let mut next = Some(ty);
-                while let Some(ty) = next {
-                    if let Some(var) = ty.vars.get(var_name) {
-                        results.push(self.convert_location(var.value.location, &ty.path, "/var/", var_name)?);
-                        break;
-                    }
-                    next = ty.parent_type();
+                UnscopedVar::Variable { ty, var } => {
+                    results.push(self.convert_location(var.value.location, &ty.path, "/var/", var_name)?);
                 }
+                UnscopedVar::None => {}
             }
         }}
 
@@ -838,4 +845,17 @@ fn convert_severity(severity: dm::Severity) -> langserver::DiagnosticSeverity {
         dm::Severity::Info => langserver::DiagnosticSeverity::Information,
         dm::Severity::Hint => langserver::DiagnosticSeverity::Hint,
     }
+}
+
+enum UnscopedVar<'a> {
+    Parameter {
+        ty: TypeRef<'a>,
+        proc: &'a str,
+        param: &'a dm::ast::Parameter,
+    },
+    Variable {
+        ty: TypeRef<'a>,
+        var: &'a dm::objtree::TypeVar,
+    },
+    None,
 }
