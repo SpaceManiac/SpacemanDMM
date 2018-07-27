@@ -178,7 +178,7 @@ impl<'a> TypeRef<'a> {
     }
 
     /// Find the parent **path**, without taking `parent_type` into account.
-    pub fn parent(&self) -> Option<TypeRef<'a>> {
+    pub fn parent_path(&self) -> Option<TypeRef<'a>> {
         self.tree.graph.neighbors_directed(self.idx, Direction::Incoming).next().map(|i| TypeRef::new(self.tree, i))
     }
 
@@ -213,6 +213,39 @@ impl<'a> TypeRef<'a> {
         f(*self);
         for child in self.children() {
             child.recurse(f);
+        }
+    }
+
+    /// Navigate the tree according to the given path operator.
+    pub fn navigate(&self, op: PathOp, name: &str) -> Option<TypeRef<'a>> {
+        match op {
+            // '/' always looks for a direct child
+            PathOp::Slash => self.child(name),
+            // '.' looks for a child of us or of any of our parents
+            PathOp::Dot => {
+                let mut next = Some(*self);
+                while let Some(current) = next {
+                    if let Some(child) = current.child(name) {
+                        return Some(child);
+                    }
+                    next = current.parent_path();
+                }
+                None
+            },
+            // ':' looks for a child of us or of any of our children
+            PathOp::Colon => {
+                if let Some(child) = self.child(name) {
+                    return Some(child);
+                }
+                for idx in self.tree.graph.neighbors(self.idx) {
+                    if let Some(child) = TypeRef::new(self.tree, idx).navigate(PathOp::Colon, name) {
+                        // Yes, simply returning the first thing that matches
+                        // is the correct behavior.
+                        return Some(child);
+                    }
+                }
+                None
+            },
         }
     }
 
@@ -279,7 +312,7 @@ impl ObjectTree {
         self.graph.node_weight(type_.parent_type)
     }
 
-    pub fn type_by_path<I>(&self, path: I) -> Option<&Type>
+    pub fn type_by_path<I>(&self, path: I) -> Option<TypeRef>
         where I: IntoIterator, I::Item: AsRef<str>
     {
         let mut current = NodeIndex::new(0);
@@ -294,12 +327,12 @@ impl ObjectTree {
             }
             return None;
         }
-        Some(self.graph.node_weight(current).unwrap())
+        Some(TypeRef::new(self, current))
     }
 
-    pub fn type_by_constant(&self, constant: &Constant) -> Option<&Type> {
+    pub fn type_by_constant(&self, constant: &Constant) -> Option<TypeRef> {
         match constant {
-            &Constant::String(ref string_path) => self.find(string_path).map(|tr| tr.get()),
+            &Constant::String(ref string_path) => self.find(string_path),
             &Constant::Prefab(Prefab { ref path, .. }) => self.type_by_path(path.iter().map(|(_, item)| item)),
             _ => None,
         }
