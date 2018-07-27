@@ -158,7 +158,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         };
         Ok(langserver::Location {
             uri: if loc.file == dm::FileId::builtins() {
-                Url::parse(&format!("byond-docs://reference/#{}{}{}", one, two, three))
+                Url::parse(&format!("dm://docs/reference.dm#{}{}{}", one, two, three))
                     .map_err(invalid_request)?
             } else {
                 self.file_url(loc.file)?
