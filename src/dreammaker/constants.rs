@@ -16,7 +16,7 @@ use super::preprocessor::DefineMap;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Constant {
     /// The literal `null`.
-    Null(Option<TypePath>),
+    Null(Option<TreePath>),
     /// A `new` call.
     New {
         /// The type to be instantiated.
@@ -284,7 +284,7 @@ pub fn preprocessor_evaluate(location: Location, expr: Expression, defines: &Def
 }
 
 enum ConstLookup {
-    Found(TypePath, Constant),
+    Found(TreePath, Constant),
     Continue(Option<NodeIndex>),
 }
 
@@ -348,7 +348,7 @@ impl<'a> HasLocation for ConstantFolder<'a> {
 }
 
 impl<'a> ConstantFolder<'a> {
-    fn expr(&mut self, expression: Expression, type_hint: Option<&TypePath>) -> Result<Constant, DMError> {
+    fn expr(&mut self, expression: Expression, type_hint: Option<&TreePath>) -> Result<Constant, DMError> {
         Ok(match expression {
             Expression::Base { unary, term, follow } => {
                 let base_type_hint = if follow.is_empty() && unary.is_empty() { type_hint } else { None };
@@ -415,8 +415,8 @@ impl<'a> ConstantFolder<'a> {
             (Constant::Null(Some(type_hint)), Follow::Field(_, field_name)) => {
                 let mut full_path = String::new();
                 for each in type_hint {
-                    full_path.push('/');  // TODO: use path ops here?
-                    full_path.push_str(&each.1);
+                    full_path.push('/');
+                    full_path.push_str(&each);
                 }
                 match self.tree.as_mut().and_then(|t| t.types.get(&full_path)) {
                     Some(&idx) => self.recursive_lookup(idx, &field_name, true),
@@ -502,7 +502,7 @@ impl<'a> ConstantFolder<'a> {
         }
     }
 
-    fn term(&mut self, term: Term, type_hint: Option<&TypePath>) -> Result<Constant, DMError> {
+    fn term(&mut self, term: Term, type_hint: Option<&TreePath>) -> Result<Constant, DMError> {
         Ok(match term {
             Term::Null => Constant::Null(type_hint.cloned()),
             Term::New { type_, args } => {
@@ -581,7 +581,7 @@ impl<'a> ConstantFolder<'a> {
         Ok(Prefab { path: prefab.path, vars })
     }
 
-    fn ident(&mut self, ident: String, type_hint: Option<&TypePath>, must_be_static: bool) -> Result<Constant, DMError> {
+    fn ident(&mut self, ident: String, type_hint: Option<&TreePath>, must_be_static: bool) -> Result<Constant, DMError> {
         if ident == "null" {
             Ok(Constant::Null(type_hint.cloned()))
         } else {

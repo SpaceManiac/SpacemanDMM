@@ -551,7 +551,7 @@ handle_method_call! {
                                 if decl.var_type.is_tmp {
                                     declaration.push_str("/tmp");
                                 }
-                                for (_, bit) in decl.var_type.type_path.iter() {
+                                for bit in decl.var_type.type_path.iter() {
                                     declaration.push('/');
                                     declaration.push_str(&bit);
                                 }

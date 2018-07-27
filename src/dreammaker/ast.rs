@@ -72,6 +72,9 @@ impl fmt::Display for PathOp {
     }
 }
 
+/// A (typically absolute) tree path where the path operator is irrelevant.
+pub type TreePath = Vec<String>;
+
 /// A series of identifiers separated by path operators.
 pub type TypePath = Vec<(PathOp, String)>;
 
@@ -500,7 +503,7 @@ pub struct VarType {
     pub is_static: bool,
     pub is_const: bool,
     pub is_tmp: bool,
-    pub type_path: TypePath,
+    pub type_path: TreePath,
 }
 
 impl VarType {
@@ -512,15 +515,9 @@ impl VarType {
 
 impl FromIterator<String> for VarType {
     fn from_iter<T: IntoIterator<Item=String>>(iter: T) -> Self {
-        Self::from_iter(iter.into_iter().map(|p| (PathOp::Slash, p)))
-    }
-}
-
-impl FromIterator<(PathOp, String)> for VarType {
-    fn from_iter<T: IntoIterator<Item=(PathOp, String)>>(iter: T) -> Self {
         let (mut is_static, mut is_const, mut is_tmp) = (false, false, false);
         let type_path = iter.into_iter()
-            .skip_while(|(_, p)| {
+            .skip_while(|p| {
                 if p == "global" || p == "static" {
                     is_static = true; true
                 } else if p == "const" {

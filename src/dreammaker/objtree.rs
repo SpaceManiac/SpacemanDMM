@@ -464,7 +464,6 @@ impl ObjectTree {
                 None => return Ok(None) // var{} block, children will be real vars
             };
             while prev == "global" || prev == "static" || prev == "tmp" || prev == "const" {
-                // TODO: store this information
                 if let Some(name) = rest.next() {
                     is_static |= prev == "global" || prev == "static";
                     is_const |= prev == "const";
@@ -480,7 +479,7 @@ impl ObjectTree {
 
         let mut type_path = Vec::new();
         for each in rest {
-            type_path.push((PathOp::Slash, prev.to_owned()));
+            type_path.push(prev.to_owned());
             prev = each;
         }
         let node = self.graph.node_weight_mut(parent).unwrap();
