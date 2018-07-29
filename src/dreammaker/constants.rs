@@ -460,6 +460,7 @@ impl<'a> ConstantFolder<'a> {
         numeric!(Sub -);
         numeric!(Mul *);
         numeric!(Div /);
+        numeric!(Mod %);
         numeric!(Less <);
         numeric!(LessEq <=);
         numeric!(Greater >);
