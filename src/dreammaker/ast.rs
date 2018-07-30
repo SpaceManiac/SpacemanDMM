@@ -305,6 +305,20 @@ impl Expression {
             _ => None,
         }
     }
+
+    /// If this expression consists of a single term, return it.
+    pub fn into_term(self) -> Option<Term> {
+        match self {
+            Expression::Base { unary, follow, term } => {
+                if unary.is_empty() && follow.is_empty() {
+                    Some(term)
+                } else {
+                    None
+                }
+            },
+            _ => None
+        }
+    }
 }
 
 impl From<Term> for Expression {

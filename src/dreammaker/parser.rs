@@ -851,18 +851,35 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             } else if let Some(init) = init {
                 // in-list form ("for list")
                 let (var_type, name) = match init {
+                    // this is a really terrible way to do this
                     Statement::Var { var_type, name, value: Some(value) } => {
                         // for(var/a = 1 to
                         require!(self.exact_ident("to"));
                         return success(require!(self.for_range(Some(var_type), name, value)));
                     },
                     Statement::Var { var_type, name, value: None } => { (Some(var_type), name) },
-                    Statement::Expr(Expression::Base { unary, term: Term::Ident(name), follow }) => {
-                        if !unary.is_empty() || !follow.is_empty() {
-                            return Err(self.error("for-list must start with variable"));
+                    Statement::Expr(Expression::BinaryOp { op: BinaryOp::In, lhs, rhs }) => {
+                        let name = match lhs.into_term() {
+                            Some(Term::Ident(name)) => name,
+                            _ => return Err(self.error("for-list must start with variable")),
+                        };
+                        if let Some(()) = self.exact_ident("to")? {
+                            return success(require!(self.for_range(None, name, *rhs)));
                         }
-                        (None, name)
-                    }
+                        // I love code duplication, don't you?
+                        require!(self.exact(Token::Punct(Punctuation::RParen)));
+                        return success(Statement::ForList {
+                            var_type: None,
+                            name,
+                            input_type: InputType::default(),
+                            in_list: Some(*rhs),
+                            block: require!(self.block()),
+                        });
+                    },
+                    Statement::Expr(expr) => match expr.into_term() {
+                        Some(Term::Ident(name)) => (None, name),
+                        _ => return Err(self.error("for-list must start with variable")),
+                    },
                     _ => return Err(self.error("for-list must start with variable")),
                 };
 
