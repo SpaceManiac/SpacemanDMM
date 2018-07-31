@@ -363,6 +363,8 @@ pub enum Term {
     Call(String, Vec<Expression>),
     /// A `..()` call. If arguments is empty, the proc's arguments are passed.
     ParentCall(Vec<Expression>),
+    /// A `.()` call.
+    SelfCall(Vec<Expression>),
     /// A prefab literal (path + vars).
     Prefab(Prefab),
     /// An identifier.

@@ -1365,6 +1365,9 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                     // prefab
                     // TODO: arrange for this ident to end up in the prefab's annotation
                     Term::Prefab(require!(self.prefab_ex(vec![(PathOp::Dot, ident)])))
+                } else if let Some(args) = self.arguments()? {
+                    // .() call
+                    Term::SelfCall(args)
                 } else {
                     // bare dot
                     self.annotate(start, || Annotation::ReturnVal);
