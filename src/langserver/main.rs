@@ -840,6 +840,30 @@ handle_method_call! {
                 next = ty.parent_type();
             }
         },
+        Annotation::ParentCall => {
+            if let (Some(ty), Some((proc_name, idx))) = self.find_type_context(&iter) {
+                // TODO: idx is always 0 unless there are multiple overrides in
+                // the same .dm file, due to annotations operating against a
+                // dummy ObjectTree which does not contain any definitions from
+                // other files.
+                if idx == 0 {
+                    // first proc on the type, go to the REAL parent
+                    let mut next = ty.parent_type();
+                    while let Some(ty) = next {
+                        if let Some(proc) = ty.procs.get(proc_name) {
+                            results.push(self.convert_location(proc.value.last().unwrap().location, &ty.path, "/proc/", proc_name)?);
+                            break;
+                        }
+                        next = ty.parent_type();
+                    }
+                } else if let Some(proc) = ty.procs.get(proc_name) {
+                    // override, go to the previous version of the proc
+                    if let Some(parent) = proc.value.get(idx - 1) {
+                        results.push(self.convert_location(parent.location, &ty.path, "/proc/", proc_name)?);
+                    }
+                }
+            }
+        },
         }
 
         if results.is_empty() {

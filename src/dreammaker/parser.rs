@@ -596,7 +596,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 let parameters = require!(self.separated(Comma, RParen, None, Parser::proc_parameter));
                 let idx = match self.tree.add_proc(location, new_stack.iter(), new_stack.len(), parameters) {
                     Ok(idx) => idx,
-                    Err(e) => { self.context.register_error(e); usize::max_value() }
+                    Err(e) => { self.context.register_error(e); 0 /* incorrect but sane fallback */ }
                 };
 
                 // split off a subparser so we can keep parsing the objtree
