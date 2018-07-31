@@ -22,6 +22,7 @@ mod io;
 mod document;
 mod symbol_search;
 mod extras;
+mod completion;
 
 use std::path::{PathBuf, Path};
 use std::collections::{HashMap, VecDeque};
@@ -823,29 +824,21 @@ handle_method_call! {
         Annotation::ScopedCall(priors, proc_name) => {
             let mut next = self.find_scoped_type(&iter, priors);
             while let Some(ty) = next {
-                if ty.is_root() {
-                    break;
-                }
                 if let Some(proc) = ty.procs.get(proc_name) {
                     results.push(self.convert_location(proc.value.last().unwrap().location, &ty.path, "/proc/", proc_name)?);
                     break;
                 }
-                next = ty.parent_type();
+                next = ignore_root(ty.parent_type());
             }
         },
         Annotation::ScopedVar(priors, var_name) => {
             let mut next = self.find_scoped_type(&iter, priors);
-            let mut first = true;
             while let Some(ty) = next {
-                if ty.is_root() && !first {
-                    break;
-                }
-                first = false;
                 if let Some(var) = ty.vars.get(var_name) {
                     results.push(self.convert_location(var.value.location, &ty.path, "/var/", var_name)?);
                     break;
                 }
-                next = ty.parent_type();
+                next = ignore_root(ty.parent_type());
             }
         },
         Annotation::ParentCall => {
@@ -952,44 +945,14 @@ handle_method_call! {
                     // type variables (implicit `src.` and `globals.`)
                     for (name, var) in ty.get().vars.iter() {
                         if starts_with(name, incomplete_name) {
-                            let mut detail = ty.pretty_path().to_owned();
-                            if let Some(ref decl) = var.declaration {
-                                if decl.var_type.is_const {
-                                    if let Some(ref constant) = var.value.constant {
-                                        if ty.is_root() {
-                                            detail = constant.to_string();
-                                        } else {
-                                            detail = format!("{} - {}", constant, detail);
-                                        }
-                                    }
-                                }
-                            }
-
-                            results.push(CompletionItem {
-                                label: name.clone(),
-                                kind: Some(CompletionItemKind::Field),
-                                detail: Some(detail),
-                                .. Default::default()
-                            });
+                            results.push(completion::item_var(ty, name, var));
                         }
                     }
 
                     // procs
-                    for (name, _proc) in ty.procs.iter() {
+                    for (name, proc) in ty.procs.iter() {
                         if starts_with(name, incomplete_name) {
-                            results.push(CompletionItem {
-                                label: name.clone(),
-                                kind: Some(if ty.is_root() {
-                                    CompletionItemKind::Function
-                                } else if is_constructor_name(name.as_str()) {
-                                    CompletionItemKind::Constructor
-                                } else {
-                                    CompletionItemKind::Method
-                                }),
-                                detail: Some(ty.pretty_path().to_owned()),
-                                insert_text: Some(format!("{}(", name)),
-                                .. Default::default()
-                            });
+                            results.push(completion::item_proc(ty, name, proc));
                         }
                     }
                     next = ty.parent_type();
@@ -1118,4 +1081,11 @@ enum UnscopedVar<'a> {
 
 fn is_constructor_name(name: &str) -> bool {
     name == "New" || name == "init" || name == "Initialize"
+}
+
+fn ignore_root(t: Option<TypeRef>) -> Option<TypeRef> {
+    match t {
+        Some(t) if t.is_root() => None,
+        other => other,
+    }
 }
