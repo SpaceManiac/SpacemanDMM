@@ -584,7 +584,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 let location = self.location;
                 let expr = require!(self.expression());
                 let _ = require!(self.input_specifier());
-                require!(self.exact(Punct(Semicolon)));
+                require!(self.statement_terminator());
                 if let Err(e) = self.tree.add_var(location, new_stack.iter(), new_stack.len(), expr) {
                     self.context.register_error(e);
                 }
@@ -776,7 +776,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 }
             }
             statements
-        } else if let Some(()) = self.exact(Token::Punct(Punctuation::Semicolon))? {
+        } else if let Some(()) = self.statement_terminator()? {
             // empty blocks: proc/foo();
             Vec::new()
         } else {
@@ -828,7 +828,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             require!(self.exact(Token::Punct(Punctuation::LParen)));
             let expr = require!(self.expression());
             require!(self.exact(Token::Punct(Punctuation::RParen)));
-            require!(self.exact(Token::Punct(Punctuation::Semicolon)));
+            require!(self.statement_terminator());
             success(Statement::DoWhile(block, expr))
         } else if let Some(()) = self.exact_ident("for")? {
             // for (Var [as Type] [in List]) Statement
@@ -954,13 +954,29 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 return self.parse_error();
             };
             let value = require!(self.expression());
-            require!(self.exact(Token::Punct(Punctuation::Semicolon)));
+            require!(self.statement_terminator());
             // TODO: warn on weird values for these
             success(Statement::Setting(name, mode, value))
         } else {
             let result = leading!(self.simple_statement(false, vars));
-            require!(self.exact(Token::Punct(Punctuation::Semicolon)));
+            require!(self.statement_terminator());
             success(result)
+        }
+    }
+
+    // Handle if(1){a=1;b=2} without a trailing semicolon
+    fn statement_terminator(&mut self) -> Status<()> {
+        match self.next("';'")? {
+            Token::Punct(Punctuation::Semicolon) => SUCCESS,
+            p @ Token::Punct(Punctuation::RBrace) => {
+                //eprintln!("{:?} instead of semicolon, rbrace (soft)", self.location);
+                self.put_back(p);
+                SUCCESS
+            }
+            other => {
+                //eprintln!("{:?} instead of semicolon, {:?}", self.location, other);
+                self.try_another(other)
+            }
         }
     }
 
@@ -1081,7 +1097,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             Token::Punct(Punctuation::Slash) => PathOp::Slash,
             Token::Punct(Punctuation::Dot) => PathOp::Dot,
             Token::Punct(Punctuation::Colon) => PathOp::Colon,
-            other => { self.put_back(other); return Ok(None); }
+            other => return self.try_another(other),
         })
     }
 

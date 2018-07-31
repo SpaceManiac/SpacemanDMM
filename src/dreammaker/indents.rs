@@ -94,9 +94,6 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
             Token::Punct(Punctuation::LBrace) => self.current_spaces = None,
             Token::Punct(Punctuation::RBrace) => {
                 self.current_spaces = None;
-                if self.parentheses == 0 {
-                    self.push_semicolon();
-                }
             }
             _ => {}
         }
@@ -146,11 +143,9 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
                 }
             } else if indents == new_indents + 1 {
                 // single unindent
-                self.push_semicolon();
                 self.push(Token::Punct(Punctuation::RBrace));
             } else if indents > new_indents {
                 // multiple unindent
-                self.push_semicolon();
                 for _ in new_indents..indents {
                     self.push(Token::Punct(Punctuation::RBrace));
                 }
