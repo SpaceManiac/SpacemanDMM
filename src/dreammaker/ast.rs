@@ -590,7 +590,7 @@ pub enum Statement {
     Switch(Expression, Vec<(Vec<Case>, Vec<Statement>)>, Option<Vec<Statement>>),
     TryCatch {
         try_block: Vec<Statement>,
-        catch_params: Vec<Parameter>,
+        catch_params: Vec<TreePath>,
         catch_block: Vec<Statement>,
     },
 }

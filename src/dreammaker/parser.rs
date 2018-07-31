@@ -952,7 +952,10 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             require!(self.exact_ident("catch"));
             let catch_params;
             if let Some(()) = self.exact(Token::Punct(Punctuation::LParen))? {
-                catch_params = require!(self.separated(Punctuation::Comma, Punctuation::RParen, None, Parser::proc_parameter));
+                catch_params = require!(self.separated(Punctuation::Comma, Punctuation::RParen, None, |this| {
+                    // TODO: improve upon this cheap approximation
+                    success(leading!(this.tree_path()).1)
+                }));
             } else {
                 catch_params = Vec::new();
             }
