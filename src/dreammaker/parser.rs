@@ -1370,6 +1370,12 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 None => Term::Ident(i.to_owned())
             },
 
+            // term :: 'pick' pick_arglist
+            Token::Ident(ref i, _) if i == "pick" => match self.pick_arguments()? {
+                Some(args) => Term::Pick(args),
+                None => Term::Ident(i.to_owned())
+            },
+
             // term :: ident arglist | ident
             Token::Ident(i, _) => {
                 let first_token = self.updated_location();
@@ -1497,6 +1503,18 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     fn arguments(&mut self) -> Status<Vec<Expression>> {
         leading!(self.exact(Token::Punct(Punctuation::LParen)));
         success(require!(self.separated(Punctuation::Comma, Punctuation::RParen, Some(Expression::from(Term::Null)), Parser::expression)))
+    }
+
+    fn pick_arguments(&mut self) -> Status<Vec<(Option<Expression>, Expression)>> {
+        leading!(self.exact(Token::Punct(Punctuation::LParen)));
+        success(require!(self.separated(Punctuation::Comma, Punctuation::RParen, None, |this| {
+            let expr = leading!(this.expression());
+            if let Some(()) = this.exact(Token::Punct(Punctuation::Semicolon))? {
+                success((Some(expr), require!(this.expression())))
+            } else {
+                success((None, expr))
+            }
+        })))
     }
 
     fn separated<R: Clone, F: FnMut(&mut Self) -> Status<R>>(&mut self, sep: Punctuation, terminator: Punctuation, allow_empty: Option<R>, mut f: F) -> Status<Vec<R>> {

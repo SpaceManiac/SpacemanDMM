@@ -359,6 +359,8 @@ pub enum Term {
         args: Vec<Expression>,
         in_list: Option<Box<Expression>>, // in
     },
+    /// A `pick` call, possibly with weights.
+    Pick(Vec<(Option<Expression>, Expression)>),
     /// An unscoped function call.
     Call(String, Vec<Expression>),
     /// A `..()` call. If arguments is empty, the proc's arguments are passed.
