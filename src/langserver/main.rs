@@ -942,20 +942,15 @@ handle_method_call! {
 
                 let mut next = Some(ty);
                 while let Some(ty) = next {
-                    // type variables (implicit `src.` and `globals.`)
-                    for (name, var) in ty.get().vars.iter() {
-                        if starts_with(name, incomplete_name) {
-                            results.push(completion::item_var(ty, name, var));
-                        }
-                    }
-
-                    // procs
-                    for (name, proc) in ty.procs.iter() {
-                        if starts_with(name, incomplete_name) {
-                            results.push(completion::item_proc(ty, name, proc));
-                        }
-                    }
+                    completion::items_ty(&mut results, ty, incomplete_name);
                     next = ty.parent_type();
+                }
+            },
+            Annotation::ScopedVar(priors, incomplete_name) => {
+                let mut next = self.find_scoped_type(&iter, priors);
+                while let Some(ty) = next {
+                    completion::items_ty(&mut results, ty, incomplete_name);
+                    next = ignore_root(ty.parent_type());
                 }
             },
         }
