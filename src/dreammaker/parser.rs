@@ -801,6 +801,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             let mut arms = vec![(expr, block)];
 
             let mut else_arm = None;
+            self.skip_phantom_semicolons()?;
             while let Some(()) = self.exact_ident("else")? {
                 if let Some(()) = self.exact_ident("if")? {
                     require!(self.exact(Token::Punct(Punctuation::LParen)));
@@ -812,6 +813,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                     else_arm = Some(require!(self.block()));
                     break
                 }
+                self.skip_phantom_semicolons()?;
             }
 
             success(Statement::If(arms, else_arm))
@@ -824,6 +826,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         } else if let Some(()) = self.exact_ident("do")? {
             // statement :: 'do' block 'while' '(' expression ')' ';'
             let block = require!(self.block());
+            self.skip_phantom_semicolons()?;
             require!(self.exact_ident("while"));
             require!(self.exact(Token::Punct(Punctuation::LParen)));
             let expr = require!(self.expression());
@@ -978,6 +981,19 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 self.try_another(other)
             }
         }
+    }
+
+    fn skip_phantom_semicolons(&mut self) -> Result<(), DMError> {
+        // Indent processor inserts these semicolons which should be ignored:
+        //   if(cond){block}  ;
+        //   else if(cond){block}  ;
+        //   else {block}  ;
+        // In other situations, we really want those semicolons:
+        //   thing1 = /obj{name="prefab"}  ;
+        //   thing2 = "foo"  ;
+        // So it's easiest to just ignore them when it makes sense.
+        while let Some(()) = self.exact(Token::Punct(Punctuation::Semicolon))? {}
+        Ok(())
     }
 
     // Single-line statements. Can appear in for loops. Followed by a semicolon.
