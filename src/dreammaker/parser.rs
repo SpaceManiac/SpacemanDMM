@@ -852,12 +852,12 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 // in-list form ("for list")
                 let (var_type, name) = match init {
                     // this is a really terrible way to do this
-                    Statement::Var { var_type, name, value: Some(value) } => {
+                    Statement::Var(VarStatement { var_type, name, value: Some(value) }) => {
                         // for(var/a = 1 to
                         require!(self.exact_ident("to"));
                         return success(require!(self.for_range(Some(var_type), name, value)));
                     },
-                    Statement::Var { var_type, name, value: None } => { (Some(var_type), name) },
+                    Statement::Var(VarStatement { var_type, name, value: None }) => { (Some(var_type), name) },
                     Statement::Expr(Expression::BinaryOp { op: BinaryOp::In, lhs, rhs }) => {
                         let name = match lhs.into_term() {
                             Some(Term::Ident(name)) => name,
@@ -967,41 +967,52 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     fn simple_statement(&mut self, in_for: bool, vars: &mut Vec<(Location, VarType, String)>) -> Status<Statement> {
         if let Some(()) = self.exact_ident("var")? {
             // statement :: 'var' type_path name ('=' value)
-            let type_path_start = self.location();
-            let (_, mut tree_path) = require!(self.tree_path());
-            let name = match tree_path.pop() {
-                Some(name) => name,
-                None => return Err(self.error("'var' must be followed by a name"))
-            };
+            let mut var_stmts = Vec::new();
+            loop {
+                let type_path_start = self.location();
+                let (_, mut tree_path) = require!(self.tree_path());
+                let name = match tree_path.pop() {
+                    Some(name) => name,
+                    None => return Err(self.error("'var' must be followed by a name"))
+                };
 
-            require!(self.var_annotations());
+                require!(self.var_annotations());
 
-            let var_type = tree_path.into_iter().collect::<VarType>();
-            if var_type.is_tmp {
-                self.context.register_error(DMError::new(type_path_start, "var/tmp has no effect here")
-                    .set_severity(Severity::Warning));
+                let var_type = tree_path.into_iter().collect::<VarType>();
+                if var_type.is_tmp {
+                    self.context.register_error(DMError::new(type_path_start, "var/tmp has no effect here")
+                        .set_severity(Severity::Warning));
+                }
+
+                if self.annotations.is_some() {
+                    vars.push((self.location, var_type.clone(), name.clone()));
+                }
+
+                let value = if let Some(()) = self.exact(Token::Punct(Punctuation::Assign))? {
+                    Some(require!(self.expression()))
+                } else {
+                    None
+                };
+                let (input_types, in_list) = if !in_for {
+                    require!(self.input_specifier())
+                } else {
+                    (InputType::default(), None)
+                };
+                if !input_types.is_empty() || in_list.is_some() {
+                    self.context.register_error(self.error("input specifier has no effect here")
+                        .set_severity(Severity::Warning));
+                }
+
+                var_stmts.push(VarStatement { var_type, name, value });
+                if in_for || self.exact(Token::Punct(Punctuation::Comma))?.is_none() {
+                    break
+                }
             }
-
-            if self.annotations.is_some() {
-                vars.push((self.location, var_type.clone(), name.clone()));
-            }
-
-            let value = if let Some(()) = self.exact(Token::Punct(Punctuation::Assign))? {
-                Some(require!(self.expression()))
+            if var_stmts.len() == 1 {
+                success(Statement::Var(var_stmts.remove(0)))
             } else {
-                None
-            };
-            let (input_types, in_list) = if !in_for {
-                require!(self.input_specifier())
-            } else {
-                (InputType::default(), None)
-            };
-            if !input_types.is_empty() || in_list.is_some() {
-                self.context.register_error(self.error("input specifier has no effect here")
-                    .set_severity(Severity::Warning));
+                success(Statement::Vars(var_stmts))
             }
-
-            success(Statement::Var { var_type, name, value })
         } else if let Some(()) = self.exact_ident("return")? {
             // statement :: 'return' expression ';'
             let expression = self.expression()?;

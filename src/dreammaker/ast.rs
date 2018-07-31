@@ -579,14 +579,18 @@ pub enum Statement {
         step: Option<Expression>,
         block: Vec<Statement>,
     },
-    Var {
-        var_type: VarType,
-        name: String,
-        value: Option<Expression>,
-    },
+    Var(VarStatement),
+    Vars(Vec<VarStatement>),
     Setting(String, SettingMode, Expression),
     Spawn(Option<Expression>, Vec<Statement>),
     Switch(Expression, Vec<(Vec<Case>, Vec<Statement>)>, Option<Vec<Statement>>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VarStatement {
+    pub var_type: VarType,
+    pub name: String,
+    pub value: Option<Expression>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
