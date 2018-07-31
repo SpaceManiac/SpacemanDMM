@@ -946,6 +946,18 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             };
             require!(self.exact(Token::Punct(Punctuation::RBrace)));
             success(Statement::Switch(expr, cases, default))
+        } else if let Some(()) = self.exact_ident("try")? {
+            let try_block = require!(self.block());
+            self.skip_phantom_semicolons()?;
+            require!(self.exact_ident("catch"));
+            let catch_params;
+            if let Some(()) = self.exact(Token::Punct(Punctuation::LParen))? {
+                catch_params = require!(self.separated(Punctuation::Comma, Punctuation::RParen, None, Parser::proc_parameter));
+            } else {
+                catch_params = Vec::new();
+            }
+            let catch_block = require!(self.block());
+            success(Statement::TryCatch { try_block, catch_params, catch_block })
         // SINGLE-LINE STATEMENTS
         } else if let Some(()) = self.exact_ident("set")? {
             let name = require!(self.ident());

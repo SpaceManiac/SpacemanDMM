@@ -588,6 +588,11 @@ pub enum Statement {
     Setting(String, SettingMode, Expression),
     Spawn(Option<Expression>, Vec<Statement>),
     Switch(Expression, Vec<(Vec<Case>, Vec<Statement>)>, Option<Vec<Statement>>),
+    TryCatch {
+        try_block: Vec<Statement>,
+        catch_params: Vec<Parameter>,
+        catch_block: Vec<Statement>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
