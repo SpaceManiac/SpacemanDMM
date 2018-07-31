@@ -360,11 +360,15 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             Some(i) => i,
             None => return None,
         };
-        if first == "usr" {
-            next = self.objtree.find("/mob");
+        if first == "args" {
+            next = self.objtree.find("/list");
         } else if first == "global" {
             next = Some(self.objtree.root());
-        } else if first != "src" {
+        } else if first == "src" {
+            // nothing
+        } else if first == "usr" {
+            next = self.objtree.find("/mob");
+        } else {
             next = match self.find_unscoped_var(iter, next, proc_name, first) {
                 UnscopedVar::Parameter { param, .. } => self.objtree.type_by_path(&param.path),
                 UnscopedVar::Variable { ty, .. } => match ty.get_declaration(first) {
@@ -819,7 +823,7 @@ handle_method_call! {
         Annotation::ScopedCall(priors, proc_name) => {
             let mut next = self.find_scoped_type(&iter, priors);
             while let Some(ty) = next {
-                if ty.path.is_empty() {  // root
+                if ty.is_root() {
                     break;
                 }
                 if let Some(proc) = ty.procs.get(proc_name) {
@@ -833,7 +837,7 @@ handle_method_call! {
             let mut next = self.find_scoped_type(&iter, priors);
             let mut first = true;
             while let Some(ty) = next {
-                if ty.path.is_empty() && !first {  // root
+                if ty.is_root() && !first {
                     break;
                 }
                 first = false;
@@ -897,14 +901,29 @@ handle_method_call! {
             Annotation::UnscopedVar(incomplete_name) => {
                 let (ty, proc_name) = self.find_type_context(&iter);
 
+                // TODO: only deliver one completion for a symbol of the same
+                // kind/name, e.g. don't serve up both atom/New and datum/New.
+
+                // implicit proc vars
+                for &name in ["args", "global", "src", "usr"].iter() {
+                    if starts_with(name, incomplete_name) {
+                        results.push(CompletionItem {
+                            label: name.to_owned(),
+                            kind: Some(CompletionItemKind::Variable),
+                            detail: Some("(builtin)".to_owned()),
+                            .. Default::default()
+                        });
+                    }
+                }
+
                 // local variables
-                for (span, annotation) in iter.clone() {
-                    if let Annotation::LocalVarScope(var_type, name) = annotation {
+                for (_, annotation) in iter.clone() {
+                    if let Annotation::LocalVarScope(_var_type, name) = annotation {
                         if starts_with(name, incomplete_name) {
                             results.push(CompletionItem {
                                 label: name.clone(),
                                 kind: Some(CompletionItemKind::Variable),
-                                detail: Some("local".to_owned()),
+                                detail: Some("(local)".to_owned()),
                                 .. Default::default()
                             });
                         }
@@ -920,7 +939,7 @@ handle_method_call! {
                                 results.push(CompletionItem {
                                     label: param.name.clone(),
                                     kind: Some(CompletionItemKind::Variable),
-                                    detail: Some("parameter".to_owned()),
+                                    detail: Some("(parameter)".to_owned()),
                                     .. Default::default()
                                 });
                             }
@@ -928,16 +947,20 @@ handle_method_call! {
                     }
                 }
 
-                // type variables (implicit `src.` and `globals.`)
                 let mut next = Some(ty);
                 while let Some(ty) = next {
+                    // type variables (implicit `src.` and `globals.`)
                     for (name, var) in ty.get().vars.iter() {
                         if starts_with(name, incomplete_name) {
                             let mut detail = ty.pretty_path().to_owned();
                             if let Some(ref decl) = var.declaration {
                                 if decl.var_type.is_const {
                                     if let Some(ref constant) = var.value.constant {
-                                        detail = format!("{} - {}", constant, detail);
+                                        if ty.is_root() {
+                                            detail = constant.to_string();
+                                        } else {
+                                            detail = format!("{} - {}", constant, detail);
+                                        }
                                     }
                                 }
                             }
@@ -950,13 +973,9 @@ handle_method_call! {
                             });
                         }
                     }
-                    next = ty.parent_type();
-                }
 
-                // procs
-                next = Some(ty);
-                while let Some(ty) = next {
-                    for (name, proc) in ty.procs.iter() {
+                    // procs
+                    for (name, _proc) in ty.procs.iter() {
                         if starts_with(name, incomplete_name) {
                             results.push(CompletionItem {
                                 label: name.clone(),
