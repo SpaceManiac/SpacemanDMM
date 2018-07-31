@@ -14,8 +14,8 @@ pub enum Annotation {
     TreePath(bool, Vec<String>),
     TypePath(TypePath),
     Variable(Vec<String>),
-    ProcHeader(Vec<String>),
-    ProcBody(Vec<String>),
+    ProcHeader(Vec<String>, usize),
+    ProcBody(Vec<String>, usize),
     LocalVarScope(VarType, String),
 
     // local information about a specific token

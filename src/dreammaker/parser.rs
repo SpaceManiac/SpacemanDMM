@@ -594,13 +594,14 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             Punct(LParen) => {
                 let location = self.location;
                 let parameters = require!(self.separated(Comma, RParen, None, Parser::proc_parameter));
-                if let Err(e) = self.tree.add_proc(location, new_stack.iter(), new_stack.len(), parameters) {
-                    self.context.register_error(e);
-                }
+                let idx = match self.tree.add_proc(location, new_stack.iter(), new_stack.len(), parameters) {
+                    Ok(idx) => idx,
+                    Err(e) => { self.context.register_error(e); usize::max_value() }
+                };
 
                 // split off a subparser so we can keep parsing the objtree
                 // even when the proc body doesn't parse
-                self.annotate(entry_start, || Annotation::ProcHeader(new_stack.to_vec()));
+                self.annotate(entry_start, || Annotation::ProcHeader(new_stack.to_vec(), idx));
                 let start = self.updated_location();
                 let mut body_tt = Vec::new();
                 require!(self.read_any_tt(&mut body_tt));
@@ -608,7 +609,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                     // read repeatedly until it's a block or ends with a newline
                     require!(self.read_any_tt(&mut body_tt));
                 }
-                self.annotate(start, || Annotation::ProcBody(new_stack.to_vec()));
+                self.annotate(start, || Annotation::ProcBody(new_stack.to_vec(), idx));
                 let result = {
                     let mut subparser: Parser<'ctx, '_, _> = Parser::new(self.context, body_tt.iter().cloned());
                     if let Some(a) = self.annotations.as_mut() {

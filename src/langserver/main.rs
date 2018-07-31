@@ -279,18 +279,18 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         })
     }
 
-    fn find_type_context<'b, I, Ign>(&self, iter: &I) -> (Option<TypeRef>, Option<&'b str>)
+    fn find_type_context<'b, I, Ign>(&self, iter: &I) -> (Option<TypeRef>, Option<(&'b str, usize)>)
         where I: Iterator<Item=(Ign, &'b Annotation)> + Clone
     {
         let mut found = None;
         let mut proc_name = None;
-        if_annotation! { Annotation::ProcBody(ref proc_path) in iter; {
+        if_annotation! { Annotation::ProcBody(ref proc_path, ref idx) in iter; {
             // chop off proc name and 'proc/' or 'verb/' if it's there
             // TODO: factor this logic somewhere
             let mut proc_path = &proc_path[..];
             match proc_path.split_last() {
                 Some((name, rest)) => {
-                    proc_name = Some(name.as_str());
+                    proc_name = Some((name.as_str(), *idx));
                     proc_path = rest;
                 }
                 _ => {}
@@ -315,7 +315,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         (found, proc_name)
     }
 
-    fn find_unscoped_var<'b, I>(&'b self, iter: &I, ty: Option<TypeRef<'b>>, proc_name: Option<&'b str>, var_name: &str) -> UnscopedVar<'b>
+    fn find_unscoped_var<'b, I>(&'b self, iter: &I, ty: Option<TypeRef<'b>>, proc_name: Option<(&'b str, usize)>, var_name: &str) -> UnscopedVar<'b>
         where I: Iterator<Item=(Span, &'b Annotation)> + Clone
     {
         // local variables
@@ -329,9 +329,9 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
 
         // proc parameters
         let ty = ty.unwrap_or(self.objtree.root());
-        if let Some(proc_name) = proc_name {
+        if let Some((proc_name, idx)) = proc_name {
             if let Some(proc) = ty.get().procs.get(proc_name) {
-                for param in proc.value.parameters.iter() {
+                for param in proc.value[idx].parameters.iter() {
                     if &param.name == var_name {
                         return UnscopedVar::Parameter { ty, proc: proc_name, param };
                     }
@@ -626,7 +626,7 @@ handle_method_call! {
                         results.push(infos.into_iter().collect::<Vec<_>>().join("\n\n"));
                     }
                 }
-                Annotation::ProcHeader(path) if !path.is_empty() => {
+                Annotation::ProcHeader(path, _idx) if !path.is_empty() => {
                     let objtree = &self.objtree;
                     let mut current = objtree.root();
                     let (last, most) = path.split_last().unwrap();
@@ -639,6 +639,8 @@ handle_method_call! {
                         }
                     }
 
+                    // TODO: use `idx` and show the whole list here rather than
+                    // the last proc for each type
                     let mut infos = VecDeque::new();
                     let mut next = Some(current);
                     while let Some(current) = next {
@@ -648,9 +650,10 @@ handle_method_call! {
                             } else {
                                 &current.path
                             };
-                            let mut message = format!("[{}]({})  \n{}(", path, self.location_link(proc.value.location), last);
+                            let proc_value = proc.value.last().unwrap();
+                            let mut message = format!("[{}]({})  \n{}(", path, self.location_link(proc_value.location), last);
                             let mut first = true;
-                            for each in proc.value.parameters.iter() {
+                            for each in proc_value.parameters.iter() {
                                 use std::fmt::Write;
                                 if first {
                                     first = false;
@@ -788,7 +791,7 @@ handle_method_call! {
             let mut next = ty.or(Some(self.objtree.root()));
             while let Some(ty) = next {
                 if let Some(proc) = ty.procs.get(proc_name) {
-                    results.push(self.convert_location(proc.value.location, &ty.path, "/proc/", proc_name)?);
+                    results.push(self.convert_location(proc.value.last().unwrap().location, &ty.path, "/proc/", proc_name)?);
                     break;
                 }
                 next = ty.parent_type();
@@ -816,7 +819,7 @@ handle_method_call! {
                     break;
                 }
                 if let Some(proc) = ty.procs.get(proc_name) {
-                    results.push(self.convert_location(proc.value.location, &ty.path, "/proc/", proc_name)?);
+                    results.push(self.convert_location(proc.value.last().unwrap().location, &ty.path, "/proc/", proc_name)?);
                     break;
                 }
                 next = ty.parent_type();

@@ -52,9 +52,9 @@ pub struct ProcValue {
     pub parameters: Vec<Parameter>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct TypeProc {
-    pub value: ProcValue,
+    pub value: Vec<ProcValue>,
     pub declaration: Option<ProcDeclaration>,
 }
 
@@ -238,7 +238,7 @@ impl<'a> TypeRef<'a> {
         let mut current: Option<TypeRef<'a>> = Some(self);
         while let Some(ty) = current {
             if let Some(proc) = ty.get().procs.get(name) {
-                return Some(&proc.value);
+                return proc.value.last();
             }
             current = ty.parent_type();
         }
@@ -518,18 +518,20 @@ impl ObjectTree {
         })))
     }
 
-    fn register_proc(&mut self, location: Location, parent: NodeIndex, name: &str, is_verb: Option<bool>, parameters: Vec<Parameter>) -> Result<Option<&mut TypeProc>, DMError> {
+    fn register_proc(&mut self, location: Location, parent: NodeIndex, name: &str, is_verb: Option<bool>, parameters: Vec<Parameter>) -> Result<usize, DMError> {
         let node = self.graph.node_weight_mut(parent).unwrap();
-        Ok(Some(node.procs.entry(name.to_owned()).or_insert_with(|| TypeProc {
-            value: ProcValue {
-                location,
-                parameters,
-            },
-            declaration: is_verb.map(|is_verb| ProcDeclaration {
-                location,
-                is_verb,
-            }),
-        })))
+        let proc = node.procs.entry(name.to_owned()).or_insert_with(Default::default);
+        proc.declaration = is_verb.map(|is_verb| ProcDeclaration {
+            location,
+            is_verb,
+        });
+
+        let len = proc.value.len();
+        proc.value.push(ProcValue {
+            location,
+            parameters,
+        });
+        Ok(len)
     }
 
     // an entry which may be anything depending on the path
@@ -558,7 +560,7 @@ impl ObjectTree {
     }
 
     // an entry which is definitely a proc because an argument list is specified
-    pub fn add_proc<'a, I: Iterator<Item=&'a str>>(&mut self, location: Location, mut path: I, len: usize, parameters: Vec<Parameter>) -> Result<(), DMError> {
+    pub fn add_proc<'a, I: Iterator<Item=&'a str>>(&mut self, location: Location, mut path: I, len: usize, parameters: Vec<Parameter>) -> Result<usize, DMError> {
         let (parent, mut proc_name) = self.get_from_path(location, &mut path, len)?;
         let mut is_verb = None;
         if is_proc_decl(proc_name) {
@@ -574,12 +576,7 @@ impl ObjectTree {
             return Err(DMError::new(location, "proc name must be a single identifier"))
         }
 
-        if let Some(type_proc) = self.register_proc(location, parent, proc_name, is_verb, parameters)? {
-            type_proc.value.location = location;
-            Ok(())
-        } else {
-            Err(DMError::new(location, "proc must have a name"))
-        }
+        self.register_proc(location, parent, proc_name, is_verb, parameters)
     }
 }
 
