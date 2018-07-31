@@ -83,6 +83,21 @@ impl Type {
         }
     }
 
+    /// Checks whether this node is the root node, on which global vars and
+    /// procs reside.
+    #[inline]
+    pub fn is_root(&self) -> bool {
+        self.path.is_empty()
+    }
+
+    pub fn pretty_path(&self) -> &str {
+        if self.is_root() {
+            "(global)"
+        } else {
+            &self.path
+        }
+    }
+
     /// Checks whether this type's path is a subpath of the given path.
     #[inline]
     pub fn is_subpath_of(&self, parent: &str) -> bool {

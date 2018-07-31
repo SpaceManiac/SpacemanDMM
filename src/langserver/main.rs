@@ -470,6 +470,10 @@ handle_method_call! {
                     change: Some(TextDocumentSyncKind::Incremental),
                     .. Default::default()
                 })),
+                completion_provider: Some(CompletionOptions {
+                    trigger_characters: Some(vec![".".to_owned(), "/".to_owned(), ":".to_owned()]),
+                    resolve_provider: None,
+                }),
                 .. Default::default()
             }
         }
@@ -538,7 +542,7 @@ handle_method_call! {
                             name: proc_name.clone(),
                             kind: if idx.index() == 0 {
                                 SymbolKind::Function
-                            } else if ["init", "New", "Initialize"].contains(&&**proc_name) {
+                            } else if is_constructor_name(proc_name.as_str()) {
                                 SymbolKind::Constructor
                             } else {
                                 SymbolKind::Method
@@ -872,6 +876,114 @@ handle_method_call! {
             Some(GotoDefinitionResponse::Array(results))
         }
     }
+
+    on Completion(&mut self, params) {
+        use symbol_search::starts_with;
+
+        let path = url_to_path(params.text_document.uri)?;
+        let (_, file_id, annotations) = self.get_annotations(&path)?;
+        let location = dm::Location {
+            file: file_id,
+            line: params.position.line as u32 + 1,
+            column: params.position.character as u16 + 1,
+        };
+        let iter = annotations.get_location(location);
+        let mut results = Vec::new();
+
+        // TODO: figure out a decent way to autocomplete just on the '.', ':',
+        // or '/' without requiring at least one letter of the name.
+
+        match_annotation! { iter;
+            Annotation::UnscopedVar(incomplete_name) => {
+                let (ty, proc_name) = self.find_type_context(&iter);
+
+                // local variables
+                for (span, annotation) in iter.clone() {
+                    if let Annotation::LocalVarScope(var_type, name) = annotation {
+                        if starts_with(name, incomplete_name) {
+                            results.push(CompletionItem {
+                                label: name.clone(),
+                                kind: Some(CompletionItemKind::Variable),
+                                detail: Some("local".to_owned()),
+                                .. Default::default()
+                            });
+                        }
+                    }
+                }
+
+                // proc parameters
+                let ty = ty.unwrap_or(self.objtree.root());
+                if let Some((proc_name, idx)) = proc_name {
+                    if let Some(proc) = ty.get().procs.get(proc_name) {
+                        for param in proc.value[idx].parameters.iter() {
+                            if starts_with(&param.name, incomplete_name) {
+                                results.push(CompletionItem {
+                                    label: param.name.clone(),
+                                    kind: Some(CompletionItemKind::Variable),
+                                    detail: Some("parameter".to_owned()),
+                                    .. Default::default()
+                                });
+                            }
+                        }
+                    }
+                }
+
+                // type variables (implicit `src.` and `globals.`)
+                let mut next = Some(ty);
+                while let Some(ty) = next {
+                    for (name, var) in ty.get().vars.iter() {
+                        if starts_with(name, incomplete_name) {
+                            let mut detail = ty.pretty_path().to_owned();
+                            if let Some(ref decl) = var.declaration {
+                                if decl.var_type.is_const {
+                                    if let Some(ref constant) = var.value.constant {
+                                        detail = format!("{} - {}", constant, detail);
+                                    }
+                                }
+                            }
+
+                            results.push(CompletionItem {
+                                label: name.clone(),
+                                kind: Some(CompletionItemKind::Field),
+                                detail: Some(detail),
+                                .. Default::default()
+                            });
+                        }
+                    }
+                    next = ty.parent_type();
+                }
+
+                // procs
+                next = Some(ty);
+                while let Some(ty) = next {
+                    for (name, proc) in ty.procs.iter() {
+                        if starts_with(name, incomplete_name) {
+                            results.push(CompletionItem {
+                                label: name.clone(),
+                                kind: Some(if ty.is_root() {
+                                    CompletionItemKind::Function
+                                } else if is_constructor_name(name.as_str()) {
+                                    CompletionItemKind::Constructor
+                                } else {
+                                    CompletionItemKind::Method
+                                }),
+                                detail: Some(ty.pretty_path().to_owned()),
+                                insert_text: Some(format!("{}(", name)),
+                                .. Default::default()
+                            });
+                        }
+                    }
+                    next = ty.parent_type();
+                }
+            },
+        }
+
+        if results.is_empty() {
+            None
+        } else {
+            Some(CompletionResponse::Array(results))
+        }
+    }
 }
 
 handle_notification! {
@@ -983,4 +1095,8 @@ enum UnscopedVar<'a> {
         var_type: &'a dm::ast::VarType,
     },
     None,
+}
+
+fn is_constructor_name(name: &str) -> bool {
+    name == "New" || name == "init" || name == "Initialize"
 }

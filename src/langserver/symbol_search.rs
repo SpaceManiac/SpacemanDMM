@@ -81,7 +81,7 @@ impl Query {
 }
 
 // ignore case and underscores
-fn starts_with<'a>(fulltext: &'a str, query: &'a str) -> bool {
+pub fn starts_with<'a>(fulltext: &'a str, query: &'a str) -> bool {
     let simplify = |s: &'a str| s.chars().flat_map(|c| c.to_lowercase()).filter(|c| c.is_alphanumeric());
 
     let mut query_chars = simplify(query);
