@@ -514,9 +514,9 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         loop {
             match self.next() {
                 Some(b'_') => {},
-                Some(ch) if ch == b'.' || ch == b'e' => {
+                Some(ch) if ch == b'.' || ch == b'e' || ch == b'E' => {
                     integer = false;
-                    exponent |= ch == b'e';
+                    exponent |= ch == b'e' || ch == b'E';
                     buf.push(ch as char);
                 }
                 Some(ch) if (ch == b'+' || ch == b'-') && exponent => {
