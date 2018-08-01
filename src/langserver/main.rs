@@ -475,7 +475,7 @@ handle_method_call! {
                     .. Default::default()
                 })),
                 completion_provider: Some(CompletionOptions {
-                    trigger_characters: Some(vec![".".to_owned()]),
+                    trigger_characters: Some(vec![".".to_owned(), ":".to_owned(), "/".to_owned()]),
                     resolve_provider: None,
                 }),
                 .. Default::default()
@@ -825,6 +825,7 @@ handle_method_call! {
         // or '/' without requiring at least one letter of the name.
 
         match_annotation! { iter;
+            // happy path annotations
             Annotation::TreePath(absolute, parts) => {
                 let (query, parts) = parts.split_last().unwrap();
                 let path = completion::combine_tree_path(&iter, *absolute, parts);
@@ -847,9 +848,16 @@ handle_method_call! {
                 self.scoped_completions(&mut results, &iter, priors, query);
                 any_annotation = true;
             },
+            // error annotations, overrides anything else
             Annotation::ScopedMissingIdent(priors) => {
                 results.clear();
                 self.scoped_completions(&mut results, &iter, priors, "");
+                any_annotation = true;
+                break;
+            },
+            Annotation::IncompleteTypePath(parts, _last_op) => {
+                results.clear();
+                self.path_completions(&mut results, &iter, parts, "");
                 any_annotation = true;
                 break;
             },

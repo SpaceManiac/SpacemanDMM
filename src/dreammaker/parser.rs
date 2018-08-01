@@ -1154,28 +1154,36 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         let start = self.updated_location();
 
         // expect at least one path element
-        let len = parts.len();
-        parts.push((
-            leading!(self.path_separator()),
-            require!(self.ident_in_seq(len)),
-        ));
+        let sep = leading!(self.path_separator());
+        let mut separator_loc = self.location;
+        if let Some(ident) = self.ident_in_seq(parts.len())? {
+            parts.push((sep, ident));
+        } else {
+            separator_loc.column += 1;
+            self.annotate_precise(separator_loc..separator_loc, || Annotation::IncompleteTypePath(parts.clone(), sep));
+        }
 
         // followed by more path elements, empty ones ignored
-        loop {
-            if let Some(sep) = self.path_separator()? {
-                if let Some(ident) = self.ident_in_seq(parts.len())? {
-                    parts.push((sep, ident));
-                }
+        while let Some(sep) = self.path_separator()? {
+            let mut separator_loc = self.location;
+            if let Some(ident) = self.ident_in_seq(parts.len())? {
+                parts.push((sep, ident));
             } else {
-                break;
+                separator_loc.column += 1;
+                self.annotate_precise(separator_loc..separator_loc, || Annotation::IncompleteTypePath(parts.clone(), sep));
             }
+        }
+
+        // avoid problems with returning an empty Vec
+        if parts.is_empty() {
+            parts.push((PathOp::Slash, "PARSE_ERROR".to_owned()));
         }
 
         self.annotate(start, || Annotation::TypePath(parts.clone()));
 
         // parse vars if we find them
         let mut vars = LinkedHashMap::default();
-        if self.exact(Token::Punct(Punctuation::LBrace))?.is_some() {
+        if let Some(()) = self.exact(Token::Punct(Punctuation::LBrace))? {
             self.separated(Punctuation::Semicolon, Punctuation::RBrace, Some(()), |this| {
                 let key = require!(this.ident());
                 require!(this.exact(Token::Punct(Punctuation::Assign)));
@@ -1426,6 +1434,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
 
             // term :: '.'
             Token::Punct(Punctuation::Dot) => {
+                let mut dot_loc = self.location;
                 if let Some(ident) = self.ident()? {
                     // prefab
                     // TODO: arrange for this ident to end up in the prefab's annotation
@@ -1435,6 +1444,8 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                     Term::SelfCall(args)
                 } else {
                     // bare dot
+                    dot_loc.column += 1;
+                    self.annotate_precise(dot_loc..dot_loc, || Annotation::IncompleteTypePath(Vec::new(), PathOp::Dot));
                     self.annotate(start, || Annotation::ReturnVal);
                     Term::Ident(".".to_owned())
                 }
