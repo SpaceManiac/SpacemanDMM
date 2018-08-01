@@ -44,7 +44,6 @@ pub fn item_proc(ty: TypeRef, name: &str, _proc: &TypeProc) -> CompletionItem {
             CompletionItemKind::Method
         }),
         detail: Some(ty.pretty_path().to_owned()),
-        insert_text: Some(name.to_owned()),
         .. Default::default()
     }
 }
@@ -66,7 +65,10 @@ pub fn items_ty<'a>(results: &mut Vec<CompletionItem>, skip: &mut HashSet<(&str,
             continue;
         }
         if starts_with(name, query) {
-            results.push(item_proc(ty, name, proc));
+            results.push(CompletionItem {
+                insert_text: Some(format!("{}(", name)),
+                .. item_proc(ty, name, proc)
+            });
         }
     }
 }
