@@ -25,7 +25,7 @@ mod extras;
 mod completion;
 
 use std::path::{PathBuf, Path};
-use std::collections::{HashMap, VecDeque, HashSet};
+use std::collections::{HashMap, VecDeque};
 use std::collections::hash_map::Entry;
 use std::rc::Rc;
 
@@ -810,8 +810,6 @@ handle_method_call! {
     }
 
     on Completion(&mut self, params) {
-        use symbol_search::starts_with;
-
         let path = url_to_path(params.text_document.uri)?;
         let (_, file_id, annotations) = self.get_annotations(&path)?;
         let location = dm::Location {
@@ -821,7 +819,6 @@ handle_method_call! {
         };
         let iter = annotations.get_location(location);
         let mut results = Vec::new();
-        let mut skip = HashSet::new();
 
         // TODO: figure out a decent way to autocomplete just on the '.', ':',
         // or '/' without requiring at least one letter of the name.
@@ -829,189 +826,20 @@ handle_method_call! {
         match_annotation! { iter;
             Annotation::TreePath(absolute, parts) => {
                 let (query, parts) = parts.split_last().unwrap();
-                let (exact, ty) = self.objtree.type_by_path_approx(completion::combine_tree_path(&iter, *absolute, parts));
-                // path keywords
-                for &name in ["proc", "var", "verb"].iter() {
-                    if starts_with(name, query) {
-                        results.push(CompletionItem {
-                            label: name.to_owned(),
-                            kind: Some(CompletionItemKind::Keyword),
-                            .. Default::default()
-                        })
-                    }
-                }
-
-                if exact {
-                    // child types
-                    for child in ty.children() {
-                        if starts_with(&child.name, query) {
-                            results.push(CompletionItem {
-                                label: child.name.to_owned(),
-                                kind: Some(CompletionItemKind::Class),
-                                .. Default::default()
-                            });
-                        }
-                    }
-                }
-
-                let mut next = Some(ty);
-                skip.clear();
-                while let Some(ty) = next {
-                    // override a parent's var
-                    for (name, var) in ty.get().vars.iter() {
-                        if !skip.insert(("var", name)) {
-                            continue;
-                        }
-                        if starts_with(name, query) {
-                            results.push(CompletionItem {
-                                insert_text: Some(format!("{} = ", name)),
-                                .. completion::item_var(ty, name, var)
-                            });
-                        }
-                    }
-
-                    // override a parent's proc
-                    for (name, proc) in ty.get().procs.iter() {
-                        if !skip.insert(("proc", name)) {
-                            continue;
-                        }
-                        if starts_with(name, query) {
-                            use std::fmt::Write;
-
-                            let mut completion = format!("{}(", name);
-                            let mut sep = "";
-                            for param in proc.value.last().unwrap().parameters.iter() {
-                                for each in param.path.iter() {
-                                    let _ = write!(completion, "{}{}", sep, each);
-                                    sep = "/";
-                                }
-                                let _ = write!(completion, "{}{}", sep, param.name);
-                                sep = ", ";
-                            }
-                            let _ = write!(completion, ")\n\t. = ..()\n\t");
-
-                            results.push(CompletionItem {
-                                insert_text: Some(completion),
-                                .. completion::item_proc(ty, name, proc)
-                            });
-                        }
-                    }
-                    next = ignore_root(ty.parent_type());
-                }
+                let path = completion::combine_tree_path(&iter, *absolute, parts);
+                self.tree_completions(&mut results, path, query);
             },
             Annotation::TypePath(parts) => {
                 let ((_, query), parts) = parts.split_last().unwrap();
-                match self.follow_type_path(&iter, parts) {
-                    // '/datum/<complete types>'
-                    Some(completion::TypePathResult { ty, decl: None, proc: None }) => {
-                        // path keywords
-                        for &name in ["proc", "verb"].iter() {
-                            if starts_with(name, query) {
-                                results.push(CompletionItem {
-                                    label: name.to_owned(),
-                                    kind: Some(CompletionItemKind::Keyword),
-                                    .. Default::default()
-                                })
-                            }
-                        }
-
-                        // child types
-                        for child in ty.children() {
-                            if starts_with(&child.name, query) {
-                                results.push(CompletionItem {
-                                    label: child.name.to_owned(),
-                                    kind: Some(CompletionItemKind::Class),
-                                    .. Default::default()
-                                });
-                            }
-                        }
-                    },
-                    // '/datum/proc/<complete procs>'
-                    Some(completion::TypePathResult { ty, decl: Some(decl), proc: None }) => {
-                        let mut next = Some(ty);
-                        skip.clear();
-                        while let Some(ty) = next {
-                            // reference a declared proc
-                            for (name, proc) in ty.get().procs.iter() {
-                                // declarations only
-                                let mut proc_decl = match proc.declaration.as_ref() {
-                                    Some(decl) => decl,
-                                    None => continue
-                                };
-                                if proc_decl.is_verb != (decl == "verb") {
-                                    continue
-                                }
-                                if starts_with(name, query) {
-                                    results.push(completion::item_proc(ty, name, proc));
-                                }
-                            }
-                            next = ignore_root(ty.parent_type());
-                        }
-                    },
-                    _ => {}
-                }
+                self.path_completions(&mut results, &iter, parts, query);
             },
             Annotation::UnscopedCall(query) |
             Annotation::UnscopedVar(query) => {
-                let (ty, proc_name) = self.find_type_context(&iter);
-
-                // implicit proc vars
-                for &name in ["args", "global", "src", "usr"].iter() {
-                    if starts_with(name, query) {
-                        results.push(CompletionItem {
-                            label: name.to_owned(),
-                            kind: Some(CompletionItemKind::Keyword),
-                            .. Default::default()
-                        });
-                    }
-                }
-
-                // local variables
-                for (_, annotation) in iter.clone() {
-                    if let Annotation::LocalVarScope(_var_type, name) = annotation {
-                        if starts_with(name, query) {
-                            results.push(CompletionItem {
-                                label: name.clone(),
-                                kind: Some(CompletionItemKind::Variable),
-                                detail: Some("(local)".to_owned()),
-                                .. Default::default()
-                            });
-                        }
-                    }
-                }
-
-                // proc parameters
-                let ty = ty.unwrap_or(self.objtree.root());
-                if let Some((proc_name, idx)) = proc_name {
-                    if let Some(proc) = ty.get().procs.get(proc_name) {
-                        for param in proc.value[idx].parameters.iter() {
-                            if starts_with(&param.name, query) {
-                                results.push(CompletionItem {
-                                    label: param.name.clone(),
-                                    kind: Some(CompletionItemKind::Variable),
-                                    detail: Some("(parameter)".to_owned()),
-                                    .. Default::default()
-                                });
-                            }
-                        }
-                    }
-                }
-
-                let mut next = Some(ty);
-                skip.clear();
-                while let Some(ty) = next {
-                    completion::items_ty(&mut results, &mut skip, ty, query);
-                    next = ty.parent_type();
-                }
+                self.unscoped_completions(&mut results, &iter, query);
             },
             Annotation::ScopedCall(priors, query) |
             Annotation::ScopedVar(priors, query) => {
-                let mut next = self.find_scoped_type(&iter, priors);
-                skip.clear();
-                while let Some(ty) = next {
-                    completion::items_ty(&mut results, &mut skip, ty, query);
-                    next = ignore_root(ty.parent_type());
-                }
+                self.scoped_completions(&mut results, &iter, priors, query);
             },
         }
 

@@ -8,7 +8,7 @@ use dm::ast::PathOp;
 use dm::annotation::Annotation;
 use dm::objtree::{TypeRef, TypeVar, TypeProc, ProcValue};
 
-use {Engine, Span, io, is_constructor_name};
+use {Engine, Span, io, is_constructor_name, ignore_root};
 use symbol_search::starts_with;
 
 pub fn item_var(ty: TypeRef, name: &str, var: &TypeVar) -> CompletionItem {
@@ -161,6 +161,199 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         }
         // '/datum'
         Some(TypePathResult { ty, decl, proc })
+    }
+
+    pub fn tree_completions<'b, I>(&'b self, results: &mut Vec<CompletionItem>, iter: I, query: &str)
+        where I: Iterator, I::Item: AsRef<str>
+    {
+        let (exact, ty) = self.objtree.type_by_path_approx(iter);
+        // path keywords
+        for &name in ["proc", "var", "verb"].iter() {
+            if starts_with(name, query) {
+                results.push(CompletionItem {
+                    label: name.to_owned(),
+                    kind: Some(CompletionItemKind::Keyword),
+                    .. Default::default()
+                })
+            }
+        }
+
+        if exact {
+            // child types
+            for child in ty.children() {
+                if starts_with(&child.name, query) {
+                    results.push(CompletionItem {
+                        label: child.name.to_owned(),
+                        kind: Some(CompletionItemKind::Class),
+                        .. Default::default()
+                    });
+                }
+            }
+        }
+
+        let mut next = Some(ty);
+        let mut skip = HashSet::new();
+        while let Some(ty) = next {
+            // override a parent's var
+            for (name, var) in ty.get().vars.iter() {
+                if !skip.insert(("var", name)) {
+                    continue;
+                }
+                if starts_with(name, query) {
+                    results.push(CompletionItem {
+                        insert_text: Some(format!("{} = ", name)),
+                        .. item_var(ty, name, var)
+                    });
+                }
+            }
+
+            // override a parent's proc
+            for (name, proc) in ty.get().procs.iter() {
+                if !skip.insert(("proc", name)) {
+                    continue;
+                }
+                if starts_with(name, query) {
+                    use std::fmt::Write;
+
+                    let mut completion = format!("{}(", name);
+                    let mut sep = "";
+                    for param in proc.value.last().unwrap().parameters.iter() {
+                        for each in param.path.iter() {
+                            let _ = write!(completion, "{}{}", sep, each);
+                            sep = "/";
+                        }
+                        let _ = write!(completion, "{}{}", sep, param.name);
+                        sep = ", ";
+                    }
+                    let _ = write!(completion, ")\n\t. = ..()\n\t");
+
+                    results.push(CompletionItem {
+                        insert_text: Some(completion),
+                        .. item_proc(ty, name, proc)
+                    });
+                }
+            }
+            next = ignore_root(ty.parent_type());
+        }
+    }
+
+    pub fn path_completions<'b, I>(&'b self, results: &mut Vec<CompletionItem>, iter: &I, parts: &'b [(PathOp, String)], query: &str)
+        where I: Iterator<Item=(Span, &'b Annotation)> + Clone
+    {
+        match self.follow_type_path(iter, parts) {
+            // '/datum/<complete types>'
+            Some(TypePathResult { ty, decl: None, proc: None }) => {
+                // path keywords
+                for &name in ["proc", "verb"].iter() {
+                    if starts_with(name, query) {
+                        results.push(CompletionItem {
+                            label: name.to_owned(),
+                            kind: Some(CompletionItemKind::Keyword),
+                            .. Default::default()
+                        })
+                    }
+                }
+
+                // child types
+                for child in ty.children() {
+                    if starts_with(&child.name, query) {
+                        results.push(CompletionItem {
+                            label: child.name.to_owned(),
+                            kind: Some(CompletionItemKind::Class),
+                            .. Default::default()
+                        });
+                    }
+                }
+            },
+            // '/datum/proc/<complete procs>'
+            Some(TypePathResult { ty, decl: Some(decl), proc: None }) => {
+                let mut next = Some(ty);
+                while let Some(ty) = next {
+                    // reference a declared proc
+                    for (name, proc) in ty.get().procs.iter() {
+                        // declarations only
+                        let mut proc_decl = match proc.declaration.as_ref() {
+                            Some(decl) => decl,
+                            None => continue
+                        };
+                        if proc_decl.is_verb != (decl == "verb") {
+                            continue
+                        }
+                        if starts_with(name, query) {
+                            results.push(item_proc(ty, name, proc));
+                        }
+                    }
+                    next = ignore_root(ty.parent_type());
+                }
+            },
+            _ => {}
+        }
+    }
+
+    pub fn unscoped_completions<'b, I>(&'b self, results: &mut Vec<CompletionItem>, iter: &I, query: &str)
+        where I: Iterator<Item=(Span, &'b Annotation)> + Clone
+    {
+        let (ty, proc_name) = self.find_type_context(iter);
+
+        // implicit proc vars
+        for &name in ["args", "global", "src", "usr"].iter() {
+            if starts_with(name, query) {
+                results.push(CompletionItem {
+                    label: name.to_owned(),
+                    kind: Some(CompletionItemKind::Keyword),
+                    .. Default::default()
+                });
+            }
+        }
+
+        // local variables
+        for (_, annotation) in iter.clone() {
+            if let Annotation::LocalVarScope(_var_type, name) = annotation {
+                if starts_with(name, query) {
+                    results.push(CompletionItem {
+                        label: name.clone(),
+                        kind: Some(CompletionItemKind::Variable),
+                        detail: Some("(local)".to_owned()),
+                        .. Default::default()
+                    });
+                }
+            }
+        }
+
+        // proc parameters
+        let ty = ty.unwrap_or(self.objtree.root());
+        if let Some((proc_name, idx)) = proc_name {
+            if let Some(proc) = ty.get().procs.get(proc_name) {
+                for param in proc.value[idx].parameters.iter() {
+                    if starts_with(&param.name, query) {
+                        results.push(CompletionItem {
+                            label: param.name.clone(),
+                            kind: Some(CompletionItemKind::Variable),
+                            detail: Some("(parameter)".to_owned()),
+                            .. Default::default()
+                        });
+                    }
+                }
+            }
+        }
+
+        let mut next = Some(ty);
+        let mut skip = HashSet::new();
+        while let Some(ty) = next {
+            items_ty(results, &mut skip, ty, query);
+            next = ty.parent_type();
+        }
+    }
+
+    pub fn scoped_completions<'b, I>(&'b self, results: &mut Vec<CompletionItem>, iter: &I, priors: &[String], query: &str)
+        where I: Iterator<Item=(Span, &'b Annotation)> + Clone
+    {
+        let mut next = self.find_scoped_type(iter, priors);
+        let mut skip = HashSet::new();
+        while let Some(ty) = next {
+            items_ty(results, &mut skip, ty, query);
+            next = ignore_root(ty.parent_type());
+        }
     }
 }
 
