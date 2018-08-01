@@ -571,11 +571,11 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         client/var/fps = int!(0);
         client/var/gender;
         client/var/glide_size = int!(0);
-        client/var/images;
+        client/var/list/images;
         client/var/inactivity;
         client/var/key;
         client/var/lazy_eye;
-        client/var/mob;
+        client/var/mob/mob;
         client/var/mouse_pointer_icon;
         client/var/perspective = int!(0);  // MOB_PERSPECTIVE
         client/var/pixel_x = int!(0);
@@ -583,7 +583,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         client/var/pixel_w = int!(0);
         client/var/pixel_z = int!(0);
         client/var/preload_rsc = int!(1);
-        client/var/screen;
+        client/var/list/screen;
         client/var/script;
         client/var/show_map = int!(1);
         client/var/show_popup_menus = int!(1);
@@ -591,7 +591,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         client/var/statobj;
         client/var/statpanel;
         client/var/tick_lag = int!(0);
-        client/var/verbs;
+        client/var/list/verbs;
         client/var/view;
         client/var/virtual_eye;
         client/proc/AllowUpload(filename, filelength);
