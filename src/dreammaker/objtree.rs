@@ -598,8 +598,8 @@ impl ObjectTree {
         } else if is_var_decl(proc_name) {
             return Err(DMError::new(location, "var looks like a proc"))
         }
-        if path.next().is_some() {
-            return Err(DMError::new(location, "proc name must be a single identifier"))
+        if let Some(other) = path.next() {
+            return Err(DMError::new(location, format!("proc name must be a single identifier (spurious {:?})", other)))
         }
 
         self.register_proc(location, parent, proc_name, is_verb, parameters)

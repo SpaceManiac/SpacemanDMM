@@ -1,6 +1,7 @@
 //! Minimalist parser which turns a token stream into an object tree.
 
 use std::ops::Range;
+use std::fmt;
 
 use linked_hash_map::LinkedHashMap;
 
@@ -87,6 +88,19 @@ impl<'a> PathStack<'a> {
 
     fn to_vec(&self) -> Vec<String> {
         self.iter().map(|t| t.to_owned()).collect()
+    }
+}
+
+impl<'a> fmt::Display for PathStack<'a> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(ref parent) = self.parent {
+            write!(fmt, "{}", parent)?;
+        }
+        for part in self.parts {
+            fmt.write_str("/")?;
+            fmt.write_str(part)?;
+        }
+        Ok(())
     }
 }
 
@@ -574,14 +588,14 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
 
         // read and calculate the current path
         let (absolute, path) = leading!(self.tree_path());
-        if absolute && parent.parent.is_some() {
-            self.context.register_error(self.error(format!("nested absolute path: {:?} inside {:?}", path, parent))
-                .set_severity(Severity::Warning));
-        }
         let new_stack = PathStack {
             parent: if absolute { None } else { Some(&parent) },
             parts: &path
         };
+        if absolute && parent.parent.is_some() {
+            self.context.register_error(self.error(format!("nested absolute path: {} inside {}", new_stack, parent))
+                .set_severity(Severity::Warning));
+        }
 
         require!(self.var_annotations());
 
