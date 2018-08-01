@@ -325,6 +325,17 @@ impl ObjectTree {
     pub fn type_by_path<I>(&self, path: I) -> Option<TypeRef>
         where I: IntoIterator, I::Item: AsRef<str>
     {
+        let (exact, ty) = self.type_by_path_approx(path);
+        if exact {
+            Some(ty)
+        } else {
+            None
+        }
+    }
+
+    pub fn type_by_path_approx<I>(&self, path: I) -> (bool, TypeRef)
+        where I: IntoIterator, I::Item: AsRef<str>
+    {
         let mut current = NodeIndex::new(0);
         let mut first = true;
         'outer: for each in path {
@@ -342,9 +353,9 @@ impl ObjectTree {
                     continue 'outer;
                 }
             }
-            return None;
+            return (false, TypeRef::new(self, current));
         }
-        Some(TypeRef::new(self, current))
+        return (true, TypeRef::new(self, current));
     }
 
     pub fn type_by_constant(&self, constant: &Constant) -> Option<TypeRef> {

@@ -829,18 +829,19 @@ handle_method_call! {
         match_annotation! { iter;
             Annotation::TreePath(absolute, parts) => {
                 let (query, parts) = parts.split_last().unwrap();
-                if let Some(ty) = self.objtree.type_by_path(completion::combine_tree_path(&iter, *absolute, parts)) {
-                    // path keywords
-                    for &name in ["proc", "var", "verb"].iter() {
-                        if starts_with(name, query) {
-                            results.push(CompletionItem {
-                                label: name.to_owned(),
-                                kind: Some(CompletionItemKind::Keyword),
-                                .. Default::default()
-                            })
-                        }
+                let (exact, ty) = self.objtree.type_by_path_approx(completion::combine_tree_path(&iter, *absolute, parts));
+                // path keywords
+                for &name in ["proc", "var", "verb"].iter() {
+                    if starts_with(name, query) {
+                        results.push(CompletionItem {
+                            label: name.to_owned(),
+                            kind: Some(CompletionItemKind::Keyword),
+                            .. Default::default()
+                        })
                     }
+                }
 
+                if exact {
                     // child types
                     for child in ty.children() {
                         if starts_with(&child.name, query) {
@@ -851,51 +852,51 @@ handle_method_call! {
                             });
                         }
                     }
+                }
 
-                    let mut next = Some(ty);
-                    skip.clear();
-                    while let Some(ty) = next {
-                        // override a parent's var
-                        for (name, var) in ty.get().vars.iter() {
-                            if !skip.insert(("var", name)) {
-                                continue;
-                            }
-                            if starts_with(name, query) {
-                                results.push(CompletionItem {
-                                    insert_text: Some(format!("{} = ", name)),
-                                    .. completion::item_var(ty, name, var)
-                                });
-                            }
+                let mut next = Some(ty);
+                skip.clear();
+                while let Some(ty) = next {
+                    // override a parent's var
+                    for (name, var) in ty.get().vars.iter() {
+                        if !skip.insert(("var", name)) {
+                            continue;
                         }
-
-                        // override a parent's proc
-                        for (name, proc) in ty.get().procs.iter() {
-                            if !skip.insert(("proc", name)) {
-                                continue;
-                            }
-                            if starts_with(name, query) {
-                                use std::fmt::Write;
-
-                                let mut completion = format!("{}(", name);
-                                let mut sep = "";
-                                for param in proc.value.last().unwrap().parameters.iter() {
-                                    for each in param.path.iter() {
-                                        let _ = write!(completion, "{}{}", sep, each);
-                                        sep = "/";
-                                    }
-                                    let _ = write!(completion, "{}{}", sep, param.name);
-                                    sep = ", ";
-                                }
-                                let _ = write!(completion, ")\n\t. = ..()\n\t");
-
-                                results.push(CompletionItem {
-                                    insert_text: Some(completion),
-                                    .. completion::item_proc(ty, name, proc)
-                                });
-                            }
+                        if starts_with(name, query) {
+                            results.push(CompletionItem {
+                                insert_text: Some(format!("{} = ", name)),
+                                .. completion::item_var(ty, name, var)
+                            });
                         }
-                        next = ignore_root(ty.parent_type());
                     }
+
+                    // override a parent's proc
+                    for (name, proc) in ty.get().procs.iter() {
+                        if !skip.insert(("proc", name)) {
+                            continue;
+                        }
+                        if starts_with(name, query) {
+                            use std::fmt::Write;
+
+                            let mut completion = format!("{}(", name);
+                            let mut sep = "";
+                            for param in proc.value.last().unwrap().parameters.iter() {
+                                for each in param.path.iter() {
+                                    let _ = write!(completion, "{}{}", sep, each);
+                                    sep = "/";
+                                }
+                                let _ = write!(completion, "{}{}", sep, param.name);
+                                sep = ", ";
+                            }
+                            let _ = write!(completion, ")\n\t. = ..()\n\t");
+
+                            results.push(CompletionItem {
+                                insert_text: Some(completion),
+                                .. completion::item_proc(ty, name, proc)
+                            });
+                        }
+                    }
+                    next = ignore_root(ty.parent_type());
                 }
             },
             Annotation::TypePath(parts) => {
