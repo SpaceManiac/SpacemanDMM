@@ -269,9 +269,13 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             // TODO: take the path op into acocunt (`/proc` vs `.proc`)
             Some(TypePathResult { ty, decl: Some(decl), proc: None }) => {
                 let mut next = Some(ty);
+                let mut skip = HashSet::new();
                 while let Some(ty) = next {
                     // reference a declared proc
                     for (name, proc) in ty.get().procs.iter() {
+                        if !skip.insert(("proc", name)) {
+                            continue;
+                        }
                         // declarations only
                         let mut proc_decl = match proc.declaration.as_ref() {
                             Some(decl) => decl,
