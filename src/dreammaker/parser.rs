@@ -416,7 +416,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             }
         }, Ok);
         let what = expected.into();
-        if !what.is_empty() {
+        if !what.is_empty() && !self.expected.contains(&what) {
             self.expected.push(what);
         }
         tok
@@ -1183,7 +1183,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         let mut expr = leading!(self.group());
         loop {
             // try to read the next operator
-            let next = self.next("binary operator")?;
+            let next = self.next("operator")?;
             let &info = match BINARY_OPS.iter().find(|op| op.matches(&next)) {
                 Some(info) => info,
                 None => {
@@ -1218,7 +1218,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         let mut rhs = require!(self.group());
         loop {
             // try to read the next operator...
-            let next = self.next("binary operator")?;
+            let next = self.next("operator")?;
             let &info = match BINARY_OPS.iter().find(|op| op.matches(&next)) {
                 Some(info) => info,
                 None => {
@@ -1270,7 +1270,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         // read unary ops
         let mut unary_ops = Vec::new();
         loop {
-            match self.next("unary operator")? {
+            match self.next("operator")? {
                 Token::Punct(Punctuation::Sub) => unary_ops.push(UnaryOp::Neg),
                 Token::Punct(Punctuation::Not) => unary_ops.push(UnaryOp::Not),
                 Token::Punct(Punctuation::BitNot) => unary_ops.push(UnaryOp::BitNot),
@@ -1290,14 +1290,15 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         // Read follows
         let mut follow = Vec::new();
         loop {
-            if let Some(()) = self.exact(Token::Punct(Punctuation::PlusPlus))? {
-                unary_ops.push(UnaryOp::PostIncr);
-            } else if let Some(()) = self.exact(Token::Punct(Punctuation::MinusMinus))? {
-                unary_ops.push(UnaryOp::PostDecr);
-            } else {
-                match self.follow(&mut belongs_to)? {
-                    Some(f) => follow.push(f),
-                    None => break,
+            match self.next("operator")? {
+                Token::Punct(Punctuation::PlusPlus) => unary_ops.push(UnaryOp::PostIncr),
+                Token::Punct(Punctuation::MinusMinus) => unary_ops.push(UnaryOp::PostDecr),
+                other => {
+                    self.put_back(other);
+                    match self.follow(&mut belongs_to)? {
+                        Some(f) => follow.push(f),
+                        None => break,
+                    }
                 }
             }
         }
@@ -1471,7 +1472,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     }
 
     fn follow(&mut self, belongs_to: &mut Vec<String>) -> Status<Follow> {
-        match self.next("index, field, method call")? {
+        match self.next("field access")? {
             // follow :: '[' expression ']'
             Token::Punct(Punctuation::LBracket) => {
                 let expr = require!(self.expression());
