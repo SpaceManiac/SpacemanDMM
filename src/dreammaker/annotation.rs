@@ -23,6 +23,7 @@ pub enum Annotation {
     UnscopedVar(String),
     ScopedCall(Vec<String>, String),
     ScopedVar(Vec<String>, String),
+    ScopedMissingIdent(Vec<String>),  // when a . is followed by a non-ident
     ParentCall,  // ..
     ReturnVal,  // .
     InSequence(usize),  // where in TreePath or TypePath is this ident

@@ -475,7 +475,7 @@ handle_method_call! {
                     .. Default::default()
                 })),
                 completion_provider: Some(CompletionOptions {
-                    trigger_characters: None,
+                    trigger_characters: Some(vec![".".to_owned()]),
                     resolve_provider: None,
                 }),
                 .. Default::default()
@@ -846,6 +846,12 @@ handle_method_call! {
             Annotation::ScopedVar(priors, query) => {
                 self.scoped_completions(&mut results, &iter, priors, query);
                 any_annotation = true;
+            },
+            Annotation::ScopedMissingIdent(priors) => {
+                results.clear();
+                self.scoped_completions(&mut results, &iter, priors, "");
+                any_annotation = true;
+                break;
             },
         }
 

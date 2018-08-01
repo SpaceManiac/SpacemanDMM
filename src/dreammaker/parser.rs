@@ -1502,8 +1502,18 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     }
 
     fn follow_index(&mut self, kind: IndexKind, belongs_to: &mut Vec<String>) -> Status<Follow> {
+        let mut index_op_loc = self.location;
         let start = self.updated_location();
-        let ident = require!(self.ident());
+        let ident = match self.ident()? {
+            Some(ident) => ident,
+            None => {
+                index_op_loc.column += kind.len() as u16;
+                self.annotate_precise(index_op_loc..index_op_loc, || Annotation::ScopedMissingIdent(belongs_to.clone()));
+                // register the parse error, but keep going
+                self.context.register_error(self.describe_parse_error());
+                String::new()
+            }
+        };
         let end = self.updated_location();
 
         success(match self.arguments()? {

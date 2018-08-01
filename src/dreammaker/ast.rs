@@ -418,6 +418,28 @@ pub enum IndexKind {
     SafeColon,
 }
 
+impl IndexKind {
+    pub fn len(self) -> usize {
+        match self {
+            IndexKind::Dot |
+            IndexKind::Colon => 1,
+            IndexKind::SafeDot |
+            IndexKind::SafeColon => 2,
+        }
+    }
+}
+
+impl fmt::Display for IndexKind {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str(match *self {
+            IndexKind::Dot => ".",
+            IndexKind::Colon => ":",
+            IndexKind::SafeDot => "?.",
+            IndexKind::SafeColon => "?:",
+        })
+    }
+}
+
 /// An expression part which is applied to a term or another follow.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Follow {
