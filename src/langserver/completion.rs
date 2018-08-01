@@ -44,7 +44,7 @@ pub fn item_proc(ty: TypeRef, name: &str, _proc: &TypeProc) -> CompletionItem {
             CompletionItemKind::Method
         }),
         detail: Some(ty.pretty_path().to_owned()),
-        insert_text: Some(format!("{}(", name)),
+        insert_text: Some(name.to_owned()),
         .. Default::default()
     }
 }
@@ -109,7 +109,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
     {
         // cut off the part of the path we haven't selected
         if_annotation! { Annotation::InSequence(idx) in iter; {
-            parts = &parts[..idx+1];
+            parts = &parts[..::std::cmp::min(idx+1, parts.len())];
         }}
         // if we're on the right side of a 'list/', start the lookup there
         match parts.split_first() {
@@ -118,6 +118,9 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         }
 
         // use the first path op to select the starting type of the lookup
+        if parts.is_empty() {
+            return Some(TypePathResult { ty: self.objtree.root(), decl: None, proc: None });
+        }
         let mut ty = match parts[0].0 {
             PathOp::Colon => return None,  // never finds anything, apparently?
             PathOp::Slash => self.objtree.root(),
@@ -131,10 +134,13 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
 
         // follow the path ops until we hit 'proc' or 'verb'
         let mut iter = parts.iter();
-        let mut is_proc = false;
+        let mut decl = None;
         while let Some(&(op, ref name)) = iter.next() {
-            if name == "proc" || name == "verb" {
-                is_proc = true;
+            if name == "proc" {
+                decl = Some("proc");
+                break;
+            } else if name == "verb" {
+                decl = Some("verb");
                 break;
             }
             if let Some(next) = ty.navigate(op, name) {
@@ -143,23 +149,23 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 break;
             }
         }
-        if is_proc {
+        let mut proc = None;
+        if decl.is_some() {
             if let Some((_, proc_name)) = iter.next() {
                 // '/datum/proc/proc_name'
-                if let Some(proc) = ty.get_proc(proc_name) {
-                    return Some(TypePathResult { ty, proc: Some((proc_name, proc)) });
+                if let Some(proc_ref) = ty.get_proc(proc_name) {
+                    proc = Some((proc_name.as_str(), proc_ref));
                 }
             }
             // else '/datum/proc', no results
-            None
-        } else {
-            // just a type path
-            Some(TypePathResult { ty, proc: None })
         }
+        // '/datum'
+        Some(TypePathResult { ty, decl, proc })
     }
 }
 
 pub struct TypePathResult<'a> {
     pub ty: TypeRef<'a>,
+    pub decl: Option<&'static str>,
     pub proc: Option<(&'a str, &'a ProcValue)>,
 }

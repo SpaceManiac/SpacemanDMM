@@ -719,13 +719,15 @@ handle_method_call! {
         },
         Annotation::TypePath(parts) => {
             match self.follow_type_path(&iter, parts) {
-                Some(completion::TypePathResult { ty, proc: Some((proc_name, proc)) }) => {
+                // '/datum/proc/foo'
+                Some(completion::TypePathResult { ty, decl: _, proc: Some((proc_name, proc)) }) => {
                     results.push(self.convert_location(proc.location, &ty.path, "/proc/", proc_name)?);
                 },
-                Some(completion::TypePathResult { ty, proc: None }) => {
+                // 'datum/bar'
+                Some(completion::TypePathResult { ty, decl: None, proc: None }) => {
                     results.push(self.convert_location(ty.location, &ty.path, "", "")?);
                 },
-                None => {}
+                _ => {}
             }
         },
         Annotation::UnscopedCall(proc_name) => {
@@ -896,7 +898,58 @@ handle_method_call! {
                     }
                 }
             },
+            Annotation::TypePath(parts) => {
+                let ((_, query), parts) = parts.split_last().unwrap();
+                match self.follow_type_path(&iter, parts) {
+                    // '/datum/<complete types>'
+                    Some(completion::TypePathResult { ty, decl: None, proc: None }) => {
+                        // path keywords
+                        for &name in ["proc", "verb"].iter() {
+                            if starts_with(name, query) {
+                                results.push(CompletionItem {
+                                    label: name.to_owned(),
+                                    kind: Some(CompletionItemKind::Keyword),
+                                    .. Default::default()
+                                })
+                            }
+                        }
 
+                        // child types
+                        for child in ty.children() {
+                            if starts_with(&child.name, query) {
+                                results.push(CompletionItem {
+                                    label: child.name.to_owned(),
+                                    kind: Some(CompletionItemKind::Class),
+                                    .. Default::default()
+                                });
+                            }
+                        }
+                    },
+                    // '/datum/proc/<complete procs>'
+                    Some(completion::TypePathResult { ty, decl: Some(decl), proc: None }) => {
+                        let mut next = Some(ty);
+                        skip.clear();
+                        while let Some(ty) = next {
+                            // reference a declared proc
+                            for (name, proc) in ty.get().procs.iter() {
+                                // declarations only
+                                let mut proc_decl = match proc.declaration.as_ref() {
+                                    Some(decl) => decl,
+                                    None => continue
+                                };
+                                if proc_decl.is_verb != (decl == "verb") {
+                                    continue
+                                }
+                                if starts_with(name, query) {
+                                    results.push(completion::item_proc(ty, name, proc));
+                                }
+                            }
+                            next = ignore_root(ty.parent_type());
+                        }
+                    },
+                    _ => {}
+                }
+            },
             Annotation::UnscopedVar(query) => {
                 let (ty, proc_name) = self.find_type_context(&iter);
 
