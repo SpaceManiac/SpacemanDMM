@@ -951,6 +951,7 @@ handle_method_call! {
                     _ => {}
                 }
             },
+            Annotation::UnscopedCall(query) |
             Annotation::UnscopedVar(query) => {
                 let (ty, proc_name) = self.find_type_context(&iter);
 
@@ -1003,6 +1004,7 @@ handle_method_call! {
                     next = ty.parent_type();
                 }
             },
+            Annotation::ScopedCall(priors, query) |
             Annotation::ScopedVar(priors, query) => {
                 let mut next = self.find_scoped_type(&iter, priors);
                 skip.clear();
