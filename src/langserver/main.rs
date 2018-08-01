@@ -859,6 +859,7 @@ handle_method_call! {
         };
         let iter = annotations.get_location(location);
         let mut results = Vec::new();
+        let mut skip = HashSet::new();
 
         // TODO: figure out a decent way to autocomplete just on the '.', ':',
         // or '/' without requiring at least one letter of the name.
@@ -890,9 +891,13 @@ handle_method_call! {
                     }
 
                     let mut next = Some(ty);
+                    skip.clear();
                     while let Some(ty) = next {
                         // override a parent's var
                         for (name, var) in ty.get().vars.iter() {
+                            if !skip.insert(("var", name)) {
+                                continue;
+                            }
                             if starts_with(name, query) {
                                 results.push(CompletionItem {
                                     insert_text: Some(format!("{} = ", name)),
@@ -903,6 +908,9 @@ handle_method_call! {
 
                         // override a parent's proc
                         for (name, proc) in ty.get().procs.iter() {
+                            if !skip.insert(("proc", name)) {
+                                continue;
+                            }
                             if starts_with(name, query) {
                                 use std::fmt::Write;
 
@@ -929,15 +937,12 @@ handle_method_call! {
                 }
             },
 
-            Annotation::UnscopedVar(incomplete_name) => {
+            Annotation::UnscopedVar(query) => {
                 let (ty, proc_name) = self.find_type_context(&iter);
-
-                // TODO: only deliver one completion for a symbol of the same
-                // kind/name, e.g. don't serve up both atom/New and datum/New.
 
                 // implicit proc vars
                 for &name in ["args", "global", "src", "usr"].iter() {
-                    if starts_with(name, incomplete_name) {
+                    if starts_with(name, query) {
                         results.push(CompletionItem {
                             label: name.to_owned(),
                             kind: Some(CompletionItemKind::Keyword),
@@ -949,7 +954,7 @@ handle_method_call! {
                 // local variables
                 for (_, annotation) in iter.clone() {
                     if let Annotation::LocalVarScope(_var_type, name) = annotation {
-                        if starts_with(name, incomplete_name) {
+                        if starts_with(name, query) {
                             results.push(CompletionItem {
                                 label: name.clone(),
                                 kind: Some(CompletionItemKind::Variable),
@@ -965,7 +970,7 @@ handle_method_call! {
                 if let Some((proc_name, idx)) = proc_name {
                     if let Some(proc) = ty.get().procs.get(proc_name) {
                         for param in proc.value[idx].parameters.iter() {
-                            if starts_with(&param.name, incomplete_name) {
+                            if starts_with(&param.name, query) {
                                 results.push(CompletionItem {
                                     label: param.name.clone(),
                                     kind: Some(CompletionItemKind::Variable),
@@ -978,15 +983,17 @@ handle_method_call! {
                 }
 
                 let mut next = Some(ty);
+                skip.clear();
                 while let Some(ty) = next {
-                    completion::items_ty(&mut results, ty, incomplete_name);
+                    completion::items_ty(&mut results, &mut skip, ty, query);
                     next = ty.parent_type();
                 }
             },
-            Annotation::ScopedVar(priors, incomplete_name) => {
+            Annotation::ScopedVar(priors, query) => {
                 let mut next = self.find_scoped_type(&iter, priors);
+                skip.clear();
                 while let Some(ty) = next {
-                    completion::items_ty(&mut results, ty, incomplete_name);
+                    completion::items_ty(&mut results, &mut skip, ty, query);
                     next = ignore_root(ty.parent_type());
                 }
             },

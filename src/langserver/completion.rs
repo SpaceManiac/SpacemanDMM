@@ -1,5 +1,7 @@
 //! Supporting functions for completion and go-to-definition.
 
+use std::collections::HashSet;
+
 use langserver::*;
 
 use dm::annotation::Annotation;
@@ -46,16 +48,22 @@ pub fn item_proc(ty: TypeRef, name: &str, _proc: &TypeProc) -> CompletionItem {
     }
 }
 
-pub fn items_ty(results: &mut Vec<CompletionItem>, ty: TypeRef, query: &str) {
+pub fn items_ty<'a>(results: &mut Vec<CompletionItem>, skip: &mut HashSet<(&str, &'a String)>, ty: TypeRef<'a>, query: &str) {
     // type variables
     for (name, var) in ty.get().vars.iter() {
+        if !skip.insert(("var", name)) {
+            continue;
+        }
         if starts_with(name, query) {
             results.push(item_var(ty, name, var));
         }
     }
 
     // procs
-    for (name, proc) in ty.procs.iter() {
+    for (name, proc) in ty.get().procs.iter() {
+        if !skip.insert(("proc", name)) {
+            continue;
+        }
         if starts_with(name, query) {
             results.push(item_proc(ty, name, proc));
         }
