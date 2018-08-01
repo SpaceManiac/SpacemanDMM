@@ -236,9 +236,10 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         }
     }
 
-    pub fn path_completions<'b, I>(&'b self, results: &mut Vec<CompletionItem>, iter: &I, parts: &'b [(PathOp, String)], query: &str)
+    pub fn path_completions<'b, I>(&'b self, results: &mut Vec<CompletionItem>, iter: &I, parts: &'b [(PathOp, String)], _last_op: PathOp, query: &str)
         where I: Iterator<Item=(Span, &'b Annotation)> + Clone
     {
+        // TODO: take last_op into account
         match self.follow_type_path(iter, parts) {
             // '/datum/<complete types>'
             Some(TypePathResult { ty, decl: None, proc: None }) => {
@@ -265,6 +266,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 }
             },
             // '/datum/proc/<complete procs>'
+            // TODO: take the path op into acocunt (`/proc` vs `.proc`)
             Some(TypePathResult { ty, decl: Some(decl), proc: None }) => {
                 let mut next = Some(ty);
                 while let Some(ty) = next {

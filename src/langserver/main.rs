@@ -834,8 +834,8 @@ handle_method_call! {
                 any_annotation = true;
             },
             Annotation::TypePath(parts) => {
-                let ((_, query), parts) = parts.split_last().unwrap();
-                self.path_completions(&mut results, &iter, parts, query);
+                let ((last_op, query), parts) = parts.split_last().unwrap();
+                self.path_completions(&mut results, &iter, parts, *last_op, query);
                 any_annotation = true;
             },
             Annotation::UnscopedCall(query) |
@@ -855,9 +855,9 @@ handle_method_call! {
                 any_annotation = true;
                 break;
             },
-            Annotation::IncompleteTypePath(parts, _last_op) => {
+            Annotation::IncompleteTypePath(parts, last_op) => {
                 results.clear();
-                self.path_completions(&mut results, &iter, parts, "");
+                self.path_completions(&mut results, &iter, parts, *last_op, "");
                 any_annotation = true;
                 break;
             },
