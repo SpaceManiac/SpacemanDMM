@@ -635,10 +635,16 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 self.annotate(entry_start, || Annotation::ProcHeader(new_stack.to_vec(), idx));
                 let start = self.updated_location();
                 let mut body_tt = Vec::new();
-                require!(self.read_any_tt(&mut body_tt));
-                while body_tt[0].token != Punct(LBrace) && body_tt[body_tt.len() - 1].token != Punct(Semicolon) {
-                    // read repeatedly until it's a block or ends with a newline
+                // check that it doesn't end immediately (empty body)
+                if self.statement_terminator()?.is_none() {
+                    // read an initial token tree
                     require!(self.read_any_tt(&mut body_tt));
+                    // if the first token is not an LBrace, it's on one line
+                    if body_tt[0].token != Punct(LBrace) {
+                        while self.statement_terminator()?.is_none() {
+                            require!(self.read_any_tt(&mut body_tt));
+                        }
+                    }
                 }
                 self.annotate(start, || Annotation::ProcBody(new_stack.to_vec(), idx));
                 if self.procs {
