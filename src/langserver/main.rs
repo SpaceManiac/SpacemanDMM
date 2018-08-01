@@ -35,7 +35,6 @@ use langserver::MessageType;
 use petgraph::visit::IntoNodeReferences;
 
 use dm::FileId;
-use dm::ast::PathOp;
 use dm::annotation::{Annotation, AnnotationTree};
 use dm::objtree::TypeRef;
 
@@ -719,53 +718,14 @@ handle_method_call! {
             }
         },
         Annotation::TypePath(parts) => {
-            let mut parts = &parts[..];
-            // cut off the part of the path we haven't selected
-            if_annotation! { Annotation::InSequence(idx) in iter; {
-                parts = &parts[..idx+1];
-            }}
-            // if we're on the right side of a 'list/', start the lookup there
-            match parts.split_first() {
-                Some(((PathOp::Slash, kwd), rest)) if kwd == "list" && !rest.is_empty() => parts = rest,
-                _ => {}
-            }
-
-            // use the first path op to select the starting type of the lookup
-            let mut ty = match parts[0].0 {
-                PathOp::Colon => break,  // never finds anything, apparently?
-                PathOp::Slash => self.objtree.root(),
-                PathOp::Dot => {
-                    match self.find_type_context(&iter) {
-                        (Some(base), _) => base,
-                        (None, _) => self.objtree.root(),
-                    }
-                }
-            };
-
-            // follow the path ops until we hit 'proc' or 'verb'
-            let mut iter = parts.iter();
-            let mut is_proc = false;
-            while let Some(&(op, ref name)) = iter.next() {
-                if name == "proc" || name == "verb" {
-                    is_proc = true;
-                    break;
-                }
-                if let Some(next) = ty.navigate(op, name) {
-                    ty = next;
-                } else {
-                    break;
-                }
-            }
-            if is_proc {
-                if let Some((_, proc_name)) = iter.next() {
-                    // '/datum/proc/proc_name'
-                    if let Some(proc) = ty.get_proc(proc_name) {
-                        results.push(self.convert_location(proc.location, &ty.path, "/proc/", proc_name)?);
-                    }
-                }  // else '/datum/proc', no results
-            } else {
-                // just a type path
-                results.push(self.convert_location(ty.location, &ty.path, "", "")?);
+            match self.follow_type_path(&iter, parts) {
+                Some(completion::TypePathResult { ty, proc: Some((proc_name, proc)) }) => {
+                    results.push(self.convert_location(proc.location, &ty.path, "/proc/", proc_name)?);
+                },
+                Some(completion::TypePathResult { ty, proc: None }) => {
+                    results.push(self.convert_location(ty.location, &ty.path, "", "")?);
+                },
+                None => {}
             }
         },
         Annotation::UnscopedCall(proc_name) => {

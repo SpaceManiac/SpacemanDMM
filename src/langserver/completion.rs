@@ -4,10 +4,11 @@ use std::collections::HashSet;
 
 use langserver::*;
 
+use dm::ast::PathOp;
 use dm::annotation::Annotation;
-use dm::objtree::{TypeRef, TypeVar, TypeProc};
+use dm::objtree::{TypeRef, TypeVar, TypeProc, ProcValue};
 
-use {Span, is_constructor_name};
+use {Engine, Span, io, is_constructor_name};
 use symbol_search::starts_with;
 
 pub fn item_var(ty: TypeRef, name: &str, var: &TypeVar) -> CompletionItem {
@@ -100,4 +101,65 @@ pub fn combine_tree_path<'a, I>(iter: &I, mut absolute: bool, mut parts: &'a [St
     }
 
     prefix_parts.iter().chain(parts).map(|x| &**x)
+}
+
+impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
+    pub fn follow_type_path<'b, I>(&'b self, iter: &I, mut parts: &'b [(PathOp, String)]) -> Option<TypePathResult<'b>>
+        where I: Iterator<Item=(Span, &'a Annotation)> + Clone
+    {
+        // cut off the part of the path we haven't selected
+        if_annotation! { Annotation::InSequence(idx) in iter; {
+            parts = &parts[..idx+1];
+        }}
+        // if we're on the right side of a 'list/', start the lookup there
+        match parts.split_first() {
+            Some(((PathOp::Slash, kwd), rest)) if kwd == "list" && !rest.is_empty() => parts = rest,
+            _ => {}
+        }
+
+        // use the first path op to select the starting type of the lookup
+        let mut ty = match parts[0].0 {
+            PathOp::Colon => return None,  // never finds anything, apparently?
+            PathOp::Slash => self.objtree.root(),
+            PathOp::Dot => {
+                match self.find_type_context(iter) {
+                    (Some(base), _) => base,
+                    (None, _) => self.objtree.root(),
+                }
+            }
+        };
+
+        // follow the path ops until we hit 'proc' or 'verb'
+        let mut iter = parts.iter();
+        let mut is_proc = false;
+        while let Some(&(op, ref name)) = iter.next() {
+            if name == "proc" || name == "verb" {
+                is_proc = true;
+                break;
+            }
+            if let Some(next) = ty.navigate(op, name) {
+                ty = next;
+            } else {
+                break;
+            }
+        }
+        if is_proc {
+            if let Some((_, proc_name)) = iter.next() {
+                // '/datum/proc/proc_name'
+                if let Some(proc) = ty.get_proc(proc_name) {
+                    return Some(TypePathResult { ty, proc: Some((proc_name, proc)) });
+                }
+            }
+            // else '/datum/proc', no results
+            None
+        } else {
+            // just a type path
+            Some(TypePathResult { ty, proc: None })
+        }
+    }
+}
+
+pub struct TypePathResult<'a> {
+    pub ty: TypeRef<'a>,
+    pub proc: Option<(&'a str, &'a ProcValue)>,
 }
