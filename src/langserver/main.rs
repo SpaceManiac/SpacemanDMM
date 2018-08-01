@@ -819,6 +819,7 @@ handle_method_call! {
         };
         let iter = annotations.get_location(location);
         let mut results = Vec::new();
+        let mut any_annotation = false;
 
         // TODO: figure out a decent way to autocomplete just on the '.', ':',
         // or '/' without requiring at least one letter of the name.
@@ -827,20 +828,36 @@ handle_method_call! {
             Annotation::TreePath(absolute, parts) => {
                 let (query, parts) = parts.split_last().unwrap();
                 let path = completion::combine_tree_path(&iter, *absolute, parts);
-                self.tree_completions(&mut results, path, query);
+                let (exact, ty) = self.objtree.type_by_path_approx(path);
+                self.tree_completions(&mut results, exact, ty, query);
+                any_annotation = true;
             },
             Annotation::TypePath(parts) => {
                 let ((_, query), parts) = parts.split_last().unwrap();
                 self.path_completions(&mut results, &iter, parts, query);
+                any_annotation = true;
             },
             Annotation::UnscopedCall(query) |
             Annotation::UnscopedVar(query) => {
                 self.unscoped_completions(&mut results, &iter, query);
+                any_annotation = true;
             },
             Annotation::ScopedCall(priors, query) |
             Annotation::ScopedVar(priors, query) => {
                 self.scoped_completions(&mut results, &iter, priors, query);
+                any_annotation = true;
             },
+        }
+
+        if !any_annotation {
+            // Someone hit Ctrl+Space with no usable idents nearby
+            let (ty, proc_name) = self.find_type_context(&iter);
+            if proc_name.is_some() {
+                // TODO: unscoped_completions calls find_type_context again
+                self.unscoped_completions(&mut results, &iter, "");
+            } else {
+                self.tree_completions(&mut results, true, ty.unwrap_or(self.objtree.root()), "");
+            }
         }
 
         if results.is_empty() {

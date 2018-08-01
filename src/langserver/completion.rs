@@ -163,10 +163,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         Some(TypePathResult { ty, decl, proc })
     }
 
-    pub fn tree_completions<'b, I>(&'b self, results: &mut Vec<CompletionItem>, iter: I, query: &str)
-        where I: Iterator, I::Item: AsRef<str>
-    {
-        let (exact, ty) = self.objtree.type_by_path_approx(iter);
+    pub fn tree_completions(&self, results: &mut Vec<CompletionItem>, exact: bool, ty: TypeRef, query: &str) {
         // path keywords
         for &name in ["proc", "var", "verb"].iter() {
             if starts_with(name, query) {
