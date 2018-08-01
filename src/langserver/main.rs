@@ -25,7 +25,7 @@ mod extras;
 mod completion;
 
 use std::path::{PathBuf, Path};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, VecDeque, HashSet};
 use std::collections::hash_map::Entry;
 use std::rc::Rc;
 
@@ -476,7 +476,7 @@ handle_method_call! {
                     .. Default::default()
                 })),
                 completion_provider: Some(CompletionOptions {
-                    trigger_characters: Some(vec![".".to_owned(), "/".to_owned(), ":".to_owned()]),
+                    trigger_characters: None,
                     resolve_provider: None,
                 }),
                 .. Default::default()
@@ -713,35 +713,8 @@ handle_method_call! {
 
         let iter = annotations.get_location(location);
         match_annotation! { iter;
-        Annotation::TreePath(mut absolute, parts) => {
-            let mut parts = &parts[..];
-            // cut off the part of the path we haven't selected
-            if_annotation! { Annotation::InSequence(idx) in iter; {
-                parts = &parts[..idx+1];
-            }}
-            // if we're on the right side of a 'var/', start the lookup there
-            if let Some(i) = parts.iter().position(|x| x == "var") {
-                parts = &parts[i+1..];
-                absolute = true;
-            }
-            // if we're on the right side of a 'list/', start the lookup there
-            match parts.split_first() {
-                Some((kwd, rest)) if kwd == "list" && !rest.is_empty() => parts = rest,
-                _ => {}
-            }
-
-            let mut prefix_parts = &[][..];
-            if !absolute {
-                if_annotation! { Annotation::TreeBlock(parts) in iter; {
-                    prefix_parts = parts;
-                    if let Some(i) = prefix_parts.iter().position(|x| x == "var") {
-                        // if we're inside a 'var' block, start the lookup there
-                        prefix_parts = &prefix_parts[i+1..];
-                    }
-                }}
-            }
-
-            if let Some(ty) = self.objtree.type_by_path(prefix_parts.iter().chain(parts.iter())) {
+        Annotation::TreePath(absolute, parts) => {
+            if let Some(ty) = self.objtree.type_by_path(completion::combine_tree_path(&iter, *absolute, parts)) {
                 results.push(self.convert_location(ty.location, &ty.path, "", "")?);
             }
         },
@@ -891,6 +864,71 @@ handle_method_call! {
         // or '/' without requiring at least one letter of the name.
 
         match_annotation! { iter;
+            Annotation::TreePath(absolute, parts) => {
+                let (query, parts) = parts.split_last().unwrap();
+                if let Some(ty) = self.objtree.type_by_path(completion::combine_tree_path(&iter, *absolute, parts)) {
+                    // path keywords
+                    for &name in ["proc", "var", "verb"].iter() {
+                        if starts_with(name, query) {
+                            results.push(CompletionItem {
+                                label: name.to_owned(),
+                                kind: Some(CompletionItemKind::Keyword),
+                                .. Default::default()
+                            })
+                        }
+                    }
+
+                    // child types
+                    for child in ty.children() {
+                        if starts_with(&child.name, query) {
+                            results.push(CompletionItem {
+                                label: child.name.to_owned(),
+                                kind: Some(CompletionItemKind::Class),
+                                .. Default::default()
+                            });
+                        }
+                    }
+
+                    let mut next = Some(ty);
+                    while let Some(ty) = next {
+                        // override a parent's var
+                        for (name, var) in ty.get().vars.iter() {
+                            if starts_with(name, query) {
+                                results.push(CompletionItem {
+                                    insert_text: Some(format!("{} = ", name)),
+                                    .. completion::item_var(ty, name, var)
+                                });
+                            }
+                        }
+
+                        // override a parent's proc
+                        for (name, proc) in ty.get().procs.iter() {
+                            if starts_with(name, query) {
+                                use std::fmt::Write;
+
+                                let mut completion = format!("{}(", name);
+                                let mut sep = "";
+                                for param in proc.value.last().unwrap().parameters.iter() {
+                                    for each in param.path.iter() {
+                                        let _ = write!(completion, "{}{}", sep, each);
+                                        sep = "/";
+                                    }
+                                    let _ = write!(completion, "{}{}", sep, param.name);
+                                    sep = ", ";
+                                }
+                                let _ = write!(completion, ")\n\t. = ..()\n\t");
+
+                                results.push(CompletionItem {
+                                    insert_text: Some(completion),
+                                    .. completion::item_proc(ty, name, proc)
+                                });
+                            }
+                        }
+                        next = ignore_root(ty.parent_type());
+                    }
+                }
+            },
+
             Annotation::UnscopedVar(incomplete_name) => {
                 let (ty, proc_name) = self.find_type_context(&iter);
 
@@ -902,8 +940,7 @@ handle_method_call! {
                     if starts_with(name, incomplete_name) {
                         results.push(CompletionItem {
                             label: name.to_owned(),
-                            kind: Some(CompletionItemKind::Variable),
-                            detail: Some("(builtin)".to_owned()),
+                            kind: Some(CompletionItemKind::Keyword),
                             .. Default::default()
                         });
                     }
