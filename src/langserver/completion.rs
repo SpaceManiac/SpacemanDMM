@@ -190,7 +190,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
 
         let mut next = Some(ty);
         let mut skip = HashSet::new();
-        while let Some(ty) = next {
+        while let Some(ty) = ignore_root(next) {
             // override a parent's var
             for (name, var) in ty.get().vars.iter() {
                 if !skip.insert(("var", name)) {
@@ -230,7 +230,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                     });
                 }
             }
-            next = ignore_root(ty.parent_type());
+            next = ty.parent_type();
         }
     }
 
