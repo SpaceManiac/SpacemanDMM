@@ -29,7 +29,8 @@ pub enum Annotation {
 
     // error annotations, mostly for autocompletion
     ScopedMissingIdent(Vec<String>),  // when a . is followed by a non-ident
-    IncompleteTypePath(Vec<(PathOp, String)>, PathOp),
+    IncompleteTypePath(TypePath, PathOp),
+    IncompleteTreePath(bool, Vec<String>),
 }
 
 pub struct AnnotationTree {

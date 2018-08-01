@@ -523,16 +523,19 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             }
             t => { self.put_back(t); }
         }
+        let mut slash_loc = self.location;
 
         // expect at least one ident
-        parts.push(match self.ident_in_seq(0)? {
-            Some(i) => i,
+        match self.ident_in_seq(parts.len())? {
+            Some(i) => parts.push(i),
             None if !(absolute || spurious_lead) => return Ok(None),
             None => {
+                slash_loc.column += 1;
+                self.annotate_precise(slash_loc..slash_loc, || Annotation::IncompleteTreePath(absolute, parts.clone()));
                 self.context.register_error(self.error("path has no effect"));
                 return success((absolute, Vec::new()));
             }
-        });
+        }
         // followed by ('/' ident)*
         loop {
             match self.next("'/'")? {
@@ -544,8 +547,12 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 }
                 t => { self.put_back(t); break; }
             }
+            let mut slash_loc = self.location;
             if let Some(i) = self.ident_in_seq(parts.len())? {
                 parts.push(i);
+            } else {
+                slash_loc.column += 1;
+                self.annotate_precise(slash_loc..slash_loc, || Annotation::IncompleteTreePath(absolute, parts.clone()));
             }
         }
 

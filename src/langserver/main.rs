@@ -821,9 +821,6 @@ handle_method_call! {
         let mut results = Vec::new();
         let mut any_annotation = false;
 
-        // TODO: figure out a decent way to autocomplete just on the '.', ':',
-        // or '/' without requiring at least one letter of the name.
-
         match_annotation! { iter;
             // happy path annotations
             Annotation::TreePath(absolute, parts) => {
@@ -858,6 +855,14 @@ handle_method_call! {
             Annotation::IncompleteTypePath(parts, last_op) => {
                 results.clear();
                 self.path_completions(&mut results, &iter, parts, *last_op, "");
+                any_annotation = true;
+                break;
+            },
+            Annotation::IncompleteTreePath(absolute, parts) => {
+                results.clear();
+                let path = completion::combine_tree_path(&iter, *absolute, parts);
+                let (exact, ty) = self.objtree.type_by_path_approx(path);
+                self.tree_completions(&mut results, exact, ty, "");
                 any_annotation = true;
                 break;
             },
