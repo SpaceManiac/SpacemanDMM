@@ -18,17 +18,7 @@ use super::ast::*;
 pub fn parse<I>(context: &Context, iter: I) -> ObjectTree where
     I: IntoIterator<Item=LocatedToken>
 {
-    let mut parser = Parser::new(context, iter.into_iter());
-    parser.run();
-
-    let procs_total = parser.procs_good + parser.procs_bad;
-    if procs_total > 0 {
-        eprintln!("parsed {}/{} proc bodies ({}%)", parser.procs_good, procs_total, (parser.procs_good * 100 / procs_total));
-    }
-
-    let sloppy = context.errors().iter().any(|p| p.severity() == Severity::Error);
-    parser.tree.finalize(context, sloppy);
-    parser.tree
+    Parser::new(context, iter.into_iter()).parse_object_tree()
 }
 
 type Ident = String;
@@ -321,6 +311,7 @@ pub struct Parser<'ctx, 'an, I> {
     location: Location,
     expected: Vec<String>,
 
+    procs: bool,
     procs_bad: u64,
     procs_good: u64,
 }
@@ -347,6 +338,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             location: Default::default(),
             expected: Vec::new(),
 
+            procs: false,
             procs_bad: 0,
             procs_good: 0,
         }
@@ -360,8 +352,26 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         }
     }
 
+    pub fn parse_object_tree(mut self) -> ObjectTree {
+        self.run();
+
+        let procs_total = self.procs_good + self.procs_bad;
+        if procs_total > 0 {
+            eprintln!("parsed {}/{} proc bodies ({}%)", self.procs_good, procs_total, (self.procs_good * 100 / procs_total));
+        }
+
+        let sloppy = self.context.errors().iter().any(|p| p.severity() == Severity::Error);
+        self.tree.finalize(self.context, sloppy);
+        self.tree
+    }
+
+    pub fn enable_procs(&mut self) {
+        self.procs = true;
+    }
+
     pub fn annotate_to(&mut self, annotations: &'an mut AnnotationTree) {
         self.annotations = Some(annotations);
+        self.procs = true;
     }
 
     pub fn set_fallback_location(&mut self, fallback: Location) {
@@ -610,23 +620,23 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                     require!(self.read_any_tt(&mut body_tt));
                 }
                 self.annotate(start, || Annotation::ProcBody(new_stack.to_vec(), idx));
-                let result = {
-                    let mut subparser: Parser<'ctx, '_, _> = Parser::new(self.context, body_tt.iter().cloned());
-                    if let Some(a) = self.annotations.as_mut() {
-                        subparser.annotations = Some(&mut *a);
+                if self.procs {
+                    let result = {
+                        let mut subparser: Parser<'ctx, '_, _> = Parser::new(self.context, body_tt.iter().cloned());
+                        if let Some(a) = self.annotations.as_mut() {
+                            subparser.annotations = Some(&mut *a);
+                        }
+                        let block = subparser.block();
+                        subparser.require(block)
+                    };
+                    if result.is_ok() {
+                        self.procs_good += 1;
+                    } else {
+                        self.procs_bad += 1;
                     }
-                    let block = subparser.block();
-                    subparser.require(block)
-                };
-                if result.is_ok() {
-                    self.procs_good += 1;
-                } else {
-                    self.procs_bad += 1;
-                }
-                if let Err(err) = result {
-                    // TODO: change Hint to Error when the last failing procs
-                    // in tgstation are fixed
-                    self.context.register_error(err.set_severity(Severity::Hint));
+                    if let Err(err) = result {
+                        self.context.register_error(err);
+                    }
                 }
                 SUCCESS
             }

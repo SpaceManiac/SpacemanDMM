@@ -55,6 +55,7 @@ struct Context {
     icon_cache: icon_cache::IconCache,
     exit_status: AtomicIsize,
     parallel: bool,
+    procs: bool,
 }
 
 impl Context {
@@ -68,15 +69,20 @@ impl Context {
             }
         };
         println!("parsing {}", environment.display());
-        match self.dm_context.parse_environment(environment) {
-            Ok(tree) => {
-                self.objtree = tree;
-            },
+
+        let pp = match dm::preprocessor::Preprocessor::new(&self.dm_context, environment.to_owned()) {
+            Ok(pp) => pp,
             Err(e) => {
                 eprintln!("i/o error opening environment:\n{}", e);
                 std::process::exit(1);
             }
         };
+        let indents = dm::indents::IndentProcessor::new(&self.dm_context, pp);
+        let mut parser = dm::parser::Parser::new(&self.dm_context, indents);
+        if self.procs {
+            parser.enable_procs();
+        }
+        self.objtree = parser.parse_object_tree();
     }
 }
 
@@ -136,6 +142,9 @@ enum Command {
         /// The minimum severity to print, of "error", "warning", "info", "hint".
         #[structopt(long="severity", default_value="info")]
         severity: String,
+        /// Check proc bodies as well as the object tree.
+        #[structopt(long="procs")]
+        procs: bool,
     },
     /// Build minimaps of the specified maps.
     #[structopt(name = "minimap")]
@@ -241,7 +250,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             }
         },
         // --------------------------------------------------------------------
-        Command::Check { ref severity } => {
+        Command::Check { ref severity, procs } => {
             let severity = match severity.as_str() {
                 "error" => dm::Severity::Error,
                 "warning" => dm::Severity::Warning,
@@ -249,6 +258,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                 _ => dm::Severity::Hint,
             };
             context.dm_context.set_print_severity(Some(severity));
+            context.procs = procs;
             context.objtree(opt);
             *context.exit_status.get_mut() = context.dm_context.errors().iter().filter(|e| e.severity() <= severity).count() as isize;
         },
