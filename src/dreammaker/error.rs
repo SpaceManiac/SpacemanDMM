@@ -103,7 +103,7 @@ impl Context {
             self.file_path(error.location.file).display(),
             error.location.line,
             error.location.column)?;
-        writeln!(w, "{}: {}\n", error.severity, error.desc)
+        writeln!(w, "{}: {}\n", error.severity, error.description)
     }
 
     /// Pretty-print all registered diagnostics to standard error.
@@ -225,7 +225,7 @@ impl fmt::Display for Severity {
 pub struct DMError {
     location: Location,
     severity: Severity,
-    desc: String,
+    description: String,
     cause: Option<Box<error::Error + Send>>,
 }
 
@@ -235,7 +235,7 @@ impl DMError {
         DMError {
             location,
             severity: Default::default(),
-            desc: desc.into(),
+            description: desc.into(),
             cause: None,
         }
     }
@@ -262,24 +262,24 @@ impl DMError {
 
     /// Get the description associated with this error.
     pub fn description(&self) -> &str {
-        &self.desc
+        &self.description
     }
 
     /// Deconstruct this error, returning only the description.
     pub fn into_description(self) -> String {
-        self.desc
+        self.description
     }
 }
 
 impl fmt::Display for DMError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}:{}:{}", self.location.line, self.location.column, self.desc)
+        write!(f, "{}:{}:{}", self.location.line, self.location.column, self.description)
     }
 }
 
 impl error::Error for DMError {
     fn description(&self) -> &str {
-        &self.desc
+        &self.description
     }
 
     fn cause(&self) -> Option<&error::Error> {
