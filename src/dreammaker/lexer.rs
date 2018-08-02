@@ -488,7 +488,8 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
             } else if backslash {
                 backslash = false;
             } else if ch == b'\n' {
-                break
+                self.put_back(Some(ch));
+                break;
             } else if ch == b'\\' {
                 backslash = true;
             }
@@ -774,7 +775,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                 }
                 Some(LineComment) => {
                     self.skip_line_comment();
-                    Some(locate(Punct(Newline)))
+                    continue;
                 }
                 Some(SingleQuote) => Some(locate(Resource(self.read_resource()))),
                 Some(DoubleQuote) => Some(locate(self.read_string(b"\"", false))),
