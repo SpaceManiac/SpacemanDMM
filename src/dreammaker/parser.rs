@@ -636,7 +636,9 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 let start = self.updated_location();
                 let mut body_tt = Vec::new();
                 // check that it doesn't end immediately (empty body)
-                if self.statement_terminator()?.is_none() {
+                if let Some(()) = self.statement_terminator()? {
+                    body_tt.push(LocatedToken::new(self.location, Punct(Semicolon)));
+                } else {
                     // read an initial token tree
                     require!(self.read_any_tt(&mut body_tt));
                     // if the first token is not an LBrace, it's on one line
@@ -644,6 +646,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                         while self.statement_terminator()?.is_none() {
                             require!(self.read_any_tt(&mut body_tt));
                         }
+                        body_tt.push(LocatedToken::new(self.location, Punct(Semicolon)));
                     }
                 }
                 self.annotate(start, || Annotation::ProcBody(new_stack.to_vec(), idx));
