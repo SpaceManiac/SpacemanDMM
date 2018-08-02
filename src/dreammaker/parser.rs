@@ -399,6 +399,9 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     // Call this to get a DMError in the event of an entry point returning None
     fn describe_parse_error(&mut self) -> DMError {
         let expected = self.expected.join(", ");
+        if self.eof {
+            return self.error(format!("got EOF, expected one of: {}", expected));
+        }
         match self.next("") {
             Ok(got) => {
                 let message = format!("got '{}', expected one of: {}", got, expected);
@@ -435,7 +438,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                     self.eof = true;
                     Ok(Token::Eof)
                 } else {
-                    Err(DMError::new(self.location, "read-after-EOF"))
+                    self.parse_error()
                 }
             }
         }, Ok);
