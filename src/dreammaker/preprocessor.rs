@@ -538,7 +538,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                 Some("dms") => FileType::DMS,
                                 Some("dm") => FileType::DM,
                                 Some(ext) => {
-                                    self.context.register_error(DMError::new(self.last_input_loc, format!("unknown extension '.{:?}'", ext)));
+                                    self.context.register_error(DMError::new(self.last_input_loc, format!("unknown extension {:?}", ext)));
                                     return Ok(());
                                 }
                                 None => {
