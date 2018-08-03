@@ -31,6 +31,9 @@ pub enum Annotation {
     ScopedMissingIdent(Vec<String>),  // when a . is followed by a non-ident
     IncompleteTypePath(TypePath, PathOp),
     IncompleteTreePath(bool, Vec<String>),
+
+    ProcArguments(Vec<String>, String, usize),  // Vec empty for unscoped call
+    ProcArgument(usize),  // where in the prog arguments we are
 }
 
 pub struct AnnotationTree {

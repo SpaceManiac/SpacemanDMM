@@ -66,7 +66,7 @@ pub fn items_ty<'a>(results: &mut Vec<CompletionItem>, skip: &mut HashSet<(&str,
         }
         if starts_with(name, query) {
             results.push(CompletionItem {
-                insert_text: Some(format!("{}(", name)),
+                insert_text: Some(name.to_owned()),
                 .. item_proc(ty, name, proc)
             });
         }

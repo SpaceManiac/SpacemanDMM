@@ -1386,7 +1386,8 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 };
 
                 // try to read an arglist
-                let a = self.arguments()?;
+                // TODO: communicate what type is being new'd somehow
+                let a = self.arguments(&[], "New")?;
 
                 Term::New {
                     type_: t,
@@ -1398,18 +1399,18 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             // TODO: list arguments are actually subtly different, but
             // we're going to pretend they're not to make code simpler, and
             // anyone relying on the difference needs to fix their garbage
-            Token::Ident(ref i, _) if i == "list" => match self.arguments()? {
+            Token::Ident(ref i, _) if i == "list" => match self.arguments(&[], "list")? {
                 Some(args) => Term::List(args),
                 None => Term::Ident(i.to_owned()),
             },
 
             // term :: 'call' arglist arglist
             Token::Ident(ref i, _) if i == "call" => {
-                Term::DynamicCall(require!(self.arguments()), require!(self.arguments()))
+                Term::DynamicCall(require!(self.arguments(&[], "call")), require!(self.arguments(&[], "call*")))
             },
 
             // term :: 'input' arglist input_specifier
-            Token::Ident(ref i, _) if i == "input" => match self.arguments()? {
+            Token::Ident(ref i, _) if i == "input" => match self.arguments(&[], "input")? {
                 Some(args) => {
                     let (input_type, in_list) = require!(self.input_specifier());
                     Term::Input { args, input_type, in_list: in_list.map(Box::new) }
@@ -1418,7 +1419,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             },
 
             // term :: 'locate' arglist ('in' expression)?
-            Token::Ident(ref i, _) if i == "locate" => match self.arguments()? {
+            Token::Ident(ref i, _) if i == "locate" => match self.arguments(&[], "locate")? {
                 Some(args) => {
                     // warn against this mistake
                     if let Some(&Expression::BinaryOp { op: BinaryOp::In, .. } ) = args.get(0) {
@@ -1446,7 +1447,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             // term :: ident arglist | ident
             Token::Ident(i, _) => {
                 let first_token = self.updated_location();
-                match self.arguments()? {
+                match self.arguments(&[], &i)? {
                     Some(args) => {
                         self.annotate_precise(start..first_token, || Annotation::UnscopedCall(i.clone()));
                         Term::Call(i, args)
@@ -1462,7 +1463,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             // term :: '..' arglist
             Token::Punct(Punctuation::Super) => {
                 self.annotate(start, || Annotation::ParentCall);
-                Term::ParentCall(require!(self.arguments()))
+                Term::ParentCall(require!(self.arguments(&[], "..")))
             },
 
             // term :: '.'
@@ -1472,7 +1473,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                     // prefab
                     // TODO: arrange for this ident to end up in the prefab's annotation
                     Term::Prefab(require!(self.prefab_ex(vec![(PathOp::Dot, ident)])))
-                } else if let Some(args) = self.arguments()? {
+                } else if let Some(args) = self.arguments(&[], ".")? {
                     // .() call
                     Term::SelfCall(args)
                 } else {
@@ -1560,7 +1561,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         };
         let end = self.updated_location();
 
-        success(match self.arguments()? {
+        success(match self.arguments(belongs_to, &ident)? {
             Some(args) => {
                 if !belongs_to.is_empty() {
                     let past = ::std::mem::replace(belongs_to, Vec::new());
@@ -1580,9 +1581,29 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     }
 
     /// a parenthesized, comma-separated list of expressions
-    fn arguments(&mut self) -> Status<Vec<Expression>> {
+    fn arguments(&mut self, parents: &[String], proc: &str) -> Status<Vec<Expression>> {
         leading!(self.exact(Token::Punct(Punctuation::LParen)));
-        success(require!(self.separated(Punctuation::Comma, Punctuation::RParen, Some(Expression::from(Term::Null)), Parser::expression)))
+        let start = self.location;
+
+        let mut arguments = Vec::new();
+        // TODO: account for implicit nulls again
+        let result = self.separated(Punctuation::Comma, Punctuation::RParen, Some(()), |this| {
+            let arg_start = this.location;
+            let result = this.expression();
+            this.annotate(arg_start, || Annotation::ProcArgument(arguments.len()));
+            match result {
+                Ok(Some(expr)) => { arguments.push(expr); SUCCESS },
+                Ok(None) => Ok(None),
+                Err(e) => Err(e),
+            }
+        });
+        let end = self.location;  // location of the closing parenthesis
+        self.annotate_precise(start..end, || Annotation::ProcArguments(parents.to_owned(), proc.to_owned(), arguments.len()));
+        match result {
+            Ok(Some(_)) => success(arguments),
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 
     fn pick_arguments(&mut self) -> Status<Vec<(Option<Expression>, Expression)>> {

@@ -358,7 +358,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         let mut priors = priors.iter();
         let first = match priors.next() {
             Some(i) => i,
-            None => return None,
+            None => return next,  // empty priors acts like unscoped
         };
         if first == "args" {
             next = self.objtree.find("/list");
@@ -477,6 +477,9 @@ handle_method_call! {
                 completion_provider: Some(CompletionOptions {
                     trigger_characters: Some(vec![".".to_owned(), ":".to_owned(), "/".to_owned()]),
                     resolve_provider: None,
+                }),
+                signature_help_provider: Some(SignatureHelpOptions {
+                    trigger_characters: Some(vec!["(".to_owned(), ",".to_owned()]),
                 }),
                 .. Default::default()
             }
@@ -884,6 +887,69 @@ handle_method_call! {
         } else {
             Some(CompletionResponse::Array(results))
         }
+    }
+
+    on SignatureHelpRequest(&mut self, params) {
+        let path = url_to_path(params.text_document.uri)?;
+        let (_, file_id, annotations) = self.get_annotations(&path)?;
+        let location = dm::Location {
+            file: file_id,
+            line: params.position.line as u32 + 1,
+            column: params.position.character as u16 + 1,
+        };
+        let iter = annotations.get_location(location);
+        let mut result = None;
+
+        if_annotation! { Annotation::ProcArguments(priors, proc_name, mut idx) in iter; {
+            // take the specific argument we're working on
+            if_annotation! { Annotation::ProcArgument(i) in iter; {
+                idx = *i;
+            }}
+
+            let mut next = self.find_scoped_type(&iter, priors);
+            while let Some(ty) = next {
+                if let Some(proc) = ty.procs.get(proc_name) {
+                    use std::fmt::Write;
+
+                    let mut params = Vec::new();
+                    let mut label = format!("{}/{}(", ty.path, proc_name);
+                    let mut sep = "";
+                    for param in proc.value.last().unwrap().parameters.iter() {
+                        params.push(ParameterInformation {
+                            label: param.name.clone(),
+                            documentation: None,
+                        });
+                        for each in param.path.iter() {
+                            let _ = write!(label, "{}{}", sep, each);
+                            sep = "/";
+                        }
+                        let _ = write!(label, "{}{}", sep, param.name);
+                        sep = ", ";
+                    }
+                    let _ = write!(label, ")");
+
+                    result = Some(SignatureHelp {
+                        active_signature: Some(0),
+                        active_parameter: Some(idx as u64),
+                        signatures: vec![SignatureInformation {
+                            label: label,
+                            parameters: Some(params),
+                            documentation: None,
+                        }],
+                    });
+                    break;
+                }
+                next = ty.parent_type();
+                if let Some(ref n) = next {
+                    if n.is_root() && !priors.is_empty() {
+                        break;
+                    }
+                }
+            }
+        }}
+
+        eprintln!("{:?}", result);
+        result
     }
 }
 
