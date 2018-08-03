@@ -701,7 +701,13 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         // `name` or `obj/name` or `var/obj/name` or ...
         let leading_loc = self.updated_location();
         let (_absolute, mut path) = leading!(self.tree_path());
-        let name = path.pop().unwrap();
+        let name = match path.pop() {
+            Some(name) => name,
+            None => {
+                self.context.register_error(self.describe_parse_error());
+                "".to_owned()
+            }
+        };
         if path.first().map_or(false, |i| i == "var") {
             path.remove(0);
             self.context.register_error(DMError::new(leading_loc, "'var/' is unnecessary here")
