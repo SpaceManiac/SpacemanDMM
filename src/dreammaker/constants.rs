@@ -27,7 +27,7 @@ pub enum Constant {
     /// A `list` literal. Elements have optional associations.
     List(Vec<(Constant, Option<Constant>)>),
     /// A call to a constant type constructor.
-    Call(ConstFn, Vec<Constant>),
+    Call(ConstFn, Vec<(Constant, Option<Constant>)>),
     /// A prefab literal.
     Prefab(Prefab<Constant>),
     /// A string literal.
@@ -209,12 +209,15 @@ impl fmt::Display for Constant {
             Constant::Call(const_fn, ref list) => {
                 write!(f, "{}(", const_fn)?;
                 let mut first = true;
-                for each in list.iter() {
+                for (key, val) in list.iter() {
                     if !first {
                         write!(f, ", ")?;
                     }
                     first = false;
-                    write!(f, "{}", each)?;
+                    write!(f, "{}", key)?;
+                    if let Some(val) = val {
+                        write!(f, " = {}", val)?;
+                    }
                 }
                 write!(f, ")")
             },
@@ -377,6 +380,7 @@ impl<'a> ConstantFolder<'a> {
     }
 
     /// list of expressions, keyword arguments disallowed
+    #[allow(dead_code)]
     fn expr_vec(&mut self, v: Vec<Expression>) -> Result<Vec<Constant>, DMError> {
         let mut out = Vec::new();
         for each in v {
@@ -524,10 +528,10 @@ impl<'a> ConstantFolder<'a> {
             },
             Term::Call(ident, args) => match &*ident {
                 // constructors which remain as they are
-                "matrix" => Constant::Call(ConstFn::Matrix, self.expr_vec(args)?),
-                "newlist" => Constant::Call(ConstFn::Newlist, self.expr_vec(args)?),
-                "icon" => Constant::Call(ConstFn::Icon, self.expr_vec(args)?),
-                "sound" => Constant::Call(ConstFn::Sound, self.expr_vec(args)?),
+                "matrix" => Constant::Call(ConstFn::Matrix, self.arguments(args)?),
+                "newlist" => Constant::Call(ConstFn::Newlist, self.arguments(args)?),
+                "icon" => Constant::Call(ConstFn::Icon, self.arguments(args)?),
+                "sound" => Constant::Call(ConstFn::Sound, self.arguments(args)?),
                 // constant-evaluatable functions
                 "rgb" => {
                     use std::fmt::Write;
