@@ -948,7 +948,6 @@ handle_method_call! {
             }
         }}
 
-        eprintln!("{:?}", result);
         result
     }
 }
