@@ -9,7 +9,7 @@ use dm::annotation::Annotation;
 use dm::objtree::{TypeRef, TypeVar, TypeProc, ProcValue};
 
 use {Engine, Span, io, is_constructor_name, ignore_root};
-use symbol_search::starts_with;
+use symbol_search::contains;
 
 pub fn item_var(ty: TypeRef, name: &str, var: &TypeVar) -> CompletionItem {
     let mut detail = ty.pretty_path().to_owned();
@@ -54,7 +54,7 @@ pub fn items_ty<'a>(results: &mut Vec<CompletionItem>, skip: &mut HashSet<(&str,
         if !skip.insert(("var", name)) {
             continue;
         }
-        if starts_with(name, query) {
+        if contains(name, query) {
             results.push(item_var(ty, name, var));
         }
     }
@@ -64,7 +64,7 @@ pub fn items_ty<'a>(results: &mut Vec<CompletionItem>, skip: &mut HashSet<(&str,
         if !skip.insert(("proc", name)) {
             continue;
         }
-        if starts_with(name, query) {
+        if contains(name, query) {
             results.push(CompletionItem {
                 insert_text: Some(name.to_owned()),
                 .. item_proc(ty, name, proc)
@@ -168,7 +168,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
     pub fn tree_completions(&self, results: &mut Vec<CompletionItem>, exact: bool, ty: TypeRef, query: &str) {
         // path keywords
         for &name in ["proc", "var", "verb"].iter() {
-            if starts_with(name, query) {
+            if contains(name, query) {
                 results.push(CompletionItem {
                     label: name.to_owned(),
                     kind: Some(CompletionItemKind::Keyword),
@@ -180,7 +180,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         if exact {
             // child types
             for child in ty.children() {
-                if starts_with(&child.name, query) {
+                if contains(&child.name, query) {
                     results.push(CompletionItem {
                         label: child.name.to_owned(),
                         kind: Some(CompletionItemKind::Class),
@@ -198,7 +198,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 if !skip.insert(("var", name)) {
                     continue;
                 }
-                if starts_with(name, query) {
+                if contains(name, query) {
                     results.push(CompletionItem {
                         insert_text: Some(format!("{} = ", name)),
                         .. item_var(ty, name, var)
@@ -211,7 +211,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 if !skip.insert(("proc", name)) {
                     continue;
                 }
-                if starts_with(name, query) {
+                if contains(name, query) {
                     use std::fmt::Write;
 
                     let mut completion = format!("{}(", name);
@@ -245,7 +245,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             Some(TypePathResult { ty, decl: None, proc: None }) => {
                 // path keywords
                 for &name in ["proc", "verb"].iter() {
-                    if starts_with(name, query) {
+                    if contains(name, query) {
                         results.push(CompletionItem {
                             label: name.to_owned(),
                             kind: Some(CompletionItemKind::Keyword),
@@ -256,7 +256,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
 
                 // child types
                 for child in ty.children() {
-                    if starts_with(&child.name, query) {
+                    if contains(&child.name, query) {
                         results.push(CompletionItem {
                             label: child.name.to_owned(),
                             kind: Some(CompletionItemKind::Class),
@@ -284,7 +284,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                         if proc_decl.is_verb != (decl == "verb") {
                             continue
                         }
-                        if starts_with(name, query) {
+                        if contains(name, query) {
                             results.push(item_proc(ty, name, proc));
                         }
                     }
@@ -302,7 +302,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
 
         // implicit proc vars
         for &name in ["args", "global", "src", "usr"].iter() {
-            if starts_with(name, query) {
+            if contains(name, query) {
                 results.push(CompletionItem {
                     label: name.to_owned(),
                     kind: Some(CompletionItemKind::Keyword),
@@ -314,7 +314,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         // local variables
         for (_, annotation) in iter.clone() {
             if let Annotation::LocalVarScope(_var_type, name) = annotation {
-                if starts_with(name, query) {
+                if contains(name, query) {
                     results.push(CompletionItem {
                         label: name.clone(),
                         kind: Some(CompletionItemKind::Variable),
@@ -330,7 +330,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         if let Some((proc_name, idx)) = proc_name {
             if let Some(proc) = ty.get().procs.get(proc_name) {
                 for param in proc.value[idx].parameters.iter() {
-                    if starts_with(&param.name, query) {
+                    if contains(&param.name, query) {
                         results.push(CompletionItem {
                             label: param.name.clone(),
                             kind: Some(CompletionItemKind::Variable),
