@@ -615,6 +615,8 @@ pub enum Statement {
         catch_params: Vec<TreePath>,
         catch_block: Vec<Statement>,
     },
+    Continue(Option<String>),
+    Break(Option<String>),
 }
 
 #[derive(Debug, Clone, PartialEq)]

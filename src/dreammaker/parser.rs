@@ -1034,6 +1034,14 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             require!(self.statement_terminator());
             // TODO: warn on weird values for these
             success(Statement::Setting(name, mode, value))
+        } else if let Some(()) = self.exact_ident("break")? {
+            let label = self.ident()?;
+            require!(self.statement_terminator());
+            success(Statement::Break(label))
+        } else if let Some(()) = self.exact_ident("continue")? {
+            let label = self.ident()?;
+            require!(self.statement_terminator());
+            success(Statement::Continue(label))
         } else {
             let result = leading!(self.simple_statement(false, vars));
             require!(self.statement_terminator());
