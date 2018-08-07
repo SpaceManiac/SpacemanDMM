@@ -212,6 +212,12 @@ pub struct Prefab<E=Expression> {
     pub vars: LinkedHashMap<String, E>,
 }
 
+impl<E> From<TypePath> for Prefab<E> {
+    fn from(path: TypePath) -> Self {
+        Prefab { path, vars: Default::default() }
+    }
+}
+
 impl<E: fmt::Display> fmt::Display for Prefab<E> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for each in self.path.iter() {

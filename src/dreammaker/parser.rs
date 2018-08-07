@@ -1211,7 +1211,11 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         let start = self.updated_location();
 
         // expect at least one path element
-        let sep = leading!(self.path_separator());
+        let sep = match self.path_separator()? {
+            Some(sep) => sep,
+            None if !parts.is_empty() => return Ok(Some(Prefab::from(parts))),
+            None => return Ok(None),
+        };
         let mut separator_loc = self.location;
         if let Some(ident) = self.ident_in_seq(parts.len())? {
             parts.push((sep, ident));
