@@ -177,7 +177,7 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
                 self.parentheses += 1;
             }
             Token::Punct(Punctuation::RParen) => {
-                self.parentheses -= 1;
+                self.parentheses = self.parentheses.saturating_sub(1);
             }
             _ => {}
         }
