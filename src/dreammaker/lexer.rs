@@ -7,18 +7,36 @@ use std::borrow::Cow;
 use super::{DMError, Location, HasLocation, FileId, Context, Severity};
 
 macro_rules! table {
-    ($(#[$attr:meta])* table $tabname:ident: $repr:ty => $enum_:ident; $($literal:expr, $name:ident;)*) => {
+    (
+        $(#[$attr:meta])* table $tabname:ident: $repr:ty => $enum_:ident;
+        $($literal:expr, $name:ident $(-> $close:ident)*;)*
+    ) => {
         $(#[$attr])*
         #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
         pub enum $enum_ {
-            $($name,)*
+            $(
+                $name,
+                $($close,)*
+            )*
         }
 
         impl $enum_ {
             #[allow(dead_code)]
             fn value(self) -> $repr {
                 match self {
-                    $($enum_::$name => $literal,)*
+                    $(
+                        $enum_::$name => $literal,
+                        $($enum_::$close => $literal,)*
+                    )*
+                }
+            }
+
+            fn close(self) -> Self {
+                match self {
+                    $(
+                        $($enum_::$name => $enum_::$close,)*
+                    )*
+                    _ => self,
                 }
             }
         }
@@ -70,7 +88,7 @@ table! {
     b"/*",	BlockComment;
     b"//",	LineComment;
     b"/=",	DivAssign;
-    b":",	Colon;
+    b":",	Colon -> CloseColon;
     b";",	Semicolon;
     b"<",	Less;
     b"<<",	LShift;
@@ -378,6 +396,7 @@ pub struct Lexer<'ctx, I> {
     next: Option<u8>,
     final_newline: bool,
     at_line_head: bool,
+    close_allowed: bool,
     directive: Directive,
     interp_stack: Vec<Interpolation>,
 }
@@ -419,6 +438,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
             next: None,
             final_newline: false,
             at_line_head: true,
+            close_allowed: true,
             directive: Directive::None,
             interp_stack: Vec::new(),
         }
@@ -712,14 +732,30 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         }
     }
 
+    fn check_close(&mut self, mut punct: Punctuation) -> Punctuation {
+        let close = punct.close();
+        if punct != close {
+            let next = self.next();
+            match next {
+                Some(b'\r') |
+                Some(b' ') |
+                Some(b'\t') |
+                Some(b'\n') => {}
+                _ => punct = close,
+            }
+            self.put_back(next);
+        }
+        punct
+    }
+
     fn skip_ws(&mut self, skip_newlines: bool) -> Option<u8> {
         let mut skip_newlines = if skip_newlines { 2 } else { 0 };
         loop {
             match self.next() {
                 Some(b'\r') => {},
                 Some(b' ') |
-                Some(b'\t') if !self.at_line_head || skip_newlines > 0 => {},
-                Some(b'\n') if skip_newlines == 2 => { skip_newlines = 1; },
+                Some(b'\t') if !self.at_line_head || skip_newlines > 0 => { self.close_allowed = false; },
+                Some(b'\n') if skip_newlines == 2 => { skip_newlines = 1; self.close_allowed = true; },
                 ch => return ch
             }
         }
@@ -763,7 +799,10 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                 return Some(locate(self.read_string(b"\n", false)));
             }
 
-            let punct = self.read_punct(first);
+            let mut punct = self.read_punct(first);
+            if self.close_allowed {
+                punct = punct.map(|p| self.check_close(p));
+            }
             return match punct {
                 Some(Hash) if self.directive == Directive::None => {
                     self.directive = Directive::Hash;
@@ -794,7 +833,12 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                         }
                         self.interp_stack.push(interp);
                     }
+                    self.close_allowed = true;
                     Some(locate(Punct(RBracket)))
+                }
+                Some(RParen) => {
+                    self.close_allowed = true;
+                    Some(locate(Punct(RParen)))
                 }
                 Some(v) => Some(locate(Punct(v))),
                 None => match first {
@@ -817,6 +861,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                                 return Some(locate(Punct(value)))
                             }
                         }
+                        self.close_allowed = true;
                         Some(locate(Ident(ident, ws)))
                     }
                     b'\\' => {

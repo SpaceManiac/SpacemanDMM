@@ -1194,7 +1194,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         success(match self.next("path separator")? {
             Token::Punct(Punctuation::Slash) => PathOp::Slash,
             Token::Punct(Punctuation::Dot) => PathOp::Dot,
-            Token::Punct(Punctuation::Colon) => PathOp::Colon,
+            Token::Punct(Punctuation::CloseColon) => PathOp::Colon,
             other => return self.try_another(other),
         })
     }
@@ -1255,7 +1255,11 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
 
     /// Parse an expression at the current position.
     pub fn expression(&mut self) -> Status<Expression> {
-        let mut expr = leading!(self.group());
+        self.expression_ex(false)
+    }
+
+    fn expression_ex(&mut self, in_ternary: bool) -> Status<Expression> {
+        let mut expr = leading!(self.group(in_ternary));
         loop {
             // try to read the next operator
             let next = self.next("operator")?;
@@ -1268,12 +1272,17 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             };
 
             // trampoline high-strength expression parts as the lhs of the newly found op
-            expr = require!(self.expression_part(expr, info));
+            expr = require!(self.expression_part(expr, info, in_ternary));
         }
 
+        // TODO: this needs to be worked into the precedence table somehow
         if let Some(()) = self.exact(Token::Punct(Punctuation::QuestionMark))? {
-            let if_ = require!(self.expression());
-            require!(self.exact(Token::Punct(Punctuation::Colon)));
+            let if_ = require!(self.expression_ex(true));
+            match self.next("':'")? {
+                Token::Punct(Punctuation::Colon) |
+                Token::Punct(Punctuation::CloseColon) => {}
+                _ => return self.parse_error(),
+            }
             let else_ = require!(self.expression());
             expr = Expression::TernaryOp {
                 cond: Box::new(expr),
@@ -1285,12 +1294,12 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         success(expr)
     }
 
-    fn expression_part(&mut self, lhs: Expression, prev_op: OpInfo) -> Status<Expression> {
+    fn expression_part(&mut self, lhs: Expression, prev_op: OpInfo, in_ternary: bool) -> Status<Expression> {
         use std::cmp::Ordering;
 
         let mut bits = vec![lhs];
         let mut ops = vec![prev_op.oper];
-        let mut rhs = require!(self.group());
+        let mut rhs = require!(self.group(in_ternary));
         loop {
             // try to read the next operator...
             let next = self.next("operator")?;
@@ -1306,7 +1315,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             match info.strength.cmp(&prev_op.strength) {
                 Ordering::Less => {
                     // the operator is stronger than us... recurse down
-                    rhs = require!(self.expression_part(rhs, info));
+                    rhs = require!(self.expression_part(rhs, info, in_ternary));
                 }
                 Ordering::Greater => {
                     // the operator is weaker than us... return up
@@ -1317,7 +1326,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                     // the same strength... push it to the list
                     ops.push(info.oper);
                     bits.push(rhs);
-                    rhs = require!(self.group());
+                    rhs = require!(self.group(in_ternary));
                 }
             }
         }
@@ -1341,7 +1350,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     }
 
     // parse an Expression::Base (unary ops, term, follows)
-    fn group(&mut self) -> Status<Expression> {
+    fn group(&mut self, in_ternary: bool) -> Status<Expression> {
         // read unary ops
         let mut unary_ops = Vec::new();
         loop {
@@ -1370,7 +1379,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 Token::Punct(Punctuation::MinusMinus) => unary_ops.push(UnaryOp::PostDecr),
                 other => {
                     self.put_back(other);
-                    match self.follow(&mut belongs_to)? {
+                    match self.follow(&mut belongs_to, in_ternary)? {
                         Some(f) => follow.push(f),
                         None => break,
                     }
@@ -1510,7 +1519,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             },
             // term :: path_lit
             t @ Token::Punct(Punctuation::Slash) |
-            t @ Token::Punct(Punctuation::Colon) => {
+            t @ Token::Punct(Punctuation::CloseColon) => {
                 self.put_back(t);
                 Term::Prefab(require!(self.prefab()))
             },
@@ -1550,10 +1559,11 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         })
     }
 
-    fn follow(&mut self, belongs_to: &mut Vec<String>) -> Status<Follow> {
+    fn follow(&mut self, belongs_to: &mut Vec<String>, in_ternary: bool) -> Status<Follow> {
         match self.next("field access")? {
             // follow :: '[' expression ']'
             Token::Punct(Punctuation::LBracket) => {
+                belongs_to.clear();
                 let expr = require!(self.expression());
                 require!(self.exact(Token::Punct(Punctuation::RBracket)));
                 success(Follow::Index(Box::new(expr)))
@@ -1562,7 +1572,9 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             // follow :: '.' ident arglist?
             // TODO: only apply these rules if there is no whitespace around the punctuation
             Token::Punct(Punctuation::Dot) => self.follow_index(IndexKind::Dot, belongs_to),
-            //Token::Punct(Punctuation::Colon) => self.follow_index(IndexKind::Colon),
+            Token::Punct(Punctuation::CloseColon)
+                if !belongs_to.is_empty() || !in_ternary
+                => self.follow_index(IndexKind::Colon, belongs_to),
             Token::Punct(Punctuation::SafeDot) => self.follow_index(IndexKind::SafeDot, belongs_to),
             Token::Punct(Punctuation::SafeColon) => self.follow_index(IndexKind::SafeColon, belongs_to),
 
@@ -1595,8 +1607,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             },
             None => {
                 if !belongs_to.is_empty() {
-                    let past = belongs_to.clone();
-                    self.annotate_precise(start..end, || Annotation::ScopedVar(past, ident.clone()));
+                    self.annotate_precise(start..end, || Annotation::ScopedVar(belongs_to.clone(), ident.clone()));
                     belongs_to.push(ident.clone());
                 }
                 Follow::Field(kind, ident)
