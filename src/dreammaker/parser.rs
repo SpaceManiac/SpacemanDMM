@@ -310,6 +310,16 @@ impl TTKind {
 // ----------------------------------------------------------------------------
 // The parser
 
+#[derive(Debug)]
+enum LoopContext {
+    None,
+    ForLoop,
+    ForList,
+    ForRange,
+    While,
+    DoWhile,
+}
+
 /// A single-lookahead, recursive-descent DM parser.
 ///
 /// Results are accumulated into an inner `ObjectTree`. To parse an entire
@@ -659,7 +669,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                         if let Some(a) = self.annotations.as_mut() {
                             subparser.annotations = Some(&mut *a);
                         }
-                        let block = subparser.block();
+                        let block = subparser.block(&LoopContext::None);
                         subparser.require(block)
                     };
                     if result.is_ok() {
@@ -811,7 +821,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     }
 
     /// Parse a block
-    fn block(&mut self) -> Status<Vec<Statement>> {
+    fn block(&mut self, loop_ctx: &LoopContext) -> Status<Vec<Statement>> {
         let mut vars = Vec::new();
         let result = if let Some(()) = self.exact(Token::Punct(Punctuation::LBrace))? {
             let mut statements = Vec::new();
@@ -821,7 +831,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 } else if let Some(()) = self.exact(Token::Punct(Punctuation::Semicolon))? {
                     continue;
                 } else {
-                    statements.push(require!(self.statement(&mut vars)));
+                    statements.push(require!(self.statement(loop_ctx, &mut vars)));
                 }
             }
             statements
@@ -830,7 +840,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             Vec::new()
         } else {
             // and one-line blocks: if(1) neat();
-            let statement = require!(self.statement(&mut vars));
+            let statement = require!(self.statement(loop_ctx, &mut vars));
             vec![statement]
         };
         for (loc, var_type, name) in vars {
@@ -839,14 +849,14 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         success(result)
     }
 
-    fn statement(&mut self, vars: &mut Vec<(Location, VarType, String)>) -> Status<Statement> {
+    fn statement(&mut self, loop_ctx: &LoopContext, vars: &mut Vec<(Location, VarType, String)>) -> Status<Statement> {
         // BLOCK STATEMENTS
         if let Some(()) = self.exact_ident("if")? {
             // statement :: 'if' '(' expression ')' block ('else' 'if' '(' expression ')' block)* ('else' block)?
             require!(self.exact(Token::Punct(Punctuation::LParen)));
             let expr = require!(self.expression());
             require!(self.exact(Token::Punct(Punctuation::RParen)));
-            let block = require!(self.block());
+            let block = require!(self.block(loop_ctx));
             let mut arms = vec![(expr, block)];
 
             let mut else_arm = None;
@@ -856,10 +866,10 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                     require!(self.exact(Token::Punct(Punctuation::LParen)));
                     let expr = require!(self.expression());
                     require!(self.exact(Token::Punct(Punctuation::RParen)));
-                    let block = require!(self.block());
+                    let block = require!(self.block(loop_ctx));
                     arms.push((expr, block));
                 } else {
-                    else_arm = Some(require!(self.block()));
+                    else_arm = Some(require!(self.block(loop_ctx)));
                     break
                 }
                 self.skip_phantom_semicolons()?;
@@ -871,10 +881,10 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             require!(self.exact(Token::Punct(Punctuation::LParen)));
             let expr = require!(self.expression());
             require!(self.exact(Token::Punct(Punctuation::RParen)));
-            success(Statement::While(expr, require!(self.block())))
+            success(Statement::While(expr, require!(self.block(&LoopContext::While))))
         } else if let Some(()) = self.exact_ident("do")? {
             // statement :: 'do' block 'while' '(' expression ')' ';'
-            let block = require!(self.block());
+            let block = require!(self.block(&LoopContext::DoWhile));
             self.skip_phantom_semicolons()?;
             require!(self.exact_ident("while"));
             require!(self.exact(Token::Punct(Punctuation::LParen)));
@@ -899,7 +909,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                     init: init.map(Box::new),
                     test,
                     inc: inc.map(Box::new),
-                    block: require!(self.block()),
+                    block: require!(self.block(&LoopContext::ForLoop)),
                 })
             } else if let Some(init) = init {
                 // in-list form ("for list")
@@ -926,7 +936,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                             name,
                             input_type: InputType::default(),
                             in_list: Some(*rhs),
-                            block: require!(self.block()),
+                            block: require!(self.block(&LoopContext::ForList)),
                         });
                     },
                     Statement::Expr(expr) => match expr.into_term() {
@@ -959,7 +969,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                     name,
                     input_type,
                     in_list,
-                    block: require!(self.block()),
+                    block: require!(self.block(&LoopContext::ForList)),
                 })
             } else {
                 Err(self.error("for-in-list must start with variable"))
@@ -972,7 +982,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             } else {
                 expr = None;
             }
-            success(Statement::Spawn(expr, require!(self.block())))
+            success(Statement::Spawn(expr, require!(self.block(&LoopContext::None))))
         } else if let Some(()) = self.exact_ident("switch")? {
             require!(self.exact(Token::Punct(Punctuation::LParen)));
             let expr = require!(self.expression());
@@ -985,18 +995,18 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 if what.is_empty() {
                     self.context.register_error(self.error("switch case cannot be empty"));
                 }
-                let block = require!(self.block());
+                let block = require!(self.block(loop_ctx));
                 cases.push((what, block));
             }
             let default = if let Some(()) = self.exact_ident("else")? {
-                Some(require!(self.block()))
+                Some(require!(self.block(loop_ctx)))
             } else {
                 None
             };
             require!(self.exact(Token::Punct(Punctuation::RBrace)));
             success(Statement::Switch(expr, cases, default))
         } else if let Some(()) = self.exact_ident("try")? {
-            let try_block = require!(self.block());
+            let try_block = require!(self.block(loop_ctx));
             self.skip_phantom_semicolons()?;
             require!(self.exact_ident("catch"));
             let catch_params;
@@ -1008,7 +1018,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             } else {
                 catch_params = Vec::new();
             }
-            let catch_block = require!(self.block());
+            let catch_block = require!(self.block(loop_ctx));
             success(Statement::TryCatch { try_block, catch_params, catch_block })
         // SINGLE-LINE STATEMENTS
         } else if let Some(()) = self.exact_ident("set")? {
@@ -1146,7 +1156,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             start,
             end,
             step,
-            block: require!(self.block()),
+            block: require!(self.block(&LoopContext::ForRange)),
         })
     }
 
