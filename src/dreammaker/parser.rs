@@ -918,7 +918,8 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                     Statement::Var(VarStatement { var_type, name, value: Some(value) }) => {
                         // for(var/a = 1 to
                         require!(self.exact_ident("to"));
-                        return success(require!(self.for_range(Some(var_type), name, value)));
+                        let rhs = require!(self.expression());
+                        return success(require!(self.for_range(Some(var_type), name, value, rhs)));
                     },
                     Statement::Var(VarStatement { var_type, name, value: None }) => { (Some(var_type), name) },
                     Statement::Expr(Expression::BinaryOp { op: BinaryOp::In, lhs, rhs }) => {
@@ -926,18 +927,27 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                             Some(Term::Ident(name)) => name,
                             _ => return Err(self.error("for-list must start with variable")),
                         };
-                        if let Some(()) = self.exact_ident("to")? {
-                            return success(require!(self.for_range(None, name, *rhs)));
+                        // Explicit move is necessary because rustc becomes
+                        // confused when matching on the *rhs lvalue, thinking
+                        // moving the LHS also moves the RHS. This fails:
+                        //   let a: Box<(NonCopy, NonCopy)>;
+                        //   let (b, c) = *a;
+                        match {*rhs} {
+                            Expression::BinaryOp { op: BinaryOp::To, lhs, rhs } => {
+                                return success(require!(self.for_range(None, name, *lhs, *rhs)));
+                            },
+                            rhs => {
+                                // I love code duplication, don't you?
+                                require!(self.exact(Token::Punct(Punctuation::RParen)));
+                                return success(Statement::ForList {
+                                    var_type: None,
+                                    name,
+                                    input_type: InputType::default(),
+                                    in_list: Some(rhs),
+                                    block: require!(self.block(&LoopContext::ForList)),
+                                });
+                            }
                         }
-                        // I love code duplication, don't you?
-                        require!(self.exact(Token::Punct(Punctuation::RParen)));
-                        return success(Statement::ForList {
-                            var_type: None,
-                            name,
-                            input_type: InputType::default(),
-                            in_list: Some(*rhs),
-                            block: require!(self.block(&LoopContext::ForList)),
-                        });
                     },
                     Statement::Expr(expr) => match expr.into_term() {
                         Some(Term::Ident(name)) => (None, name),
@@ -956,7 +966,8 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 let in_list = if let Some(()) = self.exact(Token::Punct(Punctuation::In))? {
                     let value = require!(self.expression());
                     if let Some(()) = self.exact_ident("to")? {
-                        return success(require!(self.for_range(var_type, name, value)));
+                        let rhs = require!(self.expression());
+                        return success(require!(self.for_range(var_type, name, value, rhs)));
                     }
                     Some(value)
                 } else {
@@ -1144,11 +1155,9 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         }
     }
 
-    // for(var/a = 1 to
-    // for(var/a in 1 to
-    fn for_range(&mut self, var_type: Option<VarType>, name: String, start: Expression) -> Status<Statement> {
-        // to 20
-        let end = require!(self.expression());
+    // for(var/a = 1 to 20
+    // for(var/a in 1 to 20
+    fn for_range(&mut self, var_type: Option<VarType>, name: String, start: Expression, end: Expression) -> Status<Statement> {
         // step 2
         let step = if let Some(()) = self.exact_ident("step")? {
             Some(require!(self.expression()))
@@ -1332,6 +1341,21 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                     bits.push(rhs);
                     rhs = require!(self.group(in_ternary));
                 }
+            }
+        }
+
+        // Handle ternary ops... they should have their own precedence or else.
+        // TODO: A?B:C should probably be handled here as well.
+        if prev_op.token == Punctuation::In {
+            // "in" is optionally ternary: (x in 1 to 5)
+            if let Some(()) = self.exact_ident("to")? {
+                rhs = Expression::BinaryOp {
+                    op: BinaryOp::To,
+                    lhs: Box::new(rhs),
+                    rhs: Box::new(require!(self.expression_ex(in_ternary))),
+                };
+                // "step" could appear here but doesn't actually do anything.
+                // In for statements it is parsed by `for_range`.
             }
         }
 

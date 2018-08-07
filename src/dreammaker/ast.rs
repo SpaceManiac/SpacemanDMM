@@ -103,6 +103,7 @@ pub enum BinaryOp {
     And,
     Or,
     In,
+    To,  // only appears in RHS of `In`
 }
 
 impl fmt::Display for BinaryOp {
@@ -131,6 +132,7 @@ impl fmt::Display for BinaryOp {
             And => "&&",
             Or => "||",
             In => "in",
+            To => "to",
         })
     }
 }
