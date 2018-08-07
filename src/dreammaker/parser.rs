@@ -1055,6 +1055,17 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             success(Statement::Continue(label))
         } else {
             let result = leading!(self.simple_statement(false, vars));
+
+            // check for a label `ident:`
+            if let Statement::Expr(ref expr) = result {
+                if let Some(Term::Ident(ref name)) = expr.as_term() {
+                    if let Some(()) = self.exact(Token::Punct(Punctuation::Colon))? {
+                        // it's a label! check for a block
+                        return success(Statement::Label(name.to_owned(), require!(self.block(loop_ctx))));
+                    }
+                }
+            }
+
             require!(self.statement_terminator());
             success(result)
         }
