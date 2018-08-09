@@ -5,6 +5,7 @@ use std::fmt;
 use std::borrow::Cow;
 
 use super::{DMError, Location, HasLocation, FileId, Context, Severity};
+use super::docs::*;
 
 macro_rules! table {
     (
@@ -150,6 +151,8 @@ pub enum Token {
     Int(i32),
     /// A floating-point literal.
     Float(f32),
+    /// A documentation comment.
+    DocComment(DocComment),
 }
 
 impl Token {
@@ -238,6 +241,7 @@ impl fmt::Display for Token {
             Resource(ref i) => write!(f, "'{}'", i),
             Int(i) => write!(f, "{}", i),
             Float(i) => write!(f, "{}", i),
+            DocComment(ref c) => write!(f, "{}", c),
         }
     }
 }
@@ -481,7 +485,17 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
     fn skip_block_comments(&mut self) {
         let mut depth = 1;
         let mut buffer = [0, 0];
-        while depth > 0 {
+
+        // read the first character and check for being a comment
+        let mut comment = None;
+        match self.next() {
+            Some(b'*') => comment = Some(DocComment::new(CommentKind::Block, DocTarget::FollowingItem)),
+            Some(b'!') => comment = Some(DocComment::new(CommentKind::Block, DocTarget::EnclosingItem)),
+            Some(ch) => buffer[1] = ch,
+            None => {}
+        }
+
+        loop {
             // read one character
             buffer[0] = buffer[1];
             match self.next() {
@@ -496,13 +510,39 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                 depth += 1;
             } else if buffer == *b"*/" {
                 depth -= 1;
+                if depth == 0 {
+                    break;
+                }
+            }
+
+            if buffer[0] != 0 {
+                if let Some(ref mut comment) = comment {
+                    comment.text.push(buffer[0] as char);
+                }
             }
         }
     }
 
     fn skip_line_comment(&mut self) {
         let mut backslash = false;
+
+        // read the first character and check for being a comment
+        let mut comment = None;
+        match self.next() {
+            Some(b'/') => comment = Some(DocComment::new(CommentKind::Line, DocTarget::FollowingItem)),
+            Some(b'!') => comment = Some(DocComment::new(CommentKind::Line, DocTarget::FollowingItem)),
+            Some(b'\n') => { self.put_back(Some(b'\n')); return },
+            Some(b'\\') => backslash = true,
+            _ => {}
+        }
+
         while let Some(ch) = self.next() {
+            if ch != b'\r' && ch != b'\n' {
+                if let Some(ref mut comment) = comment {
+                    comment.text.push(ch as char);
+                }
+            }
+
             if ch == b'\r' {
                 // not listening
             } else if backslash {

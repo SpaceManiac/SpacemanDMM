@@ -25,6 +25,7 @@ mod error;
 pub use error::*;
 
 // roughly in order of stage
+pub mod docs;
 pub mod lexer;
 pub mod preprocessor;
 pub mod indents;
