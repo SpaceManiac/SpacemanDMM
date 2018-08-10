@@ -72,7 +72,11 @@ fn main() -> Result<(), Box<std::error::Error>> {
         }
 
         if anything {
-            parsed_type.filename = &ty.get().path;
+            if ty.is_root() {
+                parsed_type.filename = "global";
+            } else {
+                parsed_type.filename = &ty.get().path[1..];
+            }
             types_with_docs.insert(&ty.get().path, parsed_type);
         }
     });
@@ -83,6 +87,18 @@ fn main() -> Result<(), Box<std::error::Error>> {
     } else {
         println!("documenting {}/{} types ({}%)", types_with_docs.len(), count, (types_with_docs.len() * 100 / count));
     }
+
+    println!("generating index");
+    let mut index = create(&output_path.join("index.html"))?;
+    writeln!(index, "<ul>")?;
+    for (typath, details) in types_with_docs.iter() {
+        write!(index, r#"<li><a href="{fname}.html">{path}</a>"#, path=typath, fname=details.filename)?;
+        if let Some(ref own) = details.own {
+            write!(index, " - {}", own.teaser)?;
+        }
+        writeln!(index)?;
+    }
+    writeln!(index, "</ul>")?;
 
     Ok(())
 }
