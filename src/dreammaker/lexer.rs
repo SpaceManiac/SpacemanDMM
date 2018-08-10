@@ -482,7 +482,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         self.next = val;
     }
 
-    fn skip_block_comments(&mut self) {
+    fn skip_block_comments(&mut self) -> Option<Token> {
         let mut depth = 1;
         let mut buffer = [0, 0];
 
@@ -521,9 +521,11 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                 }
             }
         }
+
+        comment.map(Token::DocComment)
     }
 
-    fn skip_line_comment(&mut self) {
+    fn skip_line_comment(&mut self) -> Option<Token> {
         let mut backslash = false;
 
         // read the first character and check for being a comment
@@ -531,7 +533,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         match self.next() {
             Some(b'/') => comment = Some(DocComment::new(CommentKind::Line, DocTarget::FollowingItem)),
             Some(b'!') => comment = Some(DocComment::new(CommentKind::Line, DocTarget::FollowingItem)),
-            Some(b'\n') => { self.put_back(Some(b'\n')); return },
+            Some(b'\n') => { self.put_back(Some(b'\n')); return None },
             Some(b'\\') => backslash = true,
             _ => {}
         }
@@ -554,6 +556,8 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                 backslash = true;
             }
         }
+
+        comment.map(Token::DocComment)
     }
 
     fn read_number_inner(&mut self, first: u8) -> (bool, u32, String) {
@@ -849,11 +853,15 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                     Some(locate(Punct(Hash)))
                 }
                 Some(BlockComment) => {
-                    self.skip_block_comments();
+                    if let Some(t) = self.skip_block_comments() {
+                        return Some(locate(t));
+                    }
                     continue;
                 }
                 Some(LineComment) => {
-                    self.skip_line_comment();
+                    if let Some(t) = self.skip_line_comment() {
+                        return Some(locate(t));
+                    }
                     continue;
                 }
                 Some(SingleQuote) => Some(locate(Resource(self.read_resource()))),

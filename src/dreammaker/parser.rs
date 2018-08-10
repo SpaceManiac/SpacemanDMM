@@ -437,21 +437,28 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     }
 
     fn next<S: Into<String>>(&mut self, expected: S) -> Result<Token, DMError> {
-        let tok = self.next.take().map_or_else(|| match self.input.next() {
-            Some(token) => {
-                self.expected.clear();
-                self.location = token.location;
-                Ok(token.token)
+        let tok = loop {
+            if let Some(next) = self.next.take() {
+                break Ok(next);
             }
-            None => {
-                if !self.eof {
-                    self.eof = true;
-                    Ok(Token::Eof)
-                } else {
-                    self.parse_error()
+            match self.input.next() {
+                Some(LocatedToken { location: _, token: Token::DocComment(_) }) => {
+                }
+                Some(token) => {
+                    self.expected.clear();
+                    self.location = token.location;
+                    break Ok(token.token);
+                }
+                None => {
+                    if !self.eof {
+                        self.eof = true;
+                        break Ok(Token::Eof);
+                    } else {
+                        break self.parse_error();
+                    }
                 }
             }
-        }, Ok);
+        };
         let what = expected.into();
         if !what.is_empty() && !self.expected.contains(&what) {
             self.expected.push(what);
