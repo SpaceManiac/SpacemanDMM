@@ -104,17 +104,27 @@ fn main() -> Result<(), Box<std::error::Error>> {
     create(&output_path.join("dmdoc.js"))?.write_all(include_bytes!("dmdoc.js"))?;
 
     progress.println("rendering html");
+    let env_filename = environment.display().to_string();
+    let env = &Environment {
+        filename: &env_filename,
+        world_name: objtree.find("/world")
+            .and_then(|w| w.get().vars.get("name"))
+            .and_then(|v| v.value.constant.as_ref())
+            .and_then(|c| c.as_str())
+            .unwrap_or(""),
+    };
+
     {
         #[derive(Serialize)]
         struct Index<'a> {
-            environment: &'a str,
+            env: &'a Environment<'a>,
             types: &'a BTreeMap<&'a str, ParsedType<'a>>,
         }
 
         progress.update("index.html");
         let mut index = create(&output_path.join("index.html"))?;
         index.write_all(tera.render("dm_index.html", &Index {
-            environment: &environment.display().to_string(),
+            env,
             types: &types_with_docs,
         })?.as_bytes())?;
     }
@@ -122,6 +132,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
     for (path, details) in types_with_docs.iter() {
         #[derive(Serialize)]
         struct Type<'a> {
+            env: &'a Environment<'a>,
             base_href: &'a str,
             path: &'a str,
             details: &'a ParsedType<'a>,
@@ -137,6 +148,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
         let mut f = create(&output_path.join(&fname))?;
         f.write_all(tera.render("dm_type.html", &Type {
+            env,
             base_href: &base,
             path,
             details,
@@ -185,6 +197,12 @@ struct ParsedType<'a> {
     vars: BTreeMap<&'a str, DocBlock>,
     procs: BTreeMap<&'a str, DocBlock>,
     filename: &'a str,
+}
+
+#[derive(Serialize)]
+struct Environment<'a> {
+    filename: &'a str,
+    world_name: &'a str,
 }
 
 /// Helper for printing progress information.
