@@ -677,31 +677,44 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 // `something(` - proc
                 let location = self.location;
                 let parameters = require!(self.separated(Comma, RParen, None, Parser::proc_parameter));
-                let idx = match self.tree.add_proc(location, new_stack.iter(), new_stack.len(), parameters) {
-                    Ok(idx) => idx,
-                    Err(e) => { self.context.register_error(e); 0 /* incorrect but sane fallback */ }
-                };
 
                 // split off a subparser so we can keep parsing the objtree
                 // even when the proc body doesn't parse
-                self.annotate(entry_start, || Annotation::ProcHeader(new_stack.to_vec(), idx));
-                let start = self.updated_location();
+                let body_start = self.updated_location();
                 let mut body_tt = Vec::new();
                 // check that it doesn't end immediately (empty body)
-                if let Some(()) = self.statement_terminator()? {
-                    body_tt.push(LocatedToken::new(self.location, Punct(Semicolon)));
-                } else {
-                    // read an initial token tree
-                    require!(self.read_any_tt(&mut body_tt));
-                    // if the first token is not an LBrace, it's on one line
-                    if body_tt[0].token != Punct(LBrace) {
-                        while self.statement_terminator()?.is_none() {
-                            require!(self.read_any_tt(&mut body_tt));
+                let (comment, ()) = require!(self.doc_comment(|this| {
+                    if let Some(()) = this.statement_terminator()? {
+                        body_tt.push(LocatedToken::new(this.location, Punct(Semicolon)));
+                    } else {
+                        // read an initial token tree
+                        require!(this.read_any_tt(&mut body_tt));
+                        // if the first token is not an LBrace, it's on one line
+                        if body_tt[0].token != Punct(LBrace) {
+                            while this.statement_terminator()?.is_none() {
+                                require!(this.read_any_tt(&mut body_tt));
+                            }
+                            body_tt.push(LocatedToken::new(this.location, Punct(Semicolon)));
                         }
-                        body_tt.push(LocatedToken::new(self.location, Punct(Semicolon)));
                     }
-                }
-                self.annotate(start, || Annotation::ProcBody(new_stack.to_vec(), idx));
+                    SUCCESS
+                }));
+
+                match self.tree.add_proc(location, new_stack.iter(), new_stack.len(), parameters) {
+                    Ok((idx, proc)) => {
+                        if let Some(comment) = comment {
+                            eprintln!("{:?}\n{}", new_stack.to_vec(), comment.text);
+                            comment.merge_into(&mut proc.docs);
+                        }
+                        // manually performed for borrowck reasons
+                        if let Some(dest) = self.annotations.as_mut() {
+                            dest.insert(entry_start..body_start, Annotation::ProcHeader(new_stack.to_vec(), idx));
+                            dest.insert(body_start..self.location, Annotation::ProcBody(new_stack.to_vec(), idx));
+                        }
+                    }
+                    Err(e) => self.context.register_error(e),
+                };
+
                 if self.procs {
                     let result = {
                         let mut subparser: Parser<'ctx, '_, _> = Parser::new(self.context, body_tt.iter().cloned());

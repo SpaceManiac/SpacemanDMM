@@ -11,6 +11,7 @@ use linked_hash_map::LinkedHashMap;
 
 use super::ast::{Expression, VarType, PathOp, Prefab, Parameter};
 use super::constants::Constant;
+use super::docs::DocComment;
 use super::{DMError, Location, Context};
 
 // ----------------------------------------------------------------------------
@@ -50,6 +51,7 @@ pub struct ProcDeclaration {
 pub struct ProcValue {
     pub location: Location,
     pub parameters: Vec<Parameter>,
+    pub docs: Option<DocComment>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -544,7 +546,7 @@ impl ObjectTree {
         })))
     }
 
-    fn register_proc(&mut self, location: Location, parent: NodeIndex, name: &str, is_verb: Option<bool>, parameters: Vec<Parameter>) -> Result<usize, DMError> {
+    fn register_proc(&mut self, location: Location, parent: NodeIndex, name: &str, is_verb: Option<bool>, parameters: Vec<Parameter>) -> Result<(usize, &mut ProcValue), DMError> {
         let node = self.graph.node_weight_mut(parent).unwrap();
         let proc = node.procs.entry(name.to_owned()).or_insert_with(Default::default);
         proc.declaration = is_verb.map(|is_verb| ProcDeclaration {
@@ -556,8 +558,9 @@ impl ObjectTree {
         proc.value.push(ProcValue {
             location,
             parameters,
+            docs: None,
         });
-        Ok(len)
+        Ok((len, proc.value.last_mut().unwrap()))
     }
 
     // an entry which may be anything depending on the path
@@ -586,7 +589,7 @@ impl ObjectTree {
     }
 
     // an entry which is definitely a proc because an argument list is specified
-    pub fn add_proc<'a, I: Iterator<Item=&'a str>>(&mut self, location: Location, mut path: I, len: usize, parameters: Vec<Parameter>) -> Result<usize, DMError> {
+    pub fn add_proc<'a, I: Iterator<Item=&'a str>>(&mut self, location: Location, mut path: I, len: usize, parameters: Vec<Parameter>) -> Result<(usize, &mut ProcValue), DMError> {
         let (parent, mut proc_name) = self.get_from_path(location, &mut path, len)?;
         let mut is_verb = None;
         if is_proc_decl(proc_name) {

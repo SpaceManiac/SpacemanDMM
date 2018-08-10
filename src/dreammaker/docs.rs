@@ -28,7 +28,7 @@ impl DocComment {
             return;
         }
 
-        self.text = format!("{}{}", self.text, other.text);
+        self.text = format!("{}\n{}", self.text, other.text);
     }
 
     /// Merge or begin an in-progress doc comment with this one.
