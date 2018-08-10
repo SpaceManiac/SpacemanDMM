@@ -21,6 +21,31 @@ impl DocComment {
         let ignore_char = self.kind.ignore_char();
         self.text.chars().all(|c| c.is_whitespace() || c == ignore_char)
     }
+
+    /// Append the contents of another doc comment to this one.
+    pub fn merge_with(&mut self, other: DocComment) {
+        if other.is_empty() {
+            return;
+        }
+
+        self.text = format!("{}{}", self.text, other.text);
+    }
+
+    /// Merge or begin an in-progress doc comment with this one.
+    pub fn merge_into(self, other: &mut Option<DocComment>) {
+        if self.is_empty() {
+            return;
+        }
+        // TODO: if `kind` differs, pre-simplify?
+        match *other {
+            None => *other = Some(self),
+            Some(ref mut it) => it.merge_with(self),
+        }
+    }
+
+    /// Simplify this doc comment, stripping line-start whitespace.
+    pub fn simplify(&mut self) {
+    }
 }
 
 impl fmt::Display for DocComment {

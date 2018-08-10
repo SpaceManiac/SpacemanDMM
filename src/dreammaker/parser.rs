@@ -10,6 +10,7 @@ use super::lexer::{LocatedToken, Token, Punctuation};
 use super::objtree::ObjectTree;
 use super::annotation::*;
 use super::ast::*;
+use super::docs::*;
 
 /// Parse a token stream, in the form emitted by the indent processor, into
 /// an object tree.
@@ -335,6 +336,9 @@ pub struct Parser<'ctx, 'an, I> {
     location: Location,
     expected: Vec<String>,
 
+    docs_following: Option<DocComment>,
+    docs_enclosing: Option<DocComment>,
+
     procs: bool,
     procs_bad: u64,
     procs_good: u64,
@@ -361,6 +365,9 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             next: None,
             location: Default::default(),
             expected: Vec::new(),
+
+            docs_following: None,
+            docs_enclosing: None,
 
             procs: false,
             procs_bad: 0,
@@ -442,7 +449,12 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 break Ok(next);
             }
             match self.input.next() {
-                Some(LocatedToken { location: _, token: Token::DocComment(_) }) => {
+                Some(LocatedToken { location: _, token: Token::DocComment(dc) }) => {
+                    // TODO: track file-level EnclosingItem comments here
+                    match dc.target {
+                        DocTarget::FollowingItem => dc.merge_into(&mut self.docs_following),
+                        DocTarget::EnclosingItem => dc.merge_into(&mut self.docs_enclosing),
+                    }
                 }
                 Some(token) => {
                     self.expected.clear();
@@ -537,6 +549,23 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     }
 
     // ------------------------------------------------------------------------
+    // Doc comment tracking
+
+    fn doc_comment<R, F: FnOnce(&mut Self) -> Status<R>>(&mut self, f: F) -> Status<(Option<DocComment>, R)> {
+        let enclosing = self.docs_enclosing.take();
+        let mut docs = self.docs_following.take();
+        let result = f(self);
+        if let Some(c) = ::std::mem::replace(&mut self.docs_enclosing, enclosing) {
+            c.merge_into(&mut docs);
+        }
+        match result {
+            Ok(Some(found)) => Ok(Some((docs, found))),
+            Ok(None) => Ok(None),
+            Err(err) => Err(err),
+        }
+    }
+
+    // ------------------------------------------------------------------------
     // Object tree
 
     fn tree_path(&mut self) -> Status<(bool, Vec<Ident>)> {
@@ -622,6 +651,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         // read the contents for real
         match self.next("contents")? {
             t @ Punct(LBrace) => {
+                // `thing{` - block
                 if let Err(e) = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len()) {
                     self.context.register_error(e);
                 }
@@ -632,6 +662,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 SUCCESS
             }
             Punct(Assign) => {
+                // `something=` - var
                 let location = self.location;
                 let expr = require!(self.expression());
                 let _ = require!(self.input_specifier());
@@ -643,6 +674,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 SUCCESS
             }
             Punct(LParen) => {
+                // `something(` - proc
                 let location = self.location;
                 let parameters = require!(self.separated(Comma, RParen, None, Parser::proc_parameter));
                 let idx = match self.tree.add_proc(location, new_stack.iter(), new_stack.len(), parameters) {
@@ -691,6 +723,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 SUCCESS
             }
             other => {
+                // usually `thing;` - a contextless declaration
                 if let Err(e) = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len()) {
                     self.context.register_error(e);
                 }
@@ -758,7 +791,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 continue
             }
             self.put_back(next);
-            /*push*/ require!(self.tree_entry(parent));
+            require!(self.tree_entry(parent));
         }
         SUCCESS
     }
