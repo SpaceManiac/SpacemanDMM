@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 extern crate dreammaker as dm;
 extern crate docstrings;
+extern crate pulldown_cmark;
 
 use std::collections::BTreeMap;
 use std::io::{self, Write};
@@ -110,23 +111,23 @@ fn main() -> Result<(), Box<std::error::Error>> {
         let mut f = create(&output_path.join(&fname))?;
         writeln!(f, "<h1>{}</h1>", typath)?;
         if let Some(ref own) = details.own {
-            writeln!(f, "<pre>{:#?}</pre>", own)?;
+            write_doc_block(&mut f, own)?;
         }
         if !details.vars.is_empty() {
-            writeln!(f, "<h2>Vars</h2>")?;
-            writeln!(f, "<table>")?;
+            writeln!(f, r#"<h2 name="vars">Vars</h2>"#)?;
             for (name, var) in details.vars.iter() {
-                writeln!(f, "<tr><th valign=top>{}</th><td><pre>{:#?}</pre></td></tr>", name, var)?;
+                writeln!(f, r##"<p><a name="var/{name}" href="#var/{name}"><b>{name}</b></a> -"##, name=name)?;
+                write_doc_block(&mut f, var)?;
+                writeln!(f, "</p>")?;
             }
-            writeln!(f, "</table>")?;
         }
         if !details.procs.is_empty() {
-            writeln!(f, "<h2>Procs</h2>")?;
-            writeln!(f, "<table>")?;
+            writeln!(f, r#"<h2 name="procs">Procs</h2>"#)?;
             for (name, proc) in details.procs.iter() {
-                writeln!(f, "<tr><th valign=top>{}</th><td><pre>{:#?}</pre></td></tr>", name, proc)?;
+                writeln!(f, r##"<p><a name="proc/{name}" href="#proc/{name}"><b>{name}</b></a> -"##, name=name)?;
+                write_doc_block(&mut f, proc)?;
+                writeln!(f, "</p>")?;
             }
-            writeln!(f, "</table>")?;
         }
     }
 
@@ -139,6 +140,22 @@ fn create(path: &Path) -> io::Result<File> {
         fs::create_dir_all(parent)?;
     }
     File::create(path)
+}
+
+fn write_doc_block<W: Write>(w: &mut W, block: &DocBlock) -> io::Result<()> {
+    writeln!(w, "{}", block.teaser)?;
+    if let Some(ref desc) = block.description {
+        writeln!(w, "{}", render_markdown(desc))?;
+    }
+    // TODO: sections
+    Ok(())
+}
+
+fn render_markdown(markdown: &str) -> String {
+    let mut buf = String::new();
+    let parser = pulldown_cmark::Parser::new(markdown);
+    pulldown_cmark::html::push_html(&mut buf, parser);
+    buf
 }
 
 /// A parsed documented type.

@@ -10,6 +10,7 @@ path = "main.rs"
 [dependencies]
 dreammaker = { path = "../dreammaker" }
 docstrings = "0.1.1"
+pulldown-cmark = "0.1.2"
 
 [dev-dependencies]
 walkdir = "2.0.1"
