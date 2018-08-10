@@ -153,3 +153,26 @@ pub fn fix_case(path: &Path) -> Cow<Path> {
     }
     Cow::Borrowed(path)
 }
+
+/// Autodetect any `.dme` file in the current folder, or fall back to default.
+///
+/// If multiple environments exist, the first non-default is preferred.
+pub fn detect_environment(default: &str) -> std::io::Result<Option<std::path::PathBuf>> {
+    let mut result = None;
+    for entry in std::fs::read_dir(".")? {
+        if let Ok(entry) = entry {
+            let name = entry.file_name();
+            let (dme, default) = {
+                let utf8_name = name.to_string_lossy();
+                (utf8_name.ends_with(".dme"), utf8_name == default)
+            };
+            if dme {
+                result = Some(name.into());
+                if !default {
+                    break;
+                }
+            }
+        }
+    }
+    Ok(result)
+}

@@ -63,7 +63,7 @@ impl Context {
         let pathbuf;
         let environment: &std::path::Path = match opt.environment {
             Some(ref env) => env.as_ref(),
-            None => match detect_environment() {
+            None => match dm::detect_environment(DEFAULT_DME) {
                 Ok(Some(found)) => { pathbuf = found; &pathbuf },
                 _ => DEFAULT_DME.as_ref(),
             }
@@ -84,21 +84,6 @@ impl Context {
         }
         self.objtree = parser.parse_object_tree();
     }
-}
-
-fn detect_environment() -> std::io::Result<Option<std::path::PathBuf>> {
-    for entry in std::fs::read_dir(".")? {
-        if let Ok(entry) = entry {
-            let name = entry.file_name();
-            if {
-                let utf8_name = name.to_string_lossy();
-                utf8_name.ends_with(".dme") && utf8_name != DEFAULT_DME
-            } {
-                return Ok(Some(name.into()));
-            }
-        }
-    }
-    Ok(None)
 }
 
 #[derive(StructOpt, Debug)]
