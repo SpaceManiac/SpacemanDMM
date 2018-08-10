@@ -89,9 +89,17 @@ fn main() -> Result<(), Box<std::error::Error>> {
         println!("documenting {}/{} types ({}%)", types_with_docs.len(), count, (types_with_docs.len() * 100 / count));
     }
 
+    progress = Progress::default();
+    progress.update("creating dmdoc.css");
+    create(&output_path.join("dmdoc.css"))?.write_all(include_bytes!("dmdoc.css"))?;
+    progress.update("creating dmdoc.js");
+    create(&output_path.join("dmdoc.js"))?.write_all(include_bytes!("dmdoc.js"))?;
+
     {
-        println!("creating index.html");
+        progress.update("creating index.html");
         let mut index = create(&output_path.join("index.html"))?;
+        writeln!(index, r#"<link rel="stylesheet" href="dmdoc.css">"#)?;
+        writeln!(index, r#"<script src="dmdoc.js"></script>"#)?;
         writeln!(index, "<h1>{}</h1>", environment.display())?;
         writeln!(index, "<ul>")?;
         for (typath, details) in types_with_docs.iter() {
@@ -104,11 +112,21 @@ fn main() -> Result<(), Box<std::error::Error>> {
         writeln!(index, "</ul>")?;
     }
 
-    progress = Progress::default();
     for (typath, details) in types_with_docs.iter() {
         let fname = format!("{}.html", details.filename);
         progress.update(&format!("creating {}", fname));
         let mut f = create(&output_path.join(&fname))?;
+
+        let mut base = String::new();
+        for _ in  fname.chars().filter(|&x| x == '/') {
+            base.push_str("../");
+        }
+        if !base.is_empty() {
+            writeln!(f, r#"<base href="{}">"#, base)?;
+        }
+        writeln!(f, r#"<link rel="stylesheet" href="dmdoc.css">"#)?;
+        writeln!(f, r#"<script src="dmdoc.js"></script>"#)?;
+
         writeln!(f, "<h1>{}</h1>", typath)?;
         if let Some(ref own) = details.own {
             write_doc_block(&mut f, own)?;
