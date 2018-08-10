@@ -4,7 +4,7 @@
 <h1>{{ env.world_name }} ({{ env.filename }})</h1>
 <ul>
 {% for path, details in types %}
-    <li><a href="{{ details.filename }}.html">{{ path }}</a>{% if details.own %} - {{ details.own.teaser | md(teaser=true) }}{% endif %}</li>
+    <li><a href="{{ details.filename | safe }}.html">{{ path }}</a>{% if details.own %} - {{ details.own.teaser | md(teaser=true) }}{% endif %}</li>
 {% endfor %}
 </ul>
 {% endblock content %}
