@@ -688,10 +688,11 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
 
                 // split off a subparser so we can keep parsing the objtree
                 // even when the proc body doesn't parse
-                let body_start = self.updated_location();
+                let mut body_start = self.location;
                 let mut body_tt = Vec::new();
                 // check that it doesn't end immediately (empty body)
                 let (comment, ()) = require!(self.doc_comment(|this| {
+                    body_start = this.updated_location();
                     if let Some(()) = this.statement_terminator()? {
                         body_tt.push(LocatedToken::new(this.location, Punct(Semicolon)));
                     } else {
