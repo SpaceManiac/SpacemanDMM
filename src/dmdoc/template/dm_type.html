@@ -1,7 +1,6 @@
+{% extends "base.html" %}
 {% import "macros.html" as macros %}
-{% if base_href %}<base href="{{ base_href }}">{% endif %}
-<link rel="stylesheet" href="dmdoc.css">
-<script src="dmdoc.js"></script>
+{% block content %}
 <h1>{{ path }}</h1>
 
 {% if details.own %}
@@ -23,3 +22,4 @@
         {{ macros::doc_block(block=proc) }}
     {% endfor %}
 {% endif %}
+{% endblock content %}

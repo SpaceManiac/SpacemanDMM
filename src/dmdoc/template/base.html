@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% block head %}
+    {% if base_href %}<base href="{{ base_href }}">{% endif %}
+    <link rel="stylesheet" href="dmdoc.css">
+    <script src="dmdoc.js"></script>
+    <title>{% block title %}{% endblock title %}</title>
+    {% endblock head %}
+</head>
+<body>
+<div id="content">
+{% block content %}{% endblock content %}
+</div>
+<div id="footer">
+{% block footer %}{% endblock footer %}
+</div>
+</body>
+</html>
