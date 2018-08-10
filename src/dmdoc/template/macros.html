@@ -1,0 +1,7 @@
+{% macro doc_block(block) %}
+    {{ block.teaser | md }}
+    {% if block.description %}
+        {{ block.description | md }}
+    {% endif %}
+    {# TODO: sections #}
+{% endmacro doc_block %}

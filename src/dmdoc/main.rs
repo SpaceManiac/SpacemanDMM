@@ -3,6 +3,10 @@
 extern crate dreammaker as dm;
 extern crate docstrings;
 extern crate pulldown_cmark;
+extern crate tera;
+#[macro_use] extern crate serde_derive;
+
+mod template;
 
 use std::collections::BTreeMap;
 use std::io::{self, Write};
@@ -89,65 +93,56 @@ fn main() -> Result<(), Box<std::error::Error>> {
         println!("documenting {}/{} types ({}%)", types_with_docs.len(), count, (types_with_docs.len() * 100 / count));
     }
 
+    println!("loading templates");
+    let tera = template::builtin()?;
+
+    println!("saving static resources");
     progress = Progress::default();
-    progress.update("creating dmdoc.css");
+    progress.update("dmdoc.css");
     create(&output_path.join("dmdoc.css"))?.write_all(include_bytes!("dmdoc.css"))?;
-    progress.update("creating dmdoc.js");
+    progress.update("dmdoc.js");
     create(&output_path.join("dmdoc.js"))?.write_all(include_bytes!("dmdoc.js"))?;
 
+    progress.println("rendering html");
     {
-        progress.update("creating index.html");
-        let mut index = create(&output_path.join("index.html"))?;
-        writeln!(index, r#"<link rel="stylesheet" href="dmdoc.css">"#)?;
-        writeln!(index, r#"<script src="dmdoc.js"></script>"#)?;
-        writeln!(index, "<h1>{}</h1>", environment.display())?;
-        writeln!(index, "<ul>")?;
-        for (typath, details) in types_with_docs.iter() {
-            write!(index, r#"<li><a href="{fname}.html">{path}</a>"#, path=typath, fname=details.filename)?;
-            if let Some(ref own) = details.own {
-                write!(index, " - {}", own.teaser)?;
-            }
-            writeln!(index)?;
+        #[derive(Serialize)]
+        struct Index<'a> {
+            environment: &'a str,
+            types: &'a BTreeMap<&'a str, ParsedType<'a>>,
         }
-        writeln!(index, "</ul>")?;
+
+        progress.update("index.html");
+        let mut index = create(&output_path.join("index.html"))?;
+        index.write_all(tera.render("dm_index.html", &Index {
+            environment: &environment.display().to_string(),
+            types: &types_with_docs,
+        })?.as_bytes())?;
     }
 
-    for (typath, details) in types_with_docs.iter() {
+    for (path, details) in types_with_docs.iter() {
+        #[derive(Serialize)]
+        struct Type<'a> {
+            base_href: &'a str,
+            path: &'a str,
+            details: &'a ParsedType<'a>,
+        }
+
         let fname = format!("{}.html", details.filename);
-        progress.update(&format!("creating {}", fname));
-        let mut f = create(&output_path.join(&fname))?;
+        progress.update(&fname);
 
         let mut base = String::new();
         for _ in  fname.chars().filter(|&x| x == '/') {
             base.push_str("../");
         }
-        if !base.is_empty() {
-            writeln!(f, r#"<base href="{}">"#, base)?;
-        }
-        writeln!(f, r#"<link rel="stylesheet" href="dmdoc.css">"#)?;
-        writeln!(f, r#"<script src="dmdoc.js"></script>"#)?;
 
-        writeln!(f, "<h1>{}</h1>", typath)?;
-        if let Some(ref own) = details.own {
-            write_doc_block(&mut f, own)?;
-        }
-        if !details.vars.is_empty() {
-            writeln!(f, r#"<h2 name="vars">Vars</h2>"#)?;
-            for (name, var) in details.vars.iter() {
-                writeln!(f, r##"<p><a name="var/{name}" href="#var/{name}"><b>{name}</b></a> -"##, name=name)?;
-                write_doc_block(&mut f, var)?;
-                writeln!(f, "</p>")?;
-            }
-        }
-        if !details.procs.is_empty() {
-            writeln!(f, r#"<h2 name="procs">Procs</h2>"#)?;
-            for (name, proc) in details.procs.iter() {
-                writeln!(f, r##"<p><a name="proc/{name}" href="#proc/{name}"><b>{name}</b></a> -"##, name=name)?;
-                write_doc_block(&mut f, proc)?;
-                writeln!(f, "</p>")?;
-            }
-        }
+        let mut f = create(&output_path.join(&fname))?;
+        f.write_all(tera.render("dm_type.html", &Type {
+            base_href: &base,
+            path,
+            details,
+        })?.as_bytes())?;
     }
+    drop(progress);
 
     Ok(())
 }
@@ -160,24 +155,31 @@ fn create(path: &Path) -> io::Result<File> {
     File::create(path)
 }
 
-fn write_doc_block<W: Write>(w: &mut W, block: &DocBlock) -> io::Result<()> {
-    writeln!(w, "{}", block.teaser)?;
-    if let Some(ref desc) = block.description {
-        writeln!(w, "{}", render_markdown(desc))?;
-    }
-    // TODO: sections
-    Ok(())
-}
-
-fn render_markdown(markdown: &str) -> String {
+fn render_markdown(markdown: &str, summary: bool) -> String {
     let mut buf = String::new();
-    let parser = pulldown_cmark::Parser::new(markdown);
-    pulldown_cmark::html::push_html(&mut buf, parser);
+    let mut parser = pulldown_cmark::Parser::new(markdown).peekable();
+    match (summary, parser.peek()) {
+        (true, Some(&pulldown_cmark::Event::Start(pulldown_cmark::Tag::Paragraph))) => {
+            // Skip the opening <p>
+            parser.next();
+            // Parse everything
+            let mut rest: Vec<_> = parser.collect();
+            // Drop the closing </p>
+            if let Some(&pulldown_cmark::Event::End(pulldown_cmark::Tag::Paragraph)) = rest.last() {
+                let len = rest.len() - 1;
+                rest.truncate(len);
+            }
+            pulldown_cmark::html::push_html(&mut buf, rest.into_iter());
+        },
+        _ => pulldown_cmark::html::push_html(&mut buf, parser),
+    }
+    let len = buf.trim_right().len();
+    buf.truncate(len);
     buf
 }
 
 /// A parsed documented type.
-#[derive(Default)]
+#[derive(Default, Serialize)]
 struct ParsedType<'a> {
     own: Option<DocBlock>,
     vars: BTreeMap<&'a str, DocBlock>,
