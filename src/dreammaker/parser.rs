@@ -652,22 +652,30 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         match self.next("contents")? {
             t @ Punct(LBrace) => {
                 // `thing{` - block
-                if let Err(e) = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len()) {
+                if let Err(e) = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), None) {
                     self.context.register_error(e);
                 }
                 self.put_back(t);
                 let start = self.updated_location();
-                require!(self.tree_block(new_stack));
+                let (comment, ()) = require!(self.doc_comment(|this| this.tree_block(new_stack)));
+                // TODO: make this duplicate less work?
+                if comment.is_some() {
+                    let _ = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), comment);
+                }
                 self.annotate(start, || Annotation::TreeBlock(new_stack.to_vec()));
                 SUCCESS
             }
             Punct(Assign) => {
                 // `something=` - var
                 let location = self.location;
-                let expr = require!(self.expression());
-                let _ = require!(self.input_specifier());
-                require!(self.statement_terminator());
-                if let Err(e) = self.tree.add_var(location, new_stack.iter(), new_stack.len(), expr) {
+                // kind of goofy, but allows "enclosing" doc comments at the end of the line
+                let (comment, expr) = require!(self.doc_comment(|this| {
+                    let expr = require!(this.expression());
+                    let _ = require!(this.input_specifier());
+                    require!(this.statement_terminator());
+                    success(expr)
+                }));
+                if let Err(e) = self.tree.add_var(location, new_stack.iter(), new_stack.len(), expr, comment) {
                     self.context.register_error(e);
                 }
                 self.annotate(entry_start, || Annotation::Variable(new_stack.to_vec()));
@@ -703,7 +711,6 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 match self.tree.add_proc(location, new_stack.iter(), new_stack.len(), parameters) {
                     Ok((idx, proc)) => {
                         if let Some(comment) = comment {
-                            eprintln!("{:?}\n{}", new_stack.to_vec(), comment.text);
                             comment.merge_into(&mut proc.docs);
                         }
                         // manually performed for borrowck reasons
@@ -736,8 +743,10 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 SUCCESS
             }
             other => {
-                // usually `thing;` - a contextless declaration
-                if let Err(e) = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len()) {
+                // usually `thing;` - a contentless declaration
+                // TODO: allow enclosing-targeting docs here somehow?
+                let comment = self.docs_following.take();
+                if let Err(e) = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), comment) {
                     self.context.register_error(e);
                 }
                 self.put_back(other);

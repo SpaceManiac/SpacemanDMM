@@ -33,6 +33,7 @@ pub struct VarValue {
     /// Evaluated value for non-static and non-tmp vars.
     pub constant: Option<Constant>,
     pub being_evaluated: bool,
+    pub docs: Option<DocComment>,
 }
 
 #[derive(Debug, Clone)]
@@ -74,6 +75,7 @@ pub struct Type {
     pub vars: LinkedHashMap<String, TypeVar>,
     pub procs: LinkedHashMap<String, TypeProc>,
     parent_type: NodeIndex,
+    pub docs: Option<DocComment>,
 }
 
 impl Type {
@@ -299,6 +301,7 @@ impl Default for ObjectTree {
             vars: Default::default(),
             procs: Default::default(),
             parent_type: NodeIndex::new(BAD_NODE_INDEX),
+            docs: None,
         });
         tree
     }
@@ -466,6 +469,7 @@ impl ObjectTree {
             location: location,
             location_specificity: len,
             parent_type: NodeIndex::new(BAD_NODE_INDEX),
+            docs: None,
         });
         self.graph.add_edge(parent, node, ());
         self.types.insert(path, node);
@@ -492,7 +496,13 @@ impl ObjectTree {
         Ok((current, last))
     }
 
-    fn register_var<'a, I>(&mut self, location: Location, parent: NodeIndex, mut prev: &'a str, mut rest: I) -> Result<Option<&mut TypeVar>, DMError> where
+    fn register_var<'a, I>(&mut self,
+        location: Location,
+        parent: NodeIndex,
+        mut prev: &'a str,
+        mut rest: I,
+        comment: Option<DocComment>,
+    ) -> Result<Option<&mut TypeVar>, DMError> where
         I: Iterator<Item=&'a str>
     {
         let (mut is_declaration, mut is_static, mut is_const, mut is_tmp) = (false, false, false, false);
@@ -523,12 +533,14 @@ impl ObjectTree {
             prev = each;
         }
         let node = self.graph.node_weight_mut(parent).unwrap();
+        // TODO: warn and merge docs for repeats
         Ok(Some(node.vars.entry(prev.to_owned()).or_insert_with(|| TypeVar {
             value: VarValue {
                 location,
                 expression: None,
                 constant: None,
                 being_evaluated: false,
+                docs: comment,
             },
             declaration: if is_declaration {
                 Some(VarDeclaration {
@@ -546,7 +558,13 @@ impl ObjectTree {
         })))
     }
 
-    fn register_proc(&mut self, location: Location, parent: NodeIndex, name: &str, is_verb: Option<bool>, parameters: Vec<Parameter>) -> Result<(usize, &mut ProcValue), DMError> {
+    fn register_proc(&mut self,
+        location: Location,
+        parent: NodeIndex,
+        name: &str,
+        is_verb: Option<bool>,
+        parameters: Vec<Parameter>,
+    ) -> Result<(usize, &mut ProcValue), DMError> {
         let node = self.graph.node_weight_mut(parent).unwrap();
         let proc = node.procs.entry(name.to_owned()).or_insert_with(Default::default);
         proc.declaration = is_verb.map(|is_verb| ProcDeclaration {
@@ -564,22 +582,36 @@ impl ObjectTree {
     }
 
     // an entry which may be anything depending on the path
-    pub fn add_entry<'a, I: Iterator<Item=&'a str>>(&mut self, location: Location, mut path: I, len: usize) -> Result<(), DMError> {
+    pub fn add_entry<'a, I: Iterator<Item=&'a str>>(&mut self,
+        location: Location,
+        mut path: I,
+        len: usize,
+        comment: Option<DocComment>,
+    ) -> Result<(), DMError> {
         let (parent, child) = self.get_from_path(location, &mut path, len)?;
         if is_var_decl(child) {
-            self.register_var(location, parent, "var", path)?;
+            self.register_var(location, parent, "var", path, comment)?;
         } else if is_proc_decl(child) {
             // proc{} block, children will be procs
         } else {
-            self.subtype_or_add(location, parent, child, len);
+            let idx = self.subtype_or_add(location, parent, child, len);
+            if let Some(comment) = comment {
+                comment.merge_into(&mut self.graph.node_weight_mut(idx).unwrap().docs);
+            }
         }
         Ok(())
     }
 
     // an entry which is definitely a var because a value is specified
-    pub fn add_var<'a, I: Iterator<Item=&'a str>>(&mut self, location: Location, mut path: I, len: usize, expr: Expression) -> Result<(), DMError> {
+    pub fn add_var<'a, I: Iterator<Item=&'a str>>(&mut self,
+        location: Location,
+        mut path: I,
+        len: usize,
+        expr: Expression,
+        comment: Option<DocComment>,
+    ) -> Result<(), DMError> {
         let (parent, initial) = self.get_from_path(location, &mut path, len)?;
-        if let Some(type_var) = self.register_var(location, parent, initial, path)? {
+        if let Some(type_var) = self.register_var(location, parent, initial, path, comment)? {
             type_var.value.location = location;
             type_var.value.expression = Some(expr);
             Ok(())
@@ -589,7 +621,12 @@ impl ObjectTree {
     }
 
     // an entry which is definitely a proc because an argument list is specified
-    pub fn add_proc<'a, I: Iterator<Item=&'a str>>(&mut self, location: Location, mut path: I, len: usize, parameters: Vec<Parameter>) -> Result<(usize, &mut ProcValue), DMError> {
+    pub fn add_proc<'a, I: Iterator<Item=&'a str>>(&mut self,
+        location: Location,
+        mut path: I,
+        len: usize,
+        parameters: Vec<Parameter>,
+    ) -> Result<(usize, &mut ProcValue), DMError> {
         let (parent, mut proc_name) = self.get_from_path(location, &mut path, len)?;
         let mut is_verb = None;
         if is_proc_decl(proc_name) {
