@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "src/cli",
+    "src/dmdoc",
     "src/dreammaker",
     #"src/editor",
     "src/interval-tree",

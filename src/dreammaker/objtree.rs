@@ -193,7 +193,7 @@ impl<'a> TypeRef<'a> {
     }
 
     /// Recursively visit this and all child **paths**.
-    pub fn recurse<F: FnMut(TypeRef)>(&self, f: &mut F) {
+    pub fn recurse<F: FnMut(TypeRef<'a>)>(&self, f: &mut F) {
         f(*self);
         for child in self.children() {
             child.recurse(f);
