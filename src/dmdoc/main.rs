@@ -77,7 +77,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
             } else {
                 parsed_type.filename = &ty.get().path[1..];
             }
-            types_with_docs.insert(&ty.get().path, parsed_type);
+            types_with_docs.insert(ty.get().pretty_path(), parsed_type);
         }
     });
     drop(progress);
@@ -88,17 +88,47 @@ fn main() -> Result<(), Box<std::error::Error>> {
         println!("documenting {}/{} types ({}%)", types_with_docs.len(), count, (types_with_docs.len() * 100 / count));
     }
 
-    println!("generating index");
-    let mut index = create(&output_path.join("index.html"))?;
-    writeln!(index, "<ul>")?;
-    for (typath, details) in types_with_docs.iter() {
-        write!(index, r#"<li><a href="{fname}.html">{path}</a>"#, path=typath, fname=details.filename)?;
-        if let Some(ref own) = details.own {
-            write!(index, " - {}", own.teaser)?;
+    {
+        println!("creating index.html");
+        let mut index = create(&output_path.join("index.html"))?;
+        writeln!(index, "<h1>{}</h1>", environment.display())?;
+        writeln!(index, "<ul>")?;
+        for (typath, details) in types_with_docs.iter() {
+            write!(index, r#"<li><a href="{fname}.html">{path}</a>"#, path=typath, fname=details.filename)?;
+            if let Some(ref own) = details.own {
+                write!(index, " - {}", own.teaser)?;
+            }
+            writeln!(index)?;
         }
-        writeln!(index)?;
+        writeln!(index, "</ul>")?;
     }
-    writeln!(index, "</ul>")?;
+
+    progress = Progress::default();
+    for (typath, details) in types_with_docs.iter() {
+        let fname = format!("{}.html", details.filename);
+        progress.update(&format!("creating {}", fname));
+        let mut f = create(&output_path.join(&fname))?;
+        writeln!(f, "<h1>{}</h1>", typath)?;
+        if let Some(ref own) = details.own {
+            writeln!(f, "<pre>{:#?}</pre>", own)?;
+        }
+        if !details.vars.is_empty() {
+            writeln!(f, "<h2>Vars</h2>")?;
+            writeln!(f, "<table>")?;
+            for (name, var) in details.vars.iter() {
+                writeln!(f, "<tr><th valign=top>{}</th><td><pre>{:#?}</pre></td></tr>", name, var)?;
+            }
+            writeln!(f, "</table>")?;
+        }
+        if !details.procs.is_empty() {
+            writeln!(f, "<h2>Procs</h2>")?;
+            writeln!(f, "<table>")?;
+            for (name, proc) in details.procs.iter() {
+                writeln!(f, "<tr><th valign=top>{}</th><td><pre>{:#?}</pre></td></tr>", name, proc)?;
+            }
+            writeln!(f, "</table>")?;
+        }
+    }
 
     Ok(())
 }
