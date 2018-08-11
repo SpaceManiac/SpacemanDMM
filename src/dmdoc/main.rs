@@ -84,7 +84,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
         if let Some(ref docs) = ty.docs {
             match parse_md_docblock(&docs.text) {
                 Ok(block) => {
-                    parsed_type.own = Some(block);
+                    parsed_type.docs = Some(block);
                     anything = true;
                 }
                 Err(e) => progress.println(&format!("{}: {}", ty.path, e)),
@@ -95,7 +95,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
             if let Some(ref docs) = var.value.docs {
                 match parse_md_docblock(&docs.text) {
                     Ok(block) => {
-                        parsed_type.vars.insert(name, block);
+                        parsed_type.vars.insert(name, Var { docs: block });
                         anything = true;
                     }
                     Err(e) => progress.println(&format!("{}/var/{}: {}", ty.path, name, e)),
@@ -107,7 +107,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
             if let Some(ref docs) = proc.value.last().unwrap().docs {
                 match parse_md_docblock(&docs.text) {
                     Ok(block) => {
-                        parsed_type.procs.insert(name, block);
+                        parsed_type.procs.insert(name, Proc { docs: block });
                         anything = true;
                     }
                     Err(e) => progress.println(&format!("{}/proc/{}: {}", ty.path, name, e)),
@@ -270,18 +270,28 @@ impl Drop for Progress {
 // ----------------------------------------------------------------------------
 // Templating structs
 
-/// A parsed documented type.
-#[derive(Default, Serialize)]
-struct ParsedType<'a> {
-    own: Option<DocBlock>,
-    vars: BTreeMap<&'a str, DocBlock>,
-    procs: BTreeMap<&'a str, DocBlock>,
-    filename: &'a str,
-}
-
 #[derive(Serialize)]
 struct Environment<'a> {
     filename: &'a str,
     world_name: &'a str,
     dmdoc_version: &'a str,
+}
+
+/// A parsed documented type.
+#[derive(Default, Serialize)]
+struct ParsedType<'a> {
+    docs: Option<DocBlock>,
+    vars: BTreeMap<&'a str, Var>,
+    procs: BTreeMap<&'a str, Proc>,
+    filename: &'a str,
+}
+
+#[derive(Serialize)]
+struct Var {
+    docs: DocBlock,
+}
+
+#[derive(Serialize)]
+struct Proc {
+    docs: DocBlock,
 }

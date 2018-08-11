@@ -4,15 +4,15 @@
 {% block content %}
 <h1>{{ path | safe | linkify_type }}</h1>
 
-{% if details.own %}
-    {{ macros::doc_block(block=details.own) }}
+{% if details.docs %}
+    {{ macros::doc_block(block=details.docs) }}
 {% endif %}
 
 {% if details.vars %}
     <h2 name="var">Vars</h2>
     {% for name, var in details.vars %}
         <h3 name="var/{{ name }}">{{ name }}</h3>
-        {{ macros::doc_block(block=var) }}
+        {{ macros::doc_block(block=var.docs) }}
     {% endfor %}
 {% endif %}
 
@@ -20,7 +20,7 @@
     <h2 name="proc">Procs</h2>
     {% for name, proc in details.procs %}
         <h3 name="proc/{{ name }}">{{ name }}</h3>
-        {{ macros::doc_block(block=proc) }}
+        {{ macros::doc_block(block=proc.docs) }}
     {% endfor %}
 {% endif %}
 {% endblock content %}
