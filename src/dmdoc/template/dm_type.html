@@ -33,7 +33,11 @@
 {% if details.vars %}
     <h2>Var Details</h2>
     {%- for name, var in details.vars -%}
-        <h3><a name="var/{{ name }}">{{ name }}</a> <aside>&ndash; {{ var.type_path | safe | linkify_type }}</aside></h3>
+        <h3>
+        {%- if var.decl -%}
+            <aside class="declaration">{{ var.decl }} </aside>
+        {%- endif -%}
+        <a name="var/{{ name }}">{{ name }}</a> <aside>&ndash; {{ var.type_path | safe | linkify_type }}</aside></h3>
         {{ macros::doc_block(block=var.docs) }}
     {%- endfor -%}
 {% endif %}
@@ -41,10 +45,17 @@
 {%- if details.procs -%}
     <h2>Proc Details</h2>
     {%- for name, proc in details.procs -%}
-        <h3><a name="proc/{{ name }}">{{ name }}</a> <aside>({%- for param in proc.params -%}
-            {% if not loop.first %}, {% endif -%}
-            {% if param.type_path %}{{ param.type_path | safe | linkify_type }}/{% endif %}{{ param.name }}
-        {%- endfor -%})</aside></h3>
+        <h3>
+            {%- if proc.decl -%}
+                <aside class="declaration">{{ proc.decl }} </aside>
+            {%- endif -%}
+            <a name="proc/{{ name }}">{{ name }}</a><aside>(
+            {%- for param in proc.params -%}
+                {% if not loop.first %}, {% endif -%}
+                {% if param.type_path %}{{ param.type_path | safe | linkify_type }}/{% endif %}{{ param.name }}
+            {%- endfor -%}
+            )</aside>
+        </h3>
         {{ macros::doc_block(block=proc.docs) }}
     {%- endfor -%}
 {%- endif -%}

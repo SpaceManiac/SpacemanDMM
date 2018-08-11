@@ -27,6 +27,15 @@ h1 aside, h2 aside, h3 aside, h4 aside, h5 aside {
     font-weight: normal;
     font-size: smaller;
 }
+aside.declaration {
+    display: inline-block;
+    position: relative;
+    text-align: right;
+    width: 100px;
+    margin-right: -100px;
+    right: 105px;
+    font-style: italic;
+}
 table.summary tr:first-child h2 {
     margin-top: 0;
 }

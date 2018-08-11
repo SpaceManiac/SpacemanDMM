@@ -113,6 +113,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
                         parsed_type.vars.insert(name, Var {
                             docs: block,
                             type_path: path,
+                            decl: if var.declaration.is_some() { "var" } else { "" },
                         });
                         anything = true;
                     }
@@ -132,6 +133,10 @@ fn main() -> Result<(), Box<std::error::Error>> {
                                 name: p.name.clone(),
                                 type_path: format_type_path(&p.path),
                             }).collect(),
+                            decl: match proc.declaration {
+                                Some(ref decl) => if decl.is_verb { "verb" } else { "proc" },
+                                None => "",
+                            },
                         });
                         anything = true;
                     }
@@ -323,12 +328,14 @@ struct ParsedType<'a> {
 #[derive(Serialize)]
 struct Var {
     docs: DocBlock,
+    decl: &'static str,
     type_path: String,
 }
 
 #[derive(Serialize)]
 struct Proc {
     docs: DocBlock,
+    decl: &'static str,
     params: Vec<Param>,
 }
 
