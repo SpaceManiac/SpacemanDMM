@@ -80,6 +80,11 @@ fn main() -> Result<(), Box<std::error::Error>> {
         progress.update(&ty.path);
 
         let mut parsed_type = ParsedType::default();
+        parsed_type.name = ty.get().vars.get("name")
+            .and_then(|v| v.value.constant.as_ref())
+            .and_then(|c| c.as_str())
+            .unwrap_or("");
+
         let mut anything = false;
         if let Some(ref docs) = ty.docs {
             match parse_md_docblock(&docs.text) {
@@ -302,6 +307,7 @@ struct Environment<'a> {
 /// A parsed documented type.
 #[derive(Default, Serialize)]
 struct ParsedType<'a> {
+    name: &'a str,
     docs: Option<DocBlock>,
     vars: BTreeMap<&'a str, Var>,
     procs: BTreeMap<&'a str, Proc>,

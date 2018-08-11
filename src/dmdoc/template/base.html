@@ -1,9 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>{% block head %}
-    {% if base_href %}<base href="{{ base_href }}">{% endif %}
+    {% if base_href %}<base href="{{ base_href | safe }}">{% endif %}
     <link rel="stylesheet" href="dmdoc.css">
-    <script src="dmdoc.js"></script>
     <title>{% block title %}{% endblock title %} - {{ env.world_name }}</title>
 {% endblock head %}</head>
 <body>
