@@ -30,11 +30,12 @@ impl DocComment {
         match *other {
             None => *other = Some(self),
             Some(ref mut it) => {
-                let extra_newline = match (it.kind, self.kind) {
-                    (CommentKind::Block, CommentKind::Block) => "\n",
-                    _ => "",
-                };
+                let mut extra_newline = "";
+                if it.kind == CommentKind::Block || self.kind == CommentKind::Block {
+                    extra_newline = "\n";
+                }
                 it.text = format!("{}\n{}{}", it.text, extra_newline, self.text);
+                it.kind = self.kind;
             }
         }
     }
