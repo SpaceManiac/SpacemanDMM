@@ -1,6 +1,6 @@
 //! The built-in template.
 
-use tera::{Tera, Value};
+use tera::Tera;
 
 pub fn builtin() -> Result<Tera, ::tera::Error> {
     let mut tera = Tera::default();
@@ -10,9 +10,10 @@ pub fn builtin() -> Result<Tera, ::tera::Error> {
         ("dm_index.html", include_str!("dm_index.html")),
         ("dm_type.html", include_str!("dm_type.html")),
     ])?;
-    tera.register_filter("md", |input, opts| match input {
-        Value::String(s) => Ok(Value::String(::render_markdown(&s, opts.contains_key("teaser")))),
-        other => Ok(other),
-    });
     Ok(tera)
 }
+
+pub const RESOURCES: &[(&str, &str)] = &[
+    ("dmdoc.css", include_str!("dmdoc.css")),
+    ("dmdoc.js", include_str!("dmdoc.js")),
+];

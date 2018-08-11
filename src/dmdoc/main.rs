@@ -19,6 +19,16 @@ fn main() -> Result<(), Box<std::error::Error>> {
     // TODO: command-line args
     let output_path: &Path = "docs".as_ref();
 
+    // load tera templates
+    println!("loading templates");
+    let mut tera = template::builtin()?;
+
+    // register tera extensions
+    tera.register_filter("md", |input, opts| match input {
+        tera::Value::String(s) => Ok(tera::Value::String(render_markdown(&s, opts.contains_key("teaser")))),
+        other => Ok(other),
+    });
+
     // parse environment
     let context = dm::Context::default();
     let environment = match dm::detect_environment("tgstation.dme")? {
@@ -93,15 +103,12 @@ fn main() -> Result<(), Box<std::error::Error>> {
         println!("documenting {}/{} types ({}%)", types_with_docs.len(), count, (types_with_docs.len() * 100 / count));
     }
 
-    println!("loading templates");
-    let tera = template::builtin()?;
-
     println!("saving static resources");
     progress = Progress::default();
-    progress.update("dmdoc.css");
-    create(&output_path.join("dmdoc.css"))?.write_all(include_bytes!("dmdoc.css"))?;
-    progress.update("dmdoc.js");
-    create(&output_path.join("dmdoc.js"))?.write_all(include_bytes!("dmdoc.js"))?;
+    for (name, contents) in template::RESOURCES {
+        progress.update(name);
+        create(&output_path.join(name))?.write_all(contents.as_bytes())?;
+    }
 
     progress.println("rendering html");
     let env_filename = environment.display().to_string();
