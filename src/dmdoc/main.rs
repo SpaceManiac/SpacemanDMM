@@ -8,7 +8,8 @@ extern crate tera;
 
 mod template;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::cell::RefCell;
 use std::io::{self, Write};
 use std::fs::{self, File};
 use std::path::Path;
@@ -17,6 +18,10 @@ use docstrings::{DocBlock, parse_md_docblock};
 
 // ----------------------------------------------------------------------------
 // Driver
+
+thread_local! {
+    static ALL_TYPE_NAMES: RefCell<BTreeSet<String>> = Default::default();
+}
 
 fn main() -> Result<(), Box<std::error::Error>> {
     // TODO: command-line args
@@ -29,7 +34,28 @@ fn main() -> Result<(), Box<std::error::Error>> {
     // register tera extensions
     tera.register_filter("md", |input, opts| match input {
         tera::Value::String(s) => Ok(tera::Value::String(render_markdown(&s, opts.contains_key("teaser")))),
-        other => Ok(other),
+        _ => Err("md() input must be string".into()),
+    });
+    tera.register_filter("linkify_type", |input, _opts| match input {
+        tera::Value::String(s) => {
+            let mut output = String::new();
+            let mut all_progress = String::new();
+            let mut progress = String::new();
+            for bit in s.split("/").skip_while(|b| b.is_empty()) {
+                all_progress.push_str("/");
+                all_progress.push_str(bit);
+                progress.push_str("/");
+                progress.push_str(bit);
+                if ALL_TYPE_NAMES.with(|t| t.borrow().contains(&all_progress)) {
+                    use std::fmt::Write;
+                    let _ = write!(output, r#"/<a href="{}.html">{}</a>"#, &all_progress[1..], &progress[1..]);
+                    progress.clear();
+                }
+            }
+            output.push_str(&progress);
+            Ok(tera::Value::String(output))
+        }
+        _ => Err("linkify_type() input must be string".into()),
     });
 
     // parse environment
@@ -106,6 +132,10 @@ fn main() -> Result<(), Box<std::error::Error>> {
         println!("documenting {}/{} types ({}%)", types_with_docs.len(), count, (types_with_docs.len() * 100 / count));
     }
 
+    ALL_TYPE_NAMES.with(|all| {
+        all.borrow_mut().extend(types_with_docs.keys().map(|&t| t.to_owned()));
+    });
+
     println!("saving static resources");
     progress = Progress::default();
     for (name, contents) in template::RESOURCES {
@@ -147,6 +177,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
             base_href: &'a str,
             path: &'a str,
             details: &'a ParsedType<'a>,
+            types: &'a BTreeMap<&'a str, ParsedType<'a>>,
         }
 
         let fname = format!("{}.html", details.filename);
@@ -163,6 +194,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
             base_href: &base,
             path,
             details,
+            types: &types_with_docs,
         })?.as_bytes())?;
     }
     drop(progress);

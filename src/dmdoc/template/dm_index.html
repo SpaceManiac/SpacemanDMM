@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Index{% endblock %}
 {% block content %}
-<h1>{{ env.world_name }} ({{ env.filename }})</h1>
+<h1>{{ env.world_name }}</h1>
 <ul>
 {% for path, details in types %}
     <li><a href="{{ details.filename | safe }}.html">{{ path }}</a>{% if details.own %} - {{ details.own.teaser | md(teaser=true) }}{% endif %}</li>

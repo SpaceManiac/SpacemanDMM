@@ -2,7 +2,7 @@
 {% import "macros.html" as macros %}
 {% block title %}{{ path }}{% endblock %}
 {% block content %}
-<h1>{{ path }}</h1>
+<h1>{{ path | safe | linkify_type }}</h1>
 
 {% if details.own %}
     {{ macros::doc_block(block=details.own) }}
