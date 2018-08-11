@@ -5,8 +5,8 @@
 {% if modules %}
 <h3>Modules</h3>
 <ul>
-{% for path, details in modules %}
-    <li><a href="{{ details.filename | safe }}.html" title="{{ details.defines | length}} #defines">{{path}}</a></li>
+{%- for path, details in modules %}
+    <li><a href="{{ details.filename | safe }}.html" title="{{ details.defines | length}} macros">{{path}}</a></li>
     {%- if details.name %}: {{ details.name }} {% endif -%}
     {%- if details.docs %} - {{ details.docs.teaser | md(teaser=true) }}{% endif -%}
 {% endfor %}
@@ -15,7 +15,7 @@
 {% if types %}
 <h3>Types</h3>
 <ul>
-{% for path, details in types %}
+{%- for path, details in types %}
     <li><a href="{{ details.filename | safe }}.html" title="{{ details.vars | length }} vars, {{ details.procs | length }} procs"
         {%- if not details.docs.description and not details.vars and not details.procs %} class="no-items"{% endif -%}
         >{{path}}</a>
