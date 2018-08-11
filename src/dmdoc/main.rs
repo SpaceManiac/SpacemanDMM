@@ -95,7 +95,14 @@ fn main() -> Result<(), Box<std::error::Error>> {
             if let Some(ref docs) = var.value.docs {
                 match parse_md_docblock(&docs.text) {
                     Ok(block) => {
-                        parsed_type.vars.insert(name, Var { docs: block });
+                        let path = match ty.get_declaration(name) {
+                            Some(decl) => format_type_path(&decl.var_type.type_path),
+                            _ => String::new(),
+                        };
+                        parsed_type.vars.insert(name, Var {
+                            docs: block,
+                            type_path: path,
+                        });
                         anything = true;
                     }
                     Err(e) => progress.println(&format!("{}/var/{}: {}", ty.path, name, e)),
@@ -104,10 +111,17 @@ fn main() -> Result<(), Box<std::error::Error>> {
         }
 
         for (name, proc) in ty.get().procs.iter() {
-            if let Some(ref docs) = proc.value.last().unwrap().docs {
+            let proc_value = proc.value.last().unwrap();
+            if let Some(ref docs) = proc_value.docs {
                 match parse_md_docblock(&docs.text) {
                     Ok(block) => {
-                        parsed_type.procs.insert(name, Proc { docs: block });
+                        parsed_type.procs.insert(name, Proc {
+                            docs: block,
+                            params: proc_value.parameters.iter().map(|p| Param {
+                                name: p.name.clone(),
+                                type_path: format_type_path(&p.path),
+                            }).collect(),
+                        });
                         anything = true;
                     }
                     Err(e) => progress.println(&format!("{}/proc/{}: {}", ty.path, name, e)),
@@ -205,6 +219,14 @@ fn main() -> Result<(), Box<std::error::Error>> {
 // ----------------------------------------------------------------------------
 // Helpers
 
+fn format_type_path(vec: &[String]) -> String {
+    if vec.is_empty() {
+        String::new()
+    } else {
+        format!("/{}", vec.join("/"))
+    }
+}
+
 /// Create the parent dirs of a file and then itself.
 fn create(path: &Path) -> io::Result<File> {
     if let Some(parent) = path.parent() {
@@ -289,9 +311,17 @@ struct ParsedType<'a> {
 #[derive(Serialize)]
 struct Var {
     docs: DocBlock,
+    type_path: String,
 }
 
 #[derive(Serialize)]
 struct Proc {
     docs: DocBlock,
+    params: Vec<Param>,
+}
+
+#[derive(Serialize)]
+struct Param {
+    name: String,
+    type_path: String,
 }

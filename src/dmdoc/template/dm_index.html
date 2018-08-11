@@ -5,6 +5,6 @@
 <ul>
 {% for path, details in types %}
     <li><a href="{{ details.filename | safe }}.html">{{ path }}</a>{% if details.own %} - {{ details.own.teaser | md(teaser=true) }}{% endif %}</li>
-{% endfor %}
+{%- endfor %}
 </ul>
 {% endblock content %}
