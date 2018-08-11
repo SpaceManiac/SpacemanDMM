@@ -1,11 +1,12 @@
 //! Minimalist parser which turns a token stream into an object tree.
 
+use std::collections::BTreeMap;
 use std::ops::Range;
 use std::fmt;
 
 use linked_hash_map::LinkedHashMap;
 
-use super::{DMError, Location, HasLocation, Context, Severity};
+use super::{DMError, Location, HasLocation, Context, Severity, FileId};
 use super::lexer::{LocatedToken, Token, Punctuation};
 use super::objtree::ObjectTree;
 use super::annotation::*;
@@ -338,6 +339,8 @@ pub struct Parser<'ctx, 'an, I> {
 
     docs_following: Option<DocComment>,
     docs_enclosing: Option<DocComment>,
+    module_docs: BTreeMap<FileId, Vec<DocComment>>,
+    in_docs: usize,
 
     procs: bool,
     procs_bad: u64,
@@ -368,32 +371,13 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
 
             docs_following: None,
             docs_enclosing: None,
+            module_docs: Default::default(),
+            in_docs: 0,
 
             procs: false,
             procs_bad: 0,
             procs_good: 0,
         }
-    }
-
-    pub fn run(&mut self) {
-        self.tree.register_builtins();
-        let root = self.root();
-        if let Err(e) = self.require(root) {
-            self.context.register_error(e);
-        }
-    }
-
-    pub fn parse_object_tree(mut self) -> ObjectTree {
-        self.run();
-
-        let procs_total = self.procs_good + self.procs_bad;
-        if procs_total > 0 {
-            eprintln!("parsed {}/{} proc bodies ({}%)", self.procs_good, procs_total, (self.procs_good * 100 / procs_total));
-        }
-
-        let sloppy = self.context.errors().iter().any(|p| p.severity() == Severity::Error);
-        self.tree.finalize(self.context, sloppy);
-        self.tree
     }
 
     pub fn enable_procs(&mut self) {
@@ -408,6 +392,34 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     pub fn set_fallback_location(&mut self, fallback: Location) {
         assert!(self.location == Default::default());
         self.location = fallback;
+    }
+
+    pub fn parse_object_tree(mut self) -> ObjectTree {
+        self.run();
+        self.finalize_object_tree()
+    }
+
+    pub fn run(&mut self) {
+        self.tree.register_builtins();
+        let root = self.root();
+        if let Err(e) = self.require(root) {
+            self.context.register_error(e);
+        }
+    }
+
+    pub fn take_module_docs(&mut self) -> BTreeMap<FileId, Vec<DocComment>> {
+        ::std::mem::replace(&mut self.module_docs, Default::default())
+    }
+
+    pub fn finalize_object_tree(mut self) -> ObjectTree {
+        let procs_total = self.procs_good + self.procs_bad;
+        if procs_total > 0 {
+            eprintln!("parsed {}/{} proc bodies ({}%)", self.procs_good, procs_total, (self.procs_good * 100 / procs_total));
+        }
+
+        let sloppy = self.context.errors().iter().any(|p| p.severity() == Severity::Error);
+        self.tree.finalize(self.context, sloppy);
+        self.tree
     }
 
     // ------------------------------------------------------------------------
@@ -449,11 +461,13 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 break Ok(next);
             }
             match self.input.next() {
-                Some(LocatedToken { location: _, token: Token::DocComment(dc) }) => {
-                    // TODO: track file-level EnclosingItem comments here
+                Some(LocatedToken { location, token: Token::DocComment(dc) }) => {
                     match dc.target {
-                        DocTarget::FollowingItem => dc.merge_into(&mut self.docs_following),
+                        DocTarget::EnclosingItem if self.in_docs == 0 => {
+                            self.module_docs.entry(location.file).or_default().push(dc);
+                        },
                         DocTarget::EnclosingItem => dc.merge_into(&mut self.docs_enclosing),
+                        DocTarget::FollowingItem => dc.merge_into(&mut self.docs_following),
                     }
                 }
                 Some(token) => {
@@ -554,7 +568,9 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     fn doc_comment<R, F: FnOnce(&mut Self) -> Status<R>>(&mut self, f: F) -> Status<(Option<DocComment>, R)> {
         let enclosing = self.docs_enclosing.take();
         let mut docs = self.docs_following.take();
+        self.in_docs += 1;
         let result = f(self);
+        self.in_docs -= 1;
         if let Some(c) = ::std::mem::replace(&mut self.docs_enclosing, enclosing) {
             c.merge_into(&mut docs);
         }

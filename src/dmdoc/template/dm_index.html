@@ -6,9 +6,9 @@
 <h3>Modules</h3>
 <ul>
 {%- for path, details in modules %}
-    <li><a href="{{ details.filename | safe }}.html" title="{{ details.defines | length}} macros">{{path}}</a></li>
+    <li><a href="{{ details.filename | safe }}.html" title="{{ details.defines | length}} macros">{{path}}</a>
     {%- if details.name %}: {{ details.name }} {% endif -%}
-    {%- if details.docs %} - {{ details.docs.teaser | md(teaser=true) }}{% endif -%}
+    {%- if details.docs %} - {{ details.docs.teaser | md(teaser=true) }}{% endif -%}</li>
 {% endfor %}
 </ul>
 {% endif %}

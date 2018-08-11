@@ -27,11 +27,14 @@ impl DocComment {
         if self.is_empty() {
             return;
         }
-        // TODO: if `kind` differs, pre-simplify?
         match *other {
             None => *other = Some(self),
             Some(ref mut it) => {
-                it.text = format!("{}\n{}", it.text, self.text);
+                let extra_newline = match (it.kind, self.kind) {
+                    (CommentKind::Block, CommentKind::Block) => "\n",
+                    _ => "",
+                };
+                it.text = format!("{}\n{}{}", it.text, extra_newline, self.text);
             }
         }
     }

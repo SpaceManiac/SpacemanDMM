@@ -77,10 +77,14 @@ fn main() -> Result<(), Box<std::error::Error>> {
     let mut context = dm::Context::default();
     context.set_print_severity(Some(dm::Severity::Error));
     let mut pp = dm::preprocessor::Preprocessor::new(&context, environment.clone())?;
-    let objtree = {
+    let (module_docs, objtree);
+    {
         let indents = dm::indents::IndentProcessor::new(&context, &mut pp);
-        dm::parser::Parser::new(&context, indents).parse_object_tree()
-    };
+        let mut parser = dm::parser::Parser::new(&context, indents);
+        parser.run();
+        module_docs = parser.take_module_docs();
+        objtree = parser.finalize_object_tree();
+    }
     pp.finalize();
 
     // collate types which have docs
@@ -166,6 +170,8 @@ fn main() -> Result<(), Box<std::error::Error>> {
     let mut modules = BTreeMap::<PathBuf, Module>::new();
     let mut macro_count = 0;
     for (range, (name, define)) in pp.history().iter() {
+        progress.update(&format!("#define {}", name));
+
         let (docs, has_params, params, is_variadic);
         match define {
             dm::preprocessor::Define::Constant { docs: Some(dc), .. } => {
@@ -190,13 +196,38 @@ fn main() -> Result<(), Box<std::error::Error>> {
             }
         };
 
-        let module = modules.entry(context.file_path(range.start.file)).or_insert_with(|| {
-            let mut module = Module::default();
-            module.filename = context.file_path(range.start.file).display().to_string().replace(".dm", "");
-            module
-        });
+        let module = modules.entry(context.file_path(range.start.file)).or_default();
         module.defines.insert(name, Define { docs, has_params, params, is_variadic });
         macro_count += 1;
+    }
+    for (file, comment_vec) in module_docs {
+        let file_path = context.file_path(file);
+        progress.update(&file_path.display().to_string());
+
+        let mut docs: Option<dm::docs::DocComment> = None;
+        for each in comment_vec {
+            if let Some(ref mut docs) = docs {
+                docs.text.push_str("\n");
+            }
+            each.merge_into(&mut docs);
+        }
+        let docs = match docs {
+            Some(docs) => docs,
+            None => continue,
+        };
+        let docs = match parse_md_docblock(&docs.text) {
+            Ok(block) => block,
+            Err(e) => {
+                progress.println(&format!("{}: {}", file_path.display(), e));
+                continue;
+            }
+        };
+
+        let module = modules.entry(file_path).or_default();
+        module.docs = Some(docs);
+    }
+    for (k, v) in modules.iter_mut() {
+        v.filename = k.with_extension("").display().to_string().replace("\\", "/");
     }
 
     drop(progress);
