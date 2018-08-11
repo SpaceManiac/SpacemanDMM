@@ -48,3 +48,9 @@ table.summary th, table.summary td {
 a.no-items {
     color: #888888;
 }
+a:target {
+    background-color: white;
+    border-radius: 5px;
+    padding: 0 3px;
+    margin: 0 -3px;
+}
