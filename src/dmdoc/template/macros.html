@@ -1,7 +1,9 @@
-{% macro doc_block(block) %}
+{% macro doc_block(block) -%}
     {{ block.teaser | md }}
-    {% if block.description %}
+    {%- if block.description -%}
         {{ block.description | md }}
-    {% endif %}
-    {# TODO: sections #}
+    {%- endif %}
+    {%- if block.sections -%}
+        <p>(dmdoc TODO: sections)</p>
+    {%- endif %}
 {% endmacro doc_block %}

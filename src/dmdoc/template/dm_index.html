@@ -4,7 +4,9 @@
 <h1>{{ env.world_name }}</h1>
 <ul>
 {% for path, details in types %}
-    <li><a href="{{ details.filename | safe }}.html">{{path}}</a>
+    <li><a href="{{ details.filename | safe }}.html" title="{{ details.vars | length }} vars, {{ details.procs | length }} procs"
+        {%- if not details.docs.description and not details.vars and not details.procs %} class="no-items"{% endif -%}
+        >{{path}}</a>
     {%- if details.name %} ({{ details.name }}) {% endif -%}
     {%- if details.docs %} - {{ details.docs.teaser | md(teaser=true) }}{% endif -%}
 </li>

@@ -57,6 +57,12 @@ fn main() -> Result<(), Box<std::error::Error>> {
         }
         _ => Err("linkify_type() input must be string".into()),
     });
+    tera.register_filter("length", |input, _opts| match input {
+        tera::Value::String(s) => Ok(s.len().into()),
+        tera::Value::Array(a) => Ok(a.len().into()),
+        tera::Value::Object(o) => Ok(o.len().into()),
+        _ => Ok(0 .into()),
+    });
 
     // parse environment
     let context = dm::Context::default();

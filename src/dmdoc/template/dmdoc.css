@@ -31,3 +31,6 @@ table.summary th, table.summary td {
     text-align: left;
     vertical-align: top;
 }
+a.no-items {
+    color: #888888;
+}
