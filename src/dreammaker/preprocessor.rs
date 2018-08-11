@@ -6,8 +6,9 @@ use std::path::{Path, PathBuf};
 
 use interval_tree::{IntervalTree, range};
 
-use super::lexer::*;
 use super::{DMError, Location, HasLocation, FileId, Context, Severity};
+use super::lexer::*;
+use super::docs::{DocComment, DocTarget};
 
 // ----------------------------------------------------------------------------
 // Macro representation and predefined macros
@@ -16,11 +17,13 @@ use super::{DMError, Location, HasLocation, FileId, Context, Severity};
 pub enum Define {
     Constant {
         subst: Vec<Token>,
+        docs: Option<DocComment>,
     },
     Function {
         params: Vec<String>,
         subst: Vec<Token>,
         variadic: bool,
+        docs: Option<DocComment>,
     },
 }
 
@@ -246,6 +249,9 @@ pub struct Preprocessor<'ctx> {
     last_printable_input_loc: Location,
     danger_idents: HashMap<String, Location>,
     in_interp_string: u32,
+
+    docs_in: VecDeque<(Location, DocComment)>,
+    docs_out: VecDeque<(Location, DocComment)>,
 }
 
 impl<'ctx> HasLocation for Preprocessor<'ctx> {
@@ -288,6 +294,8 @@ impl<'ctx> Preprocessor<'ctx> {
             last_printable_input_loc: Default::default(),
             output: Default::default(),
             danger_idents: Default::default(),
+            docs_in: Default::default(),
+            docs_out: Default::default(),
             in_interp_string: 0,
         })
     }
@@ -341,6 +349,8 @@ impl<'ctx> Preprocessor<'ctx> {
             last_printable_input_loc: location,
             output: Default::default(),
             danger_idents: Default::default(),
+            docs_in: Default::default(),
+            docs_out: Default::default(),
             in_interp_string: 0,
         }
     }
@@ -433,6 +443,14 @@ impl<'ctx> Preprocessor<'ctx> {
                 false
             }
         }
+    }
+
+    // ------------------------------------------------------------------------
+    // Doc comments
+
+    /// Something other than a `#define` was encountered, docs are not for us.
+    fn flush_docs(&mut self) {
+        self.docs_out.extend(self.docs_in.drain(..));
     }
 
     // ------------------------------------------------------------------------
@@ -571,6 +589,19 @@ impl<'ctx> Preprocessor<'ctx> {
                     // both constant and function defines
                     "define" if disabled => {}
                     "define" => {
+                        let mut docs = None;
+                        // accumulate just-seen Following doc comments
+                        while let Some((loc, doc)) = self.docs_in.pop_back() {
+                            if doc.target == DocTarget::FollowingItem {
+                                doc.merge_into(&mut docs);
+                            } else {
+                                self.docs_in.push_back((loc, doc));
+                                break;
+                            }
+                        }
+                        // flush all docs which do not apply to this define
+                        self.flush_docs();
+
                         expect_token!((define_name, ws) = Token::Ident(define_name, ws));
                         let define_name_loc = _last_expected_loc;
                         self.check_danger_ident(&define_name, "defined");
@@ -607,6 +638,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                     }
                                 }
                                 Token::Punct(Punctuation::Newline) => break 'outer,
+                                Token::DocComment(doc) => doc.merge_into(&mut docs),
                                 other => {
                                     subst.push(other);
                                 }
@@ -614,14 +646,15 @@ impl<'ctx> Preprocessor<'ctx> {
                             loop {
                                 match next!() {
                                     Token::Punct(Punctuation::Newline) => break 'outer,
+                                    Token::DocComment(doc) => doc.merge_into(&mut docs),
                                     other => subst.push(other),
                                 }
                             }
                         }
                         let define = if params.is_empty() {
-                            Define::Constant { subst }
+                            Define::Constant { subst, docs }
                         } else {
-                            Define::Function { params, subst, variadic }
+                            Define::Function { params, subst, variadic, docs }
                         };
                         // DEBUG can only be defined in the root .dme file
                         if define_name != "DEBUG" || self.in_environment() {
@@ -682,6 +715,8 @@ impl<'ctx> Preprocessor<'ctx> {
             _ if disabled => return Ok(()),
             // identifiers may be macros
             Token::Ident(ref ident, _) if ident != self.include_stack.top_no_expand() => {
+                self.flush_docs();
+
                 // lint for BYOND bug
                 if self.in_interp_string > 0 {
                     self.danger_idents.insert(ident.clone(), self.last_input_loc);
@@ -704,7 +739,7 @@ impl<'ctx> Preprocessor<'ctx> {
 
                 // if it's a define, perform the substitution
                 match self.defines.get(ident).cloned() { // TODO
-                    Some((_, Define::Constant { subst })) => {
+                    Some((_, Define::Constant { subst, docs: _ })) => {
                         let e = Include::Expansion {
                             name: ident.to_owned(),
                             tokens: subst.into_iter().collect(),
@@ -713,7 +748,7 @@ impl<'ctx> Preprocessor<'ctx> {
                         self.include_stack.stack.push(e);
                         return Ok(());
                     }
-                    Some((_, Define::Function { ref params, ref subst, variadic })) => {
+                    Some((_, Define::Function { ref params, ref subst, variadic, docs: _ })) => {
                         // if it's not followed by an LParen, it isn't really a function call
                         match next!() {
                             Token::Punct(Punctuation::LParen) => {}
@@ -850,8 +885,16 @@ impl<'ctx> Preprocessor<'ctx> {
             }
             Token::InterpStringBegin(_) => self.in_interp_string += 1,
             Token::InterpStringEnd(_) => self.in_interp_string -= 1,
+            // documentation is accumulated, and flushed if no #define follows
+            Token::DocComment(doc) => {
+                self.docs_in.push_back((self.last_input_loc, doc));
+                return Ok(());
+            },
             // everything else is itself
             _ => {}
+        }
+        if !read.is_whitespace() {
+            self.flush_docs();
         }
         self.output.push_back(read);
         Ok(())
@@ -863,6 +906,13 @@ impl<'ctx> Iterator for Preprocessor<'ctx> {
 
     fn next(&mut self) -> Option<LocatedToken> {
         loop {
+            if let Some((location, doc)) = self.docs_out.pop_front() {
+                return Some(LocatedToken {
+                    location,
+                    token: Token::DocComment(doc),
+                });
+            }
+
             if let Some(token) = self.output.pop_front() {
                 return Some(LocatedToken {
                     location: self.last_input_loc,

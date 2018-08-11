@@ -18,7 +18,7 @@ pub fn default_defines(defines: &mut DefineMap) {
         ($($i:ident = $($x:expr),*;)*) => {
             $(
                 assert!(defines.insert(
-                    stringify!($i).into(), (location, Define::Constant { subst: vec![$($x),*] })
+                    stringify!($i).into(), (location, Define::Constant { subst: vec![$($x),*], docs: None })
                 ).is_none(), stringify!($i));
             )*
         }
