@@ -1,5 +1,5 @@
 body {
-    margin: 5% auto;
+    margin: auto;
     background: #f4f4f4;
     color: #333333;
     font-size: 16px;
@@ -12,4 +12,13 @@ code {
 }
 a {
     color: #333333;
+}
+article {
+    margin: 2.5% auto;
+}
+header, footer {
+    margin: 2.5% auto;
+    border: 1px solid #444444;
+    border-radius: 5px;
+    padding: 5px;
 }

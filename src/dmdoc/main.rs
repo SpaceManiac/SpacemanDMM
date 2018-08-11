@@ -15,6 +15,9 @@ use std::path::Path;
 
 use docstrings::{DocBlock, parse_md_docblock};
 
+// ----------------------------------------------------------------------------
+// Driver
+
 fn main() -> Result<(), Box<std::error::Error>> {
     // TODO: command-line args
     let output_path: &Path = "docs".as_ref();
@@ -119,6 +122,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
             .and_then(|v| v.value.constant.as_ref())
             .and_then(|c| c.as_str())
             .unwrap_or(""),
+        dmdoc_version: env!("CARGO_PKG_VERSION"),
     };
 
     {
@@ -166,6 +170,9 @@ fn main() -> Result<(), Box<std::error::Error>> {
     Ok(())
 }
 
+// ----------------------------------------------------------------------------
+// Helpers
+
 /// Create the parent dirs of a file and then itself.
 fn create(path: &Path) -> io::Result<File> {
     if let Some(parent) = path.parent() {
@@ -197,21 +204,6 @@ fn render_markdown(markdown: &str, summary: bool) -> String {
     buf
 }
 
-/// A parsed documented type.
-#[derive(Default, Serialize)]
-struct ParsedType<'a> {
-    own: Option<DocBlock>,
-    vars: BTreeMap<&'a str, DocBlock>,
-    procs: BTreeMap<&'a str, DocBlock>,
-    filename: &'a str,
-}
-
-#[derive(Serialize)]
-struct Environment<'a> {
-    filename: &'a str,
-    world_name: &'a str,
-}
-
 /// Helper for printing progress information.
 #[derive(Default)]
 struct Progress {
@@ -241,4 +233,23 @@ impl Drop for Progress {
         self.update("");
         print!("\r");
     }
+}
+
+// ----------------------------------------------------------------------------
+// Templating structs
+
+/// A parsed documented type.
+#[derive(Default, Serialize)]
+struct ParsedType<'a> {
+    own: Option<DocBlock>,
+    vars: BTreeMap<&'a str, DocBlock>,
+    procs: BTreeMap<&'a str, DocBlock>,
+    filename: &'a str,
+}
+
+#[derive(Serialize)]
+struct Environment<'a> {
+    filename: &'a str,
+    world_name: &'a str,
+    dmdoc_version: &'a str,
 }

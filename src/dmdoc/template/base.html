@@ -7,8 +7,12 @@
     <title>{% block title %}{% endblock title %} - {{ env.world_name }}</title>
 {% endblock head %}</head>
 <body>
-<header>{% block header %}{% endblock header %}</header>
+<header>{% block header %}
+    {{ env.world_name }}
+{% endblock header %}</header>
 <article>{% block content %}{% endblock content %}</article>
-<footer>{% block footer %}{% endblock footer %}</footer>
+<footer>{% block footer %}
+    {{ env.filename }} &mdash; dmdoc {{ env.dmdoc_version }}
+{% endblock footer %}</footer>
 </body>
 </html>
