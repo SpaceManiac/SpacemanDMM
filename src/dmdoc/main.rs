@@ -205,11 +205,15 @@ fn main() -> Result<(), Box<std::error::Error>> {
         progress.update(&file_path.display().to_string());
 
         let mut docs: Option<dm::docs::DocComment> = None;
-        for each in comment_vec {
-            if let Some(ref mut docs) = docs {
-                docs.text.push_str("\n");
+        let mut last_line = 0;
+        for (line, doc) in comment_vec {
+            if line > last_line + 1 {
+                if let Some(ref mut docs) = docs {
+                    docs.text.push_str("\n");
+                }
             }
-            each.merge_into(&mut docs);
+            doc.merge_into(&mut docs);
+            last_line = line;
         }
         let docs = match docs {
             Some(docs) => docs,

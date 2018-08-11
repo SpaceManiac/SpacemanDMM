@@ -339,7 +339,7 @@ pub struct Parser<'ctx, 'an, I> {
 
     docs_following: Option<DocComment>,
     docs_enclosing: Option<DocComment>,
-    module_docs: BTreeMap<FileId, Vec<DocComment>>,
+    module_docs: BTreeMap<FileId, Vec<(u32, DocComment)>>,
     in_docs: usize,
 
     procs: bool,
@@ -407,7 +407,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         }
     }
 
-    pub fn take_module_docs(&mut self) -> BTreeMap<FileId, Vec<DocComment>> {
+    pub fn take_module_docs(&mut self) -> BTreeMap<FileId, Vec<(u32, DocComment)>> {
         ::std::mem::replace(&mut self.module_docs, Default::default())
     }
 
@@ -464,7 +464,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 Some(LocatedToken { location, token: Token::DocComment(dc) }) => {
                     match dc.target {
                         DocTarget::EnclosingItem if self.in_docs == 0 => {
-                            self.module_docs.entry(location.file).or_default().push(dc);
+                            self.module_docs.entry(location.file).or_default().push((location.line, dc));
                         },
                         DocTarget::EnclosingItem => dc.merge_into(&mut self.docs_enclosing),
                         DocTarget::FollowingItem => dc.merge_into(&mut self.docs_following),
