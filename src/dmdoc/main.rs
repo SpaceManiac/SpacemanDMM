@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::cell::RefCell;
 use std::io::{self, Write};
 use std::fs::{self, File};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use docstrings::{DocBlock, parse_md_docblock};
 
@@ -65,7 +65,6 @@ fn main() -> Result<(), Box<std::error::Error>> {
     });
 
     // parse environment
-    let context = dm::Context::default();
     let environment = match dm::detect_environment("tgstation.dme")? {
         Some(env) => env,
         None => {
@@ -74,7 +73,15 @@ fn main() -> Result<(), Box<std::error::Error>> {
         }
     };
     println!("parsing {}", environment.display());
-    let objtree = context.parse_environment(&environment)?;
+
+    let mut context = dm::Context::default();
+    context.set_print_severity(Some(dm::Severity::Error));
+    let mut pp = dm::preprocessor::Preprocessor::new(&context, environment.clone())?;
+    let objtree = {
+        let indents = dm::indents::IndentProcessor::new(&context, &mut pp);
+        dm::parser::Parser::new(&context, indents).parse_object_tree()
+    };
+    pp.finalize();
 
     // collate types which have docs
     println!("collating documented types");
@@ -154,12 +161,52 @@ fn main() -> Result<(), Box<std::error::Error>> {
             types_with_docs.insert(ty.get().pretty_path(), parsed_type);
         }
     });
+
+    // collate documented modules
+    let mut modules = BTreeMap::<PathBuf, Module>::new();
+    let mut macro_count = 0;
+    for (range, (name, define)) in pp.history().iter() {
+        let (docs, has_params, params, is_variadic);
+        match define {
+            dm::preprocessor::Define::Constant { docs: Some(dc), .. } => {
+                docs = dc;
+                has_params = false;
+                params = &[][..];
+                is_variadic = false;
+            }
+            dm::preprocessor::Define::Function { docs: Some(dc), params: macro_params, variadic, .. } => {
+                docs = dc;
+                has_params = true;
+                params = macro_params;
+                is_variadic = *variadic;
+            }
+            _ => continue,
+        }
+        let docs = match parse_md_docblock(&docs.text) {
+            Ok(block) => block,
+            Err(e) => {
+                progress.println(&format!("#define {}: {}", name, e));
+                continue;
+            }
+        };
+
+        let module = modules.entry(context.file_path(range.start.file)).or_insert_with(|| {
+            let mut module = Module::default();
+            module.filename = context.file_path(range.start.file).display().to_string().replace(".dm", "");
+            module
+        });
+        module.defines.insert(name, Define { docs, has_params, params, is_variadic });
+        macro_count += 1;
+    }
+
     drop(progress);
     if count == 0 {
-        println!("none of {} types have documentation", count);
-        return Ok(());
+        println!("documenting 0/0 types");
     } else {
         println!("documenting {}/{} types ({}%)", types_with_docs.len(), count, (types_with_docs.len() * 100 / count));
+    }
+    if !modules.is_empty() {
+        println!("documenting {} macros in {} modules", macro_count, modules.len());
     }
 
     ALL_TYPE_NAMES.with(|all| {
@@ -190,6 +237,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
         struct Index<'a> {
             env: &'a Environment<'a>,
             types: &'a BTreeMap<&'a str, ParsedType<'a>>,
+            modules: &'a BTreeMap<PathBuf, Module<'a>>,
         }
 
         progress.update("index.html");
@@ -197,6 +245,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
         index.write_all(tera.render("dm_index.html", &Index {
             env,
             types: &types_with_docs,
+            modules: &modules,
         })?.as_bytes())?;
     }
 
@@ -214,7 +263,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
         progress.update(&fname);
 
         let mut base = String::new();
-        for _ in  fname.chars().filter(|&x| x == '/') {
+        for _ in fname.chars().filter(|&x| x == '/') {
             base.push_str("../");
         }
 
@@ -225,6 +274,32 @@ fn main() -> Result<(), Box<std::error::Error>> {
             path,
             details,
             types: &types_with_docs,
+        })?.as_bytes())?;
+    }
+
+    for (path, details) in modules.iter() {
+        #[derive(Serialize)]
+        struct ModuleArgs<'a> {
+            env: &'a Environment<'a>,
+            base_href: &'a str,
+            path: &'a Path,
+            details: &'a Module<'a>,
+        }
+
+        let fname = format!("{}.html", details.filename);
+        progress.update(&fname);
+
+        let mut base = String::new();
+        for _ in fname.chars().filter(|&x| x == '/') {
+            base.push_str("../");
+        }
+
+        let mut f = create(&output_path.join(&fname))?;
+        f.write_all(tera.render("dm_module.html", &ModuleArgs {
+            env,
+            base_href: &base,
+            path,
+            details,
         })?.as_bytes())?;
     }
     drop(progress);
@@ -343,4 +418,20 @@ struct Proc {
 struct Param {
     name: String,
     type_path: String,
+}
+
+#[derive(Default, Serialize)]
+struct Module<'a> {
+    name: &'a str,
+    docs: Option<DocBlock>,
+    defines: BTreeMap<&'a str, Define<'a>>,
+    filename: String,
+}
+
+#[derive(Serialize)]
+struct Define<'a> {
+    docs: DocBlock,
+    has_params: bool,
+    params: &'a [String],
+    is_variadic: bool,
 }

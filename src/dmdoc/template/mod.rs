@@ -9,6 +9,7 @@ pub fn builtin() -> Result<Tera, ::tera::Error> {
         ("base.html", include_str!("base.html")),
         ("dm_index.html", include_str!("dm_index.html")),
         ("dm_type.html", include_str!("dm_type.html")),
+        ("dm_module.html", include_str!("dm_module.html")),
     ])?;
     Ok(tera)
 }

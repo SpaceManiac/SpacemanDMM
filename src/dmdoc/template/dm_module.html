@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% import "macros.html" as macros %}
+{% block title %}{{ path }}{% endblock %}
+{% block content %}
+<h1>{% if details.name -%}
+    {{ details.name }} <aside>{{ path | safe }}</aside>
+{%- else -%}
+    {{ path | safe }}
+{%- endif %}</h1>
+
+{%- if details.docs -%}
+    {{ macros::doc_block(block=details.docs) }}
+{%- endif -%}
+
+{%- if details.defines -%}
+<table class="summary" cellspacing="0">
+    <tr><td colspan="2"><h2>Macro definitions</h2></td></tr>
+    {%- for name, define in details.defines %}
+        <tr><th><a href="{{details.filename|safe}}.html#define/{{name}}">{{name}}</a></th><td>{{ define.docs.teaser | md(teaser=true) }}</td></tr>
+    {%- endfor -%}
+</table>
+
+<h2>Define Details</h2>
+{%- for name, define in details.defines -%}
+    <h3>
+        <aside class="declaration">#define </aside><a name="define/{{ name }}">{{ name }}</a>
+        {%- if define.has_params %}
+            <aside>(
+            {%- for param in define.params -%}
+                {% if not loop.first %}, {% endif -%}
+                {{ param }}
+            {%- endfor -%}
+            {%- if define.variadic %} ...{% endif -%}
+            )</aside>
+        {%- endif -%}
+    </h3>
+    {{ macros::doc_block(block=define.docs) }}
+{%- endfor -%}
+{%- endif -%}
+{% endblock content %}
