@@ -589,15 +589,19 @@ impl<'ctx> Preprocessor<'ctx> {
                     // both constant and function defines
                     "define" if disabled => {}
                     "define" => {
-                        let mut docs = None;
                         // accumulate just-seen Following doc comments
+                        let mut our_docs = Vec::new();
                         while let Some((loc, doc)) = self.docs_in.pop_back() {
                             if doc.target == DocTarget::FollowingItem {
-                                doc.merge_into(&mut docs);
+                                our_docs.push(doc);
                             } else {
                                 self.docs_in.push_back((loc, doc));
                                 break;
                             }
+                        }
+                        let mut docs = None;
+                        for each in our_docs.into_iter().rev() {
+                            each.merge_into(&mut docs);
                         }
                         // flush all docs which do not apply to this define
                         self.flush_docs();

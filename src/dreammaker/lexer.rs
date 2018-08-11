@@ -532,7 +532,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         let mut comment = None;
         match self.next() {
             Some(b'/') => comment = Some(DocComment::new(CommentKind::Line, DocTarget::FollowingItem)),
-            Some(b'!') => comment = Some(DocComment::new(CommentKind::Line, DocTarget::FollowingItem)),
+            Some(b'!') => comment = Some(DocComment::new(CommentKind::Line, DocTarget::EnclosingItem)),
             Some(b'\n') => { self.put_back(Some(b'\n')); return None },
             Some(b'\\') => backslash = true,
             _ => {}
