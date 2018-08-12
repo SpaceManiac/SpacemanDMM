@@ -12,8 +12,12 @@
     {% if item and item.file %}
         {% set file = item.file %}
     {% endif %}
-    {%- if env.git.web_url and env.git.revision and file %}
-        <a href="{{ env.git.web_url | safe }}/blob/{{ env.git.revision }}/{{ file | safe }}
-        {%- if item.line %}#L{{ item.line }}{% endif %}"><img src="git.png" width="16" height="16"/></a>
+    {%- if file -%}
+        {%- if env.git.web_url and env.git.revision %}
+            <a href="{{ env.git.web_url | safe }}/blob/{{ env.git.revision }}/{{ file | safe }}
+            {%- if item.line %}#L{{ item.line }}{% endif %}">
+        {%- endif %}
+        <img src="git.png" width="16" height="16" title="{{ file }}{% if item.line %} {{ item.line }}{% endif %}"/>
+        {%- if env.git.web_url and env.git.revision %}</a>{% endif %}
     {%- endif -%}
 {%- endmacro git_link %}
