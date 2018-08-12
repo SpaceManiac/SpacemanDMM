@@ -63,6 +63,17 @@ fn main() -> Result<(), Box<std::error::Error>> {
         tera::Value::Object(o) => Ok(o.len().into()),
         _ => Ok(0 .into()),
     });
+    tera.register_filter("substring", |input, opts| match input {
+        tera::Value::String(s) => {
+            let start = opts.get("start").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+            let mut end = opts.get("end").and_then(|v| v.as_u64()).map(|s| s as usize).unwrap_or(s.len());
+            if end > s.len() {
+                end = s.len();
+            }
+            Ok(s[start..end].into())
+        }
+        _ => Err("substring() input must be string".into()),
+    });
 
     // parse environment
     let environment = match dm::detect_environment("tgstation.dme")? {
@@ -153,6 +164,9 @@ fn main() -> Result<(), Box<std::error::Error>> {
         if let Some(ref docs) = ty.docs {
             match parse_md_docblock(&docs.text) {
                 Ok(block) => {
+                    if let Some(module) = modules.get_mut(&context.file_path(ty.location.file)) {
+                        module.items_wip.push((ty.location.line, ModuleItem::Type { path: ty.get().pretty_path(), teaser: block.teaser.clone() }));
+                    }
                     parsed_type.docs = Some(block);
                     anything = true;
                 }
@@ -494,6 +508,11 @@ enum ModuleItem<'a> {
     #[serde(rename="define")]
     Define {
         name: &'a str,
+        teaser: String,
+    },
+    #[serde(rename="type")]
+    Type {
+        path: &'a str,
         teaser: String,
     },
 }

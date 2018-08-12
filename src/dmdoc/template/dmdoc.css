@@ -36,7 +36,7 @@ aside.declaration {
     right: 105px;
     font-style: italic;
 }
-table.summary tr:first-child h2 {
+table.summary tr:first-child h1, table.summary tr:first-child h2 {
     margin-top: 0;
 }
 table.summary th, table.summary td {

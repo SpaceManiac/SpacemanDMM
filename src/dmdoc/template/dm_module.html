@@ -17,7 +17,9 @@
         {% if item.docs -%}
             <tr><td colspan="2">{{ item.docs | md }}</td></tr>
         {%- elif item.define -%}
-            <tr><th width="0"><a href="{{details.filename|safe}}.html#define/{{item.define.name}}">{{item.define.name}}</a></th><td>{{ item.define.teaser | md(teaser=true) }}</td></tr>
+            <tr><th><a href="{{ details.filename | safe }}.html#define/{{item.define.name}}">{{item.define.name}}</a></th><td>{{ item.define.teaser | md(teaser=true) }}</td></tr>
+        {%- elif item.type -%}
+            <tr><th><a href="{{ item.type.path | safe | substring(start=1) }}.html">{{item.type.path}}</a></th><td>{{ item.type.teaser | md(teaser=true) }}</td></tr>
         {%- endif %}
     {%- endfor -%}
 </table>
