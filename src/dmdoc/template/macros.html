@@ -8,12 +8,12 @@
     {%- endif %}
 {% endmacro doc_block %}
 
-{% macro source_link(env, item, file) -%}
-    {% if item.file %}
+{% macro git_link(env, item=false, file=false) -%}
+    {% if item and item.file %}
         {% set file = item.file %}
     {% endif %}
     {%- if env.git.web_url and env.git.revision and file %}
         <a href="{{ env.git.web_url | safe }}/blob/{{ env.git.revision }}/{{ file | safe }}
-        {%- if item.line %}#L{{ item.line }}{% endif %}"><img src="git.png" width="16" height="16" alt="Git" class="git"/></a>
+        {%- if item.line %}#L{{ item.line }}{% endif %}"><img src="git.png" width="16" height="16"/></a>
     {%- endif -%}
-{%- endmacro source_link %}
+{%- endmacro git_link %}

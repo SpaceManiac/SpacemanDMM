@@ -187,6 +187,8 @@ fn main() -> Result<(), Box<std::error::Error>> {
                             docs: block,
                             type_path: path,
                             decl: if var.declaration.is_some() { "var" } else { "" },
+                            file: context.file_path(var.value.location.file),
+                            line: var.value.location.line,
                         });
                         anything = true;
                     }
@@ -210,6 +212,8 @@ fn main() -> Result<(), Box<std::error::Error>> {
                                 Some(ref decl) => if decl.is_verb { "verb" } else { "proc" },
                                 None => "",
                             },
+                            file: context.file_path(proc_value.location.file),
+                            line: proc_value.location.line,
                         });
                         anything = true;
                     }
@@ -219,6 +223,8 @@ fn main() -> Result<(), Box<std::error::Error>> {
         }
 
         if anything {
+            parsed_type.file = context.file_path(ty.location.file);
+            parsed_type.line = ty.location.line;
             if ty.is_root() {
                 parsed_type.htmlname = "global";
             } else {
@@ -546,6 +552,8 @@ struct ParsedType<'a> {
     vars: BTreeMap<&'a str, Var>,
     procs: BTreeMap<&'a str, Proc>,
     htmlname: &'a str,
+    file: PathBuf,
+    line: u32,
 }
 
 #[derive(Serialize)]
@@ -553,6 +561,8 @@ struct Var {
     docs: DocBlock,
     decl: &'static str,
     type_path: String,
+    file: PathBuf,
+    line: u32,
 }
 
 #[derive(Serialize)]
@@ -560,6 +570,8 @@ struct Proc {
     docs: DocBlock,
     decl: &'static str,
     params: Vec<Param>,
+    file: PathBuf,
+    line: u32,
 }
 
 #[derive(Serialize)]

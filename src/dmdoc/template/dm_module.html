@@ -6,7 +6,7 @@
     {{ details.name }} <aside>{{ path | safe }}</aside>
 {%- else -%}
     {{ path | safe }}
-{%- endif %}</h1>
+{%- endif %} {{ macros::git_link(env=env, file=path) }}</h1>
 
 {%- if details.docs -%}
     {{ macros::doc_block(block=details.docs) }}
@@ -37,7 +37,7 @@
             {%- if define.variadic %} ...{% endif -%}
             )</aside>
         {%- endif -%}
-        {{ macros::source_link(env=env, item=define, file=path) }}
+        {{ macros::git_link(env=env, item=define, file=path) }}
     </h3>
     {{ macros::doc_block(block=define.docs) }}
 {%- endfor -%}

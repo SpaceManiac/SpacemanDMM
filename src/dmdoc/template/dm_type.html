@@ -6,7 +6,7 @@
     {{ details.name }} <aside>{{ path | safe | linkify_type }}</aside>
 {%- else -%}
     {{ path | safe | linkify_type }}
-{%- endif %}</h1>
+{%- endif %} {{ macros::git_link(env=env, item=details) }}</h1>
 
 {%- if details.docs -%}
     {{ macros::doc_block(block=details.docs) }}
@@ -37,7 +37,8 @@
         {%- if var.decl -%}
             <aside class="declaration">{{ var.decl }} </aside>
         {%- endif -%}
-        <a name="var/{{ name }}">{{ name }}</a> <aside>&ndash; {{ var.type_path | safe | linkify_type }}</aside></h3>
+        <a name="var/{{ name }}">{{ name }}</a> <aside>&ndash; {{ var.type_path | safe | linkify_type }}</aside>
+        {{ macros::git_link(env=env, item=var) }}</h3>
         {{ macros::doc_block(block=var.docs) }}
     {%- endfor -%}
 {% endif %}
@@ -54,7 +55,7 @@
                 {% if not loop.first %}, {% endif -%}
                 {% if param.type_path %}{{ param.type_path | safe | linkify_type }}/{% endif %}{{ param.name }}
             {%- endfor -%}
-            )</aside>
+            ) {{ macros::git_link(env=env, item=proc) }}</aside>
         </h3>
         {{ macros::doc_block(block=proc.docs) }}
     {%- endfor -%}

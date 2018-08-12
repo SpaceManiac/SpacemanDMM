@@ -54,6 +54,6 @@ a:target {
     padding: 0 3px;
     margin: 0 -3px;
 }
-img.git {
+img[src="git.png"] {
     opacity: 0.8;
 }
