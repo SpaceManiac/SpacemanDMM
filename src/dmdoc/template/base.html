@@ -11,7 +11,20 @@
 {% endblock header %}</header>
 <article>{% block content %}{% endblock content %}</article>
 <footer>{% block footer %}
-    {{ env.filename }} &mdash; dmdoc {{ env.dmdoc_version }}
+    {{ env.filename }}
+    {% if env.git.revision -%}
+        {%- if env.git.web_url -%}
+            <a href="{{env.git.web_url}}/tree/{{env.git.revision}}">{{ env.git.revision | substring(end=7) }}</a>
+        {%- else -%}
+            {{ env.git.revision }}
+        {%- endif -%}
+        {%- if env.git.branch %}
+        ({{ env.git.branch }}
+            {%- if env.git.remote_branch and env.git.remote_branch != env.git.branch %}
+                &rightarrow; {{ env.git.remote_branch }}
+            {%- endif -%}
+        ){% endif %}
+    {%- endif %} &mdash; dmdoc {{ env.dmdoc.version }}
 {% endblock footer %}</footer>
 </body>
 </html>

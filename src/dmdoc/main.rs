@@ -4,6 +4,7 @@ extern crate dreammaker as dm;
 extern crate docstrings;
 extern crate pulldown_cmark;
 extern crate tera;
+extern crate git2;
 #[macro_use] extern crate serde_derive;
 
 mod template;
@@ -277,19 +278,28 @@ fn main() -> Result<(), Box<std::error::Error>> {
         progress.update(name);
         create(&output_path.join(name))?.write_all(contents)?;
     }
+    drop(progress);
 
-    progress.println("rendering html");
     let env_filename = environment.display().to_string();
-    let env = &Environment {
+    let mut env = Environment {
+        dmdoc: DmDoc {
+            version: env!("CARGO_PKG_VERSION"),
+        },
         filename: &env_filename,
         world_name: objtree.find("/world")
             .and_then(|w| w.get().vars.get("name"))
             .and_then(|v| v.value.constant.as_ref())
             .and_then(|c| c.as_str())
             .unwrap_or(""),
-        dmdoc_version: env!("CARGO_PKG_VERSION"),
+        git: Default::default(),
     };
+    if let Err(e) = git_info(&mut env.git) {
+        println!("incomplete git info: {}", e);
+    }
+    let env = &env;
 
+    progress = Progress::default();
+    progress.println("rendering html");
     {
         #[derive(Serialize)]
         struct Index<'a> {
@@ -407,6 +417,72 @@ fn render_markdown(markdown: &str, summary: bool) -> String {
     buf
 }
 
+fn git_info(git: &mut Git) -> Result<(), git2::Error> {
+    macro_rules! req {
+        ($e:expr) => { match $e { Some(x) => x, None => {
+            println!("incomplete git info: malformed or non-utf8 name");
+            return Ok(());
+        }}}
+    }
+
+    // get the revision
+    let repo = git2::Repository::open_from_env()?;
+    let head = repo.head()?;
+    let head_oid = head.peel_to_commit()?.id();
+    git.revision = head_oid.to_string();
+
+    if !head.is_branch() {
+        println!("incomplete git info: HEAD is not a branch");
+        return Ok(());
+    }
+
+    // check that the current revision is an ancestor of its remote
+    let branch = repo.find_branch(req!(head.shorthand()), git2::BranchType::Local)?;
+    if let Ok(Some(name)) = branch.name() {
+        git.branch = name.to_owned();
+    }
+    let upstream = branch.upstream()?;
+    let upstream_oid = upstream.get().peel_to_commit()?.id();
+    let upstream_name = req!(upstream.name()?);
+    if repo.merge_base(head_oid, upstream_oid)? != head_oid {
+        println!("incomplete git info: HEAD is not an ancestor of {}", upstream_name);
+        return Ok(());
+    }
+
+    // figure out the remote URL, convert from SSH to HTTPS
+    let mut iter = upstream_name.splitn(2, "/");
+    let remote_name = req!(iter.next());
+    if let Some(name) = iter.next() {
+        git.remote_branch = name.to_owned();
+    }
+
+    let remote = repo.find_remote(remote_name)?;
+    let mut url = req!(remote.url());
+    if url.ends_with("/") {
+        url = &url[..url.len() - 1];
+    }
+    if url.ends_with(".git") {
+        url = &url[..url.len() - 4];
+        if url.ends_with("/") {
+            url = &url[..url.len() - 1];
+        }
+    }
+    if url.starts_with("https://") || url.starts_with("http://") {
+        git.web_url = url.to_owned();
+    } else if url.starts_with("ssh://") {
+        git.web_url = url.replace("ssh://", "https://");
+    } else {
+        let at = req!(url.find("@"));
+        let colon = req!(url.find(":"));
+        if colon >= at {
+            git.web_url = format!("https://{}/{}", &url[at+1..colon], &url[colon+1..]);
+        } else {
+            println!("incomplete git info: weird SSH path: {}", url);
+        }
+    }
+    Ok(())
+}
+
 /// Helper for printing progress information.
 #[derive(Default)]
 struct Progress {
@@ -443,9 +519,23 @@ impl Drop for Progress {
 
 #[derive(Serialize)]
 struct Environment<'a> {
+    dmdoc: DmDoc,
     filename: &'a str,
     world_name: &'a str,
-    dmdoc_version: &'a str,
+    git: Git,
+}
+
+#[derive(Serialize)]
+struct DmDoc {
+    version: &'static str,
+}
+
+#[derive(Serialize, Default)]
+struct Git {
+    revision: String,
+    branch: String,
+    remote_branch: String,
+    web_url: String,
 }
 
 /// A parsed documented type.

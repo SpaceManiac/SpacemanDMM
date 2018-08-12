@@ -194,6 +194,7 @@ version = "0.1.0"
 dependencies = [
  "docstrings 0.1.1 (git+https://github.com/SpaceManiac/rust-docstrings?branch=tweaks)",
  "dreammaker 0.1.0",
+ "git2 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "pulldown-cmark 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.71 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.58 (registry+https://github.com/rust-lang/crates.io-index)",
