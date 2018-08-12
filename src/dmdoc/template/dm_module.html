@@ -19,15 +19,15 @@
 <table class="summary" cellspacing="0">
     {%- for item in details.items %}
         {% if item.docs -%}
-            <tr><td colspan="2">{{ item.docs | md }}</td></tr>
+            <tr><td colspan="2">{{ item.docs | safe | md }}</td></tr>
         {%- elif item.define -%}
-            <tr><th><a href="{{ details.htmlname | safe }}.html#define/{{item.define.name}}">{{item.define.name}}</a></th><td>{{ item.define.teaser | md(teaser=true) }}</td></tr>
+            <tr><th><a href="{{ details.htmlname | safe }}.html#define/{{item.define.name}}">{{item.define.name}}</a></th><td>{{ item.define.teaser | safe | md(teaser=true) }}</td></tr>
         {%- elif item.type -%}
             <tr><th>{% if item.type.substance -%}
                 <a href="{{ item.type.path | safe | substring(start=1) }}.html">{{item.type.path}}</a>
             {%- else -%}
                 {{ item.type.path | safe | linkify_type }}
-            {%- endif %}</th><td>{{ item.type.teaser | md(teaser=true) }}</td></tr>
+            {%- endif %}</th><td>{{ item.type.teaser | safe | md(teaser=true) }}</td></tr>
         {%- endif %}
     {%- endfor -%}
 </table>
