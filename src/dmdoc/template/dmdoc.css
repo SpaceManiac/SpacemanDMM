@@ -17,7 +17,7 @@ article {
     margin: 2.5% auto;
 }
 header, footer {
-    margin: 2.5% auto;
+    margin: 2.5% -6px;
     border: 1px solid #444444;
     border-radius: 5px;
     padding: 5px;
@@ -53,4 +53,7 @@ a:target {
     border-radius: 5px;
     padding: 0 3px;
     margin: 0 -3px;
+}
+img.git {
+    opacity: 0.8;
 }

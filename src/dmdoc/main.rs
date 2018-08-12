@@ -145,7 +145,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
         let module = modules.entry(context.file_path(range.start.file)).or_default();
         module.items_wip.push((range.start.line, ModuleItem::Define { name, teaser: docs.teaser.clone() }));
-        module.defines.insert(name, Define { docs, has_params, params, is_variadic });
+        module.defines.insert(name, Define { docs, has_params, params, is_variadic, line: range.start.line });
         macro_count += 1;
     }
 
@@ -317,6 +317,32 @@ fn main() -> Result<(), Box<std::error::Error>> {
         })?.as_bytes())?;
     }
 
+    for (path, details) in modules.iter() {
+        #[derive(Serialize)]
+        struct ModuleArgs<'a> {
+            env: &'a Environment<'a>,
+            base_href: &'a str,
+            path: &'a Path,
+            details: &'a Module<'a>,
+        }
+
+        let fname = format!("{}.html", details.htmlname);
+        progress.update(&fname);
+
+        let mut base = String::new();
+        for _ in fname.chars().filter(|&x| x == '/') {
+            base.push_str("../");
+        }
+
+        let mut f = create(&output_path.join(&fname))?;
+        f.write_all(tera.render("dm_module.html", &ModuleArgs {
+            env,
+            base_href: &base,
+            path,
+            details,
+        })?.as_bytes())?;
+    }
+
     for (path, details) in types_with_docs.iter() {
         #[derive(Serialize)]
         struct Type<'a> {
@@ -342,32 +368,6 @@ fn main() -> Result<(), Box<std::error::Error>> {
             path,
             details,
             types: &types_with_docs,
-        })?.as_bytes())?;
-    }
-
-    for (path, details) in modules.iter() {
-        #[derive(Serialize)]
-        struct ModuleArgs<'a> {
-            env: &'a Environment<'a>,
-            base_href: &'a str,
-            path: &'a Path,
-            details: &'a Module<'a>,
-        }
-
-        let fname = format!("{}.html", details.htmlname);
-        progress.update(&fname);
-
-        let mut base = String::new();
-        for _ in fname.chars().filter(|&x| x == '/') {
-            base.push_str("../");
-        }
-
-        let mut f = create(&output_path.join(&fname))?;
-        f.write_all(tera.render("dm_module.html", &ModuleArgs {
-            env,
-            base_href: &base,
-            path,
-            details,
         })?.as_bytes())?;
     }
     drop(progress);
@@ -584,6 +584,7 @@ struct Define<'a> {
     has_params: bool,
     params: &'a [String],
     is_variadic: bool,
+    line: u32,
 }
 
 #[derive(Serialize)]

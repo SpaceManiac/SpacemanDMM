@@ -23,4 +23,5 @@ pub fn builtin() -> Result<Tera, ::tera::Error> {
 pub const RESOURCES: &[(&str, &[u8])] = &[
     ("dmdoc.css", include_bytes!("dmdoc.css")),
     ("dmdoc.js", include_bytes!("dmdoc.js")),
+    ("git.png", include_bytes!("git.png")),
 ];
