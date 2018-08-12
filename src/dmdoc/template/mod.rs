@@ -2,6 +2,12 @@
 
 use tera::Tera;
 
+#[cfg(debug_assertions)]
+pub fn builtin() -> Result<Tera, ::tera::Error> {
+    Tera::new(concat!(env!("CARGO_MANIFEST_DIR"), "/template/*.html"))
+}
+
+#[cfg(not(debug_assertions))]
 pub fn builtin() -> Result<Tera, ::tera::Error> {
     let mut tera = Tera::default();
     tera.add_raw_templates(vec![
