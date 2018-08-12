@@ -3,7 +3,7 @@
 {% block content %}
 <h1>{{ env.world_name }}</h1>
 {% if modules %}
-<h3>Modules</h3>
+<h3><a name="modules">Modules</a></h3>
 <ul>
 {%- for path, details in modules %}
     <li><a href="{{ details.htmlname | safe }}.html" title="{{ details.defines | length }} macros">{{path}}</a>
@@ -13,7 +13,7 @@
 </ul>
 {% endif %}
 {% if types %}
-<h3>Types</h3>
+<h3><a name="types">Types</a></h3>
 <ul>
 {%- for path, details in types %}
     <li><a href="{{ details.htmlname | safe }}.html" title="{{ details.vars | length }} vars, {{ details.procs | length }} procs"

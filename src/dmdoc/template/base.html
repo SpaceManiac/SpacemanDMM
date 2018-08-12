@@ -7,7 +7,9 @@
 {% endblock head %}</head>
 <body>
 <header>{% block header %}
-    <a href="index.html">{{ env.world_name }}</a>
+    <a href="index.html">{{ env.world_name }}</a> -
+    <a href="index.html#modules">Modules</a> -
+    <a href="index.html#types">Types</a>
 {% endblock header %}</header>
 <article>{% block content %}{% endblock content %}</article>
 <footer>{% block footer %}
