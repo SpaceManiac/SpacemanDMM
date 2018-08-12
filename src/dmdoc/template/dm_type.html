@@ -1,8 +1,16 @@
 {% extends "base.html" %}
 {% import "macros.html" as macros %}
 {% block title %}{{ path }}{% endblock %}
+{% block header -%}
+{{ super() }}
+{%- if details.vars %} &mdash; <a href="{{ details.htmlname | safe }}.html#var">Var Details</a>{% endif %}
+{%- if details.procs %}{% if details.vars %} - {% else %} &mdash; {% endif -%}
+    <a href="{{ details.htmlname | safe }}.html#proc">Proc Details</a>{% endif %}
+{%- endblock %}
 {% block content %}
-<h1>{% if details.name -%}
+<h1>{% if path == "(global)" -%}
+    (global)
+{%- elif details.name -%}
     {{ details.name }} <aside>{{ path | safe | linkify_type }}</aside>
 {%- else -%}
     {{ path | safe | linkify_type }}
@@ -31,7 +39,7 @@
 {%- endif -%}
 
 {% if details.vars %}
-    <h2>Var Details</h2>
+    <h2><a name="var">Var Details</a></h2>
     {%- for name, var in details.vars -%}
         <h3>
         {%- if var.decl -%}
@@ -44,7 +52,7 @@
 {% endif %}
 
 {%- if details.procs -%}
-    <h2>Proc Details</h2>
+    <h2><a name="proc">Proc Details</a></h2>
     {%- for name, proc in details.procs -%}
         <h3>
             {%- if proc.decl -%}

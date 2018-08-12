@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 {% import "macros.html" as macros %}
 {% block title %}{{ path }}{% endblock %}
+{% block header -%}
+{{ super() }}
+{%- if details.defines %} &mdash; <a href="{{ details.htmlname | safe }}.html#define">Define Details</a>{% endif %}
+{%- endblock %}
 {% block content %}
 <h1>{% if details.name -%}
     {{ details.name }} <aside>{{ path | safe }}</aside>
@@ -25,7 +29,7 @@
 </table>
 
 {%- if details.defines -%}
-<h2>Define Details</h2>
+<h2><a name="define">Define Details</a></h2>
 {% for name, define in details.defines -%}
     <h3><aside class="declaration">#define </aside><a name="define/{{ name }}">{{ name }}</a>
         {%- if define.has_params %}
