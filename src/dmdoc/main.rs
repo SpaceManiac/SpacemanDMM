@@ -38,24 +38,8 @@ fn main() -> Result<(), Box<std::error::Error>> {
         _ => Err("md() input must be string".into()),
     });
     tera.register_filter("linkify_type", |input, _opts| match input {
-        tera::Value::String(s) => {
-            let mut output = String::new();
-            let mut all_progress = String::new();
-            let mut progress = String::new();
-            for bit in s.split("/").skip_while(|b| b.is_empty()) {
-                all_progress.push_str("/");
-                all_progress.push_str(bit);
-                progress.push_str("/");
-                progress.push_str(bit);
-                if ALL_TYPE_NAMES.with(|t| t.borrow().contains(&all_progress)) {
-                    use std::fmt::Write;
-                    let _ = write!(output, r#"/<a href="{}.html">{}</a>"#, &all_progress[1..], &progress[1..]);
-                    progress.clear();
-                }
-            }
-            output.push_str(&progress);
-            Ok(tera::Value::String(output))
-        }
+        tera::Value::String(s) => Ok(linkify_type(s.split("/").skip_while(|b| b.is_empty())).into()),
+        tera::Value::Array(a) => Ok(linkify_type(a.iter().filter_map(|v| v.as_str())).into()),
         _ => Err("linkify_type() input must be string".into()),
     });
     tera.register_filter("length", |input, _opts| match input {
@@ -178,13 +162,17 @@ fn main() -> Result<(), Box<std::error::Error>> {
             if let Some(ref docs) = var.value.docs {
                 match parse_md_docblock(&docs.text) {
                     Ok(block) => {
-                        let path = match ty.get_declaration(name) {
-                            Some(decl) => format_type_path(&decl.var_type.type_path),
-                            _ => String::new(),
-                        };
+                        // `type` is pulled from the parent if necessary
+                        let type_ = ty.get_declaration(name).map(|decl| VarType {
+                            is_static: decl.var_type.is_static,
+                            is_const: decl.var_type.is_const,
+                            is_tmp: decl.var_type.is_tmp,
+                            path: &decl.var_type.type_path,
+                        });
                         parsed_type.vars.insert(name, Var {
                             docs: block,
-                            type_path: path,
+                            type_,
+                            // but `decl` is only used if it's on this type
                             decl: if var.declaration.is_some() { "var" } else { "" },
                             file: context.file_path(var.value.location.file),
                             line: var.value.location.line,
@@ -411,6 +399,25 @@ fn format_type_path(vec: &[String]) -> String {
     }
 }
 
+fn linkify_type<'a, I: Iterator<Item=&'a str>>(iter: I) -> String {
+    let mut output = String::new();
+    let mut all_progress = String::new();
+    let mut progress = String::new();
+    for bit in iter {
+        all_progress.push_str("/");
+        all_progress.push_str(bit);
+        progress.push_str("/");
+        progress.push_str(bit);
+        if ALL_TYPE_NAMES.with(|t| t.borrow().contains(&all_progress)) {
+            use std::fmt::Write;
+            let _ = write!(output, r#"/<a href="{}.html">{}</a>"#, &all_progress[1..], &progress[1..]);
+            progress.clear();
+        }
+    }
+    output.push_str(&progress);
+    output
+}
+
 /// Create the parent dirs of a file and then itself.
 fn create(path: &Path) -> io::Result<File> {
     if let Some(parent) = path.parent() {
@@ -569,7 +576,7 @@ struct ParsedType<'a> {
     name: &'a str,
     docs: Option<DocBlock>,
     substance: bool,
-    vars: BTreeMap<&'a str, Var>,
+    vars: BTreeMap<&'a str, Var<'a>>,
     procs: BTreeMap<&'a str, Proc>,
     htmlname: &'a str,
     file: PathBuf,
@@ -577,12 +584,21 @@ struct ParsedType<'a> {
 }
 
 #[derive(Serialize)]
-struct Var {
+struct Var<'a> {
     docs: DocBlock,
     decl: &'static str,
-    type_path: String,
+    #[serde(rename="type")]
+    type_: Option<VarType<'a>>,
     file: PathBuf,
     line: u32,
+}
+
+#[derive(Serialize)]
+struct VarType<'a> {
+    is_static: bool,
+    is_const: bool,
+    is_tmp: bool,
+    path: &'a [String],
 }
 
 #[derive(Serialize)]

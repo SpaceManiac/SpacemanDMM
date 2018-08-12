@@ -45,7 +45,13 @@
         {%- if var.decl -%}
             <aside class="declaration">{{ var.decl }} </aside>
         {%- endif -%}
-        <a name="var/{{ name }}">{{ name }}</a> <aside>&ndash; {{ var.type_path | safe | linkify_type }}</aside>
+        <a name="var/{{ name }}">{{ name }}</a>
+        {%- if var.type %}
+            <aside>&ndash; {% if var.type.is_static %}/static{% endif -%}
+                {%- if var.type.is_const %}/const{% endif -%}
+                {%- if var.type.is_tmp %}/tmp{% endif -%}
+                {{ var.type.path | safe | linkify_type }}</aside>
+        {%- endif -%}
         {{ macros::git_link(env=env, item=var) }}</h3>
         {{ macros::doc_block(block=var.docs) }}
     {%- endfor -%}
