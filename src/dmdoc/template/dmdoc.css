@@ -45,7 +45,7 @@ table.summary th, table.summary td {
     padding-left: 0;
     padding-right: 1em;
 }
-a.no-items {
+.no-substance {
     color: #888888;
 }
 a:target {

@@ -162,14 +162,13 @@ fn main() -> Result<(), Box<std::error::Error>> {
             .unwrap_or("");
 
         let mut anything = false;
+        let mut substance = false;
         if let Some(ref docs) = ty.docs {
             match parse_md_docblock(&docs.text) {
                 Ok(block) => {
-                    if let Some(module) = modules.get_mut(&context.file_path(ty.location.file)) {
-                        module.items_wip.push((ty.location.line, ModuleItem::Type { path: ty.get().pretty_path(), teaser: block.teaser.clone() }));
-                    }
-                    parsed_type.docs = Some(block);
                     anything = true;
+                    substance = block.description.is_some();
+                    parsed_type.docs = Some(block);
                 }
                 Err(e) => progress.println(&format!("{}: {}", ty.path, e)),
             }
@@ -191,6 +190,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
                             line: var.value.location.line,
                         });
                         anything = true;
+                        substance = true;
                     }
                     Err(e) => progress.println(&format!("{}/var/{}: {}", ty.path, name, e)),
                 }
@@ -216,15 +216,28 @@ fn main() -> Result<(), Box<std::error::Error>> {
                             line: proc_value.location.line,
                         });
                         anything = true;
+                        substance = true;
                     }
                     Err(e) => progress.println(&format!("{}/proc/{}: {}", ty.path, name, e)),
                 }
             }
         }
 
+        // file the type under its module as well
+        if let Some(ref block) = parsed_type.docs {
+            if let Some(module) = modules.get_mut(&context.file_path(ty.location.file)) {
+                module.items_wip.push((ty.location.line, ModuleItem::Type {
+                    path: ty.get().pretty_path(),
+                    teaser: block.teaser.clone(),
+                    substance: substance,
+                }));
+            }
+        }
+
         if anything {
             parsed_type.file = context.file_path(ty.location.file);
             parsed_type.line = ty.location.line;
+            parsed_type.substance = substance;
             if ty.is_root() {
                 parsed_type.htmlname = "global";
             } else {
@@ -274,7 +287,9 @@ fn main() -> Result<(), Box<std::error::Error>> {
     }
 
     ALL_TYPE_NAMES.with(|all| {
-        all.borrow_mut().extend(types_with_docs.keys().map(|&t| t.to_owned()));
+        all.borrow_mut().extend(types_with_docs.iter()
+            .filter(|(_, v)| v.substance)
+            .map(|(&t, _)| t.to_owned()));
     });
 
     // render
@@ -350,6 +365,10 @@ fn main() -> Result<(), Box<std::error::Error>> {
     }
 
     for (path, details) in types_with_docs.iter() {
+        if !details.substance {
+            continue;
+        }
+
         #[derive(Serialize)]
         struct Type<'a> {
             env: &'a Environment<'a>,
@@ -549,6 +568,7 @@ struct Git {
 struct ParsedType<'a> {
     name: &'a str,
     docs: Option<DocBlock>,
+    substance: bool,
     vars: BTreeMap<&'a str, Var>,
     procs: BTreeMap<&'a str, Proc>,
     htmlname: &'a str,
@@ -617,5 +637,6 @@ enum ModuleItem<'a> {
     Type {
         path: &'a str,
         teaser: String,
+        substance: bool,
     },
 }

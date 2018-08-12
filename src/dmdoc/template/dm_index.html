@@ -16,9 +16,12 @@
 <h3><a name="types">Types</a></h3>
 <ul>
 {%- for path, details in types %}
-    <li><a href="{{ details.htmlname | safe }}.html" title="{{ details.vars | length }} vars, {{ details.procs | length }} procs"
-        {%- if not details.docs.description and not details.vars and not details.procs %} class="no-items"{% endif -%}
-        >{{path}}</a>
+    <li>
+        {%- if details.substance -%}
+            <a href="{{ details.htmlname | safe }}.html" title="{{ details.vars | length }} vars, {{ details.procs | length }} procs">{{ path }}</a>
+        {%- else -%}
+            <span class="no-substance">{{ path }}</span>
+        {%- endif %}
         {%- if details.name %}: {{ details.name }} {% endif -%}
         {%- if details.docs %} - {{ details.docs.teaser | md(teaser=true) }}{% endif -%}
     </li>
