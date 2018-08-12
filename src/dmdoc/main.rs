@@ -219,9 +219,9 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
         if anything {
             if ty.is_root() {
-                parsed_type.filename = "global";
+                parsed_type.htmlname = "global";
             } else {
-                parsed_type.filename = &ty.get().path[1..];
+                parsed_type.htmlname = &ty.get().path[1..];
             }
             types_with_docs.insert(ty.get().pretty_path(), parsed_type);
         }
@@ -229,7 +229,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
     // finalize modules
     for (path, module) in modules.iter_mut() {
-        module.filename = path.with_extension("").display().to_string().replace("\\", "/");
+        module.htmlname = path.with_extension("").display().to_string().replace("\\", "/");
         module.items_wip.sort_by_key(|&(line, _)| line);
 
         let mut docs: Option<dm::docs::DocComment> = None;
@@ -275,7 +275,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
     progress = Progress::default();
     for (name, contents) in template::RESOURCES {
         progress.update(name);
-        create(&output_path.join(name))?.write_all(contents.as_bytes())?;
+        create(&output_path.join(name))?.write_all(contents)?;
     }
 
     progress.println("rendering html");
@@ -317,7 +317,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
             types: &'a BTreeMap<&'a str, ParsedType<'a>>,
         }
 
-        let fname = format!("{}.html", details.filename);
+        let fname = format!("{}.html", details.htmlname);
         progress.update(&fname);
 
         let mut base = String::new();
@@ -344,7 +344,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
             details: &'a Module<'a>,
         }
 
-        let fname = format!("{}.html", details.filename);
+        let fname = format!("{}.html", details.htmlname);
         progress.update(&fname);
 
         let mut base = String::new();
@@ -455,7 +455,7 @@ struct ParsedType<'a> {
     docs: Option<DocBlock>,
     vars: BTreeMap<&'a str, Var>,
     procs: BTreeMap<&'a str, Proc>,
-    filename: &'a str,
+    htmlname: &'a str,
 }
 
 #[derive(Serialize)]
@@ -480,7 +480,7 @@ struct Param {
 
 #[derive(Default, Serialize)]
 struct Module<'a> {
-    filename: String,
+    htmlname: String,
     name: &'a str,
     teaser: String,
     items: Vec<ModuleItem<'a>>,

@@ -17,14 +17,14 @@
     {%- if details.vars -%}
         <tr><td colspan="2"><h2>Vars</h2></td></tr>
         {%- for name, var in details.vars %}
-            <tr><th><a href="{{details.filename|safe}}.html#var/{{name}}">{{ name }}</a></th><td>{{ var.docs.teaser | md(teaser=true) }}</td></tr>
+            <tr><th><a href="{{details.htmlname|safe}}.html#var/{{name}}">{{ name }}</a></th><td>{{ var.docs.teaser | md(teaser=true) }}</td></tr>
         {%- endfor %}
     {%- endif -%}
 
     {%- if details.procs -%}
         <tr><td colspan="2"><h2>Procs</h2></td></tr>
         {%- for name, proc in details.procs %}
-            <tr><th><a href="{{details.filename|safe}}.html#proc/{{name}}">{{ name }}</a></th><td>{{ proc.docs.teaser | md(teaser=true) }}</td></tr>
+            <tr><th><a href="{{details.htmlname|safe}}.html#proc/{{name}}">{{ name }}</a></th><td>{{ proc.docs.teaser | md(teaser=true) }}</td></tr>
         {%- endfor %}
     {%- endif -%}
     </table>
