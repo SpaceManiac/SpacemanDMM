@@ -97,32 +97,10 @@ fn main() -> Result<(), Box<std::error::Error>> {
     for (file, comment_vec) in module_docs {
         let file_path = context.file_path(file);
         progress.update(&file_path.display().to_string());
-
-        let mut docs: Option<dm::docs::DocComment> = None;
-        let mut last_line = 0;
-        for (line, doc) in comment_vec {
-            if line > last_line + 1 {
-                if let Some(ref mut docs) = docs {
-                    docs.text.push_str("\n");
-                }
-            }
-            doc.merge_into(&mut docs);
-            last_line = line;
-        }
-        let docs = match docs {
-            Some(docs) => docs,
-            None => continue,
-        };
-        let docs = match parse_md_docblock(&docs.text) {
-            Ok(block) => block,
-            Err(e) => {
-                progress.println(&format!("{}: {}", file_path.display(), e));
-                continue;
-            }
-        };
-
         let module = modules.entry(file_path).or_default();
-        module.docs = Some(docs);
+        for (line, doc) in comment_vec {
+            module.items_wip.push((line, ModuleItem::DocComment(doc)));
+        }
     }
 
     // if macros have docs, that counts as a module too
@@ -154,11 +132,9 @@ fn main() -> Result<(), Box<std::error::Error>> {
         };
 
         let module = modules.entry(context.file_path(range.start.file)).or_default();
+        module.items_wip.push((range.start.line, ModuleItem::Define { name, teaser: docs.teaser.clone() }));
         module.defines.insert(name, Define { docs, has_params, params, is_variadic });
         macro_count += 1;
-    }
-    for (k, v) in modules.iter_mut() {
-        v.filename = k.with_extension("").display().to_string().replace("\\", "/");
     }
 
     // collate types which have docs
@@ -237,6 +213,37 @@ fn main() -> Result<(), Box<std::error::Error>> {
         }
     });
 
+    // finalize modules
+    for (path, module) in modules.iter_mut() {
+        module.filename = path.with_extension("").display().to_string().replace("\\", "/");
+        module.items_wip.sort_by_key(|&(line, _)| line);
+
+        let mut docs: Option<dm::docs::DocComment> = None;
+        let mut last_line = 0;
+        for (line, item) in module.items_wip.drain(..) {
+            match item {
+                ModuleItem::DocComment(doc) => {
+                    if line > last_line + 1 {
+                        if let Some(ref mut docs) = docs {
+                            docs.text.push_str("\n");
+                        }
+                    }
+                    doc.merge_into(&mut docs);
+                    last_line = line;
+                },
+                other => {
+                    if let Some(doc) = docs.take() {
+                        module.items.push(ModuleItem::Docs(doc.text));
+                    }
+                    module.items.push(other);
+                }
+            }
+        }
+        if let Some(doc) = docs.take() {
+            module.items.push(ModuleItem::Docs(doc.text));
+        }
+    }
+
     drop(progress);
     print!("documenting {} modules, {} macros, ", modules.len(), macro_count);
     if count == 0 {
@@ -249,6 +256,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
         all.borrow_mut().extend(types_with_docs.keys().map(|&t| t.to_owned()));
     });
 
+    // render
     println!("saving static resources");
     progress = Progress::default();
     for (name, contents) in template::RESOURCES {
@@ -458,10 +466,12 @@ struct Param {
 
 #[derive(Default, Serialize)]
 struct Module<'a> {
-    name: &'a str,
-    docs: Option<DocBlock>,
-    defines: BTreeMap<&'a str, Define<'a>>,
     filename: String,
+    name: &'a str,
+    teaser: String,
+    items: Vec<ModuleItem<'a>>,
+    items_wip: Vec<(u32, ModuleItem<'a>)>,
+    defines: BTreeMap<&'a str, Define<'a>>,
 }
 
 #[derive(Serialize)]
@@ -470,4 +480,20 @@ struct Define<'a> {
     has_params: bool,
     params: &'a [String],
     is_variadic: bool,
+}
+
+#[derive(Serialize)]
+enum ModuleItem<'a> {
+    // preparation
+    #[serde(skip)]
+    DocComment(dm::docs::DocComment),
+
+    // rendering
+    #[serde(rename="docs")]
+    Docs(String),
+    #[serde(rename="define")]
+    Define {
+        name: &'a str,
+        teaser: String,
+    },
 }
