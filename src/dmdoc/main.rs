@@ -418,6 +418,25 @@ fn linkify_type<'a, I: Iterator<Item=&'a str>>(iter: I) -> String {
     output
 }
 
+// (normalized, reference) -> (href, tooltip)
+fn handle_crosslink(_: &str, reference: &str) -> Option<(String, String)> {
+    // TODO: allow performing relative searches, find vars and procs too
+    let mut progress = String::new();
+    let mut best = String::new();
+    for bit in reference.split("/").skip_while(|s| s.is_empty()) {
+        progress.push_str("/");
+        progress.push_str(bit);
+        if ALL_TYPE_NAMES.with(|t| t.borrow().contains(&progress)) {
+            best = progress.clone();
+        }
+    }
+    if !best.is_empty() {
+        Some((format!("{}.html", &best[1..]), best))
+    } else {
+        None
+    }
+}
+
 /// Create the parent dirs of a file and then itself.
 fn create(path: &Path) -> io::Result<File> {
     if let Some(parent) = path.parent() {
@@ -428,7 +447,11 @@ fn create(path: &Path) -> io::Result<File> {
 
 fn render_markdown(markdown: &str, summary: bool) -> String {
     let mut buf = String::new();
-    let mut parser = pulldown_cmark::Parser::new(markdown).peekable();
+    let mut parser = pulldown_cmark::Parser::new_with_broken_link_callback(
+        markdown,
+        pulldown_cmark::OPTION_ENABLE_TABLES,
+        Some(&handle_crosslink)
+    ).peekable();
     match (summary, parser.peek()) {
         (true, Some(&pulldown_cmark::Event::Start(pulldown_cmark::Tag::Paragraph))) => {
             // Skip the opening <p>
