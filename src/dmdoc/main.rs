@@ -87,10 +87,81 @@ fn main() -> Result<(), Box<std::error::Error>> {
     }
     pp.finalize();
 
-    // collate types which have docs
     println!("collating documented types");
     let mut types_with_docs = BTreeMap::new();
     let mut progress = Progress::default();
+
+    // collate modules which have docs
+    let mut modules = BTreeMap::<PathBuf, Module>::new();
+    let mut macro_count = 0;
+    for (file, comment_vec) in module_docs {
+        let file_path = context.file_path(file);
+        progress.update(&file_path.display().to_string());
+
+        let mut docs: Option<dm::docs::DocComment> = None;
+        let mut last_line = 0;
+        for (line, doc) in comment_vec {
+            if line > last_line + 1 {
+                if let Some(ref mut docs) = docs {
+                    docs.text.push_str("\n");
+                }
+            }
+            doc.merge_into(&mut docs);
+            last_line = line;
+        }
+        let docs = match docs {
+            Some(docs) => docs,
+            None => continue,
+        };
+        let docs = match parse_md_docblock(&docs.text) {
+            Ok(block) => block,
+            Err(e) => {
+                progress.println(&format!("{}: {}", file_path.display(), e));
+                continue;
+            }
+        };
+
+        let module = modules.entry(file_path).or_default();
+        module.docs = Some(docs);
+    }
+
+    // if macros have docs, that counts as a module too
+    for (range, (name, define)) in pp.history().iter() {
+        progress.update(&format!("#define {}", name));
+
+        let (docs, has_params, params, is_variadic);
+        match define {
+            dm::preprocessor::Define::Constant { docs: Some(dc), .. } => {
+                docs = dc;
+                has_params = false;
+                params = &[][..];
+                is_variadic = false;
+            }
+            dm::preprocessor::Define::Function { docs: Some(dc), params: macro_params, variadic, .. } => {
+                docs = dc;
+                has_params = true;
+                params = macro_params;
+                is_variadic = *variadic;
+            }
+            _ => continue,
+        }
+        let docs = match parse_md_docblock(&docs.text) {
+            Ok(block) => block,
+            Err(e) => {
+                progress.println(&format!("#define {}: {}", name, e));
+                continue;
+            }
+        };
+
+        let module = modules.entry(context.file_path(range.start.file)).or_default();
+        module.defines.insert(name, Define { docs, has_params, params, is_variadic });
+        macro_count += 1;
+    }
+    for (k, v) in modules.iter_mut() {
+        v.filename = k.with_extension("").display().to_string().replace("\\", "/");
+    }
+
+    // collate types which have docs
     let mut count = 0;
     objtree.root().recurse(&mut |ty| {
         count += 1;
@@ -166,82 +237,12 @@ fn main() -> Result<(), Box<std::error::Error>> {
         }
     });
 
-    // collate documented modules
-    let mut modules = BTreeMap::<PathBuf, Module>::new();
-    let mut macro_count = 0;
-    for (range, (name, define)) in pp.history().iter() {
-        progress.update(&format!("#define {}", name));
-
-        let (docs, has_params, params, is_variadic);
-        match define {
-            dm::preprocessor::Define::Constant { docs: Some(dc), .. } => {
-                docs = dc;
-                has_params = false;
-                params = &[][..];
-                is_variadic = false;
-            }
-            dm::preprocessor::Define::Function { docs: Some(dc), params: macro_params, variadic, .. } => {
-                docs = dc;
-                has_params = true;
-                params = macro_params;
-                is_variadic = *variadic;
-            }
-            _ => continue,
-        }
-        let docs = match parse_md_docblock(&docs.text) {
-            Ok(block) => block,
-            Err(e) => {
-                progress.println(&format!("#define {}: {}", name, e));
-                continue;
-            }
-        };
-
-        let module = modules.entry(context.file_path(range.start.file)).or_default();
-        module.defines.insert(name, Define { docs, has_params, params, is_variadic });
-        macro_count += 1;
-    }
-    for (file, comment_vec) in module_docs {
-        let file_path = context.file_path(file);
-        progress.update(&file_path.display().to_string());
-
-        let mut docs: Option<dm::docs::DocComment> = None;
-        let mut last_line = 0;
-        for (line, doc) in comment_vec {
-            if line > last_line + 1 {
-                if let Some(ref mut docs) = docs {
-                    docs.text.push_str("\n");
-                }
-            }
-            doc.merge_into(&mut docs);
-            last_line = line;
-        }
-        let docs = match docs {
-            Some(docs) => docs,
-            None => continue,
-        };
-        let docs = match parse_md_docblock(&docs.text) {
-            Ok(block) => block,
-            Err(e) => {
-                progress.println(&format!("{}: {}", file_path.display(), e));
-                continue;
-            }
-        };
-
-        let module = modules.entry(file_path).or_default();
-        module.docs = Some(docs);
-    }
-    for (k, v) in modules.iter_mut() {
-        v.filename = k.with_extension("").display().to_string().replace("\\", "/");
-    }
-
     drop(progress);
+    print!("documenting {} modules, {} macros, ", modules.len(), macro_count);
     if count == 0 {
-        println!("documenting 0/0 types");
+        println!("0 types");
     } else {
-        println!("documenting {}/{} types ({}%)", types_with_docs.len(), count, (types_with_docs.len() * 100 / count));
-    }
-    if !modules.is_empty() {
-        println!("documenting {} macros in {} modules", macro_count, modules.len());
+        println!("{}/{} types ({}%)", types_with_docs.len(), count, (types_with_docs.len() * 100 / count));
     }
 
     ALL_TYPE_NAMES.with(|all| {
