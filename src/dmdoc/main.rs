@@ -238,6 +238,28 @@ fn main() -> Result<(), Box<std::error::Error>> {
         module.items_wip.sort_by_key(|&(line, _)| line);
 
         let mut docs: Option<dm::docs::DocComment> = None;
+        let mut _first = true;
+        macro_rules! push_docs { () => {  // oof
+            if let Some(doc) = docs.take() {
+                if _first {
+                    _first = false;
+                    match parse_md_docblock(&doc.text) {
+                        Ok(block) => {
+                            module.name = block.title;
+                            module.teaser = block.teaser;
+                            module.items.push(ModuleItem::Docs(format!("<p>{}</p>", module.teaser)));
+                            if let Some(desc) = block.description {
+                                module.items.push(ModuleItem::Docs(desc));
+                            }
+                        }
+                        Err(e) => progress.println(&format!("{}: {}", path.display(), e)),
+                    }
+                } else {
+                    module.items.push(ModuleItem::Docs(markdown::render(&doc.text)));
+                }
+            }
+        }}
+
         let mut last_line = 0;
         for (line, item) in module.items_wip.drain(..) {
             match item {
@@ -251,16 +273,12 @@ fn main() -> Result<(), Box<std::error::Error>> {
                     last_line = line;
                 },
                 other => {
-                    if let Some(doc) = docs.take() {
-                        module.items.push(ModuleItem::Docs(markdown::render(&doc.text)));
-                    }
+                    push_docs!();
                     module.items.push(other);
                 }
             }
         }
-        if let Some(doc) = docs.take() {
-            module.items.push(ModuleItem::Docs(markdown::render(&doc.text)));
-        }
+        push_docs!();
     }
 
     drop(progress);
@@ -612,7 +630,7 @@ struct Param {
 #[derive(Default, Serialize)]
 struct Module<'a> {
     htmlname: String,
-    name: &'a str,
+    name: Option<String>,
     teaser: String,
     items: Vec<ModuleItem<'a>>,
     items_wip: Vec<(u32, ModuleItem<'a>)>,
