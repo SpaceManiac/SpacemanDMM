@@ -15,10 +15,5 @@ serde = "1.0.71"
 serde_derive = "1.0.27"
 git2 = { version = "0.7", default-features = false }
 
-[dependencies.docstrings]
-git = "https://github.com/SpaceManiac/rust-docstrings"
-branch = "tweaks"
-features = ["deser"]
-
 [dev-dependencies]
 walkdir = "2.0.1"

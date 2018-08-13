@@ -1,13 +1,13 @@
 //! A CLI tool to generate HTML documentation of DreamMaker codebases.
 #![forbid(unsafe_code)]
 extern crate dreammaker as dm;
-extern crate docstrings;
 extern crate pulldown_cmark;
 extern crate tera;
 extern crate git2;
 #[macro_use] extern crate serde_derive;
 
 mod template;
+mod markdown;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::cell::RefCell;
@@ -15,7 +15,7 @@ use std::io::{self, Write};
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 
-use docstrings::{DocBlock, parse_md_docblock};
+use markdown::{DocBlock, parse_md_docblock};
 
 // ----------------------------------------------------------------------------
 // Driver
@@ -33,10 +33,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
     let mut tera = template::builtin()?;
 
     // register tera extensions
-    tera.register_filter("md", |input, opts| match input {
-        tera::Value::String(s) => Ok(tera::Value::String(render_markdown(&s, opts.contains_key("teaser")))),
-        _ => Err("md() input must be string".into()),
-    });
+    tera.register_filter("md", |input, _opts| Ok(input));
     tera.register_filter("linkify_type", |input, _opts| match input {
         tera::Value::String(s) => Ok(linkify_type(s.split("/").skip_while(|b| b.is_empty())).into()),
         tera::Value::Array(a) => Ok(linkify_type(a.iter().filter_map(|v| v.as_str())).into()),
@@ -255,14 +252,14 @@ fn main() -> Result<(), Box<std::error::Error>> {
                 },
                 other => {
                     if let Some(doc) = docs.take() {
-                        module.items.push(ModuleItem::Docs(doc.text));
+                        module.items.push(ModuleItem::Docs(markdown::render(&doc.text)));
                     }
                     module.items.push(other);
                 }
             }
         }
         if let Some(doc) = docs.take() {
-            module.items.push(ModuleItem::Docs(doc.text));
+            module.items.push(ModuleItem::Docs(markdown::render(&doc.text)));
         }
     }
 
@@ -443,33 +440,6 @@ fn create(path: &Path) -> io::Result<File> {
         fs::create_dir_all(parent)?;
     }
     File::create(path)
-}
-
-fn render_markdown(markdown: &str, summary: bool) -> String {
-    let mut buf = String::new();
-    let mut parser = pulldown_cmark::Parser::new_with_broken_link_callback(
-        markdown,
-        pulldown_cmark::OPTION_ENABLE_TABLES,
-        Some(&handle_crosslink)
-    ).peekable();
-    match (summary, parser.peek()) {
-        (true, Some(&pulldown_cmark::Event::Start(pulldown_cmark::Tag::Paragraph))) => {
-            // Skip the opening <p>
-            parser.next();
-            // Parse everything
-            let mut rest: Vec<_> = parser.collect();
-            // Drop the closing </p>
-            if let Some(&pulldown_cmark::Event::End(pulldown_cmark::Tag::Paragraph)) = rest.last() {
-                let len = rest.len() - 1;
-                rest.truncate(len);
-            }
-            pulldown_cmark::html::push_html(&mut buf, rest.into_iter());
-        },
-        _ => pulldown_cmark::html::push_html(&mut buf, parser),
-    }
-    let len = buf.trim_right().len();
-    buf.truncate(len);
-    buf
 }
 
 fn git_info(git: &mut Git) -> Result<(), git2::Error> {
