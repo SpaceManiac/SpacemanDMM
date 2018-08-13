@@ -86,10 +86,6 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
                 }
                 return;
             }
-            t @ Token::DocComment(_) => {
-                self.push(t);
-                return;
-            }
             _ => {}
         }
 
