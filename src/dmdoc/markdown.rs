@@ -13,24 +13,23 @@ pub struct DocBlock {
     pub description: Option<String>,
 }
 
-pub fn render(markdown: &str) -> String {
-    let mut buf = String::new();
-    let parser = Parser::new_with_broken_link_callback(
+fn parser(markdown: &str) -> Parser {
+    Parser::new_with_broken_link_callback(
         markdown,
         pulldown_cmark::OPTION_ENABLE_TABLES,
         Some(&::handle_crosslink)
-    );
-    push_html(&mut buf, parser);
+    )
+}
+
+pub fn render(markdown: &str) -> String {
+    let mut buf = String::new();
+    push_html(&mut buf, parser(markdown));
     buf
 }
 
 pub fn parse_md_docblock(markdown: &str) -> Result<DocBlock, String> {
     let mut block = DocBlock::default();
-    let mut parser = Parser::new_with_broken_link_callback(
-        markdown,
-        pulldown_cmark::OPTION_ENABLE_TABLES,
-        Some(&::handle_crosslink)
-    ).peekable();
+    let mut parser = parser(markdown).peekable();
 
     if let Some(&Event::Start(Tag::Header(1))) = parser.peek() {
         parser.next();
