@@ -1,7 +1,7 @@
 {% macro teaser(block, prefix="") -%}
     {%- if block -%}
         {%- set teaser = block.html | safe | substring(start=block.teaser.start, end=block.teaser.end) -%}
-        {%- if teaser %}{{ prefix }}{{ teaser }}{% endif -%}
+        {%- if teaser %}{{ prefix }}{{ teaser | safe }}{% endif -%}
     {%- endif -%}
 {%- endmacro teaser %}
 
