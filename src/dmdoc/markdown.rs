@@ -1,16 +1,51 @@
 //! Parser for
 
+use std::ops::Range;
+
 use pulldown_cmark::{self, Parser, Tag, Event};
 
-/// A markdown parsed to HTML sections.
-#[derive(Serialize, Default)]
+pub fn render(markdown: &str) -> String {
+    let mut buf = String::new();
+    push_html(&mut buf, parser(markdown));
+    buf
+}
+
+/// A rendered markdown document with the teaser identified.
+#[derive(Serialize)]
 pub struct DocBlock {
-    /// Optional leading <h1>
-    pub title: Option<String>,
-    /// Leading <p>
-    pub teaser: String,
-    /// Optional remainder
-    pub description: Option<String>,
+    pub html: String,
+    pub has_description: bool,
+    teaser: Range<usize>,
+}
+
+impl DocBlock {
+    pub fn parse(markdown: &str) -> Self {
+        parse_main(parser(markdown).peekable())
+    }
+
+    pub fn parse_with_title(markdown: &str) -> (Option<String>, Self) {
+        let mut parser = parser(markdown).peekable();
+        (if let Some(&Event::Start(Tag::Header(1))) = parser.peek() {
+            parser.next();
+            let mut pieces = Vec::new();
+            loop {
+                match parser.next() {
+                    None | Some(Event::End(Tag::Header(1))) => break,
+                    Some(other) => pieces.push(other),
+                }
+            }
+
+            let mut title = String::new();
+            push_html(&mut title, pieces);
+            Some(title)
+        } else {
+            None
+        }, parse_main(parser))
+    }
+
+    pub fn teaser(&self) -> &str {
+        &self.html[self.teaser.clone()]
+    }
 }
 
 fn parser(markdown: &str) -> Parser {
@@ -21,33 +56,12 @@ fn parser(markdown: &str) -> Parser {
     )
 }
 
-pub fn render(markdown: &str) -> String {
-    let mut buf = String::new();
-    push_html(&mut buf, parser(markdown));
-    buf
-}
-
-pub fn parse_md_docblock(markdown: &str) -> Result<DocBlock, String> {
-    let mut block = DocBlock::default();
-    let mut parser = parser(markdown).peekable();
-
-    if let Some(&Event::Start(Tag::Header(1))) = parser.peek() {
-        parser.next();
-        let mut pieces = Vec::new();
-        loop {
-            match parser.next() {
-                None | Some(Event::End(Tag::Header(1))) => break,
-                Some(other) => pieces.push(other),
-            }
-        }
-
-        let mut title = String::new();
-        push_html(&mut title, pieces);
-        block.title = Some(title);
-    }
-
+fn parse_main(mut parser: ::std::iter::Peekable<Parser>) -> DocBlock {
+    let mut html = String::new();
+    let teaser;
     if let Some(&Event::Start(Tag::Paragraph)) = parser.peek() {
-        parser.next();
+        push_html(&mut html, parser.next());
+        let start = html.len();
         let mut pieces = Vec::new();
         loop {
             match parser.next() {
@@ -55,23 +69,21 @@ pub fn parse_md_docblock(markdown: &str) -> Result<DocBlock, String> {
                 Some(other) => pieces.push(other),
             }
         }
-
-        push_html(&mut block.teaser, pieces);
+        push_html(&mut html, pieces);
+        teaser = start..html.len();
+        push_html(&mut html, Some(Event::End(Tag::Paragraph)));
     } else {
-        return Err(format!("teaser should be paragraph, not {:?}", parser.peek()));
+        teaser = 0..0;
     }
 
-    if parser.peek().is_some() {
-        let mut description = String::new();
-        push_html(&mut description, parser);
-        block.description = Some(description);
-    }
-    Ok(block)
+    let has_description = parser.peek().is_some();
+    push_html(&mut html, parser);
+    trim_right(&mut html);
+    DocBlock { html, teaser, has_description }
 }
 
 fn push_html<'a, I: IntoIterator<Item=Event<'a>>>(buf: &mut String, iter: I) {
     pulldown_cmark::html::push_html(buf, iter.into_iter());
-    trim_right(buf);
 }
 
 fn trim_right(buf: &mut String) {

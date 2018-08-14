@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 
 use dm::docs::*;
 
-use markdown::{DocBlock, parse_md_docblock};
+use markdown::DocBlock;
 
 // ----------------------------------------------------------------------------
 // Driver
@@ -35,7 +35,6 @@ fn main() -> Result<(), Box<std::error::Error>> {
     let mut tera = template::builtin()?;
 
     // register tera extensions
-    tera.register_filter("md", |input, _opts| Ok(input));
     tera.register_filter("linkify_type", |input, _opts| match input {
         tera::Value::String(s) => Ok(linkify_type(s.split("/").skip_while(|b| b.is_empty())).into()),
         tera::Value::Array(a) => Ok(linkify_type(a.iter().filter_map(|v| v.as_str())).into()),
@@ -120,16 +119,9 @@ fn main() -> Result<(), Box<std::error::Error>> {
         if docs.is_empty() {
             continue;
         }
-        let docs = match parse_md_docblock(&docs.text()) {
-            Ok(block) => block,
-            Err(e) => {
-                progress.println(&format!("#define {}: {}", name, e));
-                continue;
-            }
-        };
-
+        let docs = DocBlock::parse(&docs.text());
         let module = modules.entry(context.file_path(range.start.file)).or_default();
-        module.items_wip.push((range.start.line, ModuleItem::Define { name, teaser: docs.teaser.clone() }));
+        module.items_wip.push((range.start.line, ModuleItem::Define { name, teaser: docs.teaser().to_owned() }));
         module.defines.insert(name, Define { docs, has_params, params, is_variadic, line: range.start.line });
         macro_count += 1;
     }
@@ -149,66 +141,54 @@ fn main() -> Result<(), Box<std::error::Error>> {
         let mut anything = false;
         let mut substance = false;
         if !ty.docs.is_empty() {
-            match parse_md_docblock(&ty.docs.text()) {
-                Ok(block) => {
-                    anything = true;
-                    substance = block.description.is_some();
-                    parsed_type.docs = Some(block);
-                }
-                Err(e) => progress.println(&format!("{}: {}", ty.path, e)),
-            }
+            let block = DocBlock::parse(&ty.docs.text());
+            anything = true;
+            substance = block.has_description;
+            parsed_type.docs = Some(block);
         }
 
         for (name, var) in ty.get().vars.iter() {
             if !var.value.docs.is_empty() {
-                match parse_md_docblock(&var.value.docs.text()) {
-                    Ok(block) => {
-                        // `type` is pulled from the parent if necessary
-                        let type_ = ty.get_declaration(name).map(|decl| VarType {
-                            is_static: decl.var_type.is_static,
-                            is_const: decl.var_type.is_const,
-                            is_tmp: decl.var_type.is_tmp,
-                            path: &decl.var_type.type_path,
-                        });
-                        parsed_type.vars.insert(name, Var {
-                            docs: block,
-                            type_,
-                            // but `decl` is only used if it's on this type
-                            decl: if var.declaration.is_some() { "var" } else { "" },
-                            file: context.file_path(var.value.location.file),
-                            line: var.value.location.line,
-                        });
-                        anything = true;
-                        substance = true;
-                    }
-                    Err(e) => progress.println(&format!("{}/var/{}: {}", ty.path, name, e)),
-                }
+                let block = DocBlock::parse(&var.value.docs.text());
+                // `type` is pulled from the parent if necessary
+                let type_ = ty.get_declaration(name).map(|decl| VarType {
+                    is_static: decl.var_type.is_static,
+                    is_const: decl.var_type.is_const,
+                    is_tmp: decl.var_type.is_tmp,
+                    path: &decl.var_type.type_path,
+                });
+                parsed_type.vars.insert(name, Var {
+                    docs: block,
+                    type_,
+                    // but `decl` is only used if it's on this type
+                    decl: if var.declaration.is_some() { "var" } else { "" },
+                    file: context.file_path(var.value.location.file),
+                    line: var.value.location.line,
+                });
+                anything = true;
+                substance = true;
             }
         }
 
         for (name, proc) in ty.get().procs.iter() {
             let proc_value = proc.value.last().unwrap();
             if !proc_value.docs.is_empty() {
-                match parse_md_docblock(&proc_value.docs.text()) {
-                    Ok(block) => {
-                        parsed_type.procs.insert(name, Proc {
-                            docs: block,
-                            params: proc_value.parameters.iter().map(|p| Param {
-                                name: p.name.clone(),
-                                type_path: format_type_path(&p.path),
-                            }).collect(),
-                            decl: match proc.declaration {
-                                Some(ref decl) => if decl.is_verb { "verb" } else { "proc" },
-                                None => "",
-                            },
-                            file: context.file_path(proc_value.location.file),
-                            line: proc_value.location.line,
-                        });
-                        anything = true;
-                        substance = true;
-                    }
-                    Err(e) => progress.println(&format!("{}/proc/{}: {}", ty.path, name, e)),
-                }
+                let block = DocBlock::parse(&proc_value.docs.text());
+                parsed_type.procs.insert(name, Proc {
+                    docs: block,
+                    params: proc_value.parameters.iter().map(|p| Param {
+                        name: p.name.clone(),
+                        type_path: format_type_path(&p.path),
+                    }).collect(),
+                    decl: match proc.declaration {
+                        Some(ref decl) => if decl.is_verb { "verb" } else { "proc" },
+                        None => "",
+                    },
+                    file: context.file_path(proc_value.location.file),
+                    line: proc_value.location.line,
+                });
+                anything = true;
+                substance = true;
             }
         }
 
@@ -217,7 +197,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
             if let Some(module) = modules.get_mut(&context.file_path(ty.location.file)) {
                 module.items_wip.push((ty.location.line, ModuleItem::Type {
                     path: ty.get().pretty_path(),
-                    teaser: block.teaser.clone(),
+                    teaser: block.teaser().to_owned(),
                     substance: substance,
                 }));
             }
@@ -248,18 +228,10 @@ fn main() -> Result<(), Box<std::error::Error>> {
                 let doc = ::std::mem::replace(&mut docs, Default::default());
                 if _first {
                     _first = false;
-                    match parse_md_docblock(&doc.text()) {
-                        Ok(block) => {
-                            module.name = block.title;
-                            module.teaser = block.teaser;
-                            if let Some(desc) = block.description {
-                                module.items.push(ModuleItem::Docs(format!("<p>{}</p>{}", module.teaser, desc)));
-                            } else {
-                                module.items.push(ModuleItem::Docs(format!("<p>{}</p>", module.teaser)));
-                            }
-                        }
-                        Err(e) => progress.println(&format!("{}: {}", path.display(), e)),
-                    }
+                    let (title, block) = DocBlock::parse_with_title(&doc.text());
+                    module.name = title;
+                    module.teaser = block.teaser().to_owned();
+                    module.items.push(ModuleItem::Docs(block.html));
                 } else {
                     module.items.push(ModuleItem::Docs(markdown::render(&doc.text())));
                 }

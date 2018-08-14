@@ -16,23 +16,21 @@
     {{ path | safe | linkify_type }}
 {%- endif %} {{ macros::git_link(env=env, item=details) }}</h1>
 
-{%- if details.docs -%}
-    {{ macros::doc_block(block=details.docs) }}
-{%- endif -%}
+{% if details.docs %}{{ details.docs.html | safe }}{% endif %}
 
 {%- if details.vars or details.procs -%}
     <table class="summary" cellspacing="0">
     {%- if details.vars -%}
         <tr><td colspan="2"><h2>Vars</h2></td></tr>
         {%- for name, var in details.vars %}
-            <tr><th><a href="{{details.htmlname|safe}}.html#var/{{name}}">{{ name }}</a></th><td>{{ var.docs.teaser | safe | md(teaser=true) }}</td></tr>
+            <tr><th><a href="{{details.htmlname|safe}}.html#var/{{name}}">{{ name }}</a></th><td>{{ macros::teaser(block=var.docs) }}</td></tr>
         {%- endfor %}
     {%- endif -%}
 
     {%- if details.procs -%}
         <tr><td colspan="2"><h2>Procs</h2></td></tr>
         {%- for name, proc in details.procs %}
-            <tr><th><a href="{{details.htmlname|safe}}.html#proc/{{name}}">{{ name }}</a></th><td>{{ proc.docs.teaser | safe | md(teaser=true) }}</td></tr>
+            <tr><th><a href="{{details.htmlname|safe}}.html#proc/{{name}}">{{ name }}</a></th><td>{{ macros::teaser(block=proc.docs) }}</td></tr>
         {%- endfor %}
     {%- endif -%}
     </table>
@@ -53,7 +51,7 @@
                 {{ var.type.path | safe | linkify_type }}</aside>
         {%- endif -%}
         {{ macros::git_link(env=env, item=var) }}</h3>
-        {{ macros::doc_block(block=var.docs) }}
+        {{ var.docs.html | safe }}
     {%- endfor -%}
 {% endif %}
 
@@ -71,7 +69,7 @@
             {%- endfor -%}
             ) {{ macros::git_link(env=env, item=proc) }}</aside>
         </h3>
-        {{ macros::doc_block(block=proc.docs) }}
+        {{ proc.docs.html | safe }}
     {%- endfor -%}
 {%- endif -%}
 {% endblock content %}
