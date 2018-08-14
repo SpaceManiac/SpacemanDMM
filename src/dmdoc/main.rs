@@ -136,12 +136,15 @@ fn main() -> Result<(), Box<std::error::Error>> {
         parsed_type.name = ty.get().vars.get("name")
             .and_then(|v| v.value.constant.as_ref())
             .and_then(|c| c.as_str())
-            .unwrap_or("");
+            .unwrap_or("").into();
 
         let mut anything = false;
         let mut substance = false;
         if !ty.docs.is_empty() {
-            let block = DocBlock::parse(&ty.docs.text());
+            let (title, block) = DocBlock::parse_with_title(&ty.docs.text());
+            if let Some(title) = title {
+                parsed_type.name = title.into();
+            }
             anything = true;
             substance = block.has_description;
             parsed_type.docs = Some(block);
@@ -560,7 +563,7 @@ struct Git {
 /// A parsed documented type.
 #[derive(Default, Serialize)]
 struct ParsedType<'a> {
-    name: &'a str,
+    name: std::borrow::Cow<'a, str>,
     docs: Option<DocBlock>,
     substance: bool,
     vars: BTreeMap<&'a str, Var<'a>>,

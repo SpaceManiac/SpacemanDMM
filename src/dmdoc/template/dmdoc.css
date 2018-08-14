@@ -9,6 +9,8 @@ body {
 }
 pre, code {
     background: white;
+    tab-size: 4;
+    -moz-tab-size: 4;
 }
 a {
     color: #333333;
