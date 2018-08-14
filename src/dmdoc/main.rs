@@ -276,12 +276,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
     // render
     println!("saving static resources");
-    progress = Progress::default();
-    for (name, contents) in template::RESOURCES {
-        progress.update(name);
-        create(&output_path.join(name))?.write_all(contents)?;
-    }
-    drop(progress);
+    template::save_resources(output_path)?;
 
     let env_filename = environment.display().to_string();
     let mut env = Environment {
