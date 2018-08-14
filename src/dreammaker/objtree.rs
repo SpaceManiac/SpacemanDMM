@@ -11,7 +11,7 @@ use linked_hash_map::LinkedHashMap;
 
 use super::ast::{Expression, VarType, PathOp, Prefab, Parameter};
 use super::constants::Constant;
-use super::docs::DocComment;
+use super::docs::DocCollection;
 use super::{DMError, Location, Context};
 
 // ----------------------------------------------------------------------------
@@ -33,7 +33,7 @@ pub struct VarValue {
     /// Evaluated value for non-static and non-tmp vars.
     pub constant: Option<Constant>,
     pub being_evaluated: bool,
-    pub docs: Option<DocComment>,
+    pub docs: DocCollection,
 }
 
 #[derive(Debug, Clone)]
@@ -52,7 +52,7 @@ pub struct ProcDeclaration {
 pub struct ProcValue {
     pub location: Location,
     pub parameters: Vec<Parameter>,
-    pub docs: Option<DocComment>,
+    pub docs: DocCollection,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -75,7 +75,7 @@ pub struct Type {
     pub vars: LinkedHashMap<String, TypeVar>,
     pub procs: LinkedHashMap<String, TypeProc>,
     parent_type: NodeIndex,
-    pub docs: Option<DocComment>,
+    pub docs: DocCollection,
 }
 
 impl Type {
@@ -301,7 +301,7 @@ impl Default for ObjectTree {
             vars: Default::default(),
             procs: Default::default(),
             parent_type: NodeIndex::new(BAD_NODE_INDEX),
-            docs: None,
+            docs: Default::default(),
         });
         tree
     }
@@ -469,7 +469,7 @@ impl ObjectTree {
             location: location,
             location_specificity: len,
             parent_type: NodeIndex::new(BAD_NODE_INDEX),
-            docs: None,
+            docs: Default::default(),
         });
         self.graph.add_edge(parent, node, ());
         self.types.insert(path, node);
@@ -501,7 +501,7 @@ impl ObjectTree {
         parent: NodeIndex,
         mut prev: &'a str,
         mut rest: I,
-        comment: Option<DocComment>,
+        comment: DocCollection,
     ) -> Result<Option<&mut TypeVar>, DMError> where
         I: Iterator<Item=&'a str>
     {
@@ -576,7 +576,7 @@ impl ObjectTree {
         proc.value.push(ProcValue {
             location,
             parameters,
-            docs: None,
+            docs: Default::default(),
         });
         Ok((len, proc.value.last_mut().unwrap()))
     }
@@ -586,7 +586,7 @@ impl ObjectTree {
         location: Location,
         mut path: I,
         len: usize,
-        comment: Option<DocComment>,
+        comment: DocCollection,
     ) -> Result<(), DMError> {
         let (parent, child) = self.get_from_path(location, &mut path, len)?;
         if is_var_decl(child) {
@@ -595,9 +595,7 @@ impl ObjectTree {
             // proc{} block, children will be procs
         } else {
             let idx = self.subtype_or_add(location, parent, child, len);
-            if let Some(comment) = comment {
-                comment.merge_into(&mut self.graph.node_weight_mut(idx).unwrap().docs);
-            }
+            self.graph.node_weight_mut(idx).unwrap().docs.extend(comment);
         }
         Ok(())
     }
@@ -608,7 +606,7 @@ impl ObjectTree {
         mut path: I,
         len: usize,
         expr: Expression,
-        comment: Option<DocComment>,
+        comment: DocCollection,
     ) -> Result<(), DMError> {
         let (parent, initial) = self.get_from_path(location, &mut path, len)?;
         if let Some(type_var) = self.register_var(location, parent, initial, path, comment)? {

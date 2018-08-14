@@ -2,6 +2,62 @@
 
 use std::fmt;
 
+/// A collection of documentation comments targeting the same item.
+#[derive(Default, Clone, Debug, PartialEq)]
+pub struct DocCollection {
+    elems: Vec<DocComment>,
+}
+
+impl DocCollection {
+    /// Push a doc comment to the collection.
+    pub fn push(&mut self, comment: DocComment) {
+        self.elems.push(comment);
+    }
+
+    /// Combine another collection into this one.
+    pub fn extend(&mut self, collection: DocCollection) {
+        self.elems.extend(collection.elems);
+    }
+
+    /// Check whether this collection is empty.
+    pub fn is_empty(&self) -> bool {
+        self.elems.iter().all(|c| c.is_empty())
+    }
+
+    /// Render this collection to a single Markdown document.
+    pub fn text(&self) -> String {
+        let mut output = String::new();
+        let mut line_comments = String::new();
+        for each in self.elems.iter() {
+            match each.kind {
+                CommentKind::Block => {
+                    if !line_comments.is_empty() {
+                        simplify(&mut output, &line_comments, '/');
+                        line_comments.clear();
+                    }
+                    if each.is_empty() {
+                        continue;
+                    }
+                    // block comments are always paragraphs
+                    output.push_str("\n");
+                    if simplify(&mut output, &each.text, '*') {
+                        output.push_str("\n");
+                    }
+                },
+                CommentKind::Line => {
+                    // line comments are paragraphs only if there are blanks
+                    line_comments.push_str(&each.text);
+                    line_comments.push_str("\n");
+                },
+            }
+        }
+        if !line_comments.is_empty() {
+            simplify(&mut output, &line_comments, '/');
+        }
+        output
+    }
+}
+
 /// A documentation comment.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DocComment {
@@ -17,32 +73,8 @@ impl DocComment {
     }
 
     /// Check if this comment is entirely textless.
-    pub fn is_empty(&self) -> bool {
+    fn is_empty(&self) -> bool {
         is_empty(&self.text, self.kind.ignore_char())
-    }
-
-    /// Merge or begin an in-progress doc comment with this one.
-    pub fn merge_into(mut self, other: &mut Option<DocComment>) {
-        self.simplify();
-        if self.is_empty() {
-            return;
-        }
-        match *other {
-            None => *other = Some(self),
-            Some(ref mut it) => {
-                let mut extra_newline = "";
-                if it.kind == CommentKind::Block || self.kind == CommentKind::Block {
-                    extra_newline = "\n";
-                }
-                it.text = format!("{}\n{}{}", it.text, extra_newline, self.text);
-                it.kind = self.kind;
-            }
-        }
-    }
-
-    /// Simplify this doc comment, stripping line-start whitespace.
-    pub fn simplify(&mut self) {
-        self.text = simplify(&self.text, self.kind.ignore_char());
     }
 }
 
@@ -75,7 +107,11 @@ impl CommentKind {
     }
 }
 
-fn simplify(text: &str, ignore_char: char) -> String {
+fn simplify(out: &mut String, text: &str, ignore_char: char) -> bool {
+    if text.is_empty() {
+        return false;
+    }
+
     let mut prefix = None;
     let mut suffix = None;
 
@@ -125,7 +161,7 @@ fn simplify(text: &str, ignore_char: char) -> String {
 
     // perform the stripping
     let mut newlines = 0;
-    let mut out = String::new();
+    let mut anything = false;
     for line in text.lines() {
         // Skip empty lines at the start or end of the comment...
         if is_empty(line, ignore_char) {
@@ -139,9 +175,10 @@ fn simplify(text: &str, ignore_char: char) -> String {
             out.push_str("\n");
         }
         out.push_str(&line[prefix_len..line.len()-suffix_len]);
+        anything = true;
         newlines = 1;
     }
-    out
+    anything
 }
 
 fn is_empty(text: &str, ignore_char: char) -> bool {

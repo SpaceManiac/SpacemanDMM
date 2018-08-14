@@ -8,7 +8,7 @@ use interval_tree::{IntervalTree, range};
 
 use super::{DMError, Location, HasLocation, FileId, Context, Severity};
 use super::lexer::*;
-use super::docs::{DocComment, DocTarget};
+use super::docs::{DocComment, DocTarget, DocCollection};
 
 // ----------------------------------------------------------------------------
 // Macro representation and predefined macros
@@ -17,13 +17,13 @@ use super::docs::{DocComment, DocTarget};
 pub enum Define {
     Constant {
         subst: Vec<Token>,
-        docs: Option<DocComment>,
+        docs: DocCollection,
     },
     Function {
         params: Vec<String>,
         subst: Vec<Token>,
         variadic: bool,
-        docs: Option<DocComment>,
+        docs: DocCollection,
     },
 }
 
@@ -599,9 +599,9 @@ impl<'ctx> Preprocessor<'ctx> {
                                 break;
                             }
                         }
-                        let mut docs = None;
+                        let mut docs = DocCollection::default();
                         for each in our_docs.into_iter().rev() {
-                            each.merge_into(&mut docs);
+                            docs.push(each);
                         }
                         // flush all docs which do not apply to this define
                         self.flush_docs();
@@ -642,7 +642,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                     }
                                 }
                                 Token::Punct(Punctuation::Newline) => break 'outer,
-                                Token::DocComment(doc) => doc.merge_into(&mut docs),
+                                Token::DocComment(doc) => docs.push(doc),
                                 other => {
                                     subst.push(other);
                                 }
@@ -650,7 +650,7 @@ impl<'ctx> Preprocessor<'ctx> {
                             loop {
                                 match next!() {
                                     Token::Punct(Punctuation::Newline) => break 'outer,
-                                    Token::DocComment(doc) => doc.merge_into(&mut docs),
+                                    Token::DocComment(doc) => docs.push(doc),
                                     other => subst.push(other),
                                 }
                             }

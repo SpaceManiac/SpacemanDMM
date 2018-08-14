@@ -337,8 +337,8 @@ pub struct Parser<'ctx, 'an, I> {
     location: Location,
     expected: Vec<String>,
 
-    docs_following: Option<DocComment>,
-    docs_enclosing: Option<DocComment>,
+    docs_following: DocCollection,
+    docs_enclosing: DocCollection,
     module_docs: BTreeMap<FileId, Vec<(u32, DocComment)>>,
     in_docs: usize,
 
@@ -369,8 +369,8 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             location: Default::default(),
             expected: Vec::new(),
 
-            docs_following: None,
-            docs_enclosing: None,
+            docs_following: Default::default(),
+            docs_enclosing: Default::default(),
             module_docs: Default::default(),
             in_docs: 0,
 
@@ -466,8 +466,8 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                         DocTarget::EnclosingItem if self.in_docs == 0 => {
                             self.module_docs.entry(location.file).or_default().push((location.line, dc));
                         },
-                        DocTarget::EnclosingItem => dc.merge_into(&mut self.docs_enclosing),
-                        DocTarget::FollowingItem => dc.merge_into(&mut self.docs_following),
+                        DocTarget::EnclosingItem => self.docs_enclosing.push(dc),
+                        DocTarget::FollowingItem => self.docs_following.push(dc),
                     }
                 }
                 Some(token) => {
@@ -565,15 +565,15 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     // ------------------------------------------------------------------------
     // Doc comment tracking
 
-    fn doc_comment<R, F: FnOnce(&mut Self) -> Status<R>>(&mut self, f: F) -> Status<(Option<DocComment>, R)> {
-        let enclosing = self.docs_enclosing.take();
-        let mut docs = self.docs_following.take();
+    fn doc_comment<R, F: FnOnce(&mut Self) -> Status<R>>(&mut self, f: F) -> Status<(DocCollection, R)> {
+        use std::mem::replace;
+
+        let enclosing = replace(&mut self.docs_enclosing, Default::default());
+        let mut docs = replace(&mut self.docs_following, Default::default());
         self.in_docs += 1;
         let result = f(self);
         self.in_docs -= 1;
-        if let Some(c) = ::std::mem::replace(&mut self.docs_enclosing, enclosing) {
-            c.merge_into(&mut docs);
-        }
+        docs.extend(replace(&mut self.docs_enclosing, enclosing));
         match result {
             Ok(Some(found)) => Ok(Some((docs, found))),
             Ok(None) => Ok(None),
@@ -668,14 +668,14 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         match self.next("contents")? {
             t @ Punct(LBrace) => {
                 // `thing{` - block
-                if let Err(e) = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), None) {
+                if let Err(e) = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), Default::default()) {
                     self.context.register_error(e);
                 }
                 self.put_back(t);
                 let start = self.updated_location();
                 let (comment, ()) = require!(self.doc_comment(|this| this.tree_block(new_stack)));
                 // TODO: make this duplicate less work?
-                if comment.is_some() {
+                if !comment.is_empty() {
                     let _ = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), comment);
                 }
                 self.annotate(start, || Annotation::TreeBlock(new_stack.to_vec()));
@@ -727,9 +727,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
 
                 match self.tree.add_proc(location, new_stack.iter(), new_stack.len(), parameters) {
                     Ok((idx, proc)) => {
-                        if let Some(comment) = comment {
-                            comment.merge_into(&mut proc.docs);
-                        }
+                        proc.docs.extend(comment);
                         // manually performed for borrowck reasons
                         if let Some(dest) = self.annotations.as_mut() {
                             dest.insert(entry_start..body_start, Annotation::ProcHeader(new_stack.to_vec(), idx));
@@ -762,7 +760,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             other => {
                 // usually `thing;` - a contentless declaration
                 // TODO: allow enclosing-targeting docs here somehow?
-                let comment = self.docs_following.take();
+                let comment = ::std::mem::replace(&mut self.docs_following, Default::default());
                 if let Err(e) = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), comment) {
                     self.context.register_error(e);
                 }

@@ -15,6 +15,8 @@ use std::io::{self, Write};
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 
+use dm::docs::*;
+
 use markdown::{DocBlock, parse_md_docblock};
 
 // ----------------------------------------------------------------------------
@@ -102,21 +104,23 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
         let (docs, has_params, params, is_variadic);
         match define {
-            dm::preprocessor::Define::Constant { docs: Some(dc), .. } => {
+            dm::preprocessor::Define::Constant { docs: dc, .. } => {
                 docs = dc;
                 has_params = false;
                 params = &[][..];
                 is_variadic = false;
             }
-            dm::preprocessor::Define::Function { docs: Some(dc), params: macro_params, variadic, .. } => {
+            dm::preprocessor::Define::Function { docs: dc, params: macro_params, variadic, .. } => {
                 docs = dc;
                 has_params = true;
                 params = macro_params;
                 is_variadic = *variadic;
             }
-            _ => continue,
         }
-        let docs = match parse_md_docblock(&docs.text) {
+        if docs.is_empty() {
+            continue;
+        }
+        let docs = match parse_md_docblock(&docs.text()) {
             Ok(block) => block,
             Err(e) => {
                 progress.println(&format!("#define {}: {}", name, e));
@@ -144,8 +148,8 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
         let mut anything = false;
         let mut substance = false;
-        if let Some(ref docs) = ty.docs {
-            match parse_md_docblock(&docs.text) {
+        if !ty.docs.is_empty() {
+            match parse_md_docblock(&ty.docs.text()) {
                 Ok(block) => {
                     anything = true;
                     substance = block.description.is_some();
@@ -156,8 +160,8 @@ fn main() -> Result<(), Box<std::error::Error>> {
         }
 
         for (name, var) in ty.get().vars.iter() {
-            if let Some(ref docs) = var.value.docs {
-                match parse_md_docblock(&docs.text) {
+            if !var.value.docs.is_empty() {
+                match parse_md_docblock(&var.value.docs.text()) {
                     Ok(block) => {
                         // `type` is pulled from the parent if necessary
                         let type_ = ty.get_declaration(name).map(|decl| VarType {
@@ -184,8 +188,8 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
         for (name, proc) in ty.get().procs.iter() {
             let proc_value = proc.value.last().unwrap();
-            if let Some(ref docs) = proc_value.docs {
-                match parse_md_docblock(&docs.text) {
+            if !proc_value.docs.is_empty() {
+                match parse_md_docblock(&proc_value.docs.text()) {
                     Ok(block) => {
                         parsed_type.procs.insert(name, Proc {
                             docs: block,
@@ -237,25 +241,27 @@ fn main() -> Result<(), Box<std::error::Error>> {
         module.htmlname = path.with_extension("").display().to_string().replace("\\", "/");
         module.items_wip.sort_by_key(|&(line, _)| line);
 
-        let mut docs: Option<dm::docs::DocComment> = None;
+        let mut docs = DocCollection::default();
         let mut _first = true;
         macro_rules! push_docs { () => {  // oof
-            if let Some(doc) = docs.take() {
+            if !docs.is_empty() {
+                let doc = ::std::mem::replace(&mut docs, Default::default());
                 if _first {
                     _first = false;
-                    match parse_md_docblock(&doc.text) {
+                    match parse_md_docblock(&doc.text()) {
                         Ok(block) => {
                             module.name = block.title;
                             module.teaser = block.teaser;
-                            module.items.push(ModuleItem::Docs(format!("<p>{}</p>", module.teaser)));
                             if let Some(desc) = block.description {
-                                module.items.push(ModuleItem::Docs(desc));
+                                module.items.push(ModuleItem::Docs(format!("<p>{}</p>{}", module.teaser, desc)));
+                            } else {
+                                module.items.push(ModuleItem::Docs(format!("<p>{}</p>", module.teaser)));
                             }
                         }
                         Err(e) => progress.println(&format!("{}: {}", path.display(), e)),
                     }
                 } else {
-                    module.items.push(ModuleItem::Docs(markdown::render(&doc.text)));
+                    module.items.push(ModuleItem::Docs(markdown::render(&doc.text())));
                 }
             }
         }}
@@ -265,11 +271,9 @@ fn main() -> Result<(), Box<std::error::Error>> {
             match item {
                 ModuleItem::DocComment(doc) => {
                     if line > last_line + 1 {
-                        if let Some(ref mut docs) = docs {
-                            docs.text.push_str("\n");
-                        }
+                        docs.push(DocComment::new(CommentKind::Line, DocTarget::EnclosingItem));
                     }
-                    doc.merge_into(&mut docs);
+                    docs.push(doc);
                     last_line = line;
                 },
                 other => {
@@ -650,7 +654,7 @@ struct Define<'a> {
 enum ModuleItem<'a> {
     // preparation
     #[serde(skip)]
-    DocComment(dm::docs::DocComment),
+    DocComment(DocComment),
 
     // rendering
     #[serde(rename="docs")]

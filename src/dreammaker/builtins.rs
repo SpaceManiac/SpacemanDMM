@@ -18,7 +18,7 @@ pub fn default_defines(defines: &mut DefineMap) {
         ($($i:ident = $($x:expr),*;)*) => {
             $(
                 assert!(defines.insert(
-                    stringify!($i).into(), (location, Define::Constant { subst: vec![$($x),*], docs: None })
+                    stringify!($i).into(), (location, Define::Constant { subst: vec![$($x),*], docs: Default::default() })
                 ).is_none(), stringify!($i));
             )*
         }
@@ -126,7 +126,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
                 #![allow(unreachable_code)]
                 let elems = [$(stringify!($elem)),*];
                 $(
-                    tree.add_var(location, elems.iter().cloned(), elems.len() + 1, $val, None)?;
+                    tree.add_var(location, elems.iter().cloned(), elems.len() + 1, $val, Default::default())?;
                     break;
                 )*
                 $(
@@ -135,7 +135,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
                     ),*])?;
                     break;
                 )*
-                tree.add_entry(location, elems.iter().cloned(), elems.len() + 1, None)?;
+                tree.add_entry(location, elems.iter().cloned(), elems.len() + 1, Default::default())?;
                 break;
             })*
         }

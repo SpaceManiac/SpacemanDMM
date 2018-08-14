@@ -7,7 +7,7 @@ body {
     max-width: 73%;
     overflow-y: scroll;
 }
-code {
+pre, code {
     background: white;
 }
 a {
