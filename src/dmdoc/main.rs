@@ -128,6 +128,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
     // collate types which have docs
     let mut count = 0;
+    let mut substance_count = 0;
     objtree.root().recurse(&mut |ty| {
         count += 1;
         progress.update(&ty.path);
@@ -216,6 +217,9 @@ fn main() -> Result<(), Box<std::error::Error>> {
                 parsed_type.htmlname = &ty.get().path[1..];
             }
             types_with_docs.insert(ty.get().pretty_path(), parsed_type);
+            if substance {
+                substance_count += 1;
+            }
         }
     });
 
@@ -265,7 +269,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
     if count == 0 {
         println!("0 types");
     } else {
-        println!("{}/{} types ({}%)", types_with_docs.len(), count, (types_with_docs.len() * 100 / count));
+        println!("{}/{}/{} types ({}%)", substance_count, types_with_docs.len(), count, (types_with_docs.len() * 100 / count));
     }
 
     ALL_TYPE_NAMES.with(|all| {
