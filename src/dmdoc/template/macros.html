@@ -18,3 +18,19 @@
         {%- if env.git.web_url and env.git.revision %}</a>{% endif %}
     {%- endif -%}
 {%- endmacro git_link %}
+
+{% macro index_tree(elems) -%}
+<ul class="index-tree">
+    {% for tree in elems -%}
+        <li{% if tree.children %} class="has-children"{% endif %}>
+        {%- if not tree.htmlname -%}
+            <span{% if tree.no_substance and not tree.children %} class="no-substance"{% endif %} title="{{ tree.full_name }}">{{ tree.self_name }}</span>
+        {%- else -%}
+            <a href="{{ tree.htmlname | safe }}.html" title="{{ tree.full_name }}">{{ tree.self_name }}</a>
+        {%- endif %}
+        {%- if tree.teaser %} - {{ tree.teaser | safe }}{%- endif -%}
+        {% if tree.children %}{{ self::index_tree(elems=tree.children) }}{% endif %}
+        </li>
+    {% endfor -%}
+</ul>
+{%- endmacro %}

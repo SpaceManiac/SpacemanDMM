@@ -246,10 +246,12 @@ fn main() -> Result<(), Box<std::error::Error>> {
             parsed_type.file = context.file_path(ty.location.file);
             parsed_type.line = ty.location.line;
             parsed_type.substance = substance;
-            if ty.is_root() {
-                parsed_type.htmlname = "global";
-            } else {
-                parsed_type.htmlname = &ty.get().path[1..];
+            if substance {
+                if ty.is_root() {
+                    parsed_type.htmlname = "global";
+                } else {
+                    parsed_type.htmlname = &ty.get().path[1..];
+                }
             }
             types_with_docs.insert(ty.get().pretty_path(), parsed_type);
             if substance {
@@ -346,18 +348,39 @@ fn main() -> Result<(), Box<std::error::Error>> {
         #[derive(Serialize)]
         struct Index<'a> {
             env: &'a Environment<'a>,
-            types: &'a BTreeMap<&'a str, ParsedType<'a>>,
-            modules: &'a BTreeMap<String, Module<'a>>,
             html: Option<&'a str>,
+            modules: Vec<IndexTree<'a>>,
+            types: Vec<IndexTree<'a>>,
         }
 
         progress.update("index.html");
         let mut index = create(&output_path.join("index.html"))?;
         index.write_all(tera.render("dm_index.html", &Index {
             env,
-            types: &types_with_docs,
-            modules: &modules,
             html: index_docs.as_ref().map(|(_, docs)| &docs.html[..]),
+            modules: build_index_tree(modules.iter().map(|(_path, module)| IndexTree {
+                htmlname: &module.htmlname,
+                full_name: &module.orig_filename,
+                self_name: match module.name {
+                    None => last_element(&module.orig_filename),
+                    Some(ref t) => t.as_str(),
+                },
+                teaser: &module.teaser,
+                no_substance: false,
+                children: Vec::new(),
+            })),
+            types: build_index_tree(types_with_docs.iter().map(|(path, ty)| IndexTree {
+                htmlname: &ty.htmlname,
+                full_name: path,
+                self_name: if ty.name.is_empty() {
+                    last_element(path)
+                } else {
+                    &ty.name
+                },
+                teaser: ty.docs.as_ref().map_or("", |d| d.teaser()),
+                no_substance: !ty.substance,
+                children: Vec::new(),
+            })),
         })?.as_bytes())?;
     }
 
@@ -595,6 +618,33 @@ impl Drop for Progress {
         self.update("");
         print!("\r");
     }
+}
+
+// ----------------------------------------------------------------------------
+// Tree stuff
+
+#[derive(Serialize)]
+struct IndexTree<'a> {
+    htmlname: &'a str,  // href="{{htmlname}}.html"
+    full_name: &'a str,
+    self_name: &'a str,
+    teaser: &'a str,
+    no_substance: bool,
+    children: Vec<IndexTree<'a>>,
+}
+
+fn build_index_tree<'a, I>(iter: I) -> Vec<IndexTree<'a>>
+    where I: IntoIterator<Item=IndexTree<'a>>
+{
+    let mut stack = Vec::new();
+    for each in iter {
+        stack.push(each);
+    }
+    stack
+}
+
+fn last_element(path: &str) -> &str {
+    path.split("/").last().unwrap_or("")
 }
 
 // ----------------------------------------------------------------------------
