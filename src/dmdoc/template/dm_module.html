@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 {% import "macros.html" as macros %}
-{% block title %}{{ path }}{% endblock %}
+{% block title %}{{ details.orig_filename }}{% endblock %}
 {% block header -%}
 {{ super() }}
 {%- if details.defines %} &mdash; <a href="{{ details.htmlname | safe }}.html#define">Define Details</a>{% endif %}
 {%- endblock %}
 {% block content %}
 <h1>{% if details.name -%}
-    {{ details.name }} <aside>{{ path | safe }}</aside>
+    {{ details.name }} <aside>{{ details.orig_filename | safe }}</aside>
 {%- else -%}
-    {{ path | safe }}
-{%- endif %} {{ macros::git_link(env=env, file=path) }}</h1>
+    {{ details.orig_filename | safe }}
+{%- endif %} {{ macros::git_link(env=env, file=details.orig_filename) }}</h1>
 
 <table class="summary" cellspacing="0">
     {%- for item in details.items %}

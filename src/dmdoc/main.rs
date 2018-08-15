@@ -4,6 +4,7 @@ extern crate dreammaker as dm;
 extern crate pulldown_cmark;
 extern crate tera;
 extern crate git2;
+extern crate walkdir;
 #[macro_use] extern crate serde_derive;
 
 mod template;
@@ -86,12 +87,12 @@ fn main() -> Result<(), Box<std::error::Error>> {
     let mut progress = Progress::default();
 
     // collate modules which have docs
-    let mut modules = BTreeMap::<PathBuf, Module>::new();
+    let mut modules = BTreeMap::new();
     let mut macro_count = 0;
     for (file, comment_vec) in module_docs {
         let file_path = context.file_path(file);
         progress.update(&file_path.display().to_string());
-        let module = modules.entry(file_path).or_default();
+        let module = module_entry(&mut modules, &file_path);
         for (line, doc) in comment_vec {
             module.items_wip.push((line, ModuleItem::DocComment(doc)));
         }
@@ -120,10 +121,36 @@ fn main() -> Result<(), Box<std::error::Error>> {
             continue;
         }
         let docs = DocBlock::parse(&docs.text());
-        let module = modules.entry(context.file_path(range.start.file)).or_default();
+        let module = module_entry(&mut modules, &context.file_path(range.start.file));
         module.items_wip.push((range.start.line, ModuleItem::Define { name, teaser: docs.teaser().to_owned() }));
         module.defines.insert(name, Define { docs, has_params, params, is_variadic, line: range.start.line });
         macro_count += 1;
+    }
+
+    // search the code tree for Markdown files
+    // TODO: don't hardcode this?
+    for entry in walkdir::WalkDir::new("code").into_iter().filter_entry(is_visible) {
+        use std::io::Read;
+
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension() != Some("md".as_ref()) {
+            continue;
+        }
+        progress.println(&path.display().to_string());
+        if path == Path::new("code/README.md") {
+            // root
+        } else {
+            let mut buf = String::new();
+            File::open(path)?.read_to_string(&mut buf)?;
+
+            let module = module_entry(&mut modules, &path);
+            module.items_wip.push((0, ModuleItem::DocComment(DocComment {
+                kind: CommentKind::Block,
+                target: DocTarget::EnclosingItem,
+                text: buf,
+            })));
+        }
     }
 
     // collate types which have docs
@@ -205,7 +232,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
         // file the type under its module as well
         if let Some(ref block) = parsed_type.docs {
-            if let Some(module) = modules.get_mut(&context.file_path(ty.location.file)) {
+            if let Some(module) = modules.get_mut(&module_path(&context.file_path(ty.location.file))) {
                 module.items_wip.push((ty.location.line, ModuleItem::Type {
                     path: ty.get().pretty_path(),
                     teaser: block.teaser().to_owned(),
@@ -231,8 +258,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
     });
 
     // finalize modules
-    for (path, module) in modules.iter_mut() {
-        module.htmlname = path.with_extension("").display().to_string().replace("\\", "/");
+    for (_, module) in modules.iter_mut() {
         module.items_wip.sort_by_key(|&(line, _)| line);
 
         let mut docs = DocCollection::default();
@@ -314,7 +340,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
         struct Index<'a> {
             env: &'a Environment<'a>,
             types: &'a BTreeMap<&'a str, ParsedType<'a>>,
-            modules: &'a BTreeMap<PathBuf, Module<'a>>,
+            modules: &'a BTreeMap<String, Module<'a>>,
         }
 
         progress.update("index.html");
@@ -331,7 +357,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
         struct ModuleArgs<'a> {
             env: &'a Environment<'a>,
             base_href: &'a str,
-            path: &'a Path,
+            path: &'a str,
             details: &'a Module<'a>,
         }
 
@@ -390,6 +416,26 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
 // ----------------------------------------------------------------------------
 // Helpers
+
+fn module_path(path: &Path) -> String {
+    path.with_extension("").display().to_string().replace("\\", "/")
+}
+
+fn module_entry<'a, 'b>(modules: &'a mut BTreeMap<String, Module<'b>>, path: &Path) -> &'a mut Module<'b> {
+    modules.entry(module_path(path)).or_insert_with(|| {
+        let mut module = Module::default();
+        module.htmlname = module_path(path);
+        module.orig_filename = path.display().to_string().replace("\\", "/");
+        module
+    })
+}
+
+fn is_visible(entry: &walkdir::DirEntry) -> bool {
+    entry.file_name()
+        .to_str()
+        .map(|s| !s.starts_with("."))
+        .unwrap_or(true)
+}
 
 fn format_type_path(vec: &[String]) -> String {
     if vec.is_empty() {
@@ -616,6 +662,7 @@ struct Param {
 #[derive(Default, Serialize)]
 struct Module<'a> {
     htmlname: String,
+    orig_filename: String,
     name: Option<String>,
     teaser: String,
     items: Vec<ModuleItem<'a>>,
