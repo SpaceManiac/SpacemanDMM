@@ -2,7 +2,8 @@
 {% import "macros.html" as macros %}
 {% block title %}Index{% endblock %}
 {% block content %}
-<h1>{{ env.world_name }}</h1>
+<h1>{{ env.title }}</h1>
+{% if html %}{{ html | safe }}{% endif %}
 {% if modules %}
 <h3><a name="modules">Modules</a></h3>
 <ul>

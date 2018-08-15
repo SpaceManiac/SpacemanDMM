@@ -129,6 +129,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
     // search the code tree for Markdown files
     // TODO: don't hardcode this?
+    let mut index_docs = None;
     for entry in walkdir::WalkDir::new("code").into_iter().filter_entry(is_visible) {
         use std::io::Read;
 
@@ -137,13 +138,13 @@ fn main() -> Result<(), Box<std::error::Error>> {
         if path.extension() != Some("md".as_ref()) {
             continue;
         }
-        progress.println(&path.display().to_string());
-        if path == Path::new("code/README.md") {
-            // root
-        } else {
-            let mut buf = String::new();
-            File::open(path)?.read_to_string(&mut buf)?;
+        progress.update(&path.display().to_string());
 
+        let mut buf = String::new();
+        File::open(path)?.read_to_string(&mut buf)?;
+        if path == Path::new("code/README.md") {
+            index_docs = Some(DocBlock::parse_with_title(&buf));
+        } else {
             let module = module_entry(&mut modules, &path);
             module.items_wip.push((0, ModuleItem::DocComment(DocComment {
                 kind: CommentKind::Block,
@@ -316,16 +317,22 @@ fn main() -> Result<(), Box<std::error::Error>> {
     template::save_resources(output_path)?;
 
     let env_filename = environment.display().to_string();
+    let world_name = objtree.find("/world")
+        .and_then(|w| w.get().vars.get("name"))
+        .and_then(|v| v.value.constant.as_ref())
+        .and_then(|c| c.as_str())
+        .unwrap_or("");
+    let title = index_docs.as_ref()
+        .and_then(|(title, _)| title.as_ref())
+        .map(|s| &s[..])
+        .unwrap_or(world_name);
     let mut env = Environment {
         dmdoc: DmDoc {
             version: env!("CARGO_PKG_VERSION"),
         },
         filename: &env_filename,
-        world_name: objtree.find("/world")
-            .and_then(|w| w.get().vars.get("name"))
-            .and_then(|v| v.value.constant.as_ref())
-            .and_then(|c| c.as_str())
-            .unwrap_or(""),
+        world_name,
+        title,
         git: Default::default(),
     };
     if let Err(e) = git_info(&mut env.git) {
@@ -341,6 +348,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
             env: &'a Environment<'a>,
             types: &'a BTreeMap<&'a str, ParsedType<'a>>,
             modules: &'a BTreeMap<String, Module<'a>>,
+            html: Option<&'a str>,
         }
 
         progress.update("index.html");
@@ -349,6 +357,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
             env,
             types: &types_with_docs,
             modules: &modules,
+            html: index_docs.as_ref().map(|(_, docs)| &docs.html[..]),
         })?.as_bytes())?;
     }
 
@@ -596,6 +605,7 @@ struct Environment<'a> {
     dmdoc: DmDoc,
     filename: &'a str,
     world_name: &'a str,
+    title: &'a str,
     git: Git,
 }
 
