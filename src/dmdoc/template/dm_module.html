@@ -41,7 +41,7 @@
             {%- if define.variadic %} ...{% endif -%}
             )</aside>
         {%- endif -%}
-        {{ macros::git_link(env=env, item=define, file=path) }}
+        {{ macros::git_link(env=env, item=define, file=details.orig_filename) }}
     </h3>
     {{ define.docs.html | safe }}
 {%- endfor -%}
