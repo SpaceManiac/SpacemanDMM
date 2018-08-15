@@ -278,6 +278,14 @@ impl<'a> fmt::Debug for TypeRef<'a> {
     }
 }
 
+impl<'a> ::std::cmp::PartialEq for TypeRef<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        ::std::ptr::eq(self.tree, other.tree) && self.idx == other.idx
+    }
+}
+
+impl<'a> ::std::cmp::Eq for TypeRef<'a> {}
+
 // ----------------------------------------------------------------------------
 // The object tree itself
 

@@ -151,6 +151,13 @@ fn main() -> Result<(), Box<std::error::Error>> {
             parsed_type.docs = Some(block);
         }
 
+        let parent_type = ty.parent_type();
+        if parent_type != ty.parent_path() {
+            if let Some(parent) = parent_type {
+                parsed_type.parent_type = Some(&parent.get().path);
+            }
+        }
+
         for (name, var) in ty.get().vars.iter() {
             if !var.value.docs.is_empty() {
                 let block = DocBlock::parse(&var.value.docs.text());
@@ -563,6 +570,7 @@ struct Git {
 #[derive(Default, Serialize)]
 struct ParsedType<'a> {
     name: std::borrow::Cow<'a, str>,
+    parent_type: Option<&'a str>,
     docs: Option<DocBlock>,
     substance: bool,
     vars: BTreeMap<&'a str, Var<'a>>,

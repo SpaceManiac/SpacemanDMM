@@ -14,7 +14,9 @@
     {{ details.name }} <aside>{{ path | safe | linkify_type }}</aside>
 {%- else -%}
     {{ path | safe | linkify_type }}
-{%- endif %} {{ macros::git_link(env=env, item=details) }}</h1>
+{%- endif %}
+{%- if details.parent_type %}<aside> inherits {{ details.parent_type | safe | linkify_type }}</aside>{% endif -%}
+{{ macros::git_link(env=env, item=details) }}</h1>
 
 {% if details.docs %}{{ details.docs.html | safe }}{% endif %}
 
