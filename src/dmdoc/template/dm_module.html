@@ -38,7 +38,7 @@
                 {% if not loop.first %}, {% endif -%}
                 {{ param }}
             {%- endfor -%}
-            {%- if define.variadic %} ...{% endif -%}
+            {%- if define.is_variadic %} ...{% endif -%}
             )</aside>
         {%- endif -%}
         {{ macros::git_link(env=env, item=define, file=details.orig_filename) }}
