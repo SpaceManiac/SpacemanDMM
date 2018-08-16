@@ -62,3 +62,12 @@ a:target {
 img[src="git.png"] {
     opacity: 0.8;
 }
+.expander {
+    cursor: pointer;
+    display: inline-block;
+    position: relative;
+    text-align: right;
+    width: 50px;
+    margin-right: -50px;
+    right: 53px;
+}

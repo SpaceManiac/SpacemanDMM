@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% import "macros.html" as macros %}
 {% block title %}Index{% endblock %}
+{% block head %}{{ super() }}
+<script src="dmdoc.js"></script>
+{% endblock head %}
 {% block content %}
 <h1>{{ env.title }}</h1>
 {% if html %}{{ html | safe }}{% endif %}
