@@ -362,7 +362,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
                 htmlname: &module.htmlname,
                 full_name: &module.orig_filename,
                 self_name: match module.name {
-                    None => last_element(&module.orig_filename),
+                    None => last_element(&module.htmlname),
                     Some(ref t) => t.as_str(),
                 },
                 teaser: &module.teaser,
@@ -636,11 +636,71 @@ struct IndexTree<'a> {
 fn build_index_tree<'a, I>(iter: I) -> Vec<IndexTree<'a>>
     where I: IntoIterator<Item=IndexTree<'a>>
 {
-    let mut stack = Vec::new();
+    let mut stack = vec![IndexTree {
+        htmlname: "",
+        full_name: "",
+        self_name: "",
+        teaser: "",
+        no_substance: false,
+        children: Vec::new(),
+    }];
     for each in iter {
+        // don't speak to me or my poorly-thought-out son ever again
+        {
+            let mut i = 1;
+            let mut len = 0;
+            let mut bits = each.full_name.split("/").peekable();
+            if bits.peek() == Some(&"") {
+                bits.next();
+                len += 1;
+            }
+            // determine common position
+            while i < stack.len() {
+                {
+                    let bit = match bits.peek() {
+                        Some(bit) => bit,
+                        None => break,
+                    };
+                    if stack[i].full_name != &each.full_name[..len + bit.len()] {
+                        break;
+                    }
+                    len += 1 + bit.len();
+                }
+                i += 1;
+                bits.next();
+            }
+            // pop everything below our common parent
+            combine(&mut stack, i);
+            // push ancestors between stack and ourselves
+            while let Some(bit) = bits.next() {
+                if bits.peek().is_none() {
+                    break;
+                }
+                stack.push(IndexTree {
+                    htmlname: "",
+                    full_name: &each.full_name[..len + bit.len()],
+                    self_name: bit,
+                    teaser: "",
+                    no_substance: true,
+                    children: Vec::new(),
+                });
+                len += 1 + bit.len();
+            }
+        }
+        // push ourselves
         stack.push(each);
     }
-    stack
+    combine(&mut stack, 1);
+    stack.remove(0).children
+}
+
+fn combine(stack: &mut Vec<IndexTree>, to: usize) {
+    while to < stack.len() {
+        let popped = stack.pop().unwrap();
+        let last = stack.last_mut().expect("last_mut");
+        last.no_substance = last.no_substance && popped.no_substance;
+        last.children.push(popped);
+    }
 }
 
 fn last_element(path: &str) -> &str {

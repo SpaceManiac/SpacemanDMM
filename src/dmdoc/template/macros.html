@@ -22,15 +22,26 @@
 {% macro index_tree(elems) -%}
 <ul class="index-tree">
     {% for tree in elems -%}
+        {{ self::index_tree_elem(tree=tree) }}
+    {% endfor -%}
+</ul>
+{%- endmacro %}
+
+{% macro index_tree_elem(tree, prefix="") -%}
+    {%- if tree.children | length == 1 and not tree.htmlname and not tree.teaser -%}
+        {{ self::index_tree_elem(tree=tree.children[0], prefix=prefix ~ tree.self_name ~ "/") }}
+    {%- else -%}
         <li{% if tree.children %} class="has-children"{% endif %}>
+        {%- if prefix -%}
+            <span class="no-substance">{{prefix}}</span>
+        {%- endif -%}
         {%- if not tree.htmlname -%}
-            <span{% if tree.no_substance and not tree.children %} class="no-substance"{% endif %} title="{{ tree.full_name }}">{{ tree.self_name }}</span>
+            <span{% if tree.no_substance %} class="no-substance"{% endif %} title="{{ tree.full_name }}">{{ tree.self_name }}</span>
         {%- else -%}
             <a href="{{ tree.htmlname | safe }}.html" title="{{ tree.full_name }}">{{ tree.self_name }}</a>
         {%- endif %}
         {%- if tree.teaser %} - {{ tree.teaser | safe }}{%- endif -%}
-        {% if tree.children %}{{ self::index_tree(elems=tree.children) }}{% endif %}
+        {% if tree.children %}{{ self::index_tree(elems=tree.children) }}{% endif -%}
         </li>
-    {% endfor -%}
-</ul>
+    {%- endif -%}
 {%- endmacro %}
