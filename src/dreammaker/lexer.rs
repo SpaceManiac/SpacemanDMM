@@ -560,7 +560,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         comment.map(Token::DocComment)
     }
 
-    fn read_number_inner(&mut self, first: u8) -> (bool, u32, String) {
+    fn read_number_inner(&mut self, first: u8) -> (bool, u32, Cow<'static, str>) {
         let mut integer = true;
         let mut exponent = false;
         let mut radix = 10;
@@ -597,10 +597,10 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                         }
                         // Not what we expected, throw it up the line so that
                         // f32::from_str will error.
-                        return (false, 10, buf);
+                        return (false, 10, buf.into());
                     }
                     // Got "1.#INF", change it to "inf" for read_number.
-                    return (false, 10, "inf".to_owned());
+                    return (false, 10, "inf".into());
                 }
                 Some(ch) if (ch as char).is_digit(::std::cmp::max(radix, 10)) => {
                     exponent = false;
@@ -608,7 +608,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                 }
                 ch => {
                     self.put_back(ch);
-                    return (integer, radix, buf);
+                    return (integer, radix, buf.into());
                 }
             }
         }

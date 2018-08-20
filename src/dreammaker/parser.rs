@@ -1,5 +1,6 @@
 //! Minimalist parser which turns a token stream into an object tree.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::ops::Range;
 use std::fmt;
@@ -335,7 +336,7 @@ pub struct Parser<'ctx, 'an, I> {
     eof: bool,
     next: Option<Token>,
     location: Location,
-    expected: Vec<String>,
+    expected: Vec<Cow<'static, str>>,
 
     docs_following: DocCollection,
     docs_enclosing: DocCollection,
@@ -455,7 +456,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         }
     }
 
-    fn next<S: Into<String>>(&mut self, expected: S) -> Result<Token, DMError> {
+    fn next<S: Into<Cow<'static, str>>>(&mut self, expected: S) -> Result<Token, DMError> {
         let tok = loop {
             if let Some(next) = self.next.take() {
                 break Ok(next);
@@ -555,7 +556,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         }
     }
 
-    fn exact_ident(&mut self, ident: &str) -> Status<()> {
+    fn exact_ident(&mut self, ident: &'static str) -> Status<()> {
         match self.next(ident)? {
             Token::Ident(ref i, _) if i == ident => SUCCESS,
             other => self.try_another(other),

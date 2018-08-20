@@ -538,7 +538,8 @@ impl<'a> ConstantFolder<'a> {
                     if args.len() != 3 && args.len() != 4 {
                         return Err(self.error("malformed rgb() call"));
                     }
-                    let mut result = "#".to_owned();
+                    let mut result = String::with_capacity(7);
+                    result.push_str("#");
                     for each in args {
                         if let Constant::Int(i) = self.expr(each, None)? {
                             let clamped = ::std::cmp::max(::std::cmp::min(i, 255), 0);
