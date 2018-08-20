@@ -55,7 +55,7 @@ table! {
     /// Not all punctuation types will actually appear in the lexer's output;
     /// some (such as comments) are handled internally.
     table PUNCT_TABLE: &'static [u8] => Punctuation;
-    // Order is significant; see read_punct below.
+    // Order is significant; see filter_punct below.
     b"\t",  Tab;
     b"\n",  Newline;
     b" ",   Space;
@@ -126,6 +126,21 @@ impl fmt::Display for Punctuation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(::std::str::from_utf8(self.value()).unwrap())
     }
+}
+
+fn filter_punct<'a>(input: &'a [(&'static [u8], Punctuation)], filter: &[u8]) -> &'a [(&'static [u8], Punctuation)] {
+    // requires that PUNCT_TABLE be ordered, shorter entries be first,
+    // and all entries with >1 character also have their prefix in the table
+    let mut start = 0;
+    while start < input.len() && !input[start].0.starts_with(filter) {
+        start += 1;
+    }
+    let mut end = start;
+    while end < input.len() && input[end].0.starts_with(filter) {
+        end += 1;
+    }
+    //println!("{:?} -> {:?}", filter, &input[start..end]);
+    &input[start..end]
 }
 
 /// A single DM token.
@@ -747,33 +762,32 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
     }
 
     fn read_punct(&mut self, first: u8) -> Option<Punctuation> {
-        // requires that PUNCT_TABLE be ordered, shorter entries be first,
-        // and all entries with >1 character also have their prefix in the table
-        let mut items: Vec<_> = PUNCT_TABLE.iter()
-            .skip_while(|&&(tok, _)| tok[0] < first)
-            .take_while(|&&(tok, _)| tok[0] == first)
-            .collect();
-        if items.is_empty() {
-            return None
-        }
+        let mut needle = [first, 0, 0, 0, 0, 0, 0, 0];  // poor man's StackVec
+        let mut needle_idx = 1;
 
-        let mut candidate;
-        let mut needle = vec![first];
-        loop {
-            candidate = Some(items[0].1);
+        let mut items = filter_punct(PUNCT_TABLE, &needle[..needle_idx]);
+        let mut candidate = None;
+        while !items.is_empty() {
+            if items[0].0 == &needle[..needle_idx] {
+                candidate = Some(items[0].1);
+            }
             if items.len() == 1 {
                 return candidate
             }
+
             match self.next() {
-                Some(b) => needle.push(b),
+                Some(b) => {
+                    needle[needle_idx] = b;
+                    needle_idx += 1;
+                },
                 None => return candidate,  // EOF
             }
-            items.retain(|&&(tok, _)| tok.starts_with(&needle));
-            if items.is_empty() {
-                self.put_back(needle.last().cloned());
-                return candidate
-            }
+            items = filter_punct(items, &needle[..needle_idx]);
         }
+        if needle_idx > 1 {
+            self.put_back(needle[..needle_idx].last().cloned());
+        }
+        candidate
     }
 
     fn check_close(&mut self, mut punct: Punctuation) -> Punctuation {
