@@ -667,7 +667,9 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
     }
 
     fn read_ident(&mut self, first: u8) -> String {
-        let mut ident = vec![first];
+        // 12 is ~89% of idents, 24 is ~99.5%, 48 is ~100%
+        let mut ident = Vec::with_capacity(12);
+        ident.push(first);
         loop {
             match self.next() {
                 Some(ch) if is_ident(ch) || is_digit(ch) => ident.push(ch),
