@@ -589,7 +589,6 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         // path :: '/'? ident ('/' ident?)*
         let mut absolute = false;
         let mut spurious_lead = false;
-        let mut parts = Vec::new();
         let start = self.updated_location();
 
         // handle leading slash
@@ -605,6 +604,8 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         }
         let mut slash_loc = self.location;
 
+        // 2 is ~66.0%, 4 is ~83.4%, 8 is ~99.9%
+        let mut parts = Vec::with_capacity(2);
         // expect at least one ident
         match self.ident_in_seq(parts.len())? {
             Some(i) => parts.push(i),
@@ -740,7 +741,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
 
                 if self.procs {
                     let result = {
-                        let mut subparser: Parser<'ctx, '_, _> = Parser::new(self.context, body_tt.iter().cloned());
+                        let mut subparser: Parser<'ctx, '_, _> = Parser::new(self.context, body_tt.into_iter());
                         if let Some(a) = self.annotations.as_mut() {
                             subparser.annotations = Some(&mut *a);
                         }
