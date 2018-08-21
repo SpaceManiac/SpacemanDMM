@@ -68,63 +68,63 @@ table! {
     "\t",  Tab;
     "\n",  Newline;
     " ",   Space;
-    "!",	Not;
-    "!=",	NotEq;
+    "!",   Not;
+    "!=",  NotEq;
     "\"",  DoubleQuote;
     "#",   Hash;
     "##",  TokenPaste;
-    "%",	Mod;
+    "%",   Mod;
     "%=",  ModAssign;
-    "&",	BitAnd;
-    "&&",	And;
-    "&=",	BitAndAssign;
+    "&",   BitAnd;
+    "&&",  And;
+    "&=",  BitAndAssign;
     "'",   SingleQuote;
-    "(",	LParen;
-    ")",	RParen;
-    "*",	Mul;
-    "**",	Pow;
-    "*=",	MulAssign;
-    "+",	Add;
+    "(",   LParen;
+    ")",   RParen;
+    "*",   Mul;
+    "**",  Pow;
+    "*=",  MulAssign;
+    "+",   Add;
     "++",  PlusPlus;
-    "+=",	AddAssign;
-    ",",	Comma;
-    "-",	Sub;
+    "+=",  AddAssign;
+    ",",   Comma;
+    "-",   Sub;
     "--",  MinusMinus;
-    "-=",	SubAssign;
-    ".",	Dot;
+    "-=",  SubAssign;
+    ".",   Dot;
     "..",  Super;
     "...", Ellipsis;
-    "/",	Slash;
-    "/*",	BlockComment;
-    "//",	LineComment;
-    "/=",	DivAssign;
-    ":",	Colon -> CloseColon;
-    ";",	Semicolon;
-    "<",	Less;
-    "<<",	LShift;
-    "<<=",	LShiftAssign;
-    "<=",	LessEq;
-    "<>",	LessGreater;
-    "=",	Assign;
-    "==",	Eq;
-    ">",	Greater;
-    ">=",	GreaterEq;
-    ">>",	RShift;
-    ">>=",	RShiftAssign;
+    "/",   Slash;
+    "/*",  BlockComment;
+    "//",  LineComment;
+    "/=",  DivAssign;
+    ":",   Colon -> CloseColon;
+    ";",   Semicolon;
+    "<",   Less;
+    "<<",  LShift;
+    "<<=", LShiftAssign;
+    "<=",  LessEq;
+    "<>",  LessGreater;
+    "=",   Assign;
+    "==",  Eq;
+    ">",   Greater;
+    ">=",  GreaterEq;
+    ">>",  RShift;
+    ">>=", RShiftAssign;
     "?",   QuestionMark;
     "?.",  SafeDot;
     "?:",  SafeColon;
-    "[",	LBracket;
-    "]",	RBracket;
-    "^",	BitXor;
-    "^=",	BitXorAssign;
-    "{",	LBrace;
+    "[",   LBracket;
+    "]",   RBracket;
+    "^",   BitXor;
+    "^=",  BitXorAssign;
+    "{",   LBrace;
     "{\"", BlockString;
-    "|",	BitOr;
-    "|=",	BitOrAssign;
-    "||",	Or;
-    "}",	RBrace;
-    "~",	BitNot;
+    "|",   BitOr;
+    "|=",  BitOrAssign;
+    "||",  Or;
+    "}",   RBrace;
+    "~",   BitNot;
     "~!",  NotEquiv;
     "~=",  Equiv;
     // Keywords - not checked by read_punct
@@ -137,6 +137,69 @@ impl fmt::Display for Punctuation {
     }
 }
 
+/// This lookup table is used to keep `read_punct`, called for essentially each
+/// character in the input, blazing fast. The code to generate it is contained
+/// in the following test.
+static SPEEDY_TABLE: [(usize, usize); 127] = [
+    (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
+    (0, 0), (0, 1), (1, 2), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
+    (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
+    (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
+    (2, 3), (3, 5), (5, 6), (6, 8), (0, 0), (8, 10), (10, 13), (13, 14),
+    (14, 15), (15, 16), (16, 19), (19, 22), (22, 23), (23, 26), (26, 29), (29, 33),
+    (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
+    (0, 0), (0, 0), (33, 34), (34, 35), (35, 40), (40, 42), (42, 46), (46, 49),
+    (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
+    (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
+    (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
+    (0, 0), (0, 0), (0, 0), (49, 50), (0, 0), (50, 51), (51, 53), (0, 0),
+    (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
+    (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
+    (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
+    (0, 0), (0, 0), (0, 0), (53, 55), (55, 58), (58, 59), (59, 62)];
+
+#[test]
+fn make_speedy_table() {
+    let everything: Vec<&str> = PUNCT_TABLE.iter()
+        .map(|p| p.0)
+        .filter(|s| !s.chars().any(|c| c.is_alphanumeric()))
+        .collect();
+    for each in everything.iter() {
+        assert!(each.len() == 1 || everything.contains(&&each[..each.len() - 1]), "no prefix: {}", each);
+    }
+
+    let mut table = vec![];
+    for (i, (each, _)) in PUNCT_TABLE.iter().enumerate() {
+        if each.chars().any(|c| c.is_alphanumeric()) {
+            continue;
+        }
+
+        let b = each.as_bytes()[0] as usize;
+        if b >= table.len() {
+            table.resize(b + 1, (0, 0));
+        }
+        if table[b] == (0, 0) {
+            table[b].0 = i;
+            table[b].1 = i + 1;
+        } else {
+            assert!(i >= table[b].0);
+            assert_eq!(i, table[b].1, "{}", each);
+            table[b].1 = i + 1;
+        }
+    }
+
+    if &SPEEDY_TABLE[..] != &table[..] {
+        panic!("\n\nSpeedy table outdated, replace with:\n\nstatic SPEEDY_TABLE: [(usize, usize); {}] = {:?};\n\n", table.len(), table);
+    }
+}
+
+#[inline]
+fn filter_punct_table<'a>(filter: u8) -> &'static [(&'static str, Punctuation)] {
+    let &(start, end) = SPEEDY_TABLE.get(filter as usize).unwrap_or(&(0, 0));
+    &PUNCT_TABLE[start..end]
+}
+
+#[inline]
 fn filter_punct<'a>(input: &'a [(&'static str, Punctuation)], filter: &[u8]) -> &'a [(&'static str, Punctuation)] {
     // requires that PUNCT_TABLE be ordered, shorter entries be first,
     // and all entries with >1 character also have their prefix in the table
@@ -776,7 +839,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         let mut needle = [first, 0, 0, 0, 0, 0, 0, 0];  // poor man's StackVec
         let mut needle_idx = 1;
 
-        let mut items = filter_punct(PUNCT_TABLE, &needle[..needle_idx]);
+        let mut items = filter_punct_table(first);
         let mut candidate = None;
         while !items.is_empty() {
             if items[0].0.as_bytes() == &needle[..needle_idx] {
