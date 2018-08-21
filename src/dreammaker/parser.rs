@@ -525,10 +525,10 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
     }
 
     fn exact(&mut self, tok: Token) -> Status<()> {
-        let message = if tok == Token::Eof {
-            "EOF".to_owned()
-        } else {
-            format!("'{}'", tok)
+        let message: Cow<'static, str> = match tok {
+            Token::Eof => "EOF".into(),
+            Token::Punct(p) => p.single_quoted().into(),
+            ref other => format!("'{}'", other).into(),
         };
         let next = self.next(message)?;
         if next == tok {
@@ -818,10 +818,9 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
 
     fn tree_entries(&mut self, parent: PathStack, terminator: Token) -> Status<()> {
         loop {
-            let message = if terminator == Token::Eof {
-                "newline".to_owned()
-            } else {
-                format!("newline, '{}'", terminator)
+            let message: Cow<'static, str> = match terminator {
+                Token::Eof => "newline".into(),
+                ref other => format!("newline, '{}'", other).into(),
             };
             let next = self.next(message)?;
             if next == terminator || next == Token::Eof {

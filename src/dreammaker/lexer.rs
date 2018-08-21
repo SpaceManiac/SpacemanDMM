@@ -32,6 +32,15 @@ macro_rules! table {
                 }
             }
 
+            pub fn single_quoted(self) -> &'static str {
+                match self {
+                    $(
+                        $enum_::$name => concat!("'", $literal, "'"),
+                        $($enum_::$close => concat!("'", $literal, "'"),)*
+                    )*
+                }
+            }
+
             fn close(self) -> Self {
                 match self {
                     $(
@@ -54,89 +63,89 @@ table! {
     ///
     /// Not all punctuation types will actually appear in the lexer's output;
     /// some (such as comments) are handled internally.
-    table PUNCT_TABLE: &'static [u8] => Punctuation;
+    table PUNCT_TABLE: &'static str => Punctuation;
     // Order is significant; see filter_punct below.
-    b"\t",  Tab;
-    b"\n",  Newline;
-    b" ",   Space;
-    b"!",	Not;
-    b"!=",	NotEq;
-    b"\"",  DoubleQuote;
-    b"#",   Hash;
-    b"##",  TokenPaste;
-    b"%",	Mod;
-    b"%=",  ModAssign;
-    b"&",	BitAnd;
-    b"&&",	And;
-    b"&=",	BitAndAssign;
-    b"'",   SingleQuote;
-    b"(",	LParen;
-    b")",	RParen;
-    b"*",	Mul;
-    b"**",	Pow;
-    b"*=",	MulAssign;
-    b"+",	Add;
-    b"++",  PlusPlus;
-    b"+=",	AddAssign;
-    b",",	Comma;
-    b"-",	Sub;
-    b"--",  MinusMinus;
-    b"-=",	SubAssign;
-    b".",	Dot;
-    b"..",  Super;
-    b"...", Ellipsis;
-    b"/",	Slash;
-    b"/*",	BlockComment;
-    b"//",	LineComment;
-    b"/=",	DivAssign;
-    b":",	Colon -> CloseColon;
-    b";",	Semicolon;
-    b"<",	Less;
-    b"<<",	LShift;
-    b"<<=",	LShiftAssign;
-    b"<=",	LessEq;
-    b"<>",	LessGreater;
-    b"=",	Assign;
-    b"==",	Eq;
-    b">",	Greater;
-    b">=",	GreaterEq;
-    b">>",	RShift;
-    b">>=",	RShiftAssign;
-    b"?",   QuestionMark;
-    b"?.",  SafeDot;
-    b"?:",  SafeColon;
-    b"[",	LBracket;
-    b"]",	RBracket;
-    b"^",	BitXor;
-    b"^=",	BitXorAssign;
-    b"{",	LBrace;
-    b"{\"", BlockString;
-    b"|",	BitOr;
-    b"|=",	BitOrAssign;
-    b"||",	Or;
-    b"}",	RBrace;
-    b"~",	BitNot;
-    b"~!",  NotEquiv;
-    b"~=",  Equiv;
+    "\t",  Tab;
+    "\n",  Newline;
+    " ",   Space;
+    "!",	Not;
+    "!=",	NotEq;
+    "\"",  DoubleQuote;
+    "#",   Hash;
+    "##",  TokenPaste;
+    "%",	Mod;
+    "%=",  ModAssign;
+    "&",	BitAnd;
+    "&&",	And;
+    "&=",	BitAndAssign;
+    "'",   SingleQuote;
+    "(",	LParen;
+    ")",	RParen;
+    "*",	Mul;
+    "**",	Pow;
+    "*=",	MulAssign;
+    "+",	Add;
+    "++",  PlusPlus;
+    "+=",	AddAssign;
+    ",",	Comma;
+    "-",	Sub;
+    "--",  MinusMinus;
+    "-=",	SubAssign;
+    ".",	Dot;
+    "..",  Super;
+    "...", Ellipsis;
+    "/",	Slash;
+    "/*",	BlockComment;
+    "//",	LineComment;
+    "/=",	DivAssign;
+    ":",	Colon -> CloseColon;
+    ";",	Semicolon;
+    "<",	Less;
+    "<<",	LShift;
+    "<<=",	LShiftAssign;
+    "<=",	LessEq;
+    "<>",	LessGreater;
+    "=",	Assign;
+    "==",	Eq;
+    ">",	Greater;
+    ">=",	GreaterEq;
+    ">>",	RShift;
+    ">>=",	RShiftAssign;
+    "?",   QuestionMark;
+    "?.",  SafeDot;
+    "?:",  SafeColon;
+    "[",	LBracket;
+    "]",	RBracket;
+    "^",	BitXor;
+    "^=",	BitXorAssign;
+    "{",	LBrace;
+    "{\"", BlockString;
+    "|",	BitOr;
+    "|=",	BitOrAssign;
+    "||",	Or;
+    "}",	RBrace;
+    "~",	BitNot;
+    "~!",  NotEquiv;
+    "~=",  Equiv;
     // Keywords - not checked by read_punct
-    b"in",  In;
+    "in",  In;
 }
 
 impl fmt::Display for Punctuation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(::std::str::from_utf8(self.value()).unwrap())
+        f.write_str(self.value())
     }
 }
 
-fn filter_punct<'a>(input: &'a [(&'static [u8], Punctuation)], filter: &[u8]) -> &'a [(&'static [u8], Punctuation)] {
+fn filter_punct<'a>(input: &'a [(&'static str, Punctuation)], filter: &[u8]) -> &'a [(&'static str, Punctuation)] {
     // requires that PUNCT_TABLE be ordered, shorter entries be first,
     // and all entries with >1 character also have their prefix in the table
     let mut start = 0;
-    while start < input.len() && !input[start].0.starts_with(filter) {
+    while start < input.len() && !input[start].0.as_bytes().starts_with(filter) {
         start += 1;
     }
     let mut end = start;
-    while end < input.len() && input[end].0.starts_with(filter) {
+    while end < input.len() && input[end].0.as_bytes().starts_with(filter) {
         end += 1;
     }
     //println!("{:?} -> {:?}", filter, &input[start..end]);
@@ -770,7 +779,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         let mut items = filter_punct(PUNCT_TABLE, &needle[..needle_idx]);
         let mut candidate = None;
         while !items.is_empty() {
-            if items[0].0 == &needle[..needle_idx] {
+            if items[0].0.as_bytes() == &needle[..needle_idx] {
                 candidate = Some(items[0].1);
             }
             if items.len() == 1 {
@@ -921,7 +930,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                         }
                         // check keywords
                         for &(name, value) in PUNCT_TABLE.iter() {
-                            if name == ident.as_bytes() {
+                            if name == ident {
                                 return Some(locate(Punct(value)))
                             }
                         }
