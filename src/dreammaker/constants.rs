@@ -222,7 +222,7 @@ impl fmt::Display for Constant {
                 write!(f, ")")
             },
             Constant::Prefab(ref val) => write!(f, "{}", val),
-            Constant::String(ref val) => write!(f, "\"{}\"", val),
+            Constant::String(ref val) => write!(f, "{}", ::lexer::Quote(val)),
             Constant::Resource(ref val) => write!(f, "'{}'", val),
             Constant::Int(val) => write!(f, "{}", val),
             Constant::Float(val) => write!(f, "{}", val),

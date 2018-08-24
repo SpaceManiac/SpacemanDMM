@@ -581,6 +581,25 @@ impl FromIterator<String> for VarType {
     }
 }
 
+impl fmt::Display for VarType {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        if self.is_static {
+            fmt.write_str("/static")?;
+        }
+        if self.is_const {
+            fmt.write_str("/const")?;
+        }
+        if self.is_tmp {
+            fmt.write_str("/tmp")?;
+        }
+        for bit in self.type_path.iter() {
+            fmt.write_str("/")?;
+            fmt.write_str(bit)?;
+        }
+        Ok(())
+    }
+}
+
 /// A statement in a proc body.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {

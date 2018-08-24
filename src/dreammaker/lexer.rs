@@ -322,12 +322,7 @@ impl fmt::Display for Token {
             Eof => f.write_str("__EOF__"),
             Punct(p) => write!(f, "{}", p),
             Ident(ref i, _) => f.write_str(i),
-            String(ref i) if i.contains("\"}") =>
-                write!(f, "@'{}'", i),
-            String(ref i) if i.contains("\"") || i.contains("\n") =>
-                write!(f, "{{\"{}\"}}", i),
-            String(ref i) =>
-                write!(f, "\"{}\"", i),
+            String(ref i) => write!(f, "{}", Quote(i)),
             InterpStringBegin(ref i) => write!(f, "\"{}[", i),
             InterpStringPart(ref i) => write!(f, "]{}[", i),
             InterpStringEnd(ref i) => write!(f, "]{}\"", i),
@@ -337,6 +332,24 @@ impl fmt::Display for Token {
             Float(i) if i.is_infinite() => write!(f, "1.#INF"),
             Float(i) => write!(f, "{}", i),
             DocComment(ref c) => write!(f, "{}", c),
+        }
+    }
+}
+
+/// Formatting helper to quote a string according to DM's rules.
+///
+/// Assumes that escapes within the string have NOT been parsed
+pub struct Quote<'a>(pub &'a str);
+
+impl<'a> fmt::Display for Quote<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = self.0;
+        if s.contains("\"}") {
+            write!(f, "@@{}@", s)
+        } else if s.contains("\"") || s.contains("\n") {
+            write!(f, "{{\"{}\"}}", s)
+        } else {
+            write!(f, "\"{}\"", s)
         }
     }
 }

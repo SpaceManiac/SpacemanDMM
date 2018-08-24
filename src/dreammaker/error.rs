@@ -169,6 +169,10 @@ impl Location {
         }
         self
     }
+
+    pub fn is_builtins(self) -> bool {
+        self.file == FileId::builtins()
+    }
 }
 
 /// A trait for types which may yield location information.
