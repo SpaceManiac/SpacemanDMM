@@ -83,6 +83,7 @@ pub fn pretty_print<W, I>(w: &mut W, input: I, show_ws: bool) -> io::Result<()> 
                 needs_newline = true;
                 if show_ws { write!(w, ";")?; }
             }
+            lexer::Token::DocComment(_) => {}
             other => {
                 if needs_newline {
                     const SPACES: &str = "                                ";

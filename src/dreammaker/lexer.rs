@@ -254,6 +254,7 @@ impl Token {
                 _ => continue,
             };
             match p {
+                In |
                 Eq |
                 NotEq |
                 Mod |
@@ -321,12 +322,19 @@ impl fmt::Display for Token {
             Eof => f.write_str("__EOF__"),
             Punct(p) => write!(f, "{}", p),
             Ident(ref i, _) => f.write_str(i),
-            String(ref i) => write!(f, "\"{}\"", i),
+            String(ref i) if i.contains("\"}") =>
+                write!(f, "@'{}'", i),
+            String(ref i) if i.contains("\"") || i.contains("\n") =>
+                write!(f, "{{\"{}\"}}", i),
+            String(ref i) =>
+                write!(f, "\"{}\"", i),
             InterpStringBegin(ref i) => write!(f, "\"{}[", i),
             InterpStringPart(ref i) => write!(f, "]{}[", i),
             InterpStringEnd(ref i) => write!(f, "]{}\"", i),
             Resource(ref i) => write!(f, "'{}'", i),
             Int(i) => write!(f, "{}", i),
+            Float(i) if i < 0.0 && i.is_infinite() => write!(f, "-1.#INF"),
+            Float(i) if i.is_infinite() => write!(f, "1.#INF"),
             Float(i) => write!(f, "{}", i),
             DocComment(ref c) => write!(f, "{}", c),
         }
