@@ -575,10 +575,12 @@ impl ObjectTree {
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let node = self.graph.node_weight_mut(parent).unwrap();
         let proc = node.procs.entry(name.to_owned()).or_insert_with(Default::default);
-        proc.declaration = is_verb.map(|is_verb| ProcDeclaration {
-            location,
-            is_verb,
-        });
+        if proc.declaration.is_none() {
+            proc.declaration = is_verb.map(|is_verb| ProcDeclaration {
+                location,
+                is_verb,
+            });
+        }
 
         let len = proc.value.len();
         proc.value.push(ProcValue {
