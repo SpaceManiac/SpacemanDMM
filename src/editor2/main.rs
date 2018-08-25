@@ -30,6 +30,8 @@ pub struct EditorScene {
 
     objtree_rx: mpsc::Receiver<ObjectTree>,
     dmm_rx: mpsc::Receiver<Map>,
+
+    ui_style_editor: bool,
 }
 
 impl EditorScene {
@@ -60,6 +62,8 @@ impl EditorScene {
 
             objtree_rx,
             dmm_rx,
+
+            ui_style_editor: false,
         }
     }
 
@@ -77,6 +81,19 @@ impl EditorScene {
                 self.map_renderer.prepare(&dmm, dmm.z_level(0));
                 self.maps.push(EditorMap { dmm });
             }
+        }
+
+        ui.main_menu_bar(|| {
+            ui.menu(im_str!("Window")).build(|| {
+                ui.menu_item(im_str!("Style Editor"))
+                    .selected(&mut self.ui_style_editor)
+                    .build();
+            })
+        });
+        if self.ui_style_editor {
+            ui.window(im_str!("Style Editor"))
+                .opened(&mut self.ui_style_editor)
+                .build(|| ui.show_default_style_editor());
         }
 
         ui.window(im_str!("Object Tree"))
