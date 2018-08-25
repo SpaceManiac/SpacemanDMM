@@ -1,0 +1,19 @@
+[package]
+name = "spaceman-dmm"
+version = "0.1.0"
+authors = ["Tad Hardesty <tad@platymuus.com>"]
+
+[[bin]]
+name = "editor"
+path = "main.rs"
+
+[dependencies]
+dreammaker = { path = "../dreammaker" }
+#dmm-tools = { path = "../tools" }
+glutin = "0.18"
+imgui = "0.0.20"
+imgui-glium-renderer = "0.0.20"
+
+[dependencies.glium]
+version = "0.22.0"
+default-features = false
