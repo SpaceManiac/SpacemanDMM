@@ -1,4 +1,4 @@
-use imgui::{FrameSize, ImFontConfig, ImGui, ImGuiMouseCursor, Ui};
+use imgui::{FrameSize, ImFontConfig, ImGui, ImGuiMouseCursor};
 use std::time::Instant;
 
 #[derive(Copy, Clone, PartialEq, Debug, Default)]
@@ -8,7 +8,7 @@ struct MouseState {
     wheel: f32,
 }
 
-pub fn run<F: FnMut(&Ui) -> bool>(title: String, clear_color: [f32; 4], mut run_ui: F) {
+pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
     use glium::glutin;
     use glium::{Display, Surface};
     use imgui_glium_renderer::Renderer;
@@ -55,7 +55,7 @@ pub fn run<F: FnMut(&Ui) -> bool>(title: String, clear_color: [f32; 4], mut run_
 
     configure_keys(&mut imgui);
 
-    let mut map = ::map_renderer::GliumTest::new(&display);
+    let mut scene = ::EditorScene::new(&display);
 
     let mut last_frame = Instant::now();
     let mut mouse_state = MouseState::default();
@@ -173,7 +173,7 @@ pub fn run<F: FnMut(&Ui) -> bool>(title: String, clear_color: [f32; 4], mut run_
         }
 
         let ui = imgui.frame(frame_size, delta_s);
-        if !run_ui(&ui) {
+        if !scene.run_ui(&ui) {
             break;
         }
 
@@ -184,7 +184,7 @@ pub fn run<F: FnMut(&Ui) -> bool>(title: String, clear_color: [f32; 4], mut run_
             clear_color[2],
             clear_color[3],
         );
-        map.paint(&mut target);
+        scene.render(&mut target);
         renderer.render(&mut target, ui).expect("Rendering failed");
         target.finish().unwrap();
 
@@ -192,6 +192,7 @@ pub fn run<F: FnMut(&Ui) -> bool>(title: String, clear_color: [f32; 4], mut run_
             break;
         }
     }
+    scene
 }
 
 fn configure_keys(imgui: &mut ImGui) {

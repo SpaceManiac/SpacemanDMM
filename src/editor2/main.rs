@@ -13,30 +13,51 @@ use std::sync::mpsc;
 pub use glium::glutin;
 use imgui::*;
 
-const CLEAR_COLOR: [f32; 4] = [0.25, 0.25, 0.5, 1.0];
+use dm::objtree::{ObjectTree, TypeRef};
 
 fn main() {
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let context = dm::Context::default();
-        let env = dm::detect_environment("tgstation.dme")
-            .expect("error detecting .dme")
-            .expect("no .dme found");
-        let objtree = context.parse_environment(&env)
-            .expect("i/o error opening .dme");
-        let _ = tx.send(objtree);
-    });
+    support::run("SpacemanDMM".to_owned(), [0.25, 0.25, 0.5, 1.0]);
+}
 
-    let mut objtree = None;
-    support::run("SpacemanDMM".to_owned(), CLEAR_COLOR, |ui: &Ui| -> bool {
-        if objtree.is_none() {
-            objtree = rx.try_recv().ok();
+pub struct EditorScene {
+    map: map_renderer::GliumTest,
+    rx: mpsc::Receiver<ObjectTree>,
+    objtree: Option<ObjectTree>,
+}
+
+impl EditorScene {
+    fn new(display: &glium::Display) -> Self {
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let context = dm::Context::default();
+            let env = dm::detect_environment("tgstation.dme")
+                .expect("error detecting .dme")
+                .expect("no .dme found");
+            let objtree = context.parse_environment(&env)
+                .expect("i/o error opening .dme");
+            let _ = tx.send(objtree);
+        });
+
+        EditorScene {
+            map: map_renderer::GliumTest::new(display),
+            rx,
+            objtree: None,
+        }
+    }
+
+    fn render<S: glium::Surface>(&mut self, target: &mut S) {
+        self.map.paint(target);
+    }
+
+    fn run_ui(&mut self, ui: &Ui) -> bool {
+        if self.objtree.is_none() {
+            self.objtree = self.rx.try_recv().ok();
         }
 
         ui.window(im_str!("Object Tree"))
             .size((300.0, 600.0), ImGuiCond::FirstUseEver)
             .build(|| {
-                if let Some(objtree) = objtree.as_ref() {
+                if let Some(objtree) = self.objtree.as_ref() {
                     let root = objtree.root();
                     root_node(ui, root, "area");
                     root_node(ui, root, "turf");
@@ -47,16 +68,16 @@ fn main() {
                 }
             });
         true
-    });
+    }
 }
 
-fn root_node(ui: &Ui, ty: dm::objtree::TypeRef, name: &str) {
+fn root_node(ui: &Ui, ty: TypeRef, name: &str) {
     if let Some(child) = ty.child(name) {
         tree_node(ui, child);
     }
 }
 
-fn tree_node(ui: &Ui, ty: dm::objtree::TypeRef) {
+fn tree_node(ui: &Ui, ty: TypeRef) {
     let mut children = ty.children();
     if children.is_empty() {
         ui.tree_node(im_str!("{}", ty.name)).leaf(true).build(||{});
