@@ -1,5 +1,7 @@
 use glium::{self, Display, Surface};
 
+use dmm_tools::dmm::{Map, Grid};
+
 #[derive(Copy, Clone)]
 struct Vertex {
     position: [f32; 2],
@@ -102,6 +104,9 @@ impl GliumTest {
         GliumTest {
             vertex_buffer, index_buffer, program
         }
+    }
+
+    pub fn prepare(&mut self, _map: &Map, _grid: Grid) {
     }
 
     pub fn paint<S: Surface>(&mut self, target: &mut S) {

@@ -24,7 +24,9 @@ fn main() {
 pub struct EditorScene {
     map_renderer: map_renderer::GliumTest,
     objtree: Option<ObjectTree>,
-    dmm: Option<Map>,
+
+    maps: Vec<EditorMap>,
+    map_current: usize,
 
     objtree_rx: mpsc::Receiver<ObjectTree>,
     dmm_rx: mpsc::Receiver<Map>,
@@ -53,7 +55,8 @@ impl EditorScene {
         EditorScene {
             map_renderer: map_renderer::GliumTest::new(display),
             objtree: None,
-            dmm: None,
+            maps: Vec::new(),
+            map_current: 0,
 
             objtree_rx,
             dmm_rx,
@@ -68,8 +71,12 @@ impl EditorScene {
         if self.objtree.is_none() {
             self.objtree = self.objtree_rx.try_recv().ok();
         }
-        if self.dmm.is_none() {
-            self.dmm = self.dmm_rx.try_recv().ok();
+        if self.maps.is_empty() {
+            if let Ok(dmm) = self.dmm_rx.try_recv() {
+                self.map_current = self.maps.len();
+                self.map_renderer.prepare(&dmm, dmm.z_level(0));
+                self.maps.push(EditorMap { dmm });
+            }
         }
 
         ui.window(im_str!("Object Tree"))
@@ -86,17 +93,26 @@ impl EditorScene {
                 }
             });
 
-        if let Some(dmm) = self.dmm.as_ref() {
-            ui.window(im_str!("Map"))
-                .position((410.0, 60.0), ImGuiCond::FirstUseEver)
-                .size((300.0, 200.0), ImGuiCond::FirstUseEver)
-                .build(|| {
-                    ui.text(im_str!("key length: {}", dmm.key_length));
-                    ui.text(im_str!("dictionary size: {}", dmm.dictionary.len()));
-                });
-        }
+        ui.window(im_str!("Maps"))
+            .position((410.0, 60.0), ImGuiCond::FirstUseEver)
+            .size((300.0, 200.0), ImGuiCond::FirstUseEver)
+            .build(|| {
+                for map in self.maps.iter() {
+                    if ui.collapsing_header(im_str!("runtimestation.dmm")).default_open(true).build() {
+                        ui.text(im_str!("key length: {}", map.dmm.key_length));
+                        ui.text(im_str!("dictionary size: {}", map.dmm.dictionary.len()));
+                        for z in 0..map.dmm.dim_z() {
+                            ui.small_button(im_str!("z = {}", z + 1));
+                        }
+                    }
+                }
+            });
         true
     }
+}
+
+struct EditorMap {
+    dmm: Map,
 }
 
 fn root_node(ui: &Ui, ty: TypeRef, name: &str) {
