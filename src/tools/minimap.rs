@@ -161,7 +161,7 @@ pub fn generate(
     }
 
     // sorts the atom list and renders them onto the output image
-    atoms.sort_by_key(|a| layer_of(objtree, a));
+    atoms.sort_by_key(|a| fancy_layer_of(objtree, a));
     let mut map_image = Image::new_rgba(len_x as u32 * TILE_SIZE, len_y as u32 * TILE_SIZE);
     'atom: for atom in atoms {
         // At this time, space is invisible. Earlier steps need to process it.
@@ -382,7 +382,7 @@ impl<'a> Atom<'a> {
     }
 }
 
-fn layer_of(objtree: &ObjectTree, atom: &Atom) -> i32 {
+fn fancy_layer_of(objtree: &ObjectTree, atom: &Atom) -> i32 {
     let p = &atom.type_.path;
     if subtype(p, "/turf/open/floor/plating/") || subtype(p, "/turf/open/space/") {
         -10_000  // under everything
@@ -407,13 +407,17 @@ fn layer_of(objtree: &ObjectTree, atom: &Atom) -> i32 {
     } else if subtype(p, "/obj/machinery/navbeacon/") {
         -3_000
     } else {
-        match atom.get_var("layer", objtree) {
-            &Constant::Int(i) => (i % 1000) * 1000,
-            &Constant::Float(f) => ((f % 1000.) * 1000.) as i32,
-            other => {
-                eprintln!("not a layer: {:?} on {:?}", other, atom.type_.path);
-                2_000
-            }
+        layer_of(objtree, atom)
+    }
+}
+
+pub fn layer_of(objtree: &ObjectTree, atom: &Atom) -> i32 {
+    match atom.get_var("layer", objtree) {
+        &Constant::Int(i) => (i % 1000) * 1000,
+        &Constant::Float(f) => ((f % 1000.) * 1000.) as i32,
+        other => {
+            eprintln!("not a layer: {:?} on {:?}", other, atom.type_.path);
+            2_000
         }
     }
 }
