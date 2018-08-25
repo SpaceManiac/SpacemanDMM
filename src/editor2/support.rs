@@ -29,6 +29,16 @@ pub fn run<F: FnMut(&Ui) -> bool>(title: String, clear_color: [f32; 4], mut run_
 	let window_hidpi_factor = window.get_hidpi_factor();
     let hidpi_factor = window_hidpi_factor.round();
 
+    let mut frame_size = FrameSize {
+        logical_size: window
+            .get_inner_size()
+            .unwrap()
+            .to_physical(window_hidpi_factor)
+            .to_logical(hidpi_factor)
+            .into(),
+        hidpi_factor,
+    };
+
     let font_size = (13.0 * hidpi_factor) as f32;
 
     imgui.fonts().add_default_font_with_config(
@@ -57,6 +67,12 @@ pub fn run<F: FnMut(&Ui) -> bool>(title: String, clear_color: [f32; 4], mut run_
             if let Event::WindowEvent { event, .. } = event {
                 match event {
                     CloseRequested => quit = true,
+                    Resized(new_logical_size) => {
+                        frame_size.logical_size = new_logical_size
+                            .to_physical(window_hidpi_factor)
+                            .to_logical(hidpi_factor)
+                            .into();
+                    }
                     KeyboardInput { input, .. } => {
                         use glutin::VirtualKeyCode as Key;
 
@@ -152,18 +168,6 @@ pub fn run<F: FnMut(&Ui) -> bool>(title: String, clear_color: [f32; 4], mut run_
                 ImGuiMouseCursor::ResizeNWSE => glutin::MouseCursor::NwseResize,
             });
         }
-
-        // Rescale window size from glutin logical size to our logical size
-        let physical_size = window
-            .get_inner_size()
-            .unwrap()
-            .to_physical(window_hidpi_factor);
-        let logical_size = physical_size.to_logical(hidpi_factor);
-
-        let frame_size = FrameSize {
-            logical_size: logical_size.into(),
-            hidpi_factor,
-        };
 
         let ui = imgui.frame(frame_size, delta_s);
         if !run_ui(&ui) {
