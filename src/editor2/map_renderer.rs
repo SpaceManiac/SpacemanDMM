@@ -1,5 +1,6 @@
 use glium::{self, Display, Surface};
 
+use dm::objtree::ObjectTree;
 use dmm_tools::dmm::{Map, Grid};
 
 #[derive(Copy, Clone)]
@@ -106,7 +107,7 @@ impl GliumTest {
         }
     }
 
-    pub fn prepare(&mut self, _map: &Map, _grid: Grid) {
+    pub fn prepare(&mut self, _objtree: &ObjectTree, _map: &Map, _grid: Grid) {
     }
 
     pub fn paint<S: Surface>(&mut self, target: &mut S) {

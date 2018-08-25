@@ -72,13 +72,18 @@ impl EditorScene {
     }
 
     fn run_ui(&mut self, ui: &Ui) -> bool {
-        if self.objtree.is_none() {
-            self.objtree = self.objtree_rx.try_recv().ok();
+        if let Ok(objtree) = self.objtree_rx.try_recv() {
+            if let Some(map) = self.maps.get(self.map_current) {
+                self.map_renderer.prepare(&objtree, &map.dmm, map.dmm.z_level(0));
+            }
+            self.objtree = Some(objtree);
         }
         if self.maps.is_empty() {
             if let Ok(dmm) = self.dmm_rx.try_recv() {
+                if let Some(objtree) = self.objtree.as_ref() {
+                    self.map_renderer.prepare(&objtree, &dmm, dmm.z_level(0));
+                }
                 self.map_current = self.maps.len();
-                self.map_renderer.prepare(&dmm, dmm.z_level(0));
                 self.maps.push(EditorMap { dmm });
             }
         }
