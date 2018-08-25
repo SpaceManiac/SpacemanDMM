@@ -1058,6 +1058,7 @@ dependencies = [
 name = "spaceman-dmm"
 version = "0.1.0"
 dependencies = [
+ "dmm-tools 0.1.0",
  "dreammaker 0.1.0",
  "glium 0.22.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "imgui 0.0.20 (registry+https://github.com/rust-lang/crates.io-index)",

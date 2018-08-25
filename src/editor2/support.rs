@@ -22,6 +22,10 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
     let display = Display::new(builder, context, &events_loop).unwrap();
     let window = display.gl_window();
 
+    let (ww, wh): (f64, f64) = window.get_outer_size().unwrap().into();
+    let (dw, dh): (f64, f64) = window.get_primary_monitor().get_dimensions().into();
+    window.set_position(((dw - ww) / 2.0, (dh - wh) / 2.0).into());
+
     let mut imgui = ImGui::init();
     imgui.set_ini_filename(None);
 

@@ -9,7 +9,7 @@ path = "main.rs"
 
 [dependencies]
 dreammaker = { path = "../dreammaker" }
-#dmm-tools = { path = "../tools" }
+dmm-tools = { path = "../tools" }
 glium = "0.22.0"
 imgui = "0.0.20"
 imgui-glium-renderer = "0.0.20"

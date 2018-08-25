@@ -4,6 +4,7 @@
 #[macro_use] extern crate imgui;
 extern crate imgui_glium_renderer;
 extern crate dreammaker as dm;
+extern crate dmm_tools;
 
 mod support;
 mod map_renderer;
@@ -14,20 +15,24 @@ pub use glium::glutin;
 use imgui::*;
 
 use dm::objtree::{ObjectTree, TypeRef};
+use dmm_tools::dmm::Map;
 
 fn main() {
     support::run("SpacemanDMM".to_owned(), [0.25, 0.25, 0.5, 1.0]);
 }
 
 pub struct EditorScene {
-    map: map_renderer::GliumTest,
-    rx: mpsc::Receiver<ObjectTree>,
+    map_renderer: map_renderer::GliumTest,
     objtree: Option<ObjectTree>,
+    dmm: Option<Map>,
+
+    objtree_rx: mpsc::Receiver<ObjectTree>,
+    dmm_rx: mpsc::Receiver<Map>,
 }
 
 impl EditorScene {
     fn new(display: &glium::Display) -> Self {
-        let (tx, rx) = mpsc::channel();
+        let (objtree_tx, objtree_rx) = mpsc::channel();
         std::thread::spawn(move || {
             let context = dm::Context::default();
             let env = dm::detect_environment("tgstation.dme")
@@ -35,23 +40,36 @@ impl EditorScene {
                 .expect("no .dme found");
             let objtree = context.parse_environment(&env)
                 .expect("i/o error opening .dme");
-            let _ = tx.send(objtree);
+            let _ = objtree_tx.send(objtree);
+        });
+
+        let (dmm_tx, dmm_rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let map = Map::from_file("_maps/map_files/debug/runtimestation.dmm".as_ref())
+                .expect("error loading .dmm");
+            let _ = dmm_tx.send(map);
         });
 
         EditorScene {
-            map: map_renderer::GliumTest::new(display),
-            rx,
+            map_renderer: map_renderer::GliumTest::new(display),
             objtree: None,
+            dmm: None,
+
+            objtree_rx,
+            dmm_rx,
         }
     }
 
     fn render<S: glium::Surface>(&mut self, target: &mut S) {
-        self.map.paint(target);
+        self.map_renderer.paint(target);
     }
 
     fn run_ui(&mut self, ui: &Ui) -> bool {
         if self.objtree.is_none() {
-            self.objtree = self.rx.try_recv().ok();
+            self.objtree = self.objtree_rx.try_recv().ok();
+        }
+        if self.dmm.is_none() {
+            self.dmm = self.dmm_rx.try_recv().ok();
         }
 
         ui.window(im_str!("Object Tree"))
@@ -67,6 +85,16 @@ impl EditorScene {
                     ui.text(im_str!("The object tree is loading..."));
                 }
             });
+
+        if let Some(dmm) = self.dmm.as_ref() {
+            ui.window(im_str!("Map"))
+                .position((410.0, 60.0), ImGuiCond::FirstUseEver)
+                .size((300.0, 200.0), ImGuiCond::FirstUseEver)
+                .build(|| {
+                    ui.text(im_str!("key length: {}", dmm.key_length));
+                    ui.text(im_str!("dictionary size: {}", dmm.dictionary.len()));
+                });
+        }
         true
     }
 }
