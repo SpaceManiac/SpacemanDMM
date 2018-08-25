@@ -1,5 +1,4 @@
-use glium;
-use qt::glium_widget::{GliumCallbacks, Display};
+use glium::{self, Display, Surface};
 
 #[derive(Copy, Clone)]
 struct Vertex {
@@ -9,20 +8,14 @@ struct Vertex {
 
 implement_vertex!(Vertex, position, color);
 
-#[doc(hidden)]
-pub struct GliumTest;
-
-#[doc(hidden)]
-pub struct GliumTestData {
+pub struct GliumTest {
     vertex_buffer: glium::VertexBuffer<Vertex>,
     index_buffer: glium::IndexBuffer<u16>,
     program: glium::Program,
 }
 
-impl GliumCallbacks for GliumTest {
-    type Data = GliumTestData;
-
-    fn initialize(&mut self, display: &Display) -> GliumTestData {
+impl GliumTest {
+    pub fn new(display: &Display) -> GliumTest {
         use glium::index::PrimitiveType;
 
         let vertex_buffer = glium::VertexBuffer::new(display, &[
@@ -106,14 +99,12 @@ impl GliumCallbacks for GliumTest {
             },
         ).unwrap();
 
-        GliumTestData {
+        GliumTest {
             vertex_buffer, index_buffer, program
         }
     }
 
-    fn paint(&mut self, display: &Display, data: &mut GliumTestData) {
-        use glium::Surface;
-
+    pub fn paint<S: Surface>(&mut self, target: &mut S) {
         // building the uniforms
         let uniforms = uniform! {
             matrix: [
@@ -125,9 +116,6 @@ impl GliumCallbacks for GliumTest {
         };
 
         // drawing a frame
-        let mut target = display.draw();
-        target.clear_color(0.0, 0.0, 0.0, 0.0);
-        target.draw(&data.vertex_buffer, &data.index_buffer, &data.program, &uniforms, &Default::default()).unwrap();
-        target.finish().unwrap();
+        target.draw(&self.vertex_buffer, &self.index_buffer, &self.program, &uniforms, &Default::default()).unwrap();
     }
 }

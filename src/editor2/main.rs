@@ -1,18 +1,19 @@
 //! The map editor proper, with a GUI and everything.
 
-extern crate glium;
+#[macro_use] extern crate glium;
 #[macro_use] extern crate imgui;
 extern crate imgui_glium_renderer;
 extern crate dreammaker as dm;
 
 mod support;
+mod map_renderer;
 
 use std::sync::mpsc;
 
 pub use glium::glutin;
 use imgui::*;
 
-const CLEAR_COLOR: [f32; 4] = [0.1, 0.1, 0.1, 1.0];
+const CLEAR_COLOR: [f32; 4] = [0.25, 0.25, 0.5, 1.0];
 
 fn main() {
     let (tx, rx) = mpsc::channel();
