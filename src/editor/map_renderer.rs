@@ -67,7 +67,7 @@ impl GliumTest {
                 [0.0, 0.0, 0.0, 1.0f32],
             ]
         };
-        encoder.update_buffer(&self.data.transform, &[TRANSFORM], 0);
+        encoder.update_buffer(&self.data.transform, &[TRANSFORM], 0).expect("update_buffer failed");
         encoder.draw(&self.slice, &self.pso, &self.data);
     }
 }
