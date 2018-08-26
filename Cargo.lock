@@ -1115,6 +1115,7 @@ dependencies = [
  "glutin 0.18.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "imgui 0.0.20 (registry+https://github.com/rust-lang/crates.io-index)",
  "imgui-gfx-renderer 0.0.20 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lodepng 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

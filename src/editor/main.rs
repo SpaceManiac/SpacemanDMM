@@ -6,10 +6,13 @@ extern crate gfx_window_glutin;
 extern crate gfx_device_gl;
 #[macro_use] extern crate imgui;
 extern crate imgui_gfx_renderer;
+extern crate lodepng;
+
 extern crate dreammaker as dm;
 extern crate dmm_tools;
 
 mod support;
+mod dmi;
 mod map_renderer;
 
 use std::sync::mpsc;
