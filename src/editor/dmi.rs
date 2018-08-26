@@ -7,6 +7,9 @@ use std::collections::{btree_map, BTreeMap};
 use lodepng::{self, RGBA};
 use lodepng::ffi::{State as PngState, ColorType};
 
+use gfx::{self, Factory as FactoryTrait};
+use {Factory, Texture};
+
 pub const NORTH: i32 = 1;
 pub const SOUTH: i32 = 2;
 pub const EAST: i32 = 4;
@@ -29,16 +32,16 @@ pub struct IconCache {
 }
 
 impl IconCache {
-    pub fn retrieve(&mut self, path: &Path) -> Option<&IconFile> {
+    pub fn retrieve(&mut self, factory: &mut Factory, path: &Path) -> Option<&IconFile> {
         match self.map.entry(path.to_owned()) {
             btree_map::Entry::Occupied(entry) => entry.into_mut().as_ref(),
-            btree_map::Entry::Vacant(entry) => entry.insert(load(path)).as_ref(),
+            btree_map::Entry::Vacant(entry) => entry.insert(load(factory, path)).as_ref(),
         }
     }
 }
 
-fn load(path: &Path) -> Option<IconFile> {
-    match IconFile::from_file(path) {
+fn load(factory: &mut Factory, path: &Path) -> Option<IconFile> {
+    match IconFile::from_file(factory, path) {
         Ok(loaded) => Some(loaded),
         Err(err) => {
             eprintln!("error loading icon: {}\n  {}", path.display(), err);
@@ -53,11 +56,11 @@ fn load(path: &Path) -> Option<IconFile> {
 pub struct IconFile {
     pub metadata: Metadata,
     pub width: u32,
-    pub texture: (),
+    pub texture: Texture,
 }
 
 impl IconFile {
-    pub fn from_file(path: &Path) -> io::Result<IconFile> {
+    pub fn from_file(factory: &mut Factory, path: &Path) -> io::Result<IconFile> {
         let path = &::dm::fix_case(path);
         let mut decoder = PngState::new();
         decoder.info_raw.colortype = ColorType::RGBA;
@@ -87,7 +90,7 @@ impl IconFile {
         Ok(IconFile {
             metadata: metadata,
             width: bitmap.width as u32,
-            texture: load_texture(bitmap),
+            texture: load_texture(factory, bitmap),
         })
     }
 
@@ -118,6 +121,22 @@ impl IconFile {
     }
 }
 
-pub fn load_texture(_bitmap: lodepng::Bitmap<RGBA>) {
-    // TODO
+pub fn load_texture(factory: &mut Factory, bitmap: lodepng::Bitmap<RGBA>) -> Texture {
+    let width = bitmap.width;
+    let height = bitmap.height;
+    let mut new_buffer = Vec::with_capacity(4 * width * height);
+    for pixel in bitmap.buffer {
+        new_buffer.push(pixel.r);
+        new_buffer.push(pixel.g);
+        new_buffer.push(pixel.b);
+        new_buffer.push(pixel.a);
+    }
+
+    let kind = gfx::texture::Kind::D2(width as u16, height as u16, gfx::texture::AaMode::Single);
+    let (_, view) = factory.create_texture_immutable_u8::<gfx::format::Rgba8>(
+        kind,
+        gfx::texture::Mipmap::Provided,
+        &[&new_buffer[..]]
+    ).expect("create_texture_immutable_u8");
+    view
 }

@@ -27,6 +27,7 @@ type Encoder = gfx::Encoder<Resources, CommandBuffer>;
 type ColorFormat = gfx::format::Rgba8;
 type DepthFormat = gfx::format::DepthStencil;
 type RenderTargetView = gfx::handle::RenderTargetView<Resources, ColorFormat>;
+type Texture = gfx::handle::ShaderResourceView<Resources, [f32; 4]>;
 
 fn main() {
     support::run("SpacemanDMM".to_owned(), [0.25, 0.25, 0.5, 1.0]);

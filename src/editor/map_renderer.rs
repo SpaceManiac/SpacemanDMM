@@ -5,10 +5,13 @@ use {Resources, Factory, Encoder, ColorFormat, RenderTargetView};
 use dm::objtree::ObjectTree;
 use dmm_tools::dmm::{Map, Grid};
 
+use dmi::*;
+
 gfx_defines! {
     vertex Vertex {
         position: [f32; 2] = "position",
         color: [f32; 3] = "color",
+        uv: [f32; 2] = "uv",
     }
 
     constant Transform {
@@ -18,6 +21,7 @@ gfx_defines! {
     pipeline pipe {
         vbuf: gfx::VertexBuffer<Vertex> = (),
         transform: gfx::ConstantBuffer<Transform> = "Transform",
+        tex: gfx::TextureSampler<[f32; 4]> = "tex",
         out: gfx::RenderTarget<ColorFormat> = "target",
     }
 }
@@ -36,15 +40,19 @@ impl GliumTest {
             pipe::new()
         ).expect("create_pipeline_simple failed");
 
+        let test_icon = IconFile::from_file(factory, "icons/obj/device.dmi".as_ref())
+            .expect("IconFile::from_file").texture;
+
         let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&[
-            Vertex { position: [-0.5, -0.5], color: [0.0, 1.0, 0.0] },
-            Vertex { position: [ 0.0,  0.5], color: [0.0, 0.0, 1.0] },
-            Vertex { position: [ 0.5, -0.5], color: [1.0, 0.0, 0.0] },
+            Vertex { position: [-0.5, -0.5], color: [0.0, 1.0, 0.0], uv: [0.0, 1.0] },
+            Vertex { position: [ 0.0,  0.5], color: [0.0, 0.0, 1.0], uv: [0.5, 0.0] },
+            Vertex { position: [ 0.5, -0.5], color: [1.0, 0.0, 0.0], uv: [1.0, 1.0] },
         ], ());
         let transform_buffer = factory.create_constant_buffer(1);
         let data = pipe::Data {
             vbuf: vertex_buffer,
             transform: transform_buffer,
+            tex: (test_icon, factory.create_sampler_linear()),
             out: view.clone(),
         };
 
