@@ -25,6 +25,11 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
         .with_dimensions(glutin::dpi::LogicalSize::new(1024.0, 768.0));
     let (window, mut device, mut factory, mut main_color, mut main_depth) =
         gfx_window_glutin::init::<ColorFormat, DepthFormat>(window, context, &events_loop);
+
+    let (ww, wh): (f64, f64) = window.get_outer_size().unwrap().into();
+    let (dw, dh): (f64, f64) = window.get_primary_monitor().get_dimensions().into();
+    window.set_position(((dw - ww) / 2.0, (dh - wh) / 2.0).into());
+
     let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
     let shaders = {
         let version = device.get_info().shading_language;
@@ -42,10 +47,6 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
             Shaders::GlSl110
         }
     };
-
-    let (ww, wh): (f64, f64) = window.get_outer_size().unwrap().into();
-    let (dw, dh): (f64, f64) = window.get_primary_monitor().get_dimensions().into();
-    window.set_position(((dw - ww) / 2.0, (dh - wh) / 2.0).into());
 
     let mut imgui = ImGui::init();
     let mut cached_colors = [ImVec4::default(); 43];
