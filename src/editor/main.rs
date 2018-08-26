@@ -39,11 +39,14 @@ pub struct EditorScene {
 
     maps: Vec<EditorMap>,
     map_current: usize,
+    z_current: usize,
 
     objtree_rx: mpsc::Receiver<ObjectTree>,
     dmm_rx: mpsc::Receiver<Map>,
 
+    ui_lock_windows: bool,
     ui_style_editor: bool,
+    ui_imgui_metrics: bool,
 }
 
 impl EditorScene {
@@ -71,11 +74,14 @@ impl EditorScene {
             objtree: None,
             maps: Vec::new(),
             map_current: 0,
+            z_current: 0,
 
             objtree_rx,
             dmm_rx,
 
+            ui_lock_windows: true,
             ui_style_editor: false,
+            ui_imgui_metrics: false,
         }
     }
 
@@ -83,14 +89,14 @@ impl EditorScene {
         if let Ok(objtree) = self.objtree_rx.try_recv() {
             self.map_renderer.icons.clear();
             if let Some(map) = self.maps.get(self.map_current) {
-                self.map_renderer.prepare(factory, &objtree, &map.dmm, map.dmm.z_level(0));
+                self.map_renderer.prepare(factory, &objtree, &map.dmm, map.dmm.z_level(self.z_current));
             }
             self.objtree = Some(objtree);
         }
         if self.maps.is_empty() {
             if let Ok(dmm) = self.dmm_rx.try_recv() {
                 if let Some(objtree) = self.objtree.as_ref() {
-                    self.map_renderer.prepare(factory, &objtree, &dmm, dmm.z_level(0));
+                    self.map_renderer.prepare(factory, &objtree, &dmm, dmm.z_level(self.z_current));
                 }
                 self.map_current = self.maps.len();
                 self.maps.push(EditorMap { dmm });
@@ -101,20 +107,48 @@ impl EditorScene {
     }
 
     fn run_ui(&mut self, ui: &Ui) -> bool {
+        let mut window_positions_cond = match self.ui_lock_windows {
+            false => ImGuiCond::FirstUseEver,
+            true => ImGuiCond::Always,
+        };
+
         ui.main_menu_bar(|| {
+            ui.menu(im_str!("Zoom")).build(|| {
+                for &zoom in [0.5, 1.0, 2.0, 4.0].iter() {
+                    let mut selected = self.map_renderer.zoom == zoom;
+                    if ui.menu_item(im_str!("{}%", 100.0 * zoom)).selected(&mut selected).build() {
+                        self.map_renderer.zoom = zoom;
+                    }
+                }
+            });
             ui.menu(im_str!("Window")).build(|| {
+                ui.menu_item(im_str!("Lock positions"))
+                    .selected(&mut self.ui_lock_windows)
+                    .build();
+                if ui.menu_item(im_str!("Reset positions")).enabled(!self.ui_lock_windows).build() {
+                    window_positions_cond = ImGuiCond::Always;
+                }
+                ui.separator();
                 ui.menu_item(im_str!("Style Editor"))
                     .selected(&mut self.ui_style_editor)
                     .build();
-            })
+                ui.menu_item(im_str!("ImGui Metrics"))
+                    .selected(&mut self.ui_imgui_metrics)
+                    .build();
+            });
         });
         if self.ui_style_editor {
             ui.window(im_str!("Style Editor"))
                 .opened(&mut self.ui_style_editor)
                 .build(|| ui.show_default_style_editor());
         }
+        if self.ui_imgui_metrics {
+            ui.show_metrics_window(&mut self.ui_imgui_metrics);
+        }
 
         ui.window(im_str!("Object Tree"))
+            .position((10.0, 30.0), window_positions_cond)
+            .movable(!self.ui_lock_windows)
             .size((300.0, 600.0), ImGuiCond::FirstUseEver)
             .build(|| {
                 if let Some(objtree) = self.objtree.as_ref() {
@@ -129,15 +163,20 @@ impl EditorScene {
             });
 
         ui.window(im_str!("Maps"))
-            .position((410.0, 60.0), ImGuiCond::FirstUseEver)
+            .position((ui.frame_size().logical_size.0 as f32 - 310.0, 30.0), window_positions_cond)
+            .movable(!self.ui_lock_windows)
             .size((300.0, 200.0), ImGuiCond::FirstUseEver)
             .build(|| {
-                for map in self.maps.iter() {
+                for (map_idx, map) in self.maps.iter().enumerate() {
                     if ui.collapsing_header(im_str!("runtimestation.dmm")).default_open(true).build() {
-                        ui.text(im_str!("key length: {}", map.dmm.key_length));
-                        ui.text(im_str!("dictionary size: {}", map.dmm.dictionary.len()));
+                        ui.text(im_str!("keys: {} / length: {}",
+                            map.dmm.dictionary.len(),
+                            map.dmm.key_length));
                         for z in 0..map.dmm.dim_z() {
-                            ui.small_button(im_str!("z = {}", z + 1));
+                            if ui.small_button(im_str!("z = {}", z + 1)) {
+                                self.map_current = map_idx;
+                                self.z_current = z;
+                            }
                         }
                     }
                 }
