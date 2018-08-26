@@ -93,7 +93,7 @@ impl MapRenderer {
 
         // collect the atoms
         let mut atoms = Vec::new();
-        for (y, row) in grid.axis_iter(Axis(0)).enumerate() {
+        for (y, row) in grid.axis_iter(Axis(0)).rev().enumerate() {
             for (x, key) in row.iter().enumerate() {
                 for fab in map.dictionary[key].last() {  // TODO: change last() to iter()
                     atoms.extend(Atom::from_prefab(objtree, fab, (x as u32, y as u32)));
@@ -123,6 +123,7 @@ impl MapRenderer {
                 Some(icon_file) => icon_file,
                 None => continue,
             };
+            self.data.tex.0 = icon_file.texture.clone();
 
             let uv = match icon_file.uv_of(&icon_state, dir) {
                 Some(rect) => rect,
@@ -145,10 +146,10 @@ impl MapRenderer {
 
             let start = vertices.len() as u32;
             vertices.extend_from_slice(&[
-                Vertex { color, position: [loc.0, loc.1], uv: [uv.0, uv.1] },
-                Vertex { color, position: [loc.0, loc.1 + TILE_SIZE as f32], uv: [uv.0, uv.3] },
-                Vertex { color, position: [loc.0 + TILE_SIZE as f32, loc.1 + TILE_SIZE as f32], uv: [uv.2, uv.3] },
-                Vertex { color, position: [loc.0 + TILE_SIZE as f32, loc.1], uv: [uv.2, uv.1] },
+                Vertex { color, position: [loc.0, loc.1], uv: [uv.0, uv.3] },
+                Vertex { color, position: [loc.0, loc.1 + TILE_SIZE as f32], uv: [uv.0, uv.1] },
+                Vertex { color, position: [loc.0 + TILE_SIZE as f32, loc.1 + TILE_SIZE as f32], uv: [uv.2, uv.1] },
+                Vertex { color, position: [loc.0 + TILE_SIZE as f32, loc.1], uv: [uv.2, uv.3] },
             ]);
             indices.extend_from_slice(&[start, start+1, start+3, start+1, start+2, start+3]);
         }
