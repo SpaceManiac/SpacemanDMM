@@ -227,22 +227,7 @@ pub fn generate(
             let loc = (loc.0 as u32, loc.1 as u32);
 
             // HTML color parsing
-            let color = match atom.get_var("color", objtree) {
-                &Constant::String(ref color) if color.starts_with("#") => {
-                    let mut sum = 0;
-                    for ch in color[1..color.len()].chars() {
-                        sum = 16 * sum + ch.to_digit(16).unwrap();
-                    }
-                    if color.len() == 7 {  // #rrggbb
-                        [(sum >> 16) as u8, (sum >> 8) as u8, sum as u8, 255]
-                    } else if color.len() == 4 {  // #rgb
-                        [(0x11 * ((sum >> 8) & 0xf)) as u8, (0x11 * ((sum >> 4) & 0xf)) as u8, (0x11 * (sum & 0xf)) as u8, 255]
-                    } else {
-                        [255, 255, 255, 255]  // invalid
-                    }
-                }
-                _ => [255, 255, 255, 255],
-            };
+            let color = color_of(objtree, &atom);
 
             // the real business
             map_image.composite(&icon_file.image, loc, rect, color);
@@ -419,6 +404,25 @@ pub fn layer_of(objtree: &ObjectTree, atom: &Atom) -> i32 {
             eprintln!("not a layer: {:?} on {:?}", other, atom.type_.path);
             2_000
         }
+    }
+}
+
+pub fn color_of(objtree: &ObjectTree, atom: &Atom) -> [u8; 4] {
+    match atom.get_var("color", objtree) {
+        &Constant::String(ref color) if color.starts_with("#") => {
+            let mut sum = 0;
+            for ch in color[1..color.len()].chars() {
+                sum = 16 * sum + ch.to_digit(16).unwrap();
+            }
+            if color.len() == 7 {  // #rrggbb
+                [(sum >> 16) as u8, (sum >> 8) as u8, sum as u8, 255]
+            } else if color.len() == 4 {  // #rgb
+                [(0x11 * ((sum >> 8) & 0xf)) as u8, (0x11 * ((sum >> 4) & 0xf)) as u8, (0x11 * (sum & 0xf)) as u8, 255]
+            } else {
+                [255, 255, 255, 255]  // invalid
+            }
+        }
+        _ => [255, 255, 255, 255],
     }
 }
 

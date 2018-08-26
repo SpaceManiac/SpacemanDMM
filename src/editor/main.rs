@@ -7,6 +7,7 @@ extern crate gfx_device_gl;
 #[macro_use] extern crate imgui;
 extern crate imgui_gfx_renderer;
 extern crate lodepng;
+extern crate ndarray;
 
 extern crate dreammaker as dm;
 extern crate dmm_tools;

@@ -100,6 +100,15 @@ impl IconFile {
         })
     }
 
+    pub fn uv_of(&self, icon_state: &str, dir: i32) -> Option<(f32, f32, f32, f32)> {
+        self.rect_of(icon_state, dir).map(|(x1, y1, x2, y2)| (
+            x1 as f32 / self.width as f32,
+            y1 as f32 / self.height as f32,
+            x2 as f32 / self.width as f32,
+            y2 as f32 / self.height as f32,
+        ))
+    }
+
     pub fn rect_of(&self, icon_state: &str, dir: i32) -> Option<Rect> {
         if self.metadata.states.is_empty() {
             return Some((0, 0, self.metadata.width, self.metadata.height));
