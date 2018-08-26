@@ -167,8 +167,8 @@ impl MapRenderer {
         // (0, 0) is the center of the screen, 1.0 = 1 pixel
         let transform = Transform {
             transform: [
-                [2.0 / x as f32, 0.0, 0.0, self.center[0]],
-                [0.0, 2.0 / y as f32, 0.0, -self.center[1]],
+                [2.0 / x as f32, 0.0, 0.0, self.center[0].round() / x as f32],
+                [0.0, 2.0 / y as f32, 0.0, -self.center[1].round() / y as f32],
                 [0.0, 0.0, 1.0, 0.0],
                 [0.0, 0.0, 0.0, 1.0 / self.zoom],
             ]
