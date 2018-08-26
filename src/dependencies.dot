@@ -1,0 +1,12 @@
+strict digraph {
+    graph [bgcolor="transparent"]
+    node [color="#408080"; style="filled"; fillcolor="white"]
+    edge [color="#408080"]
+
+    "dreammaker" -> "interval-tree"
+    "dmdoc" -> "dreammaker"
+    "langserver" -> "dreammaker"
+    "dmm-tools" -> "dreammaker"
+    "cli" -> "dmm-tools"
+    "editor" -> "dmm-tools"
+}
