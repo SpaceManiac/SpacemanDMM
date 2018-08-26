@@ -1,5 +1,5 @@
 use gfx;
-use gfx::traits::FactoryExt;
+use gfx::traits::{Factory as FactoryTrait, FactoryExt};
 use {Resources, Factory, Encoder, ColorFormat, RenderTargetView};
 
 use dm::objtree::ObjectTree;
@@ -22,7 +22,7 @@ gfx_defines! {
         vbuf: gfx::VertexBuffer<Vertex> = (),
         transform: gfx::ConstantBuffer<Transform> = "Transform",
         tex: gfx::TextureSampler<[f32; 4]> = "tex",
-        out: gfx::RenderTarget<ColorFormat> = "target",
+        out: gfx::BlendTarget<ColorFormat> = ("target", gfx::state::ColorMask::all(), gfx::preset::blend::ALPHA),
     }
 }
 
@@ -42,17 +42,20 @@ impl GliumTest {
 
         let test_icon = IconFile::from_file(factory, "icons/obj/device.dmi".as_ref())
             .expect("IconFile::from_file").texture;
+        let sampler = factory.create_sampler(gfx::texture::SamplerInfo::new(
+            gfx::texture::FilterMethod::Scale,
+            gfx::texture::WrapMode::Clamp));
 
         let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&[
-            Vertex { position: [-0.5, -0.5], color: [0.0, 1.0, 0.0], uv: [0.0, 1.0] },
-            Vertex { position: [ 0.0,  0.5], color: [0.0, 0.0, 1.0], uv: [0.5, 0.0] },
-            Vertex { position: [ 0.5, -0.5], color: [1.0, 0.0, 0.0], uv: [1.0, 1.0] },
+            Vertex { position: [-1.0, -1.0], color: [1.0, 1.0, 1.0], uv: [0.0, 1.0] },
+            Vertex { position: [ 0.0,  1.0], color: [1.0, 1.0, 1.0], uv: [0.5, 0.0] },
+            Vertex { position: [ 1.0, -1.0], color: [1.0, 1.0, 1.0], uv: [1.0, 1.0] },
         ], ());
         let transform_buffer = factory.create_constant_buffer(1);
         let data = pipe::Data {
             vbuf: vertex_buffer,
             transform: transform_buffer,
-            tex: (test_icon, factory.create_sampler_linear()),
+            tex: (test_icon, sampler),
             out: view.clone(),
         };
 
