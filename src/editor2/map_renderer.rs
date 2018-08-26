@@ -1,25 +1,22 @@
-use glium::{self, Display, Surface};
+use gfx::{self, Factory, Encoder};
 
 use dm::objtree::ObjectTree;
 use dmm_tools::dmm::{Map, Grid};
 
-#[derive(Copy, Clone)]
-struct Vertex {
-    position: [f32; 2],
-    color: [f32; 3],
-}
-
-implement_vertex!(Vertex, position, color);
+gfx_vertex_struct!(Vertex {
+    position: [f32; 2] = "position",
+    color: [f32; 3] = "color",
+});
 
 pub struct GliumTest {
-    vertex_buffer: glium::VertexBuffer<Vertex>,
+    /*vertex_buffer: glium::VertexBuffer<Vertex>,
     index_buffer: glium::IndexBuffer<u16>,
-    program: glium::Program,
+    program: glium::Program,*/
 }
 
 impl GliumTest {
-    pub fn new(display: &Display) -> GliumTest {
-        use glium::index::PrimitiveType;
+    pub fn new() -> GliumTest {
+        /*use glium::index::PrimitiveType;
 
         let vertex_buffer = glium::VertexBuffer::new(display, &[
             Vertex { position: [-0.5, -0.5], color: [0.0, 1.0, 0.0] },
@@ -104,13 +101,15 @@ impl GliumTest {
 
         GliumTest {
             vertex_buffer, index_buffer, program
-        }
+        }*/
+        GliumTest {}
     }
 
     pub fn prepare(&mut self, _objtree: &ObjectTree, _map: &Map, _grid: Grid) {
     }
 
-    pub fn paint<S: Surface>(&mut self, target: &mut S) {
+    /*
+    pub fn paint<F: Factory<()>>(&mut self, factory: &mut F, encoder: &mut Encoder) {
         // building the uniforms
         let uniforms = uniform! {
             matrix: [
@@ -124,4 +123,5 @@ impl GliumTest {
         // drawing a frame
         target.draw(&self.vertex_buffer, &self.index_buffer, &self.program, &uniforms, &Default::default()).unwrap();
     }
+    */
 }

@@ -10,6 +10,9 @@ path = "main.rs"
 [dependencies]
 dreammaker = { path = "../dreammaker" }
 dmm-tools = { path = "../tools" }
-glium = "0.22.0"
+glutin = "0.18.0"
+gfx = "0.17.1"
+gfx_window_glutin = "0.26.0"
+gfx_device_gl = "0.15.3"
 imgui = "0.0.20"
-imgui-glium-renderer = "0.0.20"
+imgui-gfx-renderer = "0.0.20"

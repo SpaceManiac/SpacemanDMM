@@ -1,4 +1,5 @@
-use imgui::{FrameSize, ImFontConfig, ImGui, ImGuiMouseCursor};
+use imgui::{FrameSize, ImFontConfig, ImGui, ImGuiMouseCursor, ImVec4};
+use imgui_gfx_renderer::{Renderer, Shaders};
 use std::time::Instant;
 
 #[derive(Copy, Clone, PartialEq, Debug, Default)]
@@ -9,24 +10,46 @@ struct MouseState {
 }
 
 pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
-    use glium::glutin;
-    use glium::{Display, Surface};
-    use imgui_glium_renderer::Renderer;
+    use gfx::{self, Device};
+    use gfx_window_glutin;
+    use glutin::{self, GlContext};
+
+    type ColorFormat = gfx::format::Rgba8;
+    type DepthFormat = gfx::format::DepthStencil;
 
     let mut events_loop = glutin::EventsLoop::new();
     let context = glutin::ContextBuilder::new().with_vsync(true);
-    let builder = glutin::WindowBuilder::new()
+    let window = glutin::WindowBuilder::new()
         .with_title(title)
         .with_window_icon(glutin::Icon::from_rgba(include_bytes!("gasmask.raw").to_vec(), 16, 16).ok())
         .with_dimensions(glutin::dpi::LogicalSize::new(1024f64, 768f64));
-    let display = Display::new(builder, context, &events_loop).unwrap();
-    let window = display.gl_window();
+    let (window, mut device, mut factory, mut main_color, mut main_depth) =
+        gfx_window_glutin::init::<ColorFormat, DepthFormat>(window, context, &events_loop);
+    let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
+    let shaders = {
+        let version = device.get_info().shading_language;
+        if version.is_embedded {
+            if version.major >= 3 {
+                Shaders::GlSlEs300
+            } else {
+                Shaders::GlSlEs100
+            }
+        } else if version.major >= 4 {
+            Shaders::GlSl400
+        } else if version.major >= 3 {
+            Shaders::GlSl130
+        } else {
+            Shaders::GlSl110
+        }
+    };
 
     let (ww, wh): (f64, f64) = window.get_outer_size().unwrap().into();
     let (dw, dh): (f64, f64) = window.get_primary_monitor().get_dimensions().into();
     window.set_position(((dw - ww) / 2.0, (dh - wh) / 2.0).into());
 
     let mut imgui = ImGui::init();
+    let mut cached_colors = [ImVec4::default(); 43];
+    fix_imgui_srgb(&mut cached_colors, &mut imgui.style_mut().colors);
     imgui.set_ini_filename(None);
 
     // In the examples we only use integer DPI factors, because the UI can get very blurry
@@ -55,11 +78,12 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
 
     imgui.set_font_global_scale((1.0 / hidpi_factor) as f32);
 
-    let mut renderer = Renderer::init(&mut imgui, &display).expect("Failed to initialize renderer");
+    let mut renderer = Renderer::init(&mut imgui, &mut factory, shaders, main_color.clone())
+        .expect("Failed to initialize renderer");
 
     configure_keys(&mut imgui);
 
-    let mut scene = ::EditorScene::new(&display);
+    let mut scene = ::EditorScene::new();
 
     let mut last_frame = Instant::now();
     let mut mouse_state = MouseState::default();
@@ -75,6 +99,8 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                 match event {
                     CloseRequested => quit = true,
                     Resized(new_logical_size) => {
+                        gfx_window_glutin::update_views(&window, &mut main_color, &mut main_depth);
+                        renderer.update_render_target(main_color.clone());
                         frame_size.logical_size = new_logical_size
                             .to_physical(window_hidpi_factor)
                             .to_logical(hidpi_factor)
@@ -149,6 +175,9 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                 }
             }
         });
+        if quit {
+            break;
+        }
 
         let now = Instant::now();
         let delta = now - last_frame;
@@ -176,25 +205,20 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
             });
         }
 
+        fix_imgui_srgb(&mut cached_colors, &mut imgui.style_mut().colors);
         let ui = imgui.frame(frame_size, delta_s);
         if !scene.run_ui(&ui) {
             break;
         }
 
-        let mut target = display.draw();
-        target.clear_color(
-            clear_color[0],
-            clear_color[1],
-            clear_color[2],
-            clear_color[3],
-        );
-        scene.render(&mut target);
-        renderer.render(&mut target, ui).expect("Rendering failed");
-        target.finish().unwrap();
-
-        if quit {
-            break;
-        }
+        encoder.clear(&main_color, clear_color);
+        renderer
+            .render(ui, &mut factory, &mut encoder)
+            .expect("Rendering failed");
+        scene.render(&mut factory, &mut encoder);
+        encoder.flush(&mut device);
+        window.context().swap_buffers().unwrap();
+        device.cleanup();
     }
     scene
 }
@@ -234,4 +258,24 @@ fn update_mouse(imgui: &mut ImGui, mouse_state: &mut MouseState) {
     ]);
     imgui.set_mouse_wheel(mouse_state.wheel);
     mouse_state.wheel = 0.0;
+}
+
+fn fix_imgui_srgb(cache: &mut [ImVec4; 43], style_colors: &mut [ImVec4; 43]) {
+    if cache[..] == style_colors[..] {
+        return;
+    }
+
+    // Fix incorrect colors with sRGB framebuffer
+    fn imgui_gamma_to_linear(col: ImVec4) -> ImVec4 {
+        let x = col.x.powf(2.2);
+        let y = col.y.powf(2.2);
+        let z = col.z.powf(2.2);
+        let w = 1.0 - (1.0 - col.w).powf(2.2);
+        ImVec4::new(x, y, z, w)
+    }
+
+    for col in 0..style_colors.len() {
+        style_colors[col] = imgui_gamma_to_linear(style_colors[col]);
+    }
+    cache.copy_from_slice(style_colors);
 }

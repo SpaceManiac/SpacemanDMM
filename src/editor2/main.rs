@@ -1,8 +1,11 @@
 //! The map editor proper, with a GUI and everything.
 
-#[macro_use] extern crate glium;
+extern crate glutin;
+#[macro_use] extern crate gfx;
+extern crate gfx_window_glutin;
+extern crate gfx_device_gl;
 #[macro_use] extern crate imgui;
-extern crate imgui_glium_renderer;
+extern crate imgui_gfx_renderer;
 extern crate dreammaker as dm;
 extern crate dmm_tools;
 
@@ -11,11 +14,13 @@ mod map_renderer;
 
 use std::sync::mpsc;
 
-pub use glium::glutin;
 use imgui::*;
 
 use dm::objtree::{ObjectTree, TypeRef};
 use dmm_tools::dmm::Map;
+
+use gfx_device_gl::{Factory, Resources, CommandBuffer};
+type Encoder = gfx::Encoder<Resources, CommandBuffer>;
 
 fn main() {
     support::run("SpacemanDMM".to_owned(), [0.25, 0.25, 0.5, 1.0]);
@@ -35,7 +40,7 @@ pub struct EditorScene {
 }
 
 impl EditorScene {
-    fn new(display: &glium::Display) -> Self {
+    fn new() -> Self {
         let (objtree_tx, objtree_rx) = mpsc::channel();
         std::thread::spawn(move || {
             let context = dm::Context::default();
@@ -55,7 +60,7 @@ impl EditorScene {
         });
 
         EditorScene {
-            map_renderer: map_renderer::GliumTest::new(display),
+            map_renderer: map_renderer::GliumTest::new(),
             objtree: None,
             maps: Vec::new(),
             map_current: 0,
@@ -67,8 +72,8 @@ impl EditorScene {
         }
     }
 
-    fn render<S: glium::Surface>(&mut self, target: &mut S) {
-        self.map_renderer.paint(target);
+    fn render(&mut self, factory: &mut Factory, encoder: &mut Encoder) {
+        //self.map_renderer.paint(factory, encoder);
     }
 
     fn run_ui(&mut self, ui: &Ui) -> bool {
