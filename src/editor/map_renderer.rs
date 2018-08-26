@@ -69,7 +69,9 @@ impl GliumTest {
     pub fn prepare(&mut self, _objtree: &ObjectTree, _map: &Map, _grid: Grid) {
     }
 
-    pub fn paint(&mut self, _factory: &mut Factory, encoder: &mut Encoder) {
+    pub fn paint(&mut self, _factory: &mut Factory, encoder: &mut Encoder, view: &RenderTargetView) {
+        self.data.out = view.clone();
+
         const TRANSFORM: Transform = Transform {
             transform: [
                 [1.0, 0.0, 0.0, 0.0],

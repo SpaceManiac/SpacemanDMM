@@ -79,8 +79,8 @@ impl EditorScene {
         }
     }
 
-    fn render(&mut self, factory: &mut Factory, encoder: &mut Encoder) {
-        self.map_renderer.paint(factory, encoder);
+    fn render(&mut self, factory: &mut Factory, encoder: &mut Encoder, view: &RenderTargetView) {
+        self.map_renderer.paint(factory, encoder, view);
     }
 
     fn run_ui(&mut self, ui: &Ui) -> bool {

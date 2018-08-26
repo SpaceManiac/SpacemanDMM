@@ -213,7 +213,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
         }
 
         encoder.clear(&main_color, clear_color);
-        scene.render(&mut factory, &mut encoder);
+        scene.render(&mut factory, &mut encoder, &main_color);
         renderer
             .render(ui, &mut factory, &mut encoder)
             .expect("Rendering failed");
