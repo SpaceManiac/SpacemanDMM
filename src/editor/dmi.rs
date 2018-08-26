@@ -56,6 +56,7 @@ fn load(factory: &mut Factory, path: &Path) -> Option<IconFile> {
 pub struct IconFile {
     pub metadata: Metadata,
     pub width: u32,
+    pub height: u32,
     pub texture: Texture,
 }
 
@@ -90,6 +91,7 @@ impl IconFile {
         Ok(IconFile {
             metadata: metadata,
             width: bitmap.width as u32,
+            height: bitmap.height as u32,
             texture: load_texture(factory, bitmap),
         })
     }
