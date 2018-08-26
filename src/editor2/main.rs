@@ -21,6 +21,9 @@ use dmm_tools::dmm::Map;
 
 use gfx_device_gl::{Factory, Resources, CommandBuffer};
 type Encoder = gfx::Encoder<Resources, CommandBuffer>;
+type ColorFormat = gfx::format::Rgba8;
+type DepthFormat = gfx::format::DepthStencil;
+type RenderTargetView = gfx::handle::RenderTargetView<Resources, ColorFormat>;
 
 fn main() {
     support::run("SpacemanDMM".to_owned(), [0.25, 0.25, 0.5, 1.0]);
@@ -40,7 +43,7 @@ pub struct EditorScene {
 }
 
 impl EditorScene {
-    fn new() -> Self {
+    fn new(factory: &mut Factory, view: &RenderTargetView) -> Self {
         let (objtree_tx, objtree_rx) = mpsc::channel();
         std::thread::spawn(move || {
             let context = dm::Context::default();
@@ -60,7 +63,7 @@ impl EditorScene {
         });
 
         EditorScene {
-            map_renderer: map_renderer::GliumTest::new(),
+            map_renderer: map_renderer::GliumTest::new(factory, view),
             objtree: None,
             maps: Vec::new(),
             map_current: 0,
@@ -73,7 +76,7 @@ impl EditorScene {
     }
 
     fn render(&mut self, factory: &mut Factory, encoder: &mut Encoder) {
-        //self.map_renderer.paint(factory, encoder);
+        self.map_renderer.paint(factory, encoder);
     }
 
     fn run_ui(&mut self, ui: &Ui) -> bool {

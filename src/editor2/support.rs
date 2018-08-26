@@ -2,6 +2,8 @@ use imgui::{FrameSize, ImFontConfig, ImGui, ImGuiMouseCursor, ImVec4};
 use imgui_gfx_renderer::{Renderer, Shaders};
 use std::time::Instant;
 
+use {ColorFormat, DepthFormat};
+
 #[derive(Copy, Clone, PartialEq, Debug, Default)]
 struct MouseState {
     pos: (i32, i32),
@@ -13,9 +15,6 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
     use gfx::{self, Device};
     use gfx_window_glutin;
     use glutin::{self, GlContext};
-
-    type ColorFormat = gfx::format::Rgba8;
-    type DepthFormat = gfx::format::DepthStencil;
 
     let mut events_loop = glutin::EventsLoop::new();
     let context = glutin::ContextBuilder::new().with_vsync(true);
@@ -83,7 +82,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
 
     configure_keys(&mut imgui);
 
-    let mut scene = ::EditorScene::new();
+    let mut scene = ::EditorScene::new(&mut factory, &main_color);
 
     let mut last_frame = Instant::now();
     let mut mouse_state = MouseState::default();
@@ -212,10 +211,10 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
         }
 
         encoder.clear(&main_color, clear_color);
+        scene.render(&mut factory, &mut encoder);
         renderer
             .render(ui, &mut factory, &mut encoder)
             .expect("Rendering failed");
-        scene.render(&mut factory, &mut encoder);
         encoder.flush(&mut device);
         window.context().swap_buffers().unwrap();
         device.cleanup();
