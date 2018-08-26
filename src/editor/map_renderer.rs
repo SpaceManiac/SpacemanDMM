@@ -51,11 +51,14 @@ impl MapRenderer {
                 gfx::texture::WrapMode::Clamp));
 
             let test_icon = icons.retrieve(factory, "icons/obj/device.dmi".as_ref()).expect("test icon");
+            let w = test_icon.width as f32 / 2.0;
+            let h = test_icon.height as f32 / 2.0;
             let (vertex_buffer, new_slice) = factory.create_vertex_buffer_with_slice(&[
-                Vertex { position: [-(test_icon.width as f32) / 2.0, -(test_icon.height as f32) / 2.0], color: [1.0, 1.0, 1.0], uv: [0.0, 1.0] },
-                Vertex { position: [ 0.0,  test_icon.height as f32 / 2.0], color: [1.0, 1.0, 1.0], uv: [0.5, 0.0] },
-                Vertex { position: [ test_icon.width as f32 / 2.0, -(test_icon.height as f32) / 2.0], color: [1.0, 1.0, 1.0], uv: [1.0, 1.0] },
-            ], ());
+                Vertex { position: [-w,  h], color: [1.0, 1.0, 1.0], uv: [0.0, 0.0] },
+                Vertex { position: [-w, -h], color: [1.0, 1.0, 1.0], uv: [0.0, 1.0] },
+                Vertex { position: [ w, -h], color: [1.0, 1.0, 1.0], uv: [1.0, 1.0] },
+                Vertex { position: [ w,  h], color: [1.0, 1.0, 1.0], uv: [1.0, 0.0] },
+            ], &[0u16, 1, 3, 1, 2, 3][..]);
             slice = new_slice;
             let transform_buffer = factory.create_constant_buffer(1);
 
