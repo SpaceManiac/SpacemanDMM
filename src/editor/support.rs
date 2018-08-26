@@ -7,7 +7,7 @@ use {ColorFormat, DepthFormat};
 #[derive(Copy, Clone, PartialEq, Debug, Default)]
 struct MouseState {
     pos: (i32, i32),
-    pressed: (bool, bool, bool),
+    pressed: [bool; 5],
     wheel: f32,
 }
 
@@ -149,16 +149,21 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                             .into();
                     }
                     MouseInput { state, button, .. } => match button {
-                        MouseButton::Left => mouse_state.pressed.0 = state == Pressed,
-                        MouseButton::Right => mouse_state.pressed.1 = state == Pressed,
-                        MouseButton::Middle => mouse_state.pressed.2 = state == Pressed,
-                        _ => {}
+                        MouseButton::Left => mouse_state.pressed[0] = state == Pressed,
+                        MouseButton::Right => mouse_state.pressed[1] = state == Pressed,
+                        MouseButton::Middle => mouse_state.pressed[2] = state == Pressed,
+                        MouseButton::Other(i) => if let Some(b) = mouse_state.pressed.get_mut(2 + i as usize) {
+                            *b = state == Pressed;
+                        },
                     },
                     MouseWheel {
-                        delta: MouseScrollDelta::LineDelta(_, y),
+                        delta: MouseScrollDelta::LineDelta(x, y),
                         phase: TouchPhase::Moved,
                         ..
-                    } => mouse_state.wheel = y,
+                    } => {
+                        mouse_state.wheel = y;
+                        scene.mouse_wheel(imgui.key_ctrl(), imgui.key_shift(), x, y);
+                    },
                     MouseWheel {
                         delta: MouseScrollDelta::PixelDelta(pos),
                         phase: TouchPhase::Moved,
@@ -166,10 +171,11 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                     } => {
                         // Rescale pixel delta from glutin logical coordinates to our logical
                         // coordinates
-                        mouse_state.wheel = pos
+                        let diff = pos
                             .to_physical(window_hidpi_factor)
-                            .to_logical(hidpi_factor)
-                            .y as f32;
+                            .to_logical(hidpi_factor);
+                        mouse_state.wheel = diff.y as f32;
+                        scene.mouse_wheel(imgui.key_ctrl(), imgui.key_shift(), diff.x as f32, diff.y as f32);
                     }
                     ReceivedCharacter(c) => imgui.add_input_character(c),
                     _ => (),
@@ -250,13 +256,7 @@ fn configure_keys(imgui: &mut ImGui) {
 
 fn update_mouse(imgui: &mut ImGui, mouse_state: &mut MouseState) {
     imgui.set_mouse_pos(mouse_state.pos.0 as f32, mouse_state.pos.1 as f32);
-    imgui.set_mouse_down([
-        mouse_state.pressed.0,
-        mouse_state.pressed.1,
-        mouse_state.pressed.2,
-        false,
-        false,
-    ]);
+    imgui.set_mouse_down(mouse_state.pressed);
     imgui.set_mouse_wheel(mouse_state.wheel);
     mouse_state.wheel = 0.0;
 }

@@ -35,6 +35,7 @@ gfx_defines! {
 pub struct MapRenderer {
     pub icons: IconCache,
     pub zoom: f32,
+    pub center: [f32; 2],
 
     slice: gfx::Slice<Resources>,
     pso: gfx::PipelineState<Resources, pipe::Meta>,
@@ -79,6 +80,7 @@ impl MapRenderer {
         MapRenderer {
             icons,
             zoom: 1.0,
+            center: [0.0; 2],
 
             slice,
             pso,
@@ -164,8 +166,8 @@ impl MapRenderer {
         // (0, 0) is the center of the screen, 1.0 = 1 pixel
         let transform = Transform {
             transform: [
-                [2.0 / x as f32, 0.0, 0.0, 0.0],
-                [0.0, 2.0 / y as f32, 0.0, 0.0],
+                [2.0 / x as f32, 0.0, 0.0, self.center[0]],
+                [0.0, 2.0 / y as f32, 0.0, -self.center[1]],
                 [0.0, 0.0, 1.0, 0.0],
                 [0.0, 0.0, 0.0, 1.0 / self.zoom],
             ]
