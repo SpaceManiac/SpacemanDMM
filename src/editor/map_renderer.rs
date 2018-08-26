@@ -28,6 +28,7 @@ gfx_defines! {
 
 pub struct MapRenderer {
     pub icons: IconCache,
+    pub zoom: f32,
 
     slice: gfx::Slice<Resources>,
     pso: gfx::PipelineState<Resources, pipe::Meta>,
@@ -68,13 +69,17 @@ impl MapRenderer {
 
         MapRenderer {
             icons,
+            zoom: 1.0,
+
             slice,
             pso,
             data,
         }
     }
 
-    pub fn prepare(&mut self, _objtree: &ObjectTree, _map: &Map, _grid: Grid) {
+    pub fn prepare(&mut self, factory: &mut Factory, _objtree: &ObjectTree, _map: &Map, _grid: Grid) {
+        let test_icon = self.icons.retrieve(factory, "icons/obj/mining.dmi".as_ref()).expect("test icon");
+        self.data.tex.0 = test_icon.texture.clone();
     }
 
     pub fn paint(&mut self, _factory: &mut Factory, encoder: &mut Encoder, view: &RenderTargetView) {
@@ -83,13 +88,12 @@ impl MapRenderer {
         let (x, y, _, _) = view.get_dimensions();
 
         // (0, 0) is the center of the screen, 1.0 = 1 pixel
-        let zoom = 1.0;
         let transform = Transform {
             transform: [
                 [2.0 / x as f32, 0.0, 0.0, 0.0],
                 [0.0, 2.0 / y as f32, 0.0, 0.0],
                 [0.0, 0.0, 1.0, 0.0],
-                [0.0, 0.0, 0.0, 1.0 / zoom],
+                [0.0, 0.0, 0.0, 1.0 / self.zoom],
             ]
         };
         encoder.update_buffer(&self.data.transform, &[transform], 0).expect("update_buffer failed");

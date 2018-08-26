@@ -80,27 +80,27 @@ impl EditorScene {
     }
 
     fn render(&mut self, factory: &mut Factory, encoder: &mut Encoder, view: &RenderTargetView) {
-        self.map_renderer.paint(factory, encoder, view);
-    }
-
-    fn run_ui(&mut self, ui: &Ui) -> bool {
         if let Ok(objtree) = self.objtree_rx.try_recv() {
             self.map_renderer.icons.clear();
             if let Some(map) = self.maps.get(self.map_current) {
-                self.map_renderer.prepare(&objtree, &map.dmm, map.dmm.z_level(0));
+                self.map_renderer.prepare(factory, &objtree, &map.dmm, map.dmm.z_level(0));
             }
             self.objtree = Some(objtree);
         }
         if self.maps.is_empty() {
             if let Ok(dmm) = self.dmm_rx.try_recv() {
                 if let Some(objtree) = self.objtree.as_ref() {
-                    self.map_renderer.prepare(&objtree, &dmm, dmm.z_level(0));
+                    self.map_renderer.prepare(factory, &objtree, &dmm, dmm.z_level(0));
                 }
                 self.map_current = self.maps.len();
                 self.maps.push(EditorMap { dmm });
             }
         }
 
+        self.map_renderer.paint(factory, encoder, view);
+    }
+
+    fn run_ui(&mut self, ui: &Ui) -> bool {
         ui.main_menu_bar(|| {
             ui.menu(im_str!("Window")).build(|| {
                 ui.menu_item(im_str!("Style Editor"))
