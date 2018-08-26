@@ -21,7 +21,8 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
     let window = glutin::WindowBuilder::new()
         .with_title(title)
         .with_window_icon(glutin::Icon::from_rgba(include_bytes!("gasmask.raw").to_vec(), 16, 16).ok())
-        .with_dimensions(glutin::dpi::LogicalSize::new(1024f64, 768f64));
+        .with_min_dimensions(glutin::dpi::LogicalSize::new(640.0, 480.0))
+        .with_dimensions(glutin::dpi::LogicalSize::new(1024.0, 768.0));
     let (window, mut device, mut factory, mut main_color, mut main_depth) =
         gfx_window_glutin::init::<ColorFormat, DepthFormat>(window, context, &events_loop);
     let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
@@ -259,9 +260,9 @@ fn update_mouse(imgui: &mut ImGui, mouse_state: &mut MouseState) {
     mouse_state.wheel = 0.0;
 }
 
-fn fix_imgui_srgb(cache: &mut [ImVec4; 43], style_colors: &mut [ImVec4; 43]) {
+fn fix_imgui_srgb(cache: &mut [ImVec4; 43], style_colors: &mut [ImVec4; 43]) -> bool {
     if cache[..] == style_colors[..] {
-        return;
+        return false;
     }
 
     // Fix incorrect colors with sRGB framebuffer
@@ -277,4 +278,5 @@ fn fix_imgui_srgb(cache: &mut [ImVec4; 43], style_colors: &mut [ImVec4; 43]) {
         style_colors[col] = imgui_gamma_to_linear(style_colors[col]);
     }
     cache.copy_from_slice(style_colors);
+    true
 }
