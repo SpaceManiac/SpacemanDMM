@@ -1,12 +1,10 @@
 use std::io;
-use std::fs::File;
 use std::path::Path;
 use std::collections::BTreeMap;
 
 use ndarray::Array3;
 use lodepng::{self, RGBA};
 use lodepng::ffi::{State as PngState, ColorType};
-use png::OutputInfo;
 
 pub const NORTH: i32 = 1;
 pub const SOUTH: i32 = 2;
@@ -83,7 +81,7 @@ impl IconFile {
         };
 
         let icon_index = state.offset as u32 + dir_idx;
-        let icon_count = self.image.info.width / self.metadata.width;
+        let icon_count = self.image.width / self.metadata.width;
         let (icon_x, icon_y) = (icon_index % icon_count, icon_index / icon_count);
         Some((icon_x * self.metadata.width, icon_y * self.metadata.height,
             self.metadata.width, self.metadata.height))
@@ -95,34 +93,24 @@ impl IconFile {
 // Image manipulation
 
 pub struct Image {
-    pub info: ::png::OutputInfo,
+    pub width: u32,
+    pub height: u32,
     pub data: Array3<u8>,
 }
 
 impl Image {
     pub fn new_rgba(width: u32, height: u32) -> Image {
-        let info = OutputInfo {
+        Image {
             width,
             height,
-            color_type: ::png::ColorType::RGBA,
-            bit_depth: ::png::BitDepth::Eight,
-            line_size: width as usize * 4,
-        };
-        Image {
             data: Array3::zeros((height as usize, width as usize, 4)),
-            info,
         }
     }
 
     fn from_rgba(bitmap: lodepng::Bitmap<RGBA>) -> Image {
-        let info = OutputInfo {
+        Image {
             width: bitmap.width as u32,
             height: bitmap.height as u32,
-            color_type: ::png::ColorType::RGBA,
-            bit_depth: ::png::BitDepth::Eight,
-            line_size: bitmap.width * 4,
-        };
-        Image {
             data: Array3::from_shape_fn((bitmap.height, bitmap.width, 4), |(y, x, c)| {
                 let rgba = bitmap.buffer[y * bitmap.width + x];
                 match c {
@@ -133,7 +121,6 @@ impl Image {
                     _ => unreachable!(),
                 }
             }),
-            info,
         }
     }
 
@@ -157,12 +144,14 @@ impl Image {
         Ok(Image::from_rgba(bitmap))
     }
 
+    #[cfg(feature="png")]
     pub fn to_file(&self, path: &Path) -> io::Result<()> {
+        use std::fs::File;
         use png::{Encoder, HasParameters};
 
-        let mut encoder = Encoder::new(File::create(path)?, self.info.width, self.info.height);
-        encoder.set(self.info.bit_depth);
-        encoder.set(self.info.color_type);
+        let mut encoder = Encoder::new(File::create(path)?, self.width, self.height);
+        encoder.set(::png::ColorType::RGBA);
+        encoder.set(::png::BitDepth::Eight);
         let mut writer = encoder.write_header()?;
         // TODO: metadata with write_chunk()
 

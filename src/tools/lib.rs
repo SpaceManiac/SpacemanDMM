@@ -3,7 +3,7 @@
 
 extern crate dreammaker as dm;
 
-extern crate png;
+#[cfg(feature="png")] extern crate png;
 extern crate lodepng;
 extern crate inflate;
 

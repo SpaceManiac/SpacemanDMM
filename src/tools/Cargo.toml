@@ -7,13 +7,16 @@ authors = ["Tad Hardesty <tad@platymuus.com>"]
 path = "lib.rs"
 
 [dependencies]
-png = "0.12.0"
 inflate = "0.4.1"
 ndarray = "0.11.1"
 rand = "0.4.2"
 linked-hash-map = "0.5.0"
 dreammaker = { path = "../dreammaker" }
 lodepng = "2.1.5"
+
+[dependencies.png]
+version = "0.12.0"
+optional = true
 
 [dev-dependencies]
 walkdir = "2.0.1"

@@ -208,7 +208,7 @@ pub fn generate(
                 }
                 loc.0 = 0;
             }
-            while loc.0 + rect.2 as i32 > map_image.info.width as i32 {
+            while loc.0 + rect.2 as i32 > map_image.width as i32 {
                 rect.2 -= 1;
                 if rect.2 == 0 { continue 'atom }
             }
@@ -220,7 +220,7 @@ pub fn generate(
                 }
                 loc.1 = 0;
             }
-            while loc.1 + rect.3 as i32 > map_image.info.height as i32 {
+            while loc.1 + rect.3 as i32 > map_image.height as i32 {
                 rect.3 -= 1;
                 if rect.3 == 0 { continue 'atom }
             }
