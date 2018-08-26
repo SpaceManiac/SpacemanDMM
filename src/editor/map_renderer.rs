@@ -26,40 +26,48 @@ gfx_defines! {
     }
 }
 
-pub struct GliumTest {
+pub struct MapRenderer {
+    pub icons: IconCache,
+
     slice: gfx::Slice<Resources>,
     pso: gfx::PipelineState<Resources, pipe::Meta>,
     data: pipe::Data<Resources>,
 }
 
-impl GliumTest {
-    pub fn new(factory: &mut Factory, view: &RenderTargetView) -> GliumTest {
-        let pso = factory.create_pipeline_simple(
-            include_bytes!("shaders/main_150.glslv"),
-            include_bytes!("shaders/main_150.glslf"),
-            pipe::new()
-        ).expect("create_pipeline_simple failed");
+impl MapRenderer {
+    pub fn new(factory: &mut Factory, view: &RenderTargetView) -> MapRenderer {
+        let mut icons = IconCache::default();
+        let (slice, pso, data);
+        {
+            pso = factory.create_pipeline_simple(
+                include_bytes!("shaders/main_150.glslv"),
+                include_bytes!("shaders/main_150.glslf"),
+                pipe::new()
+            ).expect("create_pipeline_simple failed");
 
-        let test_icon = IconFile::from_file(factory, "icons/obj/device.dmi".as_ref())
-            .expect("IconFile::from_file");
-        let sampler = factory.create_sampler(gfx::texture::SamplerInfo::new(
-            gfx::texture::FilterMethod::Scale,
-            gfx::texture::WrapMode::Clamp));
+            let sampler = factory.create_sampler(gfx::texture::SamplerInfo::new(
+                gfx::texture::FilterMethod::Scale,
+                gfx::texture::WrapMode::Clamp));
 
-        let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&[
-            Vertex { position: [-(test_icon.width as f32) / 2.0, -(test_icon.height as f32) / 2.0], color: [1.0, 1.0, 1.0], uv: [0.0, 1.0] },
-            Vertex { position: [ 0.0,  test_icon.height as f32 / 2.0], color: [1.0, 1.0, 1.0], uv: [0.5, 0.0] },
-            Vertex { position: [ test_icon.width as f32 / 2.0, -(test_icon.height as f32) / 2.0], color: [1.0, 1.0, 1.0], uv: [1.0, 1.0] },
-        ], ());
-        let transform_buffer = factory.create_constant_buffer(1);
-        let data = pipe::Data {
-            vbuf: vertex_buffer,
-            transform: transform_buffer,
-            tex: (test_icon.texture, sampler),
-            out: view.clone(),
-        };
+            let test_icon = icons.retrieve(factory, "icons/obj/device.dmi".as_ref()).expect("test icon");
+            let (vertex_buffer, new_slice) = factory.create_vertex_buffer_with_slice(&[
+                Vertex { position: [-(test_icon.width as f32) / 2.0, -(test_icon.height as f32) / 2.0], color: [1.0, 1.0, 1.0], uv: [0.0, 1.0] },
+                Vertex { position: [ 0.0,  test_icon.height as f32 / 2.0], color: [1.0, 1.0, 1.0], uv: [0.5, 0.0] },
+                Vertex { position: [ test_icon.width as f32 / 2.0, -(test_icon.height as f32) / 2.0], color: [1.0, 1.0, 1.0], uv: [1.0, 1.0] },
+            ], ());
+            slice = new_slice;
+            let transform_buffer = factory.create_constant_buffer(1);
 
-        GliumTest {
+            data = pipe::Data {
+                vbuf: vertex_buffer,
+                transform: transform_buffer,
+                tex: (test_icon.texture.clone(), sampler),
+                out: view.clone(),
+            };
+        }
+
+        MapRenderer {
+            icons,
             slice,
             pso,
             data,

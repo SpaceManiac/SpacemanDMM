@@ -38,6 +38,10 @@ impl IconCache {
             btree_map::Entry::Vacant(entry) => entry.insert(load(factory, path)).as_ref(),
         }
     }
+
+    pub fn clear(&mut self) {
+        self.map.clear();
+    }
 }
 
 fn load(factory: &mut Factory, path: &Path) -> Option<IconFile> {

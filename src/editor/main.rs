@@ -34,7 +34,7 @@ fn main() {
 }
 
 pub struct EditorScene {
-    map_renderer: map_renderer::GliumTest,
+    map_renderer: map_renderer::MapRenderer,
     objtree: Option<ObjectTree>,
 
     maps: Vec<EditorMap>,
@@ -67,7 +67,7 @@ impl EditorScene {
         });
 
         EditorScene {
-            map_renderer: map_renderer::GliumTest::new(factory, view),
+            map_renderer: map_renderer::MapRenderer::new(factory, view),
             objtree: None,
             maps: Vec::new(),
             map_current: 0,
@@ -85,6 +85,7 @@ impl EditorScene {
 
     fn run_ui(&mut self, ui: &Ui) -> bool {
         if let Ok(objtree) = self.objtree_rx.try_recv() {
+            self.map_renderer.icons.clear();
             if let Some(map) = self.maps.get(self.map_current) {
                 self.map_renderer.prepare(&objtree, &map.dmm, map.dmm.z_level(0));
             }
