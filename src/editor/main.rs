@@ -23,6 +23,7 @@ use imgui::*;
 use dm::objtree::{ObjectTree, TypeRef};
 use dmm_tools::dmm::Map;
 
+use glutin::VirtualKeyCode as Key;
 use gfx_device_gl::{Factory, Resources, CommandBuffer};
 type Encoder = gfx::Encoder<Resources, CommandBuffer>;
 type ColorFormat = gfx::format::Rgba8;
@@ -86,11 +87,14 @@ impl EditorScene {
         }
     }
 
-    fn mouse_wheel(&mut self, ctrl: bool, shift: bool, _x: f32, y: f32) {
+    fn mouse_wheel(&mut self, ctrl: bool, shift: bool, _alt: bool, _x: f32, y: f32) {
         let axis = if ctrl { 0 } else { 1 };
         let mul = if shift { 8.0 } else { 1.0 };
 
         self.map_renderer.center[axis] += 4.0 * 64.0 * mul * y / self.map_renderer.zoom;
+    }
+
+    fn chord(&mut self, _ctrl: bool, _shift: bool, _alt: bool, _key: Key) {
     }
 
     fn render(&mut self, factory: &mut Factory, encoder: &mut Encoder, view: &RenderTargetView) {

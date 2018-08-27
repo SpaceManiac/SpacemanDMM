@@ -89,6 +89,8 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
     let mut last_frame = Instant::now();
     let mut mouse_state = MouseState::default();
     let mut quit = false;
+    let mut mouse_captured = false;
+    let mut kbd_captured = false;
 
     loop {
         events_loop.poll_events(|event| {
@@ -139,6 +141,12 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                             Some(Key::LWin) | Some(Key::RWin) => imgui.set_key_super(pressed),
                             _ => {}
                         }
+
+                        if pressed && !kbd_captured {
+                            if let Some(key) = input.virtual_keycode {
+                                scene.chord(imgui.key_ctrl(), imgui.key_shift(), imgui.key_alt(), key);
+                            }
+                        }
                     }
                     CursorMoved { position: pos, .. } => {
                         // Rescale position from glutin logical coordinates to our logical
@@ -162,7 +170,9 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                         ..
                     } => {
                         mouse_state.wheel = y;
-                        scene.mouse_wheel(imgui.key_ctrl(), imgui.key_shift(), x, y);
+                        if !mouse_captured {
+                            scene.mouse_wheel(imgui.key_ctrl(), imgui.key_shift(), imgui.key_alt(), x, y);
+                        }
                     },
                     MouseWheel {
                         delta: MouseScrollDelta::PixelDelta(pos),
@@ -175,7 +185,9 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                             .to_physical(window_hidpi_factor)
                             .to_logical(hidpi_factor);
                         mouse_state.wheel = diff.y as f32;
-                        scene.mouse_wheel(imgui.key_ctrl(), imgui.key_shift(), diff.x as f32, diff.y as f32);
+                        if !mouse_captured {
+                            scene.mouse_wheel(imgui.key_ctrl(), imgui.key_shift(), imgui.key_alt(), diff.x as f32, diff.y as f32);
+                        }
                     }
                     ReceivedCharacter(c) => imgui.add_input_character(c),
                     _ => (),
@@ -217,6 +229,9 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
         if !scene.run_ui(&ui) {
             break;
         }
+
+        mouse_captured = ui.want_capture_mouse();
+        kbd_captured = ui.want_capture_keyboard();
 
         encoder.clear(&main_color, clear_color);
         scene.render(&mut factory, &mut encoder, &main_color);
