@@ -300,15 +300,19 @@ impl EditorScene {
 
         if self.ui_debug {
             let mut ui_debug = self.ui_debug;
-            ui.window(im_str!("Debug")).opened(&mut ui_debug).build(|| {
-                ui.text(im_str!("maps[{}], i = {}, z = {}", self.maps.len(), self.map_current, self.z_current));
-                ui.text(im_str!("zoom = {}, center = {:?}", self.map_renderer.zoom, self.map_renderer.center));
-                ui.text(im_str!("icons[{}], draw_calls[{}], atoms[{}]",
-                    self.map_renderer.icons.len(),
-                    self.map_renderer.draw_calls(),
-                    self.map_renderer.last_atoms));
-                ui.text(im_str!("last render: {}s", self.map_renderer.last_duration));
-            });
+            ui.window(im_str!("Debug"))
+                .position((320.0, 30.0), ImGuiCond::FirstUseEver)
+                .size((300.0, 100.0), ImGuiCond::FirstUseEver)
+                .opened(&mut ui_debug)
+                .build(|| {
+                    ui.text(im_str!("maps[{}], i = {}, z = {}", self.maps.len(), self.map_current, self.z_current));
+                    ui.text(im_str!("zoom = {}, center = {:?}", self.map_renderer.zoom, self.map_renderer.center));
+                    ui.text(im_str!("icons[{}], draw_calls[{}], atoms[{}]",
+                        self.map_renderer.icons.len(),
+                        self.map_renderer.draw_calls(),
+                        self.map_renderer.last_atoms));
+                    ui.text(im_str!("last render: {}s", self.map_renderer.last_duration));
+                });
             self.ui_debug = ui_debug;
         }
 
