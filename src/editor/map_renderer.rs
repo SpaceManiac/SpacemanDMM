@@ -1,6 +1,6 @@
 use gfx;
 use gfx::traits::{Factory as FactoryTrait, FactoryExt};
-use {Resources, Factory, Encoder, ColorFormat, RenderTargetView};
+use {Resources, Factory, Encoder, ColorFormat, RenderTargetView, Texture};
 
 use ndarray::Axis;
 
@@ -37,9 +37,10 @@ pub struct MapRenderer {
     pub zoom: f32,
     pub center: [f32; 2],
 
-    slice: gfx::Slice<Resources>,
+    draw_calls: Vec<DrawCall>,
     pso: gfx::PipelineState<Resources, pipe::Meta>,
     data: pipe::Data<Resources>,
+    ibuf: gfx::IndexBuffer<Resources>,
 }
 
 impl MapRenderer {
@@ -82,9 +83,14 @@ impl MapRenderer {
             zoom: 1.0,
             center: [0.0; 2],
 
-            slice,
+            draw_calls: vec![DrawCall {
+                texture: data.tex.0.clone(),
+                start: 0,
+                len: 6,
+            }],
             pso,
             data,
+            ibuf: slice.buffer,
         }
     }
 
@@ -95,7 +101,7 @@ impl MapRenderer {
         let mut atoms = Vec::new();
         for (y, row) in grid.axis_iter(Axis(0)).rev().enumerate() {
             for (x, key) in row.iter().enumerate() {
-                for fab in map.dictionary[key].last() {  // TODO: change last() to iter()
+                for fab in map.dictionary[key].iter() {
                     atoms.extend(Atom::from_prefab(objtree, fab, (x as u32, y as u32)));
                 }
             }
@@ -107,6 +113,7 @@ impl MapRenderer {
         // render atoms
         let mut vertices = Vec::new();
         let mut indices: Vec<u32> = Vec::new();
+        self.draw_calls.clear();
 
         for atom in atoms.iter() {
             let icon = match atom.get_var("icon", objtree) {
@@ -151,12 +158,24 @@ impl MapRenderer {
                 Vertex { color, position: [loc.0 + TILE_SIZE as f32, loc.1 + TILE_SIZE as f32], uv: [uv.2, uv.1] },
                 Vertex { color, position: [loc.0 + TILE_SIZE as f32, loc.1], uv: [uv.2, uv.3] },
             ]);
+            let i_start = indices.len() as u32;
             indices.extend_from_slice(&[start, start+1, start+3, start+1, start+2, start+3]);
+
+            if let Some(call) = self.draw_calls.last_mut() {
+                if call.texture == icon_file.texture {
+                    call.len += 6;
+                    continue;
+                }
+            }
+            self.draw_calls.push(DrawCall {
+                texture: icon_file.texture.clone(),
+                start: i_start,
+                len: 6,
+            });
         }
 
-        let (vertex_buffer, new_slice) = factory.create_vertex_buffer_with_slice(&vertices, &indices[..]);
-        self.data.vbuf = vertex_buffer;
-        self.slice = new_slice;
+        self.data.vbuf = factory.create_vertex_buffer(&vertices[..]);
+        self.ibuf = factory.create_index_buffer(&indices[..]);
     }
 
     pub fn paint(&mut self, _factory: &mut Factory, encoder: &mut Encoder, view: &RenderTargetView) {
@@ -174,6 +193,22 @@ impl MapRenderer {
             ]
         };
         encoder.update_buffer(&self.data.transform, &[transform], 0).expect("update_buffer failed");
-        encoder.draw(&self.slice, &self.pso, &self.data);
+        for call in self.draw_calls.iter() {
+            self.data.tex.0 = call.texture.clone();
+            let slice = gfx::Slice {
+                start: call.start,
+                end: call.start + call.len,
+                base_vertex: 0,
+                instances: None,
+                buffer: self.ibuf.clone(),
+            };
+            encoder.draw(&slice, &self.pso, &self.data);
+        }
     }
+}
+
+struct DrawCall {
+    texture: Texture,
+    start: u32,
+    len: u32,
 }
