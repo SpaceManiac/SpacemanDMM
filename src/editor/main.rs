@@ -115,12 +115,57 @@ impl EditorScene {
     }
 
     fn run_ui(&mut self, ui: &Ui) -> bool {
+        let mut continue_running = true;
         let mut window_positions_cond = match self.ui_lock_windows {
             false => ImGuiCond::FirstUseEver,
             true => ImGuiCond::Always,
         };
 
         ui.main_menu_bar(|| {
+            ui.menu(im_str!("File")).build(|| {
+                ui.menu_item(im_str!("Open Environment"))
+                    .shortcut(im_str!("Ctrl+Shift+O"))
+                    .enabled(false)
+                    .build();
+                ui.menu(im_str!("Recent Environments")).enabled(false).build(|| {
+                    // TODO
+                });
+                ui.separator();
+                ui.menu_item(im_str!("New"))
+                    .shortcut(im_str!("Ctrl+N"))
+                    .enabled(false)
+                    .build();
+                ui.menu_item(im_str!("Open"))
+                    .shortcut(im_str!("Ctrl+O"))
+                    .enabled(false)
+                    .build();
+                ui.menu_item(im_str!("Close"))
+                    .shortcut(im_str!("Ctrl+W"))
+                    .enabled(false)
+                    .build();
+                ui.separator();
+                ui.menu_item(im_str!("Save"))
+                    .shortcut(im_str!("Ctrl+S"))
+                    .enabled(false)
+                    .build();
+                ui.menu_item(im_str!("Save As"))
+                    .enabled(false)
+                    .build();
+                ui.menu_item(im_str!("Save Copy As"))
+                    .enabled(false)
+                    .build();
+                ui.menu_item(im_str!("Save All"))
+                    .shortcut(im_str!("Ctrl+Shift+S"))
+                    .enabled(false)
+                    .build();
+                ui.separator();
+                if ui.menu_item(im_str!("Exit"))
+                    .shortcut(im_str!("Alt+F4"))
+                    .build()
+                {
+                    continue_running = false;
+                }
+            });
             ui.menu(im_str!("Zoom")).build(|| {
                 for &zoom in [0.5, 1.0, 2.0, 4.0].iter() {
                     let mut selected = self.map_renderer.zoom == zoom;
@@ -143,6 +188,14 @@ impl EditorScene {
                 ui.menu_item(im_str!("ImGui Metrics"))
                     .selected(&mut self.ui_imgui_metrics)
                     .build();
+            });
+            ui.menu(im_str!("Help")).build(|| {
+                ui.menu_item(im_str!("About"))
+                    .enabled(false)
+                    .build();
+                ui.menu(im_str!("ImGui help")).build(|| {
+                    ui.show_user_guide();
+                });
             });
         });
         if self.ui_style_editor {
@@ -190,7 +243,7 @@ impl EditorScene {
                     }
                 }
             });
-        true
+        continue_running
     }
 }
 
