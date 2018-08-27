@@ -49,6 +49,7 @@ pub struct EditorScene {
     ui_lock_windows: bool,
     ui_style_editor: bool,
     ui_imgui_metrics: bool,
+    ui_debug: bool,
 }
 
 impl EditorScene {
@@ -84,6 +85,7 @@ impl EditorScene {
             ui_lock_windows: true,
             ui_style_editor: false,
             ui_imgui_metrics: false,
+            ui_debug: true,
         }
     }
 
@@ -91,7 +93,7 @@ impl EditorScene {
         let axis = if ctrl { 0 } else { 1 };
         let mul = if shift { 8.0 } else { 1.0 };
 
-        self.map_renderer.center[axis] += 4.0 * 64.0 * mul * y / self.map_renderer.zoom;
+        self.map_renderer.center[axis] += 4.0 * 32.0 * mul * y / self.map_renderer.zoom;
     }
 
     fn chord(&mut self, _ctrl: bool, _shift: bool, _alt: bool, _key: Key) {
@@ -186,6 +188,9 @@ impl EditorScene {
                     window_positions_cond = ImGuiCond::Always;
                 }
                 ui.separator();
+                ui.menu_item(im_str!("Debug Window"))
+                    .selected(&mut self.ui_debug)
+                    .build();
                 ui.menu_item(im_str!("Style Editor"))
                     .selected(&mut self.ui_style_editor)
                     .build();
@@ -247,6 +252,21 @@ impl EditorScene {
                     }
                 }
             });
+
+        if self.ui_debug {
+            let mut ui_debug = self.ui_debug;
+            ui.window(im_str!("Debug")).opened(&mut ui_debug).build(|| {
+                ui.text(im_str!("maps[{}], i = {}, z = {}", self.maps.len(), self.map_current, self.z_current));
+                ui.text(im_str!("zoom = {}, center = {:?}", self.map_renderer.zoom, self.map_renderer.center));
+                ui.text(im_str!("icons[{}], draw_calls[{}], atoms[{}]",
+                    self.map_renderer.icons.len(),
+                    self.map_renderer.draw_calls(),
+                    self.map_renderer.last_atoms));
+                ui.text(im_str!("last render: {}s", self.map_renderer.last_duration));
+            });
+            self.ui_debug = ui_debug;
+        }
+
         continue_running
     }
 }

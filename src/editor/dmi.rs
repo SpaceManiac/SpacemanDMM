@@ -39,6 +39,10 @@ impl IconCache {
         }
     }
 
+    pub fn len(&mut self) -> usize {
+        self.map.len()
+    }
+
     pub fn clear(&mut self) {
         self.map.clear();
     }

@@ -37,6 +37,9 @@ pub struct MapRenderer {
     pub zoom: f32,
     pub center: [f32; 2],
 
+    pub last_atoms: usize,
+    pub last_duration: f32,
+
     draw_calls: Vec<DrawCall>,
     pso: gfx::PipelineState<Resources, pipe::Meta>,
     data: pipe::Data<Resources>,
@@ -83,6 +86,9 @@ impl MapRenderer {
             zoom: 1.0,
             center: [0.0; 2],
 
+            last_atoms: 0,
+            last_duration: 0.0,
+
             draw_calls: vec![DrawCall {
                 texture: data.tex.0.clone(),
                 start: 0,
@@ -95,7 +101,9 @@ impl MapRenderer {
     }
 
     pub fn prepare(&mut self, factory: &mut Factory, objtree: &ObjectTree, map: &Map, grid: Grid) {
+        let now = ::std::time::Instant::now();
         let (_len_y, _len_x) = grid.dim();
+        self.center = [_len_x as f32 * 16.0, _len_y as f32 * 16.0];
 
         // collect the atoms
         let mut atoms = Vec::new();
@@ -176,6 +184,9 @@ impl MapRenderer {
 
         self.data.vbuf = factory.create_vertex_buffer(&vertices[..]);
         self.ibuf = factory.create_index_buffer(&indices[..]);
+        self.last_atoms = atoms.len();
+        let duration = now.elapsed();
+        self.last_duration = duration.as_secs() as f32 + duration.subsec_nanos() as f32 / 1_000_000_000.0;
     }
 
     pub fn paint(&mut self, _factory: &mut Factory, encoder: &mut Encoder, view: &RenderTargetView) {
@@ -186,8 +197,8 @@ impl MapRenderer {
         // (0, 0) is the center of the screen, 1.0 = 1 pixel
         let transform = Transform {
             transform: [
-                [2.0 / x as f32, 0.0, 0.0, self.center[0].round() / x as f32],
-                [0.0, 2.0 / y as f32, 0.0, -self.center[1].round() / y as f32],
+                [2.0 / x as f32, 0.0, 0.0, -2.0 * self.center[0].round() / x as f32],
+                [0.0, 2.0 / y as f32, 0.0, -2.0 * self.center[1].round() / y as f32],
                 [0.0, 0.0, 1.0, 0.0],
                 [0.0, 0.0, 0.0, 1.0 / self.zoom],
             ]
@@ -204,6 +215,10 @@ impl MapRenderer {
             };
             encoder.draw(&slice, &self.pso, &self.data);
         }
+    }
+
+    pub fn draw_calls(&self) -> usize {
+        self.draw_calls.len()
     }
 }
 
