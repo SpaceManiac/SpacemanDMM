@@ -85,8 +85,10 @@ impl EditorScene {
     }
 
     fn mouse_wheel(&mut self, ctrl: bool, shift: bool, _alt: bool, _x: f32, y: f32) {
-        let axis = if ctrl { 0 } else { 1 };
-        let mul = if shift { 8.0 } else { 1.0 };
+        let (axis, mut mul) = if ctrl { (0, -1.0) } else { (1, 1.0) };
+        if shift {
+            mul *= 8.0;
+        }
 
         self.map_renderer.center[axis] += 4.0 * 32.0 * mul * y / self.map_renderer.zoom;
     }
