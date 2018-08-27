@@ -45,7 +45,7 @@ pub struct EditorScene {
     map_current: usize,
     z_current: usize,
 
-    tasks: Vec<Task<Result<TaskResult, Box<std::error::Error + Send + Sync>>>>,
+    tasks: Vec<Task<TaskResult>>,
     errors: Vec<Box<std::error::Error>>,
 
     ui_lock_windows: bool,
@@ -56,7 +56,7 @@ pub struct EditorScene {
 
 impl EditorScene {
     fn new(factory: &mut Factory, view: &RenderTargetView) -> Self {
-        let mut tasks: Vec<Task<Result<TaskResult, Box<std::error::Error + Send + Sync>>>> = Vec::new();
+        let mut tasks: Vec<Task<TaskResult>> = Vec::new();
         tasks.push(Task::spawn("Loading tgstation.dme", move || {
             let context = dm::Context::default();
             let env = dm::detect_environment("tgstation.dme")?.ok_or("no .dme found")?;
@@ -96,29 +96,25 @@ impl EditorScene {
 
     fn render(&mut self, factory: &mut Factory, encoder: &mut Encoder, view: &RenderTargetView) {
         let mut tasks = std::mem::replace(&mut self.tasks, Vec::new());
-        tasks.retain(|task| match task.poll() {
-            None => true,
-            Some(Err(e)) => {
+        tasks.retain(|task| task.poll(|res| match res {
+            Err(e) => {
                 self.errors.push(e);
-                false
             }
-            Some(Ok(TaskResult::ObjectTree(objtree))) => {
+            Ok(TaskResult::ObjectTree(objtree)) => {
                 self.map_renderer.icons.clear();
                 if let Some(map) = self.maps.get(self.map_current) {
                     self.map_renderer.prepare(factory, &objtree, &map.dmm, map.dmm.z_level(self.z_current));
                 }
                 self.objtree = Some(objtree);
-                false
             }
-            Some(Ok(TaskResult::Map(dmm))) => {
+            Ok(TaskResult::Map(dmm)) => {
                 if let Some(objtree) = self.objtree.as_ref() {
                     self.map_renderer.prepare(factory, &objtree, &dmm, dmm.z_level(self.z_current));
                 }
                 self.map_current = self.maps.len();
                 self.maps.push(EditorMap { dmm });
-                false
             }
-        });
+        }));
         tasks.extend(std::mem::replace(&mut self.tasks, Vec::new()));
         self.tasks = tasks;
 
