@@ -172,6 +172,42 @@ impl EditorScene {
                     continue_running = false;
                 }
             });
+            ui.menu(im_str!("Edit")).build(|| {
+                ui.menu_item(im_str!("Undo"))
+                    .shortcut(im_str!("Ctrl+Z"))
+                    .enabled(false)
+                    .build();
+                ui.menu_item(im_str!("Redo"))
+                    .shortcut(im_str!("Ctrl+Shift+Z"))
+                    .enabled(false)
+                    .build();
+                ui.separator();
+                ui.menu_item(im_str!("Cut"))
+                    .shortcut(im_str!("Ctrl+X"))
+                    .enabled(false)
+                    .build();
+                ui.menu_item(im_str!("Copy"))
+                    .shortcut(im_str!("Ctrl+C"))
+                    .enabled(false)
+                    .build();
+                ui.menu_item(im_str!("Paste"))
+                    .shortcut(im_str!("Ctrl+V"))
+                    .enabled(false)
+                    .build();
+                ui.menu_item(im_str!("Delete"))
+                    .shortcut(im_str!("Del"))
+                    .enabled(false)
+                    .build();
+                ui.separator();
+                ui.menu_item(im_str!("Select All"))
+                    .shortcut(im_str!("Ctrl+A"))
+                    .enabled(false)
+                    .build();
+                ui.menu_item(im_str!("Select None"))
+                    .shortcut(im_str!("Ctrl+Shift+A"))
+                    .enabled(false)
+                    .build();
+            });
             ui.menu(im_str!("Zoom")).build(|| {
                 for &zoom in [0.5, 1.0, 2.0, 4.0].iter() {
                     let mut selected = self.map_renderer.zoom == zoom;
@@ -199,7 +235,10 @@ impl EditorScene {
                     .build();
             });
             ui.menu(im_str!("Help")).build(|| {
-                ui.menu_item(im_str!("About"))
+                ui.menu_item(im_str!("About SpacemanDMM"))
+                    .enabled(false)
+                    .build();
+                ui.menu_item(im_str!("Open-source licenses"))
                     .enabled(false)
                     .build();
                 ui.menu(im_str!("ImGui help")).build(|| {
