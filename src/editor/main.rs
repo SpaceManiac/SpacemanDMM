@@ -47,11 +47,13 @@ pub struct EditorScene {
 
     tasks: Vec<Task<TaskResult>>,
     errors: Vec<Box<std::error::Error>>,
+    last_errors: usize,
 
     ui_lock_windows: bool,
     ui_style_editor: bool,
     ui_imgui_metrics: bool,
     ui_debug: bool,
+    ui_errors: bool,
 }
 
 impl EditorScene {
@@ -74,13 +76,15 @@ impl EditorScene {
             map_current: 0,
             z_current: 0,
 
+            tasks,
+            errors: Vec::new(),
+            last_errors: 0,
+
             ui_lock_windows: true,
             ui_style_editor: false,
             ui_imgui_metrics: false,
             ui_debug: true,
-
-            tasks,
-            errors: Vec::new(),
+            ui_errors: false,
         }
     }
 
@@ -227,6 +231,9 @@ impl EditorScene {
                     window_positions_cond = ImGuiCond::Always;
                 }
                 ui.separator();
+                ui.menu_item(im_str!("Errors"))
+                    .selected(&mut self.ui_errors)
+                    .build();
                 ui.menu_item(im_str!("Debug Window"))
                     .selected(&mut self.ui_debug)
                     .build();
@@ -252,6 +259,13 @@ impl EditorScene {
             for task in self.tasks.iter() {
                 ui.separator();
                 ui.text(im_str!("{}", task.name()));
+            }
+
+            if self.errors.len() > self.last_errors {
+                ui.separator();
+                if ui.menu_item(im_str!("{} errors", self.errors.len() - self.last_errors)).build() {
+                    self.ui_errors = true;
+                }
             }
         });
         if self.ui_style_editor {
@@ -316,6 +330,20 @@ impl EditorScene {
                     ui.text(im_str!("last render: {}s", self.map_renderer.last_duration));
                 });
             self.ui_debug = ui_debug;
+        }
+
+        if self.ui_errors {
+            self.last_errors = self.errors.len();
+            let mut ui_errors = self.ui_errors;
+            ui.window(im_str!("Errors"))
+                .position((320.0, 140.0), ImGuiCond::FirstUseEver)
+                .size((300.0, 400.0), ImGuiCond::FirstUseEver)
+                .horizontal_scrollbar(true)
+                .opened(&mut ui_errors)
+                .build(|| {
+                    ui.text(im_str!("{:#?}", self.errors));
+                });
+            self.ui_errors = ui_errors;
         }
 
         continue_running
