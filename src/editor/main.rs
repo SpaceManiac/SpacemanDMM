@@ -16,8 +16,7 @@ extern crate dmm_tools;
 mod support;
 mod dmi;
 mod map_renderer;
-
-use std::sync::mpsc;
+mod tasks;
 
 use imgui::*;
 
@@ -32,6 +31,8 @@ type DepthFormat = gfx::format::DepthStencil;
 type RenderTargetView = gfx::handle::RenderTargetView<Resources, ColorFormat>;
 type Texture = gfx::handle::ShaderResourceView<Resources, [f32; 4]>;
 
+use tasks::Task;
+
 fn main() {
     support::run("SpacemanDMM".to_owned(), [0.25, 0.25, 0.5, 1.0]);
 }
@@ -44,8 +45,8 @@ pub struct EditorScene {
     map_current: usize,
     z_current: usize,
 
-    objtree_rx: mpsc::Receiver<ObjectTree>,
-    dmm_rx: mpsc::Receiver<Map>,
+    tasks: Vec<Task<Result<TaskResult, Box<std::error::Error + Send + Sync>>>>,
+    errors: Vec<Box<std::error::Error>>,
 
     ui_lock_windows: bool,
     ui_style_editor: bool,
@@ -55,23 +56,16 @@ pub struct EditorScene {
 
 impl EditorScene {
     fn new(factory: &mut Factory, view: &RenderTargetView) -> Self {
-        let (objtree_tx, objtree_rx) = mpsc::channel();
-        std::thread::spawn(move || {
+        let mut tasks: Vec<Task<Result<TaskResult, Box<std::error::Error + Send + Sync>>>> = Vec::new();
+        tasks.push(Task::spawn("Loading tgstation.dme", move || {
             let context = dm::Context::default();
-            let env = dm::detect_environment("tgstation.dme")
-                .expect("error detecting .dme")
-                .expect("no .dme found");
-            let objtree = context.parse_environment(&env)
-                .expect("i/o error opening .dme");
-            let _ = objtree_tx.send(objtree);
-        });
-
-        let (dmm_tx, dmm_rx) = mpsc::channel();
-        std::thread::spawn(move || {
-            let map = Map::from_file("_maps/map_files/debug/runtimestation.dmm".as_ref())
-                .expect("error loading .dmm");
-            let _ = dmm_tx.send(map);
-        });
+            let env = dm::detect_environment("tgstation.dme")?.ok_or("no .dme found")?;
+            Ok(TaskResult::ObjectTree(context.parse_environment(&env)?))
+        }));
+        tasks.push(Task::spawn("Loading runtimestation.dmm", move || {
+            let map = Map::from_file("_maps/map_files/debug/runtimestation.dmm".as_ref())?;
+            Ok(TaskResult::Map(map))
+        }));
 
         EditorScene {
             map_renderer: map_renderer::MapRenderer::new(factory, view),
@@ -80,13 +74,13 @@ impl EditorScene {
             map_current: 0,
             z_current: 0,
 
-            objtree_rx,
-            dmm_rx,
-
             ui_lock_windows: true,
             ui_style_editor: false,
             ui_imgui_metrics: false,
             ui_debug: true,
+
+            tasks,
+            errors: Vec::new(),
         }
     }
 
@@ -101,22 +95,32 @@ impl EditorScene {
     }
 
     fn render(&mut self, factory: &mut Factory, encoder: &mut Encoder, view: &RenderTargetView) {
-        if let Ok(objtree) = self.objtree_rx.try_recv() {
-            self.map_renderer.icons.clear();
-            if let Some(map) = self.maps.get(self.map_current) {
-                self.map_renderer.prepare(factory, &objtree, &map.dmm, map.dmm.z_level(self.z_current));
+        let mut tasks = std::mem::replace(&mut self.tasks, Vec::new());
+        tasks.retain(|task| match task.poll() {
+            None => true,
+            Some(Err(e)) => {
+                self.errors.push(e);
+                false
             }
-            self.objtree = Some(objtree);
-        }
-        if self.maps.is_empty() {
-            if let Ok(dmm) = self.dmm_rx.try_recv() {
+            Some(Ok(TaskResult::ObjectTree(objtree))) => {
+                self.map_renderer.icons.clear();
+                if let Some(map) = self.maps.get(self.map_current) {
+                    self.map_renderer.prepare(factory, &objtree, &map.dmm, map.dmm.z_level(self.z_current));
+                }
+                self.objtree = Some(objtree);
+                false
+            }
+            Some(Ok(TaskResult::Map(dmm))) => {
                 if let Some(objtree) = self.objtree.as_ref() {
                     self.map_renderer.prepare(factory, &objtree, &dmm, dmm.z_level(self.z_current));
                 }
                 self.map_current = self.maps.len();
                 self.maps.push(EditorMap { dmm });
+                false
             }
-        }
+        });
+        tasks.extend(std::mem::replace(&mut self.tasks, Vec::new()));
+        self.tasks = tasks;
 
         self.map_renderer.paint(factory, encoder, view);
     }
@@ -246,6 +250,11 @@ impl EditorScene {
                     ui.show_user_guide();
                 });
             });
+
+            for task in self.tasks.iter() {
+                ui.separator();
+                ui.text(im_str!("{}", task.name()));
+            }
         });
         if self.ui_style_editor {
             ui.window(im_str!("Style Editor"))
@@ -333,4 +342,9 @@ fn tree_node(ui: &Ui, ty: TypeRef) {
             }
         });
     }
+}
+
+enum TaskResult {
+    ObjectTree(ObjectTree),
+    Map(Map),
 }

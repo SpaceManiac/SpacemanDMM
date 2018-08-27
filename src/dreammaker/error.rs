@@ -230,7 +230,7 @@ pub struct DMError {
     location: Location,
     severity: Severity,
     description: String,
-    cause: Option<Box<error::Error + Send>>,
+    cause: Option<Box<error::Error + Send + Sync>>,
 }
 
 #[allow(unused_variables)]
@@ -244,7 +244,7 @@ impl DMError {
         }
     }
 
-    pub fn set_cause<E: error::Error + Send + 'static>(mut self, cause: E) -> DMError {
+    pub fn set_cause<E: error::Error + Send + Sync + 'static>(mut self, cause: E) -> DMError {
         self.cause = Some(Box::new(cause));
         self
     }
