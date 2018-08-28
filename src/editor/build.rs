@@ -7,7 +7,7 @@ fn main() {
         let out_dir = env::var("OUT_DIR").ok().expect("can't find out_dir");
 
         if cfg!(target_env="msvc") {
-            if let Err(e) = Command::new("windres").args(&["editor.rc",  "-o"])
+            if let Err(e) = Command::new("windres").args(&["res/editor.rc",  "-o"])
                 .arg(&format!("{}/editor_rc.lib", out_dir))
                 .status()
             {
@@ -15,7 +15,7 @@ fn main() {
                 return;
             }
         } else {
-            if let Err(e) = Command::new("windres").args(&["editor.rc",  "-o"])
+            if let Err(e) = Command::new("windres").args(&["res/editor.rc",  "-o"])
                 .arg(&format!("{}/editor.rc.o", out_dir))
                 .status()
             {
