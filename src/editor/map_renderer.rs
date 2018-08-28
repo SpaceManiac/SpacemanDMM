@@ -37,71 +37,54 @@ pub struct MapRenderer {
     pub zoom: f32,
     pub center: [f32; 2],
 
-    pub last_atoms: usize,
-    pub last_duration: f32,
+    pso: gfx::PipelineState<Resources, pipe::Meta>,
+    transform_buffer: gfx::handle::Buffer<Resources, Transform>,
+    sampler: gfx::handle::Sampler<Resources>,
+}
+
+pub struct RenderedMap {
+    pub atoms_len: usize,
+    pub duration: f32,
 
     draw_calls: Vec<DrawCall>,
-    pso: gfx::PipelineState<Resources, pipe::Meta>,
-    data: pipe::Data<Resources>,
     ibuf: gfx::IndexBuffer<Resources>,
+    vbuf: gfx::handle::Buffer<Resources, Vertex>,
+}
+
+struct DrawCall {
+    texture: Texture,
+    start: u32,
+    len: u32,
 }
 
 impl MapRenderer {
-    pub fn new(factory: &mut Factory, view: &RenderTargetView) -> MapRenderer {
-        let mut icons = IconCache::default();
-        let (slice, pso, data);
-        {
-            pso = factory.create_pipeline_simple(
-                include_bytes!("shaders/main_150.glslv"),
-                include_bytes!("shaders/main_150.glslf"),
-                pipe::new()
-            ).expect("create_pipeline_simple failed");
+    pub fn new(factory: &mut Factory, _view: &RenderTargetView) -> MapRenderer {
+        let pso = factory.create_pipeline_simple(
+            include_bytes!("shaders/main_150.glslv"),
+            include_bytes!("shaders/main_150.glslf"),
+            pipe::new()
+        ).expect("create_pipeline_simple failed");
 
-            let sampler = factory.create_sampler(gfx::texture::SamplerInfo::new(
-                gfx::texture::FilterMethod::Scale,
-                gfx::texture::WrapMode::Clamp));
+        let transform_buffer = factory.create_constant_buffer(1);
 
-            let test_icon = icons.retrieve(factory, "icons/obj/device.dmi".as_ref()).expect("test icon");
-            let w = test_icon.width as f32 / 2.0;
-            let h = test_icon.height as f32 / 2.0;
-            let (vertex_buffer, new_slice) = factory.create_vertex_buffer_with_slice(&[
-                Vertex { position: [-w,  h], color: [1.0, 1.0, 1.0, 1.0], uv: [0.0, 0.0] },
-                Vertex { position: [-w, -h], color: [1.0, 1.0, 1.0, 1.0], uv: [0.0, 1.0] },
-                Vertex { position: [ w, -h], color: [1.0, 1.0, 1.0, 1.0], uv: [1.0, 1.0] },
-                Vertex { position: [ w,  h], color: [1.0, 1.0, 1.0, 1.0], uv: [1.0, 0.0] },
-            ], &[0u16, 1, 3, 1, 2, 3][..]);
-            slice = new_slice;
-            let transform_buffer = factory.create_constant_buffer(1);
-
-            data = pipe::Data {
-                vbuf: vertex_buffer,
-                transform: transform_buffer,
-                tex: (test_icon.texture.clone(), sampler),
-                out: view.clone(),
-            };
-        }
+        let sampler = factory.create_sampler(gfx::texture::SamplerInfo::new(
+            gfx::texture::FilterMethod::Scale,
+            gfx::texture::WrapMode::Clamp));
 
         MapRenderer {
-            icons,
+            icons: IconCache::default(),
             zoom: 1.0,
             center: [0.0; 2],
 
-            last_atoms: 0,
-            last_duration: 0.0,
-
-            draw_calls: vec![DrawCall {
-                texture: data.tex.0.clone(),
-                start: 0,
-                len: 6,
-            }],
             pso,
-            data,
-            ibuf: slice.buffer,
+            transform_buffer,
+            sampler,
         }
     }
 
-    pub fn prepare(&mut self, factory: &mut Factory, objtree: &ObjectTree, map: &Map, grid: Grid) {
-        let now = ::std::time::Instant::now();
+    #[must_use]
+    pub fn prepare(&mut self, factory: &mut Factory, objtree: &ObjectTree, map: &Map, grid: Grid) -> RenderedMap {
+        let start = ::std::time::Instant::now();
         let (_len_y, _len_x) = grid.dim();
         self.center = [_len_x as f32 * 16.0, _len_y as f32 * 16.0];
 
@@ -121,7 +104,7 @@ impl MapRenderer {
         // render atoms
         let mut vertices = Vec::new();
         let mut indices: Vec<u32> = Vec::new();
-        self.draw_calls.clear();
+        let mut draw_calls: Vec<DrawCall> = Vec::new();
 
         for atom in atoms.iter() {
             let icon = match atom.get_var("icon", objtree) {
@@ -138,7 +121,6 @@ impl MapRenderer {
                 Some(icon_file) => icon_file,
                 None => continue,
             };
-            self.data.tex.0 = icon_file.texture.clone();
 
             let uv = match icon_file.uv_of(&icon_state, dir) {
                 Some(rect) => rect,
@@ -169,43 +151,55 @@ impl MapRenderer {
             let i_start = indices.len() as u32;
             indices.extend_from_slice(&[start, start+1, start+3, start+1, start+2, start+3]);
 
-            if let Some(call) = self.draw_calls.last_mut() {
+            if let Some(call) = draw_calls.last_mut() {
                 if call.texture == icon_file.texture {
                     call.len += 6;
                     continue;
                 }
             }
-            self.draw_calls.push(DrawCall {
+            draw_calls.push(DrawCall {
                 texture: icon_file.texture.clone(),
                 start: i_start,
                 len: 6,
             });
         }
 
-        self.data.vbuf = factory.create_vertex_buffer(&vertices[..]);
-        self.ibuf = factory.create_index_buffer(&indices[..]);
-        self.last_atoms = atoms.len();
-        let duration = now.elapsed();
-        self.last_duration = duration.as_secs() as f32 + duration.subsec_nanos() as f32 / 1_000_000_000.0;
+        let vbuf = factory.create_vertex_buffer(&vertices[..]);
+        let ibuf = factory.create_index_buffer(&indices[..]);
+
+        let elapsed = start.elapsed();
+        let duration = elapsed.as_secs() as f32 + elapsed.subsec_nanos() as f32 / 1_000_000_000.0;
+        RenderedMap {
+            atoms_len: atoms.len(),
+            duration,
+            draw_calls,
+
+            ibuf,
+            vbuf,
+        }
+    }
+}
+
+impl RenderedMap {
+    pub fn draw_calls(&self) -> usize {
+        self.draw_calls.len()
     }
 
-    pub fn paint(&mut self, _factory: &mut Factory, encoder: &mut Encoder, view: &RenderTargetView) {
-        self.data.out = view.clone();
-
+    pub fn paint(&mut self, parent: &mut MapRenderer, encoder: &mut Encoder, view: &RenderTargetView) {
         let (x, y, _, _) = view.get_dimensions();
 
         // (0, 0) is the center of the screen, 1.0 = 1 pixel
         let transform = Transform {
             transform: [
-                [2.0 / x as f32, 0.0, 0.0, -2.0 * self.center[0].round() / x as f32],
-                [0.0, 2.0 / y as f32, 0.0, -2.0 * self.center[1].round() / y as f32],
+                [2.0 / x as f32, 0.0, 0.0, -2.0 * parent.center[0].round() / x as f32],
+                [0.0, 2.0 / y as f32, 0.0, -2.0 * parent.center[1].round() / y as f32],
                 [0.0, 0.0, 1.0, 0.0],
-                [0.0, 0.0, 0.0, 1.0 / self.zoom],
+                [0.0, 0.0, 0.0, 1.0 / parent.zoom],
             ]
         };
-        encoder.update_buffer(&self.data.transform, &[transform], 0).expect("update_buffer failed");
+        encoder.update_buffer(&parent.transform_buffer, &[transform], 0).expect("update_buffer failed");
+
         for call in self.draw_calls.iter() {
-            self.data.tex.0 = call.texture.clone();
             let slice = gfx::Slice {
                 start: call.start,
                 end: call.start + call.len,
@@ -213,17 +207,14 @@ impl MapRenderer {
                 instances: None,
                 buffer: self.ibuf.clone(),
             };
-            encoder.draw(&slice, &self.pso, &self.data);
+            let data = pipe::Data {
+                vbuf: self.vbuf.clone(),
+                transform: parent.transform_buffer.clone(),
+                tex: (call.texture.clone(), parent.sampler.clone()),
+                out: view.clone(),
+            };
+            encoder.draw(&slice, &parent.pso, &data);
         }
     }
-
-    pub fn draw_calls(&self) -> usize {
-        self.draw_calls.len()
-    }
 }
 
-struct DrawCall {
-    texture: Texture,
-    start: u32,
-    len: u32,
-}

@@ -47,7 +47,6 @@ pub struct EditorScene {
 
     maps: Vec<EditorMap>,
     map_current: usize,
-    z_current: usize,
 
     tasks: Vec<Task<TaskResult>>,
     errors: Vec<Box<std::error::Error>>,
@@ -82,7 +81,6 @@ impl EditorScene {
 
             maps: Vec::new(),
             map_current: 0,
-            z_current: 0,
 
             tasks,
             errors: Vec::new(),
@@ -128,8 +126,12 @@ impl EditorScene {
         match (ctrl, shift, alt, key) {
             k!(Ctrl + R) => {
                 if let Some(objtree) = self.objtree.as_ref() {
-                    if let Some(map) = self.maps.get(self.map_current) {
-                        self.map_renderer.prepare(&mut self.factory, &objtree, &map.dmm, map.dmm.z_level(self.z_current));
+                    if let Some(map) = self.maps.get_mut(self.map_current) {
+                        map.rendered = Some(self.map_renderer.prepare(
+                            &mut self.factory,
+                            &objtree,
+                            &map.dmm,
+                            map.dmm.z_level(map.z_current)));
                     }
                 }
             },
@@ -146,23 +148,32 @@ impl EditorScene {
             Ok(TaskResult::ObjectTree(objtree)) => {
                 self.tools = tools::configure(&objtree);
                 self.map_renderer.icons.clear();
-                if let Some(map) = self.maps.get(self.map_current) {
-                    self.map_renderer.prepare(factory, &objtree, &map.dmm, map.dmm.z_level(self.z_current));
+                if let Some(map) = self.maps.get_mut(self.map_current) {
+                    map.rendered = Some(self.map_renderer.prepare(
+                        factory,
+                        &objtree,
+                        &map.dmm,
+                        map.dmm.z_level(map.z_current)));
                 }
                 self.objtree = Some(objtree);
             }
             Ok(TaskResult::Map(dmm)) => {
+                let mut rendered = None;
                 if let Some(objtree) = self.objtree.as_ref() {
-                    self.map_renderer.prepare(factory, &objtree, &dmm, dmm.z_level(self.z_current));
+                    rendered = Some(self.map_renderer.prepare(factory, &objtree, &dmm, dmm.z_level(0)));
                 }
                 self.map_current = self.maps.len();
-                self.maps.push(EditorMap { dmm });
+                self.maps.push(EditorMap { dmm, z_current: 0, rendered });
             }
         }));
         tasks.extend(std::mem::replace(&mut self.tasks, Vec::new()));
         self.tasks = tasks;
 
-        self.map_renderer.paint(factory, encoder, view);
+        if let Some(map) = self.maps.get_mut(self.map_current) {
+            if let Some(rendered) = map.rendered.as_mut() {
+                rendered.paint(&mut self.map_renderer, encoder, view);
+            }
+        }
     }
 
     fn run_ui(&mut self, ui: &Ui) -> bool {
@@ -369,7 +380,7 @@ impl EditorScene {
             .size((300.0, 200.0), window_positions_cond)
             .resizable(!self.ui_lock_windows)
             .build(|| {
-                for (map_idx, map) in self.maps.iter().enumerate() {
+                for (map_idx, map) in self.maps.iter_mut().enumerate() {
                     if ui.collapsing_header(im_str!("runtimestation.dmm")).default_open(true).build() {
                         ui.text(im_str!("keys: {} / length: {}",
                             map.dmm.dictionary.len(),
@@ -377,7 +388,7 @@ impl EditorScene {
                         for z in 0..map.dmm.dim_z() {
                             if ui.small_button(im_str!("z = {}", z + 1)) {
                                 self.map_current = map_idx;
-                                self.z_current = z;
+                                map.z_current = z;
                             }
                         }
                     }
@@ -391,13 +402,14 @@ impl EditorScene {
                 .size((300.0, 100.0), ImGuiCond::FirstUseEver)
                 .opened(&mut ui_debug)
                 .build(|| {
-                    ui.text(im_str!("maps[{}], i = {}, z = {}", self.maps.len(), self.map_current, self.z_current));
                     ui.text(im_str!("zoom = {}, center = {:?}", self.map_renderer.zoom, self.map_renderer.center));
-                    ui.text(im_str!("icons[{}], draw_calls[{}], atoms[{}]",
-                        self.map_renderer.icons.len(),
-                        self.map_renderer.draw_calls(),
-                        self.map_renderer.last_atoms));
-                    ui.text(im_str!("last render: {}s", self.map_renderer.last_duration));
+                    ui.text(im_str!("map = {}, maps[{}], icons[{}]", self.map_current, self.maps.len(), self.map_renderer.icons.len()));
+                    if let Some(map) = self.maps.get(self.map_current) {
+                        if let Some(rendered) = map.rendered.as_ref() {
+                            ui.text(im_str!("draw_calls[{}], atoms[{}]", rendered.draw_calls(), rendered.atoms_len));
+                            ui.text(im_str!("last render: {}s", rendered.duration));
+                        }
+                    }
                 });
             self.ui_debug = ui_debug;
         }
@@ -422,6 +434,8 @@ impl EditorScene {
 
 struct EditorMap {
     dmm: Map,
+    z_current: usize,
+    rendered: Option<map_renderer::RenderedMap>,
 }
 
 fn root_node(ui: &Ui, ty: TypeRef, name: &str) {
