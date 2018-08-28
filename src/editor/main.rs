@@ -407,7 +407,7 @@ impl EditorScene {
                     if let Some(map) = self.maps.get(self.map_current) {
                         if let Some(rendered) = map.rendered.as_ref() {
                             ui.text(im_str!("draw_calls[{}], atoms[{}]", rendered.draw_calls(), rendered.atoms_len));
-                            ui.text(im_str!("last render: {}s", rendered.duration));
+                            ui.text(im_str!("timings: {:?}", rendered.duration));
                         }
                     }
                 });

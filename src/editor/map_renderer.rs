@@ -44,7 +44,7 @@ pub struct MapRenderer {
 
 pub struct RenderedMap {
     pub atoms_len: usize,
-    pub duration: f32,
+    pub duration: [f32; 2],
 
     draw_calls: Vec<DrawCall>,
     ibuf: gfx::IndexBuffer<Resources>,
@@ -93,10 +93,22 @@ impl MapRenderer {
         for (y, row) in grid.axis_iter(Axis(0)).rev().enumerate() {
             for (x, key) in row.iter().enumerate() {
                 for fab in map.dictionary[key].iter() {
-                    atoms.extend(Atom::from_prefab(objtree, fab, (x as u32, y as u32)));
+                    let atom = match Atom::from_prefab(objtree, fab, (x as u32, y as u32)) {
+                        Some(atom) => atom,
+                        None => continue,
+                    };
+                    match atom.get_var("icon", objtree) {
+                        &Constant::Resource(ref path) | &Constant::String(ref path) => {
+                            let _ = self.icons.retrieve(factory, path.as_ref());
+                        },
+                        _ => continue,
+                    }
+                    atoms.push(atom);
                 }
             }
         }
+
+        let midpoint = ::std::time::Instant::now();
 
         // z sort - TODO: use depth buffer instead?
         atoms.sort_by_key(|a| minimap::layer_of(objtree, a));
@@ -167,11 +179,10 @@ impl MapRenderer {
         let vbuf = factory.create_vertex_buffer(&vertices[..]);
         let ibuf = factory.create_index_buffer(&indices[..]);
 
-        let elapsed = start.elapsed();
-        let duration = elapsed.as_secs() as f32 + elapsed.subsec_nanos() as f32 / 1_000_000_000.0;
+        let end = ::std::time::Instant::now();
         RenderedMap {
             atoms_len: atoms.len(),
-            duration,
+            duration: [to_seconds(midpoint - start), to_seconds(end - midpoint)],
             draw_calls,
 
             ibuf,
@@ -218,3 +229,6 @@ impl RenderedMap {
     }
 }
 
+fn to_seconds(duration: ::std::time::Duration) -> f32 {
+    duration.as_secs() as f32 + duration.subsec_nanos() as f32 / 1_000_000_000.0
+}
