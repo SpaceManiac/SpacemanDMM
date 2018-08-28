@@ -51,6 +51,7 @@ pub struct EditorScene {
     tasks: Vec<Task<TaskResult>>,
     errors: Vec<Box<std::error::Error>>,
     last_errors: usize,
+    counter: usize,
 
     ui_lock_windows: bool,
     ui_style_editor: bool,
@@ -85,6 +86,7 @@ impl EditorScene {
             tasks,
             errors: Vec::new(),
             last_errors: 0,
+            counter: 0,
 
             ui_lock_windows: true,
             ui_style_editor: false,
@@ -327,9 +329,11 @@ impl EditorScene {
                 });
             });
 
-            for task in self.tasks.iter() {
+            const SPINNER: &[&str] = &["|", "/", "-", "\\"];
+            self.counter = self.counter.wrapping_add(1);
+            for (i, task) in self.tasks.iter().enumerate() {
                 ui.separator();
-                ui.text(im_str!("{}", task.name()));
+                ui.text(im_str!("{} {}", SPINNER[(self.counter / 10 + i) % SPINNER.len()], task.name()));
             }
 
             if self.errors.len() > self.last_errors {
