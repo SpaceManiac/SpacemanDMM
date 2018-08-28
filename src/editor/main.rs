@@ -223,6 +223,28 @@ impl EditorScene {
                     }
                 }
             });
+            ui.menu(im_str!("Layers")).build(|| {
+                ui.menu_item(im_str!("Customize filters..."))
+                    .enabled(false)
+                    .build();
+                ui.separator();
+                ui.menu_item(im_str!("Area"))
+                    .shortcut(im_str!("Ctrl+1"))
+                    .enabled(false)
+                    .build();
+                ui.menu_item(im_str!("Turf"))
+                    .shortcut(im_str!("Ctrl+2"))
+                    .enabled(false)
+                    .build();
+                ui.menu_item(im_str!("Obj"))
+                    .shortcut(im_str!("Ctrl+3"))
+                    .enabled(false)
+                    .build();
+                ui.menu_item(im_str!("Mob"))
+                    .shortcut(im_str!("Ctrl+4"))
+                    .enabled(false)
+                    .build();
+            });
             ui.menu(im_str!("Window")).build(|| {
                 ui.menu_item(im_str!("Lock positions"))
                     .selected(&mut self.ui_lock_windows)
