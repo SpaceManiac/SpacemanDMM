@@ -39,6 +39,7 @@ fn main() {
 }
 
 pub struct EditorScene {
+    factory: Factory,
     map_renderer: map_renderer::MapRenderer,
     objtree: Option<ObjectTree>,
 
@@ -73,6 +74,7 @@ impl EditorScene {
         }));
 
         EditorScene {
+            factory: factory.clone(),
             map_renderer: map_renderer::MapRenderer::new(factory, view),
             objtree: None,
 
@@ -103,7 +105,36 @@ impl EditorScene {
         self.map_renderer.center[axis] += 4.0 * 32.0 * mul * y / self.map_renderer.zoom;
     }
 
-    fn chord(&mut self, _ctrl: bool, _shift: bool, _alt: bool, _key: Key) {
+    fn chord(&mut self, ctrl: bool, shift: bool, alt: bool, key: Key) {
+        use Key::*;
+        macro_rules! k {
+            (@[$ctrl:pat, $shift:pat, $alt:pat] $k:pat) => {
+                ($ctrl, $shift, $alt, $k)
+            };
+            (@[$ctrl:pat, $shift:pat, $alt:pat] Ctrl + $($rest:tt)*) => {
+                k!(@[true, $shift, $alt] $($rest)*)
+            };
+            (@[$ctrl:pat, $shift:pat, $alt:pat] Shift + $($rest:tt)*) => {
+                k!(@[$ctrl, true, $alt] $($rest)*)
+            };
+            (@[$ctrl:pat, $shift:pat, $alt:pat] Alt + $($rest:tt)*) => {
+                k!(@[$ctrl, $shift, true] $($rest)*)
+            };
+            (@$($rest:tt)*) => { error };
+            ($($rest:tt)*) => {
+                k!(@[false, false, false] $($rest)*)
+            };
+        }
+        match (ctrl, shift, alt, key) {
+            k!(Ctrl + R) => {
+                if let Some(objtree) = self.objtree.as_ref() {
+                    if let Some(map) = self.maps.get(self.map_current) {
+                        self.map_renderer.prepare(&mut self.factory, &objtree, &map.dmm, map.dmm.z_level(self.z_current));
+                    }
+                }
+            },
+            _ => {}
+        }
     }
 
     fn render(&mut self, factory: &mut Factory, encoder: &mut Encoder, view: &RenderTargetView) {
