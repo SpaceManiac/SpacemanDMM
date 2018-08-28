@@ -17,6 +17,7 @@ mod support;
 mod dmi;
 mod map_renderer;
 mod tasks;
+mod tools;
 
 use imgui::*;
 
@@ -40,6 +41,8 @@ fn main() {
 pub struct EditorScene {
     map_renderer: map_renderer::MapRenderer,
     objtree: Option<ObjectTree>,
+
+    tools: Vec<tools::Tool>,
 
     maps: Vec<EditorMap>,
     map_current: usize,
@@ -72,6 +75,9 @@ impl EditorScene {
         EditorScene {
             map_renderer: map_renderer::MapRenderer::new(factory, view),
             objtree: None,
+
+            tools: tools::configure(&ObjectTree::default()),
+
             maps: Vec::new(),
             map_current: 0,
             z_current: 0,
@@ -107,6 +113,7 @@ impl EditorScene {
                 self.errors.push(e);
             }
             Ok(TaskResult::ObjectTree(objtree)) => {
+                self.tools = tools::configure(&objtree);
                 self.map_renderer.icons.clear();
                 if let Some(map) = self.maps.get(self.map_current) {
                     self.map_renderer.prepare(factory, &objtree, &map.dmm, map.dmm.z_level(self.z_current));
@@ -312,6 +319,16 @@ impl EditorScene {
                     root_node(ui, root, "mob");
                 } else {
                     ui.text(im_str!("The object tree is loading..."));
+                }
+            });
+
+        ui.window(im_str!("Tools"))
+            .build(|| {
+                for tool in self.tools.iter() {
+                    ui.text(im_str!("{}", tool.name));
+                    if ui.is_item_hovered() {
+                        ui.tooltip_text("Test tooltip.");
+                    }
                 }
             });
 
