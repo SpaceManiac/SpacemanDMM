@@ -36,6 +36,7 @@ pub struct MapRenderer {
     pub icons: IconCache,
     pub zoom: f32,
     pub center: [f32; 2],
+    pub layers: [bool; 5],
 
     pso: gfx::PipelineState<Resources, pipe::Meta>,
     transform_buffer: gfx::handle::Buffer<Resources, Transform>,
@@ -75,6 +76,7 @@ impl MapRenderer {
             icons: IconCache::default(),
             zoom: 1.0,
             center: [0.0; 2],
+            layers: [true; 5],
 
             pso,
             transform_buffer,
@@ -85,14 +87,26 @@ impl MapRenderer {
     #[must_use]
     pub fn prepare(&mut self, factory: &mut Factory, objtree: &ObjectTree, map: &Map, grid: Grid) -> RenderedMap {
         let start = ::std::time::Instant::now();
-        let (_len_y, _len_x) = grid.dim();
-        self.center = [_len_x as f32 * 16.0, _len_y as f32 * 16.0];
 
         // collect the atoms
         let mut atoms = Vec::new();
         for (y, row) in grid.axis_iter(Axis(0)).rev().enumerate() {
             for (x, key) in row.iter().enumerate() {
                 for fab in map.dictionary[key].iter() {
+                    let i = if fab.path.starts_with("/area") {
+                        1
+                    } else if fab.path.starts_with("/turf") {
+                        2
+                    } else if fab.path.starts_with("/obj") {
+                        3
+                    } else if fab.path.starts_with("/mob") {
+                        4
+                    } else {
+                        0
+                    };
+                    if !self.layers[i] {
+                        continue;
+                    }
                     let atom = match Atom::from_prefab(objtree, fab, (x as u32, y as u32)) {
                         Some(atom) => atom,
                         None => continue,
@@ -188,6 +202,11 @@ impl MapRenderer {
             ibuf,
             vbuf,
         }
+    }
+
+    pub fn recenter(&mut self, dmm: &Map) {
+        let (x, y, _) = dmm.dim_xyz();
+        self.center = [x as f32 * 16.0, y as f32 * 16.0];
     }
 }
 

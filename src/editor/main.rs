@@ -123,6 +123,7 @@ impl EditorScene {
                         &objtree,
                         &map.dmm,
                         map.dmm.z_level(map.z_current)));
+                    self.map_renderer.recenter(&map.dmm);
                 }
                 self.objtree = Some(objtree);
             }
@@ -252,22 +253,22 @@ impl EditorScene {
                     .enabled(false)
                     .build();
                 ui.separator();
-                ui.menu_item(im_str!("Area"))
+                if ui.menu_item(im_str!("Area"))
                     .shortcut(im_str!("Ctrl+1"))
-                    .enabled(false)
-                    .build();
-                ui.menu_item(im_str!("Turf"))
+                    .selected(&mut self.map_renderer.layers[1])
+                    .build() { self.rerender_map(); }
+                if ui.menu_item(im_str!("Turf"))
                     .shortcut(im_str!("Ctrl+2"))
-                    .enabled(false)
-                    .build();
-                ui.menu_item(im_str!("Obj"))
+                    .selected(&mut self.map_renderer.layers[2])
+                    .build() { self.rerender_map(); }
+                if ui.menu_item(im_str!("Obj"))
                     .shortcut(im_str!("Ctrl+3"))
-                    .enabled(false)
-                    .build();
-                ui.menu_item(im_str!("Mob"))
+                    .selected(&mut self.map_renderer.layers[3])
+                    .build() { self.rerender_map(); }
+                if ui.menu_item(im_str!("Mob"))
                     .shortcut(im_str!("Ctrl+4"))
-                    .enabled(false)
-                    .build();
+                    .selected(&mut self.map_renderer.layers[4])
+                    .build() { self.rerender_map(); }
             });
             ui.menu(im_str!("Window")).build(|| {
                 ui.menu_item(im_str!("Lock positions"))
@@ -431,6 +432,11 @@ impl EditorScene {
         match (ctrl, shift, alt, key) {
             // File
             k!(Ctrl + U) => self.reload_objtree(),
+            // Layers
+            k!(Ctrl + Key1) => self.toggle_layer(1),
+            k!(Ctrl + Key2) => self.toggle_layer(2),
+            k!(Ctrl + Key3) => self.toggle_layer(3),
+            k!(Ctrl + Key4) => self.toggle_layer(4),
             // misc
             k!(Ctrl + R) => self.rerender_map(),
             _ => {}
@@ -451,6 +457,12 @@ impl EditorScene {
             let context = dm::Context::default();
             Ok(TaskResult::ObjectTree(context.parse_environment(&path)?))
         }));
+    }
+
+    fn toggle_layer(&mut self, which: usize) {
+        // TODO: make this faster
+        self.map_renderer.layers[which] = !self.map_renderer.layers[which];
+        self.rerender_map();
     }
 
     fn rerender_map(&mut self) {
