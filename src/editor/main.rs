@@ -19,6 +19,8 @@ mod map_renderer;
 mod tasks;
 mod tools;
 
+use std::path::PathBuf;
+
 use imgui::*;
 
 use dm::objtree::{ObjectTree, TypeRef};
@@ -41,6 +43,7 @@ fn main() {
 pub struct EditorScene {
     factory: Factory,
     map_renderer: map_renderer::MapRenderer,
+    environment: Option<PathBuf>,
     objtree: Option<ObjectTree>,
 
     tools: Vec<tools::Tool>,
@@ -63,19 +66,15 @@ pub struct EditorScene {
 impl EditorScene {
     fn new(factory: &mut Factory, view: &RenderTargetView) -> Self {
         let mut tasks: Vec<Task<TaskResult>> = Vec::new();
-        tasks.push(Task::spawn("Loading tgstation.dme", move || {
-            let context = dm::Context::default();
-            let env = dm::detect_environment("tgstation.dme")?.ok_or("no .dme found")?;
-            Ok(TaskResult::ObjectTree(context.parse_environment(&env)?))
-        }));
         tasks.push(Task::spawn("Loading runtimestation.dmm", move || {
             let map = Map::from_file("_maps/map_files/debug/runtimestation.dmm".as_ref())?;
             Ok(TaskResult::Map(map))
         }));
 
-        EditorScene {
+        let mut ed = EditorScene {
             factory: factory.clone(),
             map_renderer: map_renderer::MapRenderer::new(factory, view),
+            environment: None,
             objtree: None,
 
             tools: tools::configure(&ObjectTree::default()),
@@ -93,7 +92,11 @@ impl EditorScene {
             ui_imgui_metrics: false,
             ui_debug: true,
             ui_errors: false,
+        };
+        if let Ok(Some(env)) = dm::detect_environment("tgstation.dme") {
+            ed.load_environment(env);
         }
+        ed
     }
 
     fn mouse_wheel(&mut self, ctrl: bool, shift: bool, _alt: bool, _x: f32, y: f32) {
@@ -103,42 +106,6 @@ impl EditorScene {
         }
 
         self.map_renderer.center[axis] += 4.0 * 32.0 * mul * y / self.map_renderer.zoom;
-    }
-
-    fn chord(&mut self, ctrl: bool, shift: bool, alt: bool, key: Key) {
-        use Key::*;
-        macro_rules! k {
-            (@[$ctrl:pat, $shift:pat, $alt:pat] $k:pat) => {
-                ($ctrl, $shift, $alt, $k)
-            };
-            (@[$ctrl:pat, $shift:pat, $alt:pat] Ctrl + $($rest:tt)*) => {
-                k!(@[true, $shift, $alt] $($rest)*)
-            };
-            (@[$ctrl:pat, $shift:pat, $alt:pat] Shift + $($rest:tt)*) => {
-                k!(@[$ctrl, true, $alt] $($rest)*)
-            };
-            (@[$ctrl:pat, $shift:pat, $alt:pat] Alt + $($rest:tt)*) => {
-                k!(@[$ctrl, $shift, true] $($rest)*)
-            };
-            (@$($rest:tt)*) => { error };
-            ($($rest:tt)*) => {
-                k!(@[false, false, false] $($rest)*)
-            };
-        }
-        match (ctrl, shift, alt, key) {
-            k!(Ctrl + R) => {
-                if let Some(objtree) = self.objtree.as_ref() {
-                    if let Some(map) = self.maps.get_mut(self.map_current) {
-                        map.rendered = Some(self.map_renderer.prepare(
-                            &mut self.factory,
-                            &objtree,
-                            &map.dmm,
-                            map.dmm.z_level(map.z_current)));
-                    }
-                }
-            },
-            _ => {}
-        }
     }
 
     fn render(&mut self, factory: &mut Factory, encoder: &mut Encoder, view: &RenderTargetView) {
@@ -187,13 +154,19 @@ impl EditorScene {
 
         ui.main_menu_bar(|| {
             ui.menu(im_str!("File")).build(|| {
-                ui.menu_item(im_str!("Open Environment"))
+                ui.menu_item(im_str!("Open environment"))
                     .shortcut(im_str!("Ctrl+Shift+O"))
                     .enabled(false)
                     .build();
-                ui.menu(im_str!("Recent Environments")).enabled(false).build(|| {
+                ui.menu(im_str!("Recent environments")).enabled(false).build(|| {
                     // TODO
                 });
+                if ui.menu_item(im_str!("Update environment"))
+                    .shortcut(im_str!("Ctrl+U"))
+                    .build()
+                {
+                    self.reload_objtree();
+                }
                 ui.separator();
                 ui.menu_item(im_str!("New"))
                     .shortcut(im_str!("Ctrl+N"))
@@ -433,6 +406,63 @@ impl EditorScene {
         }
 
         continue_running
+    }
+
+    fn chord(&mut self, ctrl: bool, shift: bool, alt: bool, key: Key) {
+        use Key::*;
+        macro_rules! k {
+            (@[$ctrl:pat, $shift:pat, $alt:pat] $k:pat) => {
+                ($ctrl, $shift, $alt, $k)
+            };
+            (@[$ctrl:pat, $shift:pat, $alt:pat] Ctrl + $($rest:tt)*) => {
+                k!(@[true, $shift, $alt] $($rest)*)
+            };
+            (@[$ctrl:pat, $shift:pat, $alt:pat] Shift + $($rest:tt)*) => {
+                k!(@[$ctrl, true, $alt] $($rest)*)
+            };
+            (@[$ctrl:pat, $shift:pat, $alt:pat] Alt + $($rest:tt)*) => {
+                k!(@[$ctrl, $shift, true] $($rest)*)
+            };
+            (@$($rest:tt)*) => { error };
+            ($($rest:tt)*) => {
+                k!(@[false, false, false] $($rest)*)
+            };
+        }
+        match (ctrl, shift, alt, key) {
+            // File
+            k!(Ctrl + U) => self.reload_objtree(),
+            // misc
+            k!(Ctrl + R) => self.rerender_map(),
+            _ => {}
+        }
+    }
+
+    // -----------------------------------------------------------------------
+
+    fn reload_objtree(&mut self) {
+        if let Some(env) = self.environment.as_ref().cloned() {
+            self.load_environment(env);
+        }
+    }
+
+    fn load_environment(&mut self, path: PathBuf) {
+        self.environment = Some(path.to_owned());
+        self.tasks.push(Task::spawn(format!("Loading {}", path.display()), move || {
+            let context = dm::Context::default();
+            Ok(TaskResult::ObjectTree(context.parse_environment(&path)?))
+        }));
+    }
+
+    fn rerender_map(&mut self) {
+        if let Some(objtree) = self.objtree.as_ref() {
+            if let Some(map) = self.maps.get_mut(self.map_current) {
+                map.rendered = Some(self.map_renderer.prepare(
+                    &mut self.factory,
+                    &objtree,
+                    &map.dmm,
+                    map.dmm.z_level(map.z_current)));
+            }
+        }
     }
 }
 
