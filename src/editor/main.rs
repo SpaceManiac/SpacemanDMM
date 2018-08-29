@@ -317,10 +317,23 @@ impl EditorScene {
             ui.show_metrics_window(&mut self.ui_imgui_metrics);
         }
 
-        ui.window(im_str!("Object Tree"))
+        ui.window(im_str!("Tools"))
             .position((10.0, 30.0), window_positions_cond)
             .movable(!self.ui_lock_windows)
-            .size((300.0, 600.0), ImGuiCond::FirstUseEver)
+            .size((300.0, 100.0), ImGuiCond::FirstUseEver)
+            .build(|| {
+                for tool in self.tools.iter() {
+                    ui.text(im_str!("{}", tool.name));
+                    if ui.is_item_hovered() {
+                        ui.tooltip_text("Test tooltip.");
+                    }
+                }
+            });
+
+        ui.window(im_str!("Object Tree"))
+            .position((10.0, 140.0), window_positions_cond)
+            .movable(!self.ui_lock_windows)
+            .size((300.0, 500.0), ImGuiCond::FirstUseEver)
             .build(|| {
                 if let Some(objtree) = self.objtree.as_ref() {
                     let root = objtree.root();
@@ -330,16 +343,6 @@ impl EditorScene {
                     root_node(ui, root, "mob");
                 } else {
                     ui.text(im_str!("The object tree is loading..."));
-                }
-            });
-
-        ui.window(im_str!("Tools"))
-            .build(|| {
-                for tool in self.tools.iter() {
-                    ui.text(im_str!("{}", tool.name));
-                    if ui.is_item_hovered() {
-                        ui.tooltip_text("Test tooltip.");
-                    }
                 }
             });
 
