@@ -409,6 +409,7 @@ impl EditorScene {
         continue_running
     }
 
+    #[deny(unreachable_patterns)]
     fn chord(&mut self, ctrl: bool, shift: bool, alt: bool, key: Key) {
         use Key::*;
         macro_rules! k {
@@ -439,6 +440,8 @@ impl EditorScene {
             k!(Ctrl + Key4) => self.toggle_layer(4),
             // misc
             k!(Ctrl + R) => self.rerender_map(),
+            k!(Ctrl + Equals) => self.map_renderer.zoom *= 2.0,
+            k!(Ctrl + Subtract) => self.map_renderer.zoom *= 0.5,
             _ => {}
         }
     }
