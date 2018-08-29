@@ -187,13 +187,13 @@ impl EditorScene {
                     .enabled(false)
                     .build();
                 ui.menu_item(im_str!("Save As"))
+                    .shortcut(im_str!("Ctrl+Shift+S"))
                     .enabled(false)
                     .build();
                 ui.menu_item(im_str!("Save Copy As"))
                     .enabled(false)
                     .build();
                 ui.menu_item(im_str!("Save All"))
-                    .shortcut(im_str!("Ctrl+Shift+S"))
                     .enabled(false)
                     .build();
                 ui.separator();
