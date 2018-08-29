@@ -9,6 +9,7 @@ extern crate gfx_device_gl;
 extern crate imgui_gfx_renderer;
 extern crate lodepng;
 extern crate ndarray;
+extern crate nfd;
 
 extern crate dreammaker as dm;
 extern crate dmm_tools;
@@ -155,32 +156,26 @@ impl EditorScene {
 
         ui.main_menu_bar(|| {
             ui.menu(im_str!("File")).build(|| {
-                ui.menu_item(im_str!("Open environment"))
+                if ui.menu_item(im_str!("Open environment"))
                     .shortcut(im_str!("Ctrl+Shift+O"))
-                    .enabled(false)
-                    .build();
+                    .build() { self.open_environment(); }
                 ui.menu(im_str!("Recent environments")).enabled(false).build(|| {
                     // TODO
                 });
                 if ui.menu_item(im_str!("Update environment"))
                     .shortcut(im_str!("Ctrl+U"))
-                    .build()
-                {
-                    self.reload_objtree();
-                }
+                    .build() { self.reload_objtree(); }
                 ui.separator();
                 ui.menu_item(im_str!("New"))
                     .shortcut(im_str!("Ctrl+N"))
                     .enabled(false)
                     .build();
-                ui.menu_item(im_str!("Open"))
+                if ui.menu_item(im_str!("Open"))
                     .shortcut(im_str!("Ctrl+O"))
-                    .enabled(false)
-                    .build();
-                ui.menu_item(im_str!("Close"))
+                    .build() { self.open_map(); }
+                if ui.menu_item(im_str!("Close"))
                     .shortcut(im_str!("Ctrl+W"))
-                    .enabled(false)
-                    .build();
+                    .build() { self.close_map(); }
                 ui.separator();
                 ui.menu_item(im_str!("Save"))
                     .shortcut(im_str!("Ctrl+S"))
@@ -432,7 +427,10 @@ impl EditorScene {
         }
         match (ctrl, shift, alt, key) {
             // File
+            k!(Ctrl + Shift + O) => self.open_environment(),
             k!(Ctrl + U) => self.reload_objtree(),
+            k!(Ctrl + O) => self.open_map(),
+            k!(Ctrl + W) => self.close_map(),
             // Layers
             k!(Ctrl + Key1) => self.toggle_layer(1),
             k!(Ctrl + Key2) => self.toggle_layer(2),
@@ -456,12 +454,45 @@ impl EditorScene {
         }
     }
 
+    fn open_environment(&mut self) {
+        if let Ok(nfd::Response::Okay(fname)) = nfd::open_file_dialog(Some("dme"), None) {
+            self.load_environment(fname.into());
+        }
+    }
+
     fn load_environment(&mut self, path: PathBuf) {
         self.environment = Some(path.to_owned());
         self.tasks.push(Task::spawn(format!("Loading {}", path.display()), move || {
             let context = dm::Context::default();
             Ok(TaskResult::ObjectTree(context.parse_environment(&path)?))
         }));
+    }
+
+    fn open_map(&mut self) {
+        match nfd::open_file_multiple_dialog(Some("dmm"), None) {
+            Ok(nfd::Response::Okay(fname)) => {
+                self.load_map(fname.into());
+            }
+            Ok(nfd::Response::OkayMultiple(fnames)) => {
+                for each in fnames {
+                    // TODO: order these?
+                    self.load_map(each.into());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn load_map(&mut self, path: PathBuf) {
+        self.tasks.push(Task::spawn(format!("Loading {}", path.display()), move || {
+            let map = Map::from_file(&path)?;
+            Ok(TaskResult::Map(map))
+        }));
+    }
+
+    fn close_map(&mut self) {
+        // TODO: prompt to save if dirty
+        self.maps.remove(self.map_current);
     }
 
     fn toggle_layer(&mut self, which: usize) {
