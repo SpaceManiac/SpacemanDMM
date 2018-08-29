@@ -482,6 +482,13 @@ impl EditorScene {
     }
 
     fn load_map(&mut self, path: PathBuf) {
+        for (i, map) in self.maps.iter().enumerate() {
+            // TODO: consider using same_file here
+            if map.path == path {
+                self.map_current = i;
+                return;
+            }
+        }
         self.tasks.push(Task::spawn(format!("Loading {}", file_name(&path)), move || {
             let map = Map::from_file(&path)?;
             Ok(TaskResult::Map(path, map))
@@ -490,7 +497,12 @@ impl EditorScene {
 
     fn close_map(&mut self) {
         // TODO: prompt to save if dirty
-        self.maps.remove(self.map_current);
+        if self.map_current + 1 == self.maps.len() {
+            self.maps.remove(self.map_current);
+            self.map_current = self.map_current.saturating_sub(1);
+        } else if self.map_current + 1 < self.maps.len() {
+            self.maps.remove(self.map_current);
+        }
     }
 
     fn save_map(&mut self) {
