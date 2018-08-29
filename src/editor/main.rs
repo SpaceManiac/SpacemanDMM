@@ -173,17 +173,14 @@ impl EditorScene {
                     .shortcut(im_str!("Ctrl+W"))
                     .build() { self.close_map(); }
                 ui.separator();
-                ui.menu_item(im_str!("Save"))
+                if ui.menu_item(im_str!("Save"))
                     .shortcut(im_str!("Ctrl+S"))
-                    .enabled(false)
-                    .build();
-                ui.menu_item(im_str!("Save As"))
+                    .build() { self.save_map(); }
+                if ui.menu_item(im_str!("Save As"))
                     .shortcut(im_str!("Ctrl+Shift+S"))
-                    .enabled(false)
-                    .build();
-                ui.menu_item(im_str!("Save Copy As"))
-                    .enabled(false)
-                    .build();
+                    .build() { self.save_map_as(false); }
+                if ui.menu_item(im_str!("Save Copy As"))
+                    .build() { self.save_map_as(true); }
                 ui.menu_item(im_str!("Save All"))
                     .enabled(false)
                     .build();
@@ -430,6 +427,8 @@ impl EditorScene {
             k!(Ctrl + U) => self.reload_objtree(),
             k!(Ctrl + O) => self.open_map(),
             k!(Ctrl + W) => self.close_map(),
+            k!(Ctrl + S) => self.save_map(),
+            k!(Ctrl + Shift + S) => self.save_map_as(false),
             // Layers
             k!(Ctrl + Key1) => self.toggle_layer(1),
             k!(Ctrl + Key2) => self.toggle_layer(2),
@@ -492,6 +491,24 @@ impl EditorScene {
     fn close_map(&mut self) {
         // TODO: prompt to save if dirty
         self.maps.remove(self.map_current);
+    }
+
+    fn save_map(&mut self) {
+        if let Some(map) = self.maps.get(self.map_current) {
+            self.errors.extend(map.dmm.to_file(&map.path).err().map(From::from));
+        }
+    }
+
+    fn save_map_as(&mut self, copy: bool) {
+        if let Some(map) = self.maps.get_mut(self.map_current) {
+            if let Ok(nfd::Response::Okay(fname)) = nfd::open_save_dialog(Some("dmm"), None) {
+                let path = PathBuf::from(fname);
+                self.errors.extend(map.dmm.to_file(&path).err().map(From::from));
+                if !copy {
+                    map.path = path;
+                }
+            }
+        }
     }
 
     fn toggle_layer(&mut self, which: usize) {
