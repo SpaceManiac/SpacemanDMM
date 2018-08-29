@@ -20,7 +20,8 @@ mod map_renderer;
 mod tasks;
 mod tools;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::borrow::Cow;
 
 use imgui::*;
 
@@ -66,12 +67,6 @@ pub struct EditorScene {
 
 impl EditorScene {
     fn new(factory: &mut Factory, view: &RenderTargetView) -> Self {
-        let mut tasks: Vec<Task<TaskResult>> = Vec::new();
-        tasks.push(Task::spawn("Loading runtimestation.dmm", move || {
-            let map = Map::from_file("_maps/map_files/debug/runtimestation.dmm".as_ref())?;
-            Ok(TaskResult::Map(map))
-        }));
-
         let mut ed = EditorScene {
             factory: factory.clone(),
             map_renderer: map_renderer::MapRenderer::new(factory, view),
@@ -83,7 +78,7 @@ impl EditorScene {
             maps: Vec::new(),
             map_current: 0,
 
-            tasks,
+            tasks: Vec::new(),
             errors: Vec::new(),
             last_errors: 0,
             counter: 0,
@@ -97,6 +92,7 @@ impl EditorScene {
         if let Ok(Some(env)) = dm::detect_environment("tgstation.dme") {
             ed.load_environment(env);
         }
+        ed.load_map("_maps/map_files/debug/runtimestation.dmm".into());
         ed
     }
 
@@ -128,13 +124,13 @@ impl EditorScene {
                 }
                 self.objtree = Some(objtree);
             }
-            Ok(TaskResult::Map(dmm)) => {
+            Ok(TaskResult::Map(path, dmm)) => {
                 let mut rendered = None;
                 if let Some(objtree) = self.objtree.as_ref() {
                     rendered = Some(self.map_renderer.prepare(factory, &objtree, &dmm, dmm.z_level(0)));
                 }
                 self.map_current = self.maps.len();
-                self.maps.push(EditorMap { dmm, z_current: 0, rendered });
+                self.maps.push(EditorMap { path, dmm, z_current: 0, rendered });
             }
         }));
         tasks.extend(std::mem::replace(&mut self.tasks, Vec::new()));
@@ -354,12 +350,12 @@ impl EditorScene {
             .resizable(!self.ui_lock_windows)
             .build(|| {
                 for (map_idx, map) in self.maps.iter_mut().enumerate() {
-                    if ui.collapsing_header(im_str!("runtimestation.dmm")).default_open(true).build() {
+                    if ui.collapsing_header(im_str!("{}##map_{}", file_name(&map.path), map.path.display())).default_open(true).build() {
                         ui.text(im_str!("keys: {} / length: {}",
                             map.dmm.dictionary.len(),
                             map.dmm.key_length));
                         for z in 0..map.dmm.dim_z() {
-                            if ui.small_button(im_str!("z = {}", z + 1)) {
+                            if ui.small_button(im_str!("z = {}##map_{}_{}", z + 1, map_idx, z)) {
                                 self.map_current = map_idx;
                                 map.z_current = z;
                             }
@@ -462,7 +458,7 @@ impl EditorScene {
 
     fn load_environment(&mut self, path: PathBuf) {
         self.environment = Some(path.to_owned());
-        self.tasks.push(Task::spawn(format!("Loading {}", path.display()), move || {
+        self.tasks.push(Task::spawn(format!("Loading {}", file_name(&path)), move || {
             let context = dm::Context::default();
             Ok(TaskResult::ObjectTree(context.parse_environment(&path)?))
         }));
@@ -484,9 +480,9 @@ impl EditorScene {
     }
 
     fn load_map(&mut self, path: PathBuf) {
-        self.tasks.push(Task::spawn(format!("Loading {}", path.display()), move || {
+        self.tasks.push(Task::spawn(format!("Loading {}", file_name(&path)), move || {
             let map = Map::from_file(&path)?;
-            Ok(TaskResult::Map(map))
+            Ok(TaskResult::Map(path, map))
         }));
     }
 
@@ -515,6 +511,7 @@ impl EditorScene {
 }
 
 struct EditorMap {
+    path: PathBuf,
     dmm: Map,
     z_current: usize,
     rendered: Option<map_renderer::RenderedMap>,
@@ -540,7 +537,11 @@ fn tree_node(ui: &Ui, ty: TypeRef) {
     }
 }
 
+fn file_name(path: &Path) -> Cow<str> {
+    path.file_name().map_or("".into(), |s| s.to_string_lossy())
+}
+
 enum TaskResult {
     ObjectTree(ObjectTree),
-    Map(Map),
+    Map(PathBuf, Map),
 }
