@@ -8,6 +8,10 @@ env:
   - BUILD_POSTFIX: "--all"
   - BUILD_POSTFIX: "--all --release"
 cache: cargo
+addons:
+  apt:
+    packages:
+    - libgtk-3-dev
 install:
   - rustc -Vv
   - cargo -V
