@@ -108,7 +108,16 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                             .to_physical(window_hidpi_factor)
                             .to_logical(hidpi_factor)
                             .into();
-                    }
+                    },
+                    Focused(false) => {
+                        // If the window is unfocused, unset modifiers, or
+                        // Alt-Tab will set it permanently & cause trouble. No,
+                        // I don't know why this doesn't just work.
+                        imgui.set_key_ctrl(false);
+                        imgui.set_key_alt(false);
+                        imgui.set_key_shift(false);
+                        imgui.set_key_super(false);
+                    },
                     KeyboardInput { input, .. } => {
                         use glutin::VirtualKeyCode as Key;
 
@@ -147,7 +156,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                                 scene.chord(imgui.key_ctrl(), imgui.key_shift(), imgui.key_alt(), key);
                             }
                         }
-                    }
+                    },
                     CursorMoved { position: pos, .. } => {
                         // Rescale position from glutin logical coordinates to our logical
                         // coordinates
@@ -155,7 +164,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                             .to_physical(window_hidpi_factor)
                             .to_logical(hidpi_factor)
                             .into();
-                    }
+                    },
                     MouseInput { state, button, .. } => match button {
                         MouseButton::Left => mouse_state.pressed[0] = state == Pressed,
                         MouseButton::Right => mouse_state.pressed[1] = state == Pressed,
@@ -188,7 +197,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                         if !mouse_captured {
                             scene.mouse_wheel(imgui.key_ctrl(), imgui.key_shift(), imgui.key_alt(), diff.x as f32, diff.y as f32);
                         }
-                    }
+                    },
                     ReceivedCharacter(c) => imgui.add_input_character(c),
                     _ => (),
                 }
