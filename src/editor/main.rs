@@ -25,7 +25,6 @@ use std::path::{Path, PathBuf};
 use std::borrow::Cow;
 
 use imgui::*;
-use divrem::DivFloor;
 
 use dm::objtree::{ObjectTree, TypeRef};
 use dmm_tools::dmm::Map;
@@ -425,8 +424,8 @@ impl EditorScene {
         if let Some(map) = self.maps.get(self.map_current) {
             let (w, h, _, _) = view.get_dimensions();
             let (cx, cy) = (w / 2, h / 2);
-            let tx = (x - cx as i32 + self.map_renderer.center[0].round() as i32).div_floor(32);
-            let ty = (cy as i32 - y + self.map_renderer.center[1].round() as i32).div_floor(32);
+            let tx = ((self.map_renderer.center[0].round() + (x as f32 - cx as f32) / self.map_renderer.zoom) / 32.0).floor() as i32;
+            let ty = ((self.map_renderer.center[1].round() + (cy as f32 - y as f32) / self.map_renderer.zoom) / 32.0).floor() as i32;
             let (dim_x, dim_y, _) = map.dmm.dim_xyz();
             if tx >= 0 && ty >= 0 && tx < dim_x as i32 && ty < dim_y as i32 {
                 Some((tx as usize, ty as usize))
