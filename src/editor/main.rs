@@ -49,6 +49,7 @@ pub struct EditorScene {
     objtree: Option<ObjectTree>,
 
     tools: Vec<tools::Tool>,
+    tool_current: usize,
 
     maps: Vec<EditorMap>,
     map_current: usize,
@@ -74,6 +75,7 @@ impl EditorScene {
             objtree: None,
 
             tools: tools::configure(&ObjectTree::default()),
+            tool_current: 0,
 
             maps: Vec::new(),
             map_current: 0,
@@ -318,19 +320,33 @@ impl EditorScene {
             .position((10.0, 30.0), window_positions_cond)
             .movable(!self.ui_lock_windows)
             .size((300.0, 100.0), ImGuiCond::FirstUseEver)
+            .resizable(!self.ui_lock_windows)
             .build(|| {
-                for tool in self.tools.iter() {
-                    ui.text(im_str!("{}", tool.name));
+                for (i, tool) in self.tools.iter().enumerate() {
+                    if ui.small_button(im_str!("{}", tool.name)) {
+                        self.tool_current = i;
+                    }
                     if ui.is_item_hovered() {
                         ui.tooltip_text("Test tooltip.");
                     }
                 }
             });
 
+        if let Some(tool) = self.tools.get_mut(self.tool_current) {
+            // TODO: figure out how to give these all the same ID.
+            ui.window(im_str!("{}", tool.name))
+                .position((10.0, 140.0), window_positions_cond)
+                .movable(!self.ui_lock_windows)
+                .size((300.0, 190.0), ImGuiCond::FirstUseEver)
+                .build(|| {
+                    tool.behavior.settings(ui);
+                });
+        }
+
         ui.window(im_str!("Object Tree"))
-            .position((10.0, 140.0), window_positions_cond)
+            .position((10.0, 340.0), window_positions_cond)
             .movable(!self.ui_lock_windows)
-            .size((300.0, 500.0), ImGuiCond::FirstUseEver)
+            .size((300.0, 400.0), ImGuiCond::FirstUseEver)
             .build(|| {
                 if let Some(objtree) = self.objtree.as_ref() {
                     let root = objtree.root();

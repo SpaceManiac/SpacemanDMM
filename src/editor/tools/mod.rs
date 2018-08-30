@@ -1,5 +1,7 @@
 //! Placement and editing tools which appear in the workbench.
 
+use imgui::*;
+
 use dm::objtree::ObjectTree;
 
 pub struct Tool {
@@ -9,6 +11,9 @@ pub struct Tool {
 }
 
 pub trait ToolBehavior {
+    fn settings(&mut self, ui: &Ui) {
+        let _ = ui;
+    }
 }
 
 impl Tool {
