@@ -35,7 +35,6 @@ gfx_defines! {
 pub struct MapRenderer {
     pub icons: IconCache,
     pub zoom: f32,
-    pub center: [f32; 2],
     pub layers: [bool; 5],
 
     pso: gfx::PipelineState<Resources, pipe::Meta>,
@@ -75,7 +74,6 @@ impl MapRenderer {
         MapRenderer {
             icons: IconCache::default(),
             zoom: 1.0,
-            center: [0.0; 2],
             layers: [true; 5],
 
             pso,
@@ -203,11 +201,6 @@ impl MapRenderer {
             vbuf,
         }
     }
-
-    pub fn recenter(&mut self, dmm: &Map) {
-        let (x, y, _) = dmm.dim_xyz();
-        self.center = [x as f32 * 16.0, y as f32 * 16.0];
-    }
 }
 
 impl RenderedMap {
@@ -215,14 +208,14 @@ impl RenderedMap {
         self.draw_calls.len()
     }
 
-    pub fn paint(&mut self, parent: &mut MapRenderer, encoder: &mut Encoder, view: &RenderTargetView) {
+    pub fn paint(&mut self, parent: &mut MapRenderer, center: [f32; 2], encoder: &mut Encoder, view: &RenderTargetView) {
         let (x, y, _, _) = view.get_dimensions();
 
         // (0, 0) is the center of the screen, 1.0 = 1 pixel
         let transform = Transform {
             transform: [
-                [2.0 / x as f32, 0.0, 0.0, -2.0 * parent.center[0].round() / x as f32],
-                [0.0, 2.0 / y as f32, 0.0, -2.0 * parent.center[1].round() / y as f32],
+                [2.0 / x as f32, 0.0, 0.0, -2.0 * center[0].round() / x as f32],
+                [0.0, 2.0 / y as f32, 0.0, -2.0 * center[1].round() / y as f32],
                 [0.0, 0.0, 1.0, 0.0],
                 [0.0, 0.0, 0.0, 1.0 / parent.zoom],
             ]

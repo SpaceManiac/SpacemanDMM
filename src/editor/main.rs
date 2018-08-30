@@ -120,7 +120,6 @@ impl EditorScene {
                         &objtree,
                         &map.dmm,
                         map.dmm.z_level(map.z_current)));
-                    self.map_renderer.recenter(&map.dmm);
                 }
                 self.objtree = Some(objtree);
             }
@@ -130,7 +129,14 @@ impl EditorScene {
                     rendered = Some(self.map_renderer.prepare(factory, &objtree, &dmm, dmm.z_level(0)));
                 }
                 self.map_current = self.maps.len();
-                self.maps.push(EditorMap { path, dmm, z_current: 0, rendered });
+                let (x, y, _) = dmm.dim_xyz();
+                self.maps.push(EditorMap {
+                    path,
+                    dmm,
+                    z_current: 0,
+                    center: [x as f32 * 16.0, y as f32 * 16.0],
+                    rendered,
+                });
             }
         }));
         tasks.extend(std::mem::replace(&mut self.tasks, Vec::new()));
@@ -138,7 +144,7 @@ impl EditorScene {
 
         if let Some(map) = self.maps.get_mut(self.map_current) {
             if let Some(rendered) = map.rendered.as_mut() {
-                rendered.paint(&mut self.map_renderer, encoder, view);
+                rendered.paint(&mut self.map_renderer, map.center, encoder, view);
             }
         }
     }
@@ -386,9 +392,10 @@ impl EditorScene {
                 .size((300.0, 120.0), ImGuiCond::FirstUseEver)
                 .opened(&mut ui_debug)
                 .build(|| {
-                    ui.text(im_str!("zoom = {}, center = {:?}", self.map_renderer.zoom, self.map_renderer.center));
+                    ui.text(im_str!("zoom = {}", self.map_renderer.zoom));
                     ui.text(im_str!("map = {}, maps[{}], icons[{}]", self.map_current, self.maps.len(), self.map_renderer.icons.len()));
                     if let Some(map) = self.maps.get(self.map_current) {
+                        ui.text(im_str!("center = {:?}", map.center));
                         if let Some(rendered) = map.rendered.as_ref() {
                             ui.text(im_str!("draw_calls[{}], atoms[{}]", rendered.draw_calls(), rendered.atoms_len));
                             ui.text(im_str!("timings: {:?}", rendered.duration));
@@ -451,8 +458,8 @@ impl EditorScene {
         if let Some(map) = self.maps.get(self.map_current) {
             let (w, h, _, _) = view.get_dimensions();
             let (cx, cy) = (w / 2, h / 2);
-            let tx = ((self.map_renderer.center[0].round() + (x as f32 - cx as f32) / self.map_renderer.zoom) / 32.0).floor() as i32;
-            let ty = ((self.map_renderer.center[1].round() + (cy as f32 - y as f32) / self.map_renderer.zoom) / 32.0).floor() as i32;
+            let tx = ((map.center[0].round() + (x as f32 - cx as f32) / self.map_renderer.zoom) / 32.0).floor() as i32;
+            let ty = ((map.center[1].round() + (cy as f32 - y as f32) / self.map_renderer.zoom) / 32.0).floor() as i32;
             let (dim_x, dim_y, _) = map.dmm.dim_xyz();
             if tx >= 0 && ty >= 0 && tx < dim_x as i32 && ty < dim_y as i32 {
                 Some((tx as usize, ty as usize))
@@ -470,8 +477,10 @@ impl EditorScene {
             mul *= 8.0;
         }
 
-        self.map_renderer.center[axis] += 4.0 * 32.0 * mul * y / self.map_renderer.zoom;
-        // TODO: update target_tile
+        if let Some(map) = self.maps.get_mut(self.map_current) {
+            map.center[axis] += 4.0 * 32.0 * mul * y / self.map_renderer.zoom;
+            // TODO: update target_tile
+        }
     }
 
     #[deny(unreachable_patterns)]
@@ -620,6 +629,7 @@ struct EditorMap {
     path: PathBuf,
     dmm: Map,
     z_current: usize,
+    center: [f32; 2],
     rendered: Option<map_renderer::RenderedMap>,
 }
 
