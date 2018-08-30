@@ -523,6 +523,8 @@ impl EditorScene {
             k!(Ctrl + Add) => if self.map_renderer.zoom < 16.0 { self.map_renderer.zoom *= 2.0 },
             k!(Ctrl + Subtract) |
             k!(Ctrl + Minus) => if self.map_renderer.zoom > 0.0625 { self.map_renderer.zoom *= 0.5 },
+            k!(Ctrl + Tab) => self.tab_between_maps(1),
+            k!(Ctrl + Shift + Tab) => self.tab_between_maps(-1),
             _ => {}
         }
     }
@@ -622,6 +624,13 @@ impl EditorScene {
                     map.dmm.z_level(map.z_current)));
             }
         }
+    }
+
+    fn tab_between_maps(&mut self, offset: isize) {
+        if self.maps.is_empty() {
+            return;
+        }
+        self.map_current = (self.map_current as isize + self.maps.len() as isize + offset) as usize % self.maps.len();
     }
 }
 
