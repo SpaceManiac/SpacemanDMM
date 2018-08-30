@@ -10,6 +10,7 @@ extern crate imgui_gfx_renderer;
 extern crate lodepng;
 extern crate ndarray;
 extern crate nfd;
+extern crate divrem;
 
 extern crate dreammaker as dm;
 extern crate dmm_tools;
@@ -24,6 +25,7 @@ use std::path::{Path, PathBuf};
 use std::borrow::Cow;
 
 use imgui::*;
+use divrem::DivFloor;
 
 use dm::objtree::{ObjectTree, TypeRef};
 use dmm_tools::dmm::Map;
@@ -54,6 +56,8 @@ pub struct EditorScene {
     maps: Vec<EditorMap>,
     map_current: usize,
 
+    target_tile: Option<(usize, usize)>,
+
     tasks: Vec<Task<TaskResult>>,
     errors: Vec<Box<std::error::Error>>,
     last_errors: usize,
@@ -80,6 +84,8 @@ impl EditorScene {
             maps: Vec::new(),
             map_current: 0,
 
+            target_tile: None,
+
             tasks: Vec::new(),
             errors: Vec::new(),
             last_errors: 0,
@@ -96,15 +102,6 @@ impl EditorScene {
         }
         ed.load_map("_maps/map_files/debug/runtimestation.dmm".into());
         ed
-    }
-
-    fn mouse_wheel(&mut self, ctrl: bool, shift: bool, _alt: bool, _x: f32, y: f32) {
-        let (axis, mut mul) = if ctrl { (0, -1.0) } else { (1, 1.0) };
-        if shift {
-            mul *= 8.0;
-        }
-
-        self.map_renderer.center[axis] += 4.0 * 32.0 * mul * y / self.map_renderer.zoom;
     }
 
     fn render(&mut self, factory: &mut Factory, encoder: &mut Encoder, view: &RenderTargetView) {
@@ -367,7 +364,8 @@ impl EditorScene {
             .build(|| {
                 for (map_idx, map) in self.maps.iter_mut().enumerate() {
                     if ui.collapsing_header(im_str!("{}##map_{}", file_name(&map.path), map.path.display())).default_open(true).build() {
-                        ui.text(im_str!("keys: {} / length: {}",
+                        ui.text(im_str!("{:?}, {} keys (len={})",
+                            map.dmm.dim_xyz(),
                             map.dmm.dictionary.len(),
                             map.dmm.key_length));
                         for z in 0..map.dmm.dim_z() {
@@ -384,7 +382,7 @@ impl EditorScene {
             let mut ui_debug = self.ui_debug;
             ui.window(im_str!("Debug"))
                 .position((320.0, 30.0), ImGuiCond::FirstUseEver)
-                .size((300.0, 100.0), ImGuiCond::FirstUseEver)
+                .size((300.0, 120.0), ImGuiCond::FirstUseEver)
                 .opened(&mut ui_debug)
                 .build(|| {
                     ui.text(im_str!("zoom = {}, center = {:?}", self.map_renderer.zoom, self.map_renderer.center));
@@ -394,6 +392,9 @@ impl EditorScene {
                             ui.text(im_str!("draw_calls[{}], atoms[{}]", rendered.draw_calls(), rendered.atoms_len));
                             ui.text(im_str!("timings: {:?}", rendered.duration));
                         }
+                    }
+                    if let Some((x, y)) = self.target_tile {
+                        ui.text(im_str!("target: {}, {}", x, y));
                     }
                 });
             self.ui_debug = ui_debug;
@@ -414,6 +415,37 @@ impl EditorScene {
         }
 
         continue_running
+    }
+
+    fn mouse_moved(&mut self, (x, y): (i32, i32), view: &RenderTargetView) {
+        self.target_tile = self.tile_under((x, y), view);
+    }
+
+    fn tile_under(&self, (x, y): (i32, i32), view: &RenderTargetView) -> Option<(usize, usize)> {
+        if let Some(map) = self.maps.get(self.map_current) {
+            let (w, h, _, _) = view.get_dimensions();
+            let (cx, cy) = (w / 2, h / 2);
+            let tx = (x - cx as i32 + self.map_renderer.center[0].round() as i32).div_floor(32);
+            let ty = (cy as i32 - y + self.map_renderer.center[1].round() as i32).div_floor(32);
+            let (dim_x, dim_y, _) = map.dmm.dim_xyz();
+            if tx >= 0 && ty >= 0 && tx < dim_x as i32 && ty < dim_y as i32 {
+                Some((tx as usize, ty as usize))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    fn mouse_wheel(&mut self, ctrl: bool, shift: bool, _alt: bool, _x: f32, y: f32) {
+        let (axis, mut mul) = if ctrl { (0, -1.0) } else { (1, 1.0) };
+        if shift {
+            mul *= 8.0;
+        }
+
+        self.map_renderer.center[axis] += 4.0 * 32.0 * mul * y / self.map_renderer.zoom;
+        // TODO: update target_tile
     }
 
     #[deny(unreachable_patterns)]

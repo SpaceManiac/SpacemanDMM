@@ -157,13 +157,15 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                             }
                         }
                     },
-                    CursorMoved { position: pos, .. } => {
+                    CursorMoved { position, .. } => {
                         // Rescale position from glutin logical coordinates to our logical
                         // coordinates
-                        mouse_state.pos = pos
+                        let pos = position
                             .to_physical(window_hidpi_factor)
                             .to_logical(hidpi_factor)
                             .into();
+                        mouse_state.pos = pos;
+                        scene.mouse_moved(pos, &main_color);
                     },
                     MouseInput { state, button, .. } => match button {
                         MouseButton::Left => mouse_state.pressed[0] = state == Pressed,

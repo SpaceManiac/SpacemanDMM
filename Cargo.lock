@@ -246,6 +246,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "divrem"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
 name = "dlib"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1123,6 +1128,7 @@ dependencies = [
 name = "spaceman-dmm"
 version = "0.1.0"
 dependencies = [
+ "divrem 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "dmm-tools 0.1.0",
  "dreammaker 0.1.0",
  "gfx 0.17.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1547,6 +1553,7 @@ dependencies = [
 "checksum crossbeam-utils 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "2760899e32a1d58d5abb31129f8fae5de75220bc2176e77ff7c627ae45c918d9"
 "checksum deflate 0.7.18 (registry+https://github.com/rust-lang/crates.io-index)" = "32c8120d981901a9970a3a1c97cf8b630e0fa8c3ca31e75b6fd6fd5f9f427b31"
 "checksum derivative 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "67b3d6d0e84e53a5bdc263cc59340541877bb541706a191d762bfac6a481bdde"
+"checksum divrem 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "bc9f8914dcb99891bdfee82536bbff8d9aa612b0dbe83872afbc66902bdec0b9"
 "checksum dlib 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "77e51249a9d823a4cb79e3eca6dcd756153e8ed0157b6c04775d04bf1b13b76a"
 "checksum downcast-rs 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)" = "18df8ce4470c189d18aa926022da57544f31e154631eb4cfe796aea97051fe6c"
 "checksum draw_state 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "33cf9537e2d06891448799b96d5a8c8083e0e90522a7fdabe6ebf4f41d79d651"
