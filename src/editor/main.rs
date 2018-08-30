@@ -437,9 +437,9 @@ impl EditorScene {
             // misc
             k!(Ctrl + R) => self.rerender_map(),
             k!(Ctrl + Equals) |
-            k!(Ctrl + Add) => self.map_renderer.zoom *= 2.0,
+            k!(Ctrl + Add) => if self.map_renderer.zoom < 16.0 { self.map_renderer.zoom *= 2.0 },
             k!(Ctrl + Subtract) |
-            k!(Ctrl + Minus) => self.map_renderer.zoom *= 0.5,
+            k!(Ctrl + Minus) => if self.map_renderer.zoom > 0.0625 { self.map_renderer.zoom *= 0.5 },
             _ => {}
         }
     }
