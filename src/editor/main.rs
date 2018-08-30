@@ -56,6 +56,7 @@ pub struct EditorScene {
     map_current: usize,
 
     target_tile: Option<(usize, usize)>,
+    context_tile: Option<(usize, usize)>,
 
     tasks: Vec<Task<TaskResult>>,
     errors: Vec<Box<std::error::Error>>,
@@ -84,6 +85,7 @@ impl EditorScene {
             map_current: 0,
 
             target_tile: None,
+            context_tile: None,
 
             tasks: Vec::new(),
             errors: Vec::new(),
@@ -411,6 +413,31 @@ impl EditorScene {
                     ui.text(im_str!("{:#?}", self.errors));
                 });
             self.ui_errors = ui_errors;
+        }
+
+        if !ui.want_capture_mouse() && ui.imgui().is_mouse_clicked(ImMouseButton::Right) {
+            if let Some(tile) = self.target_tile {
+                self.context_tile = Some(tile);
+                ui.open_popup(im_str!("context"));
+            }
+        }
+        if let Some((x, y)) = self.context_tile {
+            let mut open = false;
+            ui.popup(im_str!("context"), || {
+                open = true;
+
+                if let Some(map) = self.maps.get(self.map_current) {
+                    let (_, dim_y, _) = map.dmm.dim_xyz();
+                    let grid = map.dmm.z_level(map.z_current);
+                    let key = &grid[(dim_y - 1 - y, x)];
+                    for fab in map.dmm.dictionary[key].iter() {
+                        ui.menu_item(im_str!("{}", fab.path)).build();
+                    }
+                }
+            });
+            if !open {
+                self.context_tile = None;
+            }
         }
 
         continue_running
