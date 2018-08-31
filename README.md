@@ -13,6 +13,26 @@ and on GitHub's issue tracker. Pull requests are welcome.
 [/tg/station13]: https://github.com/tgstation/tgstation/
 [releases]: https://github.com/SpaceManiac/SpacemanDMM/releases
 
+## [Language Server](src/langserver/)
+
+SpacemanDMM includes a [language server] providing autocomplete,
+go-to-definition, and more for the DreamMaker language. The preferred
+installation method is the [Visual Studio Code plugin][vsc], which will update
+with newly-released language server binaries automatically. Details on
+available features are listed in the language server's
+[package readme][ls-readme].
+
+The VS Code plugin is currently hosted in a [separate repository][vsc-src].
+
+Use `cargo build -p dm-langserver` to build a local copy of the language server
+for debugging or development purposes. The plugin can be configured to run a
+locally built language server rather than the binary releases.
+
+[language server]: https://langserver.org/
+[vsc]: https://marketplace.visualstudio.com/items?itemName=platymuus.dm-langclient
+[ls-readme]: ./src/langserver/README.md
+[vsc-src]: https://github.com/SpaceManiac/vscode-dm-langclient
+
 ## [Map Renderer](src/cli/)
 
 `dmm-tools` is SpacemanDMM's map renderer. It generates full-sized map images
@@ -33,26 +53,6 @@ The minimap output is a very large PNG (e.g. 9.3 MB for Box). You are strongly
 advised to run the resulting file through image optimization software such as
 `pngcrush`. The `--pngcrush` option to the `minimap` subcommand can do this
 automatically in many cases, but is off by default for speed reasons.
-
-## [Language Server](src/langserver/)
-
-SpacemanDMM includes a [language server] providing autocomplete,
-go-to-definition, and more for the DreamMaker language. The preferred
-installation method is the [Visual Studio Code plugin][vsc], which will update
-with newly-released language server binaries automatically. Details on
-available features are listed in the language server's
-[package readme][ls-readme].
-
-The VS Code plugin is currently hosted in a [separate repository][vsc-src].
-
-Use `cargo build -p dm-langserver` to build a local copy of the language server
-for debugging or development purposes. The plugin can be configured to run a
-locally built language server rather than the binary releases.
-
-[language server]: https://langserver.org/
-[vsc]: https://marketplace.visualstudio.com/items?itemName=platymuus.dm-langclient
-[ls-readme]: ./src/langserver/README.md
-[vsc-src]: https://github.com/SpaceManiac/vscode-dm-langclient
 
 ## [Documentation Generator](src/dmdoc/)
 
