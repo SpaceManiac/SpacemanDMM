@@ -54,6 +54,22 @@ locally built language server rather than the binary releases.
 [ls-readme]: ./src/langserver/README.md
 [vsc-src]: https://github.com/SpaceManiac/vscode-dm-langclient
 
+## [Documentation Generator](src/dmdoc/)
+
+`dmdoc` is a simple Doxygen-esque documentation generator for DreamMaker code.
+Files, macros, types, vars, and procs can be documented. Documentation comments
+start with `/**` or `///` when preceding the documented item, or `/*!` or `//!`
+when contained within it.
+
+By default, only documented types are included in the output, and types with
+only a one-line note do not get their own `.html` page. The index shows the
+contents of `code/README.md`, and other Markdown files within the `code`
+directory are shown alongside documented DM files.
+
+If run in a Git repository, web links to source code are placed next to item
+headings in the generated output; otherwise, file and line numbers are shown
+but are not linked.
+
 ## Building
 
 To build locally, begin by [installing Rust][rust] or updating your existing
