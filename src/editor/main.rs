@@ -57,6 +57,7 @@ pub struct EditorScene {
 
     target_tile: Option<(usize, usize)>,
     context_tile: Option<(usize, usize)>,
+    edit_atoms: Vec<EditAtom>,
 
     tasks: Vec<Task<TaskResult>>,
     errors: Vec<Box<std::error::Error>>,
@@ -86,6 +87,7 @@ impl EditorScene {
 
             target_tile: None,
             context_tile: None,
+            edit_atoms: Vec::new(),
 
             tasks: Vec::new(),
             errors: Vec::new(),
@@ -385,6 +387,68 @@ impl EditorScene {
                 }
             });
 
+        if !ui.want_capture_mouse() && ui.imgui().is_mouse_clicked(ImMouseButton::Right) {
+            if let Some(tile) = self.target_tile {
+                self.context_tile = Some(tile);
+                ui.open_popup(im_str!("context"));
+            }
+        }
+        if let Some((x, y)) = self.context_tile {
+            let mut open = false;
+            ui.popup(im_str!("context"), || {
+                open = true;
+
+                if let Some(map) = self.maps.get(self.map_current) {
+                    let (_, dim_y, _) = map.dmm.dim_xyz();
+                    let grid = map.dmm.z_level(map.z_current);
+                    let key = &grid[(dim_y - 1 - y, x)];
+                    for (i, fab) in map.dmm.dictionary[key].iter().enumerate() {
+                        if ui.menu_item(im_str!("{}", fab.path)).build() {
+                            self.edit_atoms.push(EditAtom {
+                                map: self.map_current,
+                                coords: (x, y, map.z_current),
+                                fab: i,
+                            });
+                        }
+                    }
+                }
+            });
+            if !open {
+                self.context_tile = None;
+            }
+        }
+
+        {
+            let maps = &self.maps;
+            self.edit_atoms.retain(|edit| {
+                let mut keep = false;
+                if let Some(map) = maps.get(edit.map) {
+                    let (_, dim_y, _) = map.dmm.dim_xyz();
+                    let key = &map.dmm.grid[(edit.coords.2, dim_y - 1 - edit.coords.1, edit.coords.0)];
+                    if let Some(fab) = map.dmm.dictionary[key].get(edit.fab) {
+                        keep = true;
+                        ui.window(im_str!("{}##{:?}", fab.path, edit))
+                            .size((300.0, 450.0), ImGuiCond::FirstUseEver)
+                            .opened(&mut keep)
+                            .build(|| {
+                                ui.text(im_str!("{}", fab.path));
+                                ui.separator();
+
+                                let max_len = fab.vars.keys().map(|k| k.len()).max().unwrap_or(0);
+                                let offset = (max_len + 1) as f32 * 8.0;
+
+                                for (name, value) in fab.vars.iter() {
+                                    ui.text(im_str!("{}", name));
+                                    ui.same_line(offset);
+                                    ui.text(im_str!("{}", value));
+                                }
+                            });
+                    }
+                }
+                keep
+            });
+        }
+
         if self.ui_debug {
             let mut ui_debug = self.ui_debug;
             ui.window(im_str!("Debug"))
@@ -420,31 +484,6 @@ impl EditorScene {
                     ui.text(im_str!("{:#?}", self.errors));
                 });
             self.ui_errors = ui_errors;
-        }
-
-        if !ui.want_capture_mouse() && ui.imgui().is_mouse_clicked(ImMouseButton::Right) {
-            if let Some(tile) = self.target_tile {
-                self.context_tile = Some(tile);
-                ui.open_popup(im_str!("context"));
-            }
-        }
-        if let Some((x, y)) = self.context_tile {
-            let mut open = false;
-            ui.popup(im_str!("context"), || {
-                open = true;
-
-                if let Some(map) = self.maps.get(self.map_current) {
-                    let (_, dim_y, _) = map.dmm.dim_xyz();
-                    let grid = map.dmm.z_level(map.z_current);
-                    let key = &grid[(dim_y - 1 - y, x)];
-                    for fab in map.dmm.dictionary[key].iter() {
-                        ui.menu_item(im_str!("{}", fab.path)).build();
-                    }
-                }
-            });
-            if !open {
-                self.context_tile = None;
-            }
         }
 
         continue_running
@@ -640,6 +679,13 @@ struct EditorMap {
     z_current: usize,
     center: [f32; 2],
     rendered: Option<map_renderer::RenderedMap>,
+}
+
+#[derive(Debug)]
+struct EditAtom {
+    map: usize,
+    coords: (usize, usize, usize),
+    fab: usize,
 }
 
 fn root_node(ui: &Ui, ty: TypeRef, name: &str) {
