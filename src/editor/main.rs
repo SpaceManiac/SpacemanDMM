@@ -113,12 +113,10 @@ impl EditorScene {
             Err(e) => {
                 self.errors.push(e);
             }
-            Ok(TaskResult::ObjectTree(path, objtree)) => {
-                self.tools = tools::configure(&objtree);
+            Ok(TaskResult::ObjectTree(environment)) => {
+                self.tools = tools::configure(&environment.objtree);
+                self.environment = Some(environment);
                 self.map_renderer.icons.clear();
-                self.environment = Some(Environment {
-                    path, objtree
-                });
                 for map in self.maps.iter_mut() {
                     for z in map.rendered.iter_mut() {
                         *z = None;
@@ -445,24 +443,26 @@ impl EditorScene {
             new_map.y = std::cmp::min(std::cmp::max(new_map.y, 1), 512);
             new_map.z = std::cmp::min(std::cmp::max(new_map.z, 1), 32);
 
-            if created {
-                self.map_current = self.maps.len();
-                let mut rendered = Vec::new();
-                for _ in 0..new_map.z {
-                    rendered.push(None);
+            if let Some(env) = self.environment.as_ref() {
+                if created {
+                    self.map_current = self.maps.len();
+                    let mut rendered = Vec::new();
+                    for _ in 0..new_map.z {
+                        rendered.push(None);
+                    }
+                    self.maps.push(EditorMap {
+                        path: None,
+                        dmm: Map::new(new_map.x as usize, new_map.y as usize, new_map.z as usize,
+                            env.turf.clone(), env.area.clone()),
+                        z_current: 0,
+                        center: [new_map.x as f32 * 16.0, new_map.y as f32 * 16.0],
+                        rendered,
+                        edit_atoms: Vec::new(),
+                    });
+                    opened = false;
                 }
-                self.maps.push(EditorMap {
-                    path: None,
-                    dmm: Map::new(new_map.x as usize, new_map.y as usize, new_map.z as usize,
-                        "/turf".into(), "/area".into()),
-                    z_current: 0,
-                    center: [new_map.x as f32 * 16.0, new_map.y as f32 * 16.0],
-                    rendered,
-                    edit_atoms: Vec::new(),
-                });
-                self.render_map(false);
             }
-            if opened && !closed && !created { Some(new_map) } else { None }
+            if opened && !closed { Some(new_map) } else { None }
         });
 
         for map in self.maps.iter_mut() {
@@ -501,12 +501,16 @@ impl EditorScene {
                 let mut opened = self.ui_debug_window;
                 ui.window(im_str!("Debug"))
                     .position((320.0, 30.0), ImGuiCond::FirstUseEver)
-                    .size((320.0, 120.0), ImGuiCond::FirstUseEver)
+                    .size((320.0, 150.0), ImGuiCond::FirstUseEver)
                     .opened(&mut opened)
                     .build(|| {
                         ui.text(im_str!("maps[{}], icons[{}], map = {}, zoom = {}",
                             self.maps.len(), self.map_renderer.icons.len(),
                             self.map_current, self.map_renderer.zoom));
+                        if let Some(env) = self.environment.as_ref() {
+                            ui.text(im_str!("turf = {}", env.turf));
+                            ui.text(im_str!("area = {}", env.area));
+                        }
                         if let Some(map) = self.maps.get(self.map_current) {
                             ui.text(im_str!("center = {:?}", map.center));
                             if let Some(rendered) = map.rendered.get(map.z_current).and_then(|x| x.as_ref()) {
@@ -644,14 +648,46 @@ impl EditorScene {
 
     fn load_environment(&mut self, path: PathBuf) {
         self.tasks.push(Task::spawn(format!("Loading {}", file_name(&path)), move || {
+            use dm::constants::Constant;
+            use dm::ast::PathOp;
+
+            fn format_path(path: &[(PathOp, String)]) -> String {
+                let mut s = String::new();
+                for &(_, ref part) in path.iter() {
+                    s.push_str("/");
+                    s.push_str(part);
+                }
+                s
+            }
+
             let context = dm::Context::default();
             let objtree = context.parse_environment(&path)?;
-            Ok(TaskResult::ObjectTree(path, objtree))
+
+            let (mut turf, mut area) = ("/turf".to_owned(), "/area".to_owned());
+            if let Some(world) = objtree.find("/world") {
+                if let Some(turf_var) = world.get_value("turf") {
+                    if let Some(Constant::Prefab(ref prefab)) = turf_var.constant {
+                        turf = format_path(&prefab.path);
+                    }
+                }
+                if let Some(area_var) = world.get_value("area") {
+                    if let Some(Constant::Prefab(ref prefab)) = area_var.constant {
+                        area = format_path(&prefab.path);
+                    }
+                }
+            }
+
+            Ok(TaskResult::ObjectTree(Environment {
+                path,
+                objtree,
+                turf,
+                area,
+            }))
         }));
     }
 
     fn new_map(&mut self) {
-        self.new_map = Some(NewMap { x: 255, y: 255, z: 1 });
+        self.new_map = Some(NewMap { x: 32, y: 32, z: 1 });
     }
 
     fn open_map(&mut self) {
@@ -750,6 +786,8 @@ impl EditorScene {
 struct Environment {
     path: PathBuf,
     objtree: ObjectTree,
+    turf: String,
+    area: String,
 }
 
 struct EditorMap {
@@ -798,6 +836,6 @@ fn file_name(path: &Path) -> Cow<str> {
 }
 
 enum TaskResult {
-    ObjectTree(PathBuf, ObjectTree),
+    ObjectTree(Environment),
     Map(PathBuf, Map),
 }
