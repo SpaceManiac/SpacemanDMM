@@ -65,7 +65,8 @@ pub struct EditorScene {
     ui_lock_windows: bool,
     ui_style_editor: bool,
     ui_imgui_metrics: bool,
-    ui_debug: bool,
+    ui_debug_mode: bool,
+    ui_debug_window: bool,
     ui_errors: bool,
 }
 
@@ -93,7 +94,8 @@ impl EditorScene {
             ui_lock_windows: true,
             ui_style_editor: false,
             ui_imgui_metrics: false,
-            ui_debug: true,
+            ui_debug_mode: cfg!(debug_assertions),
+            ui_debug_window: true,
             ui_errors: false,
         };
         if let Ok(Some(env)) = dm::detect_environment("tgstation.dme") {
@@ -268,16 +270,20 @@ impl EditorScene {
                 ui.menu_item(im_str!("Errors"))
                     .selected(&mut self.ui_errors)
                     .build();
-                ui.menu_item(im_str!("Debug Window"))
-                    .selected(&mut self.ui_debug)
-                    .build();
-                ui.menu_item(im_str!("Style Editor"))
-                    .selected(&mut self.ui_style_editor)
-                    .build();
-                ui.menu_item(im_str!("ImGui Metrics"))
-                    .selected(&mut self.ui_imgui_metrics)
-                    .build();
             });
+            if self.ui_debug_mode {
+                ui.menu(im_str!("Debug")).build(|| {
+                    ui.menu_item(im_str!("Debug Window"))
+                        .selected(&mut self.ui_debug_window)
+                        .build();
+                    ui.menu_item(im_str!("Style Editor"))
+                        .selected(&mut self.ui_style_editor)
+                        .build();
+                    ui.menu_item(im_str!("ImGui Metrics"))
+                        .selected(&mut self.ui_imgui_metrics)
+                        .build();
+                });
+            }
             ui.menu(im_str!("Help")).build(|| {
                 ui.menu_item(im_str!("About SpacemanDMM"))
                     .enabled(false)
@@ -304,14 +310,6 @@ impl EditorScene {
                 }
             }
         });
-        if self.ui_style_editor {
-            ui.window(im_str!("Style Editor"))
-                .opened(&mut self.ui_style_editor)
-                .build(|| ui.show_default_style_editor());
-        }
-        if self.ui_imgui_metrics {
-            ui.show_metrics_window(&mut self.ui_imgui_metrics);
-        }
 
         ui.window(im_str!("Tools"))
             .position((10.0, 30.0), window_positions_cond)
@@ -439,28 +437,38 @@ impl EditorScene {
             });
         }
 
-        if self.ui_debug {
-            let mut ui_debug = self.ui_debug;
-            ui.window(im_str!("Debug"))
-                .position((320.0, 30.0), ImGuiCond::FirstUseEver)
-                .size((320.0, 120.0), ImGuiCond::FirstUseEver)
-                .opened(&mut ui_debug)
-                .build(|| {
-                    ui.text(im_str!("maps[{}], icons[{}], map = {}, zoom = {}",
-                        self.maps.len(), self.map_renderer.icons.len(),
-                        self.map_current, self.map_renderer.zoom));
-                    if let Some(map) = self.maps.get(self.map_current) {
-                        ui.text(im_str!("center = {:?}", map.center));
-                        if let Some(rendered) = map.rendered.as_ref() {
-                            ui.text(im_str!("draw_calls[{}], atoms[{}]", rendered.draw_calls(), rendered.atoms_len));
-                            ui.text(im_str!("timings: {:?}", rendered.duration));
+        if self.ui_debug_mode {
+            if self.ui_debug_window {
+                let mut opened = self.ui_debug_window;
+                ui.window(im_str!("Debug"))
+                    .position((320.0, 30.0), ImGuiCond::FirstUseEver)
+                    .size((320.0, 120.0), ImGuiCond::FirstUseEver)
+                    .opened(&mut opened)
+                    .build(|| {
+                        ui.text(im_str!("maps[{}], icons[{}], map = {}, zoom = {}",
+                            self.maps.len(), self.map_renderer.icons.len(),
+                            self.map_current, self.map_renderer.zoom));
+                        if let Some(map) = self.maps.get(self.map_current) {
+                            ui.text(im_str!("center = {:?}", map.center));
+                            if let Some(rendered) = map.rendered.as_ref() {
+                                ui.text(im_str!("draw_calls[{}], atoms[{}]", rendered.draw_calls(), rendered.atoms_len));
+                                ui.text(im_str!("timings: {:?}", rendered.duration));
+                            }
                         }
-                    }
-                    if let Some((x, y)) = self.target_tile {
-                        ui.text(im_str!("target: {}, {}", x, y));
-                    }
-                });
-            self.ui_debug = ui_debug;
+                        if let Some((x, y)) = self.target_tile {
+                            ui.text(im_str!("target: {}, {}", x, y));
+                        }
+                    });
+                self.ui_debug_window = opened;
+            }
+            if self.ui_style_editor {
+                ui.window(im_str!("Style Editor"))
+                    .opened(&mut self.ui_style_editor)
+                    .build(|| ui.show_default_style_editor());
+            }
+            if self.ui_imgui_metrics {
+                ui.show_metrics_window(&mut self.ui_imgui_metrics);
+            }
         }
 
         if self.ui_errors {
@@ -555,6 +563,7 @@ impl EditorScene {
             k!(Ctrl + Minus) => if self.map_renderer.zoom > 0.0625 { self.map_renderer.zoom *= 0.5 },
             k!(Ctrl + Tab) => self.tab_between_maps(1),
             k!(Ctrl + Shift + Tab) => self.tab_between_maps(-1),
+            k!(F3) => self.ui_debug_mode = !self.ui_debug_mode,
             _ => {}
         }
     }
