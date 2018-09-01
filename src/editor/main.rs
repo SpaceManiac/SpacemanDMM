@@ -364,18 +364,19 @@ impl EditorScene {
                 }
             });
 
+        let logical_size = ui.frame_size().logical_size;
         ui.window(im_str!("Maps"))
-            .position((ui.frame_size().logical_size.0 as f32 - 310.0, 30.0), window_positions_cond)
+            .position((logical_size.0 as f32 - 230.0, 30.0), window_positions_cond)
             .movable(!self.ui_lock_windows)
-            .size((300.0, 200.0), window_positions_cond)
+            .size((220.0, logical_size.1 as f32 - 40.0), window_positions_cond)
             .resizable(!self.ui_lock_windows)
             .build(|| {
                 for (map_idx, map) in self.maps.iter_mut().enumerate() {
                     if ui.collapsing_header(im_str!("{}##map_{}", file_name(&map.path), map.path.display())).default_open(true).build() {
-                        ui.text(im_str!("{:?}, {} keys (len={})",
+                        ui.text(im_str!("{:?}; {}-keys: {}",
                             map.dmm.dim_xyz(),
-                            map.dmm.dictionary.len(),
-                            map.dmm.key_length));
+                            map.dmm.key_length,
+                            map.dmm.dictionary.len()));
                         for z in 0..map.dmm.dim_z() {
                             if ui.small_button(im_str!("z = {}##map_{}_{}", z + 1, map_idx, z)) {
                                 self.map_current = map_idx;
@@ -450,11 +451,12 @@ impl EditorScene {
             let mut ui_debug = self.ui_debug;
             ui.window(im_str!("Debug"))
                 .position((320.0, 30.0), ImGuiCond::FirstUseEver)
-                .size((300.0, 120.0), ImGuiCond::FirstUseEver)
+                .size((320.0, 120.0), ImGuiCond::FirstUseEver)
                 .opened(&mut ui_debug)
                 .build(|| {
-                    ui.text(im_str!("zoom = {}", self.map_renderer.zoom));
-                    ui.text(im_str!("map = {}, maps[{}], icons[{}]", self.map_current, self.maps.len(), self.map_renderer.icons.len()));
+                    ui.text(im_str!("maps[{}], icons[{}], map = {}, zoom = {}",
+                        self.maps.len(), self.map_renderer.icons.len(),
+                        self.map_current, self.map_renderer.zoom));
                     if let Some(map) = self.maps.get(self.map_current) {
                         ui.text(im_str!("center = {:?}", map.center));
                         if let Some(rendered) = map.rendered.as_ref() {
