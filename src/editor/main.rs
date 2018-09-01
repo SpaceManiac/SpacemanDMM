@@ -103,7 +103,7 @@ impl EditorScene {
         ed
     }
 
-    fn render(&mut self, factory: &mut Factory, encoder: &mut Encoder, view: &RenderTargetView) {
+    fn render(&mut self, encoder: &mut Encoder, view: &RenderTargetView) {
         let mut tasks = std::mem::replace(&mut self.tasks, Vec::new());
         tasks.retain(|task| task.poll(|res| match res {
             Err(e) => {
@@ -112,22 +112,13 @@ impl EditorScene {
             Ok(TaskResult::ObjectTree(path, objtree)) => {
                 self.tools = tools::configure(&objtree);
                 self.map_renderer.icons.clear();
-                if let Some(map) = self.maps.get_mut(self.map_current) {
-                    map.rendered = Some(self.map_renderer.prepare(
-                        factory,
-                        &objtree,
-                        &map.dmm,
-                        map.dmm.z_level(map.z_current)));
-                }
                 self.environment = Some(Environment {
                     path, objtree
                 });
+                self.rerender_map();
             }
             Ok(TaskResult::Map(path, dmm)) => {
                 let mut rendered = None;
-                if let Some(env) = self.environment.as_ref() {
-                    rendered = Some(self.map_renderer.prepare(factory, &env.objtree, &dmm, dmm.z_level(0)));
-                }
                 self.map_current = self.maps.len();
                 let (x, y, _) = dmm.dim_xyz();
                 self.maps.push(EditorMap {
@@ -138,6 +129,7 @@ impl EditorScene {
                     rendered,
                     edit_atoms: Vec::new(),
                 });
+                self.rerender_map();
             }
         }));
         tasks.extend(std::mem::replace(&mut self.tasks, Vec::new()));

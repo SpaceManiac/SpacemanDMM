@@ -236,22 +236,28 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
         }
 
         fix_imgui_srgb(&mut cached_colors, &mut imgui.style_mut().colors);
-        let ui = imgui.frame(frame_size, delta_s);
-        if !scene.run_ui(&ui) {
-            break;
+        // Workaround: imgui-gfx-renderer will not call ui.render() under this
+        // condition, which occurs when minimized, and imgui will assert
+        // because of missing either a Render() or EndFrame() call.
+        let logical_size = frame_size.logical_size;
+        if logical_size.0 > 0.0 && logical_size.1 > 0.0 {
+            let ui = imgui.frame(frame_size, delta_s);
+            if !scene.run_ui(&ui) {
+                break;
+            }
+
+            mouse_captured = ui.want_capture_mouse();
+            kbd_captured = ui.want_capture_keyboard();
+
+            encoder.clear(&main_color, clear_color);
+            scene.render(&mut encoder, &main_color);
+            renderer
+                .render(ui, &mut factory, &mut encoder)
+                .expect("Rendering failed");
+            encoder.flush(&mut device);
+            window.context().swap_buffers().unwrap();
+            device.cleanup();
         }
-
-        mouse_captured = ui.want_capture_mouse();
-        kbd_captured = ui.want_capture_keyboard();
-
-        encoder.clear(&main_color, clear_color);
-        scene.render(&mut factory, &mut encoder, &main_color);
-        renderer
-            .render(ui, &mut factory, &mut encoder)
-            .expect("Rendering failed");
-        encoder.flush(&mut device);
-        window.context().swap_buffers().unwrap();
-        device.cleanup();
     }
     scene
 }
