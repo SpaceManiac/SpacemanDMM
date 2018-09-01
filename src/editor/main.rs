@@ -57,7 +57,6 @@ pub struct EditorScene {
 
     target_tile: Option<(usize, usize)>,
     context_tile: Option<(usize, usize)>,
-    edit_atoms: Vec<EditAtom>,
 
     tasks: Vec<Task<TaskResult>>,
     errors: Vec<Box<std::error::Error>>,
@@ -87,7 +86,6 @@ impl EditorScene {
 
             target_tile: None,
             context_tile: None,
-            edit_atoms: Vec::new(),
 
             tasks: Vec::new(),
             errors: Vec::new(),
@@ -138,6 +136,7 @@ impl EditorScene {
                     z_current: 0,
                     center: [x as f32 * 16.0, y as f32 * 16.0],
                     rendered,
+                    edit_atoms: Vec::new(),
                 });
             }
         }));
@@ -398,14 +397,13 @@ impl EditorScene {
             ui.popup(im_str!("context"), || {
                 open = true;
 
-                if let Some(map) = self.maps.get(self.map_current) {
+                if let Some(map) = self.maps.get_mut(self.map_current) {
                     let (_, dim_y, _) = map.dmm.dim_xyz();
                     let grid = map.dmm.z_level(map.z_current);
                     let key = &grid[(dim_y - 1 - y, x)];
                     for (i, fab) in map.dmm.dictionary[key].iter().enumerate() {
                         if ui.menu_item(im_str!("{}", fab.path)).build() {
-                            self.edit_atoms.push(EditAtom {
-                                map: self.map_current,
+                            map.edit_atoms.push(EditAtom {
                                 coords: (x, y, map.z_current),
                                 fab: i,
                             });
@@ -418,32 +416,31 @@ impl EditorScene {
             }
         }
 
-        {
-            let maps = &self.maps;
-            self.edit_atoms.retain(|edit| {
+        for map in self.maps.iter_mut() {
+            let dmm = &map.dmm;
+            map.edit_atoms.retain(|edit| {
                 let mut keep = false;
-                if let Some(map) = maps.get(edit.map) {
-                    let (_, dim_y, _) = map.dmm.dim_xyz();
-                    let key = &map.dmm.grid[(edit.coords.2, dim_y - 1 - edit.coords.1, edit.coords.0)];
-                    if let Some(fab) = map.dmm.dictionary[key].get(edit.fab) {
-                        keep = true;
-                        ui.window(im_str!("{}##{:?}", fab.path, edit))
-                            .size((300.0, 450.0), ImGuiCond::FirstUseEver)
-                            .opened(&mut keep)
-                            .build(|| {
-                                ui.text(im_str!("{}", fab.path));
-                                ui.separator();
+                let (_, dim_y, _) = dmm.dim_xyz();
+                let key = &dmm.grid[(edit.coords.2, dim_y - 1 - edit.coords.1, edit.coords.0)];
+                if let Some(fab) = dmm.dictionary[key].get(edit.fab) {
+                    keep = true;
+                    ui.window(im_str!("{}##{:?}", fab.path, edit))
+                        .opened(&mut keep)
+                        .size((300.0, 450.0), ImGuiCond::FirstUseEver)
+                        .horizontal_scrollbar(true)
+                        .build(|| {
+                            ui.text(im_str!("{}", fab.path));
+                            ui.separator();
 
-                                let max_len = fab.vars.keys().map(|k| k.len()).max().unwrap_or(0);
-                                let offset = (max_len + 1) as f32 * 8.0;
+                            let max_len = fab.vars.keys().map(|k| k.len()).max().unwrap_or(0);
+                            let offset = (max_len + 1) as f32 * 8.0;
 
-                                for (name, value) in fab.vars.iter() {
-                                    ui.text(im_str!("{}", name));
-                                    ui.same_line(offset);
-                                    ui.text(im_str!("{}", value));
-                                }
-                            });
-                    }
+                            for (name, value) in fab.vars.iter() {
+                                ui.text(im_str!("{}", name));
+                                ui.same_line(offset);
+                                ui.text(im_str!("{}", value));
+                            }
+                        });
                 }
                 keep
             });
@@ -679,11 +676,11 @@ struct EditorMap {
     z_current: usize,
     center: [f32; 2],
     rendered: Option<map_renderer::RenderedMap>,
+    edit_atoms: Vec<EditAtom>,
 }
 
 #[derive(Debug)]
 struct EditAtom {
-    map: usize,
     coords: (usize, usize, usize),
     fab: usize,
 }
