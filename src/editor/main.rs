@@ -417,6 +417,7 @@ impl EditorScene {
                     keep = true;
                     ui.window(im_str!("{}##{:?}", fab.path, edit))
                         .opened(&mut keep)
+                        .position(ui.imgui().mouse_pos(), ImGuiCond::Appearing)
                         .size((300.0, 450.0), ImGuiCond::FirstUseEver)
                         .horizontal_scrollbar(true)
                         .build(|| {
