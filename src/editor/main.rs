@@ -117,12 +117,19 @@ impl EditorScene {
                 self.environment = Some(Environment {
                     path, objtree
                 });
-                self.rerender_map();
+                for map in self.maps.iter_mut() {
+                    for z in map.rendered.iter_mut() {
+                        *z = None;
+                    }
+                }
             }
             Ok(TaskResult::Map(path, dmm)) => {
-                let mut rendered = None;
                 self.map_current = self.maps.len();
-                let (x, y, _) = dmm.dim_xyz();
+                let (x, y, z) = dmm.dim_xyz();
+                let mut rendered = Vec::new();
+                for _ in 0..z {
+                    rendered.push(None);
+                }
                 self.maps.push(EditorMap {
                     path,
                     dmm,
@@ -131,14 +138,15 @@ impl EditorScene {
                     rendered,
                     edit_atoms: Vec::new(),
                 });
-                self.rerender_map();
+                self.render_map(false);
             }
         }));
         tasks.extend(std::mem::replace(&mut self.tasks, Vec::new()));
         self.tasks = tasks;
 
+        self.render_map(false);
         if let Some(map) = self.maps.get_mut(self.map_current) {
-            if let Some(rendered) = map.rendered.as_mut() {
+            if let Some(rendered) = map.rendered.get_mut(map.z_current).and_then(|x| x.as_mut()) {
                 rendered.paint(&mut self.map_renderer, map.center, encoder, view);
             }
         }
@@ -245,19 +253,19 @@ impl EditorScene {
                 if ui.menu_item(im_str!("Area"))
                     .shortcut(im_str!("Ctrl+1"))
                     .selected(&mut self.map_renderer.layers[1])
-                    .build() { self.rerender_map(); }
+                    .build() { self.render_map(true); }
                 if ui.menu_item(im_str!("Turf"))
                     .shortcut(im_str!("Ctrl+2"))
                     .selected(&mut self.map_renderer.layers[2])
-                    .build() { self.rerender_map(); }
+                    .build() { self.render_map(true); }
                 if ui.menu_item(im_str!("Obj"))
                     .shortcut(im_str!("Ctrl+3"))
                     .selected(&mut self.map_renderer.layers[3])
-                    .build() { self.rerender_map(); }
+                    .build() { self.render_map(true); }
                 if ui.menu_item(im_str!("Mob"))
                     .shortcut(im_str!("Ctrl+4"))
                     .selected(&mut self.map_renderer.layers[4])
-                    .build() { self.rerender_map(); }
+                    .build() { self.render_map(true); }
             });
             ui.menu(im_str!("Window")).build(|| {
                 ui.menu_item(im_str!("Lock positions"))
@@ -451,7 +459,7 @@ impl EditorScene {
                             self.map_current, self.map_renderer.zoom));
                         if let Some(map) = self.maps.get(self.map_current) {
                             ui.text(im_str!("center = {:?}", map.center));
-                            if let Some(rendered) = map.rendered.as_ref() {
+                            if let Some(rendered) = map.rendered.get(map.z_current).and_then(|x| x.as_ref()) {
                                 ui.text(im_str!("draw_calls[{}], atoms[{}]", rendered.draw_calls(), rendered.atoms_len));
                                 ui.text(im_str!("timings: {:?}", rendered.duration));
                             }
@@ -557,7 +565,7 @@ impl EditorScene {
             k!(Ctrl + Key3) => self.toggle_layer(3),
             k!(Ctrl + Key4) => self.toggle_layer(4),
             // misc
-            k!(Ctrl + R) => self.rerender_map(),
+            k!(Ctrl + R) => self.render_map(true),
             k!(Ctrl + Equals) |
             k!(Ctrl + Add) => if self.map_renderer.zoom < 16.0 { self.map_renderer.zoom *= 2.0 },
             k!(Ctrl + Subtract) |
@@ -651,13 +659,16 @@ impl EditorScene {
     fn toggle_layer(&mut self, which: usize) {
         // TODO: make this faster
         self.map_renderer.layers[which] = !self.map_renderer.layers[which];
-        self.rerender_map();
+        self.render_map(true);
     }
 
-    fn rerender_map(&mut self) {
+    fn render_map(&mut self, force: bool) {
         if let Some(env) = self.environment.as_ref() {
             if let Some(map) = self.maps.get_mut(self.map_current) {
-                map.rendered = Some(self.map_renderer.prepare(
+                if map.rendered[map.z_current].is_some() && !force {
+                    return;
+                }
+                map.rendered[map.z_current] = Some(self.map_renderer.prepare(
                     &mut self.factory,
                     &env.objtree,
                     &map.dmm,
@@ -684,7 +695,7 @@ struct EditorMap {
     dmm: Map,
     z_current: usize,
     center: [f32; 2],
-    rendered: Option<map_renderer::RenderedMap>,
+    rendered: Vec<Option<map_renderer::RenderedMap>>,
     edit_atoms: Vec<EditAtom>,
 }
 
