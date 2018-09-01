@@ -6,7 +6,7 @@ use ndarray::Axis;
 
 use dm::objtree::ObjectTree;
 use dm::constants::Constant;
-use dmm_tools::dmm::{Map, Grid};
+use dmm_tools::dmm::Map;
 use dmm_tools::minimap::{self, Atom};
 
 use dmi::*;
@@ -83,12 +83,12 @@ impl MapRenderer {
     }
 
     #[must_use]
-    pub fn prepare(&mut self, factory: &mut Factory, objtree: &ObjectTree, map: &Map, grid: Grid) -> RenderedMap {
+    pub fn prepare(&mut self, factory: &mut Factory, objtree: &ObjectTree, map: &Map, z: usize) -> RenderedMap {
         let start = ::std::time::Instant::now();
 
         // collect the atoms
         let mut atoms = Vec::new();
-        for (y, row) in grid.axis_iter(Axis(0)).rev().enumerate() {
+        for (y, row) in map.z_level(z).axis_iter(Axis(0)).rev().enumerate() {
             for (x, key) in row.iter().enumerate() {
                 for fab in map.dictionary[key].iter() {
                     let i = if fab.path.starts_with("/area") {

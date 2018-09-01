@@ -426,7 +426,7 @@ impl EditorScene {
                             ui.separator();
 
                             let max_len = fab.vars.keys().map(|k| k.len()).max().unwrap_or(0);
-                            let offset = (max_len + 1) as f32 * 8.0;
+                            let offset = (max_len + 2) as f32 * 7.0;
 
                             for (name, value) in fab.vars.iter() {
                                 ui.text(im_str!("{}", name));
@@ -651,7 +651,7 @@ impl EditorScene {
                     &mut self.factory,
                     &env.objtree,
                     &map.dmm,
-                    map.dmm.z_level(map.z_current)));
+                    map.z_current));
             }
         }
     }
