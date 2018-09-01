@@ -421,7 +421,6 @@ impl EditorScene {
         self.new_map = self.new_map.take().and_then(|mut new_map| {
             let mut opened = true;
             let mut closed = false;
-            let mut created = false;
 
             ui.window(im_str!("New Map"))
                 .opened(&mut opened)
@@ -431,8 +430,12 @@ impl EditorScene {
                     ui.input_int(im_str!("Y"), &mut new_map.y).build();
                     ui.input_int(im_str!("Z"), &mut new_map.z).build();
 
-                    if ui.button(im_str!("New"), (80.0, 20.0)) {
-                        created = true;
+                    if !new_map.created {
+                        if ui.button(im_str!("New"), (80.0, 20.0)) {
+                            new_map.created = true;
+                        }
+                    } else {
+                        ui.button(im_str!("Wait..."), (80.0, 20.0));
                     }
                     ui.same_line(0.0);
                     if ui.button(im_str!("Cancel"), (80.0, 20.0)) {
@@ -444,7 +447,7 @@ impl EditorScene {
             new_map.z = std::cmp::min(std::cmp::max(new_map.z, 1), 32);
 
             if let Some(env) = self.environment.as_ref() {
-                if created {
+                if new_map.created {
                     self.map_current = self.maps.len();
                     let mut rendered = Vec::new();
                     for _ in 0..new_map.z {
@@ -687,7 +690,7 @@ impl EditorScene {
     }
 
     fn new_map(&mut self) {
-        self.new_map = Some(NewMap { x: 32, y: 32, z: 1 });
+        self.new_map = Some(NewMap { x: 32, y: 32, z: 1, created: false });
     }
 
     fn open_map(&mut self) {
@@ -803,6 +806,7 @@ struct NewMap {
     x: i32,
     y: i32,
     z: i32,
+    created: bool,
 }
 
 #[derive(Debug)]
