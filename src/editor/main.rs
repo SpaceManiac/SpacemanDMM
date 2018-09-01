@@ -46,8 +46,7 @@ fn main() {
 pub struct EditorScene {
     factory: Factory,
     map_renderer: map_renderer::MapRenderer,
-    environment: Option<PathBuf>,
-    objtree: Option<ObjectTree>,
+    environment: Option<Environment>,
 
     tools: Vec<tools::Tool>,
     tool_current: usize,
@@ -76,7 +75,6 @@ impl EditorScene {
             factory: factory.clone(),
             map_renderer: map_renderer::MapRenderer::new(factory, view),
             environment: None,
-            objtree: None,
 
             tools: tools::configure(&ObjectTree::default()),
             tool_current: 0,
@@ -111,7 +109,7 @@ impl EditorScene {
             Err(e) => {
                 self.errors.push(e);
             }
-            Ok(TaskResult::ObjectTree(objtree)) => {
+            Ok(TaskResult::ObjectTree(path, objtree)) => {
                 self.tools = tools::configure(&objtree);
                 self.map_renderer.icons.clear();
                 if let Some(map) = self.maps.get_mut(self.map_current) {
@@ -121,12 +119,14 @@ impl EditorScene {
                         &map.dmm,
                         map.dmm.z_level(map.z_current)));
                 }
-                self.objtree = Some(objtree);
+                self.environment = Some(Environment {
+                    path, objtree
+                });
             }
             Ok(TaskResult::Map(path, dmm)) => {
                 let mut rendered = None;
-                if let Some(objtree) = self.objtree.as_ref() {
-                    rendered = Some(self.map_renderer.prepare(factory, &objtree, &dmm, dmm.z_level(0)));
+                if let Some(env) = self.environment.as_ref() {
+                    rendered = Some(self.map_renderer.prepare(factory, &env.objtree, &dmm, dmm.z_level(0)));
                 }
                 self.map_current = self.maps.len();
                 let (x, y, _) = dmm.dim_xyz();
@@ -353,8 +353,8 @@ impl EditorScene {
             .movable(!self.ui_lock_windows)
             .size((300.0, 400.0), ImGuiCond::FirstUseEver)
             .build(|| {
-                if let Some(objtree) = self.objtree.as_ref() {
-                    let root = objtree.root();
+                if let Some(env) = self.environment.as_ref() {
+                    let root = env.objtree.root();
                     root_node(ui, root, "area");
                     root_node(ui, root, "turf");
                     root_node(ui, root, "obj");
@@ -568,7 +568,7 @@ impl EditorScene {
     // -----------------------------------------------------------------------
 
     fn reload_objtree(&mut self) {
-        if let Some(env) = self.environment.as_ref().cloned() {
+        if let Some(env) = self.environment.as_ref().map(|e| &e.path).cloned() {
             self.load_environment(env);
         }
     }
@@ -580,10 +580,10 @@ impl EditorScene {
     }
 
     fn load_environment(&mut self, path: PathBuf) {
-        self.environment = Some(path.to_owned());
         self.tasks.push(Task::spawn(format!("Loading {}", file_name(&path)), move || {
             let context = dm::Context::default();
-            Ok(TaskResult::ObjectTree(context.parse_environment(&path)?))
+            let objtree = context.parse_environment(&path)?;
+            Ok(TaskResult::ObjectTree(path, objtree))
         }));
     }
 
@@ -651,11 +651,11 @@ impl EditorScene {
     }
 
     fn rerender_map(&mut self) {
-        if let Some(objtree) = self.objtree.as_ref() {
+        if let Some(env) = self.environment.as_ref() {
             if let Some(map) = self.maps.get_mut(self.map_current) {
                 map.rendered = Some(self.map_renderer.prepare(
                     &mut self.factory,
-                    &objtree,
+                    &env.objtree,
                     &map.dmm,
                     map.dmm.z_level(map.z_current)));
             }
@@ -668,6 +668,11 @@ impl EditorScene {
         }
         self.map_current = (self.map_current as isize + self.maps.len() as isize + offset) as usize % self.maps.len();
     }
+}
+
+struct Environment {
+    path: PathBuf,
+    objtree: ObjectTree,
 }
 
 struct EditorMap {
@@ -710,6 +715,6 @@ fn file_name(path: &Path) -> Cow<str> {
 }
 
 enum TaskResult {
-    ObjectTree(ObjectTree),
+    ObjectTree(PathBuf, ObjectTree),
     Map(PathBuf, Map),
 }
