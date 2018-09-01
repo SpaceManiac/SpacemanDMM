@@ -53,6 +53,7 @@ pub struct EditorScene {
 
     maps: Vec<EditorMap>,
     map_current: usize,
+    new_map: Option<NewMap>,
 
     target_tile: Option<(usize, usize)>,
     context_tile: Option<(usize, usize)>,
@@ -82,6 +83,7 @@ impl EditorScene {
 
             maps: Vec::new(),
             map_current: 0,
+            new_map: None,
 
             target_tile: None,
             context_tile: None,
@@ -131,7 +133,7 @@ impl EditorScene {
                     rendered.push(None);
                 }
                 self.maps.push(EditorMap {
-                    path,
+                    path: Some(path),
                     dmm,
                     z_current: 0,
                     center: [x as f32 * 16.0, y as f32 * 16.0],
@@ -171,10 +173,9 @@ impl EditorScene {
                     .shortcut(im_str!("Ctrl+U"))
                     .build() { self.reload_objtree(); }
                 ui.separator();
-                ui.menu_item(im_str!("New"))
+                if ui.menu_item(im_str!("New"))
                     .shortcut(im_str!("Ctrl+N"))
-                    .enabled(false)
-                    .build();
+                    .build() { self.new_map(); }
                 if ui.menu_item(im_str!("Open"))
                     .shortcut(im_str!("Ctrl+O"))
                     .build() { self.open_map(); }
@@ -370,7 +371,11 @@ impl EditorScene {
             .resizable(!self.ui_lock_windows)
             .build(|| {
                 for (map_idx, map) in self.maps.iter_mut().enumerate() {
-                    if ui.collapsing_header(im_str!("{}##map_{}", file_name(&map.path), map.path.display())).default_open(true).build() {
+                    let title = match map.path {
+                        Some(ref path) => format!("{}##map_{}", file_name(path), path.display()),
+                        None => format!("Untitled##{}", map_idx),
+                    };
+                    if ui.collapsing_header(&ImString::from(title)).default_open(true).build() {
                         ui.text(im_str!("{:?}; {}-keys: {}",
                             map.dmm.dim_xyz(),
                             map.dmm.key_length,
@@ -414,6 +419,50 @@ impl EditorScene {
                 self.context_tile = None;
             }
         }
+
+        self.new_map = self.new_map.take().and_then(|mut new_map| {
+            let mut opened = true;
+            let mut closed = false;
+            let mut created = false;
+
+            ui.window(im_str!("New Map"))
+                .opened(&mut opened)
+                .resizable(false)
+                .build(|| {
+                    ui.input_int(im_str!("X"), &mut new_map.x).build();
+                    ui.input_int(im_str!("Y"), &mut new_map.y).build();
+                    ui.input_int(im_str!("Z"), &mut new_map.z).build();
+
+                    if ui.button(im_str!("New"), (80.0, 20.0)) {
+                        created = true;
+                    }
+                    ui.same_line(0.0);
+                    if ui.button(im_str!("Cancel"), (80.0, 20.0)) {
+                        closed = true;
+                    }
+                });
+            new_map.x = std::cmp::min(std::cmp::max(new_map.x, 1), 512);
+            new_map.y = std::cmp::min(std::cmp::max(new_map.y, 1), 512);
+            new_map.z = std::cmp::min(std::cmp::max(new_map.z, 1), 32);
+
+            if created {
+                self.map_current = self.maps.len();
+                let mut rendered = Vec::new();
+                for _ in 0..new_map.z {
+                    rendered.push(None);
+                }
+                self.maps.push(EditorMap {
+                    path: None,
+                    dmm: unimplemented!(),
+                    z_current: 0,
+                    center: [new_map.x as f32 * 16.0, new_map.y as f32 * 16.0],
+                    rendered,
+                    edit_atoms: Vec::new(),
+                });
+                self.render_map(false);
+            }
+            if opened && !closed && !created { Some(new_map) } else { None }
+        });
 
         for map in self.maps.iter_mut() {
             let dmm = &map.dmm;
@@ -555,6 +604,7 @@ impl EditorScene {
             // File
             k!(Ctrl + Shift + O) => self.open_environment(),
             k!(Ctrl + U) => self.reload_objtree(),
+            k!(Ctrl + N) => self.new_map(),
             k!(Ctrl + O) => self.open_map(),
             k!(Ctrl + W) => self.close_map(),
             k!(Ctrl + S) => self.save_map(),
@@ -599,6 +649,10 @@ impl EditorScene {
         }));
     }
 
+    fn new_map(&mut self) {
+        self.new_map = Some(NewMap { x: 255, y: 255, z: 1 });
+    }
+
     fn open_map(&mut self) {
         match nfd::open_file_multiple_dialog(Some("dmm"), None) {
             Ok(nfd::Response::Okay(fname)) => {
@@ -617,7 +671,7 @@ impl EditorScene {
     fn load_map(&mut self, path: PathBuf) {
         for (i, map) in self.maps.iter().enumerate() {
             // TODO: consider using same_file here
-            if map.path == path {
+            if map.path.as_ref() == Some(&path) {
                 self.map_current = i;
                 return;
             }
@@ -639,8 +693,15 @@ impl EditorScene {
     }
 
     fn save_map(&mut self) {
-        if let Some(map) = self.maps.get(self.map_current) {
-            self.errors.extend(map.dmm.to_file(&map.path).err().map(From::from));
+        if let Some(map) = self.maps.get_mut(self.map_current) {
+            if map.path.is_none() {
+                if let Ok(nfd::Response::Okay(fname)) = nfd::open_save_dialog(Some("dmm"), None) {
+                    map.path = Some(PathBuf::from(fname));
+                } else {
+                    return;
+                }
+            }
+            self.errors.extend(map.dmm.to_file(map.path.as_ref().unwrap()).err().map(From::from));
         }
     }
 
@@ -650,7 +711,7 @@ impl EditorScene {
                 let path = PathBuf::from(fname);
                 self.errors.extend(map.dmm.to_file(&path).err().map(From::from));
                 if !copy {
-                    map.path = path;
+                    map.path = Some(path);
                 }
             }
         }
@@ -691,12 +752,18 @@ struct Environment {
 }
 
 struct EditorMap {
-    path: PathBuf,
+    path: Option<PathBuf>,
     dmm: Map,
     z_current: usize,
     center: [f32; 2],
     rendered: Vec<Option<map_renderer::RenderedMap>>,
     edit_atoms: Vec<EditAtom>,
+}
+
+struct NewMap {
+    x: i32,
+    y: i32,
+    z: i32,
 }
 
 #[derive(Debug)]
