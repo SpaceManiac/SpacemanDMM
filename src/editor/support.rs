@@ -1,4 +1,4 @@
-use imgui::{FrameSize, ImFontConfig, ImGui, ImGuiMouseCursor, ImVec4};
+use imgui::{FrameSize, ImFontConfig, ImGui, ImGuiMouseCursor, ImVec4, ImGuiStyle};
 use imgui_gfx_renderer::{Renderer, Shaders};
 use std::time::Instant;
 
@@ -49,8 +49,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
     };
 
     let mut imgui = ImGui::init();
-    let mut cached_colors = [ImVec4::default(); 43];
-    fix_imgui_srgb(&mut cached_colors, &mut imgui.style_mut().colors);
+    fix_imgui_srgb(&mut imgui.style_mut().colors, &dark_theme());
     imgui.set_ini_filename(None);
 
     // In the examples we only use integer DPI factors, because the UI can get very blurry
@@ -235,7 +234,6 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
             });
         }
 
-        fix_imgui_srgb(&mut cached_colors, &mut imgui.style_mut().colors);
         // Workaround: imgui-gfx-renderer will not call ui.render() under this
         // condition, which occurs when minimized, and imgui will assert
         // because of missing either a Render() or EndFrame() call.
@@ -293,11 +291,7 @@ fn update_mouse(imgui: &mut ImGui, mouse_state: &mut MouseState) {
     mouse_state.wheel = 0.0;
 }
 
-fn fix_imgui_srgb(cache: &mut [ImVec4; 43], style_colors: &mut [ImVec4; 43]) -> bool {
-    if cache[..] == style_colors[..] {
-        return false;
-    }
-
+fn fix_imgui_srgb(dest: &mut [ImVec4; 43], source: &[ImVec4; 43]) {
     // Fix incorrect colors with sRGB framebuffer
     fn imgui_gamma_to_linear(col: ImVec4) -> ImVec4 {
         let x = col.x.powf(2.2);
@@ -307,9 +301,74 @@ fn fix_imgui_srgb(cache: &mut [ImVec4; 43], style_colors: &mut [ImVec4; 43]) -> 
         ImVec4::new(x, y, z, w)
     }
 
-    for col in 0..style_colors.len() {
-        style_colors[col] = imgui_gamma_to_linear(style_colors[col]);
+    for (dest, source) in dest.iter_mut().zip(source.iter()) {
+        *dest = imgui_gamma_to_linear(*source);
     }
-    cache.copy_from_slice(style_colors);
-    true
+}
+
+// Workaround for ImGuiStyle not being Clone.
+fn _clone_imgui_style(style: &ImGuiStyle) -> ImGuiStyle {
+    macro_rules! f {
+        ($($f:ident,)*) => {
+            ImGuiStyle {
+                $($f: style.$f,)*
+            }
+        }
+    }
+    f! { alpha, window_padding, window_rounding, window_border_size,
+        window_min_size, window_title_align, child_rounding, child_border_size,
+        popup_rounding, popup_border_size, frame_padding, frame_rounding,
+        frame_border_size, item_spacing, item_inner_spacing, touch_extra_padding,
+        indent_spacing, columns_min_spacing, scrollbar_size, scrollbar_rounding,
+        grab_min_size, grab_rounding, button_text_align, display_window_padding,
+        display_safe_area_padding, anti_aliased_lines, anti_aliased_fill,
+        curve_tessellation_tol, colors, }
+}
+
+fn dark_theme() -> [ImVec4; 43] {
+    [
+        ImVec4::new(1.00, 1.00, 1.00, 1.00),
+        ImVec4::new(0.50, 0.50, 0.50, 1.00),
+        ImVec4::new(0.06, 0.06, 0.06, 0.94),
+        ImVec4::new(1.00, 1.00, 1.00, 0.00),
+        ImVec4::new(0.08, 0.08, 0.08, 0.94),
+        ImVec4::new(0.43, 0.43, 0.50, 0.50),
+        ImVec4::new(0.00, 0.00, 0.00, 0.00),
+        ImVec4::new(0.16, 0.29, 0.48, 0.54),
+        ImVec4::new(0.26, 0.59, 0.98, 0.40),
+        ImVec4::new(0.26, 0.59, 0.98, 0.67),
+        ImVec4::new(0.04, 0.04, 0.04, 1.00),
+        ImVec4::new(0.16, 0.29, 0.48, 1.00),
+        ImVec4::new(0.00, 0.00, 0.00, 0.51),
+        ImVec4::new(0.14, 0.14, 0.14, 1.00),
+        ImVec4::new(0.02, 0.02, 0.02, 0.53),
+        ImVec4::new(0.31, 0.31, 0.31, 1.00),
+        ImVec4::new(0.41, 0.41, 0.41, 1.00),
+        ImVec4::new(0.51, 0.51, 0.51, 1.00),
+        ImVec4::new(0.26, 0.59, 0.98, 1.00),
+        ImVec4::new(0.24, 0.52, 0.88, 1.00),
+        ImVec4::new(0.26, 0.59, 0.98, 1.00),
+        ImVec4::new(0.26, 0.59, 0.98, 0.40),
+        ImVec4::new(0.26, 0.59, 0.98, 1.00),
+        ImVec4::new(0.06, 0.53, 0.98, 1.00),
+        ImVec4::new(0.26, 0.59, 0.98, 0.31),
+        ImVec4::new(0.26, 0.59, 0.98, 0.80),
+        ImVec4::new(0.26, 0.59, 0.98, 1.00),
+        ImVec4::new(0.43, 0.43, 0.50, 0.50),
+        ImVec4::new(0.10, 0.40, 0.75, 0.78),
+        ImVec4::new(0.10, 0.40, 0.75, 1.00),
+        ImVec4::new(0.26, 0.59, 0.98, 0.25),
+        ImVec4::new(0.26, 0.59, 0.98, 0.67),
+        ImVec4::new(0.26, 0.59, 0.98, 0.95),
+        ImVec4::new(0.41, 0.41, 0.41, 0.50),
+        ImVec4::new(0.98, 0.39, 0.36, 1.00),
+        ImVec4::new(0.98, 0.39, 0.36, 1.00),
+        ImVec4::new(0.61, 0.61, 0.61, 1.00),
+        ImVec4::new(1.00, 0.43, 0.35, 1.00),
+        ImVec4::new(0.90, 0.70, 0.00, 1.00),
+        ImVec4::new(1.00, 0.60, 0.00, 1.00),
+        ImVec4::new(0.26, 0.59, 0.98, 0.35),
+        ImVec4::new(0.80, 0.80, 0.80, 0.35),
+        ImVec4::new(1.00, 1.00, 0.00, 0.90),
+    ]
 }
