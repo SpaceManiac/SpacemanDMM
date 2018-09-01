@@ -453,7 +453,8 @@ impl EditorScene {
                 }
                 self.maps.push(EditorMap {
                     path: None,
-                    dmm: unimplemented!(),
+                    dmm: Map::new(new_map.x as usize, new_map.y as usize, new_map.z as usize,
+                        "/turf".into(), "/area".into()),
                     z_current: 0,
                     center: [new_map.x as f32 * 16.0, new_map.y as f32 * 16.0],
                     rendered,

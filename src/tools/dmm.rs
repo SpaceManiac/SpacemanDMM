@@ -52,6 +52,24 @@ impl Map {
         Ok(map)
     }
 
+    pub fn new(x: usize, y: usize, z: usize, turf: String, area: String) -> Map {
+        assert!(x > 0 && y > 0 && z > 0, "({}, {}, {})", x, y, z);
+
+        let mut dictionary = BTreeMap::new();
+        dictionary.insert(Key(0), vec![
+            Prefab { path: turf, vars: Default::default() },
+            Prefab { path: area, vars: Default::default() },
+        ]);
+
+        let grid = Array3::default((z, y, x));  // default = 0
+
+        Map {
+            key_length: 1,
+            dictionary,
+            grid,
+        }
+    }
+
     pub fn to_file(&self, path: &Path) -> io::Result<()> {
         // DMM saver later
         save_tgm(self, File::create(path)?)
