@@ -503,7 +503,7 @@ impl EditorScene {
                 let mut opened = self.ui_debug_window;
                 ui.window(im_str!("Debug"))
                     .position((320.0, 30.0), ImGuiCond::FirstUseEver)
-                    .size((320.0, 150.0), ImGuiCond::FirstUseEver)
+                    .always_auto_resize(true)
                     .opened(&mut opened)
                     .build(|| {
                         ui.text(im_str!("maps[{}], icons[{}], map = {}, zoom = {}",
