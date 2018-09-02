@@ -2,7 +2,8 @@
 
 use std::io;
 use std::path::{Path, PathBuf};
-use std::collections::{btree_map, BTreeMap};
+use std::collections::hash_map::{HashMap, Entry};
+use std::collections::BTreeMap;
 
 use lodepng::{self, RGBA};
 use lodepng::ffi::{State as PngState, ColorType};
@@ -28,14 +29,14 @@ pub use dm::dmi::*;
 
 #[derive(Default)]
 pub struct IconCache {
-    map: BTreeMap<PathBuf, Option<IconFile>>,
+    map: HashMap<PathBuf, Option<IconFile>>,
 }
 
 impl IconCache {
     pub fn retrieve(&mut self, factory: &mut Factory, path: &Path) -> Option<&IconFile> {
         match self.map.entry(path.to_owned()) {
-            btree_map::Entry::Occupied(entry) => entry.into_mut().as_ref(),
-            btree_map::Entry::Vacant(entry) => entry.insert(load(factory, path)).as_ref(),
+            Entry::Occupied(entry) => entry.into_mut().as_ref(),
+            Entry::Vacant(entry) => entry.insert(load(factory, path)).as_ref(),
         }
     }
 
