@@ -575,7 +575,15 @@ impl EditorScene {
         }
     }
 
-    fn mouse_wheel(&mut self, ctrl: bool, shift: bool, _alt: bool, _x: f32, y: f32) {
+    fn mouse_wheel(&mut self, ctrl: bool, shift: bool, alt: bool, _x: f32, y: f32) {
+        if alt {
+            if y > 0.0 && self.map_renderer.zoom < 16.0 {
+                self.map_renderer.zoom *= 2.0;
+            } else if y < 0.0 && self.map_renderer.zoom > 0.0625 {
+                self.map_renderer.zoom *= 0.5;
+            }
+            return;
+        }
         let (axis, mut mul) = if ctrl { (0, -1.0) } else { (1, 1.0) };
         if shift {
             mul *= 8.0;
