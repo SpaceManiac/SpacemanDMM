@@ -468,9 +468,11 @@ impl EditorScene {
         });
 
         for map in self.maps.iter_mut() {
+            let env = self.environment.as_ref();
             let dmm = &map.dmm;
             map.edit_atoms.retain(|edit| {
                 let mut keep = false;
+                let mut keep2 = true;
                 let (_, dim_y, _) = dmm.dim_xyz();
                 let key = &dmm.grid[(edit.coords.2, dim_y - 1 - edit.coords.1, edit.coords.0)];
                 if let Some(fab) = dmm.dictionary[key].get(edit.fab) {
@@ -481,20 +483,58 @@ impl EditorScene {
                         .size((300.0, 450.0), ImGuiCond::FirstUseEver)
                         .horizontal_scrollbar(true)
                         .build(|| {
-                            ui.text(im_str!("{}", fab.path));
-                            ui.separator();
+                            const RED_TEXT: &[(ImGuiCol, [f32; 4])] = &[(ImGuiCol::Text, [1.0, 0.25, 0.25, 1.0])];
+
+                            if ui.button(im_str!("Apply"), (100.0, 20.0)) {
+                                // TODO: actually apply
+                                keep2 = false;
+                            }
+                            ui.same_line(0.0);
+                            if ui.button(im_str!("Cancel"), (100.0, 20.0)) {
+                                keep2 = false;
+                            }
+                            let mut s = Default::default();
+                            ui.input_text(im_str!("Filter"), &mut s).build();
 
                             let max_len = fab.vars.keys().map(|k| k.len()).max().unwrap_or(0);
-                            let offset = (max_len + 2) as f32 * 7.0;
+                            let offset = (max_len + 4) as f32 * 7.0;
 
-                            for (name, value) in fab.vars.iter() {
-                                ui.text(im_str!("{}", name));
-                                ui.same_line(offset);
-                                ui.text(im_str!("{}", value));
+                            if !fab.vars.is_empty() {
+                                ui.separator();
+                                ui.text(im_str!("Instance variables"));
+                                ui.separator();
+                                for (name, value) in fab.vars.iter() {
+                                    ui.text(im_str!(" {}", name));
+                                    ui.same_line(offset);
+                                    ui.text(im_str!("{}", value));
+                                }
+                            }
+
+                            let mut path = fab.path.as_str();
+                            while !path.is_empty() {
+                                let mut ty = None;
+                                let mut color_vars = RED_TEXT;
+                                if let Some(env) = env {
+                                    ty = env.objtree.find(path);
+                                    if ty.is_some() {
+                                        color_vars = &[];
+                                    }
+                                }
+
+                                ui.separator();
+                                ui.with_style_and_color_vars(&[], color_vars, || {
+                                    ui.text(im_str!("{}", path));
+                                });
+                                ui.separator();
+
+                                match path.rfind("/") {
+                                    Some(idx) => path = &path[..idx],
+                                    None => break,
+                                }
                             }
                         });
                 }
-                keep
+                keep && keep2
             });
         }
 
