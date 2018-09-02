@@ -407,6 +407,7 @@ impl EditorScene {
                             map.edit_atoms.push(EditAtom {
                                 coords: (x, y, map.z_current),
                                 fab: i,
+                                filter: ImString::with_capacity(128),
                             });
                         }
                     }
@@ -470,14 +471,14 @@ impl EditorScene {
         for map in self.maps.iter_mut() {
             let env = self.environment.as_ref();
             let dmm = &map.dmm;
-            map.edit_atoms.retain(|edit| {
+            map.edit_atoms.retain_mut(|edit| {
                 let mut keep = false;
                 let mut keep2 = true;
                 let (_, dim_y, _) = dmm.dim_xyz();
                 let key = &dmm.grid[(edit.coords.2, dim_y - 1 - edit.coords.1, edit.coords.0)];
                 if let Some(fab) = dmm.dictionary[key].get(edit.fab) {
                     keep = true;
-                    ui.window(im_str!("{}##{:?}", fab.path, edit))
+                    ui.window(im_str!("{}##{:?}/{}", fab.path, edit.coords, edit.fab))
                         .opened(&mut keep)
                         .position(ui.imgui().mouse_pos(), ImGuiCond::Appearing)
                         .size((300.0, 450.0), ImGuiCond::FirstUseEver)
@@ -493,8 +494,7 @@ impl EditorScene {
                             if ui.button(im_str!("Cancel"), (100.0, 20.0)) {
                                 keep2 = false;
                             }
-                            let mut s = Default::default();
-                            ui.input_text(im_str!("Filter"), &mut s).build();
+                            ui.input_text(im_str!("Filter"), &mut edit.filter).build();
 
                             let max_len = fab.vars.keys().map(|k| k.len()).max().unwrap_or(0);
                             let offset = (max_len + 4) as f32 * 7.0;
@@ -512,10 +512,9 @@ impl EditorScene {
 
                             let mut path = fab.path.as_str();
                             while !path.is_empty() {
-                                let mut ty = None;
                                 let mut color_vars = RED_TEXT;
                                 if let Some(env) = env {
-                                    ty = env.objtree.find(path);
+                                    let ty = env.objtree.find(path);
                                     if ty.is_some() {
                                         color_vars = &[];
                                     }
@@ -868,6 +867,7 @@ struct NewMap {
 struct EditAtom {
     coords: (usize, usize, usize),
     fab: usize,
+    filter: ImString,
 }
 
 fn root_node(ui: &Ui, ty: TypeRef, name: &str) {
@@ -897,4 +897,25 @@ fn file_name(path: &Path) -> Cow<str> {
 enum TaskResult {
     ObjectTree(Environment),
     Map(PathBuf, Map),
+}
+
+trait RetainMut<T> {
+    fn retain_mut<F: FnMut(&mut T) -> bool>(&mut self, f: F);
+}
+
+impl<T> RetainMut<T> for Vec<T> {
+    fn retain_mut<F: FnMut(&mut T) -> bool>(&mut self, mut f: F) {
+        let len = self.len();
+        let mut del = 0;
+        for i in 0..len {
+            if !f(&mut self[i]) {
+                del += 1;
+            } else if del > 0 {
+                self.swap(i - del, i);
+            }
+        }
+        if del > 0 {
+            self.truncate(len - del);
+        }
+    }
 }
