@@ -189,9 +189,8 @@ impl EditorScene {
                     .build() { self.save_map_as(false); }
                 if ui.menu_item(im_str!("Save Copy As"))
                     .build() { self.save_map_as(true); }
-                ui.menu_item(im_str!("Save All"))
-                    .enabled(false)
-                    .build();
+                if ui.menu_item(im_str!("Save All"))
+                    .build() { self.save_all(); }
                 ui.separator();
                 if ui.menu_item(im_str!("Exit"))
                     .shortcut(im_str!("Alt+F4"))
@@ -763,6 +762,16 @@ impl EditorScene {
                 }
             }
         }
+    }
+
+    fn save_all(&mut self) {
+        let current = self.map_current;
+        self.map_current = 0;
+        while self.map_current < self.maps.len() {
+            self.save_map();
+            self.map_current += 1;
+        }
+        self.map_current = current;
     }
 
     fn toggle_layer(&mut self, which: usize) {
