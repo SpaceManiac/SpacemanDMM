@@ -52,6 +52,7 @@ pub struct RenderedMap {
 }
 
 struct DrawCall {
+    category: u8,
     texture: Texture,
     start: u32,
     len: u32,
@@ -91,20 +92,6 @@ impl MapRenderer {
         for (y, row) in map.z_level(z).axis_iter(Axis(0)).rev().enumerate() {
             for (x, key) in row.iter().enumerate() {
                 for fab in map.dictionary[key].iter() {
-                    let i = if fab.path.starts_with("/area") {
-                        1
-                    } else if fab.path.starts_with("/turf") {
-                        2
-                    } else if fab.path.starts_with("/obj") {
-                        3
-                    } else if fab.path.starts_with("/mob") {
-                        4
-                    } else {
-                        0
-                    };
-                    if !self.layers[i] {
-                        continue;
-                    }
                     let atom = match Atom::from_prefab(objtree, fab, (x as u32, y as u32)) {
                         Some(atom) => atom,
                         None => continue,
@@ -177,13 +164,15 @@ impl MapRenderer {
             let i_start = indices.len() as u32;
             indices.extend_from_slice(&[start, start+1, start+3, start+1, start+2, start+3]);
 
+            let category = category_of(atom.path());
             if let Some(call) = draw_calls.last_mut() {
-                if call.texture == icon_file.texture {
+                if call.texture == icon_file.texture && call.category == category {
                     call.len += 6;
                     continue;
                 }
             }
             draw_calls.push(DrawCall {
+                category,
                 texture: icon_file.texture.clone(),
                 start: i_start,
                 len: 6,
@@ -225,6 +214,9 @@ impl RenderedMap {
         encoder.update_buffer(&parent.transform_buffer, &[transform], 0).expect("update_buffer failed");
 
         for call in self.draw_calls.iter() {
+            if !parent.layers[call.category as usize] {
+                continue;
+            }
             let slice = gfx::Slice {
                 start: call.start,
                 end: call.start + call.len,
@@ -245,4 +237,18 @@ impl RenderedMap {
 
 fn to_seconds(duration: ::std::time::Duration) -> f32 {
     duration.as_secs() as f32 + duration.subsec_nanos() as f32 / 1_000_000_000.0
+}
+
+fn category_of(path: &str) -> u8 {
+    if path.starts_with("/area") {
+        1
+    } else if path.starts_with("/turf") {
+        2
+    } else if path.starts_with("/obj") {
+        3
+    } else if path.starts_with("/mob") {
+        4
+    } else {
+        0
+    }
 }

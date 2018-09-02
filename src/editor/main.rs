@@ -248,22 +248,22 @@ impl EditorScene {
                     .enabled(false)
                     .build();
                 ui.separator();
-                if ui.menu_item(im_str!("Area"))
+                ui.menu_item(im_str!("Area"))
                     .shortcut(im_str!("Ctrl+1"))
                     .selected(&mut self.map_renderer.layers[1])
-                    .build() { self.render_map(true); }
-                if ui.menu_item(im_str!("Turf"))
+                    .build();
+                ui.menu_item(im_str!("Turf"))
                     .shortcut(im_str!("Ctrl+2"))
                     .selected(&mut self.map_renderer.layers[2])
-                    .build() { self.render_map(true); }
-                if ui.menu_item(im_str!("Obj"))
+                    .build();
+                ui.menu_item(im_str!("Obj"))
                     .shortcut(im_str!("Ctrl+3"))
                     .selected(&mut self.map_renderer.layers[3])
-                    .build() { self.render_map(true); }
-                if ui.menu_item(im_str!("Mob"))
+                    .build();
+                ui.menu_item(im_str!("Mob"))
                     .shortcut(im_str!("Ctrl+4"))
                     .selected(&mut self.map_renderer.layers[4])
-                    .build() { self.render_map(true); }
+                    .build();
             });
             ui.menu(im_str!("Window")).build(|| {
                 ui.menu_item(im_str!("Lock positions"))
@@ -775,9 +775,7 @@ impl EditorScene {
     }
 
     fn toggle_layer(&mut self, which: usize) {
-        // TODO: make this faster
         self.map_renderer.layers[which] = !self.map_renderer.layers[which];
-        self.render_map(true);
     }
 
     fn render_map(&mut self, force: bool) {
