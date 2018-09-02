@@ -322,15 +322,13 @@ impl fmt::Display for Token {
             Eof => f.write_str("__EOF__"),
             Punct(p) => write!(f, "{}", p),
             Ident(ref i, _) => f.write_str(i),
-            String(ref i) => write!(f, "{}", Quote(i)),
+            String(ref i) => Quote(i).fmt(f),
             InterpStringBegin(ref i) => write!(f, "\"{}[", i),
             InterpStringPart(ref i) => write!(f, "]{}[", i),
             InterpStringEnd(ref i) => write!(f, "]{}\"", i),
             Resource(ref i) => write!(f, "'{}'", i),
-            Int(i) => write!(f, "{}", i),
-            Float(i) if i < 0.0 && i.is_infinite() => write!(f, "-1.#INF"),
-            Float(i) if i.is_infinite() => write!(f, "1.#INF"),
-            Float(i) => write!(f, "{}", i),
+            Int(i) => FormatFloat(i as f32).fmt(f),
+            Float(i) => FormatFloat(i).fmt(f),
             DocComment(ref c) => write!(f, "{}", c),
         }
     }
@@ -350,6 +348,40 @@ impl<'a> fmt::Display for Quote<'a> {
             write!(f, "{{\"{}\"}}", s)
         } else {
             write!(f, "\"{}\"", s)
+        }
+    }
+}
+
+/// Formatting helper to format a float according to DM's rules.
+pub struct FormatFloat(pub f32);
+
+impl fmt::Display for FormatFloat {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let n = self.0;
+        if n.is_nan() {
+            // Not sure what is actually correct here.
+            f.write_str("1.#NaN")
+        } else if n.is_infinite() {
+            if n.is_sign_negative() {
+                f.write_str("-1.#INF")
+            } else {
+                f.write_str("1.#INF")
+            }
+        } else if n == 0.0 {
+            f.write_str("0")
+        } else {
+            let exp = n.abs().log10().floor();
+            if exp >= 6.0 || exp <= -5.0 {
+                let n2 = (n * 10.0f32.powf(5.0 - exp)).round() * 1.0e-5;
+                let mut precision = 0;
+                while precision < 5 && (n2 * 10.0f32.powi(precision)) != (n2 * 10.0f32.powi(precision)).round() {
+                    precision += 1;
+                }
+                write!(f, "{:.*}e{:+04}", precision as usize, n2, exp)
+            } else {
+                let n2 = (n * 10.0f32.powf(5.0 - exp)).round() * 10.0f32.powf(exp - 5.0);
+                write!(f, "{}", n2)
+            }
         }
     }
 }
