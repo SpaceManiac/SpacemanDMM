@@ -33,10 +33,10 @@ pub struct IconCache {
 }
 
 impl IconCache {
-    pub fn retrieve(&mut self, factory: &mut Factory, path: &Path) -> Option<&IconFile> {
-        match self.map.entry(path.to_owned()) {
+    pub fn retrieve(&mut self, factory: &mut Factory, base_path: &Path, relative_file_path: &Path) -> Option<&IconFile> {
+        match self.map.entry(relative_file_path.to_owned()) {
             Entry::Occupied(entry) => entry.into_mut().as_ref(),
-            Entry::Vacant(entry) => entry.insert(load(factory, path)).as_ref(),
+            Entry::Vacant(entry) => entry.insert(load(factory, &base_path.join(relative_file_path))).as_ref(),
         }
     }
 

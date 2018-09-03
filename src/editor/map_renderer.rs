@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use gfx;
 use gfx::traits::{Factory as FactoryTrait, FactoryExt};
 use {Resources, Factory, Encoder, ColorFormat, RenderTargetView, Texture};
@@ -84,7 +86,7 @@ impl MapRenderer {
     }
 
     #[must_use]
-    pub fn prepare(&mut self, factory: &mut Factory, objtree: &ObjectTree, map: &Map, z: usize) -> RenderedMap {
+    pub fn prepare(&mut self, factory: &mut Factory, objtree: &ObjectTree, base_path: &Path, map: &Map, z: usize) -> RenderedMap {
         let start = ::std::time::Instant::now();
 
         // collect the atoms
@@ -98,7 +100,7 @@ impl MapRenderer {
                     };
                     match atom.get_var("icon", objtree) {
                         &Constant::Resource(ref path) | &Constant::String(ref path) => {
-                            let _ = self.icons.retrieve(factory, path.as_ref());
+                            let _ = self.icons.retrieve(factory, base_path, path.as_ref());
                         },
                         _ => continue,
                     }
@@ -128,7 +130,7 @@ impl MapRenderer {
             };
             let dir = atom.get_var("dir", objtree).to_int().unwrap_or(::dmi::SOUTH);
 
-            let icon_file = match self.icons.retrieve(factory, icon.as_ref()) {
+            let icon_file = match self.icons.retrieve(factory, base_path, icon.as_ref()) {
                 Some(icon_file) => icon_file,
                 None => continue,
             };
