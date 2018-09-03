@@ -32,12 +32,8 @@ impl Config {
 fn get_config_path() -> PathBuf {
     // Determine the configuration directory
     let mut config_dir;
-    if let Some(manifest_dir) = env::var_os("CARGO_MANIFEST_DIR") {
-        // If we're being run through Cargo, put runtime files in target/
-        config_dir = PathBuf::from(manifest_dir);
-        config_dir.push("target");
-    } else if let Ok(current_exe) = env::current_exe() {
-        // Otherwise, put runtime files adjacent to the executable
+    if let Ok(current_exe) = env::current_exe() {
+        // Put runtime files adjacent to the executable
         config_dir = current_exe;
         config_dir.pop();
     } else {

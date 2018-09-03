@@ -11,6 +11,9 @@ extern crate lodepng;
 extern crate ndarray;
 extern crate nfd;
 extern crate divrem;
+#[macro_use] extern crate serde_derive;
+extern crate serde;
+extern crate toml;
 
 extern crate dreammaker as dm;
 extern crate dmm_tools;
@@ -20,6 +23,7 @@ mod dmi;
 mod map_renderer;
 mod tasks;
 mod tools;
+mod config;
 
 use std::path::{Path, PathBuf};
 use std::borrow::Cow;
@@ -44,6 +48,7 @@ fn main() {
 }
 
 pub struct EditorScene {
+    config: config::Config,
     factory: Factory,
     map_renderer: map_renderer::MapRenderer,
     environment: Option<Environment>,
@@ -74,6 +79,7 @@ pub struct EditorScene {
 impl EditorScene {
     fn new(factory: &mut Factory, view: &RenderTargetView) -> Self {
         let mut ed = EditorScene {
+            config: config::Config::load(),
             factory: factory.clone(),
             map_renderer: map_renderer::MapRenderer::new(factory, view),
             environment: None,
@@ -100,11 +106,25 @@ impl EditorScene {
             ui_debug_window: true,
             ui_errors: false,
         };
-        if let Ok(Some(env)) = dm::detect_environment("tgstation.dme") {
-            ed.load_environment(env);
-        }
-        ed.load_map("_maps/map_files/debug/runtimestation.dmm".into());
+        ed.finish_init();
         ed
+    }
+
+    fn finish_init(&mut self) {
+        // Open most recent `.dme` by default.
+        if self.environment.is_none() {
+            if let Some(env_path) = self.config.recent.first().cloned() {
+                self.load_environment(env_path);
+            }
+        }
+
+        #[cfg(debug_assertions)] {
+            // For debug builds, auto-load runtimestation
+            let path = PathBuf::from("_maps/map_files/debug/runtimestation.dmm");
+            if path.exists() {
+                self.load_map(path);
+            }
+        }
     }
 
     fn render(&mut self, encoder: &mut Encoder, view: &RenderTargetView) {
@@ -114,6 +134,8 @@ impl EditorScene {
                 self.errors.push(e);
             }
             Ok(TaskResult::ObjectTree(environment)) => {
+                self.config.make_recent(&environment.path);
+                self.config.save();
                 self.tools = tools::configure(&environment.objtree);
                 self.environment = Some(environment);
                 self.map_renderer.icons.clear();
