@@ -186,8 +186,19 @@ impl EditorScene {
                 if ui.menu_item(im_str!("Open environment"))
                     .shortcut(im_str!("Ctrl+Shift+O"))
                     .build() { self.open_environment(); }
-                ui.menu(im_str!("Recent environments")).enabled(false).build(|| {
-                    // TODO
+                ui.menu(im_str!("Recent environments")).enabled(!self.config.recent.is_empty()).build(|| {
+                    let mut clicked = None;
+                    for (i, path) in self.config.recent.iter().enumerate() {
+                        if ui.menu_item(im_str!("{}", path.display()))
+                            .shortcut(im_str!("{}", i + 1))
+                            .build()
+                        {
+                            clicked = Some(path.to_owned());
+                        }
+                    }
+                    if let Some(clicked) = clicked {
+                        self.load_environment(clicked);
+                    }
                 });
                 if ui.menu_item(im_str!("Update environment"))
                     .shortcut(im_str!("Ctrl+U"))
