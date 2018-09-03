@@ -111,18 +111,36 @@ impl EditorScene {
     }
 
     fn finish_init(&mut self) {
-        // Open most recent `.dme` by default.
-        if self.environment.is_none() {
-            if let Some(env_path) = self.config.recent.first().cloned() {
-                self.load_environment(env_path);
+        // parse command-line arguments:
+        // - use the specified DME, or autodetect one from the first DMM
+        // - preload all maps specified belonging to that DME
+        let mut loading_env = false;
+        for arg in std::env::args_os() {
+            let path = PathBuf::from(arg);
+
+            if path.extension() == Some("dme".as_ref()) {
+                // only one DME may be specified
+                if !loading_env {
+                    self.load_environment(path);
+                    loading_env = true;
+                }
+            } else if path.extension() == Some("dmm".as_ref()) {
+                // determine the corresponding DME
+                if !loading_env {
+                    if let Some(env) = detect_environment(&path) {
+                        self.load_environment(env);
+                        loading_env = true;
+                    }
+                }
+
+                self.load_map(path);
             }
         }
 
-        #[cfg(debug_assertions)] {
-            // For debug builds, auto-load runtimestation
-            let path = PathBuf::from("_maps/map_files/debug/runtimestation.dmm");
-            if path.exists() {
-                self.load_map(path);
+        // Open most recent `.dme` by default.
+        if !loading_env {
+            if let Some(env_path) = self.config.recent.first().cloned() {
+                self.load_environment(env_path);
             }
         }
     }
@@ -952,4 +970,26 @@ impl<T> RetainMut<T> for Vec<T> {
             self.truncate(len - del);
         }
     }
+}
+
+fn detect_environment(path: &Path) -> Option<PathBuf> {
+    let mut current = path.parent();
+    while let Some(dir) = current {
+        let read_dir = match std::fs::read_dir(dir) {
+            Ok(r) => r,
+            Err(_) => return None,
+        };
+        for entry in read_dir {
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => return None,
+            };
+            let path = entry.path();
+            if path.extension() == Some("dme".as_ref()) {
+                return Some(path);
+            }
+        }
+        current = dir.parent();
+    }
+    None
 }
