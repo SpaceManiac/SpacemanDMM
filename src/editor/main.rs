@@ -826,6 +826,7 @@ impl EditorScene {
                 map.rendered[map.z_current] = Some(self.map_renderer.prepare(
                     &mut self.factory,
                     &env.objtree,
+                    &env.path.parent().expect("invalid environment file path"),
                     &map.dmm,
                     map.z_current));
             }
