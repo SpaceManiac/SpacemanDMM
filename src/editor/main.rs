@@ -43,6 +43,8 @@ type Texture = gfx::handle::ShaderResourceView<Resources, [f32; 4]>;
 
 use tasks::Task;
 
+const RED_TEXT: &[(ImGuiCol, [f32; 4])] = &[(ImGuiCol::Text, [1.0, 0.25, 0.25, 1.0])];
+
 fn main() {
     support::run("SpacemanDMM".to_owned(), [0.25, 0.25, 0.5, 1.0]);
 }
@@ -450,17 +452,28 @@ impl EditorScene {
                 open = true;
 
                 if let Some(map) = self.maps.get_mut(self.map_current) {
+                    let edit_atoms = &mut map.edit_atoms;
+                    let z = map.z_current;
                     let (_, dim_y, _) = map.dmm.dim_xyz();
-                    let grid = map.dmm.z_level(map.z_current);
+                    let grid = map.dmm.z_level(z);
                     let key = &grid[(dim_y - 1 - y, x)];
                     for (i, fab) in map.dmm.dictionary[key].iter().enumerate() {
-                        if ui.menu_item(im_str!("{}", fab.path)).build() {
-                            map.edit_atoms.push(EditAtom {
-                                coords: (x, y, map.z_current),
-                                fab: i,
-                                filter: ImString::with_capacity(128),
-                            });
+                        let mut color_vars = RED_TEXT;
+                        if let Some(env) = self.environment.as_ref() {
+                            if env.objtree.find(&fab.path).is_some() {
+                                color_vars = &[];
+                            }
                         }
+
+                        ui.with_style_and_color_vars(&[], color_vars, || {
+                            if ui.menu_item(im_str!("{}", fab.path)).build() {
+                                edit_atoms.push(EditAtom {
+                                    coords: (x, y, z),
+                                    fab: i,
+                                    filter: ImString::with_capacity(128),
+                                });
+                            }
+                        });
                     }
                 }
             });
@@ -535,8 +548,6 @@ impl EditorScene {
                         .size((300.0, 450.0), ImGuiCond::FirstUseEver)
                         .horizontal_scrollbar(true)
                         .build(|| {
-                            const RED_TEXT: &[(ImGuiCol, [f32; 4])] = &[(ImGuiCol::Text, [1.0, 0.25, 0.25, 1.0])];
-
                             if ui.button(im_str!("Apply"), (100.0, 20.0)) {
                                 // TODO: actually apply
                                 keep2 = false;
