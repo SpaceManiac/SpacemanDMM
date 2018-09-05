@@ -1,4 +1,5 @@
 //! Reified undo/redo history tree.
+#![allow(dead_code)]  // WIP
 
 pub struct History<T> {
     current: T,
@@ -10,7 +11,7 @@ struct Entry<T> {
     snapshot: Option<T>,
 }
 
-impl<T: Clone> History<T> {
+impl<T> History<T> {
     pub fn new(desc: String, current: T) -> Self {
         let _ = desc; // TODO
         History { current }

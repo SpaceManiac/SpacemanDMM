@@ -174,8 +174,8 @@ impl EditorScene {
                     rendered.push(None);
                 }
                 self.maps.push(EditorMap {
+                    hist: history::History::new(format!("Load {}", path.display()), dmm),
                     path: Some(path),
-                    dmm,
                     z_current: 0,
                     center: [x as f32 * 16.0, y as f32 * 16.0],
                     rendered,
@@ -427,11 +427,12 @@ impl EditorScene {
                         None => format!("Untitled##{}", map_idx),
                     };
                     if ui.collapsing_header(&ImString::from(title)).default_open(true).build() {
+                        let dmm = map.hist.current();
                         ui.text(im_str!("{:?}; {}-keys: {}",
-                            map.dmm.dim_xyz(),
-                            map.dmm.key_length,
-                            map.dmm.dictionary.len()));
-                        for z in 0..map.dmm.dim_z() {
+                            dmm.dim_xyz(),
+                            dmm.key_length,
+                            dmm.dictionary.len()));
+                        for z in 0..dmm.dim_z() {
                             if ui.small_button(im_str!("z = {}##map_{}_{}", z + 1, map_idx, z)) {
                                 self.map_current = map_idx;
                                 map.z_current = z;
@@ -453,12 +454,13 @@ impl EditorScene {
                 open = true;
 
                 if let Some(map) = self.maps.get_mut(self.map_current) {
+                    let dmm = map.hist.current();
                     let edit_atoms = &mut map.edit_atoms;
                     let z = map.z_current;
-                    let (_, dim_y, _) = map.dmm.dim_xyz();
-                    let grid = map.dmm.z_level(z);
+                    let (_, dim_y, _) = dmm.dim_xyz();
+                    let grid = dmm.z_level(z);
                     let key = &grid[(dim_y - 1 - y, x)];
-                    for (i, fab) in map.dmm.dictionary[key].iter().enumerate() {
+                    for (i, fab) in dmm.dictionary[key].iter().enumerate() {
                         let mut color_vars = RED_TEXT;
                         if let Some(env) = self.environment.as_ref() {
                             if env.objtree.find(&fab.path).is_some() {
@@ -518,10 +520,12 @@ impl EditorScene {
                     for _ in 0..new_map.z {
                         rendered.push(None);
                     }
+                    let dmm = Map::new(new_map.x as usize, new_map.y as usize, new_map.z as usize,
+                        env.turf.clone(), env.area.clone());
+                    let desc = format!("New {}x{}x{} map", new_map.x, new_map.y, new_map.z);
                     self.maps.push(EditorMap {
                         path: None,
-                        dmm: Map::new(new_map.x as usize, new_map.y as usize, new_map.z as usize,
-                            env.turf.clone(), env.area.clone()),
+                        hist: history::History::new(desc, dmm),
                         z_current: 0,
                         center: [new_map.x as f32 * 16.0, new_map.y as f32 * 16.0],
                         rendered,
@@ -535,7 +539,7 @@ impl EditorScene {
 
         for map in self.maps.iter_mut() {
             let env = self.environment.as_ref();
-            let dmm = &map.dmm;
+            let dmm = map.hist.current();
             map.edit_atoms.retain_mut(|edit| {
                 let mut keep = false;
                 let mut keep2 = true;
@@ -665,7 +669,7 @@ impl EditorScene {
             let (cx, cy) = (w / 2, h / 2);
             let tx = ((map.center[0].round() + (x as f32 - cx as f32) / self.map_renderer.zoom) / 32.0).floor() as i32;
             let ty = ((map.center[1].round() + (cy as f32 - y as f32) / self.map_renderer.zoom) / 32.0).floor() as i32;
-            let (dim_x, dim_y, _) = map.dmm.dim_xyz();
+            let (dim_x, dim_y, _) = map.hist.current().dim_xyz();
             if tx >= 0 && ty >= 0 && tx < dim_x as i32 && ty < dim_y as i32 {
                 Some((tx as usize, ty as usize))
             } else {
@@ -850,7 +854,7 @@ impl EditorScene {
                     return;
                 }
             }
-            self.errors.extend(map.dmm.to_file(map.path.as_ref().unwrap()).err().map(From::from));
+            self.errors.extend(map.hist.current().to_file(map.path.as_ref().unwrap()).err().map(From::from));
         }
     }
 
@@ -858,7 +862,7 @@ impl EditorScene {
         if let Some(map) = self.maps.get_mut(self.map_current) {
             if let Ok(nfd::Response::Okay(fname)) = nfd::open_save_dialog(Some("dmm"), None) {
                 let path = PathBuf::from(fname);
-                self.errors.extend(map.dmm.to_file(&path).err().map(From::from));
+                self.errors.extend(map.hist.current().to_file(&path).err().map(From::from));
                 if !copy {
                     map.path = Some(path);
                 }
@@ -890,7 +894,7 @@ impl EditorScene {
                     &mut self.factory,
                     &env.objtree,
                     &env.path.parent().expect("invalid environment file path"),
-                    &map.dmm,
+                    map.hist.current(),
                     map.z_current));
             }
         }
@@ -913,7 +917,7 @@ struct Environment {
 
 struct EditorMap {
     path: Option<PathBuf>,
-    dmm: Map,
+    hist: history::History<Map>,
     z_current: usize,
     center: [f32; 2],
     rendered: Vec<Option<map_renderer::RenderedMap>>,
