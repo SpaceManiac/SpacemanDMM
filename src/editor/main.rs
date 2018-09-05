@@ -24,6 +24,7 @@ mod map_renderer;
 mod tasks;
 mod tools;
 mod config;
+mod history;
 
 use std::path::{Path, PathBuf};
 use std::borrow::Cow;
