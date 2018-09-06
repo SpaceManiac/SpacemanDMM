@@ -293,6 +293,9 @@ impl EditorScene {
                     .build();
             });
             ui.menu(im_str!("Options")).build(|| {
+                ui.menu_item(im_str!("Frame areas"))
+                    .enabled(false)
+                    .build();
                 ui.menu_item(im_str!("Show extra variables"))
                     .selected(&mut self.ui_extra_vars)
                     .build();

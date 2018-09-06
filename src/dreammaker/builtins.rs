@@ -399,10 +399,10 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
 
         // all types pseudo-inherit vars and procs from /datum
         datum;
-        datum/var/type;
-        datum/var/parent_type;
+        datum/var/const/type;  // not editable
+        datum/var/const/parent_type;  // not editable
         datum/var/tag;
-        datum/var/vars;
+        datum/var/const/vars;  // not editable
         datum/proc/New();
         datum/proc/Del();
         datum/proc/Read(/*savefile*/F);
@@ -411,11 +411,11 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
 
         atom/parent_type = path!(/datum);
         atom/var/alpha;
-        atom/var/appearance;
+        atom/var/tmp/appearance;  // not editable
         atom/var/appearance_flags;
         atom/var/blend_mode;
         atom/var/color;
-        atom/var/contents;
+        atom/var/contents;  // TODO: editable on movables only
         atom/var/density;
         atom/var/desc;
         atom/var/dir;
@@ -424,10 +424,10 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         atom/var/icon_state;
         atom/var/invisibility;
         atom/var/infra_luminosity;
-        atom/var/atom/loc;
+        atom/var/tmp/atom/loc;  // not editable
         atom/var/layer;
         atom/var/luminosity;
-        atom/var/maptext;
+        atom/var/maptext;  // all maptext vars not editable, but it's not obvious why
         atom/var/maptext_width;
         atom/var/maptext_height;
         atom/var/maptext_x;
@@ -439,8 +439,8 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         atom/var/mouse_opacity;
         atom/var/name;
         atom/var/opacity;
-        atom/var/overlays;
-        atom/var/override;
+        atom/var/tmp/overlays;  // not editable
+        //atom/var/override;  // listed under /atom but docs say /image only
         atom/var/pixel_x;
         atom/var/pixel_y;
         atom/var/pixel_w;
@@ -449,11 +449,11 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         atom/var/suffix;
         atom/var/text;
         atom/var/transform;
-        atom/var/underlays;
-        atom/var/verbs;
-        atom/var/x;
-        atom/var/y;
-        atom/var/z;
+        atom/var/tmp/underlays;  // not editable
+        atom/var/tmp/verbs;  // not editable
+        atom/var/tmp/x;  // not editable
+        atom/var/tmp/y;  // not editable
+        atom/var/tmp/z;  // not editable
         atom/proc/Click(location, control, params);
         atom/proc/DblClick(location, control, params);
         atom/proc/Enter(/*atom/movable*/O, /*atom*/oldloc);
@@ -477,7 +477,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         atom/movable/var/bound_y;
         atom/movable/var/bound_width;
         atom/movable/var/bound_height;
-        atom/movable/var/locs;
+        atom/movable/var/tmp/locs;  // not editable
         atom/movable/var/screen_loc;
         atom/movable/var/glide_size;
         atom/movable/var/step_size;
@@ -501,9 +501,9 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
 
         mob/parent_type = path!(/atom/movable);
         mob/layer = int!(4);
-        mob/var/ckey;
-        mob/var/client/client;
-        mob/var/list/group;
+        mob/var/tmp/ckey;  // not editable, use key instead
+        mob/var/tmp/client/client;  // not editable
+        mob/var/list/group;  // not editable, but it's not obvious why
         mob/var/key;
         mob/var/see_infrared;
         mob/var/see_invisible;
