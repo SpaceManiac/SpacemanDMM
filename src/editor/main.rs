@@ -14,6 +14,7 @@ extern crate divrem;
 #[macro_use] extern crate serde_derive;
 extern crate serde;
 extern crate toml;
+extern crate petgraph;
 
 extern crate dreammaker as dm;
 extern crate dmm_tools;
