@@ -412,6 +412,11 @@ pub fn layer_of(objtree: &ObjectTree, atom: &Atom) -> i32 {
 }
 
 pub fn color_of(objtree: &ObjectTree, atom: &Atom) -> [u8; 4] {
+    let alpha = match atom.get_var("alpha", objtree) {
+        &Constant::Int(i) if i >= 0 && i <= 255 => i as u8,
+        _ => 255,
+    };
+
     match atom.get_var("color", objtree) {
         &Constant::String(ref color) if color.starts_with("#") => {
             let mut sum = 0;
@@ -419,14 +424,14 @@ pub fn color_of(objtree: &ObjectTree, atom: &Atom) -> [u8; 4] {
                 sum = 16 * sum + ch.to_digit(16).unwrap();
             }
             if color.len() == 7 {  // #rrggbb
-                [(sum >> 16) as u8, (sum >> 8) as u8, sum as u8, 255]
+                [(sum >> 16) as u8, (sum >> 8) as u8, sum as u8, alpha]
             } else if color.len() == 4 {  // #rgb
-                [(0x11 * ((sum >> 8) & 0xf)) as u8, (0x11 * ((sum >> 4) & 0xf)) as u8, (0x11 * (sum & 0xf)) as u8, 255]
+                [(0x11 * ((sum >> 8) & 0xf)) as u8, (0x11 * ((sum >> 4) & 0xf)) as u8, (0x11 * (sum & 0xf)) as u8, alpha]
             } else {
-                [255, 255, 255, 255]  // invalid
+                [255, 255, 255, alpha]  // invalid
             }
         }
-        _ => [255, 255, 255, 255],
+        _ => [255, 255, 255, alpha],
     }
 }
 
