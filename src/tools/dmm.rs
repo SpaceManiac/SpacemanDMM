@@ -21,7 +21,7 @@ type KeyType = u16;
 #[derive(Copy, Clone, Debug, Hash, Ord, Eq, PartialOrd, PartialEq, Default)]
 pub struct Key(u16);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Map {
     pub key_length: u8,
     // sorted order
@@ -32,7 +32,7 @@ pub struct Map {
 pub type Grid<'a> = ndarray::ArrayBase<ndarray::ViewRepr<&'a Key>, ndarray::Dim<[usize; 2]>>;
 
 // TODO: port to ast::Prefab<Constant>
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct Prefab {
     pub path: String,
     // insertion order, sort of most of the time alphabetical but not quite

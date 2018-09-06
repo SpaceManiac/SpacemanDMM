@@ -32,7 +32,7 @@ use std::borrow::Cow;
 use imgui::*;
 
 use dm::objtree::{ObjectTree, TypeRef};
-use dmm_tools::dmm::Map;
+use dmm_tools::dmm::{Map, Prefab};
 
 use glutin::VirtualKeyCode as Key;
 use gfx_device_gl::{Factory, Resources, CommandBuffer};
@@ -45,6 +45,7 @@ type Texture = gfx::handle::ShaderResourceView<Resources, [f32; 4]>;
 use tasks::Task;
 
 const RED_TEXT: &[(ImGuiCol, [f32; 4])] = &[(ImGuiCol::Text, [1.0, 0.25, 0.25, 1.0])];
+const GREEN_TEXT: &[(ImGuiCol, [f32; 4])] = &[(ImGuiCol::Text, [0.25, 1.0, 0.25, 1.0])];
 
 fn main() {
     support::run("SpacemanDMM".to_owned(), [0.25, 0.25, 0.5, 1.0]);
@@ -472,8 +473,9 @@ impl EditorScene {
                             if ui.menu_item(im_str!("{}", fab.path)).build() {
                                 edit_atoms.push(EditAtom {
                                     coords: (x, y, z),
-                                    fab: i,
+                                    idx: i,
                                     filter: ImString::with_capacity(128),
+                                    fab: fab.clone(),
                                 });
                             }
                         });
@@ -539,67 +541,108 @@ impl EditorScene {
 
         for map in self.maps.iter_mut() {
             let env = self.environment.as_ref();
-            let dmm = map.hist.current();
             map.edit_atoms.retain_mut(|edit| {
-                let mut keep = false;
+                let mut keep = true;
                 let mut keep2 = true;
-                let (_, dim_y, _) = dmm.dim_xyz();
-                let key = &dmm.grid[(edit.coords.2, dim_y - 1 - edit.coords.1, edit.coords.0)];
-                if let Some(fab) = dmm.dictionary[key].get(edit.fab) {
-                    keep = true;
-                    ui.window(im_str!("{}##{:?}/{}", fab.path, edit.coords, edit.fab))
-                        .opened(&mut keep)
-                        .position(ui.imgui().mouse_pos(), ImGuiCond::Appearing)
-                        .size((300.0, 450.0), ImGuiCond::FirstUseEver)
-                        .horizontal_scrollbar(true)
-                        .build(|| {
-                            if ui.button(im_str!("Apply"), (100.0, 20.0)) {
-                                // TODO: actually apply
-                                keep2 = false;
-                            }
-                            ui.same_line(0.0);
-                            if ui.button(im_str!("Cancel"), (100.0, 20.0)) {
-                                keep2 = false;
-                            }
-                            ui.input_text(im_str!("Filter"), &mut edit.filter).build();
 
-                            let max_len = fab.vars.keys().map(|k| k.len()).max().unwrap_or(0);
-                            let offset = (max_len + 4) as f32 * 7.0;
+                let EditAtom { ref mut fab, ref mut filter, .. } = edit;
+                ui.window(im_str!("{}##{:?}/{}", fab.path, edit.coords, edit.idx))
+                    .opened(&mut keep)
+                    .position(ui.imgui().mouse_pos(), ImGuiCond::Appearing)
+                    .size((300.0, 450.0), ImGuiCond::FirstUseEver)
+                    .horizontal_scrollbar(true)
+                    .build(|| {
+                        if ui.button(im_str!("Apply"), (100.0, 20.0)) {
+                            // TODO: actually apply
+                            keep2 = false;
+                        }
+                        ui.same_line(0.0);
+                        if ui.button(im_str!("Cancel"), (100.0, 20.0)) {
+                            keep2 = false;
+                        }
+                        ui.input_text(im_str!("Filter"), filter).build();
 
-                            if !fab.vars.is_empty() {
-                                ui.separator();
-                                ui.text(im_str!("Instance variables"));
-                                ui.separator();
-                                for (name, value) in fab.vars.iter() {
-                                    ui.text(im_str!(" {}", name));
-                                    ui.same_line(offset);
-                                    ui.text(im_str!("{}", value));
-                                }
-                            }
-
+                        // find the "best" type by chopping the path if needed
+                        let mut ty = None;
+                        let mut red_paths = true;
+                        if let Some(env) = env {
                             let mut path = fab.path.as_str();
-                            while !path.is_empty() {
-                                let mut color_vars = RED_TEXT;
-                                if let Some(env) = env {
-                                    let ty = env.objtree.find(path);
-                                    if ty.is_some() {
-                                        color_vars = &[];
-                                    }
-                                }
-
-                                ui.separator();
-                                ui.with_style_and_color_vars(&[], color_vars, || {
-                                    ui.text(im_str!("{}", path));
-                                });
-                                ui.separator();
-
+                            ty = env.objtree.find(path);
+                            red_paths = ty.is_none();
+                            while ty.is_none() && !path.is_empty() {
                                 match path.rfind("/") {
                                     Some(idx) => path = &path[..idx],
                                     None => break,
                                 }
+                                ty = env.objtree.find(path);
                             }
-                        });
-                }
+                        }
+
+                        // loop through instance vars, that type, parent types
+                        // to find the longest var name for the column width
+                        let mut max_len = 0;
+                        for key in fab.vars.keys() {
+                            max_len = std::cmp::max(max_len, key.len());
+                        }
+                        let mut search_ty = ty;
+                        while let Some(search) = search_ty {
+                            if search.is_root() {
+                                break;
+                            }
+                            for key in search.vars.keys() {
+                                max_len = std::cmp::max(max_len, key.len());
+                            }
+                            search_ty = search.parent_type();
+                        }
+                        let offset = (max_len + 4) as f32 * 7.0;
+
+                        // show the instance variables - everything which is
+                        // actually set is right at the top
+                        ui.separator();
+                        ui.text(im_str!("Instance variables"));
+                        for (name, value) in fab.vars.iter() {
+                            if !name.contains(filter.to_str()) {
+                                continue;
+                            }
+                            // TODO: red instead of green if invalid var
+                            ui.with_style_and_color_vars(&[], GREEN_TEXT, || {
+                                ui.text(im_str!("  {}", name));
+                            });
+                            ui.same_line(offset);
+                            ui.text(im_str!("{}", value));
+                        }
+
+                        // show the red path on error
+                        if red_paths {
+                            ui.separator();
+                            ui.with_style_and_color_vars(&[], RED_TEXT, || {
+                                ui.text(im_str!("{}", &fab.path));
+                            });
+                        }
+
+                        // show all the parent variables you could edit
+                        let mut search_ty = ty;
+                        while let Some(search) = search_ty {
+                            if search.is_root() {
+                                break;
+                            }
+                            ui.separator();
+                            ui.text(im_str!("{}", &search.path));
+
+                            for (name, var) in search.vars.iter() {
+                                if !name.contains(filter.to_str()) {
+                                    continue;
+                                }
+                                if let Some(_) = var.declaration {
+                                    ui.text(im_str!("  {}", name));
+                                    ui.same_line(offset);
+                                    ui.text(im_str!("value"));
+                                }
+                            }
+
+                            search_ty = search.parent_type();
+                        }
+                    });
                 keep && keep2
             });
         }
@@ -934,8 +977,9 @@ struct NewMap {
 #[derive(Debug)]
 struct EditAtom {
     coords: (usize, usize, usize),
-    fab: usize,
+    idx: usize,
     filter: ImString,
+    fab: Prefab,
 }
 
 fn root_node(ui: &Ui, ty: TypeRef, name: &str) {
