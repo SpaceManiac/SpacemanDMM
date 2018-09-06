@@ -559,6 +559,11 @@ impl VarType {
     pub fn is_const_evaluable(&self) -> bool {
         self.is_const || (!self.is_static && !self.is_tmp)
     }
+
+    #[inline]
+    pub fn is_normal(&self) -> bool {
+        !(self.is_static || self.is_const || self.is_tmp)
+    }
 }
 
 impl FromIterator<String> for VarType {

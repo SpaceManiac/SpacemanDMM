@@ -78,6 +78,7 @@ pub struct EditorScene {
     ui_debug_mode: bool,
     ui_debug_window: bool,
     ui_errors: bool,
+    ui_extra_vars: bool,
 }
 
 impl EditorScene {
@@ -109,6 +110,7 @@ impl EditorScene {
             ui_debug_mode: cfg!(debug_assertions),
             ui_debug_window: true,
             ui_errors: false,
+            ui_extra_vars: false,
         };
         ed.finish_init();
         ed
@@ -290,7 +292,11 @@ impl EditorScene {
                     .enabled(false)
                     .build();
             });
-            ui.menu(im_str!("Zoom")).build(|| {
+            ui.menu(im_str!("Options")).build(|| {
+                ui.menu_item(im_str!("Show extra variables"))
+                    .selected(&mut self.ui_extra_vars)
+                    .build();
+                ui.separator();
                 for &zoom in [0.5, 1.0, 2.0, 4.0].iter() {
                     let mut selected = self.map_renderer.zoom == zoom;
                     if ui.menu_item(im_str!("{}%", 100.0 * zoom)).selected(&mut selected).build() {
@@ -541,6 +547,7 @@ impl EditorScene {
 
         for map in self.maps.iter_mut() {
             let env = self.environment.as_ref();
+            let extra_vars = self.ui_extra_vars;
             map.edit_atoms.retain_mut(|edit| {
                 let mut keep = true;
                 let mut keep2 = true;
@@ -589,8 +596,13 @@ impl EditorScene {
                             if search.is_root() {
                                 break;
                             }
-                            for key in search.vars.keys() {
-                                max_len = std::cmp::max(max_len, key.len());
+                            for (key, var) in search.vars.iter() {
+                                if let Some(decl) = var.declaration.as_ref() {
+                                    if !extra_vars && !decl.var_type.is_normal() {
+                                        continue;
+                                    }
+                                    max_len = std::cmp::max(max_len, key.len());
+                                }
                             }
                             search_ty = search.parent_type();
                         }
@@ -633,10 +645,25 @@ impl EditorScene {
                                 if !name.contains(filter.to_str()) {
                                     continue;
                                 }
-                                if let Some(_) = var.declaration {
-                                    ui.text(im_str!("  {}", name));
-                                    ui.same_line(offset);
-                                    ui.text(im_str!("value"));
+                                if let Some(decl) = var.declaration.as_ref() {
+                                    let mut prefix = " ";
+                                    if !decl.var_type.is_normal() {
+                                        if !extra_vars {
+                                            continue;
+                                        }
+                                        prefix = "-";
+                                    }
+                                    ui.text(im_str!("{} {}", prefix, name));
+                                    if prefix == "-" && ui.is_item_hovered() {
+                                        ui.tooltip_text("/tmp, /static, or /const");
+                                    }
+                                    // search_ty is seeded with ty and must be Some to get here
+                                    if let Some(value) = ty.unwrap().get_value(name) {
+                                        if let Some(c) = value.constant.as_ref() {
+                                            ui.same_line(offset);
+                                            ui.text(im_str!("{}", c));
+                                        }
+                                    }
                                 }
                             }
 
