@@ -54,8 +54,8 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
 
     // In the examples we only use integer DPI factors, because the UI can get very blurry
     // otherwise. This might or might not be what you want in a real application.
-	let window_hidpi_factor = window.get_hidpi_factor();
-    let hidpi_factor = window_hidpi_factor.round();
+    let mut window_hidpi_factor = window.get_hidpi_factor();
+    let mut hidpi_factor = window_hidpi_factor.round();
 
     let mut frame_size = FrameSize {
         logical_size: window
@@ -104,6 +104,16 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                         gfx_window_glutin::update_views(&window, &mut main_color, &mut main_depth);
                         renderer.update_render_target(main_color.clone());
                         frame_size.logical_size = new_logical_size
+                            .to_physical(window_hidpi_factor)
+                            .to_logical(hidpi_factor)
+                            .into();
+                    },
+                    HiDpiFactorChanged(new_factor) => {
+                        window_hidpi_factor = new_factor;
+                        hidpi_factor = window_hidpi_factor.round();
+                        frame_size.hidpi_factor = hidpi_factor;
+                        frame_size.logical_size = window.get_inner_size()
+                            .unwrap()
                             .to_physical(window_hidpi_factor)
                             .to_logical(hidpi_factor)
                             .into();
