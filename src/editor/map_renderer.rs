@@ -112,7 +112,13 @@ impl MapRenderer {
         let midpoint = ::std::time::Instant::now();
 
         // z sort - TODO: use depth buffer instead?
-        atoms.sort_by_key(|a| minimap::layer_of(objtree, a));
+
+        atoms.sort_by(|a, b| {
+            match minimap::plane_of(objtree, a).cmp(&minimap::plane_of(objtree, b)) {
+                ::std::cmp::Ordering::Equal => minimap::layer_of(objtree, a).cmp(&minimap::layer_of(objtree, b)),
+                other => other
+            }
+        });
 
         // render atoms
         let mut vertices = Vec::new();
