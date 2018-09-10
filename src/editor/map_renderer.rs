@@ -77,7 +77,7 @@ impl MapRenderer {
         MapRenderer {
             icons: IconCache::default(),
             zoom: 1.0,
-            layers: [true; 5],
+            layers: [true, false, true, true, true],
 
             pso,
             transform_buffer,
