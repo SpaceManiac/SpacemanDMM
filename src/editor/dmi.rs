@@ -156,7 +156,7 @@ pub fn load_texture(factory: &mut Factory, bitmap: lodepng::Bitmap<RGBA>) -> Tex
     }
 
     let kind = gfx::texture::Kind::D2(width as u16, height as u16, gfx::texture::AaMode::Single);
-    let (_, view) = factory.create_texture_immutable_u8::<gfx::format::Srgba8>(
+    let (_, view) = factory.create_texture_immutable_u8::<::ColorFormat>(
         kind,
         gfx::texture::Mipmap::Provided,
         &[&new_buffer[..]]

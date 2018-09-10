@@ -11,6 +11,7 @@ path = "main.rs"
 dreammaker = { path = "../dreammaker" }
 dmm-tools = { path = "../tools" }
 glutin = "0.18.0"
+gfx_gl = "0.5.0"
 gfx = "0.17.1"
 gfx_window_glutin = "0.26.0"
 gfx_device_gl = "0.15.3"

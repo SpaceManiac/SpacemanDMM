@@ -1,4 +1,4 @@
-use imgui::{FrameSize, ImFontConfig, ImGui, ImGuiMouseCursor, ImVec4, ImGuiStyle};
+use imgui::{FrameSize, ImFontConfig, ImGui, ImGuiMouseCursor, ImVec4};
 use imgui_gfx_renderer::{Renderer, Shaders};
 use std::time::Instant;
 
@@ -26,6 +26,16 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
     let (window, mut device, mut factory, mut main_color, mut main_depth) =
         gfx_window_glutin::init::<ColorFormat, DepthFormat>(window, context, &events_loop);
 
+    // gfx's gl backend sets FRAMEBUFFER_SRGB permanently by default - actually
+    // we want it off permanently. I've been told this is most sanely set on a
+    // per-render-pass basis, but neither the world nor imgui blend colors
+    // accurately if it is set.
+    unsafe {
+        device.with_gl(|gl| {
+            gl.Disable(::gl::FRAMEBUFFER_SRGB);
+        });
+    }
+
     let (ww, wh): (f64, f64) = window.get_outer_size().unwrap().into();
     let (dw, dh): (f64, f64) = window.get_primary_monitor().get_dimensions().into();
     window.set_position(((dw - ww) / 2.0, (dh - wh) / 2.0).into());
@@ -49,7 +59,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
     };
 
     let mut imgui = ImGui::init();
-    fix_imgui_srgb(&mut imgui.style_mut().colors, &dark_theme());
+    imgui.style_mut().colors.clone_from(&dark_theme());
     imgui.set_ini_filename(None);
 
     // In the examples we only use integer DPI factors, because the UI can get very blurry
@@ -299,40 +309,6 @@ fn update_mouse(imgui: &mut ImGui, mouse_state: &mut MouseState) {
     imgui.set_mouse_down(mouse_state.pressed);
     imgui.set_mouse_wheel(mouse_state.wheel);
     mouse_state.wheel = 0.0;
-}
-
-fn fix_imgui_srgb(dest: &mut [ImVec4; 43], source: &[ImVec4; 43]) {
-    // Fix incorrect colors with sRGB framebuffer
-    fn imgui_gamma_to_linear(col: ImVec4) -> ImVec4 {
-        let x = col.x.powf(2.2);
-        let y = col.y.powf(2.2);
-        let z = col.z.powf(2.2);
-        let w = 1.0 - (1.0 - col.w).powf(2.2);
-        ImVec4::new(x, y, z, w)
-    }
-
-    for (dest, source) in dest.iter_mut().zip(source.iter()) {
-        *dest = imgui_gamma_to_linear(*source);
-    }
-}
-
-// Workaround for ImGuiStyle not being Clone.
-fn _clone_imgui_style(style: &ImGuiStyle) -> ImGuiStyle {
-    macro_rules! f {
-        ($($f:ident,)*) => {
-            ImGuiStyle {
-                $($f: style.$f,)*
-            }
-        }
-    }
-    f! { alpha, window_padding, window_rounding, window_border_size,
-        window_min_size, window_title_align, child_rounding, child_border_size,
-        popup_rounding, popup_border_size, frame_padding, frame_rounding,
-        frame_border_size, item_spacing, item_inner_spacing, touch_extra_padding,
-        indent_spacing, columns_min_spacing, scrollbar_size, scrollbar_rounding,
-        grab_min_size, grab_rounding, button_text_align, display_window_padding,
-        display_safe_area_padding, anti_aliased_lines, anti_aliased_fill,
-        curve_tessellation_tol, colors, }
 }
 
 fn dark_theme() -> [ImVec4; 43] {

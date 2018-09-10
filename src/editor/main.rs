@@ -15,6 +15,7 @@ extern crate divrem;
 extern crate serde;
 extern crate toml;
 extern crate petgraph;
+extern crate gfx_gl as gl;
 
 extern crate dreammaker as dm;
 extern crate dmm_tools;
