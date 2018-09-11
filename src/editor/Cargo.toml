@@ -15,8 +15,8 @@ gfx_gl = "0.5.0"
 gfx = "0.17.1"
 gfx_window_glutin = "0.26.0"
 gfx_device_gl = "0.15.3"
-imgui = "0.0.20"
-imgui-gfx-renderer = "0.0.20"
+imgui = { git = "https://github.com/SpaceManiac/imgui-rs", branch = "patch/textures" }
+imgui-gfx-renderer = { git = "https://github.com/SpaceManiac/imgui-rs", branch = "patch/textures" }
 lodepng = "2.1.5"
 ndarray = "0.11.1"
 nfd = "0.0.4"
