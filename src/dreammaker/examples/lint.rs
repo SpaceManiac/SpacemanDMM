@@ -6,7 +6,7 @@ extern crate dreammaker as dm;
 fn main() {
     let mut context = dm::Context::default();
     context.set_print_severity(Some(dm::Severity::Info));
-    let env = dm::detect_environment("tgstation.dme")
+    let env = dm::detect_environment(".".as_ref(), "tgstation.dme")
         .expect("error detecting .dme")
         .expect("no .dme found");
     let pp = dm::preprocessor::Preprocessor::new(&context, env)

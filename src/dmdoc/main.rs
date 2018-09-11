@@ -60,7 +60,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
     });
 
     // parse environment
-    let environment = match dm::detect_environment("tgstation.dme")? {
+    let environment = match dm::detect_environment(".".as_ref(), "tgstation.dme")? {
         Some(env) => env,
         None => {
             eprintln!("Unable to find a .dme file in this directory");
