@@ -961,15 +961,8 @@ handle_notification! {
 
     on Initialized(&mut self, _) {
         eprintln!("workspace root: {}", self.root.display());
-        let mut environment = None;
-        for entry in std::fs::read_dir(&self.root).map_err(invalid_request)? {
-            let entry = entry.map_err(invalid_request)?;
-            let path = entry.path();
-            if path.extension() == Some("dme".as_ref()) {
-                environment = Some(path);
-                break;
-            }
-        }
+        let environment = dm::detect_environment(&self.root, dm::DEFAULT_ENV)
+            .map_err(invalid_request)?;
         if let Some(environment) = environment {
             self.parse_environment(environment)?;
         } else {
