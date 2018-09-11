@@ -425,7 +425,7 @@ impl EditorScene {
         ui.window(im_str!("Tools"))
             .position((10.0, 30.0), window_positions_cond)
             .movable(!self.ui_lock_windows)
-            .size((300.0, 100.0), ImGuiCond::FirstUseEver)
+            .size((300.0, 300.0), ImGuiCond::FirstUseEver)
             .resizable(!self.ui_lock_windows)
             .build(|| {
                 let (width, _) = ui.get_window_size();
@@ -459,18 +459,17 @@ impl EditorScene {
                         ui.tooltip_text(&tool.name);
                     }
                 }
-            });
 
-        if let Some(tool) = self.tools.get_mut(self.tool_current) {
-            // TODO: figure out how to give these all the same ID.
-            ui.window(im_str!("{}", tool.name))
-                .position((10.0, 140.0), window_positions_cond)
-                .movable(!self.ui_lock_windows)
-                .size((300.0, 190.0), ImGuiCond::FirstUseEver)
-                .build(|| {
+                if let Some(tool) = self.tools.get_mut(self.tool_current) {
+                    ui.separator();
+                    if tool.help.is_empty() {
+                        ui.text_wrapped(im_str!("{}", tool.name));
+                    } else {
+                        ui.text_wrapped(im_str!("{} - {}", tool.name, tool.help));
+                    }
                     tool.behavior.settings(ui);
-                });
-        }
+                }
+            });
 
         ui.window(im_str!("Object Tree"))
             .position((10.0, 340.0), window_positions_cond)
