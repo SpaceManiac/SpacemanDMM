@@ -41,7 +41,7 @@ pub struct MapRenderer {
 
     pso: gfx::PipelineState<Resources, pipe::Meta>,
     transform_buffer: gfx::handle::Buffer<Resources, Transform>,
-    sampler: gfx::handle::Sampler<Resources>,
+    pub sampler: gfx::handle::Sampler<Resources>,
 }
 
 pub struct RenderedMap {

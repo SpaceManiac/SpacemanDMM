@@ -4,9 +4,16 @@ use imgui::*;
 
 use dm::objtree::ObjectTree;
 
+pub enum ToolIcon {
+    None,
+    Dmi(String, String),
+    Loaded(ImTexture, ImVec2, ImVec2),
+}
+
 pub struct Tool {
     pub name: &'static str,
     pub objtree: bool,
+    pub icon: ToolIcon,
     pub behavior: Box<ToolBehavior>,
 }
 
@@ -21,6 +28,7 @@ impl Tool {
         Tool {
             name,
             objtree: false,
+            icon: ToolIcon::None,
             behavior: Box::new(behavior),
         }
     }
@@ -28,13 +36,30 @@ impl Tool {
     fn show_objtree(self) -> Self {
         Tool { objtree: true, ..self }
     }
+
+    fn dmi(self, file: String, state: String) -> Self {
+        Tool { icon: ToolIcon::Dmi(file, state), ..self }
+    }
+
+    fn build(self, tools: &mut Vec<Tool>) {
+        tools.push(self);
+    }
 }
 
 pub fn configure(_objtree: &ObjectTree) -> Vec<Tool> {
     let mut tools = Vec::new();
-    tools.push(Tool::new("Place", Place).show_objtree());
-    tools.push(Tool::new("Rectangle", Rectangle).show_objtree());
-    tools.push(Tool::new("Select", Select).show_objtree());
+    Tool::new("Place", Place)
+        .show_objtree()
+        .dmi("icons/obj/device.dmi".to_owned(), "analyzer".to_owned())
+        .build(&mut tools);
+    Tool::new("Rectangle", Rectangle)
+        .show_objtree()
+        .dmi("icons/obj/device.dmi".to_owned(), "spectrometer".to_owned())
+        .build(&mut tools);
+    Tool::new("Select", Select)
+        .show_objtree()
+        .dmi("icons/obj/device.dmi".to_owned(), "health".to_owned())
+        .build(&mut tools);
     tools
 }
 

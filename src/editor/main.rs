@@ -200,6 +200,31 @@ impl EditorScene {
         }
     }
 
+    fn prepare_textures(&mut self, renderer: &mut imgui_gfx_renderer::Renderer<Resources>) {
+        use tools::ToolIcon;
+
+        for tool in self.tools.iter_mut() {
+            tool.icon = match std::mem::replace(&mut tool.icon, ToolIcon::None) {
+                ToolIcon::Dmi(file, state) => if let Some(ref env) = self.environment {
+                    if let Some(icon) = self.map_renderer.icons.retrieve(&mut self.factory, &env.path, file.as_ref()) {
+                        if let Some((u1, v1, u2, v2)) = icon.uv_of(&state, 2) {
+                            let tex = icon.texture.clone();
+                            let samp = self.map_renderer.sampler.clone();
+                            ToolIcon::Loaded(renderer.textures().insert((tex, samp)), (u1, v1).into(), (u2, v2).into())
+                        } else {
+                            ToolIcon::None
+                        }
+                    } else {
+                        ToolIcon::None
+                    }
+                } else {
+                    ToolIcon::Dmi(file, state)
+                },
+                other => other,
+            };
+        }
+    }
+
     fn run_ui(&mut self, ui: &Ui) -> bool {
         let mut continue_running = true;
         let mut window_positions_cond = match self.ui_lock_windows {
@@ -389,12 +414,34 @@ impl EditorScene {
             .size((300.0, 100.0), ImGuiCond::FirstUseEver)
             .resizable(!self.ui_lock_windows)
             .build(|| {
+                let (width, _) = ui.get_window_size();
+                let count = std::cmp::max(((width - 16.0) / 42.0).floor() as usize, 1);
                 for (i, tool) in self.tools.iter().enumerate() {
-                    if ui.small_button(im_str!("{}", tool.name)) {
+                    if i % count != 0 {
+                        ui.same_line(0.0);
+                    }
+
+                    let col = if i == self.tool_current {
+                        (1.0, 1.0, 1.0, 1.0)
+                    } else {
+                        (0.5, 0.5, 0.5, 1.0)
+                    };
+                    let clicked;
+                    if let tools::ToolIcon::Loaded(tex, uv0, uv1) = tool.icon {
+                        ui.image(tex, (32.0, 32.0))
+                            .uv0(uv0)
+                            .uv1(uv1)
+                            .border_col(col)
+                            .build();
+                        clicked = ui.is_item_hovered() && ui.imgui().is_mouse_clicked(ImMouseButton::Left);
+                    } else {
+                        clicked = ui.button(im_str!(""), (32.0, 32.0));
+                    }
+                    if clicked {
                         self.tool_current = i;
                     }
                     if ui.is_item_hovered() {
-                        ui.tooltip_text("Test tooltip.");
+                        ui.tooltip_text(&tool.name);
                     }
                 }
             });

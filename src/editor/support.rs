@@ -259,6 +259,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
         // because of missing either a Render() or EndFrame() call.
         let logical_size = frame_size.logical_size;
         if logical_size.0 > 0.0 && logical_size.1 > 0.0 {
+            scene.prepare_textures(&mut renderer);
             let ui = imgui.frame(frame_size, delta_s);
             if !scene.run_ui(&ui) {
                 break;
