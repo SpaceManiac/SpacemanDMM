@@ -25,8 +25,6 @@ use dmm_tools::*;
 // ----------------------------------------------------------------------------
 // Main driver
 
-const DEFAULT_DME: &str = "tgstation.dme";
-
 fn main() {
     let opt = Opt::from_clap(&Opt::clap()
         .long_version(concat!(
@@ -63,9 +61,9 @@ impl Context {
         let pathbuf;
         let environment: &std::path::Path = match opt.environment {
             Some(ref env) => env.as_ref(),
-            None => match dm::detect_environment(".".as_ref(), DEFAULT_DME) {
+            None => match dm::detect_environment(".".as_ref(), dm::DEFAULT_ENV) {
                 Ok(Some(found)) => { pathbuf = found; &pathbuf },
-                _ => DEFAULT_DME.as_ref(),
+                _ => dm::DEFAULT_ENV.as_ref(),
             }
         };
         println!("parsing {}", environment.display());
