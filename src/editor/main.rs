@@ -224,6 +224,16 @@ impl EditorScene {
                 } else {
                     ToolIcon::Dmi { icon, icon_state }
                 },
+                ToolIcon::EmbeddedPng { data } => if let Ok(tex) = dmi::texture_from_bytes(&mut self.factory, data) {
+                    let samp = self.map_renderer.sampler.clone();
+                    ToolIcon::Loaded {
+                        tex: renderer.textures().insert((tex, samp)),
+                        uv0: (0.0, 0.0).into(),
+                        uv1: (1.0, 1.0).into(),
+                    }
+                } else {
+                    ToolIcon::None
+                },
                 other => other,
             };
         }
@@ -426,9 +436,9 @@ impl EditorScene {
                     }
 
                     let col = if i == self.tool_current {
-                        (1.0, 1.0, 1.0, 1.0)
+                        ui.imgui().style().colors[ImGuiCol::FrameBgActive as usize]
                     } else {
-                        (0.5, 0.5, 0.5, 1.0)
+                        ui.imgui().style().colors[ImGuiCol::FrameBg as usize]
                     };
                     let clicked;
                     if let tools::ToolIcon::Loaded { tex, uv0, uv1 } = tool.icon {
@@ -436,6 +446,7 @@ impl EditorScene {
                             .uv0(uv0)
                             .uv1(uv1)
                             .border_col(col)
+                            .tint_col(ui.imgui().style().colors[ImGuiCol::Text as usize])
                             .build();
                         clicked = ui.is_item_hovered() && ui.imgui().is_mouse_clicked(ImMouseButton::Left);
                     } else {

@@ -144,6 +144,19 @@ impl IconFile {
     }
 }
 
+pub fn texture_from_bytes(factory: &mut Factory, bytes: &[u8]) -> io::Result<Texture> {
+    let mut decoder = PngState::new();
+    decoder.info_raw.colortype = ColorType::RGBA;
+    decoder.info_raw.set_bitdepth(8);
+    decoder.remember_unknown_chunks(false);
+    let bitmap = match decoder.decode(bytes) {
+        Ok(::lodepng::Image::RGBA(bitmap)) => bitmap,
+        Ok(_) => return Err(io::Error::new(io::ErrorKind::InvalidData, "not RGBA")),
+        Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidData, e)),
+    };
+    Ok(load_texture(factory, bitmap))
+}
+
 pub fn load_texture(factory: &mut Factory, bitmap: lodepng::Bitmap<RGBA>) -> Texture {
     let width = bitmap.width;
     let height = bitmap.height;

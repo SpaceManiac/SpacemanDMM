@@ -1,4 +1,5 @@
 //! Placement and editing tools which appear in the workbench.
+#![allow(dead_code)]  // WIP
 
 use imgui::*;
 
@@ -9,6 +10,9 @@ pub enum ToolIcon {
     Dmi {
         icon: String,
         icon_state: String,
+    },
+    EmbeddedPng {
+        data: &'static [u8],
     },
     Loaded {
         tex: ImTexture,
@@ -48,6 +52,10 @@ impl Tool {
         Tool { icon: ToolIcon::Dmi { icon, icon_state }, ..self }
     }
 
+    fn png(self, data: &'static [u8]) -> Self {
+        Tool { icon: ToolIcon::EmbeddedPng { data }, ..self }
+    }
+
     fn build(self, tools: &mut Vec<Tool>) {
         tools.push(self);
     }
@@ -57,15 +65,15 @@ pub fn configure(_objtree: &ObjectTree) -> Vec<Tool> {
     let mut tools = Vec::new();
     Tool::new("Place", Place)
         .show_objtree()
-        .dmi("icons/obj/device.dmi".to_owned(), "analyzer".to_owned())
+        .png(include_bytes!("../res/pencil.png"))
         .build(&mut tools);
     Tool::new("Rectangle", Rectangle)
         .show_objtree()
-        .dmi("icons/obj/device.dmi".to_owned(), "spectrometer".to_owned())
+        .png(include_bytes!("../res/resize.png"))
         .build(&mut tools);
     Tool::new("Select", Select)
         .show_objtree()
-        .dmi("icons/obj/device.dmi".to_owned(), "health".to_owned())
+        .png(include_bytes!("../res/select.png"))
         .build(&mut tools);
     tools
 }

@@ -1,0 +1,16 @@
+The following icons are licensed under CC-BY-SA:
+https://creativecommons.org/licenses/by-sa/3.0/
+
+/tg/station13 contributors, https://github.com/tgstation/tgstation/
+	gasmask.ico
+	gasmask.raw
+
+Sbed, http://opengameart.org/content/95-game-icons
+	select.png
+
+Delapouite, http://delapouite.com
+	large-paint-brush.png
+	paint-brush.png
+	pencil.png
+	pencil-brush.png
+	resize.png
