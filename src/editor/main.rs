@@ -205,12 +205,16 @@ impl EditorScene {
 
         for tool in self.tools.iter_mut() {
             tool.icon = match std::mem::replace(&mut tool.icon, ToolIcon::None) {
-                ToolIcon::Dmi(file, state) => if let Some(ref env) = self.environment {
-                    if let Some(icon) = self.map_renderer.icons.retrieve(&mut self.factory, &env.path, file.as_ref()) {
-                        if let Some((u1, v1, u2, v2)) = icon.uv_of(&state, 2) {
+                ToolIcon::Dmi { icon, icon_state } => if let Some(ref env) = self.environment {
+                    if let Some(icon) = self.map_renderer.icons.retrieve(&mut self.factory, &env.path, icon.as_ref()) {
+                        if let Some((u1, v1, u2, v2)) = icon.uv_of(&icon_state, 2) {
                             let tex = icon.texture.clone();
                             let samp = self.map_renderer.sampler.clone();
-                            ToolIcon::Loaded(renderer.textures().insert((tex, samp)), (u1, v1).into(), (u2, v2).into())
+                            ToolIcon::Loaded {
+                                tex: renderer.textures().insert((tex, samp)),
+                                uv0: (u1, v1).into(),
+                                uv1: (u2, v2).into(),
+                            }
                         } else {
                             ToolIcon::None
                         }
@@ -218,7 +222,7 @@ impl EditorScene {
                         ToolIcon::None
                     }
                 } else {
-                    ToolIcon::Dmi(file, state)
+                    ToolIcon::Dmi { icon, icon_state }
                 },
                 other => other,
             };
@@ -427,7 +431,7 @@ impl EditorScene {
                         (0.5, 0.5, 0.5, 1.0)
                     };
                     let clicked;
-                    if let tools::ToolIcon::Loaded(tex, uv0, uv1) = tool.icon {
+                    if let tools::ToolIcon::Loaded { tex, uv0, uv1 } = tool.icon {
                         ui.image(tex, (32.0, 32.0))
                             .uv0(uv0)
                             .uv1(uv1)
@@ -435,7 +439,7 @@ impl EditorScene {
                             .build();
                         clicked = ui.is_item_hovered() && ui.imgui().is_mouse_clicked(ImMouseButton::Left);
                     } else {
-                        clicked = ui.button(im_str!(""), (32.0, 32.0));
+                        clicked = ui.button(im_str!("{}", tool.name), (32.0, 32.0));
                     }
                     if clicked {
                         self.tool_current = i;

@@ -6,8 +6,15 @@ use dm::objtree::ObjectTree;
 
 pub enum ToolIcon {
     None,
-    Dmi(String, String),
-    Loaded(ImTexture, ImVec2, ImVec2),
+    Dmi {
+        icon: String,
+        icon_state: String,
+    },
+    Loaded {
+        tex: ImTexture,
+        uv0: ImVec2,
+        uv1: ImVec2
+    },
 }
 
 pub struct Tool {
@@ -37,8 +44,8 @@ impl Tool {
         Tool { objtree: true, ..self }
     }
 
-    fn dmi(self, file: String, state: String) -> Self {
-        Tool { icon: ToolIcon::Dmi(file, state), ..self }
+    fn dmi(self, icon: String, icon_state: String) -> Self {
+        Tool { icon: ToolIcon::Dmi { icon, icon_state }, ..self }
     }
 
     fn build(self, tools: &mut Vec<Tool>) {
