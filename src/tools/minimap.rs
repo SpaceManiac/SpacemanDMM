@@ -402,7 +402,7 @@ fn fancy_layer_of(objtree: &ObjectTree, atom: &Atom) -> i32 {
 
 pub fn plane_of(objtree: &ObjectTree, atom: &Atom) -> i32 {
     match atom.get_var("plane", objtree) {
-        &Constant::Int(i) => (i % 1000) * 1000,
+        &Constant::Int(i) => i,
         other => {
             eprintln!("not a plane: {:?} on {:?}", other, atom.type_.path);
             0
