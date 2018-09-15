@@ -27,16 +27,23 @@ pub use dm::dmi::*;
 // ----------------------------------------------------------------------------
 // Icon file and metadata handling
 
-#[derive(Default)]
 pub struct IconCache {
+    factory: Factory,
     map: HashMap<PathBuf, Option<IconFile>>,
 }
 
 impl IconCache {
-    pub fn retrieve(&mut self, factory: &mut Factory, base_path: &Path, relative_file_path: &Path) -> Option<&IconFile> {
+    pub fn new(factory: &Factory) -> IconCache {
+        IconCache {
+            factory: factory.clone(),
+            map: Default::default(),
+        }
+    }
+
+    pub fn retrieve(&mut self, base_path: &Path, relative_file_path: &Path) -> Option<&IconFile> {
         match self.map.entry(relative_file_path.to_owned()) {
             Entry::Occupied(entry) => entry.into_mut().as_ref(),
-            Entry::Vacant(entry) => entry.insert(load(factory, &base_path.join(relative_file_path))).as_ref(),
+            Entry::Vacant(entry) => entry.insert(load(&mut self.factory, &base_path.join(relative_file_path))).as_ref(),
         }
     }
 

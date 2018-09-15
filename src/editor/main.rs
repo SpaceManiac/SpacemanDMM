@@ -220,7 +220,7 @@ impl EditorScene {
         for tool in self.tools.iter_mut() {
             tool.icon = match std::mem::replace(&mut tool.icon, ToolIcon::None) {
                 ToolIcon::Dmi { icon, icon_state } => if let Some(ref env) = self.environment {
-                    if let Some(icon) = self.map_renderer.icons.retrieve(&mut self.factory, &env.path, icon.as_ref()) {
+                    if let Some(icon) = self.map_renderer.icons.retrieve(&env.path, icon.as_ref()) {
                         if let Some((u1, v1, u2, v2)) = icon.uv_of(&icon_state, 2) {
                             let tex = icon.texture.clone();
                             let samp = self.map_renderer.sampler.clone();
