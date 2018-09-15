@@ -27,7 +27,7 @@ gfx_defines! {
     }
 
     #[derive(PartialOrd)]
-    constant Pop {
+    constant RenderPop {
         category: u32 = "category",
         texture: u32 = "texture",  // icon
         size: [f32; 2] = "size",  // icon
@@ -51,16 +51,16 @@ gfx_defines! {
 }
 
 // forgive me
-impl ::std::cmp::Eq for Pop {}
+impl ::std::cmp::Eq for RenderPop {}
 
-impl ::std::cmp::Ord for Pop {
+impl ::std::cmp::Ord for RenderPop {
     fn cmp(&self, other: &Self) -> ::std::cmp::Ordering {
-        self.partial_cmp(other).expect("in Pop::cmp, a field was NaN")
+        self.partial_cmp(other).expect("in RenderPop::cmp, a field was NaN")
     }
 }
 
-impl Pop {
-    pub fn from_prefab(icons: &mut IconCache, objtree: &ObjectTree, fab: &Prefab) -> Option<Pop> {
+impl RenderPop {
+    pub fn from_prefab(icons: &mut IconCache, objtree: &ObjectTree, fab: &Prefab) -> Option<RenderPop> {
         let icon = match fab.get_var("icon", objtree) {
             &Constant::Resource(ref path) | &Constant::String(ref path) => path,
             _ => return None,
@@ -103,7 +103,7 @@ impl Pop {
         let step_x = fab.get_var("step_x", objtree).to_int().unwrap_or(0);
         let step_y = fab.get_var("step_y", objtree).to_int().unwrap_or(0);
 
-        Some(Pop {
+        Some(RenderPop {
             category: category_of(&fab.path) as u32,
             texture,
             uv,
@@ -199,7 +199,7 @@ impl MapRenderer {
         for (key, prefabs) in map.dictionary.iter() {
             let mut all = Vec::new();
             for fab in prefabs {
-                if let Some(pop) = Pop::from_prefab(&mut self.icons, objtree, fab) {
+                if let Some(pop) = RenderPop::from_prefab(&mut self.icons, objtree, fab) {
                     let idx;
                     if let Some(&i) = pop_reverse.get(&pop) {
                         idx = i;
