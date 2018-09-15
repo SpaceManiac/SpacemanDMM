@@ -30,7 +30,8 @@ pub use dm::dmi::*;
 pub struct IconCache {
     factory: Factory,
     base_path: PathBuf,
-    map: HashMap<PathBuf, Option<IconFile>>,
+    icons: Vec<IconFile>,
+    map: HashMap<PathBuf, Option<usize>>,
 }
 
 impl IconCache {
@@ -38,15 +39,40 @@ impl IconCache {
         IconCache {
             factory: factory.clone(),
             base_path: base_path.to_owned(),
+            icons: Default::default(),
             map: Default::default(),
         }
     }
 
     pub fn retrieve(&mut self, relative_file_path: &Path) -> Option<&IconFile> {
         match self.map.entry(relative_file_path.to_owned()) {
-            Entry::Occupied(entry) => entry.into_mut().as_ref(),
-            Entry::Vacant(entry) => entry.insert(load(&mut self.factory, &self.base_path.join(relative_file_path))).as_ref(),
+            Entry::Occupied(entry) => match entry.into_mut().as_ref() {
+                Some(&i) => self.icons.get(i),
+                None => None,
+            },
+            Entry::Vacant(entry) => {
+                match load(&mut self.factory, &self.base_path.join(relative_file_path)) {
+                    Some(icon) => {
+                        let i = self.icons.len();
+                        self.icons.push(icon);
+                        entry.insert(Some(i));
+                        self.icons.last()
+                    },
+                    None => {
+                        entry.insert(None);
+                        None
+                    },
+                }
+            }
         }
+    }
+
+    pub fn get_id(&self, relative_file_path: &Path) -> Option<usize> {
+        self.map.get(relative_file_path).and_then(|&x| x)
+    }
+
+    pub fn get_by_id(&self, id: usize) -> Option<&IconFile> {
+        self.icons.get(id)
     }
 
     pub fn len(&mut self) -> usize {
