@@ -214,6 +214,8 @@ impl MapRenderer {
             pop_dictionary.insert(*key, all);
         }
 
+        let midpoint = ::std::time::Instant::now();
+
         // create instances from the grid
         let mut vertices = Vec::new();
         let mut instances = Vec::new();
@@ -226,8 +228,6 @@ impl MapRenderer {
                 }
             }
         }
-
-        let midpoint = ::std::time::Instant::now();
 
         // sort instances
         instances.sort_by_key(|&(_, pop_id)| (pops[pop_id].plane, pops[pop_id].layer, pops[pop_id].texture));
