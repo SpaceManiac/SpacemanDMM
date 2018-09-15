@@ -8,8 +8,8 @@ use ndarray::Axis;
 
 use dm::objtree::ObjectTree;
 use dm::constants::Constant;
-use dmm_tools::dmm::Map;
-use dmm_tools::minimap::{self, Atom, GetVar};
+use dmm_tools::dmm::{Map, Prefab};
+use dmm_tools::minimap::{self, GetVar};
 
 use dmi::*;
 
@@ -26,11 +26,111 @@ gfx_defines! {
         transform: [[f32; 4]; 4] = "transform",
     }
 
+    #[derive(PartialOrd)]
+    constant Pop {
+        category: u32 = "category",
+        texture: u32 = "texture",  // icon
+        size: [f32; 2] = "size",  // icon
+
+        uv: [f32; 4] = "uv",  // icon_state + dir
+        color: [f32; 4] = "color",  // color + alpha
+        // TODO: transform
+        ofs_x: i32 = "ofs_x",  // pixel_x + pixel_w + step_x
+        ofs_y: i32 = "ofs_y",  // pixel_y + pixel_z + step_y
+
+        plane: i32 = "plane",
+        layer: i32 = "layer",
+    }
+
     pipeline pipe {
         vbuf: gfx::VertexBuffer<Vertex> = (),
         transform: gfx::ConstantBuffer<Transform> = "Transform",
         tex: gfx::TextureSampler<[f32; 4]> = "tex",
         out: gfx::BlendTarget<ColorFormat> = ("Target0", gfx::state::ColorMask::all(), gfx::preset::blend::ALPHA),
+    }
+}
+
+// forgive me
+impl ::std::cmp::Eq for Pop {}
+
+impl ::std::cmp::Ord for Pop {
+    fn cmp(&self, other: &Self) -> ::std::cmp::Ordering {
+        self.partial_cmp(other).expect("in Pop::cmp, a field was NaN")
+    }
+}
+
+impl Pop {
+    pub fn from_prefab(icons: &mut IconCache, objtree: &ObjectTree, fab: &Prefab) -> Option<Pop> {
+        let icon = match fab.get_var("icon", objtree) {
+            &Constant::Resource(ref path) | &Constant::String(ref path) => path,
+            _ => return None,
+        };
+        let icon_state = match fab.get_var("icon_state", objtree) {
+            &Constant::String(ref string) => string,
+            _ => "",
+        };
+        let dir = fab.get_var("dir", objtree).to_int().unwrap_or(::dmi::SOUTH);
+
+        let (width, height, uv);
+        {
+            let icon_file = match icons.retrieve(icon.as_ref()) {
+                Some(icon_file) => icon_file,
+                None => return None,
+            };
+            width = icon_file.metadata.width as f32;
+            height = icon_file.metadata.height as f32;
+
+            let uv_ = match icon_file.uv_of(&icon_state, dir) {
+                Some(rect) => rect,
+                None => return None,
+            };
+            uv = [uv_.0, uv_.1, uv_.2, uv_.3];
+        }
+        let texture = match icons.get_id(icon.as_ref()) {
+            Some(id) => id as u32,
+            None => return None,  // shouldn't happen
+        };
+
+        let color = minimap::color_of(objtree, fab);
+        let color = [
+            color[0] as f32 / 255.0, color[1] as f32 / 255.0,
+            color[2] as f32 / 255.0, color[3] as f32 / 255.0];
+
+        let pixel_x = fab.get_var("pixel_x", objtree).to_int().unwrap_or(0);
+        let pixel_y = fab.get_var("pixel_y", objtree).to_int().unwrap_or(0);
+        let pixel_w = fab.get_var("pixel_w", objtree).to_int().unwrap_or(0);
+        let pixel_z = fab.get_var("pixel_z", objtree).to_int().unwrap_or(0);
+        let step_x = fab.get_var("step_x", objtree).to_int().unwrap_or(0);
+        let step_y = fab.get_var("step_y", objtree).to_int().unwrap_or(0);
+
+        Some(Pop {
+            category: category_of(&fab.path) as u32,
+            texture,
+            uv,
+            color,
+            size: [width, height],
+            ofs_x: pixel_x + pixel_w + step_x,
+            ofs_y: pixel_y + pixel_z + step_y,
+            plane: minimap::plane_of(objtree, fab),
+            layer: minimap::layer_of(objtree, fab),
+        })
+    }
+
+    pub fn instance(&self, loc: (u32, u32), vertices: &mut Vec<Vertex>) {
+        let uv = self.uv;
+        let loc = (
+            ((loc.0 * TILE_SIZE) as i32 + self.ofs_x) as f32,
+            ((loc.1 * TILE_SIZE) as i32 + self.ofs_y) as f32,
+        );
+        let (width, height) = (self.size[0], self.size[1]);
+        let color = self.color;
+
+        vertices.extend_from_slice(&[
+            Vertex { color, position: [loc.0, loc.1], uv: [uv[0], uv[3]] },
+            Vertex { color, position: [loc.0, loc.1 + height], uv: [uv[0], uv[1]] },
+            Vertex { color, position: [loc.0 + width, loc.1 + height], uv: [uv[2], uv[1]] },
+            Vertex { color, position: [loc.0 + width, loc.1], uv: [uv[2], uv[3]] },
+        ]);
     }
 }
 
@@ -54,7 +154,7 @@ pub struct RenderedMap {
 }
 
 struct DrawCall {
-    category: u8,
+    category: u32,
     texture: Texture,
     start: u32,
     len: u32,
@@ -87,101 +187,68 @@ impl MapRenderer {
 
     #[must_use]
     pub fn prepare(&mut self, factory: &mut Factory, objtree: &ObjectTree, map: &Map, z: usize) -> RenderedMap {
+        use std::collections::BTreeMap;
+
         let start = ::std::time::Instant::now();
 
-        // collect the atoms, collating by texture to reduce draw calls
-        let mut atoms = ::std::collections::HashMap::<Texture, Vec<Atom>>::new();
+        // create pops from the dictionary
+        let mut pops = Vec::new();
+        let mut pop_reverse = BTreeMap::new();
+        let mut pop_dictionary = BTreeMap::new();
+        for (key, prefabs) in map.dictionary.iter() {
+            let mut all = Vec::new();
+            for fab in prefabs {
+                if let Some(pop) = Pop::from_prefab(&mut self.icons, objtree, fab) {
+                    let idx;
+                    if let Some(&i) = pop_reverse.get(&pop) {
+                        idx = i;
+                    } else {
+                        idx = pops.len();
+                        pop_reverse.insert(pop.clone(), idx);
+                        pops.push(pop);
+                    }
+                    all.push(idx);
+                }
+            }
+            pop_dictionary.insert(*key, all);
+        }
+
+        // create instances from the grid
+        let mut vertices = Vec::new();
+        let mut instances = Vec::new();
         for (y, row) in map.z_level(z).axis_iter(Axis(0)).rev().enumerate() {
             for (x, key) in row.iter().enumerate() {
-                for fab in map.dictionary[key].iter() {
-                    let atom = match Atom::from_prefab(objtree, fab, (x as u32, y as u32)) {
-                        Some(atom) => atom,
-                        None => continue,
-                    };
-                    let tex = {
-                        let icon = match atom.get_var("icon", objtree) {
-                            &Constant::Resource(ref path) | &Constant::String(ref path) => path,
-                            _ => continue,
-                        };
-                        match self.icons.retrieve(icon.as_ref()) {
-                            Some(icon_file) => icon_file.texture.clone(),
-                            None => continue,
-                        }
-                    };
-                    atoms.entry(tex).or_default().push(atom);
+                for &pop_id in pop_dictionary[key].iter() {
+                    let v_start = vertices.len() as u32;
+                    pops[pop_id].instance((x as u32, y as u32), &mut vertices);
+                    instances.push((v_start, pop_id));
                 }
             }
         }
 
         let midpoint = ::std::time::Instant::now();
 
-        // merge the atoms into a single Vec and sort them by plane and layer
-        let mut atoms: Vec<Atom> = atoms.into_iter().flat_map(|(_, list)| list).collect();
-        atoms.sort_by_key(|a| (minimap::plane_of(objtree, a), minimap::layer_of(objtree, a)));
+        // sort instances
+        instances.sort_by_key(|&(_, pop_id)| (pops[pop_id].plane, pops[pop_id].layer));
 
-        // render atoms
-        let mut vertices = Vec::new();
-        let mut indices: Vec<u32> = Vec::new();
+        // create index buffer
+        let mut indices = Vec::new();
         let mut draw_calls: Vec<DrawCall> = Vec::new();
-
-        for atom in atoms.iter() {
-            let icon = match atom.get_var("icon", objtree) {
-                &Constant::Resource(ref path) | &Constant::String(ref path) => path,
-                _ => continue,
-            };
-            let icon_state = match atom.get_var("icon_state", objtree) {
-                &Constant::String(ref string) => string,
-                _ => "",
-            };
-            let dir = atom.get_var("dir", objtree).to_int().unwrap_or(::dmi::SOUTH);
-
-            let icon_file = match self.icons.retrieve(icon.as_ref()) {
-                Some(icon_file) => icon_file,
-                None => continue,
-            };
-            let width = icon_file.metadata.width as f32;
-            let height = icon_file.metadata.height as f32;
-
-            let uv = match icon_file.uv_of(&icon_state, dir) {
-                Some(rect) => rect,
-                None => continue,
-            };
-
-            let pixel_w = atom.get_var("pixel_w", objtree).to_int().unwrap_or(0);
-            let pixel_x = atom.get_var("pixel_x", objtree).to_int().unwrap_or(0);
-            let pixel_y = atom.get_var("pixel_y", objtree).to_int().unwrap_or(0);
-            let pixel_z = atom.get_var("pixel_z", objtree).to_int().unwrap_or(0);
-
-            let mut loc = (
-                (((atom.loc.0) * TILE_SIZE) as i32 + pixel_w + pixel_x) as f32,
-                (((atom.loc.1) * TILE_SIZE) as i32 + pixel_y + pixel_z) as f32,
-            );
-
-            let color = minimap::color_of(objtree, atom);
-            let color = [
-                color[0] as f32 / 255.0, color[1] as f32 / 255.0,
-                color[2] as f32 / 255.0, color[3] as f32 / 255.0];
-
-            let start = vertices.len() as u32;
-            vertices.extend_from_slice(&[
-                Vertex { color, position: [loc.0, loc.1], uv: [uv.0, uv.3] },
-                Vertex { color, position: [loc.0, loc.1 + height], uv: [uv.0, uv.1] },
-                Vertex { color, position: [loc.0 + width, loc.1 + height], uv: [uv.2, uv.1] },
-                Vertex { color, position: [loc.0 + width, loc.1], uv: [uv.2, uv.3] },
-            ]);
+        for &(start, pop_id) in instances.iter() {
             let i_start = indices.len() as u32;
             indices.extend_from_slice(&[start, start+1, start+3, start+1, start+2, start+3]);
 
-            let category = category_of(atom.path());
+            let pop = pops[pop_id];
+            let texture = &self.icons.get_by_id(pop.texture as usize).expect("icon get_by_id").texture;
             if let Some(call) = draw_calls.last_mut() {
-                if call.texture == icon_file.texture && call.category == category {
+                if &call.texture == texture && call.category == pop.category {
                     call.len += 6;
                     continue;
                 }
             }
             draw_calls.push(DrawCall {
-                category,
-                texture: icon_file.texture.clone(),
+                category: pop.category,
+                texture: texture.clone(),
                 start: i_start,
                 len: 6,
             });
@@ -192,7 +259,7 @@ impl MapRenderer {
 
         let end = ::std::time::Instant::now();
         RenderedMap {
-            atoms_len: atoms.len(),
+            atoms_len: instances.len(),
             duration: [to_seconds(midpoint - start), to_seconds(end - midpoint)],
             draw_calls,
 
@@ -247,7 +314,7 @@ fn to_seconds(duration: ::std::time::Duration) -> f32 {
     duration.as_secs() as f32 + duration.subsec_nanos() as f32 / 1_000_000_000.0
 }
 
-fn category_of(path: &str) -> u8 {
+fn category_of(path: &str) -> u32 {
     if path.starts_with("/area") {
         1
     } else if path.starts_with("/turf") {
