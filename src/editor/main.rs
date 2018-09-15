@@ -177,8 +177,10 @@ impl EditorScene {
                 self.config.make_recent(&environment.path);
                 self.config.save();
                 self.tools = tools::configure(&environment.objtree);
+                self.map_renderer.icons = dmi::IconCache::new(
+                    &self.factory,
+                    &environment.path.parent().expect("invalid environment file path"));
                 self.environment = Some(environment);
-                self.map_renderer.icons.clear();
                 for map in self.maps.iter_mut() {
                     for z in map.rendered.iter_mut() {
                         *z = None;
@@ -219,8 +221,8 @@ impl EditorScene {
 
         for tool in self.tools.iter_mut() {
             tool.icon = match std::mem::replace(&mut tool.icon, ToolIcon::None) {
-                ToolIcon::Dmi { icon, icon_state } => if let Some(ref env) = self.environment {
-                    if let Some(icon) = self.map_renderer.icons.retrieve(&env.path, icon.as_ref()) {
+                ToolIcon::Dmi { icon, icon_state } => if self.environment.is_some() {
+                    if let Some(icon) = self.map_renderer.icons.retrieve(icon.as_ref()) {
                         if let Some((u1, v1, u2, v2)) = icon.uv_of(&icon_state, 2) {
                             let tex = icon.texture.clone();
                             let samp = self.map_renderer.sampler.clone();
@@ -1053,7 +1055,6 @@ impl EditorScene {
                 map.rendered[map.z_current] = Some(self.map_renderer.prepare(
                     &mut self.factory,
                     &env.objtree,
-                    &env.path.parent().expect("invalid environment file path"),
                     map.hist.current(),
                     map.z_current));
             }

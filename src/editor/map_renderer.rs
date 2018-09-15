@@ -1,4 +1,4 @@
-use std::path::Path;
+//! GPU map renderer.
 
 use gfx;
 use gfx::traits::{Factory as FactoryTrait, FactoryExt};
@@ -75,7 +75,7 @@ impl MapRenderer {
             gfx::texture::WrapMode::Clamp));
 
         MapRenderer {
-            icons: IconCache::new(factory),
+            icons: IconCache::new(factory, ".".as_ref()),
             zoom: 1.0,
             layers: [true, false, true, true, true],
 
@@ -86,7 +86,7 @@ impl MapRenderer {
     }
 
     #[must_use]
-    pub fn prepare(&mut self, factory: &mut Factory, objtree: &ObjectTree, base_path: &Path, map: &Map, z: usize) -> RenderedMap {
+    pub fn prepare(&mut self, factory: &mut Factory, objtree: &ObjectTree, map: &Map, z: usize) -> RenderedMap {
         let start = ::std::time::Instant::now();
 
         // collect the atoms, collating by texture to reduce draw calls
@@ -103,7 +103,7 @@ impl MapRenderer {
                             &Constant::Resource(ref path) | &Constant::String(ref path) => path,
                             _ => continue,
                         };
-                        match self.icons.retrieve(base_path, icon.as_ref()) {
+                        match self.icons.retrieve(icon.as_ref()) {
                             Some(icon_file) => icon_file.texture.clone(),
                             None => continue,
                         }
@@ -135,7 +135,7 @@ impl MapRenderer {
             };
             let dir = atom.get_var("dir", objtree).to_int().unwrap_or(::dmi::SOUTH);
 
-            let icon_file = match self.icons.retrieve(base_path, icon.as_ref()) {
+            let icon_file = match self.icons.retrieve(icon.as_ref()) {
                 Some(icon_file) => icon_file,
                 None => continue,
             };
