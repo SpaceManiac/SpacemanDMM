@@ -1,6 +1,6 @@
 use dm::objtree::*;
 use dm::constants::Constant;
-use minimap::Atom;
+use minimap::{Atom, GetVar};
 
 pub mod transit_tube;
 pub mod random;

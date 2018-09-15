@@ -9,7 +9,7 @@ use ndarray::Axis;
 use dm::objtree::ObjectTree;
 use dm::constants::Constant;
 use dmm_tools::dmm::Map;
-use dmm_tools::minimap::{self, Atom};
+use dmm_tools::minimap::{self, Atom, GetVar};
 
 use dmi::*;
 

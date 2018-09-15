@@ -328,18 +328,34 @@ impl<'a> Atom<'a> {
         subpath(&self.type_.path, parent)
     }
 
-    pub fn get_var(&self, key: &str, objtree: &'a ObjectTree) -> &Constant {
-        self.get_var_spec(key, objtree).unwrap_or(Constant::null())
+    pub fn copy_var(&mut self, key: &str, from: &Atom, objtree: &'a ObjectTree) {
+        if let Some(var) = from.get_var_notnull(key, objtree) {
+            self.set_var(key, var.clone());
+        }
     }
 
-    pub fn get_var_notnull(&self, key: &str, objtree: &'a ObjectTree) -> Option<&Constant> {
-        match self.get_var_spec(key, objtree) {
+    pub fn set_var<K: Into<String>>(&mut self, key: K, value: Constant) {
+        self.vars.insert(key.into(), value);
+    }
+}
+
+pub trait GetVar {
+    fn get_var<'a>(&'a self, key: &str, objtree: &'a ObjectTree) -> &'a Constant {
+        self.get_var_inner(key, objtree).unwrap_or(Constant::null())
+    }
+
+    fn get_var_notnull<'a>(&'a self, key: &str, objtree: &'a ObjectTree) -> Option<&'a Constant> {
+        match self.get_var_inner(key, objtree) {
             None | Some(&Constant::Null(_)) => None,
             Some(other) => Some(other)
         }
     }
 
-    fn get_var_spec(&self, key: &str, objtree: &'a ObjectTree) -> Option<&Constant> {
+    fn get_var_inner<'a>(&'a self, key: &str, objtree: &'a ObjectTree) -> Option<&'a Constant>;
+}
+
+impl<'a> GetVar for Atom<'a> {
+    fn get_var_inner<'b>(&'b self, key: &str, objtree: &'b ObjectTree) -> Option<&'b Constant> {
         if let Some(v) = self.vars.get(key) {
             return Some(v);
         }
@@ -357,15 +373,21 @@ impl<'a> Atom<'a> {
         }
         None
     }
+}
 
-    pub fn copy_var(&mut self, key: &str, from: &Atom, objtree: &'a ObjectTree) {
-        if let Some(var) = from.get_var_notnull(key, objtree) {
-            self.set_var(key, var.clone());
+impl GetVar for Prefab {
+    fn get_var_inner<'a>(&'a self, key: &str, objtree: &'a ObjectTree) -> Option<&Constant> {
+        if let Some(v) = self.vars.get(key) {
+            return Some(v);
         }
-    }
-
-    pub fn set_var<K: Into<String>>(&mut self, key: K, value: Constant) {
-        self.vars.insert(key.into(), value);
+        let mut current = objtree.find(&self.path);
+        while let Some(t) = current.take() {
+            if let Some(v) = t.get().vars.get(key) {
+                return Some(v.value.constant.as_ref().unwrap_or(Constant::null()));
+            }
+            current = t.parent_type();
+        }
+        None
     }
 }
 
