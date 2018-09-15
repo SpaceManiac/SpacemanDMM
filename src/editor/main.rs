@@ -70,6 +70,7 @@ pub struct EditorScene {
     map_current: usize,
     new_map: Option<NewMap>,
 
+    last_mouse_pos: (i32, i32),
     target_tile: Option<(usize, usize)>,
     context_tile: Option<(usize, usize)>,
 
@@ -105,6 +106,7 @@ impl EditorScene {
             map_current: 0,
             new_map: None,
 
+            last_mouse_pos: (0, 0),
             target_tile: None,
             context_tile: None,
 
@@ -808,6 +810,7 @@ impl EditorScene {
     }
 
     fn mouse_moved(&mut self, (x, y): (i32, i32)) {
+        self.last_mouse_pos = (x, y);
         self.target_tile = self.tile_under((x, y));
     }
 
@@ -835,6 +838,7 @@ impl EditorScene {
             } else if y < 0.0 && self.map_renderer.zoom > 0.0625 {
                 self.map_renderer.zoom *= 0.5;
             }
+            self.target_tile = self.tile_under(self.last_mouse_pos);
             return;
         }
         let (axis, mut mul) = if ctrl { (0, -1.0) } else { (1, 1.0) };
@@ -844,8 +848,8 @@ impl EditorScene {
 
         if let Some(map) = self.maps.get_mut(self.map_current) {
             map.center[axis] += 4.0 * 32.0 * mul * y / self.map_renderer.zoom;
-            // TODO: update target_tile
         }
+        self.target_tile = self.tile_under(self.last_mouse_pos);
     }
 
     #[deny(unreachable_patterns)]
