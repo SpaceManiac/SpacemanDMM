@@ -1053,10 +1053,13 @@ impl EditorScene {
                     return;
                 }
                 map.rendered[map.z_current] = Some(self.map_renderer.prepare(
-                    &mut self.factory,
                     &env.objtree,
                     map.hist.current(),
-                    map.z_current));
+                    map.z_current,
+                ).render(
+                    &mut self.map_renderer.icons,
+                    &mut self.factory,
+                ));
             }
         }
     }

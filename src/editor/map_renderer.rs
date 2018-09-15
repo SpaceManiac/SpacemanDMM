@@ -1,4 +1,5 @@
 //! GPU map renderer.
+use std::time::Instant;
 
 use gfx;
 use gfx::traits::{Factory as FactoryTrait, FactoryExt};
@@ -47,6 +48,205 @@ gfx_defines! {
         transform: gfx::ConstantBuffer<Transform> = "Transform",
         tex: gfx::TextureSampler<[f32; 4]> = "tex",
         out: gfx::BlendTarget<ColorFormat> = ("Target0", gfx::state::ColorMask::all(), gfx::preset::blend::ALPHA),
+    }
+}
+
+pub struct MapRenderer {
+    pub icons: IconCache,
+    pub zoom: f32,
+    pub layers: [bool; 5],
+
+    pso: gfx::PipelineState<Resources, pipe::Meta>,
+    transform_buffer: gfx::handle::Buffer<Resources, Transform>,
+    pub sampler: gfx::handle::Sampler<Resources>,
+}
+
+pub struct PreparedMap {
+    duration: f32,
+    pops: Vec<RenderPop>,
+    vertices: Vec<Vertex>,
+    instances: Vec<(u32, usize)>,
+}
+
+pub struct RenderedMap {
+    pub atoms_len: usize,
+    pub pops_len: usize,
+    pub duration: [f32; 2],
+
+    draw_calls: Vec<DrawCall>,
+    ibuf: gfx::IndexBuffer<Resources>,
+    vbuf: gfx::handle::Buffer<Resources, Vertex>,
+}
+
+struct DrawCall {
+    category: u32,
+    texture: Texture,
+    start: u32,
+    len: u32,
+}
+
+impl MapRenderer {
+    pub fn new(factory: &mut Factory, _view: &RenderTargetView) -> MapRenderer {
+        let pso = factory.create_pipeline_simple(
+            include_bytes!("shaders/main_150.glslv"),
+            include_bytes!("shaders/main_150.glslf"),
+            pipe::new()
+        ).expect("create_pipeline_simple failed");
+
+        let transform_buffer = factory.create_constant_buffer(1);
+
+        let sampler = factory.create_sampler(gfx::texture::SamplerInfo::new(
+            gfx::texture::FilterMethod::Scale,
+            gfx::texture::WrapMode::Clamp));
+
+        MapRenderer {
+            icons: IconCache::new(factory, ".".as_ref()),
+            zoom: 1.0,
+            layers: [true, false, true, true, true],
+
+            pso,
+            transform_buffer,
+            sampler,
+        }
+    }
+
+    #[must_use]
+    pub fn prepare(&mut self, objtree: &ObjectTree, map: &Map, z: usize) -> PreparedMap {
+        use std::collections::BTreeMap;
+
+        let start = Instant::now();
+
+        // create pops from the dictionary
+        let mut pops = Vec::new();
+        let mut pop_reverse = BTreeMap::new();
+        let mut pop_dictionary = BTreeMap::new();
+        for (key, prefabs) in map.dictionary.iter() {
+            let mut all = Vec::new();
+            for fab in prefabs {
+                if let Some(pop) = RenderPop::from_prefab(&mut self.icons, objtree, fab) {
+                    let idx;
+                    if let Some(&i) = pop_reverse.get(&pop) {
+                        idx = i;
+                    } else {
+                        idx = pops.len();
+                        pop_reverse.insert(pop.clone(), idx);
+                        pops.push(pop);
+                    }
+                    all.push(idx);
+                }
+            }
+            pop_dictionary.insert(*key, all);
+        }
+
+        // create instances from the grid
+        let mut vertices = Vec::new();
+        let mut instances = Vec::new();
+        for (y, row) in map.z_level(z).axis_iter(Axis(0)).rev().enumerate() {
+            for (x, key) in row.iter().enumerate() {
+                for &pop_id in pop_dictionary[key].iter() {
+                    let v_start = vertices.len() as u32;
+                    pops[pop_id].instance((x as u32, y as u32), &mut vertices);
+                    instances.push((v_start, pop_id));
+                }
+            }
+        }
+
+        // sort instances
+        instances.sort_by_key(|&(_, pop_id)| (pops[pop_id].plane, pops[pop_id].layer, pops[pop_id].texture));
+
+        let duration = to_seconds(Instant::now() - start);
+
+        PreparedMap {
+            duration,
+            pops,
+            vertices,
+            instances,
+        }
+    }
+}
+
+impl PreparedMap {
+    #[must_use]
+    pub fn render(&self, icons: &mut IconCache, factory: &mut Factory) -> RenderedMap {
+        let start = Instant::now();
+
+        // TODO: determine how much of this loop belongs in prepare()
+        // create index buffer
+        let mut indices = Vec::new();
+        let mut draw_calls: Vec<DrawCall> = Vec::new();
+        for &(start, pop_id) in self.instances.iter() {
+            let i_start = indices.len() as u32;
+            indices.extend_from_slice(&[start, start+1, start+3, start+1, start+2, start+3]);
+
+            let pop = self.pops[pop_id];
+            let texture = &icons.get_by_id(pop.texture as usize).expect("icon get_by_id").texture;
+            if let Some(call) = draw_calls.last_mut() {
+                if &call.texture == texture && call.category == pop.category {
+                    call.len += 6;
+                    continue;
+                }
+            }
+            draw_calls.push(DrawCall {
+                category: pop.category,
+                texture: texture.clone(),
+                start: i_start,
+                len: 6,
+            });
+        }
+
+        let vbuf = factory.create_vertex_buffer(&self.vertices[..]);
+        let ibuf = factory.create_index_buffer(&indices[..]);
+
+        RenderedMap {
+            atoms_len: self.instances.len(),
+            pops_len: self.pops.len(),
+            duration: [self.duration, to_seconds(Instant::now() - start)],
+            draw_calls,
+
+            ibuf,
+            vbuf,
+        }
+    }
+}
+
+impl RenderedMap {
+    pub fn draw_calls(&self) -> usize {
+        self.draw_calls.len()
+    }
+
+    pub fn paint(&mut self, parent: &mut MapRenderer, center: [f32; 2], encoder: &mut Encoder, view: &RenderTargetView) {
+        let (x, y, _, _) = view.get_dimensions();
+
+        // (0, 0) is the center of the screen, 1.0 = 1 pixel
+        let transform = Transform {
+            transform: [
+                [2.0 / x as f32, 0.0, 0.0, -2.0 * center[0].round() / x as f32],
+                [0.0, 2.0 / y as f32, 0.0, -2.0 * center[1].round() / y as f32],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0 / parent.zoom],
+            ]
+        };
+        encoder.update_buffer(&parent.transform_buffer, &[transform], 0).expect("update_buffer failed");
+
+        for call in self.draw_calls.iter() {
+            if !parent.layers[call.category as usize] {
+                continue;
+            }
+            let slice = gfx::Slice {
+                start: call.start,
+                end: call.start + call.len,
+                base_vertex: 0,
+                instances: None,
+                buffer: self.ibuf.clone(),
+            };
+            let data = pipe::Data {
+                vbuf: self.vbuf.clone(),
+                transform: parent.transform_buffer.clone(),
+                tex: (call.texture.clone(), parent.sampler.clone()),
+                out: view.clone(),
+            };
+            encoder.draw(&slice, &parent.pso, &data);
+        }
     }
 }
 
@@ -131,184 +331,6 @@ impl RenderPop {
             Vertex { color, position: [loc.0 + width, loc.1 + height], uv: [uv[2], uv[1]] },
             Vertex { color, position: [loc.0 + width, loc.1], uv: [uv[2], uv[3]] },
         ]);
-    }
-}
-
-pub struct MapRenderer {
-    pub icons: IconCache,
-    pub zoom: f32,
-    pub layers: [bool; 5],
-
-    pso: gfx::PipelineState<Resources, pipe::Meta>,
-    transform_buffer: gfx::handle::Buffer<Resources, Transform>,
-    pub sampler: gfx::handle::Sampler<Resources>,
-}
-
-pub struct RenderedMap {
-    pub atoms_len: usize,
-    pub pops_len: usize,
-    pub duration: [f32; 2],
-
-    draw_calls: Vec<DrawCall>,
-    ibuf: gfx::IndexBuffer<Resources>,
-    vbuf: gfx::handle::Buffer<Resources, Vertex>,
-}
-
-struct DrawCall {
-    category: u32,
-    texture: Texture,
-    start: u32,
-    len: u32,
-}
-
-impl MapRenderer {
-    pub fn new(factory: &mut Factory, _view: &RenderTargetView) -> MapRenderer {
-        let pso = factory.create_pipeline_simple(
-            include_bytes!("shaders/main_150.glslv"),
-            include_bytes!("shaders/main_150.glslf"),
-            pipe::new()
-        ).expect("create_pipeline_simple failed");
-
-        let transform_buffer = factory.create_constant_buffer(1);
-
-        let sampler = factory.create_sampler(gfx::texture::SamplerInfo::new(
-            gfx::texture::FilterMethod::Scale,
-            gfx::texture::WrapMode::Clamp));
-
-        MapRenderer {
-            icons: IconCache::new(factory, ".".as_ref()),
-            zoom: 1.0,
-            layers: [true, false, true, true, true],
-
-            pso,
-            transform_buffer,
-            sampler,
-        }
-    }
-
-    #[must_use]
-    pub fn prepare(&mut self, factory: &mut Factory, objtree: &ObjectTree, map: &Map, z: usize) -> RenderedMap {
-        use std::collections::BTreeMap;
-
-        let start = ::std::time::Instant::now();
-
-        // create pops from the dictionary
-        let mut pops = Vec::new();
-        let mut pop_reverse = BTreeMap::new();
-        let mut pop_dictionary = BTreeMap::new();
-        for (key, prefabs) in map.dictionary.iter() {
-            let mut all = Vec::new();
-            for fab in prefabs {
-                if let Some(pop) = RenderPop::from_prefab(&mut self.icons, objtree, fab) {
-                    let idx;
-                    if let Some(&i) = pop_reverse.get(&pop) {
-                        idx = i;
-                    } else {
-                        idx = pops.len();
-                        pop_reverse.insert(pop.clone(), idx);
-                        pops.push(pop);
-                    }
-                    all.push(idx);
-                }
-            }
-            pop_dictionary.insert(*key, all);
-        }
-
-        let midpoint = ::std::time::Instant::now();
-
-        // create instances from the grid
-        let mut vertices = Vec::new();
-        let mut instances = Vec::new();
-        for (y, row) in map.z_level(z).axis_iter(Axis(0)).rev().enumerate() {
-            for (x, key) in row.iter().enumerate() {
-                for &pop_id in pop_dictionary[key].iter() {
-                    let v_start = vertices.len() as u32;
-                    pops[pop_id].instance((x as u32, y as u32), &mut vertices);
-                    instances.push((v_start, pop_id));
-                }
-            }
-        }
-
-        // sort instances
-        instances.sort_by_key(|&(_, pop_id)| (pops[pop_id].plane, pops[pop_id].layer, pops[pop_id].texture));
-
-        // create index buffer
-        let mut indices = Vec::new();
-        let mut draw_calls: Vec<DrawCall> = Vec::new();
-        for &(start, pop_id) in instances.iter() {
-            let i_start = indices.len() as u32;
-            indices.extend_from_slice(&[start, start+1, start+3, start+1, start+2, start+3]);
-
-            let pop = pops[pop_id];
-            let texture = &self.icons.get_by_id(pop.texture as usize).expect("icon get_by_id").texture;
-            if let Some(call) = draw_calls.last_mut() {
-                if &call.texture == texture && call.category == pop.category {
-                    call.len += 6;
-                    continue;
-                }
-            }
-            draw_calls.push(DrawCall {
-                category: pop.category,
-                texture: texture.clone(),
-                start: i_start,
-                len: 6,
-            });
-        }
-
-        let vbuf = factory.create_vertex_buffer(&vertices[..]);
-        let ibuf = factory.create_index_buffer(&indices[..]);
-
-        let end = ::std::time::Instant::now();
-        RenderedMap {
-            atoms_len: instances.len(),
-            pops_len: pops.len(),
-            duration: [to_seconds(midpoint - start), to_seconds(end - midpoint)],
-            draw_calls,
-
-            ibuf,
-            vbuf,
-        }
-    }
-}
-
-impl RenderedMap {
-    pub fn draw_calls(&self) -> usize {
-        self.draw_calls.len()
-    }
-
-    pub fn paint(&mut self, parent: &mut MapRenderer, center: [f32; 2], encoder: &mut Encoder, view: &RenderTargetView) {
-        let (x, y, _, _) = view.get_dimensions();
-
-        // (0, 0) is the center of the screen, 1.0 = 1 pixel
-        let transform = Transform {
-            transform: [
-                [2.0 / x as f32, 0.0, 0.0, -2.0 * center[0].round() / x as f32],
-                [0.0, 2.0 / y as f32, 0.0, -2.0 * center[1].round() / y as f32],
-                [0.0, 0.0, 1.0, 0.0],
-                [0.0, 0.0, 0.0, 1.0 / parent.zoom],
-            ]
-        };
-        encoder.update_buffer(&parent.transform_buffer, &[transform], 0).expect("update_buffer failed");
-
-        for call in self.draw_calls.iter() {
-            if !parent.layers[call.category as usize] {
-                continue;
-            }
-            let slice = gfx::Slice {
-                start: call.start,
-                end: call.start + call.len,
-                base_vertex: 0,
-                instances: None,
-                buffer: self.ibuf.clone(),
-            };
-            let data = pipe::Data {
-                vbuf: self.vbuf.clone(),
-                transform: parent.transform_buffer.clone(),
-                tex: (call.texture.clone(), parent.sampler.clone()),
-                out: view.clone(),
-            };
-            encoder.draw(&slice, &parent.pso, &data);
-        }
     }
 }
 
