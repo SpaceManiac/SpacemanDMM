@@ -89,8 +89,8 @@ impl MapRenderer {
     pub fn prepare(&mut self, factory: &mut Factory, objtree: &ObjectTree, base_path: &Path, map: &Map, z: usize) -> RenderedMap {
         let start = ::std::time::Instant::now();
 
-        // collect the atoms
-        let mut atoms = Vec::new();
+        // collect the atoms, collating by texture to reduce draw calls
+        let mut atoms = ::std::collections::HashMap::<Texture, Vec<Atom>>::new();
         for (y, row) in map.z_level(z).axis_iter(Axis(0)).rev().enumerate() {
             for (x, key) in row.iter().enumerate() {
                 for fab in map.dictionary[key].iter() {
@@ -98,20 +98,25 @@ impl MapRenderer {
                         Some(atom) => atom,
                         None => continue,
                     };
-                    match atom.get_var("icon", objtree) {
-                        &Constant::Resource(ref path) | &Constant::String(ref path) => {
-                            let _ = self.icons.retrieve(factory, base_path, path.as_ref());
-                        },
-                        _ => continue,
-                    }
-                    atoms.push(atom);
+                    let tex = {
+                        let icon = match atom.get_var("icon", objtree) {
+                            &Constant::Resource(ref path) | &Constant::String(ref path) => path,
+                            _ => continue,
+                        };
+                        match self.icons.retrieve(factory, base_path, icon.as_ref()) {
+                            Some(icon_file) => icon_file.texture.clone(),
+                            None => continue,
+                        }
+                    };
+                    atoms.entry(tex).or_default().push(atom);
                 }
             }
         }
 
         let midpoint = ::std::time::Instant::now();
 
-        // z sort - TODO: use depth buffer instead?
+        // merge the atoms into a single Vec and sort them by plane and layer
+        let mut atoms: Vec<Atom> = atoms.into_iter().flat_map(|(_, list)| list).collect();
         atoms.sort_by_key(|a| (minimap::plane_of(objtree, a), minimap::layer_of(objtree, a)));
 
         // render atoms
@@ -144,7 +149,6 @@ impl MapRenderer {
 
             let pixel_x = atom.get_var("pixel_x", objtree).to_int().unwrap_or(0);
             let pixel_y = atom.get_var("pixel_y", objtree).to_int().unwrap_or(0);
-                // + icon_file.metadata.height as i32
 
             let mut loc = (
                 (((atom.loc.0) * TILE_SIZE) as i32 + pixel_x) as f32,
