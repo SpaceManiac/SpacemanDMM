@@ -781,6 +781,11 @@ impl<'ctx> Preprocessor<'ctx> {
                             Token::Punct(Punctuation::LParen) => {}
                             other => {
                                 self.output.push_back(Token::Ident(ident.to_owned(), false));
+                                match other {
+                                    Token::InterpStringBegin(_) => self.in_interp_string += 1,
+                                    Token::InterpStringEnd(_) => self.in_interp_string -= 1,
+                                    _ => {}
+                                }
                                 self.output.push_back(other);
                                 return Ok(());
                             }
