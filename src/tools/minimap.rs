@@ -340,6 +340,8 @@ impl<'a> Atom<'a> {
 }
 
 pub trait GetVar {
+    fn get_path(&self) -> &str;
+
     fn get_var<'a>(&'a self, key: &str, objtree: &'a ObjectTree) -> &'a Constant {
         self.get_var_inner(key, objtree).unwrap_or(Constant::null())
     }
@@ -355,6 +357,10 @@ pub trait GetVar {
 }
 
 impl<'a> GetVar for Atom<'a> {
+    fn get_path(&self) -> &str {
+        &self.type_.path
+    }
+
     fn get_var_inner<'b>(&'b self, key: &str, objtree: &'b ObjectTree) -> Option<&'b Constant> {
         if let Some(v) = self.vars.get(key) {
             return Some(v);
@@ -376,6 +382,10 @@ impl<'a> GetVar for Atom<'a> {
 }
 
 impl GetVar for Prefab {
+    fn get_path(&self) -> &str {
+        &self.path
+    }
+
     fn get_var_inner<'a>(&'a self, key: &str, objtree: &'a ObjectTree) -> Option<&Constant> {
         if let Some(v) = self.vars.get(key) {
             return Some(v);
@@ -391,8 +401,8 @@ impl GetVar for Prefab {
     }
 }
 
-fn fancy_layer_of(objtree: &ObjectTree, atom: &Atom) -> i32 {
-    let p = &atom.type_.path;
+fn fancy_layer_of<T: GetVar + ?Sized>(objtree: &ObjectTree, atom: &T) -> i32 {
+    let p = atom.get_path();
     if subtype(p, "/turf/open/floor/plating/") || subtype(p, "/turf/open/space/") {
         -10_000  // under everything
     } else if subtype(p, "/turf/closed/mineral/") {
@@ -420,28 +430,28 @@ fn fancy_layer_of(objtree: &ObjectTree, atom: &Atom) -> i32 {
     }
 }
 
-pub fn plane_of(objtree: &ObjectTree, atom: &Atom) -> i32 {
+pub fn plane_of<T: GetVar + ?Sized>(objtree: &ObjectTree, atom: &T) -> i32 {
     match atom.get_var("plane", objtree) {
         &Constant::Int(i) => i,
         other => {
-            eprintln!("not a plane: {:?} on {:?}", other, atom.type_.path);
+            eprintln!("not a plane: {:?} on {:?}", other, atom.get_path());
             0
         }
     }
 }
 
-pub fn layer_of(objtree: &ObjectTree, atom: &Atom) -> i32 {
+pub fn layer_of<T: GetVar + ?Sized>(objtree: &ObjectTree, atom: &T) -> i32 {
     match atom.get_var("layer", objtree) {
         &Constant::Int(i) => (i % 1000) * 1000,
         &Constant::Float(f) => ((f % 1000.) * 1000.) as i32,
         other => {
-            eprintln!("not a layer: {:?} on {:?}", other, atom.type_.path);
+            eprintln!("not a layer: {:?} on {:?}", other, atom.get_path());
             2_000
         }
     }
 }
 
-pub fn color_of(objtree: &ObjectTree, atom: &Atom) -> [u8; 4] {
+pub fn color_of<T: GetVar + ?Sized>(objtree: &ObjectTree, atom: &T) -> [u8; 4] {
     let alpha = match atom.get_var("alpha", objtree) {
         &Constant::Int(i) if i >= 0 && i <= 255 => i as u8,
         _ => 255,
