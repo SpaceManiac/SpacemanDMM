@@ -54,6 +54,11 @@ pub enum ConstFn {
 }
 
 impl Constant {
+    pub fn null() -> &'static Constant {
+        static NULL: Constant = Constant::Null(None);
+        &NULL
+    }
+
     #[inline]
     pub fn string<S: Into<String>>(s: S) -> Constant {
         Constant::String(s.into())

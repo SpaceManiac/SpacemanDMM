@@ -8,6 +8,7 @@ use ndarray::{self, Array3, Axis};
 use linked_hash_map::LinkedHashMap;
 
 use dm::{DMError, Location, HasLocation};
+use dm::objtree::ObjectTree;
 use dm::lexer::{LocationTracker, from_latin1, from_latin1_borrowed};
 use dm::constants::Constant;
 
@@ -102,6 +103,33 @@ impl Map {
 
     pub fn one_to_zero(&self, (x, y, z): (usize, usize, usize)) -> (usize, usize, usize) {
         (x - 1, self.grid.dim().1 - y, z - 1)
+    }
+}
+
+impl Prefab {
+    pub fn get_var<'a>(&'a self, key: &str, objtree: &'a ObjectTree) -> &Constant {
+        self.get_var_spec(key, objtree).unwrap_or(Constant::null())
+    }
+
+    pub fn get_var_notnull<'a>(&'a self, key: &str, objtree: &'a ObjectTree) -> Option<&Constant> {
+        match self.get_var_spec(key, objtree) {
+            None | Some(&Constant::Null(_)) => None,
+            Some(other) => Some(other)
+        }
+    }
+
+    fn get_var_spec<'a>(&'a self, key: &str, objtree: &'a ObjectTree) -> Option<&Constant> {
+        if let Some(v) = self.vars.get(key) {
+            return Some(v);
+        }
+        let mut current = objtree.find(&self.path);
+        while let Some(t) = current.take() {
+            if let Some(v) = t.get().vars.get(key) {
+                return Some(v.value.constant.as_ref().unwrap_or(Constant::null()));
+            }
+            current = t.parent_type();
+        }
+        None
     }
 }
 

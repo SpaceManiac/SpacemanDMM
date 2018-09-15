@@ -284,8 +284,6 @@ pub fn get_atom_list<'a>(
 // ----------------------------------------------------------------------------
 // Atoms and related utilities
 
-static NULL: Constant = Constant::Null(None);
-
 #[derive(Debug, Clone)]
 pub struct Atom<'a> {
     type_: &'a Type,
@@ -331,7 +329,7 @@ impl<'a> Atom<'a> {
     }
 
     pub fn get_var(&self, key: &str, objtree: &'a ObjectTree) -> &Constant {
-        self.get_var_spec(key, objtree).unwrap_or(&NULL)
+        self.get_var_spec(key, objtree).unwrap_or(Constant::null())
     }
 
     pub fn get_var_notnull(&self, key: &str, objtree: &'a ObjectTree) -> Option<&Constant> {
@@ -353,7 +351,7 @@ impl<'a> Atom<'a> {
         let mut current = Some(self.type_);
         while let Some(t) = current.take() {
             if let Some(v) = t.vars.get(key) {
-                return Some(v.value.constant.as_ref().unwrap_or(&NULL));
+                return Some(v.value.constant.as_ref().unwrap_or(Constant::null()));
             }
             current = objtree.parent_of(t);
         }
