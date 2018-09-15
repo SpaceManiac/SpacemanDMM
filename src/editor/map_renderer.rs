@@ -147,12 +147,14 @@ impl MapRenderer {
                 None => continue,
             };
 
+            let pixel_w = atom.get_var("pixel_w", objtree).to_int().unwrap_or(0);
             let pixel_x = atom.get_var("pixel_x", objtree).to_int().unwrap_or(0);
             let pixel_y = atom.get_var("pixel_y", objtree).to_int().unwrap_or(0);
+            let pixel_z = atom.get_var("pixel_z", objtree).to_int().unwrap_or(0);
 
             let mut loc = (
-                (((atom.loc.0) * TILE_SIZE) as i32 + pixel_x) as f32,
-                (((atom.loc.1) * TILE_SIZE) as i32 + pixel_y) as f32,
+                (((atom.loc.0) * TILE_SIZE) as i32 + pixel_w + pixel_x) as f32,
+                (((atom.loc.1) * TILE_SIZE) as i32 + pixel_y + pixel_z) as f32,
             );
 
             let color = minimap::color_of(objtree, atom);
