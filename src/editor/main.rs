@@ -779,7 +779,7 @@ impl EditorScene {
                         if let Some(map) = self.maps.get(self.map_current) {
                             ui.text(im_str!("center = {:?}", map.center));
                             if let Some(rendered) = map.rendered.get(map.z_current).and_then(|x| x.as_ref()) {
-                                ui.text(im_str!("draw_calls[{}], atoms[{}]", rendered.draw_calls(), rendered.atoms_len));
+                                ui.text(im_str!("draw_calls[{}], pops[{}], atoms[{}]", rendered.draw_calls(), rendered.pops_len, rendered.atoms_len));
                                 ui.text(im_str!("timings: {:?}", rendered.duration));
                             }
                         }

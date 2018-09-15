@@ -146,6 +146,7 @@ pub struct MapRenderer {
 
 pub struct RenderedMap {
     pub atoms_len: usize,
+    pub pops_len: usize,
     pub duration: [f32; 2],
 
     draw_calls: Vec<DrawCall>,
@@ -229,7 +230,7 @@ impl MapRenderer {
         let midpoint = ::std::time::Instant::now();
 
         // sort instances
-        instances.sort_by_key(|&(_, pop_id)| (pops[pop_id].plane, pops[pop_id].layer));
+        instances.sort_by_key(|&(_, pop_id)| (pops[pop_id].plane, pops[pop_id].layer, pops[pop_id].texture));
 
         // create index buffer
         let mut indices = Vec::new();
@@ -260,6 +261,7 @@ impl MapRenderer {
         let end = ::std::time::Instant::now();
         RenderedMap {
             atoms_len: instances.len(),
+            pops_len: pops.len(),
             duration: [to_seconds(midpoint - start), to_seconds(end - midpoint)],
             draw_calls,
 
