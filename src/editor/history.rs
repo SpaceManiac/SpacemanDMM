@@ -1,6 +1,7 @@
 //! Reified undo/redo history tree.
 #![allow(dead_code)]  // WIP
 
+use petgraph::Direction;
 use petgraph::graph::{NodeIndex, Graph};
 
 pub struct History<T> {
@@ -48,11 +49,41 @@ impl<T: Clone> History<T> {
         self.idx = new_idx;
     }
 
+    fn parent(&self, idx: NodeIndex) -> Option<NodeIndex> {
+        self.graph.neighbors_directed(idx, Direction::Incoming).next()
+    }
+
+    fn get_snapshot(&mut self, idx: NodeIndex) -> &T {
+        if self.graph.node_weight(idx).unwrap().snapshot.is_none() {
+            if let Some(parent) = self.parent(idx) {
+                let mut snapshot = self.get_snapshot(parent).clone();
+                let node = self.graph.node_weight_mut(idx).unwrap();
+                (node.edit)(&mut snapshot);
+                node.snapshot = Some(snapshot);
+                return node.snapshot.as_ref().unwrap();
+            }
+            panic!("root of history had no snapshot")
+        }
+        self.graph.node_weight(idx).unwrap().snapshot.as_ref().unwrap()
+    }
+
+    pub fn can_undo(&self) -> bool {
+        self.parent(self.idx).is_some()
+    }
+
     pub fn undo(&mut self) {
-        unimplemented!()
+        if let Some(parent) = self.parent(self.idx) {
+            self.current = self.get_snapshot(parent).clone();
+        }
+    }
+
+    pub fn can_redo(&self) -> bool {
+        self.graph.neighbors_directed(self.idx, Direction::Outgoing).next().is_some()
     }
 
     pub fn redo(&mut self) {
-        unimplemented!()
+        if let Some(child) = self.graph.neighbors_directed(self.idx, Direction::Outgoing).last() {
+            self.current = self.get_snapshot(child).clone();
+        }
     }
 }

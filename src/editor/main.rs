@@ -311,15 +311,20 @@ impl EditorScene {
                     continue_running = false;
                 }
             });
+            let (mut can_undo, mut can_redo) = (false, false);
+            if let Some(map) = self.maps.get(self.map_current) {
+                can_undo = map.hist.can_undo();
+                can_redo = map.hist.can_redo();
+            }
             ui.menu(im_str!("Edit")).build(|| {
-                ui.menu_item(im_str!("Undo"))
+                if ui.menu_item(im_str!("Undo"))
                     .shortcut(im_str!("Ctrl+Z"))
-                    .enabled(false)
-                    .build();
-                ui.menu_item(im_str!("Redo"))
+                    .enabled(can_undo)
+                    .build() { self.undo(); }
+                if ui.menu_item(im_str!("Redo"))
                     .shortcut(im_str!("Ctrl+Shift+Z"))
-                    .enabled(false)
-                    .build();
+                    .enabled(can_redo)
+                    .build() { self.redo(); }
                 ui.separator();
                 ui.menu_item(im_str!("Cut"))
                     .shortcut(im_str!("Ctrl+X"))
@@ -882,6 +887,9 @@ impl EditorScene {
             k!(Ctrl + W) => self.close_map(),
             k!(Ctrl + S) => self.save_map(),
             k!(Ctrl + Shift + S) => self.save_map_as(false),
+            // Edit
+            k!(Ctrl + Z) => self.undo(),
+            k!(Ctrl + Shift + Z) | k!(Ctrl + Y) => self.redo(),
             // Layers
             k!(Ctrl + Key1) => self.toggle_layer(1),
             k!(Ctrl + Key2) => self.toggle_layer(2),
@@ -1057,6 +1065,20 @@ impl EditorScene {
             return;
         }
         self.map_current = (self.map_current as isize + self.maps.len() as isize + offset) as usize % self.maps.len();
+    }
+
+    fn undo(&mut self) {
+        if let Some(map) = self.maps.get_mut(self.map_current) {
+            map.hist.undo();
+            // TODO: rerender
+        }
+    }
+
+    fn redo(&mut self) {
+        if let Some(map) = self.maps.get_mut(self.map_current) {
+            map.hist.redo();
+            // TODO: rerender
+        }
     }
 }
 
