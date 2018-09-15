@@ -93,7 +93,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
 
     configure_keys(&mut imgui);
 
-    let mut scene = ::EditorScene::new(&mut factory, &main_color);
+    let mut scene = ::EditorScene::new(&mut factory, &main_color, &main_depth);
 
     let mut last_frame = Instant::now();
     let mut mouse_state = MouseState::default();
@@ -113,6 +113,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                     Resized(new_logical_size) => {
                         gfx_window_glutin::update_views(&window, &mut main_color, &mut main_depth);
                         renderer.update_render_target(main_color.clone());
+                        scene.update_render_target(&main_color, &main_depth);
                         frame_size.logical_size = new_logical_size
                             .to_physical(window_hidpi_factor)
                             .to_logical(hidpi_factor)
@@ -184,7 +185,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                             .to_logical(hidpi_factor)
                             .into();
                         mouse_state.pos = pos;
-                        scene.mouse_moved(pos, &main_color);
+                        scene.mouse_moved(pos);
                     },
                     MouseInput { state, button, .. } => match button {
                         MouseButton::Left => mouse_state.pressed[0] = state == Pressed,
@@ -269,7 +270,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
             kbd_captured = ui.want_capture_keyboard();
 
             encoder.clear(&main_color, clear_color);
-            scene.render(&mut encoder, &main_color);
+            scene.render(&mut encoder);
             renderer
                 .render(ui, &mut factory, &mut encoder)
                 .expect("Rendering failed");

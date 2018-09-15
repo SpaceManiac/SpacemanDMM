@@ -42,6 +42,7 @@ type Encoder = gfx::Encoder<Resources, CommandBuffer>;
 type ColorFormat = gfx::format::Rgba8;
 type DepthFormat = gfx::format::DepthStencil;
 type RenderTargetView = gfx::handle::RenderTargetView<Resources, ColorFormat>;
+type DepthStencilView = gfx::handle::DepthStencilView<Resources, DepthFormat>;
 type Texture = gfx::handle::ShaderResourceView<Resources, [f32; 4]>;
 
 use tasks::Task;
@@ -54,8 +55,11 @@ fn main() {
 }
 
 pub struct EditorScene {
-    config: config::Config,
     factory: Factory,
+    target: RenderTargetView,
+    depth: DepthStencilView,
+
+    config: config::Config,
     map_renderer: map_renderer::MapRenderer,
     environment: Option<Environment>,
 
@@ -84,11 +88,14 @@ pub struct EditorScene {
 }
 
 impl EditorScene {
-    fn new(factory: &mut Factory, view: &RenderTargetView) -> Self {
+    fn new(factory: &mut Factory, target: &RenderTargetView, depth: &DepthStencilView) -> Self {
         let mut ed = EditorScene {
-            config: config::Config::load(),
             factory: factory.clone(),
-            map_renderer: map_renderer::MapRenderer::new(factory, view),
+            target: target.clone(),
+            depth: depth.clone(),
+
+            config: config::Config::load(),
+            map_renderer: map_renderer::MapRenderer::new(factory, target),
             environment: None,
 
             tools: tools::configure(&ObjectTree::default()),
@@ -153,7 +160,12 @@ impl EditorScene {
         }
     }
 
-    fn render(&mut self, encoder: &mut Encoder, view: &RenderTargetView) {
+    fn update_render_target(&mut self, target: &RenderTargetView, depth: &DepthStencilView) {
+        self.target = target.clone();
+        self.depth = depth.clone();
+    }
+
+    fn render(&mut self, encoder: &mut Encoder) {
         let mut tasks = std::mem::replace(&mut self.tasks, Vec::new());
         tasks.retain(|task| task.poll(|res| match res {
             Err(e) => {
@@ -195,7 +207,7 @@ impl EditorScene {
         self.render_map(false);
         if let Some(map) = self.maps.get_mut(self.map_current) {
             if let Some(rendered) = map.rendered.get_mut(map.z_current).and_then(|x| x.as_mut()) {
-                rendered.paint(&mut self.map_renderer, map.center, encoder, view);
+                rendered.paint(&mut self.map_renderer, map.center, encoder, &self.target);
             }
         }
     }
@@ -795,13 +807,13 @@ impl EditorScene {
         continue_running
     }
 
-    fn mouse_moved(&mut self, (x, y): (i32, i32), view: &RenderTargetView) {
-        self.target_tile = self.tile_under((x, y), view);
+    fn mouse_moved(&mut self, (x, y): (i32, i32)) {
+        self.target_tile = self.tile_under((x, y));
     }
 
-    fn tile_under(&self, (x, y): (i32, i32), view: &RenderTargetView) -> Option<(usize, usize)> {
+    fn tile_under(&self, (x, y): (i32, i32)) -> Option<(usize, usize)> {
         if let Some(map) = self.maps.get(self.map_current) {
-            let (w, h, _, _) = view.get_dimensions();
+            let (w, h, _, _) = self.target.get_dimensions();
             let (cx, cy) = (w / 2, h / 2);
             let tx = ((map.center[0].round() + (x as f32 - cx as f32) / self.map_renderer.zoom) / 32.0).floor() as i32;
             let ty = ((map.center[1].round() + (cy as f32 - y as f32) / self.map_renderer.zoom) / 32.0).floor() as i32;
