@@ -355,6 +355,29 @@ impl<'ctx> Preprocessor<'ctx> {
         }
     }
 
+    /// Branch a child preprocessor from this preprocessor's current state.
+    pub fn branch<'ctx2>(&self, context: &'ctx2 Context) -> Preprocessor<'ctx2> {
+        Preprocessor {
+            context: context,
+            env_file: self.env_file.clone(),
+            include_stack: Default::default(),
+            history: Default::default(),  // TODO: support branching a second time
+            defines: self.defines.clone(),
+            maps: Default::default(),
+            skins: Default::default(),
+            scripts: Default::default(),
+            ifdef_stack: Default::default(),  // should be fine
+            ifdef_history: Default::default(),
+            last_input_loc: self.last_input_loc,
+            last_printable_input_loc: self.last_printable_input_loc,
+            output: Default::default(),
+            danger_idents: Default::default(),
+            docs_in: Default::default(),
+            docs_out: Default::default(),
+            in_interp_string: 0,
+        }
+    }
+
     /// Check whether this preprocessor's state as of the end of the given file
     /// matches the given child preprocessor.
     pub fn matches_end_of_file(&self, file: FileId, other: &Preprocessor) -> bool {

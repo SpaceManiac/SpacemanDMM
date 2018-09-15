@@ -259,12 +259,11 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                     Some(ref pp) => pp,
                     None => return Err(invalid_request("no preprocessor")),
                 };
-                let real_file_id = match self.context.get_file(&stripped) {
-                    Some(id) => id,
-                    None => return Err(invalid_request(format!("unregistered: {}", stripped.display()))),
-                };
                 let context = Default::default();
-                let mut preprocessor = preprocessor.branch_at_file(real_file_id, &context);
+                let (real_file_id, mut preprocessor) = match self.context.get_file(&stripped) {
+                    Some(id) => (id, preprocessor.branch_at_file(id, &context)),
+                    None => (FileId::default(), preprocessor.branch(&context)),
+                };
                 let contents = self.docs.read(path).map_err(invalid_request)?;
                 let file_id = preprocessor.push_file(stripped.to_owned(), contents);
                 let indent = dm::indents::IndentProcessor::new(&context, preprocessor);
