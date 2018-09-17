@@ -52,7 +52,7 @@ impl<'a, T: fmt::Display> fmt::Display for Around<'a, T> {
 /// The DM path operators.
 ///
 /// Which path operator is used typically only matters at the start of a path.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, Hash, PartialEq, Eq, Debug)]
 pub enum PathOp {
     /// `/` for absolute pathing.
     Slash,
@@ -208,7 +208,7 @@ augmented! {
 }
 
 /// A path optionally followed by a set of variables.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Hash, Eq, PartialEq, Debug)]
 pub struct Prefab<E=Expression> {
     pub path: TypePath,
     pub vars: LinkedHashMap<String, E>,
@@ -242,7 +242,7 @@ impl<E: fmt::Display> fmt::Display for Prefab<E> {
 }
 
 /// The different forms of the `new` command.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Hash, Eq, PartialEq, Debug)]
 pub enum NewType<E=Expression> {
     /// Implicit type, taken from context.
     Implicit,

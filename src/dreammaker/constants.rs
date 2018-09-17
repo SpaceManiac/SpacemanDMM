@@ -14,7 +14,7 @@ use super::preprocessor::DefineMap;
 ///
 /// This is intended to represent the degree to which constants are evaluated
 /// before being displayed in DreamMaker.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum Constant {
     /// The literal `null`.
     Null(Option<TreePath>),
@@ -42,7 +42,7 @@ pub enum Constant {
 }
 
 /// The constant functions which are represented as-is.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub enum ConstFn {
     /// The `icon()` type constructor.
     Icon,
