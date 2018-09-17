@@ -6,6 +6,7 @@ extern crate linked_hash_map;
 extern crate interval_tree;
 extern crate lodepng;
 #[macro_use] extern crate bitflags;
+extern crate noisy_float;
 
 use std::io;
 use std::path::Path;
