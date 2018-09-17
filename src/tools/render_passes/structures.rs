@@ -68,7 +68,7 @@ impl RenderPass for GravityGen {
             new_atom.set_var("icon_state", Constant::string(format!("on_{}", count)));
             if count <= 3 {
                 new_atom.set_var("density", Constant::Int(0));
-                new_atom.set_var("layer", Constant::Float(4.25));  // WALL_OBJ_LAYER
+                new_atom.set_var("layer", Constant::from(4.25));  // WALL_OBJ_LAYER
             }
             output.push(new_atom);
         }

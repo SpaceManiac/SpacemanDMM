@@ -443,7 +443,7 @@ pub fn plane_of<T: GetVar + ?Sized>(objtree: &ObjectTree, atom: &T) -> i32 {
 pub fn layer_of<T: GetVar + ?Sized>(objtree: &ObjectTree, atom: &T) -> i32 {
     match atom.get_var("layer", objtree) {
         &Constant::Int(i) => (i % 1000) * 1000,
-        &Constant::Float(f) => ((f % 1000.) * 1000.) as i32,
+        &Constant::Float(f) => ((f.raw() % 1000.) * 1000.) as i32,
         other => {
             eprintln!("not a layer: {:?} on {:?}", other, atom.get_path());
             2_000
