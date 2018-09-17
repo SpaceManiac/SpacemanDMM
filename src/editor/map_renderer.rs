@@ -152,7 +152,7 @@ impl MapRenderer {
         }
 
         // sort instances
-        instances.sort_by_key(|&(_, pop_id)| (pops[pop_id].plane, pops[pop_id].layer, pops[pop_id].texture));
+        instances.sort_by_key(|&(_, pop_id)| pops[pop_id].sort_key());
 
         let duration = to_seconds(Instant::now() - start);
 
@@ -259,6 +259,26 @@ impl ::std::cmp::Ord for RenderPop {
     }
 }
 
+impl ::std::hash::Hash for RenderPop {
+    fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+        self.category.hash(state);
+        self.texture.hash(state);
+        for each in self.size.iter() {
+            state.write_u32(each.to_bits());
+        }
+        for each in self.uv.iter() {
+            state.write_u32(each.to_bits());
+        }
+        for each in self.color.iter() {
+            state.write_u32(each.to_bits());
+        }
+        self.ofs_x.hash(state);
+        self.ofs_y.hash(state);
+        self.plane.hash(state);
+        self.layer.hash(state);
+    }
+}
+
 impl RenderPop {
     pub fn from_prefab(icons: &mut IconCache, objtree: &ObjectTree, fab: &Prefab) -> Option<RenderPop> {
         let icon = match fab.get_var("icon", objtree) {
@@ -331,6 +351,10 @@ impl RenderPop {
             Vertex { color, position: [loc.0 + width, loc.1 + height], uv: [uv[2], uv[1]] },
             Vertex { color, position: [loc.0 + width, loc.1], uv: [uv[2], uv[3]] },
         ]);
+    }
+
+    pub fn sort_key(&self) -> impl Ord {
+        (self.plane, self.layer, self.texture)
     }
 }
 
