@@ -28,35 +28,33 @@ pub use dm::dmi::*;
 // Icon file and metadata handling
 
 pub struct IconCache {
-    factory: Factory,
     base_path: PathBuf,
     icons: Vec<IconFile>,
     map: HashMap<PathBuf, Option<usize>>,
 }
 
 impl IconCache {
-    pub fn new(factory: &Factory, base_path: &Path) -> IconCache {
+    pub fn new(base_path: &Path) -> IconCache {
         IconCache {
-            factory: factory.clone(),
             base_path: base_path.to_owned(),
             icons: Default::default(),
             map: Default::default(),
         }
     }
 
-    pub fn retrieve(&mut self, relative_file_path: &Path) -> Option<&IconFile> {
+    pub fn retrieve(&mut self, relative_file_path: &Path) -> Option<&mut IconFile> {
         match self.map.entry(relative_file_path.to_owned()) {
             Entry::Occupied(entry) => match entry.into_mut().as_ref() {
-                Some(&i) => self.icons.get(i),
+                Some(&i) => self.icons.get_mut(i),
                 None => None,
             },
             Entry::Vacant(entry) => {
-                match load(&mut self.factory, &self.base_path.join(relative_file_path)) {
+                match load(&self.base_path.join(relative_file_path)) {
                     Some(icon) => {
                         let i = self.icons.len();
                         self.icons.push(icon);
                         entry.insert(Some(i));
-                        self.icons.last()
+                        self.icons.last_mut()
                     },
                     None => {
                         entry.insert(None);
@@ -71,11 +69,11 @@ impl IconCache {
         self.map.get(relative_file_path).and_then(|&x| x)
     }
 
-    pub fn get_by_id(&self, id: usize) -> Option<&IconFile> {
-        self.icons.get(id)
+    pub fn get_by_id(&mut self, id: usize) -> Option<&mut IconFile> {
+        self.icons.get_mut(id)
     }
 
-    pub fn len(&mut self) -> usize {
+    pub fn len(&self) -> usize {
         self.map.len()
     }
 
@@ -84,8 +82,8 @@ impl IconCache {
     }
 }
 
-fn load(factory: &mut Factory, path: &Path) -> Option<IconFile> {
-    match IconFile::from_file(factory, path) {
+fn load(path: &Path) -> Option<IconFile> {
+    match IconFile::from_file(path) {
         Ok(loaded) => Some(loaded),
         Err(err) => {
             eprintln!("error loading icon: {}\n  {}", path.display(), err);
@@ -101,11 +99,17 @@ pub struct IconFile {
     pub metadata: Metadata,
     pub width: u32,
     pub height: u32,
-    pub texture: Texture,
+    texture: MaybeTexture,
+}
+
+enum MaybeTexture {
+    Invalid,
+    Bitmap(lodepng::Bitmap<RGBA>),
+    Texture(Texture),
 }
 
 impl IconFile {
-    pub fn from_file(factory: &mut Factory, path: &Path) -> io::Result<IconFile> {
+    pub fn from_file(path: &Path) -> io::Result<IconFile> {
         let path = &::dm::fix_case(path);
         let mut decoder = PngState::new();
         decoder.info_raw.colortype = ColorType::RGBA;
@@ -136,8 +140,20 @@ impl IconFile {
             metadata: metadata,
             width: bitmap.width as u32,
             height: bitmap.height as u32,
-            texture: load_texture(factory, bitmap),
+            texture: MaybeTexture::Bitmap(bitmap),
         })
+    }
+
+    pub fn texture(&mut self, factory: &mut Factory) -> &Texture {
+        self.texture = match ::std::mem::replace(&mut self.texture, MaybeTexture::Invalid) {
+            MaybeTexture::Bitmap(bitmap) => MaybeTexture::Texture(load_texture(factory, bitmap)),
+            other => other,
+        };
+        if let MaybeTexture::Texture(ref t) = self.texture {
+            t
+        } else {
+            panic!("IconFile::texture in invalid state")
+        }
     }
 
     pub fn uv_of(&self, icon_state: &str, dir: i32) -> Option<(f32, f32, f32, f32)> {

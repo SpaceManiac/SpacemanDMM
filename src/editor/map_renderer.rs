@@ -80,6 +80,7 @@ pub struct RenderedMap {
 
 struct DrawCall {
     category: u32,
+    texture_id: u32,
     texture: Texture,
     start: u32,
     len: u32,
@@ -100,7 +101,7 @@ impl MapRenderer {
             gfx::texture::WrapMode::Clamp));
 
         MapRenderer {
-            icons: IconCache::new(factory, ".".as_ref()),
+            icons: IconCache::new(".".as_ref()),
             zoom: 1.0,
             layers: [true, false, true, true, true],
 
@@ -179,15 +180,16 @@ impl PreparedMap {
             indices.extend_from_slice(&[start, start+1, start+3, start+1, start+2, start+3]);
 
             let pop = self.pops[pop_id];
-            let texture = &icons.get_by_id(pop.texture as usize).expect("icon get_by_id").texture;
             if let Some(call) = draw_calls.last_mut() {
-                if &call.texture == texture && call.category == pop.category {
+                if call.texture_id == pop.texture && call.category == pop.category {
                     call.len += 6;
                     continue;
                 }
             }
+            let texture = icons.get_by_id(pop.texture as usize).expect("icon get_by_id").texture(factory);
             draw_calls.push(DrawCall {
                 category: pop.category,
+                texture_id: pop.texture,
                 texture: texture.clone(),
                 start: i_start,
                 len: 6,

@@ -178,7 +178,6 @@ impl EditorScene {
                 self.config.save();
                 self.tools = tools::configure(&environment.objtree);
                 self.map_renderer.icons = dmi::IconCache::new(
-                    &self.factory,
                     &environment.path.parent().expect("invalid environment file path"));
                 self.environment = Some(environment);
                 for map in self.maps.iter_mut() {
@@ -224,7 +223,7 @@ impl EditorScene {
                 ToolIcon::Dmi { icon, icon_state } => if self.environment.is_some() {
                     if let Some(icon) = self.map_renderer.icons.retrieve(icon.as_ref()) {
                         if let Some((u1, v1, u2, v2)) = icon.uv_of(&icon_state, 2) {
-                            let tex = icon.texture.clone();
+                            let tex = icon.texture(&mut self.factory).clone();
                             let samp = self.map_renderer.sampler.clone();
                             ToolIcon::Loaded {
                                 tex: renderer.textures().insert((tex, samp)),
