@@ -651,18 +651,23 @@ impl EditorScene {
                 ui.window(im_str!("{}##{:?}/{}", fab.path, edit.coords, edit.idx))
                     .opened(&mut keep)
                     .position(ui.imgui().mouse_pos(), ImGuiCond::Appearing)
-                    .size((300.0, 450.0), ImGuiCond::FirstUseEver)
+                    .size((350.0, 500.0), ImGuiCond::FirstUseEver)
                     .horizontal_scrollbar(true)
+                    .menu_bar(true)
                     .build(|| {
-                        if ui.button(im_str!("Apply"), (100.0, 20.0)) {
-                            // TODO: actually apply
-                            keep2 = false;
-                        }
-                        ui.same_line(0.0);
-                        if ui.button(im_str!("Cancel"), (100.0, 20.0)) {
-                            keep2 = false;
-                        }
-                        ui.input_text(im_str!("Filter"), filter).build();
+                        ui.menu_bar(|| {
+                            if ui.menu_item(im_str!("Apply")).build() {
+                                // TODO: actually apply
+                                keep2 = false;
+                            }
+                            ui.separator();
+                            ui.menu(im_str!("Filter...")).build(|| {
+                                ui.input_text(im_str!(""), filter).build();
+                                if ui.menu_item(im_str!("Clear")).build() {
+                                    filter.clear();
+                                }
+                            });
+                        });
 
                         // find the "best" type by chopping the path if needed
                         let mut ty = None;
@@ -705,8 +710,7 @@ impl EditorScene {
 
                         // show the instance variables - everything which is
                         // actually set is right at the top
-                        ui.separator();
-                        ui.text(im_str!("Instance variables"));
+                        ui.text(im_str!("Instance variables ({})", fab.vars.len()));
                         for (name, value) in fab.vars.iter() {
                             if !name.contains(filter.to_str()) {
                                 continue;
@@ -734,7 +738,7 @@ impl EditorScene {
                                 break;
                             }
                             ui.separator();
-                            ui.text(im_str!("{}", &search.path));
+                            ui.text(im_str!("{} ({})", &search.path, search.vars.len()));
 
                             for (name, var) in search.vars.iter() {
                                 if !name.contains(filter.to_str()) {
