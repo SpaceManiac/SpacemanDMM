@@ -255,6 +255,15 @@ impl EditorScene {
     }
 
     fn run_ui(&mut self, ui: &Ui) -> bool {
+        #[cfg(not(target_os = "macos"))]
+        macro_rules! ctrl_shortcut {
+            ($rest:expr) => (im_str!("Ctrl+{}", $rest))
+        }
+        #[cfg(target_os = "macos")]
+        macro_rules! ctrl_shortcut {
+            ($rest:expr) => (im_str!("Cmd+{}", $rest))
+        }
+
         let mut continue_running = true;
         let mut window_positions_cond = match self.ui_lock_windows {
             false => ImGuiCond::FirstUseEver,
@@ -264,7 +273,7 @@ impl EditorScene {
         ui.main_menu_bar(|| {
             ui.menu(im_str!("File")).build(|| {
                 if ui.menu_item(im_str!("Open environment"))
-                    .shortcut(im_str!("Ctrl+Shift+O"))
+                    .shortcut(ctrl_shortcut!("Shift+O"))
                     .build() { self.open_environment(); }
                 ui.menu(im_str!("Recent environments")).enabled(!self.config.recent.is_empty()).build(|| {
                     let mut clicked = None;
@@ -281,24 +290,24 @@ impl EditorScene {
                     }
                 });
                 if ui.menu_item(im_str!("Update environment"))
-                    .shortcut(im_str!("Ctrl+U"))
+                    .shortcut(ctrl_shortcut!("U"))
                     .build() { self.reload_objtree(); }
                 ui.separator();
                 if ui.menu_item(im_str!("New"))
-                    .shortcut(im_str!("Ctrl+N"))
+                    .shortcut(ctrl_shortcut!("N"))
                     .build() { self.new_map(); }
                 if ui.menu_item(im_str!("Open"))
-                    .shortcut(im_str!("Ctrl+O"))
+                    .shortcut(ctrl_shortcut!("O"))
                     .build() { self.open_map(); }
                 if ui.menu_item(im_str!("Close"))
-                    .shortcut(im_str!("Ctrl+W"))
+                    .shortcut(ctrl_shortcut!("W"))
                     .build() { self.close_map(); }
                 ui.separator();
                 if ui.menu_item(im_str!("Save"))
-                    .shortcut(im_str!("Ctrl+S"))
+                    .shortcut(ctrl_shortcut!("S"))
                     .build() { self.save_map(); }
                 if ui.menu_item(im_str!("Save As"))
-                    .shortcut(im_str!("Ctrl+Shift+S"))
+                    .shortcut(ctrl_shortcut!("Shift+S"))
                     .build() { self.save_map_as(false); }
                 if ui.menu_item(im_str!("Save Copy As"))
                     .build() { self.save_map_as(true); }
@@ -319,24 +328,24 @@ impl EditorScene {
             }
             ui.menu(im_str!("Edit")).build(|| {
                 if ui.menu_item(im_str!("Undo"))
-                    .shortcut(im_str!("Ctrl+Z"))
+                    .shortcut(ctrl_shortcut!("Z"))
                     .enabled(can_undo)
                     .build() { self.undo(); }
                 if ui.menu_item(im_str!("Redo"))
-                    .shortcut(im_str!("Ctrl+Shift+Z"))
+                    .shortcut(ctrl_shortcut!("Shift+Z"))
                     .enabled(can_redo)
                     .build() { self.redo(); }
                 ui.separator();
                 ui.menu_item(im_str!("Cut"))
-                    .shortcut(im_str!("Ctrl+X"))
+                    .shortcut(ctrl_shortcut!("X"))
                     .enabled(false)
                     .build();
                 ui.menu_item(im_str!("Copy"))
-                    .shortcut(im_str!("Ctrl+C"))
+                    .shortcut(ctrl_shortcut!("C"))
                     .enabled(false)
                     .build();
                 ui.menu_item(im_str!("Paste"))
-                    .shortcut(im_str!("Ctrl+V"))
+                    .shortcut(ctrl_shortcut!("V"))
                     .enabled(false)
                     .build();
                 ui.menu_item(im_str!("Delete"))
@@ -345,11 +354,11 @@ impl EditorScene {
                     .build();
                 ui.separator();
                 ui.menu_item(im_str!("Select All"))
-                    .shortcut(im_str!("Ctrl+A"))
+                    .shortcut(ctrl_shortcut!("A"))
                     .enabled(false)
                     .build();
                 ui.menu_item(im_str!("Select None"))
-                    .shortcut(im_str!("Ctrl+Shift+A"))
+                    .shortcut(ctrl_shortcut!("Shift+A"))
                     .enabled(false)
                     .build();
             });
@@ -374,19 +383,19 @@ impl EditorScene {
                     .build();
                 ui.separator();
                 ui.menu_item(im_str!("Area"))
-                    .shortcut(im_str!("Ctrl+1"))
+                    .shortcut(ctrl_shortcut!("1"))
                     .selected(&mut self.map_renderer.layers[1])
                     .build();
                 ui.menu_item(im_str!("Turf"))
-                    .shortcut(im_str!("Ctrl+2"))
+                    .shortcut(ctrl_shortcut!("2"))
                     .selected(&mut self.map_renderer.layers[2])
                     .build();
                 ui.menu_item(im_str!("Obj"))
-                    .shortcut(im_str!("Ctrl+3"))
+                    .shortcut(ctrl_shortcut!("3"))
                     .selected(&mut self.map_renderer.layers[3])
                     .build();
                 ui.menu_item(im_str!("Mob"))
-                    .shortcut(im_str!("Ctrl+4"))
+                    .shortcut(ctrl_shortcut!("4"))
                     .selected(&mut self.map_renderer.layers[4])
                     .build();
             });

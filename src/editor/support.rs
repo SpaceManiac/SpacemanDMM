@@ -173,7 +173,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
 
                         if pressed && !kbd_captured {
                             if let Some(key) = input.virtual_keycode {
-                                scene.chord(imgui.key_ctrl(), imgui.key_shift(), imgui.key_alt(), key);
+                                scene.chord(ctrl(&imgui), imgui.key_shift(), imgui.key_alt(), key);
                             }
                         }
                     },
@@ -202,7 +202,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                     } => {
                         mouse_state.wheel = y;
                         if !mouse_captured {
-                            scene.mouse_wheel(imgui.key_ctrl(), imgui.key_shift(), imgui.key_alt(), x, y);
+                            scene.mouse_wheel(ctrl(&imgui), imgui.key_shift(), imgui.key_alt(), x, y);
                         }
                     },
                     MouseWheel {
@@ -217,7 +217,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                             .to_logical(hidpi_factor);
                         mouse_state.wheel = diff.y as f32;
                         if !mouse_captured {
-                            scene.mouse_wheel(imgui.key_ctrl(), imgui.key_shift(), imgui.key_alt(), diff.x as f32, diff.y as f32);
+                            scene.mouse_wheel(ctrl(&imgui), imgui.key_shift(), imgui.key_alt(), diff.x as f32, diff.y as f32);
                         }
                     },
                     ReceivedCharacter(c) => imgui.add_input_character(c),
@@ -359,4 +359,14 @@ fn dark_theme() -> [ImVec4; 43] {
         ImVec4::new(0.80, 0.80, 0.80, 0.35),
         ImVec4::new(1.00, 1.00, 0.00, 0.90),
     ]
+}
+
+#[cfg(not(target_os = "macos"))]
+fn ctrl(imgui: &ImGui) -> bool {
+    imgui.key_ctrl()
+}
+
+#[cfg(target_os = "macos")]
+fn ctrl(imgui: &ImGui) -> bool {
+    imgui.key_super()
 }
