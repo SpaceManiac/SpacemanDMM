@@ -867,6 +867,7 @@ impl EditorScene {
 
         if let Some(map) = self.maps.get_mut(self.map_current) {
             map.center[axis] += 4.0 * 32.0 * mul * y / self.map_renderer.zoom;
+            map.clamp_center();
         }
         self.target_tile = self.tile_under(self.last_mouse_pos);
     }
@@ -1112,6 +1113,14 @@ struct EditorMap {
     center: [f32; 2],
     rendered: Vec<Option<map_renderer::RenderedMap>>,
     edit_atoms: Vec<EditAtom>,
+}
+
+impl EditorMap {
+    fn clamp_center(&mut self) {
+        let (x, y, _) = self.hist.current().dim_xyz();
+        self.center[0] = self.center[0].min(x as f32 * 32.0).max(0.0);
+        self.center[1] = self.center[1].min(y as f32 * 32.0).max(0.0);
+    }
 }
 
 struct NewMap {
