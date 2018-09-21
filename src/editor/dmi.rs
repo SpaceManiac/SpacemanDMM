@@ -2,8 +2,9 @@
 
 use std::io;
 use std::path::{Path, PathBuf};
-use std::collections::hash_map::{HashMap, Entry};
+use std::collections::hash_map::HashMap;
 use std::collections::BTreeMap;
+use std::sync::{Arc, RwLock};
 
 use lodepng::{self, RGBA};
 use lodepng::ffi::{State as PngState, ColorType};
@@ -29,57 +30,67 @@ pub use dm::dmi::*;
 
 pub struct IconCache {
     base_path: PathBuf,
-    icons: Vec<IconFile>,
-    map: HashMap<PathBuf, Option<usize>>,
+    lock: RwLock<IconCacheInner>,
+}
+
+#[derive(Default)]
+struct IconCacheInner {
+    icons: Vec<Arc<IconFile>>,
+    paths: HashMap<PathBuf, Option<usize>>,
 }
 
 impl IconCache {
     pub fn new(base_path: &Path) -> IconCache {
         IconCache {
             base_path: base_path.to_owned(),
-            icons: Default::default(),
-            map: Default::default(),
+            lock: Default::default(),
         }
     }
 
     pub fn retrieve(&mut self, relative_file_path: &Path) -> Option<&mut IconFile> {
-        match self.map.entry(relative_file_path.to_owned()) {
-            Entry::Occupied(entry) => match entry.into_mut().as_ref() {
-                Some(&i) => self.icons.get_mut(i),
-                None => None,
-            },
-            Entry::Vacant(entry) => {
-                match load(&self.base_path.join(relative_file_path)) {
-                    Some(icon) => {
-                        let i = self.icons.len();
-                        self.icons.push(icon);
-                        entry.insert(Some(i));
-                        self.icons.last_mut()
-                    },
-                    None => {
-                        entry.insert(None);
-                        None
-                    },
+        self.get_index(relative_file_path).map(move |i| self.get_icon_mut(i))
+    }
+
+    pub fn get_index(&self, relative_file_path: &Path) -> Option<usize> {
+        let existing = self.lock.read().expect("IconCache poisoned").paths.get(relative_file_path).cloned();
+        // shouldn't be inlined or the lifetime of the lock will be extended
+        match existing {
+            // inner None = failure to load, don't keep trying every time
+            Some(existing) => existing,
+            None => match load(&self.base_path.join(relative_file_path)) {
+                Some(icon) => {
+                    let arc = Arc::new(icon);
+                    let mut lock = self.lock.write().expect("IconCache poisoned");
+                    let i = lock.icons.len();
+                    lock.icons.push(arc);
+                    lock.paths.insert(relative_file_path.to_owned(), Some(i));
+                    Some(i)
+                }
+                None => {
+                    let mut lock = self.lock.write().expect("IconCache poisoned");
+                    lock.paths.insert(relative_file_path.to_owned(), None);
+                    None
                 }
             }
         }
     }
 
-    pub fn get_id(&self, relative_file_path: &Path) -> Option<usize> {
-        self.map.get(relative_file_path).and_then(|&x| x)
+    pub fn get_icon(&self, id: usize) -> Arc<IconFile> {
+        self.lock.read().expect("IconCache poisoned").icons[id].clone()
     }
 
-    pub fn get_by_id(&mut self, id: usize) -> Option<&mut IconFile> {
-        self.icons.get_mut(id)
+    pub fn get_icon_mut(&mut self, id: usize) -> &mut IconFile {
+        //Arc::make_mut(&mut self.lock.get_mut().expect("IconCache poisoned").icons[id])
+        unimplemented!()
     }
 
     pub fn len(&self) -> usize {
-        self.map.len()
+        self.lock.read().expect("IconCache poisoned").icons.len()
     }
 
-    pub fn clear(&mut self) {
+    /*pub fn clear(&mut self) {
         self.map.clear();
-    }
+    }*/
 }
 
 fn load(path: &Path) -> Option<IconFile> {

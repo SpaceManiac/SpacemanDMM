@@ -186,7 +186,7 @@ impl PreparedMap {
                     continue;
                 }
             }
-            let texture = icons.get_by_id(pop.texture as usize).expect("icon get_by_id").texture(factory);
+            let texture = icons.get_icon_mut(pop.texture as usize).texture(factory);
             draw_calls.push(DrawCall {
                 category: pop.category,
                 texture_id: pop.texture,
@@ -282,7 +282,7 @@ impl ::std::hash::Hash for RenderPop {
 }
 
 impl RenderPop {
-    pub fn from_prefab(icons: &mut IconCache, objtree: &ObjectTree, fab: &Prefab) -> Option<RenderPop> {
+    pub fn from_prefab(icons: &IconCache, objtree: &ObjectTree, fab: &Prefab) -> Option<RenderPop> {
         let icon = match fab.get_var("icon", objtree) {
             &Constant::Resource(ref path) | &Constant::String(ref path) => path,
             _ => return None,
@@ -294,11 +294,12 @@ impl RenderPop {
         let dir = fab.get_var("dir", objtree).to_int().unwrap_or(::dmi::SOUTH);
 
         let (width, height, uv);
+        let texture_id = match icons.get_index(icon.as_ref()) {
+            Some(id) => id,
+            None => return None,  // couldn't load
+        };
         {
-            let icon_file = match icons.retrieve(icon.as_ref()) {
-                Some(icon_file) => icon_file,
-                None => return None,
-            };
+            let icon_file = icons.get_icon(texture_id);
             width = icon_file.metadata.width as f32;
             height = icon_file.metadata.height as f32;
 
@@ -308,10 +309,6 @@ impl RenderPop {
             };
             uv = [uv_.0, uv_.1, uv_.2, uv_.3];
         }
-        let texture = match icons.get_id(icon.as_ref()) {
-            Some(id) => id as u32,
-            None => return None,  // shouldn't happen
-        };
 
         let color = minimap::color_of(objtree, fab);
         let color = [
@@ -327,7 +324,7 @@ impl RenderPop {
 
         Some(RenderPop {
             category: category_of(&fab.path) as u32,
-            texture,
+            texture: texture_id as u32,
             uv,
             color,
             size: [width, height],
