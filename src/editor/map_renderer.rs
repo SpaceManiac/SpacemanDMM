@@ -146,7 +146,7 @@ impl MapRenderer {
             for (x, key) in row.iter().enumerate() {
                 for &pop_id in pop_dictionary[key].iter() {
                     let v_start = vertices.len() as u32;
-                    pops[pop_id].instance((x as u32, y as u32), &mut vertices);
+                    vertices.extend_from_slice(&pops[pop_id].instance((x as u32, y as u32)));
                     instances.push((v_start, pop_id));
                 }
             }
@@ -338,7 +338,7 @@ impl RenderPop {
         })
     }
 
-    pub fn instance(&self, loc: (u32, u32), vertices: &mut Vec<Vertex>) {
+    pub fn instance(&self, loc: (u32, u32)) -> [Vertex; 4] {
         let uv = self.uv;
         let loc = (
             ((loc.0 * TILE_SIZE) as i32 + self.ofs_x) as f32,
@@ -347,12 +347,12 @@ impl RenderPop {
         let (width, height) = (self.size[0], self.size[1]);
         let color = self.color;
 
-        vertices.extend_from_slice(&[
+        [
             Vertex { color, position: [loc.0, loc.1], uv: [uv[0], uv[3]] },
             Vertex { color, position: [loc.0, loc.1 + height], uv: [uv[0], uv[1]] },
             Vertex { color, position: [loc.0 + width, loc.1 + height], uv: [uv[2], uv[1]] },
             Vertex { color, position: [loc.0 + width, loc.1], uv: [uv[2], uv[3]] },
-        ]);
+        ]
     }
 
     pub fn sort_key(&self) -> impl Ord {
