@@ -302,12 +302,10 @@ impl RenderPop {
             let icon_file = icons.get_icon(texture_id);
             width = icon_file.metadata.width as f32;
             height = icon_file.metadata.height as f32;
-
-            let uv_ = match icon_file.uv_of(&icon_state, dir) {
+            uv = match icon_file.uv_of(&icon_state, dir) {
                 Some(rect) => rect,
                 None => return None,
             };
-            uv = [uv_.0, uv_.1, uv_.2, uv_.3];
         }
 
         let color = minimap::color_of(objtree, fab);

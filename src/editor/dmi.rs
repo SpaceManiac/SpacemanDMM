@@ -167,13 +167,13 @@ impl IconFile {
         }
     }
 
-    pub fn uv_of(&self, icon_state: &str, dir: i32) -> Option<(f32, f32, f32, f32)> {
-        self.rect_of(icon_state, dir).map(|(x1, y1, w, h)| (
+    pub fn uv_of(&self, icon_state: &str, dir: i32) -> Option<[f32; 4]> {
+        self.rect_of(icon_state, dir).map(|(x1, y1, w, h)| [
             x1 as f32 / self.width as f32,
             y1 as f32 / self.height as f32,
             (x1 + w) as f32 / self.width as f32,
             (y1 + h) as f32 / self.height as f32,
-        ))
+        ])
     }
 
     pub fn rect_of(&self, icon_state: &str, dir: i32) -> Option<Rect> {
