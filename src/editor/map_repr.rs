@@ -33,6 +33,12 @@ pub struct Instance {
     pub pop: Rc<Prefab>,
 }
 
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct InstanceId {
+    z: u32,
+    idx: usize,
+}
+
 #[derive(Debug)]
 pub struct Defer<'a> {
     map: &'a mut AtomMap,
@@ -62,6 +68,10 @@ impl AtomMap {
         atom_map
     }
 
+    pub fn dim_xyz(&self) -> (u32, u32, u32) {
+        (self.size.0, self.size.1, self.levels.len() as u32)
+    }
+
     pub fn refresh_pops(&mut self, icons: &IconCache, objtree: &ObjectTree) {
         for (prefab, rpop) in self.pops.iter_mut() {
             *rpop = RenderPop::from_prefab(icons, objtree, &prefab).unwrap_or_default();
@@ -83,15 +93,15 @@ impl AtomMap {
         self.sort_again(z);
     }
 
-    fn add_instance_unsorted(&mut self, (x, y, z): (u32, u32, u32), prefab: Rc<Prefab>) -> usize {
+    fn add_instance_unsorted(&mut self, (x, y, z): (u32, u32, u32), prefab: Rc<Prefab>) -> InstanceId {
         let level = &mut self.levels[z as usize];
         let new_instance = level.prep_instance(&mut self.pops, (x, y), prefab);
         level.sorted_order.push(new_instance);
         level.index_buffer.push(indices(new_instance));
-        new_instance
+        InstanceId { z, idx: new_instance }
     }
 
-    pub fn add_instance(&mut self, (x, y, z): (u32, u32, u32), prefab: Rc<Prefab>) -> usize {
+    pub fn add_instance(&mut self, (x, y, z): (u32, u32, u32), prefab: Rc<Prefab>) -> InstanceId {
         let pops = &mut self.pops;
         let level = &mut self.levels[z as usize];
         let new_instance = level.prep_instance(pops, (x, y), prefab);
@@ -109,7 +119,17 @@ impl AtomMap {
         };
         sorted_order.insert(pos, new_instance);
         level.index_buffer.insert(pos, indices(new_instance));
-        new_instance
+        InstanceId { z, idx: new_instance }
+    }
+
+    pub fn get_instance(&self, id: InstanceId) -> Option<&Instance> {
+        let level = &self.levels[id.z as usize];
+        if id.idx >= level.instances.len() || level.instances.freelist.contains(&id.idx) {
+            // TODO: the contains() call is probably not fast
+            None
+        } else {
+            Some(level.instances.get_key(id.idx))
+        }
     }
 
     pub fn sort_again(&mut self, z: u32) {
@@ -158,7 +178,7 @@ impl<'a> Defer<'a> {
         self.map.add_pop(prefab, icons, objtree)
     }
 
-    pub fn add_instance(&mut self, (x, y): (u32, u32), prefab: Rc<Prefab>) -> usize {
+    pub fn add_instance(&mut self, (x, y): (u32, u32), prefab: Rc<Prefab>) -> InstanceId {
         self.map.add_instance_unsorted((x, y, self.z), prefab)
     }
 }
