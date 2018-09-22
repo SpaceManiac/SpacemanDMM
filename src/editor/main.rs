@@ -221,9 +221,14 @@ impl EditorScene {
         for tool in self.tools.iter_mut() {
             tool.icon = match std::mem::replace(&mut tool.icon, ToolIcon::None) {
                 ToolIcon::Dmi { icon, icon_state } => if self.environment.is_some() {
-                    if let Some(icon) = self.map_renderer.icons.retrieve(icon.as_ref()) {
+                    if let Some(id) = self.map_renderer.icons.get_index(icon.as_ref()) {
+                        let icon = self.map_renderer.icons.get_icon(id);
                         if let Some([u1, v1, u2, v2]) = icon.uv_of(&icon_state, 2) {
-                            let tex = icon.texture(&mut self.factory).clone();
+                            let tex = self.map_renderer.icon_textures.retrieve(
+                                &mut self.factory,
+                                &self.map_renderer.icons,
+                                id,
+                            ).clone();
                             let samp = self.map_renderer.sampler.clone();
                             ToolIcon::Loaded {
                                 tex: renderer.textures().insert((tex, samp)),
@@ -1070,7 +1075,7 @@ impl EditorScene {
                     map.hist.current(),
                     map.z_current,
                 ).render(
-                    &mut self.map_renderer.icons,
+                    &mut self.map_renderer,
                     &mut self.factory,
                 ));
             }

@@ -34,6 +34,11 @@ pub struct IconCache {
 }
 
 #[derive(Default)]
+pub struct TextureCache {
+    textures: Vec<Option<Texture>>,
+}
+
+#[derive(Default)]
 struct IconCacheInner {
     icons: Vec<Arc<IconFile>>,
     paths: HashMap<PathBuf, Option<usize>>,
@@ -45,10 +50,6 @@ impl IconCache {
             base_path: base_path.to_owned(),
             lock: Default::default(),
         }
-    }
-
-    pub fn retrieve(&mut self, relative_file_path: &Path) -> Option<&mut IconFile> {
-        self.get_index(relative_file_path).map(move |i| self.get_icon_mut(i))
     }
 
     pub fn get_index(&self, relative_file_path: &Path) -> Option<usize> {
@@ -79,11 +80,6 @@ impl IconCache {
         self.lock.read().expect("IconCache poisoned").icons[id].clone()
     }
 
-    pub fn get_icon_mut(&mut self, id: usize) -> &mut IconFile {
-        //Arc::make_mut(&mut self.lock.get_mut().expect("IconCache poisoned").icons[id])
-        unimplemented!()
-    }
-
     pub fn len(&self) -> usize {
         self.lock.read().expect("IconCache poisoned").icons.len()
     }
@@ -91,6 +87,22 @@ impl IconCache {
     /*pub fn clear(&mut self) {
         self.map.clear();
     }*/
+}
+
+impl TextureCache {
+    pub fn retrieve(&mut self, factory: &mut Factory, icons: &IconCache, id: usize) -> &Texture {
+        if id >= self.textures.len() {
+            self.textures.resize(id + 1, None);
+        }
+        if self.textures[id].is_none() {
+            self.textures[id] = Some(load_texture(factory, &icons.get_icon(id).bitmap));
+        }
+        self.textures[id].as_ref().unwrap()
+    }
+
+    pub fn clear(&mut self) {
+        self.textures.clear();
+    }
 }
 
 fn load(path: &Path) -> Option<IconFile> {
@@ -110,13 +122,7 @@ pub struct IconFile {
     pub metadata: Metadata,
     pub width: u32,
     pub height: u32,
-    texture: MaybeTexture,
-}
-
-enum MaybeTexture {
-    Invalid,
-    Bitmap(lodepng::Bitmap<RGBA>),
-    Texture(Texture),
+    bitmap: lodepng::Bitmap<RGBA>,
 }
 
 impl IconFile {
@@ -151,20 +157,8 @@ impl IconFile {
             metadata: metadata,
             width: bitmap.width as u32,
             height: bitmap.height as u32,
-            texture: MaybeTexture::Bitmap(bitmap),
+            bitmap: bitmap,
         })
-    }
-
-    pub fn texture(&mut self, factory: &mut Factory) -> &Texture {
-        self.texture = match ::std::mem::replace(&mut self.texture, MaybeTexture::Invalid) {
-            MaybeTexture::Bitmap(bitmap) => MaybeTexture::Texture(load_texture(factory, bitmap)),
-            other => other,
-        };
-        if let MaybeTexture::Texture(ref t) = self.texture {
-            t
-        } else {
-            panic!("IconFile::texture in invalid state")
-        }
     }
 
     pub fn uv_of(&self, icon_state: &str, dir: i32) -> Option<[f32; 4]> {
@@ -216,14 +210,14 @@ pub fn texture_from_bytes(factory: &mut Factory, bytes: &[u8]) -> io::Result<Tex
         Ok(_) => return Err(io::Error::new(io::ErrorKind::InvalidData, "not RGBA")),
         Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidData, e)),
     };
-    Ok(load_texture(factory, bitmap))
+    Ok(load_texture(factory, &bitmap))
 }
 
-pub fn load_texture(factory: &mut Factory, bitmap: lodepng::Bitmap<RGBA>) -> Texture {
+pub fn load_texture(factory: &mut Factory, bitmap: &lodepng::Bitmap<RGBA>) -> Texture {
     let width = bitmap.width;
     let height = bitmap.height;
     let mut new_buffer = Vec::with_capacity(4 * width * height);
-    for pixel in bitmap.buffer {
+    for pixel in &bitmap.buffer {
         new_buffer.push(pixel.r);
         new_buffer.push(pixel.g);
         new_buffer.push(pixel.b);

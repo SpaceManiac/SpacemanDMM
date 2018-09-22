@@ -53,6 +53,7 @@ gfx_defines! {
 
 pub struct MapRenderer {
     pub icons: IconCache,
+    pub icon_textures: TextureCache,
     pub zoom: f32,
     pub layers: [bool; 5],
 
@@ -102,6 +103,7 @@ impl MapRenderer {
 
         MapRenderer {
             icons: IconCache::new(".".as_ref()),
+            icon_textures: TextureCache::default(),
             zoom: 1.0,
             layers: [true, false, true, true, true],
 
@@ -168,7 +170,7 @@ impl MapRenderer {
 
 impl PreparedMap {
     #[must_use]
-    pub fn render(&self, icons: &mut IconCache, factory: &mut Factory) -> RenderedMap {
+    pub fn render(&self, parent: &mut MapRenderer, factory: &mut Factory) -> RenderedMap {
         let start = Instant::now();
 
         // TODO: determine how much of this loop belongs in prepare()
@@ -186,7 +188,7 @@ impl PreparedMap {
                     continue;
                 }
             }
-            let texture = icons.get_icon_mut(pop.texture as usize).texture(factory);
+            let texture = parent.icon_textures.retrieve(factory, &parent.icons, pop.texture as usize);
             draw_calls.push(DrawCall {
                 category: pop.category,
                 texture_id: pop.texture,
