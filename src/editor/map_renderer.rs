@@ -152,7 +152,7 @@ impl MapRenderer {
         RenderedMap {
             atoms_len: level.instances.len(),
             pops_len: map.pops.len(),
-            duration: [0.0, to_seconds(Instant::now() - start)],
+            duration: [to_seconds(map.duration), to_seconds(Instant::now() - start)],
             draw_calls,
 
             ibuf,

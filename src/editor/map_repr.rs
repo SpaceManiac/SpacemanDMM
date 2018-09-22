@@ -14,6 +14,7 @@ pub struct AtomMap {
     pub size: (u32, u32),
     pub pops: WeakKeyHashMap<Weak<Prefab>, RenderPop>,
     pub levels: Vec<AtomZ>,
+    pub duration: ::std::time::Duration,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -47,11 +48,13 @@ pub struct Defer<'a> {
 
 impl AtomMap {
     pub fn new(map: &Map, icons: &IconCache, objtree: &ObjectTree) -> AtomMap {
+        let start = ::std::time::Instant::now();
         let (dim_x, dim_y, dim_z) = map.dim_xyz();
         let mut atom_map = AtomMap {
             size: (dim_x as u32, dim_y as u32),
             pops: Default::default(),
             levels: Default::default(),
+            duration: Default::default(),
         };
 
         for z in 0..dim_z {
@@ -65,6 +68,7 @@ impl AtomMap {
                 }
             });
         }
+        atom_map.duration = ::std::time::Instant::now() - start;
         atom_map
     }
 
