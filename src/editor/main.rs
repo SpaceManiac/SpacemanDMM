@@ -191,26 +191,43 @@ impl EditorScene {
                     }
                 }
             }
-            Ok(TaskResult::Map(path, dmm)) => {
-                self.map_current = self.maps.len();
-                let (x, y, z) = dmm.dim_xyz();
-                let mut rendered = Vec::new();
-                for _ in 0..z {
-                    rendered.push(None);
-                }
-                self.maps.push(EditorMap {
-                    state: MapState::Pending(dmm),
-                    path: Some(path),
-                    z_current: 0,
-                    center: [x as f32 * 16.0, y as f32 * 16.0],
-                    rendered,
-                    edit_atoms: Vec::new(),
-                });
-                self.render_map(false);
-            }
         }));
         tasks.extend(std::mem::replace(&mut self.tasks, Vec::new()));
         self.tasks = tasks;
+
+        // TODO: error handling
+        for map in self.maps.iter_mut() {
+            map.state = match std::mem::replace(&mut map.state, MapState::Invalid) {
+                MapState::Loading(rx) => if let Ok(val) = rx.try_recv() {
+                    MapState::Pending(val)
+                } else {
+                    MapState::Loading(rx)
+                },
+                MapState::Pending(map) => if let Some(env) = self.environment.as_ref() {
+                    let (tx, rx) = mpsc::channel();
+                    let base = Arc::new(map);
+                    let icons = self.map_renderer.icons.clone();
+                    let objtree = env.objtree.clone();
+                    let base2 = base.clone();
+                    std::thread::spawn(move || {
+                        let _ = tx.send(map_repr::AtomMap::new(&base2, &icons, &objtree));
+                    });
+                    MapState::Preparing(base, rx)
+                } else {
+                    MapState::Pending(map)
+                },
+                MapState::Preparing(base, rx) => if let Ok(val) = rx.try_recv() {
+                    let merge_base = match Arc::try_unwrap(base) {
+                        Ok(map) => map,
+                        Err(arc) => (*arc).clone(),
+                    };
+                    MapState::Active { merge_base, hist: History::new("Loaded".to_owned(), val) }
+                } else {
+                    MapState::Preparing(base, rx)
+                },
+                other => other,
+            };
+        }
 
         self.render_map(false);
         if let Some(map) = self.maps.get_mut(self.map_current) {
@@ -450,9 +467,29 @@ impl EditorScene {
 
             const SPINNER: &[&str] = &["|", "/", "-", "\\"];
             self.counter = self.counter.wrapping_add(1);
+            let mut i = 0;
+            macro_rules! spinner {
+                () => (SPINNER[(self.counter / 10 + { i += 1; i }) % SPINNER.len()])
+            }
+
             for (i, task) in self.tasks.iter().enumerate() {
                 ui.separator();
-                ui.text(im_str!("{} {}", SPINNER[(self.counter / 10 + i) % SPINNER.len()], task.name()));
+                ui.text(im_str!("{} {}", spinner!(), task.name()));
+            }
+            for map in self.maps.iter() {
+                if let Some(path) = map.path.as_ref() {
+                    match map.state {
+                        MapState::Loading(..) => {
+                            ui.separator();
+                            ui.text(im_str!("{} Loading {}", spinner!(), file_name(path)));
+                        }
+                        MapState::Preparing(..) => {
+                            ui.separator();
+                            ui.text(im_str!("{} Preparing {}", spinner!(), file_name(path)));
+                        }
+                        _ => {}
+                    }
+                }
             }
 
             if self.errors.len() > self.last_errors {
@@ -1021,10 +1058,22 @@ impl EditorScene {
                 return;
             }
         }
-        self.tasks.push(Task::spawn(format!("Loading {}", file_name(&path)), move || {
-            let map = Map::from_file(&path)?;
-            Ok(TaskResult::Map(path, map))
-        }));
+
+        let (tx, rx) = mpsc::channel();
+
+        self.map_current = self.maps.len();
+        self.maps.push(EditorMap {
+            state: MapState::Loading(rx),
+            path: Some(path.clone()),
+            z_current: 0,
+            center: [0.0, 0.0],
+            rendered: Vec::new(),
+            edit_atoms: Vec::new(),
+        });
+
+        std::thread::spawn(move || {
+            let _ = tx.send(Map::from_file(&path).expect("TODO: proper error handling"));
+        });
     }
 
     fn close_map(&mut self) {
@@ -1141,6 +1190,7 @@ struct EditorMap {
 }
 
 enum MapState {
+    Invalid,
     Loading(mpsc::Receiver<Map>),
     Pending(Map),
     Preparing(Arc<Map>, mpsc::Receiver<map_repr::AtomMap>),
@@ -1226,7 +1276,6 @@ fn file_name(path: &Path) -> Cow<str> {
 
 enum TaskResult {
     ObjectTree(Environment),
-    Map(PathBuf, Map),
 }
 
 trait RetainMut<T> {
