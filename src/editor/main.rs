@@ -607,10 +607,39 @@ impl EditorScene {
                 }
             });
 
-        if !ui.want_capture_mouse() && ui.imgui().is_mouse_clicked(ImMouseButton::Right) {
-            if let Some(tile) = self.target_tile {
-                self.context_tile = Some(tile);
-                ui.open_popup(im_str!("context"));
+        if !ui.want_capture_mouse() {
+            if ui.imgui().is_mouse_clicked(ImMouseButton::Left) {
+                println!("lmb");
+                if let Some(env) = self.environment.as_ref() {
+                    println!("env");
+                    if let Some(map) = self.maps.get_mut(self.map_current) {
+                        println!("map");
+                        let z = map.z_current as u32;
+                        if let Some(hist) = map.state.hist_mut() {
+                            println!("hist");
+                            if let Some((x, y)) = self.target_tile {
+                                println!("target tile");
+                                // TODO: cloning these here is likely a bad idea
+                                let icons = self.map_renderer.icons.clone();
+                                let objtree = env.objtree.clone();
+                                hist.edit("TODO".to_owned(), move |world| {
+                                    println!("edit");
+                                    let pop = world.add_pop(&Prefab {
+                                        path: "/obj/item/lighter".to_owned(),
+                                        vars: Default::default(),
+                                    }, &icons, &objtree);
+                                    world.add_instance((x, y, z), pop);
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            if ui.imgui().is_mouse_clicked(ImMouseButton::Right) {
+                if let Some(tile) = self.target_tile {
+                    self.context_tile = Some(tile);
+                    ui.open_popup(im_str!("context"));
+                }
             }
         }
         if let Some((x, y)) = self.context_tile {

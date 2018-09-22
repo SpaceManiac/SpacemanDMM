@@ -74,6 +74,7 @@ impl<T: Clone> History<T> {
     pub fn undo(&mut self) {
         if let Some(parent) = self.parent(self.idx) {
             self.current = self.get_snapshot(parent).clone();
+            self.idx = parent;
         }
     }
 
@@ -84,6 +85,7 @@ impl<T: Clone> History<T> {
     pub fn redo(&mut self) {
         if let Some(child) = self.graph.neighbors_directed(self.idx, Direction::Outgoing).last() {
             self.current = self.get_snapshot(child).clone();
+            self.idx = child;
         }
     }
 }
