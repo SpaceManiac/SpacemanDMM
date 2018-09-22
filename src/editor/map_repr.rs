@@ -60,7 +60,7 @@ impl AtomMap {
                 for ((y, x), key) in map.z_level(z).indexed_iter() {
                     for fab in map.dictionary[key].iter() {
                         let pop = defer.add_pop(fab, icons, objtree);
-                        defer.add_instance((x as u32, y as u32), pop);
+                        defer.add_instance((x as u32, (dim_y - 1 - y) as u32), pop);
                     }
                 }
             });

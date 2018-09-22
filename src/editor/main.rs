@@ -17,6 +17,7 @@ extern crate toml;
 extern crate petgraph;
 extern crate gfx_gl as gl;
 extern crate weak_table;
+extern crate slice_of_array;
 
 extern crate dreammaker as dm;
 extern crate dmm_tools;
@@ -221,6 +222,12 @@ impl EditorScene {
                         Ok(map) => map,
                         Err(arc) => (*arc).clone(),
                     };
+                    let (x, y, z) = val.dim_xyz();
+                    map.center = [x as f32 * 16.0, y as f32 * 16.0];
+                    map.rendered.clear();
+                    for _ in 0..z {
+                        map.rendered.push(None);
+                    }
                     MapState::Active { merge_base, hist: History::new("Loaded".to_owned(), val) }
                 } else {
                     MapState::Preparing(base, rx)
@@ -1042,7 +1049,6 @@ impl EditorScene {
             }
             Ok(nfd::Response::OkayMultiple(fnames)) => {
                 for each in fnames {
-                    // TODO: order these?
                     self.load_map(each.into());
                 }
             }
@@ -1132,17 +1138,16 @@ impl EditorScene {
     fn render_map(&mut self, force: bool) {
         if let Some(env) = self.environment.as_ref() {
             if let Some(map) = self.maps.get_mut(self.map_current) {
-                /*TODO if map.rendered[map.z_current].is_some() && !force {
-                    return;
+                if let Some(hist) = map.state.hist() {
+                    if map.rendered[map.z_current].is_some() && !force {
+                        return;
+                    }
+                    map.rendered[map.z_current] = Some(self.map_renderer.render(
+                        hist.current(),
+                        map.z_current as u32,
+                        &mut self.factory,
+                    ));
                 }
-                map.rendered[map.z_current] = Some(self.map_renderer.prepare(
-                    &env.objtree,
-                    map.hist.current(),
-                    map.z_current,
-                ).render(
-                    &mut self.map_renderer,
-                    &mut self.factory,
-                ));*/
             }
         }
     }

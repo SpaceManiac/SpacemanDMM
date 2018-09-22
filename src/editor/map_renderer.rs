@@ -6,14 +6,15 @@ use gfx;
 use gfx::traits::{Factory as FactoryTrait, FactoryExt};
 use {Resources, Factory, Encoder, ColorFormat, RenderTargetView, Texture};
 
-use ndarray::Axis;
+use slice_of_array::prelude::*;
 
 use dm::objtree::ObjectTree;
 use dm::constants::Constant;
-use dmm_tools::dmm::{Map, Prefab};
+use dmm_tools::dmm::Prefab;
 use dmm_tools::minimap::{self, GetVar};
 
 use dmi::*;
+use map_repr::AtomMap;
 
 const TILE_SIZE: u32 = 32;
 
@@ -64,13 +65,6 @@ pub struct MapRenderer {
     pub sampler: gfx::handle::Sampler<Resources>,
 }
 
-pub struct PreparedMap {
-    duration: f32,
-    pops: Vec<RenderPop>,
-    vertices: Vec<Vertex>,
-    instances: Vec<(u32, usize)>,
-}
-
 pub struct RenderedMap {
     pub atoms_len: usize,
     pub pops_len: usize,
@@ -116,97 +110,49 @@ impl MapRenderer {
     }
 
     #[must_use]
-    pub fn prepare(&mut self, objtree: &ObjectTree, map: &Map, z: usize) -> PreparedMap {
-        use std::collections::BTreeMap;
+    pub fn render(&mut self, map: &AtomMap, z: u32, factory: &mut Factory) -> RenderedMap {
+        // ...
 
         let start = Instant::now();
+        let level = &map.levels[z as usize];
 
-        // create pops from the dictionary
-        let mut pops = Vec::new();
-        let mut pop_reverse = BTreeMap::new();
-        let mut pop_dictionary = BTreeMap::new();
-        for (key, prefabs) in map.dictionary.iter() {
-            let mut all = Vec::new();
-            for fab in prefabs {
-                if let Some(pop) = RenderPop::from_prefab(&mut self.icons, objtree, fab) {
-                    let idx;
-                    if let Some(&i) = pop_reverse.get(&pop) {
-                        idx = i;
-                    } else {
-                        idx = pops.len();
-                        pop_reverse.insert(pop.clone(), idx);
-                        pops.push(pop);
-                    }
-                    all.push(idx);
-                }
-            }
-            pop_dictionary.insert(*key, all);
-        }
-
-        // create instances from the grid
-        let mut vertices = Vec::new();
-        let mut instances = Vec::new();
-        for (y, row) in map.z_level(z).axis_iter(Axis(0)).rev().enumerate() {
-            for (x, key) in row.iter().enumerate() {
-                for &pop_id in pop_dictionary[key].iter() {
-                    let v_start = vertices.len() as u32;
-                    vertices.extend_from_slice(&pops[pop_id].instance((x as u32, y as u32)));
-                    instances.push((v_start, pop_id));
-                }
-            }
-        }
-
-        // sort instances
-        instances.sort_by_key(|&(_, pop_id)| pops[pop_id].sort_key());
-
-        let duration = to_seconds(Instant::now() - start);
-
-        PreparedMap {
-            duration,
-            pops,
-            vertices,
-            instances,
-        }
-    }
-}
-
-impl PreparedMap {
-    #[must_use]
-    pub fn render(&self, parent: &mut MapRenderer, factory: &mut Factory) -> RenderedMap {
-        let start = Instant::now();
-
-        // TODO: determine how much of this loop belongs in prepare()
+        // TODO: use pre-maintained index buffer
         // create index buffer
         let mut indices = Vec::new();
         let mut draw_calls: Vec<DrawCall> = Vec::new();
-        for &(start, pop_id) in self.instances.iter() {
+        for &inst in level.sorted_order.iter() {
+            let start = (4 * inst) as u32;
             let i_start = indices.len() as u32;
             indices.extend_from_slice(&[start, start+1, start+3, start+1, start+2, start+3]);
 
-            let pop = self.pops[pop_id];
+            let pop = &level.instances.get_key(inst).pop;
+            let rpop = match map.pops.get(pop) {
+                Some(rpop) => rpop,
+                None => continue,
+            };
             if let Some(call) = draw_calls.last_mut() {
-                if call.texture_id == pop.texture && call.category == pop.category {
+                if call.texture_id == rpop.texture && call.category == rpop.category {
                     call.len += 6;
                     continue;
                 }
             }
-            let texture = parent.icon_textures.retrieve(factory, &parent.icons, pop.texture as usize);
+            let texture = self.icon_textures.retrieve(factory, &self.icons, rpop.texture as usize);
             draw_calls.push(DrawCall {
-                category: pop.category,
-                texture_id: pop.texture,
+                category: rpop.category,
+                texture_id: rpop.texture,
                 texture: texture.clone(),
                 start: i_start,
                 len: 6,
             });
         }
 
-        let vbuf = factory.create_vertex_buffer(&self.vertices[..]);
+        let vbuf = factory.create_vertex_buffer(map.vertex_buffer(z).flat());
         let ibuf = factory.create_index_buffer(&indices[..]);
 
         RenderedMap {
-            atoms_len: self.instances.len(),
-            pops_len: self.pops.len(),
-            duration: [self.duration, to_seconds(Instant::now() - start)],
+            atoms_len: level.instances.len(),
+            pops_len: map.pops.len(),
+            duration: [0.0, to_seconds(Instant::now() - start)],
             draw_calls,
 
             ibuf,
