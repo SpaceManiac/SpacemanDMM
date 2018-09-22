@@ -68,6 +68,10 @@ impl AtomMap {
         atom_map
     }
 
+    pub fn save(&self, merge_base: Option<&Map>) -> Map {
+        unimplemented!()
+    }
+
     pub fn dim_xyz(&self) -> (u32, u32, u32) {
         (self.size.0, self.size.1, self.levels.len() as u32)
     }

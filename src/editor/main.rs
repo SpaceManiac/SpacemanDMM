@@ -31,12 +31,15 @@ mod config;
 mod history;
 
 use std::path::{Path, PathBuf};
+use std::sync::{mpsc, Arc};
 use std::borrow::Cow;
 
 use imgui::*;
 
 use dm::objtree::{ObjectTree, TypeRef};
 use dmm_tools::dmm::{Map, Prefab};
+
+use history::History;
 
 use glutin::VirtualKeyCode as Key;
 use gfx_device_gl::{Factory, Resources, CommandBuffer};
@@ -196,7 +199,7 @@ impl EditorScene {
                     rendered.push(None);
                 }
                 self.maps.push(EditorMap {
-                    hist: history::History::new(format!("Load {}", path.display()), dmm),
+                    state: MapState::Pending(dmm),
                     path: Some(path),
                     z_current: 0,
                     center: [x as f32 * 16.0, y as f32 * 16.0],
@@ -330,8 +333,10 @@ impl EditorScene {
             });
             let (mut can_undo, mut can_redo) = (false, false);
             if let Some(map) = self.maps.get(self.map_current) {
-                can_undo = map.hist.can_undo();
-                can_redo = map.hist.can_redo();
+                if let Some(hist) = map.state.hist() {
+                    can_undo = hist.can_undo();
+                    can_redo = hist.can_redo();
+                }
             }
             ui.menu(im_str!("Edit")).build(|| {
                 if ui.menu_item(im_str!("Undo"))
@@ -536,15 +541,20 @@ impl EditorScene {
                         None => format!("Untitled##{}", map_idx),
                     };
                     if ui.collapsing_header(&ImString::from(title)).default_open(true).build() {
-                        let dmm = map.hist.current();
-                        ui.text(im_str!("{:?}; {}-keys: {}",
-                            dmm.dim_xyz(),
-                            dmm.key_length,
-                            dmm.dictionary.len()));
-                        for z in 0..dmm.dim_z() {
-                            if ui.small_button(im_str!("z = {}##map_{}_{}", z + 1, map_idx, z)) {
-                                self.map_current = map_idx;
-                                map.z_current = z;
+                        if let Some(dmm) = map.state.base_dmm() {
+                            // TODO: use more up-to-date info?
+                            ui.text(im_str!("{:?}; {}-keys: {}",
+                                dmm.dim_xyz(),
+                                dmm.key_length,
+                                dmm.dictionary.len()));
+                        }
+                        if let Some(hist) = map.state.hist() {
+                            let world = hist.current();
+                            for z in 0..world.dim_xyz().2 {
+                                if ui.small_button(im_str!("z = {}##map_{}_{}", z + 1, map_idx, z)) {
+                                    self.map_current = map_idx;
+                                    map.z_current = z as usize;
+                                }
                             }
                         }
                     }
@@ -563,7 +573,7 @@ impl EditorScene {
                 open = true;
 
                 if let Some(map) = self.maps.get_mut(self.map_current) {
-                    let dmm = map.hist.current();
+                    /*TODO let dmm = map.state.hist.current();
                     let edit_atoms = &mut map.edit_atoms;
                     let z = map.z_current;
                     let (_, dim_y, _) = dmm.dim_xyz();
@@ -587,7 +597,7 @@ impl EditorScene {
                                 });
                             }
                         });
-                    }
+                    }*/
                 }
             });
             if !open {
@@ -632,10 +642,11 @@ impl EditorScene {
                     }
                     let dmm = Map::new(new_map.x as usize, new_map.y as usize, new_map.z as usize,
                         env.turf.clone(), env.area.clone());
+                    let atom_map = map_repr::AtomMap::new(&dmm, &self.map_renderer.icons, &env.objtree);
                     let desc = format!("New {}x{}x{} map", new_map.x, new_map.y, new_map.z);
                     self.maps.push(EditorMap {
                         path: None,
-                        hist: history::History::new(desc, dmm),
+                        state: MapState::Active { merge_base: dmm, hist: History::new(desc, atom_map) },
                         z_current: 0,
                         center: [new_map.x as f32 * 16.0, new_map.y as f32 * 16.0],
                         rendered,
@@ -842,19 +853,18 @@ impl EditorScene {
 
     fn tile_under(&self, (x, y): (i32, i32)) -> Option<(usize, usize)> {
         if let Some(map) = self.maps.get(self.map_current) {
-            let (w, h, _, _) = self.target.get_dimensions();
-            let (cx, cy) = (w / 2, h / 2);
-            let tx = ((map.center[0].round() + (x as f32 - cx as f32) / self.map_renderer.zoom) / 32.0).floor() as i32;
-            let ty = ((map.center[1].round() + (cy as f32 - y as f32) / self.map_renderer.zoom) / 32.0).floor() as i32;
-            let (dim_x, dim_y, _) = map.hist.current().dim_xyz();
-            if tx >= 0 && ty >= 0 && tx < dim_x as i32 && ty < dim_y as i32 {
-                Some((tx as usize, ty as usize))
-            } else {
-                None
+            if let Some(hist) = map.state.hist() {
+                let (w, h, _, _) = self.target.get_dimensions();
+                let (cx, cy) = (w / 2, h / 2);
+                let tx = ((map.center[0].round() + (x as f32 - cx as f32) / self.map_renderer.zoom) / 32.0).floor() as i32;
+                let ty = ((map.center[1].round() + (cy as f32 - y as f32) / self.map_renderer.zoom) / 32.0).floor() as i32;
+                let (dim_x, dim_y, _) = hist.current().dim_xyz();
+                if tx >= 0 && ty >= 0 && tx < dim_x as i32 && ty < dim_y as i32 {
+                    return Some((tx as usize, ty as usize))
+                }
             }
-        } else {
-            None
         }
+        None
     }
 
     fn mouse_wheel(&mut self, ctrl: bool, shift: bool, alt: bool, _x: f32, y: f32) {
@@ -1029,24 +1039,28 @@ impl EditorScene {
 
     fn save_map(&mut self) {
         if let Some(map) = self.maps.get_mut(self.map_current) {
-            if map.path.is_none() {
-                if let Ok(nfd::Response::Okay(fname)) = nfd::open_save_dialog(Some("dmm"), None) {
-                    map.path = Some(PathBuf::from(fname));
-                } else {
-                    return;
+            if let Some(hist) = map.state.hist() {
+                if map.path.is_none() {
+                    if let Ok(nfd::Response::Okay(fname)) = nfd::open_save_dialog(Some("dmm"), None) {
+                        map.path = Some(PathBuf::from(fname));
+                    } else {
+                        return;
+                    }
                 }
+                self.errors.extend(hist.current().save(None).to_file(map.path.as_ref().unwrap()).err().map(From::from));
             }
-            self.errors.extend(map.hist.current().to_file(map.path.as_ref().unwrap()).err().map(From::from));
         }
     }
 
     fn save_map_as(&mut self, copy: bool) {
         if let Some(map) = self.maps.get_mut(self.map_current) {
-            if let Ok(nfd::Response::Okay(fname)) = nfd::open_save_dialog(Some("dmm"), None) {
-                let path = PathBuf::from(fname);
-                self.errors.extend(map.hist.current().to_file(&path).err().map(From::from));
-                if !copy {
-                    map.path = Some(path);
+            if let Some(hist) = map.state.hist() {
+                if let Ok(nfd::Response::Okay(fname)) = nfd::open_save_dialog(Some("dmm"), None) {
+                    let path = PathBuf::from(fname);
+                    self.errors.extend(hist.current().save(None).to_file(&path).err().map(From::from));
+                    if !copy {
+                        map.path = Some(path);
+                    }
                 }
             }
         }
@@ -1069,7 +1083,7 @@ impl EditorScene {
     fn render_map(&mut self, force: bool) {
         if let Some(env) = self.environment.as_ref() {
             if let Some(map) = self.maps.get_mut(self.map_current) {
-                if map.rendered[map.z_current].is_some() && !force {
+                /*TODO if map.rendered[map.z_current].is_some() && !force {
                     return;
                 }
                 map.rendered[map.z_current] = Some(self.map_renderer.prepare(
@@ -1079,7 +1093,7 @@ impl EditorScene {
                 ).render(
                     &mut self.map_renderer,
                     &mut self.factory,
-                ));
+                ));*/
             }
         }
     }
@@ -1093,15 +1107,19 @@ impl EditorScene {
 
     fn undo(&mut self) {
         if let Some(map) = self.maps.get_mut(self.map_current) {
-            map.hist.undo();
-            // TODO: rerender
+            if let Some(hist) = map.state.hist_mut() {
+                hist.undo();
+                // TODO: rerender
+            }
         }
     }
 
     fn redo(&mut self) {
         if let Some(map) = self.maps.get_mut(self.map_current) {
-            map.hist.redo();
-            // TODO: rerender
+            if let Some(hist) = map.state.hist_mut() {
+                hist.redo();
+                // TODO: rerender
+            }
         }
     }
 }
@@ -1115,18 +1133,55 @@ struct Environment {
 
 struct EditorMap {
     path: Option<PathBuf>,
-    hist: history::History<Map>,
     z_current: usize,
     center: [f32; 2],
+    state: MapState,
     rendered: Vec<Option<map_renderer::RenderedMap>>,
     edit_atoms: Vec<EditAtom>,
 }
 
+enum MapState {
+    Loading(mpsc::Receiver<Map>),
+    Pending(Map),
+    Preparing(Arc<Map>, mpsc::Receiver<map_repr::AtomMap>),
+    Active {
+        merge_base: Map,
+        hist: History<map_repr::AtomMap>,
+    }
+}
+
 impl EditorMap {
     fn clamp_center(&mut self) {
-        let (x, y, _) = self.hist.current().dim_xyz();
-        self.center[0] = self.center[0].min(x as f32 * 32.0).max(0.0);
-        self.center[1] = self.center[1].min(y as f32 * 32.0).max(0.0);
+        if let Some(hist) = self.state.hist() {
+            let (x, y, _) = hist.current().dim_xyz();
+            self.center[0] = self.center[0].min(x as f32 * 32.0).max(0.0);
+            self.center[1] = self.center[1].min(y as f32 * 32.0).max(0.0);
+        }
+    }
+}
+
+impl MapState {
+    fn base_dmm(&self) -> Option<&Map> {
+        match self {
+            MapState::Pending(ref map) => Some(map),
+            MapState::Preparing(ref map, _) => Some(map),
+            MapState::Active { ref merge_base, .. } => Some(merge_base),
+            _ => None,
+        }
+    }
+
+    fn hist(&self) -> Option<&History<map_repr::AtomMap>> {
+        match self {
+            MapState::Active { ref hist, .. } => Some(hist),
+            _ => None,
+        }
+    }
+
+    fn hist_mut(&mut self) -> Option<&mut History<map_repr::AtomMap>> {
+        match self {
+            MapState::Active { ref mut hist, .. } => Some(hist),
+            _ => None,
+        }
     }
 }
 
