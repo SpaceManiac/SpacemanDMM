@@ -1141,18 +1141,16 @@ impl EditorScene {
     }
 
     fn render_map(&mut self, force: bool) {
-        if let Some(env) = self.environment.as_ref() {
-            if let Some(map) = self.maps.get_mut(self.map_current) {
-                if let Some(hist) = map.state.hist() {
-                    if map.rendered[map.z_current].is_some() && !force {
-                        return;
-                    }
-                    map.rendered[map.z_current] = Some(self.map_renderer.render(
-                        hist.current(),
-                        map.z_current as u32,
-                        &mut self.factory,
-                    ));
+        if let Some(map) = self.maps.get_mut(self.map_current) {
+            if let Some(hist) = map.state.hist() {
+                if map.rendered[map.z_current].is_some() && !force {
+                    return;
                 }
+                map.rendered[map.z_current] = Some(self.map_renderer.render(
+                    hist.current(),
+                    map.z_current as u32,
+                    &mut self.factory,
+                ));
             }
         }
     }

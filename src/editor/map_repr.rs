@@ -1,4 +1,5 @@
 //! Representation of a map as a collection of atoms rather than a grid.
+#![allow(dead_code)]  // WIP
 
 use std::sync::{Arc, Weak};
 use weak_table::WeakKeyHashMap;
@@ -72,7 +73,7 @@ impl AtomMap {
         atom_map
     }
 
-    pub fn save(&self, merge_base: Option<&Map>) -> Map {
+    pub fn save(&self, _merge_base: Option<&Map>) -> Map {
         unimplemented!()
     }
 
