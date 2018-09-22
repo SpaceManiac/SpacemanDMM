@@ -2,6 +2,7 @@
 #![allow(dead_code)]  // WIP
 
 use std::sync::{Arc, Weak};
+use std::cell::{Cell, RefCell, Ref};
 use weak_table::WeakKeyHashMap;
 
 use dmm_tools::dmm::{Map, Prefab};
@@ -24,8 +25,8 @@ pub struct AtomZ {
     pub instances: DualPool<Instance, [Vertex; 4]>,
     // plane+layer sorting is maintained
     pub sorted_order: Vec<usize>,
-    index_buffer: Vec<[u32; 6]>,
-    index_buffer_dirty: bool,
+    index_buffer: RefCell<Vec<[u32; 6]>>,
+    index_buffer_dirty: Cell<bool>,
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
@@ -106,7 +107,7 @@ impl AtomMap {
         let level = &mut self.levels[z as usize];
         let new_instance = level.prep_instance(&mut self.pops, (x, y), prefab);
         level.sorted_order.push(new_instance);
-        level.index_buffer.push(indices(new_instance));
+        level.index_buffer.get_mut().push(indices(new_instance));
         InstanceId { z, idx: new_instance }
     }
 
@@ -127,7 +128,7 @@ impl AtomMap {
             Err(dest) => dest,
         };
         sorted_order.insert(pos, new_instance);
-        level.index_buffer.insert(pos, indices(new_instance));
+        level.index_buffer.get_mut().insert(pos, indices(new_instance));
         InstanceId { z, idx: new_instance }
     }
 
@@ -164,7 +165,7 @@ impl AtomMap {
             let rpop = pops.get(&inst.pop).expect("instance with missing pop");
             rpop.sort_key()
         });
-        level.index_buffer_dirty = true;
+        level.index_buffer_dirty.set(true);
     }
 
     #[inline]
@@ -172,16 +173,17 @@ impl AtomMap {
         self.levels[z as usize].instances.values()
     }
 
-    pub fn index_buffer(&mut self, z: u32) -> &[[u32; 6]] {
-        let level = &mut self.levels[z as usize];
-        if level.index_buffer_dirty {
-            level.index_buffer_dirty = false;
-            level.index_buffer.clear();
+    pub fn index_buffer(&self, z: u32) -> Ref<[[u32; 6]]> {
+        let level = &self.levels[z as usize];
+        if level.index_buffer_dirty.get() {
+            level.index_buffer_dirty.set(false);
+            let mut ib = level.index_buffer.borrow_mut();
+            ib.clear();
             for &inst in level.sorted_order.iter() {
-                level.index_buffer.push(indices(inst));
+                ib.push(indices(inst));
             }
         }
-        &level.index_buffer[..]
+        Ref::map(level.index_buffer.borrow(), |v| &v[..])
     }
 }
 
@@ -258,7 +260,7 @@ impl<K, V> DualPool<K, V> {
     }
 }
 
-fn indices(start: usize) -> [u32; 6] {
-    let start = start as u32;
+fn indices(inst: usize) -> [u32; 6] {
+    let start = (inst * 4) as u32;
     [start, start + 1, start + 3, start + 1, start + 2, start + 3]
 }

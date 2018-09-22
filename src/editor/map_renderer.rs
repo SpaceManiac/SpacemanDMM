@@ -111,19 +111,13 @@ impl MapRenderer {
 
     #[must_use]
     pub fn render(&mut self, map: &AtomMap, z: u32, factory: &mut Factory) -> RenderedMap {
-        // ...
-
         let start = Instant::now();
         let level = &map.levels[z as usize];
 
-        // TODO: use pre-maintained index buffer
-        // create index buffer
-        let mut indices = Vec::new();
+        // TODO: cache the draw calls as well
         let mut draw_calls: Vec<DrawCall> = Vec::new();
-        for &inst in level.sorted_order.iter() {
-            let start = (4 * inst) as u32;
-            let i_start = indices.len() as u32;
-            indices.extend_from_slice(&[start, start+1, start+3, start+1, start+2, start+3]);
+        for (i, &inst) in level.sorted_order.iter().enumerate() {
+            let i_start = (6 * i) as u32;
 
             let pop = &level.instances.get_key(inst).pop;
             let rpop = match map.pops.get(pop) {
@@ -147,7 +141,7 @@ impl MapRenderer {
         }
 
         let vbuf = factory.create_vertex_buffer(map.vertex_buffer(z).flat());
-        let ibuf = factory.create_index_buffer(&indices[..]);
+        let ibuf = factory.create_index_buffer(map.index_buffer(z).flat());
 
         RenderedMap {
             atoms_len: level.instances.len(),
