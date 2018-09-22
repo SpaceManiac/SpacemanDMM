@@ -34,6 +34,7 @@ pub struct Instance {
 #[derive(Debug)]
 pub struct Defer<'a> {
     map: &'a mut AtomMap,
+    z: u32,
 }
 
 impl AtomMap {
@@ -47,11 +48,11 @@ impl AtomMap {
 
         for z in 0..dim_z {
             atom_map.levels.push(AtomZ::default());
-            atom_map.defer(z, |mut defer| {
+            atom_map.defer_sort(z as u32, |defer| {
                 for ((y, x), key) in map.z_level(z).indexed_iter() {
                     for fab in map.dictionary[key].iter() {
                         let pop = defer.add_pop(fab, icons, objtree);
-                        defer.add_instance((x as u32, y as u32, z as u32), pop);
+                        defer.add_instance((x as u32, y as u32), pop);
                     }
                 }
             });
@@ -75,8 +76,8 @@ impl AtomMap {
         }
     }
 
-    pub fn defer<F: FnOnce(Defer)>(&mut self, z: usize, f: F) {
-        f(Defer { map: self });
+    pub fn defer_sort<F: FnOnce(&mut Defer)>(&mut self, z: u32, f: F) {
+        f(&mut Defer { map: self, z });
         self.sort_again(z);
     }
 
@@ -106,9 +107,9 @@ impl AtomMap {
         new_instance
     }
 
-    pub fn sort_again(&mut self, z: usize) {
+    pub fn sort_again(&mut self, z: u32) {
         let pops = &self.pops;
-        let level = &mut self.levels[z];
+        let level = &mut self.levels[z as usize];
         let AtomZ { sorted_order, instances } = level;
 
         sorted_order.sort_by_key(|&idx| {
@@ -133,8 +134,8 @@ impl<'a> Defer<'a> {
         self.map.add_pop(prefab, icons, objtree)
     }
 
-    pub fn add_instance(&mut self, loc: (u32, u32, u32), prefab: Rc<Prefab>) -> usize {
-        self.map.add_instance_unsorted(loc, prefab)
+    pub fn add_instance(&mut self, (x, y): (u32, u32), prefab: Rc<Prefab>) -> usize {
+        self.map.add_instance_unsorted((x, y, self.z), prefab)
     }
 }
 
