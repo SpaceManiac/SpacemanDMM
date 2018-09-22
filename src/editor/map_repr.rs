@@ -22,6 +22,8 @@ pub struct AtomZ {
     pub instances: DualPool<Instance, [Vertex; 4]>,
     // plane+layer sorting is maintained
     pub sorted_order: Vec<usize>,
+    index_buffer: Vec<[u32; 6]>,
+    index_buffer_dirty: bool,
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
@@ -85,6 +87,7 @@ impl AtomMap {
         let level = &mut self.levels[z as usize];
         let new_instance = level.prep_instance(&mut self.pops, (x, y), prefab);
         level.sorted_order.push(new_instance);
+        level.index_buffer.push(indices(new_instance));
         new_instance
     }
 
@@ -92,7 +95,8 @@ impl AtomMap {
         let pops = &mut self.pops;
         let level = &mut self.levels[z as usize];
         let new_instance = level.prep_instance(pops, (x, y), prefab);
-        let AtomZ { sorted_order, instances } = level;
+        let sorted_order = &mut level.sorted_order;
+        let instances = &mut level.instances;
 
         let sort_key = |&idx| {
             let inst = instances.get_key(idx);
@@ -104,19 +108,39 @@ impl AtomMap {
             Err(dest) => dest,
         };
         sorted_order.insert(pos, new_instance);
+        level.index_buffer.insert(pos, indices(new_instance));
         new_instance
     }
 
     pub fn sort_again(&mut self, z: u32) {
         let pops = &self.pops;
         let level = &mut self.levels[z as usize];
-        let AtomZ { sorted_order, instances } = level;
+        let sorted_order = &mut level.sorted_order;
+        let instances = &mut level.instances;
 
         sorted_order.sort_by_key(|&idx| {
             let inst = instances.get_key(idx);
             let rpop = pops.get(&inst.pop).expect("instance with missing pop");
             rpop.sort_key()
-        })
+        });
+        level.index_buffer_dirty = true;
+    }
+
+    #[inline]
+    pub fn vertex_buffer(&self, z: u32) -> &[[Vertex; 4]] {
+        self.levels[z as usize].instances.values()
+    }
+
+    pub fn index_buffer(&mut self, z: u32) -> &[[u32; 6]] {
+        let level = &mut self.levels[z as usize];
+        if level.index_buffer_dirty {
+            level.index_buffer_dirty = false;
+            level.index_buffer.clear();
+            for &inst in level.sorted_order.iter() {
+                level.index_buffer.push(indices(inst));
+            }
+        }
+        &level.index_buffer[..]
     }
 }
 
@@ -191,4 +215,9 @@ impl<K, V> DualPool<K, V> {
     pub fn len(&self) -> usize {
         self.keys.len()
     }
+}
+
+fn indices(start: usize) -> [u32; 6] {
+    let start = start as u32;
+    [start, start + 1, start + 3, start + 1, start + 2, start + 3]
 }
