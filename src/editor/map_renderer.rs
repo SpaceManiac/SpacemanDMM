@@ -1,5 +1,6 @@
 //! GPU map renderer.
 use std::time::Instant;
+use std::sync::Arc;
 
 use gfx;
 use gfx::traits::{Factory as FactoryTrait, FactoryExt};
@@ -53,7 +54,7 @@ gfx_defines! {
 }
 
 pub struct MapRenderer {
-    pub icons: IconCache,
+    pub icons: Arc<IconCache>,
     pub icon_textures: TextureCache,
     pub zoom: f32,
     pub layers: [bool; 5],
@@ -103,7 +104,7 @@ impl MapRenderer {
             gfx::texture::WrapMode::Clamp));
 
         MapRenderer {
-            icons: IconCache::new(".".as_ref()),
+            icons: Arc::new(IconCache::new(".".as_ref())),
             icon_textures: TextureCache::default(),
             zoom: 1.0,
             layers: [true, false, true, true, true],

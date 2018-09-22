@@ -1,6 +1,6 @@
 //! Representation of a map as a collection of atoms rather than a grid.
 
-use std::rc::{Rc, Weak};
+use std::sync::{Arc, Weak};
 use weak_table::WeakKeyHashMap;
 
 use dmm_tools::dmm::{Map, Prefab};
@@ -30,7 +30,7 @@ pub struct AtomZ {
 pub struct Instance {
     pub x: u32,
     pub y: u32,
-    pub pop: Rc<Prefab>,
+    pub pop: Arc<Prefab>,
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
@@ -82,11 +82,11 @@ impl AtomMap {
         }
     }
 
-    pub fn add_pop(&mut self, prefab: &Prefab, icons: &IconCache, objtree: &ObjectTree) -> Rc<Prefab> {
+    pub fn add_pop(&mut self, prefab: &Prefab, icons: &IconCache, objtree: &ObjectTree) -> Arc<Prefab> {
         if let Some(key) = self.pops.get_key(&prefab) {
             key
         } else {
-            let rc = Rc::new(prefab.to_owned());
+            let rc = Arc::new(prefab.to_owned());
             self.pops.insert(rc.clone(), RenderPop::from_prefab(icons, objtree, &prefab).unwrap_or_default());
             rc
         }
@@ -97,7 +97,7 @@ impl AtomMap {
         self.sort_again(z);
     }
 
-    fn add_instance_unsorted(&mut self, (x, y, z): (u32, u32, u32), prefab: Rc<Prefab>) -> InstanceId {
+    fn add_instance_unsorted(&mut self, (x, y, z): (u32, u32, u32), prefab: Arc<Prefab>) -> InstanceId {
         let level = &mut self.levels[z as usize];
         let new_instance = level.prep_instance(&mut self.pops, (x, y), prefab);
         level.sorted_order.push(new_instance);
@@ -105,7 +105,7 @@ impl AtomMap {
         InstanceId { z, idx: new_instance }
     }
 
-    pub fn add_instance(&mut self, (x, y, z): (u32, u32, u32), prefab: Rc<Prefab>) -> InstanceId {
+    pub fn add_instance(&mut self, (x, y, z): (u32, u32, u32), prefab: Arc<Prefab>) -> InstanceId {
         let pops = &mut self.pops;
         let level = &mut self.levels[z as usize];
         let new_instance = level.prep_instance(pops, (x, y), prefab);
@@ -169,7 +169,7 @@ impl AtomMap {
 }
 
 impl AtomZ {
-    fn prep_instance(&mut self, pops: &mut WeakKeyHashMap<Weak<Prefab>, RenderPop>, (x, y): (u32, u32), prefab: Rc<Prefab>) -> usize {
+    fn prep_instance(&mut self, pops: &mut WeakKeyHashMap<Weak<Prefab>, RenderPop>, (x, y): (u32, u32), prefab: Arc<Prefab>) -> usize {
         let vertices = pops.get(&prefab)
             .map_or_else(|| [Vertex::default(); 4], |rpop| rpop.instance((x, y)));
         self.instances.push(Instance { x, y, pop: prefab }, vertices)
@@ -178,11 +178,11 @@ impl AtomZ {
 
 impl<'a> Defer<'a> {
     #[inline]
-    pub fn add_pop(&mut self, prefab: &Prefab, icons: &IconCache, objtree: &ObjectTree) -> Rc<Prefab> {
+    pub fn add_pop(&mut self, prefab: &Prefab, icons: &IconCache, objtree: &ObjectTree) -> Arc<Prefab> {
         self.map.add_pop(prefab, icons, objtree)
     }
 
-    pub fn add_instance(&mut self, (x, y): (u32, u32), prefab: Rc<Prefab>) -> InstanceId {
+    pub fn add_instance(&mut self, (x, y): (u32, u32), prefab: Arc<Prefab>) -> InstanceId {
         self.map.add_instance_unsorted((x, y, self.z), prefab)
     }
 }

@@ -182,8 +182,8 @@ impl EditorScene {
                 self.config.make_recent(&environment.path);
                 self.config.save();
                 self.tools = tools::configure(&environment.objtree);
-                self.map_renderer.icons = dmi::IconCache::new(
-                    &environment.path.parent().expect("invalid environment file path"));
+                self.map_renderer.icons = Arc::new(dmi::IconCache::new(
+                    &environment.path.parent().expect("invalid environment file path")));
                 self.environment = Some(environment);
                 for map in self.maps.iter_mut() {
                     for z in map.rendered.iter_mut() {
@@ -987,7 +987,7 @@ impl EditorScene {
 
             Ok(TaskResult::ObjectTree(Environment {
                 path,
-                objtree,
+                objtree: Arc::new(objtree),
                 turf,
                 area,
             }))
@@ -1126,7 +1126,7 @@ impl EditorScene {
 
 struct Environment {
     path: PathBuf,
-    objtree: ObjectTree,
+    objtree: Arc<ObjectTree>,
     turf: String,
     area: String,
 }
