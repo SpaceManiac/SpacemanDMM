@@ -140,6 +140,18 @@ impl AtomMap {
         }
     }
 
+    pub fn iter_instances<'a>(&'a self, (x, y, z): (u32, u32, u32)) -> impl Iterator<Item=(InstanceId, &'a Prefab)> + 'a {
+        let level = &self.levels[z as usize];
+        level.sorted_order.iter().rev().filter_map(move |&idx| {
+            let inst = &level.instances.get_key(idx);
+            if inst.x == x && inst.y == y {
+                Some((InstanceId { z, idx }, &*inst.pop))
+            } else {
+                None
+            }
+        })
+    }
+
     pub fn sort_again(&mut self, z: u32) {
         let pops = &self.pops;
         let level = &mut self.levels[z as usize];

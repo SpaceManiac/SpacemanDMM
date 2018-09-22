@@ -77,13 +77,14 @@ pub struct EditorScene {
     new_map: Option<NewMap>,
 
     last_mouse_pos: (i32, i32),
-    target_tile: Option<(usize, usize)>,
-    context_tile: Option<(usize, usize)>,
+    target_tile: Option<(u32, u32)>,
+    context_tile: Option<(u32, u32)>,
 
     tasks: Vec<Task<TaskResult>>,
     errors: Vec<Box<std::error::Error>>,
     last_errors: usize,
     counter: usize,
+    uid: usize,
 
     ui_lock_windows: bool,
     ui_style_editor: bool,
@@ -120,6 +121,7 @@ impl EditorScene {
             errors: Vec::new(),
             last_errors: 0,
             counter: 0,
+            uid: 0,
 
             ui_lock_windows: true,
             ui_style_editor: false,
@@ -479,7 +481,7 @@ impl EditorScene {
                 () => (SPINNER[(self.counter / 10 + { i += 1; i }) % SPINNER.len()])
             }
 
-            for (i, task) in self.tasks.iter().enumerate() {
+            for task in self.tasks.iter() {
                 ui.separator();
                 ui.text(im_str!("{} {}", spinner!(), task.name()));
             }
@@ -617,31 +619,29 @@ impl EditorScene {
                 open = true;
 
                 if let Some(map) = self.maps.get_mut(self.map_current) {
-                    /*TODO let dmm = map.state.hist.current();
+                    let z = map.z_current as u32;
                     let edit_atoms = &mut map.edit_atoms;
-                    let z = map.z_current;
-                    let (_, dim_y, _) = dmm.dim_xyz();
-                    let grid = dmm.z_level(z);
-                    let key = &grid[(dim_y - 1 - y, x)];
-                    for (i, fab) in dmm.dictionary[key].iter().enumerate() {
-                        let mut color_vars = RED_TEXT;
-                        if let Some(env) = self.environment.as_ref() {
-                            if env.objtree.find(&fab.path).is_some() {
-                                color_vars = &[];
+                    if let Some(hist) = map.state.hist() {
+                        let current = hist.current();
+                        for (inst, fab) in current.iter_instances((x, y, z)) {
+                            let mut color_vars = RED_TEXT;
+                            if let Some(env) = self.environment.as_ref() {
+                                if env.objtree.find(&fab.path).is_some() {
+                                    color_vars = &[];
+                                }
                             }
-                        }
 
-                        ui.with_style_and_color_vars(&[], color_vars, || {
-                            if ui.menu_item(im_str!("{}", fab.path)).build() {
-                                edit_atoms.push(EditAtom {
-                                    coords: (x, y, z),
-                                    idx: i,
-                                    filter: ImString::with_capacity(128),
-                                    fab: fab.clone(),
-                                });
-                            }
-                        });
-                    }*/
+                            ui.with_style_and_color_vars(&[], color_vars, || {
+                                if ui.menu_item(im_str!("{}", fab.path)).build() {
+                                    edit_atoms.push(EditAtom {
+                                        inst,
+                                        filter: ImString::with_capacity(128),
+                                        fab: fab.clone(),
+                                    });
+                                }
+                            });
+                        }
+                    }
                 }
             });
             if !open {
@@ -695,7 +695,9 @@ impl EditorScene {
                         center: [new_map.x as f32 * 16.0, new_map.y as f32 * 16.0],
                         rendered,
                         edit_atoms: Vec::new(),
+                        uid: self.uid,
                     });
+                    self.uid += 1;
                     opened = false;
                 }
             }
@@ -705,12 +707,13 @@ impl EditorScene {
         for map in self.maps.iter_mut() {
             let env = self.environment.as_ref();
             let extra_vars = self.ui_extra_vars;
+            let uid = map.uid;
             map.edit_atoms.retain_mut(|edit| {
                 let mut keep = true;
                 let mut keep2 = true;
 
                 let EditAtom { ref mut fab, ref mut filter, .. } = edit;
-                ui.window(im_str!("{}##{:?}/{}", fab.path, edit.coords, edit.idx))
+                ui.window(im_str!("{}##{}/{:?}", fab.path, uid, edit.inst))
                     .opened(&mut keep)
                     .position(ui.imgui().mouse_pos(), ImGuiCond::Appearing)
                     .size((350.0, 500.0), ImGuiCond::FirstUseEver)
@@ -895,7 +898,7 @@ impl EditorScene {
         self.target_tile = self.tile_under((x, y));
     }
 
-    fn tile_under(&self, (x, y): (i32, i32)) -> Option<(usize, usize)> {
+    fn tile_under(&self, (x, y): (i32, i32)) -> Option<(u32, u32)> {
         if let Some(map) = self.maps.get(self.map_current) {
             if let Some(hist) = map.state.hist() {
                 let (w, h, _, _) = self.target.get_dimensions();
@@ -904,7 +907,7 @@ impl EditorScene {
                 let ty = ((map.center[1].round() + (cy as f32 - y as f32) / self.map_renderer.zoom) / 32.0).floor() as i32;
                 let (dim_x, dim_y, _) = hist.current().dim_xyz();
                 if tx >= 0 && ty >= 0 && tx < dim_x as i32 && ty < dim_y as i32 {
-                    return Some((tx as usize, ty as usize))
+                    return Some((tx as u32, ty as u32))
                 }
             }
         }
@@ -1075,7 +1078,9 @@ impl EditorScene {
             center: [0.0, 0.0],
             rendered: Vec::new(),
             edit_atoms: Vec::new(),
+            uid: self.uid,
         });
+        self.uid += 1;
 
         std::thread::spawn(move || {
             let _ = tx.send(Map::from_file(&path).expect("TODO: proper error handling"));
@@ -1192,6 +1197,7 @@ struct EditorMap {
     state: MapState,
     rendered: Vec<Option<map_renderer::RenderedMap>>,
     edit_atoms: Vec<EditAtom>,
+    uid: usize,
 }
 
 enum MapState {
@@ -1249,8 +1255,7 @@ struct NewMap {
 
 #[derive(Debug)]
 struct EditAtom {
-    coords: (usize, usize, usize),
-    idx: usize,
+    inst: map_repr::InstanceId,
     filter: ImString,
     fab: Prefab,
 }
