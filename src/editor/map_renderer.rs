@@ -17,6 +17,7 @@ use dmi::*;
 const TILE_SIZE: u32 = 32;
 
 gfx_defines! {
+    #[derive(Default)]
     vertex Vertex {
         position: [f32; 2] = "position",
         color: [f32; 4] = "color",
@@ -27,7 +28,7 @@ gfx_defines! {
         transform: [[f32; 4]; 4] = "transform",
     }
 
-    #[derive(PartialOrd)]
+    #[derive(PartialOrd, Default)]
     constant RenderPop {
         category: u32 = "category",
         texture: u32 = "texture",  // icon

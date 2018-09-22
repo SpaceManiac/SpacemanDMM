@@ -16,12 +16,14 @@ extern crate serde;
 extern crate toml;
 extern crate petgraph;
 extern crate gfx_gl as gl;
+extern crate weak_table;
 
 extern crate dreammaker as dm;
 extern crate dmm_tools;
 
 mod support;
 mod dmi;
+mod map_repr;
 mod map_renderer;
 mod tasks;
 mod tools;

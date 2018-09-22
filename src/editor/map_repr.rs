@@ -1,0 +1,193 @@
+//! Representation of a map as a collection of atoms rather than a grid.
+
+use std::rc::{Rc, Weak};
+use weak_table::WeakKeyHashMap;
+
+use dmm_tools::dmm::{Map, Prefab};
+use dm::objtree::ObjectTree;
+
+use dmi::IconCache;
+use map_renderer::{RenderPop, Vertex};
+
+#[derive(Debug, Clone)]
+pub struct AtomMap {
+    pub size: (u32, u32),
+    pub pops: WeakKeyHashMap<Weak<Prefab>, RenderPop>,
+    pub levels: Vec<AtomZ>,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct AtomZ {
+    // no sorting invariants, could be in any order whatsoever
+    pub instances: DualPool<Instance, [Vertex; 4]>,
+    // plane+layer sorting is maintained
+    pub sorted_order: Vec<usize>,
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct Instance {
+    pub x: u32,
+    pub y: u32,
+    pub pop: Rc<Prefab>,
+}
+
+#[derive(Debug)]
+pub struct Defer<'a> {
+    map: &'a mut AtomMap,
+}
+
+impl AtomMap {
+    pub fn new(map: &Map, icons: &IconCache, objtree: &ObjectTree) -> AtomMap {
+        let (dim_x, dim_y, dim_z) = map.dim_xyz();
+        let mut atom_map = AtomMap {
+            size: (dim_x as u32, dim_y as u32),
+            pops: Default::default(),
+            levels: Default::default(),
+        };
+
+        for z in 0..dim_z {
+            atom_map.levels.push(AtomZ::default());
+            atom_map.defer(z, |mut defer| {
+                for ((y, x), key) in map.z_level(z).indexed_iter() {
+                    for fab in map.dictionary[key].iter() {
+                        let pop = defer.add_pop(fab, icons, objtree);
+                        defer.add_instance((x as u32, y as u32, z as u32), pop);
+                    }
+                }
+            });
+        }
+        atom_map
+    }
+
+    pub fn refresh_pops(&mut self, icons: &IconCache, objtree: &ObjectTree) {
+        for (prefab, rpop) in self.pops.iter_mut() {
+            *rpop = RenderPop::from_prefab(icons, objtree, &prefab).unwrap_or_default();
+        }
+    }
+
+    pub fn add_pop(&mut self, prefab: &Prefab, icons: &IconCache, objtree: &ObjectTree) -> Rc<Prefab> {
+        if let Some(key) = self.pops.get_key(&prefab) {
+            key
+        } else {
+            let rc = Rc::new(prefab.to_owned());
+            self.pops.insert(rc.clone(), RenderPop::from_prefab(icons, objtree, &prefab).unwrap_or_default());
+            rc
+        }
+    }
+
+    pub fn defer<F: FnOnce(Defer)>(&mut self, z: usize, f: F) {
+        f(Defer { map: self });
+        self.sort_again(z);
+    }
+
+    fn add_instance_unsorted(&mut self, (x, y, z): (u32, u32, u32), prefab: Rc<Prefab>) -> usize {
+        let level = &mut self.levels[z as usize];
+        let new_instance = level.prep_instance(&mut self.pops, (x, y), prefab);
+        level.sorted_order.push(new_instance);
+        new_instance
+    }
+
+    pub fn add_instance(&mut self, (x, y, z): (u32, u32, u32), prefab: Rc<Prefab>) -> usize {
+        let pops = &mut self.pops;
+        let level = &mut self.levels[z as usize];
+        let new_instance = level.prep_instance(pops, (x, y), prefab);
+        let AtomZ { sorted_order, instances } = level;
+
+        let sort_key = |&idx| {
+            let inst = instances.get_key(idx);
+            let rpop = pops.get(&inst.pop).expect("instance with missing pop");
+            rpop.sort_key()
+        };
+        let pos = match sorted_order.binary_search_by_key(&sort_key(&new_instance), sort_key) {
+            Ok(found) => found,  // TODO: add 1? add more than 1?
+            Err(dest) => dest,
+        };
+        sorted_order.insert(pos, new_instance);
+        new_instance
+    }
+
+    pub fn sort_again(&mut self, z: usize) {
+        let pops = &self.pops;
+        let level = &mut self.levels[z];
+        let AtomZ { sorted_order, instances } = level;
+
+        sorted_order.sort_by_key(|&idx| {
+            let inst = instances.get_key(idx);
+            let rpop = pops.get(&inst.pop).expect("instance with missing pop");
+            rpop.sort_key()
+        })
+    }
+}
+
+impl AtomZ {
+    fn prep_instance(&mut self, pops: &mut WeakKeyHashMap<Weak<Prefab>, RenderPop>, (x, y): (u32, u32), prefab: Rc<Prefab>) -> usize {
+        let vertices = pops.get(&prefab)
+            .map_or_else(|| [Vertex::default(); 4], |rpop| rpop.instance((x, y)));
+        self.instances.push(Instance { x, y, pop: prefab }, vertices)
+    }
+}
+
+impl<'a> Defer<'a> {
+    #[inline]
+    pub fn add_pop(&mut self, prefab: &Prefab, icons: &IconCache, objtree: &ObjectTree) -> Rc<Prefab> {
+        self.map.add_pop(prefab, icons, objtree)
+    }
+
+    pub fn add_instance(&mut self, loc: (u32, u32, u32), prefab: Rc<Prefab>) -> usize {
+        self.map.add_instance_unsorted(loc, prefab)
+    }
+}
+
+/// 2-tuple struct of arrays storage with freelist.
+#[derive(Debug, Clone)]
+pub struct DualPool<K, V> {
+    keys: Vec<K>,
+    vals: Vec<V>,
+    freelist: Vec<usize>,
+}
+
+impl<K, V> Default for DualPool<K, V> {
+    fn default() -> Self {
+        DualPool {
+            keys: Default::default(),
+            vals: Default::default(),
+            freelist: Default::default(),
+        }
+    }
+}
+
+impl<K, V> DualPool<K, V> {
+    /// Get a slice of all values in the pool, including dead values.
+    pub fn values(&self) -> &[V] {
+        &self.vals[..]
+    }
+
+    pub fn push(&mut self, key: K, value: V) -> usize {
+        if let Some(idx) = self.freelist.pop() {
+            // we have free slots, stick it in the middle
+            self.keys[idx] = key;
+            self.vals[idx] = value;
+            idx
+        } else {
+            // we do not have free slots, push it on the end
+            let idx = self.keys.len();
+            debug_assert!(idx == self.vals.len());
+            self.keys.push(key);
+            self.vals.push(value);
+            idx
+        }
+    }
+
+    pub fn free(&mut self, idx: usize) {
+        debug_assert!(!self.freelist.contains(&idx));
+        self.freelist.push(idx);
+    }
+
+    pub fn get_key(&self, idx: usize) -> &K {
+        &self.keys[idx]
+    }
+
+    pub fn len(&self) -> usize {
+        self.keys.len()
+    }
+}
