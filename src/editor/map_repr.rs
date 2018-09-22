@@ -9,7 +9,7 @@ use dmm_tools::dmm::{Map, Prefab};
 use dm::objtree::ObjectTree;
 
 use dmi::IconCache;
-use map_renderer::{RenderPop, Vertex};
+use map_renderer::{RenderPop, Vertex, DrawCall};
 
 #[derive(Debug, Clone)]
 pub struct AtomMap {
@@ -23,10 +23,14 @@ pub struct AtomMap {
 pub struct AtomZ {
     // no sorting invariants, could be in any order whatsoever
     pub instances: DualPool<Instance, [Vertex; 4]>,
+
     // plane+layer sorting is maintained
     pub sorted_order: Vec<usize>,
     index_buffer: RefCell<Vec<[u32; 6]>>,
     index_buffer_dirty: Cell<bool>,
+
+    // matches sorted_order with combined calls
+    pub draw_calls: Vec<DrawCall>,
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
@@ -117,6 +121,7 @@ impl AtomMap {
         let new_instance = level.prep_instance(pops, (x, y), prefab);
         let sorted_order = &mut level.sorted_order;
         let instances = &mut level.instances;
+        let draw_calls = &mut level.draw_calls;
 
         let sort_key = |&idx| {
             let inst = instances.get_key(idx);
@@ -129,6 +134,56 @@ impl AtomMap {
         };
         sorted_order.insert(pos, new_instance);
         level.index_buffer.get_mut().insert(pos, indices(new_instance));
+
+        // find the draw call which "should" contain the new index
+        let pos = 6 * (pos as u32);
+        let mut start = 0;
+        let mut draw_call = draw_calls.len();
+        for (i, call) in draw_calls.iter_mut().enumerate() {
+            if pos >= start && pos < start + call.len {
+                draw_call = i;
+                break;
+            }
+            start += call.len;
+        }
+
+        // extend the draw call or insert a new one
+        let rpop = pops.get(&instances.get_key(new_instance).pop).expect("instance with missing pop");
+        if pos == start {
+            // in between two calls
+            if draw_call > 0 && draw_calls[draw_call - 1].can_contain(rpop) {
+                // left can fit us
+                draw_calls[draw_call - 1].len += 6;
+            } else if draw_call < draw_calls.len() && draw_calls[draw_call].can_contain(rpop) {
+                // right can fit us
+                draw_calls[draw_call].len += 6;
+            } else {
+                // neither can, insert
+                draw_calls.insert(draw_call, DrawCall {
+                    category: rpop.category,
+                    texture: rpop.texture,
+                    len: 6,
+                });
+            }
+        } else {
+            // in the middle of a call
+            if draw_calls[draw_call].can_contain(rpop) {
+                // increase len
+                draw_calls[draw_call].len += 6;
+            } else {
+                // split
+                let mut clone = draw_calls[draw_call].clone();
+                clone.len = pos - start;
+                draw_calls[draw_call].len -= clone.len;
+                draw_calls.insert(draw_call, DrawCall {
+                    category: rpop.category,
+                    texture: rpop.texture,
+                    len: 6,
+                });
+                draw_calls.insert(draw_call, clone);
+            }
+        }
+
         InstanceId { z, idx: new_instance }
     }
 
@@ -158,7 +213,8 @@ impl AtomMap {
         let pops = &self.pops;
         let level = &mut self.levels[z as usize];
         let sorted_order = &mut level.sorted_order;
-        let instances = &mut level.instances;
+        let draw_calls = &mut level.draw_calls;
+        let instances = &level.instances;
 
         sorted_order.sort_by_key(|&idx| {
             let inst = instances.get_key(idx);
@@ -166,6 +222,26 @@ impl AtomMap {
             rpop.sort_key()
         });
         level.index_buffer_dirty.set(true);
+
+        draw_calls.clear();
+        for &inst in sorted_order.iter() {
+            let pop = &instances.get_key(inst).pop;
+            let rpop = match pops.get(pop) {
+                Some(rpop) => rpop,
+                None => continue,
+            };
+            if let Some(call) = draw_calls.last_mut() {
+                if call.can_contain(rpop) {
+                    call.len += 6;
+                    continue;
+                }
+            }
+            draw_calls.push(DrawCall {
+                category: rpop.category,
+                texture: rpop.texture,
+                len: 6,
+            });
+        }
     }
 
     #[inline]

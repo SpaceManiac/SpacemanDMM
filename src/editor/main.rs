@@ -241,7 +241,7 @@ impl EditorScene {
         self.render_map(false);
         if let Some(map) = self.maps.get_mut(self.map_current) {
             if let Some(rendered) = map.rendered.get_mut(map.z_current).and_then(|x| x.as_mut()) {
-                rendered.paint(&mut self.map_renderer, map.center, encoder, &self.target);
+                rendered.paint(&mut self.map_renderer, map.center, &mut self.factory, encoder, &self.target);
             }
         }
     }

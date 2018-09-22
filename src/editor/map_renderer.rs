@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use gfx;
 use gfx::traits::{Factory as FactoryTrait, FactoryExt};
-use {Resources, Factory, Encoder, ColorFormat, RenderTargetView, Texture};
+use {Resources, Factory, Encoder, ColorFormat, RenderTargetView};
 
 use slice_of_array::prelude::*;
 
@@ -75,12 +75,11 @@ pub struct RenderedMap {
     vbuf: gfx::handle::Buffer<Resources, Vertex>,
 }
 
-struct DrawCall {
-    category: u32,
-    texture_id: u32,
-    texture: Texture,
-    start: u32,
-    len: u32,
+#[derive(Debug, Clone)]
+pub struct DrawCall {
+    pub category: u32,
+    pub texture: u32,
+    pub len: u32,
 }
 
 impl MapRenderer {
@@ -114,32 +113,6 @@ impl MapRenderer {
         let start = Instant::now();
         let level = &map.levels[z as usize];
 
-        // TODO: cache the draw calls as well
-        let mut draw_calls: Vec<DrawCall> = Vec::new();
-        for (i, &inst) in level.sorted_order.iter().enumerate() {
-            let i_start = (6 * i) as u32;
-
-            let pop = &level.instances.get_key(inst).pop;
-            let rpop = match map.pops.get(pop) {
-                Some(rpop) => rpop,
-                None => continue,
-            };
-            if let Some(call) = draw_calls.last_mut() {
-                if call.texture_id == rpop.texture && call.category == rpop.category {
-                    call.len += 6;
-                    continue;
-                }
-            }
-            let texture = self.icon_textures.retrieve(factory, &self.icons, rpop.texture as usize);
-            draw_calls.push(DrawCall {
-                category: rpop.category,
-                texture_id: rpop.texture,
-                texture: texture.clone(),
-                start: i_start,
-                len: 6,
-            });
-        }
-
         let vbuf = factory.create_vertex_buffer(map.vertex_buffer(z).flat());
         let ibuf = factory.create_index_buffer(map.index_buffer(z).flat());
 
@@ -147,7 +120,7 @@ impl MapRenderer {
             atoms_len: level.instances.len(),
             pops_len: map.pops.len(),
             duration: [to_seconds(map.duration), to_seconds(Instant::now() - start)],
-            draw_calls,
+            draw_calls: level.draw_calls.clone(),
 
             ibuf,
             vbuf,
@@ -160,7 +133,7 @@ impl RenderedMap {
         self.draw_calls.len()
     }
 
-    pub fn paint(&mut self, parent: &mut MapRenderer, center: [f32; 2], encoder: &mut Encoder, view: &RenderTargetView) {
+    pub fn paint(&mut self, parent: &mut MapRenderer, center: [f32; 2], factory: &mut Factory, encoder: &mut Encoder, view: &RenderTargetView) {
         let (x, y, _, _) = view.get_dimensions();
 
         // (0, 0) is the center of the screen, 1.0 = 1 pixel
@@ -174,24 +147,29 @@ impl RenderedMap {
         };
         encoder.update_buffer(&parent.transform_buffer, &[transform], 0).expect("update_buffer failed");
 
+        let mut start = 0;
         for call in self.draw_calls.iter() {
             if !parent.layers[call.category as usize] {
+                start += call.len;
                 continue;
             }
+            let texture = parent.icon_textures.retrieve(factory, &parent.icons, call.texture as usize);
             let slice = gfx::Slice {
-                start: call.start,
-                end: call.start + call.len,
+                start: start,
+                end: start + call.len,
                 base_vertex: 0,
                 instances: None,
                 buffer: self.ibuf.clone(),
             };
+            // TODO: use borrowing to avoid having to clone so much here?
             let data = pipe::Data {
                 vbuf: self.vbuf.clone(),
                 transform: parent.transform_buffer.clone(),
-                tex: (call.texture.clone(), parent.sampler.clone()),
+                tex: (texture.clone(), parent.sampler.clone()),
                 out: view.clone(),
             };
             encoder.draw(&slice, &parent.pso, &data);
+            start += call.len;
         }
     }
 }
@@ -296,6 +274,12 @@ impl RenderPop {
 
     pub fn sort_key(&self) -> impl Ord {
         (self.plane, self.layer, self.texture)
+    }
+}
+
+impl DrawCall {
+    pub fn can_contain(&self, rpop: &RenderPop) -> bool {
+        self.category == rpop.category && self.texture == rpop.texture
     }
 }
 
