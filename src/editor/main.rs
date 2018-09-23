@@ -616,19 +616,9 @@ impl EditorScene {
                         let z = map.z_current as u32;
                         if let Some(hist) = map.state.hist_mut() {
                             if let Some((x, y)) = self.target_tile {
-                                // TODO: cloning these here is likely a bad idea
-                                let icons = self.map_renderer.icons.clone();
-                                let objtree = env.objtree.clone();
-                                hist.edit("TODO".to_owned(), move |world| {
-                                    let pop = world.add_pop(&Prefab {
-                                        path: "/obj/item/lighter".to_owned(),
-                                        vars: Default::default(),
-                                    }, &icons, &objtree);
-                                    let inst = world.add_instance((x, y, z), pop);
-                                    Box::new(move |world| {
-                                        world.remove_instance(inst.clone());
-                                    })
-                                });
+                                if let Some(tool) = self.tools.get_mut(self.tool_current) {
+                                    tool.behavior.click(hist, &env.objtree, &self.map_renderer.icons, (x, y, z));
+                                }
                             }
                         }
                     }
