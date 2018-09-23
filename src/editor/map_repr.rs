@@ -28,6 +28,7 @@ pub struct AtomZ {
     pub sorted_order: Vec<usize>,
     index_buffer: RefCell<Vec<[u32; 6]>>,
     index_buffer_dirty: Cell<bool>,
+    pub buffers_dirty: Cell<bool>,
 
     // matches sorted_order with combined calls
     pub draw_calls: Vec<DrawCall>,
@@ -112,6 +113,7 @@ impl AtomMap {
         let new_instance = level.prep_instance(&mut self.pops, (x, y), prefab);
         level.sorted_order.push(new_instance);
         level.index_buffer.get_mut().push(indices(new_instance));
+        level.buffers_dirty.set(true);
         InstanceId { z, idx: new_instance }
     }
 
@@ -134,6 +136,7 @@ impl AtomMap {
         };
         sorted_order.insert(pos, new_instance);
         level.index_buffer.get_mut().insert(pos, indices(new_instance));
+        level.buffers_dirty.set(true);
 
         // find the draw call which "should" contain the new index
         let pos = 6 * (pos as u32);
@@ -233,6 +236,7 @@ impl AtomMap {
             rpop.sort_key()
         });
         level.index_buffer_dirty.set(true);
+        level.buffers_dirty.set(true);
 
         draw_calls.clear();
         for &inst in sorted_order.iter() {
@@ -262,8 +266,7 @@ impl AtomMap {
 
     pub fn index_buffer(&self, z: u32) -> Ref<[[u32; 6]]> {
         let level = &self.levels[z as usize];
-        if level.index_buffer_dirty.get() {
-            level.index_buffer_dirty.set(false);
+        if level.index_buffer_dirty.replace(false) {
             let mut ib = level.index_buffer.borrow_mut();
             ib.clear();
             for &inst in level.sorted_order.iter() {

@@ -164,7 +164,9 @@ impl RenderedMap {
 
     pub fn paint(&mut self, parent: &mut MapRenderer, map: &AtomMap, z: u32, center: [f32; 2], factory: &mut Factory, encoder: &mut Encoder, view: &RenderTargetView) {
         // update vertex and index buffers from the map
-        self.update_buffers(map, z, factory, encoder);
+        if map.levels[z as usize].buffers_dirty.replace(false) {
+            self.update_buffers(map, z, factory, encoder);
+        }
 
         // (0, 0) is the center of the screen, 1.0 = 1 pixel
         let (x, y, _, _) = view.get_dimensions();
