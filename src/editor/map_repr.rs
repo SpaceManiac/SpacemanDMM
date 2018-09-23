@@ -137,15 +137,7 @@ impl AtomMap {
 
         // find the draw call which "should" contain the new index
         let pos = 6 * (pos as u32);
-        let mut start = 0;
-        let mut draw_call = draw_calls.len();
-        for (i, call) in draw_calls.iter_mut().enumerate() {
-            if pos >= start && pos < start + call.len {
-                draw_call = i;
-                break;
-            }
-            start += call.len;
-        }
+        let (draw_call, start) = find_draw_call(draw_calls, pos);
 
         // extend the draw call or insert a new one
         let rpop = pops.get(&instances.get_key(new_instance).pop).expect("instance with missing pop");
@@ -208,16 +200,7 @@ impl AtomMap {
 
             // find the draw call which previously contained the index
             let pos = 6 * (pos as u32);
-            let mut start = 0;
-            let mut draw_call = draw_calls.len();
-            for (i, call) in draw_calls.iter_mut().enumerate() {
-                if pos >= start && pos < start + call.len {
-                    draw_call = i;
-                    break;
-                }
-                start += call.len;
-            }
-
+            let (draw_call, _) = find_draw_call(draw_calls, pos);
             draw_calls[draw_call].len -= 6;
             if draw_calls[draw_call].len == 0 {
                 draw_calls.remove(draw_call);
@@ -367,4 +350,17 @@ impl<K, V> DualPool<K, V> {
 fn indices(inst: usize) -> [u32; 6] {
     let start = (inst * 4) as u32;
     [start, start + 1, start + 3, start + 1, start + 2, start + 3]
+}
+
+fn find_draw_call(draw_calls: &[DrawCall], pos: u32) -> (usize, u32) {
+    let mut start = 0;
+    let mut draw_call = draw_calls.len();
+    for (i, call) in draw_calls.iter().enumerate() {
+        if pos >= start && pos < start + call.len {
+            draw_call = i;
+            break;
+        }
+        start += call.len;
+    }
+    (draw_call, start)
 }
