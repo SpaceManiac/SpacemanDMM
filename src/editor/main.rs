@@ -864,17 +864,22 @@ impl EditorScene {
                     .always_auto_resize(true)
                     .opened(&mut opened)
                     .build(|| {
-                        ui.text(im_str!("maps[{}], icons[{}], map = {}, zoom = {}",
-                            self.maps.len(), self.map_renderer.icons.len(),
+                        ui.text(im_str!("maps[{}], map = {}, zoom = {}",
+                            self.maps.len(),
                             self.map_current, self.map_renderer.zoom));
                         if let Some(env) = self.environment.as_ref() {
+                            ui.text(im_str!("types[{}], icons[{}]", env.objtree.graph.node_count(), env.icons.len()));
                             ui.text(im_str!("turf = {}", env.turf));
                             ui.text(im_str!("area = {}", env.area));
                         }
                         if let Some(map) = self.maps.get(self.map_current) {
                             ui.text(im_str!("center = {:?}", map.center));
+                            if let Some(hist) = map.state.hist() {
+                                let current = hist.current();
+                                let level = &current.levels[map.z_current];
+                                ui.text(im_str!("draw_calls[{}], pops[{}], atoms[{}]", level.draw_calls.len(), current.pops.len(), level.instances.len()));
+                            }
                             if let Some(rendered) = map.rendered.get(map.z_current).and_then(|x| x.as_ref()) {
-                                ui.text(im_str!("draw_calls[{}], pops[{}], atoms[{}]", rendered.draw_calls(), rendered.pops_len, rendered.atoms_len));
                                 ui.text(im_str!("timings: {:?}", rendered.duration));
                             }
                         }

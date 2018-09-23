@@ -66,8 +66,6 @@ pub struct MapRenderer {
 }
 
 pub struct RenderedMap {
-    pub atoms_len: usize,
-    pub pops_len: usize,
     pub duration: [f32; 2],
 
     vbuf: gfx::handle::Buffer<Resources, Vertex>,
@@ -110,7 +108,6 @@ impl MapRenderer {
     #[must_use]
     pub fn render(&mut self, map: &AtomMap, z: u32, factory: &mut Factory) -> RenderedMap {
         let start = Instant::now();
-        let level = &map.levels[z as usize];
 
         let vbuf_data = map.vertex_buffer(z).flat();
         let ibuf_data = map.index_buffer(z);
@@ -130,8 +127,6 @@ impl MapRenderer {
         ).expect("create index buffer");
 
         RenderedMap {
-            atoms_len: level.instances.len(),
-            pops_len: map.pops.len(),
             duration: [to_seconds(map.duration), to_seconds(Instant::now() - start)],
 
             vbuf,
@@ -141,10 +136,6 @@ impl MapRenderer {
 }
 
 impl RenderedMap {
-    pub fn draw_calls(&self) -> usize {
-        0  // TODO
-    }
-
     fn update_buffers(&mut self, map: &AtomMap, z: u32, factory: &mut Factory, encoder: &mut Encoder) {
         let vbuf_data = map.vertex_buffer(z).flat();
         let ibuf_data = map.index_buffer(z);
