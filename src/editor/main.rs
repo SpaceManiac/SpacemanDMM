@@ -611,21 +611,15 @@ impl EditorScene {
 
         if !ui.want_capture_mouse() {
             if ui.imgui().is_mouse_clicked(ImMouseButton::Left) {
-                println!("lmb");
                 if let Some(env) = self.environment.as_ref() {
-                    println!("env");
                     if let Some(map) = self.maps.get_mut(self.map_current) {
-                        println!("map");
                         let z = map.z_current as u32;
                         if let Some(hist) = map.state.hist_mut() {
-                            println!("hist");
                             if let Some((x, y)) = self.target_tile {
-                                println!("target tile");
                                 // TODO: cloning these here is likely a bad idea
                                 let icons = self.map_renderer.icons.clone();
                                 let objtree = env.objtree.clone();
                                 hist.edit("TODO".to_owned(), move |world| {
-                                    println!("edit");
                                     let pop = world.add_pop(&Prefab {
                                         path: "/obj/item/lighter".to_owned(),
                                         vars: Default::default(),
