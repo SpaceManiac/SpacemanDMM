@@ -51,7 +51,7 @@ type Texture = gfx::handle::ShaderResourceView<Resources, [f32; 4]>;
 
 use tasks::Task;
 use dmi::IconCache;
-use history::History;
+type History = history::History<map_repr::AtomMap, Environment>;
 
 const RED_TEXT: &[(ImGuiCol, [f32; 4])] = &[(ImGuiCol::Text, [1.0, 0.25, 0.25, 1.0])];
 const GREEN_TEXT: &[(ImGuiCol, [f32; 4])] = &[(ImGuiCol::Text, [0.25, 1.0, 0.25, 1.0])];
@@ -617,7 +617,7 @@ impl EditorScene {
                         if let Some(hist) = map.state.hist_mut() {
                             if let Some((x, y)) = self.target_tile {
                                 if let Some(tool) = self.tools.get_mut(self.tool_current) {
-                                    tool.behavior.click(hist, &env.objtree, &env.icons, (x, y, z));
+                                    tool.behavior.click(hist, env, (x, y, z));
                                 }
                             }
                         }
@@ -1188,25 +1188,27 @@ impl EditorScene {
     }
 
     fn undo(&mut self) {
-        if let Some(map) = self.maps.get_mut(self.map_current) {
-            if let Some(hist) = map.state.hist_mut() {
-                hist.undo();
-                // TODO: rerender
+        if let Some(env) = self.environment.as_ref() {
+            if let Some(map) = self.maps.get_mut(self.map_current) {
+                if let Some(hist) = map.state.hist_mut() {
+                    hist.undo(env);
+                }
             }
         }
     }
 
     fn redo(&mut self) {
-        if let Some(map) = self.maps.get_mut(self.map_current) {
-            if let Some(hist) = map.state.hist_mut() {
-                hist.redo();
-                // TODO: rerender
+        if let Some(env) = self.environment.as_ref() {
+            if let Some(map) = self.maps.get_mut(self.map_current) {
+                if let Some(hist) = map.state.hist_mut() {
+                    hist.redo(env);
+                }
             }
         }
     }
 }
 
-struct Environment {
+pub struct Environment {
     path: PathBuf,
     objtree: Arc<ObjectTree>,
     icons: Arc<IconCache>,
@@ -1231,7 +1233,7 @@ enum MapState {
     Preparing(Arc<Map>, mpsc::Receiver<map_repr::AtomMap>),
     Active {
         merge_base: Map,
-        hist: History<map_repr::AtomMap>,
+        hist: History,
     }
 }
 
@@ -1255,14 +1257,14 @@ impl MapState {
         }
     }
 
-    fn hist(&self) -> Option<&History<map_repr::AtomMap>> {
+    fn hist(&self) -> Option<&History> {
         match self {
             MapState::Active { ref hist, .. } => Some(hist),
             _ => None,
         }
     }
 
-    fn hist_mut(&mut self) -> Option<&mut History<map_repr::AtomMap>> {
+    fn hist_mut(&mut self) -> Option<&mut History> {
         match self {
             MapState::Active { ref mut hist, .. } => Some(hist),
             _ => None,

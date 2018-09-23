@@ -1,15 +1,12 @@
 //! Placement and editing tools which appear in the workbench.
 #![allow(dead_code)]  // WIP
 
-use std::sync::Arc;
 use imgui::*;
 
 use dm::objtree::ObjectTree;
 use dmm_tools::dmm::Prefab;
 
-use dmi::IconCache;
-use history::History;
-use map_repr::AtomMap;
+use {History, Environment};
 
 pub enum ToolIcon {
     None,
@@ -40,7 +37,7 @@ pub trait ToolBehavior {
     fn settings(&mut self, ui: &Ui) {
     }
 
-    fn click(&mut self, hist: &mut History<AtomMap>, objtree: &Arc<ObjectTree>, icons: &Arc<IconCache>, loc: (u32, u32, u32)) {
+    fn click(&mut self, hist: &mut History, env: &Environment, loc: (u32, u32, u32)) {
     }
 }
 
@@ -100,17 +97,15 @@ pub fn configure(_objtree: &ObjectTree) -> Vec<Tool> {
 
 struct Place;
 impl ToolBehavior for Place {
-    fn click(&mut self, hist: &mut History<AtomMap>, objtree: &Arc<ObjectTree>, icons: &Arc<IconCache>, loc: (u32, u32, u32)) {
+    fn click(&mut self, hist: &mut History, env: &Environment, loc: (u32, u32, u32)) {
         // TODO: cloning these here is likely a bad idea
-        let icons = icons.clone();
-        let objtree = objtree.clone();
-        hist.edit("TODO".to_owned(), move |world| {
+        hist.edit(env, "TODO".to_owned(), move |env, world| {
             let pop = world.add_pop(&Prefab {
                 path: "/obj/item/lighter".to_owned(),
                 vars: Default::default(),
-            }, &icons, &objtree);
+            }, &env.icons, &env.objtree);
             let inst = world.add_instance(loc, pop);
-            Box::new(move |world| {
+            Box::new(move |_, world| {
                 world.remove_instance(inst.clone());
             })
         });

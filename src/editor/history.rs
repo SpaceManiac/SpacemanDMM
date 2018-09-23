@@ -5,22 +5,22 @@ use petgraph::Direction;
 use petgraph::graph::{NodeIndex, Graph};
 use petgraph::visit::EdgeRef;
 
-pub struct History<T> {
+pub struct History<T, E> {
     current: T,
     idx: NodeIndex,
-    graph: Graph<Entry, Edit<T>>,
+    graph: Graph<Entry, Edit<T, E>>,
 }
 
 struct Entry {
     desc: String,
 }
 
-struct Edit<T> {
-    redo: Box<Fn(&mut T) -> Box<Fn(&mut T)>>,
-    undo: Box<Fn(&mut T)>,
+struct Edit<T, E> {
+    redo: Box<Fn(&E, &mut T) -> Box<Fn(&E, &mut T)>>,
+    undo: Box<Fn(&E, &mut T)>,
 }
 
-impl<T> History<T> {
+impl<T, E> History<T, E> {
     pub fn new(desc: String, current: T) -> Self {
         let mut graph = Graph::default();
         let idx = graph.add_node(Entry {
@@ -37,9 +37,9 @@ impl<T> History<T> {
         &self.current
     }
 
-    pub fn edit<F: 'static + Fn(&mut T) -> Box<Fn(&mut T)>>(&mut self, desc: String, f: F) {
+    pub fn edit<F: 'static + Fn(&E, &mut T) -> Box<Fn(&E, &mut T)>>(&mut self, env: &E, desc: String, f: F) {
         // perform the edit immediately
-        let undo = f(&mut self.current);
+        let undo = f(env, &mut self.current);
 
         // save the edit to the history
         let new_idx = self.graph.add_node(Entry {
@@ -60,9 +60,9 @@ impl<T> History<T> {
         self.parent(self.idx).is_some()
     }
 
-    pub fn undo(&mut self) {
+    pub fn undo(&mut self, env: &E) {
         if let Some(edge) = self.graph.edges_directed(self.idx, Direction::Incoming).last() {
-            (edge.weight().undo)(&mut self.current);
+            (edge.weight().undo)(env, &mut self.current);
             self.idx = edge.source();
         }
     }
@@ -71,10 +71,10 @@ impl<T> History<T> {
         self.graph.neighbors_directed(self.idx, Direction::Outgoing).next().is_some()
     }
 
-    pub fn redo(&mut self) {
+    pub fn redo(&mut self, env: &E) {
         let mut undo = None;
         if let Some(edge) = self.graph.edges_directed(self.idx, Direction::Outgoing).last() {
-            undo = Some((edge.id(), (edge.weight().redo)(&mut self.current)));
+            undo = Some((edge.id(), (edge.weight().redo)(env, &mut self.current)));
             self.idx = edge.target();
         }
         if let Some((id, undo)) = undo {
