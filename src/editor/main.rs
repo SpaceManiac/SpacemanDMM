@@ -722,16 +722,17 @@ impl EditorScene {
             if opened && !closed { Some(new_map) } else { None }
         });
 
-        for map in self.maps.iter_mut() {
+        if let Some(map) = self.maps.get_mut(self.map_current) {
             let env = self.environment.as_ref();
             let extra_vars = self.ui_extra_vars;
             let uid = map.uid;
+            let mut delete = Vec::new();
             map.edit_atoms.retain_mut(|edit| {
                 let mut keep = true;
                 let mut keep2 = true;
 
-                let EditAtom { ref mut fab, ref mut filter, .. } = edit;
-                ui.window(im_str!("{}##{}/{:?}", fab.path, uid, edit.inst))
+                let EditAtom { ref mut fab, ref mut filter, ref inst } = edit;
+                ui.window(im_str!("{}##{}/{:?}", fab.path, uid, inst))
                     .opened(&mut keep)
                     .position(ui.imgui().mouse_pos(), ImGuiCond::Appearing)
                     .size((350.0, 500.0), ImGuiCond::FirstUseEver)
@@ -742,6 +743,11 @@ impl EditorScene {
                             if ui.menu_item(im_str!("Apply")).build() {
                                 // TODO: actually apply
                                 keep2 = false;
+                            }
+                            ui.separator();
+                            if ui.menu_item(im_str!("Delete")).build() {
+                                keep2 = false;
+                                delete.push(inst.clone());
                             }
                             ui.separator();
                             ui.menu(im_str!("Filter...")).build(|| {
@@ -854,6 +860,22 @@ impl EditorScene {
                     });
                 keep && keep2
             });
+            if let Some(hist) = map.state.hist_mut() {
+                if let Some(env) = env {
+                    for id in delete.into_iter() {
+                        hist.edit(env, "TODO".to_owned(), move |_, world| {
+                            let inst = world.get_instance(&id).unwrap().clone();
+                            let loc = (inst.x, inst.y, id.z);
+                            let prefab = inst.pop;
+                            world.remove_instance(id.clone());
+                            Box::new(move |env, world| {
+                                let pop = world.add_pop(&prefab, &env.icons, &env.objtree);
+                                world.add_instance(loc, pop);
+                            })
+                        })
+                    }
+                }
+            }
         }
 
         if self.ui_debug_mode {

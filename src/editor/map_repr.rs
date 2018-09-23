@@ -42,7 +42,7 @@ pub struct Instance {
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct InstanceId {
-    z: u32,
+    pub z: u32,
     idx: usize,
 }
 
@@ -179,7 +179,7 @@ impl AtomMap {
         InstanceId { z, idx: new_instance }
     }
 
-    pub fn get_instance(&self, id: InstanceId) -> Option<&Instance> {
+    pub fn get_instance(&self, id: &InstanceId) -> Option<&Instance> {
         let level = &self.levels[id.z as usize];
         if id.idx >= level.instances.len() || level.instances.freelist.contains(&id.idx) {
             // TODO: the contains() call is probably not fast
