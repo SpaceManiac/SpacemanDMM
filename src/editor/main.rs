@@ -40,8 +40,6 @@ use imgui::*;
 use dm::objtree::{ObjectTree, TypeRef};
 use dmm_tools::dmm::{Map, Prefab};
 
-use history::History;
-
 use glutin::VirtualKeyCode as Key;
 use gfx_device_gl::{Factory, Resources, CommandBuffer};
 type Encoder = gfx::Encoder<Resources, CommandBuffer>;
@@ -52,6 +50,8 @@ type DepthStencilView = gfx::handle::DepthStencilView<Resources, DepthFormat>;
 type Texture = gfx::handle::ShaderResourceView<Resources, [f32; 4]>;
 
 use tasks::Task;
+use dmi::IconCache;
+use history::History;
 
 const RED_TEXT: &[(ImGuiCol, [f32; 4])] = &[(ImGuiCol::Text, [1.0, 0.25, 0.25, 1.0])];
 const GREEN_TEXT: &[(ImGuiCol, [f32; 4])] = &[(ImGuiCol::Text, [0.25, 1.0, 0.25, 1.0])];
@@ -185,8 +185,8 @@ impl EditorScene {
                 self.config.make_recent(&environment.path);
                 self.config.save();
                 self.tools = tools::configure(&environment.objtree);
-                self.map_renderer.icons = Arc::new(dmi::IconCache::new(
-                    &environment.path.parent().expect("invalid environment file path")));
+                self.map_renderer.icons = environment.icons.clone();
+                self.map_renderer.icon_textures.clear();
                 self.environment = Some(environment);
                 for map in self.maps.iter_mut() {
                     for z in map.rendered.iter_mut() {
@@ -209,7 +209,7 @@ impl EditorScene {
                 MapState::Pending(map) => if let Some(env) = self.environment.as_ref() {
                     let (tx, rx) = mpsc::channel();
                     let base = Arc::new(map);
-                    let icons = self.map_renderer.icons.clone();
+                    let icons = env.icons.clone();
                     let objtree = env.objtree.clone();
                     let base2 = base.clone();
                     std::thread::spawn(move || {
@@ -253,13 +253,13 @@ impl EditorScene {
 
         for tool in self.tools.iter_mut() {
             tool.icon = match std::mem::replace(&mut tool.icon, ToolIcon::None) {
-                ToolIcon::Dmi { icon, icon_state } => if self.environment.is_some() {
-                    if let Some(id) = self.map_renderer.icons.get_index(icon.as_ref()) {
-                        let icon = self.map_renderer.icons.get_icon(id);
+                ToolIcon::Dmi { icon, icon_state } => if let Some(env) = self.environment.as_ref() {
+                    if let Some(id) = env.icons.get_index(icon.as_ref()) {
+                        let icon = env.icons.get_icon(id);
                         if let Some([u1, v1, u2, v2]) = icon.uv_of(&icon_state, 2) {
                             let tex = self.map_renderer.icon_textures.retrieve(
                                 &mut self.factory,
-                                &self.map_renderer.icons,
+                                &env.icons,
                                 id,
                             ).clone();
                             let samp = self.map_renderer.sampler.clone();
@@ -617,7 +617,7 @@ impl EditorScene {
                         if let Some(hist) = map.state.hist_mut() {
                             if let Some((x, y)) = self.target_tile {
                                 if let Some(tool) = self.tools.get_mut(self.tool_current) {
-                                    tool.behavior.click(hist, &env.objtree, &self.map_renderer.icons, (x, y, z));
+                                    tool.behavior.click(hist, &env.objtree, &env.icons, (x, y, z));
                                 }
                             }
                         }
@@ -704,7 +704,7 @@ impl EditorScene {
                     }
                     let dmm = Map::new(new_map.x as usize, new_map.y as usize, new_map.z as usize,
                         env.turf.clone(), env.area.clone());
-                    let atom_map = map_repr::AtomMap::new(&dmm, &self.map_renderer.icons, &env.objtree);
+                    let atom_map = map_repr::AtomMap::new(&dmm, &env.icons, &env.objtree);
                     let desc = format!("New {}x{}x{} map", new_map.x, new_map.y, new_map.z);
                     self.maps.push(EditorMap {
                         path: None,
@@ -1051,10 +1051,12 @@ impl EditorScene {
             }
 
             Ok(TaskResult::ObjectTree(Environment {
-                path,
                 objtree: Arc::new(objtree),
+                icons: Arc::new(IconCache::new(
+                    path.parent().expect("invalid environment file path"))),
                 turf,
                 area,
+                path,
             }))
         }));
     }
@@ -1202,6 +1204,7 @@ impl EditorScene {
 struct Environment {
     path: PathBuf,
     objtree: Arc<ObjectTree>,
+    icons: Arc<IconCache>,
     turf: String,
     area: String,
 }
