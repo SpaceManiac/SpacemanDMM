@@ -624,7 +624,10 @@ impl EditorScene {
                                         path: "/obj/item/lighter".to_owned(),
                                         vars: Default::default(),
                                     }, &icons, &objtree);
-                                    world.add_instance((x, y, z), pop);
+                                    let inst = world.add_instance((x, y, z), pop);
+                                    Box::new(move |world| {
+                                        world.remove_instance(inst.clone());
+                                    })
                                 });
                             }
                         }

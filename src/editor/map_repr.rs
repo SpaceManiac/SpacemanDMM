@@ -197,6 +197,34 @@ impl AtomMap {
         }
     }
 
+    pub fn remove_instance(&mut self, id: InstanceId) {
+        let level = &mut self.levels[id.z as usize];
+        let draw_calls = &mut level.draw_calls;
+        level.instances.free(id.idx);
+
+        if let Some(pos) = level.sorted_order.iter().position(|&idx| idx == id.idx) {
+            level.sorted_order.remove(pos);
+            level.index_buffer.get_mut().remove(pos);
+
+            // find the draw call which previously contained the index
+            let pos = 6 * (pos as u32);
+            let mut start = 0;
+            let mut draw_call = draw_calls.len();
+            for (i, call) in draw_calls.iter_mut().enumerate() {
+                if pos >= start && pos < start + call.len {
+                    draw_call = i;
+                    break;
+                }
+                start += call.len;
+            }
+
+            draw_calls[draw_call].len -= 6;
+            if draw_calls[draw_call].len == 0 {
+                draw_calls.remove(draw_call);
+            }
+        }
+    }
+
     pub fn iter_instances<'a>(&'a self, (x, y, z): (u32, u32, u32)) -> impl Iterator<Item=(InstanceId, &'a Prefab)> + 'a {
         let level = &self.levels[z as usize];
         level.sorted_order.iter().rev().filter_map(move |&idx| {
