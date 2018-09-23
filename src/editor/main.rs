@@ -240,8 +240,10 @@ impl EditorScene {
 
         self.render_map(false);
         if let Some(map) = self.maps.get_mut(self.map_current) {
-            if let Some(rendered) = map.rendered.get_mut(map.z_current).and_then(|x| x.as_mut()) {
-                rendered.paint(&mut self.map_renderer, map.center, &mut self.factory, encoder, &self.target);
+            if let Some(hist) = map.state.hist() {
+                if let Some(rendered) = map.rendered.get_mut(map.z_current).and_then(|x| x.as_mut()) {
+                    rendered.paint(&mut self.map_renderer, hist.current(), map.z_current as u32, map.center, &mut self.factory, encoder, &self.target);
+                }
             }
         }
     }

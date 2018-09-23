@@ -70,9 +70,8 @@ pub struct RenderedMap {
     pub pops_len: usize,
     pub duration: [f32; 2],
 
-    draw_calls: Vec<DrawCall>,
-    ibuf: gfx::IndexBuffer<Resources>,
     vbuf: gfx::handle::Buffer<Resources, Vertex>,
+    ibuf: gfx::handle::Buffer<Resources, u32>,
 }
 
 #[derive(Debug, Clone)]
@@ -113,30 +112,71 @@ impl MapRenderer {
         let start = Instant::now();
         let level = &map.levels[z as usize];
 
-        let vbuf = factory.create_vertex_buffer(map.vertex_buffer(z).flat());
-        let ibuf = factory.create_index_buffer(map.index_buffer(z).flat());
+        let vbuf_data = map.vertex_buffer(z).flat();
+        let ibuf_data = map.index_buffer(z);
+        let ibuf_data = ibuf_data.flat();
+
+        let vbuf = factory.create_buffer::<Vertex>(
+            vbuf_data.len(),
+            gfx::buffer::Role::Vertex,
+            gfx::memory::Usage::Dynamic,
+            gfx::memory::Bind::empty(),
+        ).expect("create vertex buffer");
+        let ibuf = factory.create_buffer::<u32>(
+            ibuf_data.len(),
+            gfx::buffer::Role::Index,
+            gfx::memory::Usage::Dynamic,
+            gfx::memory::Bind::empty(),
+        ).expect("create index buffer");
 
         RenderedMap {
             atoms_len: level.instances.len(),
             pops_len: map.pops.len(),
             duration: [to_seconds(map.duration), to_seconds(Instant::now() - start)],
-            draw_calls: level.draw_calls.clone(),
 
-            ibuf,
             vbuf,
+            ibuf,
         }
     }
 }
 
 impl RenderedMap {
     pub fn draw_calls(&self) -> usize {
-        self.draw_calls.len()
+        0  // TODO
     }
 
-    pub fn paint(&mut self, parent: &mut MapRenderer, center: [f32; 2], factory: &mut Factory, encoder: &mut Encoder, view: &RenderTargetView) {
-        let (x, y, _, _) = view.get_dimensions();
+    fn update_buffers(&mut self, map: &AtomMap, z: u32, factory: &mut Factory, encoder: &mut Encoder) {
+        let vbuf_data = map.vertex_buffer(z).flat();
+        let ibuf_data = map.index_buffer(z);
+        let ibuf_data = ibuf_data.flat();
+
+        if self.vbuf.len() < vbuf_data.len() {
+            self.vbuf = factory.create_buffer::<Vertex>(
+                vbuf_data.len(),
+                gfx::buffer::Role::Vertex,
+                gfx::memory::Usage::Dynamic,
+                gfx::memory::Bind::empty(),
+            ).expect("create vertex buffer");
+        }
+        encoder.update_buffer(&self.vbuf, vbuf_data, 0).expect("update vbuf");
+
+        if self.ibuf.len() < ibuf_data.len() {
+            self.ibuf = factory.create_buffer::<u32>(
+                ibuf_data.len(),
+                gfx::buffer::Role::Index,
+                gfx::memory::Usage::Dynamic,
+                gfx::memory::Bind::empty(),
+            ).expect("create index buffer");
+        }
+        encoder.update_buffer(&self.ibuf, ibuf_data, 0).expect("update ibuf");
+    }
+
+    pub fn paint(&mut self, parent: &mut MapRenderer, map: &AtomMap, z: u32, center: [f32; 2], factory: &mut Factory, encoder: &mut Encoder, view: &RenderTargetView) {
+        // update vertex and index buffers from the map
+        self.update_buffers(map, z, factory, encoder);
 
         // (0, 0) is the center of the screen, 1.0 = 1 pixel
+        let (x, y, _, _) = view.get_dimensions();
         let transform = Transform {
             transform: [
                 [2.0 / x as f32, 0.0, 0.0, -2.0 * center[0].round() / x as f32],
@@ -148,7 +188,7 @@ impl RenderedMap {
         encoder.update_buffer(&parent.transform_buffer, &[transform], 0).expect("update_buffer failed");
 
         let mut start = 0;
-        for call in self.draw_calls.iter() {
+        for call in map.levels[z as usize].draw_calls.iter() {
             if !parent.layers[call.category as usize] {
                 start += call.len;
                 continue;
@@ -159,7 +199,7 @@ impl RenderedMap {
                 end: start + call.len,
                 base_vertex: 0,
                 instances: None,
-                buffer: self.ibuf.clone(),
+                buffer: gfx::IndexBuffer::Index32(self.ibuf.clone()),
             };
             // TODO: use borrowing to avoid having to clone so much here?
             let data = pipe::Data {
