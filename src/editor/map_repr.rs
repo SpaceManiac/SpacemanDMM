@@ -200,6 +200,7 @@ impl AtomMap {
         if let Some(pos) = level.sorted_order.iter().position(|&idx| idx == id.idx) {
             level.sorted_order.remove(pos);
             level.index_buffer.get_mut().remove(pos);
+            level.buffers_dirty.set(true);
 
             // find the draw call which previously contained the index
             let pos = 6 * (pos as u32);
@@ -346,7 +347,7 @@ impl<K, V> DualPool<K, V> {
     }
 
     pub fn len(&self) -> usize {
-        self.keys.len()
+        self.keys.len() - self.freelist.len()
     }
 }
 
