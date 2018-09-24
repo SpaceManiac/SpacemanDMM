@@ -91,13 +91,11 @@ impl IconCache {
 
 impl TextureCache {
     pub fn retrieve(&mut self, factory: &mut Factory, icons: &IconCache, id: usize) -> &Texture {
+        use Fulfill;
         if id >= self.textures.len() {
             self.textures.resize(id + 1, None);
         }
-        if self.textures[id].is_none() {
-            self.textures[id] = Some(load_texture(factory, &icons.get_icon(id).bitmap));
-        }
-        self.textures[id].as_ref().unwrap()
+        self.textures[id].fulfill(|| load_texture(factory, &icons.get_icon(id).bitmap))
     }
 
     pub fn clear(&mut self) {

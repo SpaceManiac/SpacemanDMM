@@ -238,12 +238,19 @@ impl EditorScene {
             };
         }
 
-        self.render_map(false);
         if let Some(map) = self.maps.get_mut(self.map_current) {
             if let Some(hist) = map.state.hist() {
-                if let Some(rendered) = map.rendered.get_mut(map.z_current).and_then(|x| x.as_mut()) {
-                    rendered.paint(&mut self.map_renderer, hist.current(), map.z_current as u32, map.center, &mut self.factory, encoder, &self.target);
-                }
+                let z_current = map.z_current;
+                let map_renderer = &mut self.map_renderer;
+                let factory = &mut self.factory;
+                let rendered = map.rendered[map.z_current].fulfill(|| {
+                    map_renderer.render(
+                        hist.current(),
+                        z_current as u32,
+                        factory,
+                    )
+                });
+                rendered.paint(map_renderer, hist.current(), map.z_current as u32, map.center, factory, encoder, &self.target);
             }
         }
     }
@@ -1020,7 +1027,6 @@ impl EditorScene {
             k!(Ctrl + Key3) => self.toggle_layer(3),
             k!(Ctrl + Key4) => self.toggle_layer(4),
             // misc
-            k!(Ctrl + R) => self.render_map(true),
             k!(Ctrl + Equals) |
             k!(Ctrl + Add) => if self.map_renderer.zoom < 16.0 { self.map_renderer.zoom *= 2.0 },
             k!(Ctrl + Subtract) |
@@ -1187,21 +1193,6 @@ impl EditorScene {
         self.map_renderer.layers[which] = !self.map_renderer.layers[which];
     }
 
-    fn render_map(&mut self, force: bool) {
-        if let Some(map) = self.maps.get_mut(self.map_current) {
-            if let Some(hist) = map.state.hist() {
-                if map.rendered[map.z_current].is_some() && !force {
-                    return;
-                }
-                map.rendered[map.z_current] = Some(self.map_renderer.render(
-                    hist.current(),
-                    map.z_current as u32,
-                    &mut self.factory,
-                ));
-            }
-        }
-    }
-
     fn tab_between_maps(&mut self, offset: isize) {
         if self.maps.is_empty() {
             return;
@@ -1354,6 +1345,19 @@ impl<T> RetainMut<T> for Vec<T> {
         if del > 0 {
             self.truncate(len - del);
         }
+    }
+}
+
+trait Fulfill<T> {
+    fn fulfill<F: FnOnce() -> T>(&mut self, f: F) -> &mut T;
+}
+
+impl<T> Fulfill<T> for Option<T> {
+    fn fulfill<F: FnOnce() -> T>(&mut self, f: F) -> &mut T {
+        if self.is_none() {
+            *self = Some(f());
+        }
+        self.as_mut().unwrap()
     }
 }
 
