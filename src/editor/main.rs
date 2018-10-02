@@ -256,46 +256,9 @@ impl EditorScene {
     }
 
     fn prepare_textures(&mut self, renderer: &mut imgui_gfx_renderer::Renderer<Resources>) {
-        use tools::ToolIcon;
-
         for tool in self.tools.iter_mut() {
-            tool.icon = match std::mem::replace(&mut tool.icon, ToolIcon::None) {
-                ToolIcon::Dmi { icon, icon_state, dir } => if let Some(env) = self.environment.as_ref() {
-                    if let Some(id) = env.icons.get_index(icon.as_ref()) {
-                        let icon = env.icons.get_icon(id);
-                        if let Some([u1, v1, u2, v2]) = icon.uv_of(&icon_state, dir) {
-                            let tex = self.map_renderer.icon_textures.retrieve(
-                                &mut self.factory,
-                                &env.icons,
-                                id,
-                            ).clone();
-                            let samp = self.map_renderer.sampler.clone();
-                            ToolIcon::Loaded {
-                                tex: renderer.textures().insert((tex, samp)),
-                                uv0: (u1, v1).into(),
-                                uv1: (u2, v2).into(),
-                            }
-                        } else {
-                            ToolIcon::None
-                        }
-                    } else {
-                        ToolIcon::None
-                    }
-                } else {
-                    ToolIcon::Dmi { icon, icon_state, dir }
-                },
-                ToolIcon::EmbeddedPng { data } => if let Ok(tex) = dmi::texture_from_bytes(&mut self.factory, data) {
-                    let samp = self.map_renderer.sampler.clone();
-                    ToolIcon::Loaded {
-                        tex: renderer.textures().insert((tex, samp)),
-                        uv0: (0.0, 0.0).into(),
-                        uv1: (1.0, 1.0).into(),
-                    }
-                } else {
-                    ToolIcon::None
-                },
-                other => other,
-            };
+            let icon = std::mem::replace(&mut tool.icon, tools::ToolIcon::None);
+            tool.icon = prepare_tool_icon(renderer, self.environment.as_ref(), &mut self.map_renderer, &mut self.factory, icon);
         }
     }
 
@@ -1381,4 +1344,45 @@ fn detect_environment(path: &Path) -> Option<PathBuf> {
         current = dir.parent();
     }
     None
+}
+
+fn prepare_tool_icon(renderer: &mut imgui_gfx_renderer::Renderer<Resources>, environment: Option<&Environment>, map_renderer: &mut map_renderer::MapRenderer, factory: &mut Factory, icon: tools::ToolIcon) -> tools::ToolIcon {
+    use tools::ToolIcon;
+    match icon {
+        ToolIcon::Dmi { icon, icon_state, dir } => if let Some(env) = environment {
+            if let Some(id) = env.icons.get_index(icon.as_ref()) {
+                let icon = env.icons.get_icon(id);
+                if let Some([u1, v1, u2, v2]) = icon.uv_of(&icon_state, dir) {
+                    let tex = map_renderer.icon_textures.retrieve(
+                        factory,
+                        &env.icons,
+                        id,
+                    ).clone();
+                    let samp = map_renderer.sampler.clone();
+                    ToolIcon::Loaded {
+                        tex: renderer.textures().insert((tex, samp)),
+                        uv0: (u1, v1).into(),
+                        uv1: (u2, v2).into(),
+                    }
+                } else {
+                    ToolIcon::None
+                }
+            } else {
+                ToolIcon::None
+            }
+        } else {
+            ToolIcon::Dmi { icon, icon_state, dir }
+        },
+        ToolIcon::EmbeddedPng { data } => if let Ok(tex) = dmi::texture_from_bytes(factory, data) {
+            let samp = map_renderer.sampler.clone();
+            ToolIcon::Loaded {
+                tex: renderer.textures().insert((tex, samp)),
+                uv0: (0.0, 0.0).into(),
+                uv1: (1.0, 1.0).into(),
+            }
+        } else {
+            ToolIcon::None
+        },
+        other => other,
+    }
 }
