@@ -3,6 +3,7 @@
 
 use imgui::*;
 
+use dm::dmi;
 use dm::objtree::ObjectTree;
 use dmm_tools::dmm::Prefab;
 
@@ -13,6 +14,7 @@ pub enum ToolIcon {
     Dmi {
         icon: String,
         icon_state: String,
+        dir: i32,
     },
     EmbeddedPng {
         data: &'static [u8],
@@ -61,7 +63,7 @@ impl Tool {
     }
 
     fn dmi(self, icon: String, icon_state: String) -> Self {
-        Tool { icon: ToolIcon::Dmi { icon, icon_state }, ..self }
+        Tool { icon: ToolIcon::Dmi { icon, icon_state, dir: dmi::SOUTH }, ..self }
     }
 
     fn png(self, data: &'static [u8]) -> Self {

@@ -260,10 +260,10 @@ impl EditorScene {
 
         for tool in self.tools.iter_mut() {
             tool.icon = match std::mem::replace(&mut tool.icon, ToolIcon::None) {
-                ToolIcon::Dmi { icon, icon_state } => if let Some(env) = self.environment.as_ref() {
+                ToolIcon::Dmi { icon, icon_state, dir } => if let Some(env) = self.environment.as_ref() {
                     if let Some(id) = env.icons.get_index(icon.as_ref()) {
                         let icon = env.icons.get_icon(id);
-                        if let Some([u1, v1, u2, v2]) = icon.uv_of(&icon_state, 2) {
+                        if let Some([u1, v1, u2, v2]) = icon.uv_of(&icon_state, dir) {
                             let tex = self.map_renderer.icon_textures.retrieve(
                                 &mut self.factory,
                                 &env.icons,
@@ -282,7 +282,7 @@ impl EditorScene {
                         ToolIcon::None
                     }
                 } else {
-                    ToolIcon::Dmi { icon, icon_state }
+                    ToolIcon::Dmi { icon, icon_state, dir }
                 },
                 ToolIcon::EmbeddedPng { data } => if let Ok(tex) = dmi::texture_from_bytes(&mut self.factory, data) {
                     let samp = self.map_renderer.sampler.clone();
