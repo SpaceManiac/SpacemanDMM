@@ -1,5 +1,4 @@
 //! Representation of a map as a collection of atoms rather than a grid.
-#![allow(dead_code)]  // WIP
 
 use std::sync::{Arc, Weak};
 use std::cell::{Cell, RefCell, Ref};

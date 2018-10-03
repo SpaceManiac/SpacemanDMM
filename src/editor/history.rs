@@ -1,5 +1,4 @@
 //! Reified undo/redo history tree.
-#![allow(dead_code)]  // WIP
 
 use petgraph::Direction;
 use petgraph::graph::{NodeIndex, Graph};

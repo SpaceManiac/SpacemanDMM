@@ -1,5 +1,6 @@
 //! The map editor proper, with a GUI and everything.
 #![cfg_attr(not(debug_assertions), windows_subsystem="windows")]
+#![allow(dead_code)]  // TODO: remove when this is not a huge WIP
 
 extern crate glutin;
 #[macro_use] extern crate gfx;

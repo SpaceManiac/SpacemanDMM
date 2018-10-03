@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+//! Editor-environment specific DMI (texture) handling.
 
 use std::io;
 use std::path::{Path, PathBuf};

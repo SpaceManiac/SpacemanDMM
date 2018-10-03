@@ -1,5 +1,4 @@
 //! Placement and editing tools which appear in the workbench.
-#![allow(dead_code)]  // WIP
 
 use imgui::*;
 
