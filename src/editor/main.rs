@@ -60,6 +60,9 @@ fn main() {
     support::run("SpacemanDMM".to_owned(), [0.25, 0.25, 0.5, 1.0]);
 }
 
+// ---------------------------------------------------------------------------
+// Data structures
+
 pub struct EditorScene {
     factory: Factory,
     target: RenderTargetView,
@@ -94,6 +97,61 @@ pub struct EditorScene {
     ui_errors: bool,
     ui_extra_vars: bool,
 }
+
+pub struct Environment {
+    path: PathBuf,
+    objtree: Arc<ObjectTree>,
+    icons: Arc<IconCache>,
+    turf: String,
+    area: String,
+}
+
+struct LoadingEnvironment {
+    path: PathBuf,
+    rx: mpsc::Receiver<Result<Environment, tasks::Err>>,
+}
+
+struct EditorMap {
+    path: Option<PathBuf>,
+    z_current: usize,
+    center: [f32; 2],
+    state: MapState,
+    rendered: Vec<Option<map_renderer::RenderedMap>>,
+    edit_atoms: Vec<EditAtom>,
+    uid: usize,
+}
+
+enum MapState {
+    Invalid,
+    Loading(mpsc::Receiver<Map>),
+    Pending(Arc<Map>),
+    Preparing(Arc<Map>, mpsc::Receiver<map_repr::AtomMap>),
+    Refreshing {
+        merge_base: Arc<Map>,
+        hist: History,
+        rx: mpsc::Receiver<map_repr::AtomMap>,
+    },
+    Active {
+        merge_base: Arc<Map>,
+        hist: History,
+    }
+}
+
+struct NewMap {
+    x: i32,
+    y: i32,
+    z: i32,
+    created: bool,
+}
+
+struct EditAtom {
+    inst: map_repr::InstanceId,
+    filter: ImString,
+    fab: Prefab,
+}
+
+// ---------------------------------------------------------------------------
+// Editor scene, including rendering and UI
 
 impl EditorScene {
     fn new(factory: &mut Factory, target: &RenderTargetView, depth: &DepthStencilView) -> Self {
@@ -1037,6 +1095,7 @@ impl EditorScene {
     }
 
     // -----------------------------------------------------------------------
+    // Actions - called from run_ui() and from chord()
 
     fn reload_objtree(&mut self) {
         if let Some(env) = self.environment.as_ref().map(|e| &e.path).cloned() {
@@ -1229,44 +1288,8 @@ impl EditorScene {
     }
 }
 
-pub struct Environment {
-    path: PathBuf,
-    objtree: Arc<ObjectTree>,
-    icons: Arc<IconCache>,
-    turf: String,
-    area: String,
-}
-
-struct LoadingEnvironment {
-    path: PathBuf,
-    rx: mpsc::Receiver<Result<Environment, tasks::Err>>,
-}
-
-struct EditorMap {
-    path: Option<PathBuf>,
-    z_current: usize,
-    center: [f32; 2],
-    state: MapState,
-    rendered: Vec<Option<map_renderer::RenderedMap>>,
-    edit_atoms: Vec<EditAtom>,
-    uid: usize,
-}
-
-enum MapState {
-    Invalid,
-    Loading(mpsc::Receiver<Map>),
-    Pending(Arc<Map>),
-    Preparing(Arc<Map>, mpsc::Receiver<map_repr::AtomMap>),
-    Refreshing {
-        merge_base: Arc<Map>,
-        hist: History,
-        rx: mpsc::Receiver<map_repr::AtomMap>,
-    },
-    Active {
-        merge_base: Arc<Map>,
-        hist: History,
-    }
-}
+// ---------------------------------------------------------------------------
+// Helpers
 
 impl EditorMap {
     fn clamp_center(&mut self) {
@@ -1303,20 +1326,6 @@ impl MapState {
     }
 }
 
-struct NewMap {
-    x: i32,
-    y: i32,
-    z: i32,
-    created: bool,
-}
-
-#[derive(Debug)]
-struct EditAtom {
-    inst: map_repr::InstanceId,
-    filter: ImString,
-    fab: Prefab,
-}
-
 fn root_node(ui: &Ui, ty: TypeRef, name: &str) {
     if let Some(child) = ty.child(name) {
         tree_node(ui, child);
@@ -1341,40 +1350,6 @@ fn file_name(path: &Path) -> Cow<str> {
     path.file_name().map_or("".into(), |s| s.to_string_lossy())
 }
 
-trait RetainMut<T> {
-    fn retain_mut<F: FnMut(&mut T) -> bool>(&mut self, f: F);
-}
-
-impl<T> RetainMut<T> for Vec<T> {
-    fn retain_mut<F: FnMut(&mut T) -> bool>(&mut self, mut f: F) {
-        let len = self.len();
-        let mut del = 0;
-        for i in 0..len {
-            if !f(&mut self[i]) {
-                del += 1;
-            } else if del > 0 {
-                self.swap(i - del, i);
-            }
-        }
-        if del > 0 {
-            self.truncate(len - del);
-        }
-    }
-}
-
-trait Fulfill<T> {
-    fn fulfill<F: FnOnce() -> T>(&mut self, f: F) -> &mut T;
-}
-
-impl<T> Fulfill<T> for Option<T> {
-    fn fulfill<F: FnOnce() -> T>(&mut self, f: F) -> &mut T {
-        if self.is_none() {
-            *self = Some(f());
-        }
-        self.as_mut().unwrap()
-    }
-}
-
 fn detect_environment(path: &Path) -> Option<PathBuf> {
     let mut current = path.parent();
     while let Some(dir) = current {
@@ -1397,7 +1372,13 @@ fn detect_environment(path: &Path) -> Option<PathBuf> {
     None
 }
 
-fn prepare_tool_icon(renderer: &mut imgui_gfx_renderer::Renderer<Resources>, environment: Option<&Environment>, map_renderer: &mut map_renderer::MapRenderer, factory: &mut Factory, icon: tools::ToolIcon) -> tools::ToolIcon {
+fn prepare_tool_icon(
+    renderer: &mut imgui_gfx_renderer::Renderer<Resources>,
+    environment: Option<&Environment>,
+    map_renderer: &mut map_renderer::MapRenderer,
+    factory: &mut Factory,
+    icon: tools::ToolIcon
+) -> tools::ToolIcon {
     use tools::ToolIcon;
     match icon {
         ToolIcon::Dmi { icon, icon_state, dir } => if let Some(env) = environment {
@@ -1435,5 +1416,42 @@ fn prepare_tool_icon(renderer: &mut imgui_gfx_renderer::Renderer<Resources>, env
             ToolIcon::None
         },
         other => other,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Extension traits
+
+trait RetainMut<T> {
+    fn retain_mut<F: FnMut(&mut T) -> bool>(&mut self, f: F);
+}
+
+impl<T> RetainMut<T> for Vec<T> {
+    fn retain_mut<F: FnMut(&mut T) -> bool>(&mut self, mut f: F) {
+        let len = self.len();
+        let mut del = 0;
+        for i in 0..len {
+            if !f(&mut self[i]) {
+                del += 1;
+            } else if del > 0 {
+                self.swap(i - del, i);
+            }
+        }
+        if del > 0 {
+            self.truncate(len - del);
+        }
+    }
+}
+
+trait Fulfill<T> {
+    fn fulfill<F: FnOnce() -> T>(&mut self, f: F) -> &mut T;
+}
+
+impl<T> Fulfill<T> for Option<T> {
+    fn fulfill<F: FnOnce() -> T>(&mut self, f: F) -> &mut T {
+        if self.is_none() {
+            *self = Some(f());
+        }
+        self.as_mut().unwrap()
     }
 }
