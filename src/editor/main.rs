@@ -619,7 +619,13 @@ impl EditorScene {
                     } else {
                         ui.text_wrapped(im_str!("{} - {}", tool.name, tool.help));
                     }
-                    tool.behavior.settings(ui);
+                    if let Some(_) = self.environment {
+                        tool.behavior.settings(ui);
+                    } else if self.loading_env.is_some() {
+                        ui.text(im_str!("The environment is loading..."));
+                    } else {
+                        ui.text(im_str!("Load an environment to get started."));
+                    }
                 }
             });
 
