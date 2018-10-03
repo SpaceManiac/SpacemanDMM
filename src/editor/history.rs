@@ -37,6 +37,12 @@ impl<T, E> History<T, E> {
         &self.current
     }
 
+    pub fn replace_current(&mut self, new: T) {
+        // TODO: somehow verify that the new value is semantically equivalent
+        // to what we currently have.
+        self.current = new;
+    }
+
     pub fn edit<F: 'static + Fn(&E, &mut T) -> Box<Fn(&E, &mut T)>>(&mut self, env: &E, desc: String, f: F) {
         // perform the edit immediately
         let undo = f(env, &mut self.current);

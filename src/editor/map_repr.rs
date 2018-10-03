@@ -91,6 +91,9 @@ impl AtomMap {
         for (prefab, rpop) in self.pops.iter_mut() {
             *rpop = RenderPop::from_prefab(icons, objtree, &prefab).unwrap_or_default();
         }
+        for z in 0..self.levels.len() {
+            self.sort_again(z as u32);
+        }
     }
 
     pub fn add_pop(&mut self, prefab: &Prefab, icons: &IconCache, objtree: &ObjectTree) -> Arc<Prefab> {

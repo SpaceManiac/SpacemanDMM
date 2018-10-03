@@ -187,12 +187,38 @@ impl EditorScene {
                 self.tools = tools::configure(&environment.objtree);
                 self.map_renderer.icons = environment.icons.clone();
                 self.map_renderer.icon_textures.clear();
-                self.environment = Some(environment);
                 for map in self.maps.iter_mut() {
                     for z in map.rendered.iter_mut() {
                         *z = None;
                     }
+                    // need to re-render maps if the environment has changed
+                    map.state = match std::mem::replace(&mut map.state, MapState::Invalid) {
+                        MapState::Pending(base) |
+                        MapState::Preparing(base, _) => {
+                            let (tx, rx) = mpsc::channel();
+                            let icons = environment.icons.clone();
+                            let objtree = environment.objtree.clone();
+                            let base2 = base.clone();
+                            std::thread::spawn(move || {
+                                let _ = tx.send(map_repr::AtomMap::new(&base2, &icons, &objtree));
+                            });
+                            MapState::Preparing(base, rx)
+                        },
+                        MapState::Active { merge_base, hist } => {
+                            let mut new_map = hist.current().clone();
+                            let icons = environment.icons.clone();
+                            let objtree = environment.objtree.clone();
+                            let (tx, rx) = mpsc::channel();
+                            std::thread::spawn(move || {
+                                new_map.refresh_pops(&icons, &objtree);
+                                let _ = tx.send(new_map);
+                            });
+                            MapState::Refreshing { merge_base, hist, rx }
+                        },
+                        other => other,
+                    };
                 }
+                self.environment = Some(environment);
             }
         }));
         tasks.extend(std::mem::replace(&mut self.tasks, Vec::new()));
@@ -202,13 +228,12 @@ impl EditorScene {
         for map in self.maps.iter_mut() {
             map.state = match std::mem::replace(&mut map.state, MapState::Invalid) {
                 MapState::Loading(rx) => if let Ok(val) = rx.try_recv() {
-                    MapState::Pending(val)
+                    MapState::Pending(Arc::new(val))
                 } else {
                     MapState::Loading(rx)
                 },
-                MapState::Pending(map) => if let Some(env) = self.environment.as_ref() {
+                MapState::Pending(base) => if let Some(env) = self.environment.as_ref() {
                     let (tx, rx) = mpsc::channel();
-                    let base = Arc::new(map);
                     let icons = env.icons.clone();
                     let objtree = env.objtree.clone();
                     let base2 = base.clone();
@@ -217,13 +242,9 @@ impl EditorScene {
                     });
                     MapState::Preparing(base, rx)
                 } else {
-                    MapState::Pending(map)
+                    MapState::Pending(base)
                 },
-                MapState::Preparing(base, rx) => if let Ok(val) = rx.try_recv() {
-                    let merge_base = match Arc::try_unwrap(base) {
-                        Ok(map) => map,
-                        Err(arc) => (*arc).clone(),
-                    };
+                MapState::Preparing(merge_base, rx) => if let Ok(val) = rx.try_recv() {
                     let (x, y, z) = val.dim_xyz();
                     map.center = [x as f32 * 16.0, y as f32 * 16.0];
                     map.rendered.clear();
@@ -232,7 +253,13 @@ impl EditorScene {
                     }
                     MapState::Active { merge_base, hist: History::new("Loaded".to_owned(), val) }
                 } else {
-                    MapState::Preparing(base, rx)
+                    MapState::Preparing(merge_base, rx)
+                },
+                MapState::Refreshing { merge_base, mut hist, rx } => if let Ok(val) = rx.try_recv() {
+                    hist.replace_current(val);
+                    MapState::Active { merge_base, hist }
+                } else {
+                    MapState::Refreshing { merge_base, hist, rx }
                 },
                 other => other,
             };
@@ -464,6 +491,7 @@ impl EditorScene {
                             ui.separator();
                             ui.text(im_str!("{} Loading {}", spinner!(), file_name(path)));
                         }
+                        MapState::Refreshing { .. } |
                         MapState::Preparing(..) => {
                             ui.separator();
                             ui.text(im_str!("{} Preparing {}", spinner!(), file_name(path)));
@@ -678,7 +706,7 @@ impl EditorScene {
                     let desc = format!("New {}x{}x{} map", new_map.x, new_map.y, new_map.z);
                     self.maps.push(EditorMap {
                         path: None,
-                        state: MapState::Active { merge_base: dmm, hist: History::new(desc, atom_map) },
+                        state: MapState::Active { merge_base: Arc::new(dmm), hist: History::new(desc, atom_map) },
                         z_current: 0,
                         center: [new_map.x as f32 * 16.0, new_map.y as f32 * 16.0],
                         rendered,
@@ -1205,10 +1233,15 @@ struct EditorMap {
 enum MapState {
     Invalid,
     Loading(mpsc::Receiver<Map>),
-    Pending(Map),
+    Pending(Arc<Map>),
     Preparing(Arc<Map>, mpsc::Receiver<map_repr::AtomMap>),
+    Refreshing {
+        merge_base: Arc<Map>,
+        hist: History,
+        rx: mpsc::Receiver<map_repr::AtomMap>,
+    },
     Active {
-        merge_base: Map,
+        merge_base: Arc<Map>,
         hist: History,
     }
 }
