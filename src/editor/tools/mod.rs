@@ -8,6 +8,8 @@ use dmm_tools::dmm::Prefab;
 
 use {History, Environment};
 
+mod place;
+
 pub enum ToolIcon {
     None,
     Dmi {
@@ -76,47 +78,26 @@ impl Tool {
 
 pub fn configure(_objtree: &ObjectTree) -> Vec<Tool> {
     let mut tools = Vec::new();
-    Tool::new("Place", Place)
+    Tool::new("Place", place::Place::default())
         .help("Click to add an instance to the tile.")
         .show_objtree()
         .png(include_bytes!("../res/pencil.png"))
         .build(&mut tools);
-    Tool::new("Rectangle", Rectangle)
+    Tool::new("Rectangle", Dummy)
         .help("Click and drag to fill a rectangular area.")
         .show_objtree()
         .png(include_bytes!("../res/resize.png"))
         .build(&mut tools);
-    Tool::new("Select", Select)
+    Tool::new("Select", Dummy)
         .help("Click and drag to select a region. Drag again to move it.")
         .png(include_bytes!("../res/select.png"))
         .build(&mut tools);
     tools
 }
 
-// ----------------------------------------------------------------------------
-// Basic tools that are impossible to do without
-
-struct Place;
-impl ToolBehavior for Place {
-    fn click(&mut self, hist: &mut History, env: &Environment, loc: (u32, u32, u32)) {
-        // TODO: cloning these here is likely a bad idea
-        hist.edit(env, "TODO".to_owned(), move |env, world| {
-            let pop = world.add_pop(&Prefab {
-                path: "/obj/item/lighter".to_owned(),
-                vars: Default::default(),
-            }, &env.icons, &env.objtree);
-            let inst = world.add_instance(loc, pop);
-            Box::new(move |_, world| {
-                world.remove_instance(inst.clone());
-            })
-        });
+struct Dummy;
+impl ToolBehavior for Dummy {
+    fn settings(&mut self, ui: &Ui) {
+        ui.text(im_str!("Not yet implemented."));
     }
-}
-
-struct Rectangle;
-impl ToolBehavior for Rectangle {
-}
-
-struct Select;
-impl ToolBehavior for Select {
 }
