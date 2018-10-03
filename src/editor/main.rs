@@ -49,7 +49,6 @@ type RenderTargetView = gfx::handle::RenderTargetView<Resources, ColorFormat>;
 type DepthStencilView = gfx::handle::DepthStencilView<Resources, DepthFormat>;
 type Texture = gfx::handle::ShaderResourceView<Resources, [f32; 4]>;
 
-use tasks::Task;
 use dmi::IconCache;
 type History = history::History<map_repr::AtomMap, Environment>;
 
@@ -68,6 +67,7 @@ pub struct EditorScene {
     config: config::Config,
     map_renderer: map_renderer::MapRenderer,
     environment: Option<Environment>,
+    loading_env: Option<LoadingEnvironment>,
 
     tools: Vec<tools::Tool>,
     tool_current: usize,
@@ -80,8 +80,7 @@ pub struct EditorScene {
     target_tile: Option<(u32, u32)>,
     context_tile: Option<(u32, u32)>,
 
-    tasks: Vec<Task<TaskResult>>,
-    errors: Vec<Box<std::error::Error>>,
+    errors: Vec<String>,
     last_errors: usize,
     counter: usize,
     uid: usize,
@@ -105,6 +104,7 @@ impl EditorScene {
             config: config::Config::load(),
             map_renderer: map_renderer::MapRenderer::new(factory, target),
             environment: None,
+            loading_env: None,
 
             tools: tools::configure(&ObjectTree::default()),
             tool_current: 0,
@@ -117,7 +117,6 @@ impl EditorScene {
             target_tile: None,
             context_tile: None,
 
-            tasks: Vec::new(),
             errors: Vec::new(),
             last_errors: 0,
             counter: 0,
@@ -175,54 +174,61 @@ impl EditorScene {
         self.depth = depth.clone();
     }
 
+    fn finish_loading_env(&mut self, environment: Environment) {
+        self.config.make_recent(&environment.path);
+        self.config.save();
+        self.tools = tools::configure(&environment.objtree);
+        self.map_renderer.icons = environment.icons.clone();
+        self.map_renderer.icon_textures.clear();
+        for map in self.maps.iter_mut() {
+            for z in map.rendered.iter_mut() {
+                *z = None;
+            }
+            // need to re-render maps if the environment has changed
+            map.state = match std::mem::replace(&mut map.state, MapState::Invalid) {
+                MapState::Pending(base) |
+                MapState::Preparing(base, _) => {
+                    let (tx, rx) = mpsc::channel();
+                    let icons = environment.icons.clone();
+                    let objtree = environment.objtree.clone();
+                    let base2 = base.clone();
+                    std::thread::spawn(move || {
+                        let _ = tx.send(map_repr::AtomMap::new(&base2, &icons, &objtree));
+                    });
+                    MapState::Preparing(base, rx)
+                },
+                MapState::Active { merge_base, hist } => {
+                    let mut new_map = hist.current().clone();
+                    let icons = environment.icons.clone();
+                    let objtree = environment.objtree.clone();
+                    let (tx, rx) = mpsc::channel();
+                    std::thread::spawn(move || {
+                        new_map.refresh_pops(&icons, &objtree);
+                        let _ = tx.send(new_map);
+                    });
+                    MapState::Refreshing { merge_base, hist, rx }
+                },
+                other => other,
+            };
+        }
+        self.environment = Some(environment);
+    }
+
     fn render(&mut self, encoder: &mut Encoder) {
-        let mut tasks = std::mem::replace(&mut self.tasks, Vec::new());
-        tasks.retain(|task| task.poll(|res| match res {
-            Err(e) => {
-                self.errors.push(e);
-            }
-            Ok(TaskResult::ObjectTree(environment)) => {
-                self.config.make_recent(&environment.path);
-                self.config.save();
-                self.tools = tools::configure(&environment.objtree);
-                self.map_renderer.icons = environment.icons.clone();
-                self.map_renderer.icon_textures.clear();
-                for map in self.maps.iter_mut() {
-                    for z in map.rendered.iter_mut() {
-                        *z = None;
-                    }
-                    // need to re-render maps if the environment has changed
-                    map.state = match std::mem::replace(&mut map.state, MapState::Invalid) {
-                        MapState::Pending(base) |
-                        MapState::Preparing(base, _) => {
-                            let (tx, rx) = mpsc::channel();
-                            let icons = environment.icons.clone();
-                            let objtree = environment.objtree.clone();
-                            let base2 = base.clone();
-                            std::thread::spawn(move || {
-                                let _ = tx.send(map_repr::AtomMap::new(&base2, &icons, &objtree));
-                            });
-                            MapState::Preparing(base, rx)
-                        },
-                        MapState::Active { merge_base, hist } => {
-                            let mut new_map = hist.current().clone();
-                            let icons = environment.icons.clone();
-                            let objtree = environment.objtree.clone();
-                            let (tx, rx) = mpsc::channel();
-                            std::thread::spawn(move || {
-                                new_map.refresh_pops(&icons, &objtree);
-                                let _ = tx.send(new_map);
-                            });
-                            MapState::Refreshing { merge_base, hist, rx }
-                        },
-                        other => other,
-                    };
+        if let Some(loading) = self.loading_env.take() {
+            match loading.rx.try_recv() {
+                Ok(Ok(env)) => self.finish_loading_env(env),
+                Ok(Err(e)) => {
+                    self.errors.push(format!("Error(s) loading environment: {}", e));
                 }
-                self.environment = Some(environment);
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    self.errors.push("BUG: environment loading crashed".to_owned());
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    self.loading_env = Some(loading);
+                }
             }
-        }));
-        tasks.extend(std::mem::replace(&mut self.tasks, Vec::new()));
-        self.tasks = tasks;
+        }
 
         // TODO: error handling
         for map in self.maps.iter_mut() {
@@ -480,9 +486,9 @@ impl EditorScene {
                 () => (SPINNER[(self.counter / 10 + { i += 1; i }) % SPINNER.len()])
             }
 
-            for task in self.tasks.iter() {
+            if let Some(loading) = self.loading_env.as_ref() {
                 ui.separator();
-                ui.text(im_str!("{} {}", spinner!(), task.name()));
+                ui.text(im_str!("{} Loading {}", spinner!(), file_name(&loading.path)));
             }
             for map in self.maps.iter() {
                 if let Some(path) = map.path.as_ref() {
@@ -1044,7 +1050,8 @@ impl EditorScene {
     }
 
     fn load_environment(&mut self, path: PathBuf) {
-        self.tasks.push(Task::spawn(format!("Loading {}", file_name(&path)), move || {
+        let path2 = path.clone();
+        let rx = tasks::spawn(move || {
             use dm::constants::Constant;
             use dm::ast::PathOp;
 
@@ -1074,15 +1081,19 @@ impl EditorScene {
                 }
             }
 
-            Ok(TaskResult::ObjectTree(Environment {
+            Ok(Environment {
                 objtree: Arc::new(objtree),
                 icons: Arc::new(IconCache::new(
                     path.parent().expect("invalid environment file path"))),
                 turf,
                 area,
                 path,
-            }))
-        }));
+            })
+        });
+        self.loading_env = Some(LoadingEnvironment {
+            path: path2,
+            rx,
+        });
     }
 
     fn new_map(&mut self) {
@@ -1151,7 +1162,10 @@ impl EditorScene {
                         return;
                     }
                 }
-                self.errors.extend(hist.current().save(None).to_file(map.path.as_ref().unwrap()).err().map(From::from));
+                let path = map.path.as_ref().unwrap();
+                if let Err(e) = hist.current().save(None).to_file(path) {
+                    self.errors.push(format!("Error writing {}:\n{}", path.display(), e));
+                }
             }
         }
     }
@@ -1161,7 +1175,9 @@ impl EditorScene {
             if let Some(hist) = map.state.hist() {
                 if let Ok(nfd::Response::Okay(fname)) = nfd::open_save_dialog(Some("dmm"), None) {
                     let path = PathBuf::from(fname);
-                    self.errors.extend(hist.current().save(None).to_file(&path).err().map(From::from));
+                    if let Err(e) = hist.current().save(None).to_file(&path) {
+                        self.errors.push(format!("Error writing {}:\n{}", path.display(), e));
+                    }
                     if !copy {
                         map.path = Some(path);
                     }
@@ -1218,6 +1234,11 @@ pub struct Environment {
     icons: Arc<IconCache>,
     turf: String,
     area: String,
+}
+
+struct LoadingEnvironment {
+    path: PathBuf,
+    rx: mpsc::Receiver<Result<Environment, tasks::Err>>,
 }
 
 struct EditorMap {
@@ -1317,10 +1338,6 @@ fn tree_node(ui: &Ui, ty: TypeRef) {
 
 fn file_name(path: &Path) -> Cow<str> {
     path.file_name().map_or("".into(), |s| s.to_string_lossy())
-}
-
-enum TaskResult {
-    ObjectTree(Environment),
 }
 
 trait RetainMut<T> {

@@ -12,14 +12,9 @@ pub struct Task<R> {
 
 impl<R: Send + 'static> Task<R> {
     pub fn spawn<S: Into<String>, F: FnOnce() -> Result<R, Err> + Send + 'static>(name: S, f: F) -> Self {
-        let (tx, rx) = channel();
-        thread::spawn(move || {
-            // TODO: catch unwind
-            let _ = tx.send(f());
-        });
         Task {
             name: name.into(),
-            rx,
+            rx: spawn(f),
         }
     }
 
@@ -34,4 +29,13 @@ impl<R: Send + 'static> Task<R> {
             Err(TryRecvError::Disconnected) => false,
         }
     }
+}
+
+pub fn spawn<R: Send + 'static, F: FnOnce() -> Result<R, Err> + Send + 'static>(f: F) -> Receiver<Result<R, Err>> {
+    let (tx, rx) = channel();
+    thread::spawn(move || {
+        // TODO: catch unwind
+        let _ = tx.send(f());
+    });
+    rx
 }
