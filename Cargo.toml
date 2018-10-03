@@ -4,10 +4,8 @@ members = [
     "src/dmdoc",
     "src/dreammaker",
     "src/editor",
-    #"src/editor-qt",
     "src/interval-tree",
     "src/langserver",
-    #"src/qt-extras",
     "src/tools",
 ]
 
