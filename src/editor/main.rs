@@ -376,6 +376,7 @@ impl EditorScene {
 
         ui.main_menu_bar(|| {
             ui.menu(im_str!("File")).build(|| {
+                let some_map = self.maps.get(self.map_current).is_some();
                 if ui.menu_item(im_str!("Open environment"))
                     .shortcut(ctrl_shortcut!("Shift+O"))
                     .build() { self.open_environment(); }
@@ -395,6 +396,7 @@ impl EditorScene {
                 });
                 if ui.menu_item(im_str!("Update environment"))
                     .shortcut(ctrl_shortcut!("U"))
+                    .enabled(self.environment.is_some())
                     .build() { self.reload_objtree(); }
                 ui.separator();
                 if ui.menu_item(im_str!("New"))
@@ -405,17 +407,22 @@ impl EditorScene {
                     .build() { self.open_map(); }
                 if ui.menu_item(im_str!("Close"))
                     .shortcut(ctrl_shortcut!("W"))
+                    .enabled(some_map)
                     .build() { self.close_map(); }
                 ui.separator();
                 if ui.menu_item(im_str!("Save"))
                     .shortcut(ctrl_shortcut!("S"))
+                    .enabled(some_map)
                     .build() { self.save_map(); }
                 if ui.menu_item(im_str!("Save As"))
                     .shortcut(ctrl_shortcut!("Shift+S"))
+                    .enabled(some_map)
                     .build() { self.save_map_as(false); }
                 if ui.menu_item(im_str!("Save Copy As"))
+                    .enabled(some_map)
                     .build() { self.save_map_as(true); }
                 if ui.menu_item(im_str!("Save All"))
+                    .enabled(!self.maps.is_empty())
                     .build() { self.save_all(); }
                 ui.separator();
                 if ui.menu_item(im_str!("Exit"))
