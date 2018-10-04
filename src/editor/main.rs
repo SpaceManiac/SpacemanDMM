@@ -661,21 +661,27 @@ impl EditorScene {
                         None => format!("Untitled##{}", map_idx),
                     };
                     if ui.collapsing_header(&ImString::from(title)).default_open(true).build() {
-                        if let Some(dmm) = map.state.base_dmm() {
-                            // TODO: use more up-to-date info?
-                            ui.text(im_str!("{:?}; {}-keys: {}",
-                                dmm.dim_xyz(),
-                                dmm.key_length,
-                                dmm.dictionary.len()));
-                        }
                         if let Some(hist) = map.state.hist() {
                             let world = hist.current();
+                            if let Some(dmm) = map.state.base_dmm() {
+                                ui.text(im_str!("{:?}; {}-keys: {}",
+                                    world.dim_xyz(),
+                                    dmm.key_length,
+                                    dmm.dictionary.len()));
+                            } else {
+                                ui.text(im_str!("{:?}", world.dim_xyz()));
+                            }
                             for z in 0..world.dim_xyz().2 {
                                 if ui.small_button(im_str!("z = {}##map_{}_{}", z + 1, map_idx, z)) {
                                     self.map_current = map_idx;
                                     map.z_current = z as usize;
                                 }
                             }
+                        } else if let Some(dmm) = map.state.base_dmm() {
+                            ui.text(im_str!("{:?}; {}-keys: {}",
+                                dmm.dim_xyz(),
+                                dmm.key_length,
+                                dmm.dictionary.len()));
                         }
                     }
                 }
