@@ -116,7 +116,13 @@ impl fmt::Display for Prefab {
                     write!(f, "; ")?;
                 }
                 first = false;
+                if f.alternate() {
+                    f.write_str("\n    ")?;
+                }
                 write!(f, "{} = {}", k, v)?;
+            }
+            if f.alternate() {
+                f.write_str("\n")?;
             }
             write!(f, "}}")?;
         }

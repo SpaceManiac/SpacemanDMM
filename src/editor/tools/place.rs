@@ -43,7 +43,7 @@ impl ToolBehavior for Place {
             //ui.small_button(im_str!("{}. {}", i, fab.path));
             ui.button(im_str!(""), (32.0, 32.0));
             if ui.is_item_hovered() {
-                ui.tooltip_text(im_str!("{}", fab.fab));
+                ui.tooltip_text(im_str!("{:#}", fab.fab));
                 if ui.imgui().is_mouse_clicked(ImMouseButton::Left) {
                     *fab_current = i;
                 } else if ui.imgui().is_mouse_clicked(ImMouseButton::Right) {
