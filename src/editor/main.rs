@@ -629,8 +629,8 @@ impl EditorScene {
                     } else {
                         ui.text_wrapped(im_str!("{} - {}", tool.name, tool.help));
                     }
-                    if let Some(_) = self.environment {
-                        tool.behavior.settings(ui);
+                    if let Some(ref env) = self.environment {
+                        tool.behavior.settings(ui, env);
                     } else if self.loading_env.is_some() {
                         ui.text(im_str!("The environment is loading..."));
                     } else {

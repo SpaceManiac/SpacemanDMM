@@ -14,7 +14,7 @@ struct PlaceFab {
 }
 
 impl ToolBehavior for Place {
-    fn settings(&mut self, ui: &Ui) {
+    fn settings(&mut self, ui: &Ui, env: &Environment) {
         ui.text(im_str!("current: {} / {}", self.fab_current, self.fabs.len()));
         ui.same_line(0.0);
         if ui.small_button(im_str!("Add")) {
@@ -66,7 +66,7 @@ impl ToolBehavior for Place {
                             ui.separator();
                             edit.menu(ui);
                         });
-                        //edit.show(ui, env, false);
+                        edit.show(ui, Some(env), false);
                     });
             }
             if !keep_editor {

@@ -37,7 +37,7 @@ pub struct Tool {
 
 #[allow(unused_variables)]
 pub trait ToolBehavior {
-    fn settings(&mut self, ui: &Ui) {
+    fn settings(&mut self, ui: &Ui, env: &Environment) {
     }
 
     fn click(&mut self, hist: &mut History, env: &Environment, loc: (u32, u32, u32)) {
@@ -97,7 +97,7 @@ pub fn configure(_objtree: &ObjectTree) -> Vec<Tool> {
 
 struct Dummy;
 impl ToolBehavior for Dummy {
-    fn settings(&mut self, ui: &Ui) {
+    fn settings(&mut self, ui: &Ui, _: &Environment) {
         ui.text(im_str!("Not yet implemented."));
     }
 }
