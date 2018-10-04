@@ -89,7 +89,7 @@ impl ToolBehavior for Place {
                 let pop = world.add_pop(&fab, &env.icons, &env.objtree);
                 let added = world.add_instance(loc, pop);
                 Box::new(move |_, world| {
-                    world.remove_instance(added.id.clone());
+                    world.undo_add_instance(&added);
                 })
             });
         }

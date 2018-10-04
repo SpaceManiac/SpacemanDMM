@@ -61,6 +61,7 @@ pub struct AddedInstance {
 
 #[derive(Debug, Clone)]
 pub struct RemovedInstance {
+    pub z: u32,
     pub old: Instance,
     /// `Some` if deleting this instance left behind a default (turf/area).
     pub replaced_with: Option<InstanceId>,
@@ -204,6 +205,10 @@ impl AtomMap {
         }
     }
 
+    pub fn undo_add_instance(&mut self, added: &AddedInstance) {
+        self.remove_instance(added.id.clone());
+    }
+
     pub fn get_instance(&self, id: &InstanceId) -> Option<&Instance> {
         let level = &self.levels[id.z as usize];
         if id.idx >= level.instances.len() || level.instances.freelist.contains(&id.idx) {
@@ -235,9 +240,15 @@ impl AtomMap {
         }
 
         RemovedInstance {
+            z: id.z,
             old,
             replaced_with: None,
         }
+    }
+
+    pub fn undo_remove_instance(&mut self, removed: &RemovedInstance, icons: &IconCache, objtree: &ObjectTree) {
+        let pop = self.add_pop(&removed.old.pop, icons, objtree);
+        self.add_instance((removed.old.x, removed.old.y, removed.z), pop);
     }
 
     pub fn iter_instances<'a>(&'a self, (x, y, z): (u32, u32, u32)) -> impl Iterator<Item=(InstanceId, &'a Prefab)> + 'a {

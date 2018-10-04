@@ -844,13 +844,9 @@ impl EditorScene {
                 if let Some(env) = env {
                     for id in delete.into_iter() {
                         hist.edit(env, "TODO".to_owned(), move |_, world| {
-                            let inst = world.get_instance(&id).unwrap().clone();
-                            let loc = (inst.x, inst.y, id.z);
-                            let prefab = inst.pop;
-                            world.remove_instance(id.clone());
+                            let removed = world.remove_instance(id.clone());
                             Box::new(move |env, world| {
-                                let pop = world.add_pop(&prefab, &env.icons, &env.objtree);
-                                world.add_instance(loc, pop);
+                                world.undo_remove_instance(&removed, &env.icons, &env.objtree);
                             })
                         })
                     }
