@@ -146,6 +146,10 @@ struct NewMap {
 
 struct EditAtom {
     inst: map_repr::InstanceId,
+    base: EditAtomBase,
+}
+
+struct EditAtomBase {
     filter: ImString,
     fab: Prefab,
 }
@@ -721,8 +725,7 @@ impl EditorScene {
                                 if ui.menu_item(im_str!("{}", fab.path)).build() {
                                     edit_atoms.push(EditAtom {
                                         inst,
-                                        filter: ImString::with_capacity(128),
-                                        fab: fab.clone(),
+                                        base: EditAtomBase::new(fab.clone()),
                                     });
                                 }
                             });
@@ -799,8 +802,8 @@ impl EditorScene {
                 let mut keep = true;
                 let mut keep2 = true;
 
-                let EditAtom { ref mut fab, ref mut filter, ref inst } = edit;
-                ui.window(im_str!("{}##{}/{:?}", fab.path, uid, inst))
+                let EditAtom { ref mut inst, ref mut base } = edit;
+                ui.window(im_str!("{}##{}/{:?}", base.fab.path, uid, inst))
                     .opened(&mut keep)
                     .position(ui.imgui().mouse_pos(), ImGuiCond::Appearing)
                     .size((350.0, 500.0), ImGuiCond::FirstUseEver)
@@ -819,112 +822,13 @@ impl EditorScene {
                             }
                             ui.separator();
                             ui.menu(im_str!("Filter...")).build(|| {
-                                ui.input_text(im_str!(""), filter).build();
+                                ui.input_text(im_str!(""), &mut base.filter).build();
                                 if ui.menu_item(im_str!("Clear")).build() {
-                                    filter.clear();
+                                    base.filter.clear();
                                 }
                             });
                         });
-
-                        // find the "best" type by chopping the path if needed
-                        let mut ty = None;
-                        let mut red_paths = true;
-                        if let Some(env) = env {
-                            let mut path = fab.path.as_str();
-                            ty = env.objtree.find(path);
-                            red_paths = ty.is_none();
-                            while ty.is_none() && !path.is_empty() {
-                                match path.rfind("/") {
-                                    Some(idx) => path = &path[..idx],
-                                    None => break,
-                                }
-                                ty = env.objtree.find(path);
-                            }
-                        }
-
-                        // loop through instance vars, that type, parent types
-                        // to find the longest var name for the column width
-                        let mut max_len = 0;
-                        for key in fab.vars.keys() {
-                            max_len = std::cmp::max(max_len, key.len());
-                        }
-                        let mut search_ty = ty;
-                        while let Some(search) = search_ty {
-                            if search.is_root() {
-                                break;
-                            }
-                            for (key, var) in search.vars.iter() {
-                                if let Some(decl) = var.declaration.as_ref() {
-                                    if !extra_vars && !decl.var_type.is_normal() {
-                                        continue;
-                                    }
-                                    max_len = std::cmp::max(max_len, key.len());
-                                }
-                            }
-                            search_ty = search.parent_type();
-                        }
-                        let offset = (max_len + 4) as f32 * 7.0;
-
-                        // show the instance variables - everything which is
-                        // actually set is right at the top
-                        ui.text(im_str!("Instance variables ({})", fab.vars.len()));
-                        for (name, value) in fab.vars.iter() {
-                            if !name.contains(filter.to_str()) {
-                                continue;
-                            }
-                            // TODO: red instead of green if invalid var
-                            ui.with_style_and_color_vars(&[], GREEN_TEXT, || {
-                                ui.text(im_str!("  {}", name));
-                            });
-                            ui.same_line(offset);
-                            ui.text(im_str!("{}", value));
-                        }
-
-                        // show the red path on error
-                        if red_paths {
-                            ui.separator();
-                            ui.with_style_and_color_vars(&[], RED_TEXT, || {
-                                ui.text(im_str!("{}", &fab.path));
-                            });
-                        }
-
-                        // show all the parent variables you could edit
-                        let mut search_ty = ty;
-                        while let Some(search) = search_ty {
-                            if search.is_root() {
-                                break;
-                            }
-                            ui.separator();
-                            ui.text(im_str!("{} ({})", &search.path, search.vars.len()));
-
-                            for (name, var) in search.vars.iter() {
-                                if !name.contains(filter.to_str()) {
-                                    continue;
-                                }
-                                if let Some(decl) = var.declaration.as_ref() {
-                                    let mut prefix = " ";
-                                    if !decl.var_type.is_normal() {
-                                        if !extra_vars {
-                                            continue;
-                                        }
-                                        prefix = "-";
-                                    }
-                                    ui.text(im_str!("{} {}", prefix, name));
-                                    if prefix == "-" && ui.is_item_hovered() {
-                                        ui.tooltip_text("/tmp, /static, or /const");
-                                    }
-                                    // search_ty is seeded with ty and must be Some to get here
-                                    if let Some(value) = ty.unwrap().get_value(name) {
-                                        if let Some(c) = value.constant.as_ref() {
-                                            ui.same_line(offset);
-                                            ui.text(im_str!("{}", c));
-                                        }
-                                    }
-                                }
-                            }
-
-                            search_ty = search.parent_type();
-                        }
+                        base.show(ui, env, extra_vars);
                     });
                 keep && keep2
             });
@@ -1327,6 +1231,119 @@ impl MapState {
         match self {
             MapState::Active { ref mut hist, .. } => Some(hist),
             _ => None,
+        }
+    }
+}
+
+impl EditAtomBase {
+    fn new(fab: Prefab) -> EditAtomBase {
+        EditAtomBase {
+            filter: ImString::with_capacity(128),
+            fab,
+        }
+    }
+
+    fn show(&mut self, ui: &Ui, env: Option<&Environment>, extra_vars: bool) {
+        let EditAtomBase { ref mut filter, ref mut fab } = self;
+
+        // find the "best" type by chopping the path if needed
+        let mut ty = None;
+        let mut red_paths = true;
+        if let Some(env) = env {
+            let mut path = fab.path.as_str();
+            ty = env.objtree.find(path);
+            red_paths = ty.is_none();
+            while ty.is_none() && !path.is_empty() {
+                match path.rfind("/") {
+                    Some(idx) => path = &path[..idx],
+                    None => break,
+                }
+                ty = env.objtree.find(path);
+            }
+        }
+
+        // loop through instance vars, that type, parent types
+        // to find the longest var name for the column width
+        let mut max_len = 0;
+        for key in fab.vars.keys() {
+            max_len = std::cmp::max(max_len, key.len());
+        }
+        let mut search_ty = ty;
+        while let Some(search) = search_ty {
+            if search.is_root() {
+                break;
+            }
+            for (key, var) in search.vars.iter() {
+                if let Some(decl) = var.declaration.as_ref() {
+                    if !extra_vars && !decl.var_type.is_normal() {
+                        continue;
+                    }
+                    max_len = std::cmp::max(max_len, key.len());
+                }
+            }
+            search_ty = search.parent_type();
+        }
+        let offset = (max_len + 4) as f32 * 7.0;
+
+        // show the instance variables - everything which is
+        // actually set is right at the top
+        ui.text(im_str!("Instance variables ({})", fab.vars.len()));
+        for (name, value) in fab.vars.iter() {
+            if !name.contains(filter.to_str()) {
+                continue;
+            }
+            // TODO: red instead of green if invalid var
+            ui.with_style_and_color_vars(&[], GREEN_TEXT, || {
+                ui.text(im_str!("  {}", name));
+            });
+            ui.same_line(offset);
+            ui.text(im_str!("{}", value));
+        }
+
+        // show the red path on error
+        if red_paths {
+            ui.separator();
+            ui.with_style_and_color_vars(&[], RED_TEXT, || {
+                ui.text(im_str!("{}", &fab.path));
+            });
+        }
+
+        // show all the parent variables you could edit
+        let mut search_ty = ty;
+        while let Some(search) = search_ty {
+            if search.is_root() {
+                break;
+            }
+            ui.separator();
+            ui.text(im_str!("{} ({})", &search.path, search.vars.len()));
+
+            for (name, var) in search.vars.iter() {
+                if !name.contains(filter.to_str()) {
+                    continue;
+                }
+                if let Some(decl) = var.declaration.as_ref() {
+                    let mut prefix = " ";
+                    if !decl.var_type.is_normal() {
+                        if !extra_vars {
+                            continue;
+                        }
+                        prefix = "-";
+                    }
+                    ui.text(im_str!("{} {}", prefix, name));
+                    if prefix == "-" && ui.is_item_hovered() {
+                        ui.tooltip_text("/tmp, /static, or /const");
+                    }
+                    // search_ty is seeded with ty and must be Some to get here
+                    if let Some(value) = ty.unwrap().get_value(name) {
+                        if let Some(c) = value.constant.as_ref() {
+                            ui.same_line(offset);
+                            ui.text(im_str!("{}", c));
+                        }
+                    }
+                }
+            }
+
+            search_ty = search.parent_type();
         }
     }
 }
