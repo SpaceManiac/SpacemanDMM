@@ -52,6 +52,7 @@ impl ToolBehavior for Place {
 
             let mut keep_editor = true;
             if let Some(ref mut edit) = fab.edit {
+                let fab_fab = &mut fab.fab;
                 ui.window(im_str!("{}##place/{}", edit.fab.path, i))
                     .opened(&mut keep_editor)
                     .position(ui.imgui().mouse_pos(), ImGuiCond::Appearing)
@@ -60,6 +61,10 @@ impl ToolBehavior for Place {
                     .menu_bar(true)
                     .build(|| {
                         ui.menu_bar(|| {
+                            if ui.menu_item(im_str!("Apply")).build() {
+                                fab_fab.clone_from(&edit.fab);
+                            }
+                            ui.separator();
                             if ui.menu_item(im_str!("Remove")).build() {
                                 keep = false;
                             }
