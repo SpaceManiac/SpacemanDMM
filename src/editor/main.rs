@@ -117,7 +117,7 @@ struct EditorMap {
     center: [f32; 2],
     state: MapState,
     rendered: Vec<Option<map_renderer::RenderedMap>>,
-    edit_atoms: Vec<EditAtom>,
+    edit_atoms: Vec<EditInstance>,
     uid: usize,
 }
 
@@ -144,12 +144,12 @@ struct NewMap {
     created: bool,
 }
 
-struct EditAtom {
+struct EditInstance {
     inst: map_repr::InstanceId,
-    base: EditAtomBase,
+    base: EditPrefab,
 }
 
-struct EditAtomBase {
+struct EditPrefab {
     filter: ImString,
     fab: Prefab,
 }
@@ -723,9 +723,9 @@ impl EditorScene {
 
                             ui.with_style_and_color_vars(&[], color_vars, || {
                                 if ui.menu_item(im_str!("{}", fab.path)).build() {
-                                    edit_atoms.push(EditAtom {
+                                    edit_atoms.push(EditInstance {
                                         inst,
-                                        base: EditAtomBase::new(fab.clone()),
+                                        base: EditPrefab::new(fab.clone()),
                                     });
                                 }
                             });
@@ -802,7 +802,7 @@ impl EditorScene {
                 let mut keep = true;
                 let mut keep2 = true;
 
-                let EditAtom { ref mut inst, ref mut base } = edit;
+                let EditInstance { ref mut inst, ref mut base } = edit;
                 ui.window(im_str!("{}##{}/{:?}", base.fab.path, uid, inst))
                     .opened(&mut keep)
                     .position(ui.imgui().mouse_pos(), ImGuiCond::Appearing)
@@ -821,12 +821,7 @@ impl EditorScene {
                                 delete.push(inst.clone());
                             }
                             ui.separator();
-                            ui.menu(im_str!("Filter...")).build(|| {
-                                ui.input_text(im_str!(""), &mut base.filter).build();
-                                if ui.menu_item(im_str!("Clear")).build() {
-                                    base.filter.clear();
-                                }
-                            });
+                            base.menu(ui);
                         });
                         base.show(ui, env, extra_vars);
                     });
@@ -1235,16 +1230,25 @@ impl MapState {
     }
 }
 
-impl EditAtomBase {
-    fn new(fab: Prefab) -> EditAtomBase {
-        EditAtomBase {
+impl EditPrefab {
+    fn new(fab: Prefab) -> EditPrefab {
+        EditPrefab {
             filter: ImString::with_capacity(128),
             fab,
         }
     }
 
+    fn menu(&mut self, ui: &Ui) {
+        ui.menu(im_str!("Filter...")).build(|| {
+            ui.input_text(im_str!(""), &mut self.filter).build();
+            if ui.menu_item(im_str!("Clear")).build() {
+                self.filter.clear();
+            }
+        });
+    }
+
     fn show(&mut self, ui: &Ui, env: Option<&Environment>, extra_vars: bool) {
-        let EditAtomBase { ref mut filter, ref mut fab } = self;
+        let EditPrefab { ref mut filter, ref mut fab } = self;
 
         // find the "best" type by chopping the path if needed
         let mut ty = None;
