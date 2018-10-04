@@ -811,6 +811,8 @@ impl EditorScene {
             let extra_vars = self.ui_extra_vars;
             let uid = map.uid;
             let mut delete = Vec::new();
+            let tools = &mut self.tools;
+            let tool_current = self.tool_current;
             map.edit_atoms.retain_mut(|edit| {
                 let mut keep = true;
                 let mut keep2 = true;
@@ -832,6 +834,12 @@ impl EditorScene {
                             if ui.menu_item(im_str!("Delete")).build() {
                                 keep2 = false;
                                 delete.push(inst.clone());
+                            }
+                            ui.separator();
+                            if ui.menu_item(im_str!("Pick")).build() {
+                                if let Some(tool) = tools.get_mut(tool_current) {
+                                    tool.behavior.pick(&base.fab);
+                                }
                             }
                             ui.separator();
                             base.menu(ui);

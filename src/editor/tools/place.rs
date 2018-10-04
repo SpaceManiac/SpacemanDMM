@@ -13,18 +13,21 @@ struct PlaceFab {
     edit: Option<EditPrefab>,
 }
 
+impl PlaceFab {
+    fn new(fab: Prefab) -> PlaceFab {
+        PlaceFab { fab, edit: None }
+    }
+}
+
 impl ToolBehavior for Place {
     fn settings(&mut self, ui: &Ui, env: &Environment) {
         ui.text(im_str!("current: {} / {}", self.fab_current, self.fabs.len()));
         ui.same_line(0.0);
         if ui.small_button(im_str!("Add")) {
-            self.fabs.push(PlaceFab {
-                fab: Prefab {
-                    path: "/obj/item/lighter".to_owned(),
-                    vars: Default::default(),
-                },
-                edit: None,
-            });
+            self.fabs.push(PlaceFab::new(Prefab {
+                path: "/obj/item/lighter".to_owned(),
+                vars: Default::default(),
+            }));
         }
 
         let mut i = 0;
@@ -98,6 +101,17 @@ impl ToolBehavior for Place {
                 })
             });
         }
+    }
+
+    fn pick(&mut self, prefab: &Prefab) {
+        for (i, fab) in self.fabs.iter().enumerate() {
+            if fab.fab == *prefab {
+                self.fab_current = i;
+                return;
+            }
+        }
+        self.fab_current = self.fabs.len();
+        self.fabs.push(PlaceFab::new(prefab.clone()));
     }
 }
 

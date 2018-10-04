@@ -42,6 +42,9 @@ pub trait ToolBehavior {
 
     fn click(&mut self, hist: &mut History, env: &Environment, loc: (u32, u32, u32)) {
     }
+
+    fn pick(&mut self, prefab: &Prefab) {
+    }
 }
 
 impl Tool {
