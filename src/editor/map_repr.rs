@@ -52,6 +52,20 @@ pub struct Defer<'a> {
     z: u32,
 }
 
+#[derive(Debug, Clone)]
+pub struct AddedInstance {
+    pub id: InstanceId,
+    /// `Some` if adding this instance replaced another (turf/area).
+    pub replaced: Option<Instance>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RemovedInstance {
+    pub old: Instance,
+    /// `Some` if deleting this instance left behind a default (turf/area).
+    pub replaced_with: Option<InstanceId>,
+}
+
 impl AtomMap {
     pub fn new(map: &Map, icons: &IconCache, objtree: &ObjectTree) -> AtomMap {
         let start = ::std::time::Instant::now();
@@ -110,16 +124,19 @@ impl AtomMap {
         self.sort_again(z);
     }
 
-    fn add_instance_unsorted(&mut self, (x, y, z): (u32, u32, u32), prefab: Arc<Prefab>) -> InstanceId {
+    fn add_instance_unsorted(&mut self, (x, y, z): (u32, u32, u32), prefab: Arc<Prefab>) -> AddedInstance {
         let level = &mut self.levels[z as usize];
         let new_instance = level.prep_instance(&mut self.pops, (x, y), prefab);
         level.sorted_order.push(new_instance);
         level.index_buffer.get_mut().push(indices(new_instance));
         level.buffers_dirty.set(true);
-        InstanceId { z, idx: new_instance }
+        AddedInstance {
+            id: InstanceId { z, idx: new_instance },
+            replaced: None,
+        }
     }
 
-    pub fn add_instance(&mut self, (x, y, z): (u32, u32, u32), prefab: Arc<Prefab>) -> InstanceId {
+    pub fn add_instance(&mut self, (x, y, z): (u32, u32, u32), prefab: Arc<Prefab>) -> AddedInstance {
         let pops = &mut self.pops;
         let level = &mut self.levels[z as usize];
         let new_instance = level.prep_instance(pops, (x, y), prefab);
@@ -181,7 +198,10 @@ impl AtomMap {
             }
         }
 
-        InstanceId { z, idx: new_instance }
+        AddedInstance {
+            id: InstanceId { z, idx: new_instance },
+            replaced: None,
+        }
     }
 
     pub fn get_instance(&self, id: &InstanceId) -> Option<&Instance> {
@@ -194,9 +214,10 @@ impl AtomMap {
         }
     }
 
-    pub fn remove_instance(&mut self, id: InstanceId) {
+    pub fn remove_instance(&mut self, id: InstanceId) -> RemovedInstance {
         let level = &mut self.levels[id.z as usize];
         let draw_calls = &mut level.draw_calls;
+        let old = level.instances.keys[id.idx].clone();
         level.instances.free(id.idx);
 
         if let Some(pos) = level.sorted_order.iter().position(|&idx| idx == id.idx) {
@@ -211,6 +232,11 @@ impl AtomMap {
             if draw_calls[draw_call].len == 0 {
                 draw_calls.remove(draw_call);
             }
+        }
+
+        RemovedInstance {
+            old,
+            replaced_with: None,
         }
     }
 
@@ -294,7 +320,7 @@ impl<'a> Defer<'a> {
         self.map.add_pop(prefab, icons, objtree)
     }
 
-    pub fn add_instance(&mut self, (x, y): (u32, u32), prefab: Arc<Prefab>) -> InstanceId {
+    pub fn add_instance(&mut self, (x, y): (u32, u32), prefab: Arc<Prefab>) -> AddedInstance {
         self.map.add_instance_unsorted((x, y, self.z), prefab)
     }
 }

@@ -87,9 +87,9 @@ impl ToolBehavior for Place {
             let fab = fab.fab.clone();
             hist.edit(env, "TODO".to_owned(), move |env, world| {
                 let pop = world.add_pop(&fab, &env.icons, &env.objtree);
-                let inst = world.add_instance(loc, pop);
+                let added = world.add_instance(loc, pop);
                 Box::new(move |_, world| {
-                    world.remove_instance(inst.clone());
+                    world.remove_instance(added.id.clone());
                 })
             });
         }
