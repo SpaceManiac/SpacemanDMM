@@ -105,6 +105,25 @@ impl Map {
     }
 }
 
+impl fmt::Display for Prefab {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(&self.path)?;
+        if !self.vars.is_empty() {
+            write!(f, " {{")?;
+            let mut first = true;
+            for (k, v) in self.vars.iter() {
+                if !first {
+                    write!(f, "; ")?;
+                }
+                first = false;
+                write!(f, "{} = {}", k, v)?;
+            }
+            write!(f, "}}")?;
+        }
+        Ok(())
+    }
+}
+
 // ----------------------------------------------------------------------------
 // Map Writer
 

@@ -580,8 +580,7 @@ impl EditorScene {
             .size((300.0, 300.0), ImGuiCond::FirstUseEver)
             .resizable(!self.ui_lock_windows)
             .build(|| {
-                let (width, _) = ui.get_window_size();
-                let count = std::cmp::max(((width - 16.0) / 42.0).floor() as usize, 1);
+                let count = ui.fits_width(34.0);  // 32 + 2px border
                 for (i, tool) in self.tools.iter().enumerate() {
                     if i % count != 0 {
                         ui.same_line(0.0);
@@ -1459,5 +1458,16 @@ impl<T> Fulfill<T> for Option<T> {
             *self = Some(f());
         }
         self.as_mut().unwrap()
+    }
+}
+
+trait UiExt {
+    fn fits_width(&self, width: f32) -> usize;
+}
+
+impl<'a> UiExt for Ui<'a> {
+    fn fits_width(&self, element_width: f32) -> usize {
+        let (width, _) = self.get_window_size();
+        std::cmp::max(((width - 20.0) / (element_width + 8.0)) as usize, 1)
     }
 }
