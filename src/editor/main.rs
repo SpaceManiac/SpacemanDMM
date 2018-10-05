@@ -1511,11 +1511,47 @@ impl<T> Fulfill<T> for Option<T> {
 
 trait UiExt {
     fn fits_width(&self, width: f32) -> usize;
+    fn objtree_menu<'e>(&self, env: &'e Environment, selection: &mut Option<TypeRef<'e>>);
 }
 
 impl<'a> UiExt for Ui<'a> {
     fn fits_width(&self, element_width: f32) -> usize {
         let (width, _) = self.get_window_size();
         std::cmp::max(((width - 20.0) / (element_width + 8.0)) as usize, 1)
+    }
+
+    fn objtree_menu<'e>(&self, env: &'e Environment, selection: &mut Option<TypeRef<'e>>) {
+        let root = env.objtree.root();
+        objtree_menu_root(self, root, "area", selection);
+        objtree_menu_root(self, root, "turf", selection);
+        objtree_menu_root(self, root, "obj", selection);
+        objtree_menu_root(self, root, "mob", selection);
+    }
+}
+
+fn objtree_menu_root<'e>(ui: &Ui, ty: TypeRef<'e>, name: &str, selection: &mut Option<TypeRef<'e>>) {
+    if let Some(child) = ty.child(name) {
+        objtree_menu_node(ui, child, selection);
+    }
+}
+
+fn objtree_menu_node<'e>(ui: &Ui, ty: TypeRef<'e>, selection: &mut Option<TypeRef<'e>>) {
+    let mut children = ty.children();
+    if children.is_empty() {
+        if ui.menu_item(im_str!("{}", ty.name)).build() {
+            *selection = Some(ty);
+        }
+    } else {
+        children.sort_by_key(|t| &t.get().name);
+        ui.menu(im_str!("{}", ty.name))
+            .build(|| {
+                if ui.menu_item(im_str!("{}", ty.name)).build() {
+                    *selection = Some(ty);
+                }
+                ui.separator();
+                for child in children {
+                    objtree_menu_node(ui, child, selection);
+                }
+            });
     }
 }

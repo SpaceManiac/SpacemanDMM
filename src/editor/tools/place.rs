@@ -91,15 +91,23 @@ impl ToolBehavior for Place {
         }
 
         ui.popup(im_str!("place_tool_add"), || {
-            if ui.menu_item(im_str!("/obj/item/lighter")).build() {
-                *pal_current = palette.len();
+            let mut selection = None;
+            ui.menu_item(im_str!("Recent")).enabled(false).build();
+            ui.separator();
+            ui.objtree_menu(env, &mut selection);
+            if let Some(sel) = selection {
                 let new_fab = Prefab {
-                    path: "/obj/item/lighter".to_owned(),
+                    path: sel.path.to_owned(),
                     vars: Default::default(),
                 };
+                *pal_current = palette.len();
                 palette.push(PaletteEntry {
                     fab: new_fab.clone(),
-                    edit: Some(EditPrefab::new(new_fab)),
+                    edit: if ui.imgui().key_shift() {
+                        Some(EditPrefab::new(new_fab))
+                    } else {
+                        None
+                    },
                 });
             }
         });
