@@ -49,6 +49,7 @@ type DepthFormat = gfx::format::DepthStencil;
 type RenderTargetView = gfx::handle::RenderTargetView<Resources, ColorFormat>;
 type DepthStencilView = gfx::handle::DepthStencilView<Resources, DepthFormat>;
 type Texture = gfx::handle::ShaderResourceView<Resources, [f32; 4]>;
+type ImRenderer = imgui_gfx_renderer::Renderer<Resources>;
 
 use dmi::IconCache;
 type History = history::History<map_repr::AtomMap, Environment>;
@@ -360,14 +361,11 @@ impl EditorScene {
         }
     }
 
-    fn prepare_textures(&mut self, renderer: &mut imgui_gfx_renderer::Renderer<Resources>) {
+    fn run_ui(&mut self, ui: &Ui, renderer: &mut ImRenderer) -> bool {
         for tool in self.tools.iter_mut() {
-            let icon = std::mem::replace(&mut tool.icon, tools::ToolIcon::None);
-            tool.icon = prepare_tool_icon(renderer, self.environment.as_ref(), &mut self.map_renderer, &mut self.factory, icon);
+            tool.icon.prepare(renderer, self.environment.as_ref(), &mut self.map_renderer, &mut self.factory);
         }
-    }
 
-    fn run_ui(&mut self, ui: &Ui) -> bool {
         #[cfg(not(target_os = "macos"))]
         macro_rules! ctrl_shortcut {
             ($rest:expr) => (im_str!("Ctrl+{}", $rest))
@@ -1426,7 +1424,7 @@ fn detect_environment(path: &Path) -> Option<PathBuf> {
 }
 
 fn prepare_tool_icon(
-    renderer: &mut imgui_gfx_renderer::Renderer<Resources>,
+    renderer: &mut ImRenderer,
     environment: Option<&Environment>,
     map_renderer: &mut map_renderer::MapRenderer,
     factory: &mut Factory,

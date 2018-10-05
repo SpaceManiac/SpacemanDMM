@@ -92,8 +92,6 @@ impl ToolBehavior for Place {
 
         ui.popup(im_str!("place_tool_add"), || {
             let mut selection = None;
-            ui.menu_item(im_str!("Recent")).enabled(false).build();
-            ui.separator();
             ui.objtree_menu(env, &mut selection);
             if let Some(sel) = selection {
                 let new_fab = Prefab {

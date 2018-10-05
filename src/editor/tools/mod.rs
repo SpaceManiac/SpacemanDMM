@@ -10,6 +10,14 @@ use {History, Environment};
 
 mod place;
 
+pub struct Tool {
+    pub name: &'static str,
+    pub help: &'static str,
+    pub objtree: bool,
+    pub icon: ToolIcon,
+    pub behavior: Box<ToolBehavior>,
+}
+
 pub enum ToolIcon {
     None,
     Dmi {
@@ -25,14 +33,6 @@ pub enum ToolIcon {
         uv0: ImVec2,
         uv1: ImVec2
     },
-}
-
-pub struct Tool {
-    pub name: &'static str,
-    pub help: &'static str,
-    pub objtree: bool,
-    pub icon: ToolIcon,
-    pub behavior: Box<ToolBehavior>,
 }
 
 #[allow(unused_variables)]
@@ -76,6 +76,19 @@ impl Tool {
 
     fn build(self, tools: &mut Vec<Tool>) {
         tools.push(self);
+    }
+}
+
+impl ToolIcon {
+    pub fn prepare(
+        &mut self,
+        renderer: &mut ::ImRenderer,
+        environment: Option<&Environment>,
+        map_renderer: &mut ::map_renderer::MapRenderer,
+        factory: &mut ::Factory,
+    ) {
+        let temp = ::std::mem::replace(self, ToolIcon::None);
+        *self = ::prepare_tool_icon(renderer, environment, map_renderer, factory, temp);
     }
 }
 
