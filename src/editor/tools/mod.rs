@@ -85,10 +85,9 @@ impl ToolIcon {
         renderer: &mut ::ImRenderer,
         environment: Option<&Environment>,
         map_renderer: &mut ::map_renderer::MapRenderer,
-        factory: &mut ::Factory,
     ) {
         let temp = ::std::mem::replace(self, ToolIcon::None);
-        *self = ::prepare_tool_icon(renderer, environment, map_renderer, factory, temp);
+        *self = ::prepare_tool_icon(renderer, environment, map_renderer, temp);
     }
 }
 

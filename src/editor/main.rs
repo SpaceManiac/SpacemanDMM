@@ -345,7 +345,6 @@ impl EditorScene {
                         map_renderer.render(
                             hist.current(),
                             z_current as u32,
-                            factory,
                         )
                     }).paint(
                         map_renderer,
@@ -363,7 +362,7 @@ impl EditorScene {
 
     fn run_ui(&mut self, ui: &Ui, renderer: &mut ImRenderer) -> bool {
         for tool in self.tools.iter_mut() {
-            tool.icon.prepare(renderer, self.environment.as_ref(), &mut self.map_renderer, &mut self.factory);
+            tool.icon.prepare(renderer, self.environment.as_ref(), &mut self.map_renderer);
         }
 
         #[cfg(not(target_os = "macos"))]
@@ -1427,8 +1426,7 @@ fn prepare_tool_icon(
     renderer: &mut ImRenderer,
     environment: Option<&Environment>,
     map_renderer: &mut map_renderer::MapRenderer,
-    factory: &mut Factory,
-    icon: tools::ToolIcon
+    icon: tools::ToolIcon,
 ) -> tools::ToolIcon {
     use tools::ToolIcon;
     match icon {
@@ -1437,7 +1435,7 @@ fn prepare_tool_icon(
                 let icon = env.icons.get_icon(id);
                 if let Some([u1, v1, u2, v2]) = icon.uv_of(&icon_state, dir) {
                     let tex = map_renderer.icon_textures.retrieve(
-                        factory,
+                        &mut map_renderer.factory,
                         &env.icons,
                         id,
                     ).clone();
@@ -1456,7 +1454,7 @@ fn prepare_tool_icon(
         } else {
             ToolIcon::Dmi { icon, icon_state, dir }
         },
-        ToolIcon::EmbeddedPng { data } => if let Ok(tex) = dmi::texture_from_bytes(factory, data) {
+        ToolIcon::EmbeddedPng { data } => if let Ok(tex) = dmi::texture_from_bytes(&mut map_renderer.factory, data) {
             let samp = map_renderer.sampler.clone();
             ToolIcon::Loaded {
                 tex: renderer.textures().insert((tex, samp)),

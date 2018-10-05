@@ -60,6 +60,7 @@ pub struct MapRenderer {
     pub zoom: f32,
     pub layers: [bool; 5],
 
+    pub factory: Factory,
     pso: gfx::PipelineState<Resources, pipe::Meta>,
     transform_buffer: gfx::handle::Buffer<Resources, Transform>,
     pub sampler: gfx::handle::Sampler<Resources>,
@@ -99,6 +100,7 @@ impl MapRenderer {
             zoom: 1.0,
             layers: [true, false, true, true, true],
 
+            factory: factory.clone(),
             pso,
             transform_buffer,
             sampler,
@@ -106,20 +108,20 @@ impl MapRenderer {
     }
 
     #[must_use]
-    pub fn render(&mut self, map: &AtomMap, z: u32, factory: &mut Factory) -> RenderedMap {
+    pub fn render(&mut self, map: &AtomMap, z: u32) -> RenderedMap {
         let start = Instant::now();
 
         let vbuf_data = map.vertex_buffer(z).flat();
         let ibuf_data = map.index_buffer(z);
         let ibuf_data = ibuf_data.flat();
 
-        let vbuf = factory.create_buffer::<Vertex>(
+        let vbuf = self.factory.create_buffer::<Vertex>(
             vbuf_data.len(),
             gfx::buffer::Role::Vertex,
             gfx::memory::Usage::Dynamic,
             gfx::memory::Bind::empty(),
         ).expect("create vertex buffer");
-        let ibuf = factory.create_buffer::<u32>(
+        let ibuf = self.factory.create_buffer::<u32>(
             ibuf_data.len(),
             gfx::buffer::Role::Index,
             gfx::memory::Usage::Dynamic,
