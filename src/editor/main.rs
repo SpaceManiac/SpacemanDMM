@@ -339,14 +339,23 @@ impl EditorScene {
                 let z_current = map.z_current;
                 let map_renderer = &mut self.map_renderer;
                 let factory = &mut self.factory;
-                let rendered = map.rendered[map.z_current].fulfill(|| {
-                    map_renderer.render(
+                if let Some(rendered) = map.rendered.get_mut(map.z_current) {
+                    rendered.fulfill(|| {
+                        map_renderer.render(
+                            hist.current(),
+                            z_current as u32,
+                            factory,
+                        )
+                    }).paint(
+                        map_renderer,
                         hist.current(),
-                        z_current as u32,
+                        map.z_current as u32,
+                        map.center,
                         factory,
-                    )
-                });
-                rendered.paint(map_renderer, hist.current(), map.z_current as u32, map.center, factory, encoder, &self.target);
+                        encoder,
+                        &self.target,
+                    );
+                }
             }
         }
     }
