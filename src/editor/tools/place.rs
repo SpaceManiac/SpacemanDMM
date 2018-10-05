@@ -21,15 +21,6 @@ impl PlaceFab {
 
 impl ToolBehavior for Place {
     fn settings(&mut self, ui: &Ui, env: &Environment) {
-        ui.text(im_str!("current: {} / {}", self.fab_current, self.fabs.len()));
-        ui.same_line(0.0);
-        if ui.small_button(im_str!("Add")) {
-            self.fabs.push(PlaceFab::new(Prefab {
-                path: "/obj/item/lighter".to_owned(),
-                vars: Default::default(),
-            }));
-        }
-
         let mut i = 0;
         let fab_current = &mut self.fab_current;
 
@@ -88,6 +79,17 @@ impl ToolBehavior for Place {
             i += 1;
             keep
         });
+
+        if i % count != 0 {
+            ui.same_line(0.0);
+        }
+        if ui.button(im_str!("+"), (32.0, 32.0)) {
+            *fab_current = self.fabs.len();
+            self.fabs.push(PlaceFab::new(Prefab {
+                path: "/obj/item/lighter".to_owned(),
+                vars: Default::default(),
+            }));
+        }
     }
 
     fn click(&mut self, hist: &mut History, env: &Environment, loc: (u32, u32, u32)) {
