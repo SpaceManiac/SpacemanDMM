@@ -75,6 +75,16 @@ impl Map {
         save_tgm(self, File::create(path)?)
     }
 
+    pub fn adjust_key_length(&mut self) {
+        if self.dictionary.len() > 2704 {
+            self.key_length = 3;
+        } else if self.dictionary.len() > 52 {
+            self.key_length = 2;
+        } else {
+            self.key_length = 1;
+        }
+    }
+
     #[inline]
     pub fn dim_xyz(&self) -> (usize, usize, usize) {
         let dim = self.grid.dim();
@@ -127,6 +137,12 @@ impl fmt::Display for Prefab {
             write!(f, "}}")?;
         }
         Ok(())
+    }
+}
+
+impl Key {
+    pub fn next(self) -> Key {
+        Key(self.0 + 1)
     }
 }
 

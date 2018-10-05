@@ -2,9 +2,10 @@
 
 use std::sync::{Arc, Weak};
 use std::cell::{Cell, RefCell, Ref};
+use std::collections::HashMap;
 use weak_table::WeakKeyHashMap;
 
-use dmm_tools::dmm::{Map, Prefab};
+use dmm_tools::dmm::{Map, Prefab, Key};
 use dm::objtree::ObjectTree;
 
 use dmi::IconCache;
@@ -93,8 +94,40 @@ impl AtomMap {
         atom_map
     }
 
+    pub fn to_map(&self) -> Map {
+        let mut coords = HashMap::<(usize, usize, usize), Vec<&Prefab>>::new();
+        for (z, level) in self.levels.iter().enumerate() {
+            for inst in level.instances.keys.iter() {
+                coords.entry((inst.x as usize, (self.size.1 - 1 - inst.y) as usize, z as usize))
+                    .or_default()
+                    .push(&inst.pop);
+            }
+        }
+
+        let mut reverse_dictionary = HashMap::<&[&Prefab], Key>::new();
+        let mut key = Key::default();
+        let mut map = Map {
+            key_length: 1,
+            dictionary: Default::default(),
+            grid: ::ndarray::Array3::default((self.levels.len(), self.size.1 as usize, self.size.0 as usize)),
+        };
+
+        for (coord, pop_list) in coords.iter() {
+            map.grid[(coord.2, coord.1, coord.0)] = *reverse_dictionary.entry(&pop_list)
+                .or_insert_with(|| {
+                    let k = key;
+                    key = key.next();
+                    map.dictionary.insert(k, pop_list.iter().cloned().cloned().collect());
+                    k
+                });;
+        }
+        map.adjust_key_length();
+        map
+    }
+
     pub fn save(&self, _merge_base: Option<&Map>) -> Map {
-        unimplemented!()
+        // TODO: perform a map-merge-like operation here
+        self.to_map()
     }
 
     pub fn dim_xyz(&self) -> (u32, u32, u32) {
