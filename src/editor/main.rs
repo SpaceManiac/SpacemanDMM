@@ -891,8 +891,9 @@ impl EditorScene {
                             ui.text(im_str!("center = {:?}", map.center));
                             if let Some(hist) = map.state.hist() {
                                 let current = hist.current();
-                                let level = &current.levels[map.z_current];
-                                ui.text(im_str!("draw_calls[{}], pops[{}], atoms[{}]", level.draw_calls.len(), current.pops.len(), level.instances.len()));
+                                if let Some(level) = current.levels.get(map.z_current) {
+                                    ui.text(im_str!("draw_calls[{}], pops[{}], atoms[{}]", level.draw_calls.len(), current.pops.len(), level.instances.len()));
+                                }
                             }
                             if let Some(rendered) = map.rendered.get(map.z_current).and_then(|x| x.as_ref()) {
                                 ui.text(im_str!("timings: {:?}", rendered.duration));
