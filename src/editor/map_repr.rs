@@ -69,6 +69,7 @@ pub struct RemovedInstance {
 }
 
 impl AtomMap {
+    /// Convert from a dictionary-and-grid map.
     pub fn new(map: &Map, icons: &IconCache, objtree: &ObjectTree) -> AtomMap {
         let start = ::std::time::Instant::now();
         let (dim_x, dim_y, dim_z) = map.dim_xyz();
@@ -94,7 +95,11 @@ impl AtomMap {
         atom_map
     }
 
-    pub fn to_map(&self) -> Map {
+    /// Convert to a dictionary-and-grid map suitable for output.
+    ///
+    /// Can accept a base map to attempt to re-use the dictionary of.
+    pub fn save(&self, merge_base: Option<&Map>) -> Map {
+        // Map the instance space down to tiles.
         let mut coords = HashMap::<(usize, usize, usize), Vec<&Prefab>>::new();
         for (z, level) in self.levels.iter().enumerate() {
             for inst in level.instances.keys.iter() {
@@ -104,30 +109,58 @@ impl AtomMap {
             }
         }
 
+        let mut base_dictionary;
         let mut reverse_dictionary = HashMap::<&[&Prefab], Key>::new();
-        let mut key = Key::default();
         let mut map = Map {
             key_length: 1,
             dictionary: Default::default(),
             grid: ::ndarray::Array3::default((self.levels.len(), self.size.1 as usize, self.size.0 as usize)),
         };
 
+        // If we have a "base" map we want to stay close to, prepopulate the
+        // output map's dictionary with any shared tiles.
+        if let Some(base) = merge_base.as_ref() {
+            // Fill reverse_dictionary for checking whether the base's tiles
+            // are in the output map.
+            for pop_list in coords.values() {
+                reverse_dictionary.insert(pop_list, Key::invalid());
+            }
+
+            // Anything that exists in both the base map's dictionary and the
+            // output map's tiles should be ported to the output's dictionary.
+            base_dictionary = HashMap::new();
+            for (&key, pop_list) in base.dictionary.iter() {
+                base_dictionary.insert(key, pop_list.iter().collect::<Vec<_>>());
+            }
+            for (&key, pop_list) in base_dictionary.iter() {
+                if reverse_dictionary.contains_key(&pop_list[..]) {
+                    reverse_dictionary.insert(pop_list, key);
+                    map.dictionary.insert(key, pop_list.iter().cloned().cloned().collect());
+                }
+            }
+
+            // Throw out reverse_dictionary entries which weren't filled in
+            // above.
+            reverse_dictionary.retain(|_, v| *v != Key::invalid());
+        }
+
+        // Populate the grid based
+        let mut key = Key::default();
         for (coord, pop_list) in coords.iter() {
             map.grid[(coord.2, coord.1, coord.0)] = *reverse_dictionary.entry(&pop_list)
                 .or_insert_with(|| {
-                    let k = key;
-                    key = key.next();
-                    map.dictionary.insert(k, pop_list.iter().cloned().cloned().collect());
-                    k
-                });;
+                    // Just take the first available key.
+                    while map.dictionary.contains_key(&key) {
+                        key = key.next();
+                    }
+                    map.dictionary.insert(key, pop_list.iter().cloned().cloned().collect());
+                    key
+                });
         }
+
+        // Determine key length automatically.
         map.adjust_key_length();
         map
-    }
-
-    pub fn save(&self, _merge_base: Option<&Map>) -> Map {
-        // TODO: perform a map-merge-like operation here
-        self.to_map()
     }
 
     pub fn dim_xyz(&self) -> (u32, u32, u32) {

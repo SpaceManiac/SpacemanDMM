@@ -141,6 +141,10 @@ impl fmt::Display for Prefab {
 }
 
 impl Key {
+    pub fn invalid() -> Key {
+        Key(KeyType::max_value())
+    }
+
     pub fn next(self) -> Key {
         Key(self.0 + 1)
     }

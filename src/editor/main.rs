@@ -1154,7 +1154,7 @@ impl EditorScene {
                     }
                 }
                 let path = map.path.as_ref().unwrap();
-                if let Err(e) = hist.current().save(None).to_file(path) {
+                if let Err(e) = hist.current().save(map.state.base_dmm()).to_file(path) {
                     self.errors.push(format!("Error writing {}:\n{}", path.display(), e));
                 }
             }
@@ -1166,7 +1166,7 @@ impl EditorScene {
             if let Some(hist) = map.state.hist() {
                 if let Ok(nfd::Response::Okay(fname)) = nfd::open_save_dialog(Some("dmm"), None) {
                     let path = PathBuf::from(fname);
-                    if let Err(e) = hist.current().save(None).to_file(&path) {
+                    if let Err(e) = hist.current().save(map.state.base_dmm()).to_file(&path) {
                         self.errors.push(format!("Error writing {}:\n{}", path.display(), e));
                     }
                     if !copy {
