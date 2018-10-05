@@ -20,7 +20,7 @@ impl PaletteEntry {
 }
 
 impl ToolBehavior for Place {
-    fn settings(&mut self, ui: &Ui, env: &Environment) {
+    fn settings(&mut self, ui: &Ui, env: &Environment, _: &mut IconCtx) {
         let mut i = 0;
         let Place { palette, pal_current } = self;
 

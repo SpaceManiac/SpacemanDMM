@@ -37,7 +37,7 @@ pub enum ToolIcon {
 
 #[allow(unused_variables)]
 pub trait ToolBehavior {
-    fn settings(&mut self, ui: &Ui, env: &Environment) {
+    fn settings(&mut self, ui: &Ui, env: &Environment, ctx: &mut IconCtx) {
     }
 
     fn click(&mut self, hist: &mut History, env: &Environment, loc: (u32, u32, u32)) {
@@ -82,12 +82,22 @@ impl Tool {
 impl ToolIcon {
     pub fn prepare(
         &mut self,
-        renderer: &mut ::ImRenderer,
         environment: Option<&Environment>,
-        map_renderer: &mut ::map_renderer::MapRenderer,
+        ctx: &mut IconCtx,
     ) {
         let temp = ::std::mem::replace(self, ToolIcon::None);
-        *self = ::prepare_tool_icon(renderer, environment, map_renderer, temp);
+        *self = ::prepare_tool_icon(ctx.renderer, environment, ctx.map_renderer, temp);
+    }
+}
+
+pub struct IconCtx<'a> {
+    renderer: &'a mut ::ImRenderer,
+    map_renderer: &'a mut ::map_renderer::MapRenderer,
+}
+
+impl<'a> IconCtx<'a> {
+    pub fn new(renderer: &'a mut ::ImRenderer, map_renderer: &'a mut ::map_renderer::MapRenderer) -> Self {
+        IconCtx { renderer, map_renderer }
     }
 }
 
@@ -112,7 +122,7 @@ pub fn configure(_objtree: &ObjectTree) -> Vec<Tool> {
 
 struct Dummy;
 impl ToolBehavior for Dummy {
-    fn settings(&mut self, ui: &Ui, _: &Environment) {
+    fn settings(&mut self, ui: &Ui, _: &Environment, _: &mut IconCtx) {
         ui.text(im_str!("Not yet implemented."));
     }
 }

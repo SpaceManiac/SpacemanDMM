@@ -362,7 +362,7 @@ impl EditorScene {
 
     fn run_ui(&mut self, ui: &Ui, renderer: &mut ImRenderer) -> bool {
         for tool in self.tools.iter_mut() {
-            tool.icon.prepare(renderer, self.environment.as_ref(), &mut self.map_renderer);
+            tool.icon.prepare(self.environment.as_ref(), &mut tools::IconCtx::new(renderer, &mut self.map_renderer));
         }
 
         #[cfg(not(target_os = "macos"))]
@@ -636,7 +636,7 @@ impl EditorScene {
                         ui.text_wrapped(im_str!("{} - {}", tool.name, tool.help));
                     }
                     if let Some(ref env) = self.environment {
-                        tool.behavior.settings(ui, env);
+                        tool.behavior.settings(ui, env, &mut tools::IconCtx::new(renderer, &mut self.map_renderer));
                     } else if self.loading_env.is_some() {
                         ui.text(im_str!("The environment is loading..."));
                     } else {
