@@ -4,28 +4,28 @@ use {UiExt, EditPrefab, RetainMut};
 /// The standard placement tool.
 #[derive(Default)]
 pub struct Place {
-    fabs: Vec<PlaceFab>,
-    fab_current: usize,
+    palette: Vec<PaletteEntry>,
+    pal_current: usize,
 }
 
-struct PlaceFab {
+struct PaletteEntry {
     fab: Prefab,
     edit: Option<EditPrefab>,
 }
 
-impl PlaceFab {
-    fn new(fab: Prefab) -> PlaceFab {
-        PlaceFab { fab, edit: None }
+impl PaletteEntry {
+    fn new(fab: Prefab) -> PaletteEntry {
+        PaletteEntry { fab, edit: None }
     }
 }
 
 impl ToolBehavior for Place {
     fn settings(&mut self, ui: &Ui, env: &Environment) {
         let mut i = 0;
-        let fab_current = &mut self.fab_current;
+        let Place { palette, pal_current } = self;
 
         let count = ui.fits_width(32.0);
-        self.fabs.retain_mut(|fab| {
+        palette.retain_mut(|fab| {
             if i % count != 0 {
                 ui.same_line(0.0);
             }
@@ -36,7 +36,7 @@ impl ToolBehavior for Place {
             if ui.is_item_hovered() {
                 ui.tooltip_text(im_str!("{:#}", fab.fab));
                 if ui.imgui().is_mouse_clicked(ImMouseButton::Left) {
-                    *fab_current = i;
+                    *pal_current = i;
                 } else if ui.imgui().is_mouse_clicked(ImMouseButton::Right) {
                     if fab.edit.is_none() {
                         fab.edit = Some(EditPrefab::new(fab.fab.clone()));
@@ -47,7 +47,7 @@ impl ToolBehavior for Place {
             let mut keep_editor = true;
             if let Some(ref mut edit) = fab.edit {
                 let fab_fab = &mut fab.fab;
-                ui.window(im_str!("{}##place/{}", edit.fab.path, i))
+                ui.window(im_str!("Palette: {}##place/{}", edit.fab.path, i))
                     .opened(&mut keep_editor)
                     .position(ui.imgui().mouse_pos(), ImGuiCond::Appearing)
                     .size((350.0, 500.0), ImGuiCond::FirstUseEver)
@@ -73,8 +73,8 @@ impl ToolBehavior for Place {
             }
 
             // wrapping things up
-            if !keep && *fab_current > i {
-                *fab_current -= 1;
+            if !keep && *pal_current > i {
+                *pal_current -= 1;
             }
             i += 1;
             keep
@@ -84,16 +84,29 @@ impl ToolBehavior for Place {
             ui.same_line(0.0);
         }
         if ui.button(im_str!("+"), (32.0, 32.0)) {
-            *fab_current = self.fabs.len();
-            self.fabs.push(PlaceFab::new(Prefab {
-                path: "/obj/item/lighter".to_owned(),
-                vars: Default::default(),
-            }));
+            ui.open_popup(im_str!("place_tool_add"));
         }
+        if ui.is_item_hovered() {
+            ui.tooltip_text(im_str!("Add"));
+        }
+
+        ui.popup(im_str!("place_tool_add"), || {
+            if ui.menu_item(im_str!("/obj/item/lighter")).build() {
+                *pal_current = palette.len();
+                let new_fab = Prefab {
+                    path: "/obj/item/lighter".to_owned(),
+                    vars: Default::default(),
+                };
+                palette.push(PaletteEntry {
+                    fab: new_fab.clone(),
+                    edit: Some(EditPrefab::new(new_fab)),
+                });
+            }
+        });
     }
 
     fn click(&mut self, hist: &mut History, env: &Environment, loc: (u32, u32, u32)) {
-        if let Some(fab) = self.fabs.get(self.fab_current) {
+        if let Some(fab) = self.palette.get(self.pal_current) {
             let fab = fab.fab.clone();
             hist.edit(env, "TODO".to_owned(), move |env, world| {
                 let pop = world.add_pop(&fab, &env.icons, &env.objtree);
@@ -106,14 +119,14 @@ impl ToolBehavior for Place {
     }
 
     fn pick(&mut self, prefab: &Prefab) {
-        for (i, fab) in self.fabs.iter().enumerate() {
+        for (i, fab) in self.palette.iter().enumerate() {
             if fab.fab == *prefab {
-                self.fab_current = i;
+                self.pal_current = i;
                 return;
             }
         }
-        self.fab_current = self.fabs.len();
-        self.fabs.push(PlaceFab::new(prefab.clone()));
+        self.pal_current = self.palette.len();
+        self.palette.push(PaletteEntry::new(prefab.clone()));
     }
 }
 
