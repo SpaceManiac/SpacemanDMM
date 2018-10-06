@@ -57,8 +57,8 @@ impl Map {
 
         let mut dictionary = BTreeMap::new();
         dictionary.insert(Key(0), vec![
-            Prefab { path: turf, vars: Default::default() },
-            Prefab { path: area, vars: Default::default() },
+            Prefab::from_path(turf),
+            Prefab::from_path(area),
         ]);
 
         let grid = Array3::default((z, y, x));  // default = 0
@@ -112,6 +112,12 @@ impl Map {
 
     pub fn one_to_zero(&self, (x, y, z): (usize, usize, usize)) -> (usize, usize, usize) {
         (x - 1, self.grid.dim().1 - y, z - 1)
+    }
+}
+
+impl Prefab {
+    pub fn from_path<S: Into<String>>(path: S) -> Prefab {
+        Prefab { path: path.into(), vars: Default::default() }
     }
 }
 

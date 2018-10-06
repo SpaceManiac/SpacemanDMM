@@ -102,10 +102,7 @@ impl ToolBehavior for Place {
             let mut selection = None;
             ui.objtree_menu(env, &mut selection);
             if let Some(sel) = selection {
-                let fab = Prefab {
-                    path: sel.path.to_owned(),
-                    vars: Default::default(),
-                };
+                let fab = Prefab::from_path(&sel.path);
                 let mut entry = PaletteEntry::new(env, fab);
                 if ui.imgui().key_shift() {
                     entry.edit = Some(EditPrefab::new(entry.fab.clone()));
