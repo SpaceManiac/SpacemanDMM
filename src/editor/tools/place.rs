@@ -10,43 +10,51 @@ pub struct Place {
 
 struct PaletteEntry {
     fab: Prefab,
+    icon: ToolIcon,
     edit: Option<EditPrefab>,
 }
 
 impl PaletteEntry {
-    fn new(fab: Prefab) -> PaletteEntry {
-        PaletteEntry { fab, edit: None }
+    fn new(env: &Environment, fab: Prefab) -> PaletteEntry {
+        PaletteEntry {
+            icon: ToolIcon::from_atom(env, &fab).unwrap_or(ToolIcon::None),
+            edit: None,
+            fab,
+        }
     }
 }
 
 impl ToolBehavior for Place {
-    fn settings(&mut self, ui: &Ui, env: &Environment, _: &mut IconCtx) {
+    fn settings(&mut self, ui: &Ui, env: &Environment, ctx: &mut IconCtx) {
         let mut i = 0;
         let Place { palette, pal_current } = self;
 
-        let count = ui.fits_width(32.0);
-        palette.retain_mut(|fab| {
+        let count = ui.fits_width(34.0);
+        palette.retain_mut(|pal| {
             if i % count != 0 {
                 ui.same_line(0.0);
             }
 
             let mut keep = true;
-            //ui.small_button(im_str!("{}. {}", i, fab.path));
-            ui.button(im_str!(""), (32.0, 32.0));
+            ui.tool_icon(
+                i == *pal_current,
+                pal.icon.prepare(Some(env), ctx),
+                im_str!("{}", pal.fab.path),
+            );
             if ui.is_item_hovered() {
-                ui.tooltip_text(im_str!("{:#}", fab.fab));
+                ui.tooltip_text(im_str!("{:#}", pal.fab));
                 if ui.imgui().is_mouse_clicked(ImMouseButton::Left) {
                     *pal_current = i;
                 } else if ui.imgui().is_mouse_clicked(ImMouseButton::Right) {
-                    if fab.edit.is_none() {
-                        fab.edit = Some(EditPrefab::new(fab.fab.clone()));
+                    if pal.edit.is_none() {
+                        pal.edit = Some(EditPrefab::new(pal.fab.clone()));
                     }
                 }
             }
 
             let mut keep_editor = true;
-            if let Some(ref mut edit) = fab.edit {
-                let fab_fab = &mut fab.fab;
+            if let Some(ref mut edit) = pal.edit {
+                let fab = &mut pal.fab;
                 ui.window(im_str!("Palette: {}##place/{}", edit.fab.path, i))
                     .opened(&mut keep_editor)
                     .position(ui.imgui().mouse_pos(), ImGuiCond::Appearing)
@@ -56,7 +64,7 @@ impl ToolBehavior for Place {
                     .build(|| {
                         ui.menu_bar(|| {
                             if ui.menu_item(im_str!("Apply")).build() {
-                                fab_fab.clone_from(&edit.fab);
+                                fab.clone_from(&edit.fab);
                             }
                             ui.separator();
                             if ui.menu_item(im_str!("Remove")).build() {
@@ -69,7 +77,7 @@ impl ToolBehavior for Place {
                     });
             }
             if !keep_editor {
-                fab.edit = None;
+                pal.edit = None;
             }
 
             // wrapping things up
@@ -83,7 +91,7 @@ impl ToolBehavior for Place {
         if i % count != 0 {
             ui.same_line(0.0);
         }
-        if ui.button(im_str!("+"), (32.0, 32.0)) {
+        if ui.button(im_str!("+"), (34.0, 34.0)) {
             ui.open_popup(im_str!("place_tool_add"));
         }
         if ui.is_item_hovered() {
@@ -94,19 +102,17 @@ impl ToolBehavior for Place {
             let mut selection = None;
             ui.objtree_menu(env, &mut selection);
             if let Some(sel) = selection {
-                let new_fab = Prefab {
+                let fab = Prefab {
                     path: sel.path.to_owned(),
                     vars: Default::default(),
                 };
+                let mut entry = PaletteEntry::new(env, fab);
+                if ui.imgui().key_shift() {
+                    entry.edit = Some(EditPrefab::new(entry.fab.clone()));
+                }
+
                 *pal_current = palette.len();
-                palette.push(PaletteEntry {
-                    fab: new_fab.clone(),
-                    edit: if ui.imgui().key_shift() {
-                        Some(EditPrefab::new(new_fab))
-                    } else {
-                        None
-                    },
-                });
+                palette.push(entry);
             }
         });
     }
@@ -124,7 +130,7 @@ impl ToolBehavior for Place {
         }
     }
 
-    fn pick(&mut self, prefab: &Prefab) {
+    fn pick(&mut self, env: &Environment, prefab: &Prefab) {
         for (i, fab) in self.palette.iter().enumerate() {
             if fab.fab == *prefab {
                 self.pal_current = i;
@@ -132,7 +138,6 @@ impl ToolBehavior for Place {
             }
         }
         self.pal_current = self.palette.len();
-        self.palette.push(PaletteEntry::new(prefab.clone()));
+        self.palette.push(PaletteEntry::new(env, prefab.clone()));
     }
 }
-

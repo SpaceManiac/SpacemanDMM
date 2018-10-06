@@ -1,5 +1,7 @@
 //! Placement and editing tools which appear in the workbench.
 
+use std::path::PathBuf;
+
 use imgui::*;
 
 use dm::dmi;
@@ -21,7 +23,7 @@ pub struct Tool {
 pub enum ToolIcon {
     None,
     Dmi {
-        icon: String,
+        icon: PathBuf,
         icon_state: String,
         dir: i32,
     },
@@ -43,7 +45,7 @@ pub trait ToolBehavior {
     fn click(&mut self, hist: &mut History, env: &Environment, loc: (u32, u32, u32)) {
     }
 
-    fn pick(&mut self, prefab: &Prefab) {
+    fn pick(&mut self, env: &Environment, prefab: &Prefab) {
     }
 }
 
@@ -66,7 +68,7 @@ impl Tool {
         Tool { objtree: true, ..self }
     }
 
-    fn dmi(self, icon: String, icon_state: String) -> Self {
+    fn dmi(self, icon: PathBuf, icon_state: String) -> Self {
         Tool { icon: ToolIcon::Dmi { icon, icon_state, dir: dmi::SOUTH }, ..self }
     }
 
@@ -80,13 +82,40 @@ impl Tool {
 }
 
 impl ToolIcon {
+    pub fn from_atom(env: &Environment, prefab: &Prefab) -> Option<ToolIcon> {
+        let (_, ty) = env.find_closest_type(&prefab.path);
+        let ty = ty?;
+
+        let icon = prefab.vars.get("icon")
+            .or_else(|| ty.get_value("icon")?.constant.as_ref())?
+            .as_path()?
+            .to_owned();
+        let icon_state = prefab.vars.get("icon_state")
+            .or_else(|| ty.get_value("icon_state")
+                .and_then(|v| v.constant.as_ref()))
+            .and_then(|v| v.as_str())
+            .unwrap_or("").to_owned();
+        let dir = prefab.vars.get("dir")
+            .or_else(|| ty.get_value("dir")
+                .and_then(|v| v.constant.as_ref()))
+            .and_then(|v| v.to_int())
+            .unwrap_or(dmi::SOUTH);
+
+        Some(ToolIcon::Dmi {
+            icon,
+            icon_state,
+            dir,
+        })
+    }
+
     pub fn prepare(
         &mut self,
         environment: Option<&Environment>,
         ctx: &mut IconCtx,
-    ) {
+    ) -> &mut Self {
         let temp = ::std::mem::replace(self, ToolIcon::None);
         *self = ::prepare_tool_icon(ctx.renderer, environment, ctx.map_renderer, temp);
+        self
     }
 }
 

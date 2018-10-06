@@ -603,24 +603,7 @@ impl EditorScene {
                         ui.same_line(0.0);
                     }
 
-                    let col = if i == self.tool_current {
-                        ui.imgui().style().colors[ImGuiCol::FrameBgActive as usize]
-                    } else {
-                        ui.imgui().style().colors[ImGuiCol::FrameBg as usize]
-                    };
-                    let clicked;
-                    if let tools::ToolIcon::Loaded { tex, uv0, uv1 } = tool.icon {
-                        ui.image(tex, (32.0, 32.0))
-                            .uv0(uv0)
-                            .uv1(uv1)
-                            .border_col(col)
-                            .tint_col(ui.imgui().style().colors[ImGuiCol::Text as usize])
-                            .build();
-                        clicked = ui.is_item_hovered() && ui.imgui().is_mouse_clicked(ImMouseButton::Left);
-                    } else {
-                        clicked = ui.button(im_str!("{}", tool.name), (32.0, 32.0));
-                    }
-                    if clicked {
+                    if ui.tool_icon(i == self.tool_current, &tool.icon, im_str!("{}", tool.name)) {
                         self.tool_current = i;
                     }
                     if ui.is_item_hovered() {
@@ -844,7 +827,9 @@ impl EditorScene {
                             ui.separator();
                             if ui.menu_item(im_str!("Pick")).build() {
                                 if let Some(tool) = tools.get_mut(tool_current) {
-                                    tool.behavior.pick(&base.fab);
+                                    if let Some(env) = env {
+                                        tool.behavior.pick(&env, &base.fab);
+                                    }
                                 }
                             }
                             ui.separator();
@@ -1219,6 +1204,22 @@ impl EditorScene {
 // ---------------------------------------------------------------------------
 // Helpers
 
+impl Environment {
+    fn find_closest_type(&self, mut path: &str) -> (bool, Option<TypeRef>) {
+        // find the "best" type by chopping the path if needed
+        let mut ty = self.objtree.find(path);
+        let red_paths = ty.is_none();
+        while ty.is_none() && !path.is_empty() {
+            match path.rfind("/") {
+                Some(idx) => path = &path[..idx],
+                None => break,
+            }
+            ty = self.objtree.find(path);
+        }
+        (red_paths, ty)
+    }
+}
+
 impl EditorMap {
     fn clamp_center(&mut self) {
         if let Some(hist) = self.state.hist() {
@@ -1275,20 +1276,11 @@ impl EditPrefab {
         let EditPrefab { ref mut filter, ref mut fab } = self;
 
         // find the "best" type by chopping the path if needed
-        let mut ty = None;
-        let mut red_paths = true;
-        if let Some(env) = env {
-            let mut path = fab.path.as_str();
-            ty = env.objtree.find(path);
-            red_paths = ty.is_none();
-            while ty.is_none() && !path.is_empty() {
-                match path.rfind("/") {
-                    Some(idx) => path = &path[..idx],
-                    None => break,
-                }
-                ty = env.objtree.find(path);
-            }
-        }
+        let (red_paths, ty) = if let Some(env) = env.as_ref() {
+            env.find_closest_type(&fab.path)
+        } else {
+            (true, None)
+        };
 
         // loop through instance vars, that type, parent types
         // to find the longest var name for the column width
@@ -1508,6 +1500,7 @@ impl<T> Fulfill<T> for Option<T> {
 trait UiExt {
     fn fits_width(&self, width: f32) -> usize;
     fn objtree_menu<'e>(&self, env: &'e Environment, selection: &mut Option<TypeRef<'e>>);
+    fn tool_icon(&self, active: bool, icon: &tools::ToolIcon, fallback: &ImStr) -> bool;
 }
 
 impl<'a> UiExt for Ui<'a> {
@@ -1522,6 +1515,25 @@ impl<'a> UiExt for Ui<'a> {
         objtree_menu_root(self, root, "turf", selection);
         objtree_menu_root(self, root, "obj", selection);
         objtree_menu_root(self, root, "mob", selection);
+    }
+
+    fn tool_icon(&self, active: bool, icon: &tools::ToolIcon, fallback: &ImStr) -> bool {
+        if let &tools::ToolIcon::Loaded { tex, uv0, uv1 } = icon {
+            let col = if active {
+                self.imgui().style().colors[ImGuiCol::FrameBgActive as usize]
+            } else {
+                self.imgui().style().colors[ImGuiCol::FrameBg as usize]
+            };
+            self.image(tex, (32.0, 32.0))
+                .uv0(uv0)
+                .uv1(uv1)
+                .border_col(col)
+                .tint_col(self.imgui().style().colors[ImGuiCol::Text as usize])
+                .build();
+            self.is_item_hovered() && self.imgui().is_mouse_clicked(ImMouseButton::Left)
+        } else {
+            self.button(fallback, (34.0, 34.0))
+        }
     }
 }
 
