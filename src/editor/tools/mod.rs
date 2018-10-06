@@ -12,6 +12,8 @@ use {History, Environment};
 
 mod place;
 
+pub const NO_TINT: ImVec4 = ImVec4 { x: 1.0, y: 1.0, z: 1.0, w: 1.0 };
+
 pub struct Tool {
     pub name: &'static str,
     pub help: &'static str,
@@ -25,6 +27,7 @@ pub enum ToolIcon {
     Dmi {
         icon: PathBuf,
         icon_state: String,
+        tint: ImVec4,
         dir: i32,
     },
     EmbeddedPng {
@@ -33,7 +36,8 @@ pub enum ToolIcon {
     Loaded {
         tex: ImTexture,
         uv0: ImVec2,
-        uv1: ImVec2
+        uv1: ImVec2,
+        tint: Option<ImVec4>,
     },
 }
 
@@ -69,7 +73,7 @@ impl Tool {
     }
 
     fn dmi(self, icon: PathBuf, icon_state: String) -> Self {
-        Tool { icon: ToolIcon::Dmi { icon, icon_state, dir: dmi::SOUTH }, ..self }
+        Tool { icon: ToolIcon::Dmi { icon, icon_state, tint: NO_TINT, dir: dmi::SOUTH }, ..self }
     }
 
     fn png(self, data: &'static [u8]) -> Self {
@@ -100,11 +104,17 @@ impl ToolIcon {
                 .and_then(|v| v.constant.as_ref()))
             .and_then(|v| v.to_int())
             .unwrap_or(dmi::SOUTH);
+        let color = ::dmm_tools::minimap::color_of(&env.objtree, prefab);
+        let tint = [
+            color[0] as f32 / 255.0, color[1] as f32 / 255.0,
+            color[2] as f32 / 255.0, color[3] as f32 / 255.0,
+        ].into();
 
         Some(ToolIcon::Dmi {
             icon,
             icon_state,
             dir,
+            tint,
         })
     }
 

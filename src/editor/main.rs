@@ -1422,7 +1422,7 @@ fn prepare_tool_icon(
 ) -> tools::ToolIcon {
     use tools::ToolIcon;
     match icon {
-        ToolIcon::Dmi { icon, icon_state, dir } => if let Some(env) = environment {
+        ToolIcon::Dmi { icon, icon_state, tint, dir } => if let Some(env) = environment {
             if let Some(id) = env.icons.get_index(icon.as_ref()) {
                 let icon = env.icons.get_icon(id);
                 if let Some([u1, v1, u2, v2]) = icon.uv_of(&icon_state, dir) {
@@ -1436,6 +1436,7 @@ fn prepare_tool_icon(
                         tex: renderer.textures().insert((tex, samp)),
                         uv0: (u1, v1).into(),
                         uv1: (u2, v2).into(),
+                        tint: Some(tint),
                     }
                 } else {
                     ToolIcon::None
@@ -1444,7 +1445,7 @@ fn prepare_tool_icon(
                 ToolIcon::None
             }
         } else {
-            ToolIcon::Dmi { icon, icon_state, dir }
+            ToolIcon::Dmi { icon, icon_state, tint, dir }
         },
         ToolIcon::EmbeddedPng { data } => if let Ok(tex) = dmi::texture_from_bytes(&mut map_renderer.factory, data) {
             let samp = map_renderer.sampler.clone();
@@ -1452,6 +1453,7 @@ fn prepare_tool_icon(
                 tex: renderer.textures().insert((tex, samp)),
                 uv0: (0.0, 0.0).into(),
                 uv1: (1.0, 1.0).into(),
+                tint: None,
             }
         } else {
             ToolIcon::None
@@ -1518,7 +1520,7 @@ impl<'a> UiExt for Ui<'a> {
     }
 
     fn tool_icon(&self, active: bool, icon: &tools::ToolIcon, fallback: &ImStr) -> bool {
-        if let &tools::ToolIcon::Loaded { tex, uv0, uv1 } = icon {
+        if let &tools::ToolIcon::Loaded { tex, uv0, uv1, tint } = icon {
             let col = if active {
                 self.imgui().style().colors[ImGuiCol::FrameBgActive as usize]
             } else {
@@ -1528,7 +1530,7 @@ impl<'a> UiExt for Ui<'a> {
                 .uv0(uv0)
                 .uv1(uv1)
                 .border_col(col)
-                .tint_col(self.imgui().style().colors[ImGuiCol::Text as usize])
+                .tint_col(tint.unwrap_or(self.imgui().style().colors[ImGuiCol::Text as usize]))
                 .build();
             self.is_item_hovered() && self.imgui().is_mouse_clicked(ImMouseButton::Left)
         } else {
