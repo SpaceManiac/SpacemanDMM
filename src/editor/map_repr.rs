@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use weak_table::WeakKeyHashMap;
 
 use dmm_tools::dmm::{Map, Prefab, Key};
-use dm::objtree::ObjectTree;
+use dm::objtree::{ObjectTree, subpath};
 
 use dmi::IconCache;
 use map_renderer::{RenderPop, Vertex, DrawCall};
@@ -102,7 +102,7 @@ impl AtomMap {
         // Map the instance space down to tiles.
         let mut coords = HashMap::<(usize, usize, usize), Vec<&Prefab>>::new();
         for (z, level) in self.levels.iter().enumerate() {
-            for inst in level.instances.keys.iter() {
+            for (_, inst) in level.instances.keys_iter() {
                 coords.entry((inst.x as usize, (self.size.1 - 1 - inst.y) as usize, z as usize))
                     .or_default()
                     .push(&inst.pop);
@@ -204,8 +204,24 @@ impl AtomMap {
     }
 
     pub fn add_instance(&mut self, (x, y, z): (u32, u32, u32), prefab: Arc<Prefab>) -> AddedInstance {
-        let pops = &mut self.pops;
         let level = &mut self.levels[z as usize];
+
+        let mut replaced = None;
+        if let Some(replace) = should_replace(&prefab.path, "/turf/", "/area/") {
+            let mut old_instance = None;
+            // TODO: use a more efficient structure for this lookup
+            for (idx, inst) in level.instances.keys_iter() {
+                if inst.x == x && inst.y == y && subpath(&inst.pop.path, replace) {
+                    old_instance = Some(idx);
+                    break;
+                }
+            }
+            if let Some(idx) = old_instance {
+                replaced = Some(level.remove_instance(z, idx).old);
+            }
+        }
+
+        let pops = &mut self.pops;
         let new_instance = level.prep_instance(pops, (x, y), prefab);
         let sorted_order = &mut level.sorted_order;
         let instances = &mut level.instances;
@@ -267,12 +283,16 @@ impl AtomMap {
 
         AddedInstance {
             id: InstanceId { z, idx: new_instance },
-            replaced: None,
+            replaced,
         }
     }
 
     pub fn undo_add_instance(&mut self, added: &AddedInstance) {
-        self.remove_instance(added.id.clone());
+        if let Some(replaced) = added.replaced.as_ref() {
+            self.add_instance((replaced.x, replaced.y, added.id.z), replaced.pop.clone());
+        } else {
+            self.remove_instance(added.id.clone());
+        }
     }
 
     pub fn get_instance(&self, id: &InstanceId) -> Option<&Instance> {
@@ -287,29 +307,7 @@ impl AtomMap {
 
     pub fn remove_instance(&mut self, id: InstanceId) -> RemovedInstance {
         let level = &mut self.levels[id.z as usize];
-        let draw_calls = &mut level.draw_calls;
-        let old = level.instances.keys[id.idx].clone();
-        level.instances.free(id.idx);
-
-        if let Some(pos) = level.sorted_order.iter().position(|&idx| idx == id.idx) {
-            level.sorted_order.remove(pos);
-            level.index_buffer.get_mut().remove(pos);
-            level.buffers_dirty.set(true);
-
-            // find the draw call which previously contained the index
-            let pos = 6 * (pos as u32);
-            let (draw_call, _) = find_draw_call(draw_calls, pos);
-            draw_calls[draw_call].len -= 6;
-            if draw_calls[draw_call].len == 0 {
-                draw_calls.remove(draw_call);
-            }
-        }
-
-        RemovedInstance {
-            z: id.z,
-            old,
-            replaced_with: None,
-        }
+        level.remove_instance(id.z, id.idx)
     }
 
     pub fn undo_remove_instance(&mut self, removed: &RemovedInstance, icons: &IconCache, objtree: &ObjectTree) {
@@ -389,6 +387,32 @@ impl AtomZ {
             .map_or_else(|| [Vertex::default(); 4], |rpop| rpop.instance((x, y)));
         self.instances.push(Instance { x, y, pop: prefab }, vertices)
     }
+
+    fn remove_instance(&mut self, z: u32, idx: usize) -> RemovedInstance {
+        let draw_calls = &mut self.draw_calls;
+        let old = self.instances.keys[idx].clone();
+        self.instances.free(idx);
+
+        if let Some(pos) = self.sorted_order.iter().position(|&s_idx| s_idx == idx) {
+            self.sorted_order.remove(pos);
+            self.index_buffer.get_mut().remove(pos);
+            self.buffers_dirty.set(true);
+
+            // find the draw call which previously contained the index
+            let pos = 6 * (pos as u32);
+            let (draw_call, _) = find_draw_call(draw_calls, pos);
+            draw_calls[draw_call].len -= 6;
+            if draw_calls[draw_call].len == 0 {
+                draw_calls.remove(draw_call);
+            }
+        }
+
+        RemovedInstance {
+            z,
+            old,
+            replaced_with: None,
+        }
+    }
 }
 
 impl<'a> Defer<'a> {
@@ -454,6 +478,11 @@ impl<K, V> DualPool<K, V> {
     pub fn len(&self) -> usize {
         self.keys.len() - self.freelist.len()
     }
+
+    pub fn keys_iter<'a>(&'a self) -> impl Iterator<Item=(usize, &'a K)> + 'a {
+        self.keys.iter().enumerate()
+            .filter(move |(i, _)| !self.freelist.contains(i))
+    }
 }
 
 fn indices(inst: usize) -> [u32; 6] {
@@ -472,4 +501,14 @@ fn find_draw_call(draw_calls: &[DrawCall], pos: u32) -> (usize, u32) {
         start += call.len;
     }
     (draw_call, start)
+}
+
+fn should_replace<'v>(path: &str, turf: &'v str, area: &'v str) -> Option<&'v str> {
+    if subpath(path, "/turf/") {
+        Some(turf)
+    } else if subpath(path, "/area/") {
+        Some(area)
+    } else {
+        None
+    }
 }
