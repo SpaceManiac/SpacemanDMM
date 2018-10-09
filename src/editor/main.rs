@@ -652,8 +652,9 @@ impl EditorScene {
             .resizable(!self.ui_lock_windows)
             .build(|| {
                 for (map_idx, map) in self.maps.iter_mut().enumerate() {
+                    let dirty = map.state.hist().map_or(false, |h| h.is_dirty());
                     let title = match map.path {
-                        Some(ref path) => format!("{}##map_{}", file_name(path), path.display()),
+                        Some(ref path) => format!("{}{}##map_{}", file_name(path), if dirty { " *" } else { "" }, path.display()),
                         None => format!("Untitled##{}", map_idx),
                     };
                     if ui.collapsing_header(&ImString::from(title)).default_open(true).build() {
@@ -1139,6 +1140,7 @@ impl EditorScene {
                 if let Err(e) = hist.current().save(map.state.base_dmm()).to_file(path) {
                     self.errors.push(format!("Error writing {}:\n{}", path.display(), e));
                 }
+                hist.mark_clean();
             }
         }
     }
@@ -1153,6 +1155,7 @@ impl EditorScene {
                     }
                     if !copy {
                         map.path = Some(path);
+                        hist.mark_clean();
                     }
                 }
             }

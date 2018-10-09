@@ -1,5 +1,7 @@
 //! Reified undo/redo history tree.
 
+use std::cell::Cell;
+
 use petgraph::Direction;
 use petgraph::graph::{NodeIndex, Graph};
 use petgraph::visit::EdgeRef;
@@ -7,6 +9,7 @@ use petgraph::visit::EdgeRef;
 pub struct History<T, E> {
     current: T,
     idx: NodeIndex,
+    clean_idx: Cell<NodeIndex>,
     graph: Graph<Entry, Edit<T, E>>,
 }
 
@@ -28,6 +31,7 @@ impl<T, E> History<T, E> {
         History {
             current,
             idx,
+            clean_idx: Cell::new(idx),
             graph,
         }
     }
@@ -40,6 +44,14 @@ impl<T, E> History<T, E> {
         // TODO: somehow verify that the new value is semantically equivalent
         // to what we currently have.
         self.current = new;
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        self.clean_idx.get() != self.idx
+    }
+
+    pub fn mark_clean(&self) {
+        self.clean_idx.set(self.idx);
     }
 
     pub fn edit<F: 'static + Fn(&E, &mut T) -> Box<Fn(&E, &mut T)>>(&mut self, env: &E, desc: String, f: F) {
