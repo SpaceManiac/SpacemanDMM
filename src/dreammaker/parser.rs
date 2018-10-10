@@ -1594,6 +1594,10 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                 None => Term::Ident(i.to_owned())
             },
 
+            Token::Ident(ref i, _) if i == "null" => {
+                Term::Null
+            }, 
+
             // term :: ident arglist | ident
             Token::Ident(i, _) => {
                 let first_token = self.updated_location();
@@ -1631,7 +1635,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                     dot_loc.column += 1;
                     self.annotate_precise(dot_loc..dot_loc, || Annotation::IncompleteTypePath(Vec::new(), PathOp::Dot));
                     self.annotate(start, || Annotation::ReturnVal);
-                    Term::Ident(".".to_owned())
+                    Term::ReturnValue
                 }
             },
             // term :: path_lit
