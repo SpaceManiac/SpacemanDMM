@@ -1596,7 +1596,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
 
             Token::Ident(ref i, _) if i == "null" => {
                 Term::Null
-            }, 
+            },
 
             // term :: ident arglist | ident
             Token::Ident(i, _) => {

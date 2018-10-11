@@ -580,7 +580,7 @@ impl<'a> ConstantFolder<'a> {
                 _ => return Err(self.error(format!("non-constant function call: {}", ident)))
             },
             Term::Prefab(prefab) => Constant::Prefab(self.prefab(prefab)?),
-            Term::Ident(ident) => self.ident(ident, type_hint, false)?,
+            Term::Ident(ident) => self.ident(ident, false)?,
             Term::String(v) => Constant::String(v),
             Term::Resource(v) => Constant::Resource(v),
             Term::Int(v) => Constant::Int(v),
@@ -599,13 +599,9 @@ impl<'a> ConstantFolder<'a> {
         Ok(Prefab { path: prefab.path, vars })
     }
 
-    fn ident(&mut self, ident: String, type_hint: Option<&TreePath>, must_be_static: bool) -> Result<Constant, DMError> {
-        if ident == "null" {
-            Ok(Constant::Null(type_hint.cloned()))
-        } else {
-            let ty = self.ty;
-            self.recursive_lookup(ty, &ident, must_be_static)
-        }
+    fn ident(&mut self, ident: String, must_be_static: bool) -> Result<Constant, DMError> {
+        let ty = self.ty;
+        self.recursive_lookup(ty, &ident, must_be_static)
     }
 
     fn recursive_lookup(&mut self, ty: NodeIndex, ident: &str, must_be_static: bool) -> Result<Constant, DMError> {
