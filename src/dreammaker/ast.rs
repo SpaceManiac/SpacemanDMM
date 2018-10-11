@@ -389,8 +389,6 @@ pub enum Term {
     Float(f32),
     /// An expression contained in a term.
     Expr(Box<Expression>),
-    /// The current proc's return value (`.`).
-    ReturnValue,
     /// A use of the `call()()` primitive.
     DynamicCall(Vec<Expression>, Vec<Expression>),
     /// An interpolated string, alternating string/expr/string/expr.

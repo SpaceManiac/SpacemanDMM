@@ -1635,7 +1635,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
                     dot_loc.column += 1;
                     self.annotate_precise(dot_loc..dot_loc, || Annotation::IncompleteTypePath(Vec::new(), PathOp::Dot));
                     self.annotate(start, || Annotation::ReturnVal);
-                    Term::ReturnValue
+                    Term::Ident(".".to_owned())
                 }
             },
             // term :: path_lit
