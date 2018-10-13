@@ -347,16 +347,12 @@ impl EditorScene {
                 if !self.stacked_rendering {  // normal rendering
                     levels.push(map.z_current);
                 } else if !self.stacked_inverted {  // stacked rendering
-                    for z in map.z_current..map.rendered.len() {
-                        levels.push(z);
-                    }
+                    levels.extend((map.z_current..map.rendered.len()).rev());
                 } else {  // inverted stacked rendering
-                    for z in (0..=map.z_current).rev() {
-                        levels.push(z);
-                    }
+                    levels.extend(0..=map.z_current);
                 }
 
-                for &z in levels.iter().rev() {
+                for z in levels {
                     if let Some(rendered) = map.rendered.get_mut(z) {
                         rendered.fulfill(|| {
                             map_renderer.render(
