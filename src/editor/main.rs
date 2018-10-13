@@ -97,6 +97,8 @@ pub struct EditorScene {
     ui_debug_window: bool,
     ui_errors: bool,
     ui_extra_vars: bool,
+    stacked_rendering: bool,
+    stacked_inverted: bool,
 }
 
 pub struct Environment {
@@ -193,6 +195,8 @@ impl EditorScene {
             ui_debug_window: true,
             ui_errors: false,
             ui_extra_vars: false,
+            stacked_rendering: false,
+            stacked_inverted: false,
         };
         ed.finish_init();
         ed
@@ -337,24 +341,38 @@ impl EditorScene {
 
         if let Some(map) = self.maps.get_mut(self.map_current) {
             if let Some(hist) = map.state.hist() {
-                let z_current = map.z_current;
                 let map_renderer = &mut self.map_renderer;
                 let factory = &mut self.factory;
-                if let Some(rendered) = map.rendered.get_mut(map.z_current) {
-                    rendered.fulfill(|| {
-                        map_renderer.render(
+                let mut levels = Vec::new();
+                if !self.stacked_rendering {  // normal rendering
+                    levels.push(map.z_current);
+                } else if !self.stacked_inverted {  // stacked rendering
+                    for z in map.z_current..map.rendered.len() {
+                        levels.push(z);
+                    }
+                } else {  // inverted stacked rendering
+                    for z in (0..=map.z_current).rev() {
+                        levels.push(z);
+                    }
+                }
+
+                for &z in levels.iter().rev() {
+                    if let Some(rendered) = map.rendered.get_mut(z) {
+                        rendered.fulfill(|| {
+                            map_renderer.render(
+                                hist.current(),
+                                z as u32,
+                            )
+                        }).paint(
+                            map_renderer,
                             hist.current(),
-                            z_current as u32,
-                        )
-                    }).paint(
-                        map_renderer,
-                        hist.current(),
-                        map.z_current as u32,
-                        map.center,
-                        factory,
-                        encoder,
-                        &self.target,
-                    );
+                            z as u32,
+                            map.center,
+                            factory,
+                            encoder,
+                            &self.target,
+                        );
+                    }
                 }
             }
         }
@@ -487,6 +505,13 @@ impl EditorScene {
                     .build();
                 ui.menu_item(im_str!("Show extra variables"))
                     .selected(&mut self.ui_extra_vars)
+                    .build();
+                ui.separator();
+                ui.menu_item(im_str!("Stacked rendering"))
+                    .selected(&mut self.stacked_rendering)
+                    .build();
+                ui.menu_item(im_str!("Invert order"))
+                    .selected(&mut self.stacked_inverted)
                     .build();
                 ui.separator();
                 for &zoom in [0.5, 1.0, 2.0, 4.0].iter() {
