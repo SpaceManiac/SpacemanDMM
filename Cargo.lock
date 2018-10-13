@@ -523,26 +523,26 @@ dependencies = [
 
 [[package]]
 name = "imgui"
-version = "0.0.21-pre"
-source = "git+https://github.com/Gekkio/imgui-rs?rev=6ccfbf03#6ccfbf030539f4a6cef95b52814d63019acc5031"
+version = "0.0.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "imgui-sys 0.0.21-pre (git+https://github.com/Gekkio/imgui-rs?rev=6ccfbf03)",
+ "imgui-sys 0.0.21 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "imgui-gfx-renderer"
-version = "0.0.21-pre"
-source = "git+https://github.com/Gekkio/imgui-rs?rev=6ccfbf03#6ccfbf030539f4a6cef95b52814d63019acc5031"
+version = "0.0.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "gfx 0.17.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "imgui 0.0.21-pre (git+https://github.com/Gekkio/imgui-rs?rev=6ccfbf03)",
- "imgui-sys 0.0.21-pre (git+https://github.com/Gekkio/imgui-rs?rev=6ccfbf03)",
+ "imgui 0.0.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "imgui-sys 0.0.21 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "imgui-sys"
-version = "0.0.21-pre"
-source = "git+https://github.com/Gekkio/imgui-rs?rev=6ccfbf03#6ccfbf030539f4a6cef95b52814d63019acc5031"
+version = "0.0.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bitflags 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "cc 1.0.22 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1150,8 +1150,8 @@ dependencies = [
  "gfx_gl 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "gfx_window_glutin 0.26.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "glutin 0.18.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "imgui 0.0.21-pre (git+https://github.com/Gekkio/imgui-rs?rev=6ccfbf03)",
- "imgui-gfx-renderer 0.0.21-pre (git+https://github.com/Gekkio/imgui-rs?rev=6ccfbf03)",
+ "imgui 0.0.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "imgui-gfx-renderer 0.0.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "lodepng 2.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ndarray 0.11.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "nfd 0.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1614,9 +1614,9 @@ dependencies = [
 "checksum glutin 0.18.0 (registry+https://github.com/rust-lang/crates.io-index)" = "0be84b852c1dcccde4b1329be778e5bd9c0801b8bbb8766ea327a3f813c6eafe"
 "checksum humansize 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "b6cab2627acfc432780848602f3f558f7e9dd427352224b0d9324025796d2a5e"
 "checksum idna 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "38f09e0f0b1fb55fdee1f17470ad800da77af5186a1a76c026b679358b7e844e"
-"checksum imgui 0.0.21-pre (git+https://github.com/Gekkio/imgui-rs?rev=6ccfbf03)" = "<none>"
-"checksum imgui-gfx-renderer 0.0.21-pre (git+https://github.com/Gekkio/imgui-rs?rev=6ccfbf03)" = "<none>"
-"checksum imgui-sys 0.0.21-pre (git+https://github.com/Gekkio/imgui-rs?rev=6ccfbf03)" = "<none>"
+"checksum imgui 0.0.21 (registry+https://github.com/rust-lang/crates.io-index)" = "42ce4bcdc6187241a000565b7944cb6e866e7defb7247f2d6404410f904e161f"
+"checksum imgui-gfx-renderer 0.0.21 (registry+https://github.com/rust-lang/crates.io-index)" = "fbee3424bcdbdb6e36f34671dd9437c827eb3bf03fd8053e1c1d45244d2562ec"
+"checksum imgui-sys 0.0.21 (registry+https://github.com/rust-lang/crates.io-index)" = "3c7c53417637b6d47ed92a2679015101e50acb13f07c95180b29ccca3d4e4f93"
 "checksum inflate 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)" = "6f53b811ee8e2057ccf9643ca6b4277de90efaf5e61e55fd5254576926bb4245"
 "checksum itertools 0.5.10 (registry+https://github.com/rust-lang/crates.io-index)" = "4833d6978da405305126af4ac88569b5d71ff758581ce5a987dbfa3755f694fc"
 "checksum itertools 0.7.8 (registry+https://github.com/rust-lang/crates.io-index)" = "f58856976b776fedd95533137617a02fb25719f40e7d9b01c7043cd65474f450"
