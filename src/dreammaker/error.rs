@@ -9,10 +9,10 @@ use std::collections::HashMap;
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct FileId(u16);
 
-const FILEID_BUILTINS: FileId = FileId(0x0000);
-const FILEID_MIN: FileId = FileId(0x0001);
-const FILEID_MAX: FileId = FileId(0xfffe);
-const FILEID_BAD: FileId = FileId(0xffff);
+pub const FILEID_BUILTINS: FileId = FileId(0x0000);
+pub const FILEID_MIN: FileId = FileId(0x0001);
+pub const FILEID_MAX: FileId = FileId(0xfffe);
+pub const FILEID_BAD: FileId = FileId(0xffff);
 
 impl Default for FileId {
     fn default() -> FileId {
