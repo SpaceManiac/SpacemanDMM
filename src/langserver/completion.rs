@@ -342,6 +342,22 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             }
         }
 
+        // macros
+        if let Some(ref preprocessor) = self.preprocessor {
+            // TODO: verify that the macro is in scope at the location
+            for (_, &(ref name, ref define)) in preprocessor.history().iter() {
+                if contains(name, query) {
+                    results.push(CompletionItem {
+                        label: name.to_owned(),
+                        kind: Some(CompletionItemKind::Constant),
+                        detail: Some(format!("{}", define)),
+                        .. Default::default()
+                    });
+                }
+            }
+        }
+
+        // fields
         let mut next = Some(ty);
         let mut skip = HashSet::new();
         while let Some(ty) = next {

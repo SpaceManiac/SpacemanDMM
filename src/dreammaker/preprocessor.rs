@@ -1,6 +1,6 @@
 //! The preprocessor.
 use std::collections::{HashMap, VecDeque};
-use std::io;
+use std::{io, fmt};
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
@@ -25,6 +25,22 @@ pub enum Define {
         variadic: bool,
         docs: DocCollection,
     },
+}
+
+impl fmt::Display for Define {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        let subst = match self {
+            Define::Constant { ref subst, .. } |
+            Define::Function { ref subst, .. } => subst,
+        };
+        if subst.is_empty() {
+            fmt.write_str("(macro)")
+        } else if subst.len() == 1 {
+            write!(fmt, "{}", subst[0])
+        } else {
+            fmt.write_str("(macro...)")
+        }
+    }
 }
 
 /// An interval tree representing historic macro definitions.
