@@ -301,13 +301,15 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         let (ty, proc_name) = self.find_type_context(iter);
 
         // implicit proc vars
-        for &name in ["args", "global", "src", "usr"].iter() {
-            if contains(name, query) {
-                results.push(CompletionItem {
-                    label: name.to_owned(),
-                    kind: Some(CompletionItemKind::Keyword),
-                    .. Default::default()
-                });
+        if proc_name.is_some() {
+            for &name in ["args", "global", "src", "usr"].iter() {
+                if contains(name, query) {
+                    results.push(CompletionItem {
+                        label: name.to_owned(),
+                        kind: Some(CompletionItemKind::Keyword),
+                        .. Default::default()
+                    });
+                }
             }
         }
 
