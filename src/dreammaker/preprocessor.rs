@@ -339,6 +339,11 @@ impl<'ctx> Preprocessor<'ctx> {
         &self.history
     }
 
+    /// Access currently active defines.
+    pub fn defines_at(&self, location: Location) -> DefineMap {
+        DefineMap::from_history(&self.history, location)
+    }
+
     /// Access the ifdef history.
     pub fn ifdef_history(&self) -> &IntervalTree<Location, bool> {
         &self.ifdef_history
