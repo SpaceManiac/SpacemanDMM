@@ -1012,7 +1012,7 @@ impl EditorScene {
         None
     }
 
-    fn mouse_wheel(&mut self, ctrl: bool, shift: bool, alt: bool, _x: f32, y: f32) {
+    fn mouse_wheel(&mut self, ctrl: bool, shift: bool, alt: bool, x: f32, y: f32) {
         if alt {
             if y > 0.0 && self.map_renderer.zoom < 16.0 {
                 self.map_renderer.zoom *= 2.0;
@@ -1022,13 +1022,21 @@ impl EditorScene {
             self.target_tile = self.tile_under(self.last_mouse_pos);
             return;
         }
-        let (axis, mut mul) = if ctrl { (0, -1.0) } else { (1, 1.0) };
+        let mut mul = if ctrl { -1.0 } else { 1.0 };
         if shift {
             mul *= 8.0;
         }
 
         if let Some(map) = self.maps.get_mut(self.map_current) {
-            map.center[axis] += 4.0 * 32.0 * mul * y / self.map_renderer.zoom;
+            let scroll_y = mul * y / self.map_renderer.zoom;
+            let scroll_x = mul * x / self.map_renderer.zoom;
+            if ctrl {
+                map.center[0] += scroll_y;
+                map.center[1] += scroll_x;
+            } else {
+                map.center[1] += scroll_y;
+                map.center[0] += scroll_x;
+            }
             map.clamp_center();
         }
         self.target_tile = self.tile_under(self.last_mouse_pos);
