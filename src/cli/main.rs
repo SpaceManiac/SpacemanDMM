@@ -71,6 +71,10 @@ impl Context {
         };
         println!("parsing {}", environment.display());
 
+        if let Some(parent) = environment.parent() {
+            self.icon_cache.set_icons_root(&parent);
+        }
+
         let pp = match dm::preprocessor::Preprocessor::new(&self.dm_context, environment.to_owned()) {
             Ok(pp) => pp,
             Err(e) => {
