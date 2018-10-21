@@ -595,6 +595,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
         match self.next("'/'")? {
             Token::Punct(Punctuation::Slash) => absolute = true,
             Token::Punct(p @ Punctuation::Dot) |
+            Token::Punct(p @ Punctuation::CloseColon) |
             Token::Punct(p @ Punctuation::Colon) => {
                 spurious_lead = true;
                 self.context.register_error(self.error(format!("path started by '{}', should be unprefixed", p))
@@ -622,6 +623,7 @@ impl<'ctx, 'an, I> Parser<'ctx, 'an, I> where
             match self.next("'/'")? {
                 Token::Punct(Punctuation::Slash) => {}
                 Token::Punct(p @ Punctuation::Dot) |
+                Token::Punct(p @ Punctuation::CloseColon) |
                 Token::Punct(p @ Punctuation::Colon) => {
                     self.context.register_error(self.error(format!("path separated by '{}', should be '/'", p))
                         .set_severity(Severity::Warning));
