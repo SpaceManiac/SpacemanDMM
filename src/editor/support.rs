@@ -112,6 +112,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                     CloseRequested => quit = true,
                     Resized(new_logical_size) => {
                         gfx_window_glutin::update_views(&window, &mut main_color, &mut main_depth);
+                        window.resize(new_logical_size.to_physical(hidpi_factor));
                         renderer.update_render_target(main_color.clone());
                         scene.update_render_target(&main_color, &main_depth);
                         frame_size.logical_size = new_logical_size
