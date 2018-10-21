@@ -1,6 +1,6 @@
 extern crate dreammaker as dm;
 
-use dm::lexer::{Quote, FormatFloat};
+use dm::lexer::{FormatFloat, Quote};
 
 #[test]
 fn strings() {

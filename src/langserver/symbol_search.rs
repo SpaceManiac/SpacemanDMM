@@ -14,20 +14,20 @@ impl Query {
     /// Parse a symbol query.
     pub fn parse(query: &str) -> Option<Query> {
         if !any_alphanumeric(query) {
-            return None
+            return None;
         }
         Some(if query.starts_with("#") {
             Query::Define(query[1..].to_lowercase())
         } else if query.starts_with("var/") {
             let query = &query["var/".len()..];
             if !any_alphanumeric(query) {
-                return None
+                return None;
             }
             Query::Var(query.to_lowercase())
         } else if query.starts_with("proc/") {
             let query = &query["proc/".len()..];
             if !any_alphanumeric(query) {
-                return None
+                return None;
             }
             Query::Proc(query.to_lowercase())
         } else if query.contains("/") {
@@ -56,38 +56,39 @@ impl Query {
 
     pub fn matches_on_type(&self, _path: &str) -> bool {
         match *self {
-            Query::Anything(_) |
-            Query::Proc(_) |
-            Query::Var(_) => true,
+            Query::Anything(_) | Query::Proc(_) | Query::Var(_) => true,
             _ => false,
         }
     }
 
     pub fn matches_var(&self, name: &str) -> bool {
         match *self {
-            Query::Anything(ref q) |
-            Query::Var(ref q) => starts_with(name, q),
+            Query::Anything(ref q) | Query::Var(ref q) => starts_with(name, q),
             _ => false,
         }
     }
 
     pub fn matches_proc(&self, name: &str, _is_verb: bool) -> bool {
         match *self {
-            Query::Anything(ref q) |
-            Query::Proc(ref q) => starts_with(name, q),
+            Query::Anything(ref q) | Query::Proc(ref q) => starts_with(name, q),
             _ => false,
         }
     }
 }
 
-fn simplify<'a>(s: &'a str) -> impl Iterator<Item=char> + Clone + 'a {
-    s.chars().flat_map(|c| c.to_lowercase()).filter(|c| c.is_alphanumeric())
+fn simplify<'a>(s: &'a str) -> impl Iterator<Item = char> + Clone + 'a {
+    s.chars()
+        .flat_map(|c| c.to_lowercase())
+        .filter(|c| c.is_alphanumeric())
 }
 
 // ignore case and underscores
 pub fn starts_with<'a>(fulltext: &'a str, query: &'a str) -> bool {
     let mut query_chars = simplify(query);
-    simplify(fulltext).zip(&mut query_chars).all(|(a, b)| a == b) && query_chars.next().is_none()
+    simplify(fulltext)
+        .zip(&mut query_chars)
+        .all(|(a, b)| a == b)
+        && query_chars.next().is_none()
 }
 
 pub fn contains<'a>(fulltext: &'a str, query: &'a str) -> bool {
@@ -104,5 +105,7 @@ pub fn contains<'a>(fulltext: &'a str, query: &'a str) -> bool {
 }
 
 fn any_alphanumeric(text: &str) -> bool {
-    text.chars().flat_map(|c| c.to_lowercase()).any(|c| c.is_alphanumeric())
+    text.chars()
+        .flat_map(|c| c.to_lowercase())
+        .any(|c| c.is_alphanumeric())
 }

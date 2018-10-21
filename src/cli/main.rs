@@ -3,19 +3,21 @@
 
 extern crate rayon;
 extern crate structopt;
-#[macro_use] extern crate structopt_derive;
+#[macro_use]
+extern crate structopt_derive;
 
 extern crate serde;
 extern crate serde_json;
-#[macro_use] extern crate serde_derive;
+#[macro_use]
+extern crate serde_derive;
 
-extern crate dreammaker as dm;
 extern crate dmm_tools;
+extern crate dreammaker as dm;
 
-use std::fmt;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicIsize, Ordering};
+use std::fmt;
 use std::path::Path;
+use std::sync::atomic::{AtomicIsize, Ordering};
 
 use structopt::StructOpt;
 
@@ -26,15 +28,21 @@ use dmm_tools::*;
 // Main driver
 
 fn main() {
-    let opt = Opt::from_clap(&Opt::clap()
-        .long_version(concat!(
-            env!("CARGO_PKG_VERSION"), "\n",
-            include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")),
-        ).trim_right())
-        .get_matches());
+    let opt = Opt::from_clap(
+        &Opt::clap()
+            .long_version(
+                concat!(
+                    env!("CARGO_PKG_VERSION"),
+                    "\n",
+                    include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")),
+                ).trim_right(),
+            ).get_matches(),
+    );
 
     let mut context = Context::default();
-    context.dm_context.set_print_severity(Some(dm::Severity::Error));
+    context
+        .dm_context
+        .set_print_severity(Some(dm::Severity::Error));
     rayon::ThreadPoolBuilder::new()
         .num_threads(opt.jobs)
         .build_global()
@@ -62,13 +70,17 @@ impl Context {
         let environment: &std::path::Path = match opt.environment {
             Some(ref env) => env.as_ref(),
             None => match dm::detect_environment_default() {
-                Ok(Some(found)) => { pathbuf = found; &pathbuf },
+                Ok(Some(found)) => {
+                    pathbuf = found;
+                    &pathbuf
+                }
                 _ => dm::DEFAULT_ENV.as_ref(),
-            }
+            },
         };
         println!("parsing {}", environment.display());
 
-        let pp = match dm::preprocessor::Preprocessor::new(&self.dm_context, environment.to_owned()) {
+        let pp = match dm::preprocessor::Preprocessor::new(&self.dm_context, environment.to_owned())
+        {
             Ok(pp) => pp,
             Err(e) => {
                 eprintln!("i/o error opening environment:\n{}", e);
@@ -85,22 +97,24 @@ impl Context {
 }
 
 #[derive(StructOpt, Debug)]
-#[structopt(name="dmm-tools",
-author="Copyright (C) 2017-2018  Tad Hardesty",
-about="This program comes with ABSOLUTELY NO WARRANTY. This is free software,
+#[structopt(
+    name = "dmm-tools",
+    author = "Copyright (C) 2017-2018  Tad Hardesty",
+    about = "This program comes with ABSOLUTELY NO WARRANTY. This is free software,
 and you are welcome to redistribute it under the conditions of the GNU
-General Public License version 3.")]
+General Public License version 3."
+)]
 struct Opt {
     /// The environment file to operate under.
-    #[structopt(short="e", long="env")]
+    #[structopt(short = "e", long = "env")]
     environment: Option<String>,
 
-    #[structopt(short="v", long="verbose")]
+    #[structopt(short = "v", long = "verbose")]
     verbose: bool,
 
     /// Set the number of threads to be used for parallel execution when
     /// possible. A value of 0 will select automatically, and 1 will be serial.
-    #[structopt(long="jobs", default_value="1")]
+    #[structopt(long = "jobs", default_value = "1")]
     jobs: usize,
 
     #[structopt(subcommand)]
@@ -116,48 +130,48 @@ enum Command {
     #[structopt(name = "list-passes")]
     ListPasses {
         /// Output as JSON.
-        #[structopt(short="j", long="json")]
+        #[structopt(short = "j", long = "json")]
         json: bool,
     },
     /// Check the environment for errors and warnings.
     #[structopt(name = "check")]
     Check {
         /// The minimum severity to print, of "error", "warning", "info", "hint".
-        #[structopt(long="severity", default_value="info")]
+        #[structopt(long = "severity", default_value = "info")]
         severity: String,
         /// Check proc bodies as well as the object tree.
-        #[structopt(long="procs")]
+        #[structopt(long = "procs")]
         procs: bool,
     },
     /// Build minimaps of the specified maps.
     #[structopt(name = "minimap")]
     Minimap {
         /// The output directory.
-        #[structopt(short="o", default_value="data/minimaps")]
+        #[structopt(short = "o", default_value = "data/minimaps")]
         output: String,
 
         /// Set the minimum x,y or x,y,z coordinate to act upon (1-indexed, inclusive).
-        #[structopt(long="min")]
+        #[structopt(long = "min")]
         min: Option<CoordArg>,
 
         /// Set the maximum x,y or x,y,z coordinate to act upon (1-indexed, inclusive).
-        #[structopt(long="max")]
+        #[structopt(long = "max")]
         max: Option<CoordArg>,
 
         /// Enable render-passes, or "all" to only exclude those passed to --disable.
-        #[structopt(long="enable", default_value="")]
+        #[structopt(long = "enable", default_value = "")]
         enable: String,
 
         /// Disable render-passes, or "all" to only use those passed to --enable.
-        #[structopt(long="disable", default_value="")]
+        #[structopt(long = "disable", default_value = "")]
         disable: String,
 
         /// Run output through pngcrush automatically. Requires pngcrush.
-        #[structopt(long="pngcrush")]
+        #[structopt(long = "pngcrush")]
         pngcrush: bool,
 
         /// Run output through optipng automatically. Requires optipng.
-        #[structopt(long="optipng")]
+        #[structopt(long = "optipng")]
         optipng: bool,
 
         /// The list of maps to process.
@@ -167,27 +181,24 @@ enum Command {
     #[structopt(name = "lint-maps")]
     LintMaps {
         /// Only report and do not save out changes.
-        #[structopt(short="n", long="dry-run")]
+        #[structopt(short = "n", long = "dry-run")]
         dry_run: bool,
 
         /// Reformat the specified maps even if nothing was changed.
-        #[structopt(long="reformat")]
+        #[structopt(long = "reformat")]
         reformat: bool,
 
         /// The list of maps to process.
         files: Vec<String>,
     },
     /// List the differing coordinates between two maps.
-    #[structopt(name="diff-maps")]
-    DiffMaps {
-        left: String,
-        right: String,
-    },
+    #[structopt(name = "diff-maps")]
+    DiffMaps { left: String, right: String },
     /// Show metadata information about the map.
-    #[structopt(name="map-info")]
+    #[structopt(name = "map-info")]
     MapInfo {
         /// Output as JSON.
-        #[structopt(short="j", long="json")]
+        #[structopt(short = "j", long = "json")]
         json: bool,
 
         /// The list of maps to show info on.
@@ -209,9 +220,17 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
 
                 let mut report = Vec::new();
                 for &render_passes::RenderPassInfo {
-                    name, desc, default, new: _,
-                } in render_passes::RENDER_PASSES {
-                    report.push(Pass { name, desc, default });
+                    name,
+                    desc,
+                    default,
+                    new: _,
+                } in render_passes::RENDER_PASSES
+                {
+                    report.push(Pass {
+                        name,
+                        desc,
+                        default,
+                    });
                 }
                 output_json(&report);
             } else {
@@ -231,9 +250,12 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                     }
                 }
             }
-        },
+        }
         // --------------------------------------------------------------------
-        Command::Check { ref severity, procs } => {
+        Command::Check {
+            ref severity,
+            procs,
+        } => {
             let severity = match severity.as_str() {
                 "error" => dm::Severity::Error,
                 "warning" => dm::Severity::Warning,
@@ -243,18 +265,42 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             context.dm_context.set_print_severity(Some(severity));
             context.procs = procs;
             context.objtree(opt);
-            *context.exit_status.get_mut() = context.dm_context.errors().iter().filter(|e| e.severity() <= severity).count() as isize;
-        },
+            *context.exit_status.get_mut() = context
+                .dm_context
+                .errors()
+                .iter()
+                .filter(|e| e.severity() <= severity)
+                .count() as isize;
+        }
         // --------------------------------------------------------------------
         Command::Minimap {
-            ref output, min, max, ref enable, ref disable, ref files,
-            pngcrush, optipng,
+            ref output,
+            min,
+            max,
+            ref enable,
+            ref disable,
+            ref files,
+            pngcrush,
+            optipng,
         } => {
             context.objtree(opt);
-            if context.dm_context.errors().iter().filter(|e| e.severity() <= dm::Severity::Error).next().is_some() {
+            if context
+                .dm_context
+                .errors()
+                .iter()
+                .filter(|e| e.severity() <= dm::Severity::Error)
+                .next()
+                .is_some()
+            {
                 println!("there were some parsing errors; render may be inaccurate")
             }
-            let Context { ref objtree, ref icon_cache, ref exit_status, parallel, .. } = *context;
+            let Context {
+                ref objtree,
+                ref icon_cache,
+                ref exit_status,
+                parallel,
+                ..
+            } = *context;
 
             let render_passes = &dmm_tools::render_passes::configure(enable, disable);
             let paths: Vec<&Path> = files.iter().map(|p| p.as_ref()).collect();
@@ -281,7 +327,11 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
 
                 let (dim_x, dim_y, dim_z) = map.dim_xyz();
                 let mut min = min.unwrap_or(CoordArg { x: 0, y: 0, z: 0 });
-                let mut max = max.unwrap_or(CoordArg { x: dim_x + 1, y: dim_y + 1, z: dim_z + 1 });
+                let mut max = max.unwrap_or(CoordArg {
+                    x: dim_x + 1,
+                    y: dim_y + 1,
+                    z: dim_z + 1,
+                });
                 min.x = clamp(min.x, 1, dim_x);
                 min.y = clamp(min.y, 1, dim_y);
                 min.z = clamp(min.z, 1, dim_z);
@@ -306,29 +356,40 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                         exit_status.fetch_add(1, Ordering::Relaxed);
                         return;
                     }
-                    let outfile = format!("{}/{}-{}.png", output, path.file_stem().unwrap().to_string_lossy(), 1 + z);
+                    let outfile = format!(
+                        "{}/{}-{}.png",
+                        output,
+                        path.file_stem().unwrap().to_string_lossy(),
+                        1 + z
+                    );
                     println!("{}saving {}", prefix, outfile);
                     image.to_file(outfile.as_ref()).unwrap();
                     if pngcrush {
                         println!("    pngcrush {}", outfile);
                         let temp = format!("{}.temp", outfile);
-                        assert!(std::process::Command::new("pngcrush")
-                            .arg("-ow")
-                            .arg(&outfile)
-                            .arg(&temp)
-                            .stderr(std::process::Stdio::null())
-                            .status()
-                            .unwrap()
-                            .success(), "pngcrush failed");
+                        assert!(
+                            std::process::Command::new("pngcrush")
+                                .arg("-ow")
+                                .arg(&outfile)
+                                .arg(&temp)
+                                .stderr(std::process::Stdio::null())
+                                .status()
+                                .unwrap()
+                                .success(),
+                            "pngcrush failed"
+                        );
                     }
                     if optipng {
                         println!("{}optipng {}", prefix, outfile);
-                        assert!(std::process::Command::new("optipng")
-                            .arg(&outfile)
-                            .stderr(std::process::Stdio::null())
-                            .status()
-                            .unwrap()
-                            .success(), "optipng failed");
+                        assert!(
+                            std::process::Command::new("optipng")
+                                .arg(&outfile)
+                                .stderr(std::process::Stdio::null())
+                                .status()
+                                .unwrap()
+                                .success(),
+                            "optipng failed"
+                        );
                     }
                 }
             };
@@ -341,10 +402,12 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             } else {
                 paths.into_iter().for_each(perform_job);
             }
-        },
+        }
         // --------------------------------------------------------------------
         Command::LintMaps {
-            dry_run, reformat, ref files,
+            dry_run,
+            reformat,
+            ref files,
         } => {
             context.objtree(opt);
 
@@ -360,10 +423,11 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                     map.to_file(path).unwrap();
                 }
             }
-        },
+        }
         // --------------------------------------------------------------------
         Command::DiffMaps {
-            ref left, ref right,
+            ref left,
+            ref right,
         } => {
             use std::cmp::min;
 
@@ -383,19 +447,19 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             for z in 0..min(left_dims.2, right_dims.2) {
                 for y in 0..min(left_dims.1, right_dims.1) {
                     for x in 0..min(left_dims.0, right_dims.0) {
-                        let left_tile = &left_map.dictionary[&left_map.grid[(z, left_dims.1 - y - 1, x)]];
-                        let right_tile = &right_map.dictionary[&right_map.grid[(z, right_dims.1 - y - 1, x)]];
+                        let left_tile =
+                            &left_map.dictionary[&left_map.grid[(z, left_dims.1 - y - 1, x)]];
+                        let right_tile =
+                            &right_map.dictionary[&right_map.grid[(z, right_dims.1 - y - 1, x)]];
                         if left_tile != right_tile {
                             println!("    different tile: ({}, {}, {})", x + 1, y + 1, z + 1);
                         }
                     }
                 }
             }
-        },
+        }
         // --------------------------------------------------------------------
-        Command::MapInfo {
-            json, ref files,
-        } => {
+        Command::MapInfo { json, ref files } => {
             if !json {
                 eprintln!("non-JSON output is not yet supported");
             }
@@ -413,14 +477,17 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                 let mut map = dmm::Map::from_file(path).unwrap();
 
                 let dim = map.grid.dim();
-                report.insert(path, Map {
-                    size: (dim.2, dim.1, dim.0),  // zyx -> xyz
-                    key_length: map.key_length,
-                    num_keys: map.dictionary.len(),
-                });
+                report.insert(
+                    path,
+                    Map {
+                        size: (dim.2, dim.1, dim.0), // zyx -> xyz
+                        key_length: map.key_length,
+                        num_keys: map.dictionary.len(),
+                    },
+                );
             }
             output_json(&report);
-        },
+        }
         // --------------------------------------------------------------------
     }
 }
@@ -449,13 +516,21 @@ impl std::str::FromStr for CoordArg {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, String> {
-        match s.split(",").map(|x| x.parse()).collect::<Result<Vec<_>, std::num::ParseIntError>>() {
-            Ok(ref vec) if vec.len() == 2 => {
-                Ok(CoordArg { x: vec[0], y: vec[1], z: 0 })
-            }
-            Ok(ref vec) if vec.len() == 3 => {
-                Ok(CoordArg { x: vec[0], y: vec[1], z: vec[2] })
-            }
+        match s
+            .split(",")
+            .map(|x| x.parse())
+            .collect::<Result<Vec<_>, std::num::ParseIntError>>()
+        {
+            Ok(ref vec) if vec.len() == 2 => Ok(CoordArg {
+                x: vec[0],
+                y: vec[1],
+                z: 0,
+            }),
+            Ok(ref vec) if vec.len() == 3 => Ok(CoordArg {
+                x: vec[0],
+                y: vec[1],
+                z: vec[2],
+            }),
             Ok(_) => Err("must specify 2 or 3 coordinates".into()),
             Err(e) => Err(e.to_string()),
         }

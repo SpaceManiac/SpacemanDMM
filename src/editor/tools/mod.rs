@@ -8,11 +8,16 @@ use dm::dmi;
 use dm::objtree::ObjectTree;
 use dmm_tools::dmm::Prefab;
 
-use {History, Environment};
+use {Environment, History};
 
 mod place;
 
-pub const NO_TINT: ImVec4 = ImVec4 { x: 1.0, y: 1.0, z: 1.0, w: 1.0 };
+pub const NO_TINT: ImVec4 = ImVec4 {
+    x: 1.0,
+    y: 1.0,
+    z: 1.0,
+    w: 1.0,
+};
 
 pub struct Tool {
     pub name: &'static str,
@@ -43,14 +48,11 @@ pub enum ToolIcon {
 
 #[allow(unused_variables)]
 pub trait ToolBehavior {
-    fn settings(&mut self, ui: &Ui, env: &Environment, ctx: &mut IconCtx) {
-    }
+    fn settings(&mut self, ui: &Ui, env: &Environment, ctx: &mut IconCtx) {}
 
-    fn click(&mut self, hist: &mut History, env: &Environment, loc: (u32, u32, u32)) {
-    }
+    fn click(&mut self, hist: &mut History, env: &Environment, loc: (u32, u32, u32)) {}
 
-    fn pick(&mut self, env: &Environment, prefab: &Prefab) {
-    }
+    fn pick(&mut self, env: &Environment, prefab: &Prefab) {}
 }
 
 impl Tool {
@@ -69,15 +71,29 @@ impl Tool {
     }
 
     fn show_objtree(self) -> Self {
-        Tool { objtree: true, ..self }
+        Tool {
+            objtree: true,
+            ..self
+        }
     }
 
     fn dmi(self, icon: PathBuf, icon_state: String) -> Self {
-        Tool { icon: ToolIcon::Dmi { icon, icon_state, tint: NO_TINT, dir: dmi::SOUTH }, ..self }
+        Tool {
+            icon: ToolIcon::Dmi {
+                icon,
+                icon_state,
+                tint: NO_TINT,
+                dir: dmi::SOUTH,
+            },
+            ..self
+        }
     }
 
     fn png(self, data: &'static [u8]) -> Self {
-        Tool { icon: ToolIcon::EmbeddedPng { data }, ..self }
+        Tool {
+            icon: ToolIcon::EmbeddedPng { data },
+            ..self
+        }
     }
 
     fn build(self, tools: &mut Vec<Tool>) {
@@ -90,25 +106,33 @@ impl ToolIcon {
         let (_, ty) = env.find_closest_type(&prefab.path);
         let ty = ty?;
 
-        let icon = prefab.vars.get("icon")
+        let icon = prefab
+            .vars
+            .get("icon")
             .or_else(|| ty.get_value("icon")?.constant.as_ref())?
             .as_path()?
             .to_owned();
-        let icon_state = prefab.vars.get("icon_state")
-            .or_else(|| ty.get_value("icon_state")
-                .and_then(|v| v.constant.as_ref()))
+        let icon_state = prefab
+            .vars
+            .get("icon_state")
+            .or_else(|| ty.get_value("icon_state").and_then(|v| v.constant.as_ref()))
             .and_then(|v| v.as_str())
-            .unwrap_or("").to_owned();
-        let dir = prefab.vars.get("dir")
-            .or_else(|| ty.get_value("dir")
-                .and_then(|v| v.constant.as_ref()))
+            .unwrap_or("")
+            .to_owned();
+        let dir = prefab
+            .vars
+            .get("dir")
+            .or_else(|| ty.get_value("dir").and_then(|v| v.constant.as_ref()))
             .and_then(|v| v.to_int())
             .unwrap_or(dmi::SOUTH);
         let color = ::dmm_tools::minimap::color_of(&env.objtree, prefab);
         let tint = [
-            color[0] as f32 / 255.0, color[1] as f32 / 255.0,
-            color[2] as f32 / 255.0, color[3] as f32 / 255.0,
-        ].into();
+            color[0] as f32 / 255.0,
+            color[1] as f32 / 255.0,
+            color[2] as f32 / 255.0,
+            color[3] as f32 / 255.0,
+        ]
+            .into();
 
         Some(ToolIcon::Dmi {
             icon,
@@ -118,11 +142,7 @@ impl ToolIcon {
         })
     }
 
-    pub fn prepare(
-        &mut self,
-        environment: Option<&Environment>,
-        ctx: &mut IconCtx,
-    ) -> &mut Self {
+    pub fn prepare(&mut self, environment: Option<&Environment>, ctx: &mut IconCtx) -> &mut Self {
         let temp = ::std::mem::replace(self, ToolIcon::None);
         *self = ::prepare_tool_icon(ctx.renderer, environment, ctx.map_renderer, temp);
         self
@@ -135,8 +155,14 @@ pub struct IconCtx<'a> {
 }
 
 impl<'a> IconCtx<'a> {
-    pub fn new(renderer: &'a mut ::ImRenderer, map_renderer: &'a mut ::map_renderer::MapRenderer) -> Self {
-        IconCtx { renderer, map_renderer }
+    pub fn new(
+        renderer: &'a mut ::ImRenderer,
+        map_renderer: &'a mut ::map_renderer::MapRenderer,
+    ) -> Self {
+        IconCtx {
+            renderer,
+            map_renderer,
+        }
     }
 }
 

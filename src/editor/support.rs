@@ -20,8 +20,9 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
     let context = glutin::ContextBuilder::new().with_vsync(true);
     let window = glutin::WindowBuilder::new()
         .with_title(title)
-        .with_window_icon(glutin::Icon::from_rgba(include_bytes!("res/gasmask.raw").to_vec(), 16, 16).ok())
-        .with_min_dimensions(glutin::dpi::LogicalSize::new(640.0, 480.0))
+        .with_window_icon(
+            glutin::Icon::from_rgba(include_bytes!("res/gasmask.raw").to_vec(), 16, 16).ok(),
+        ).with_min_dimensions(glutin::dpi::LogicalSize::new(640.0, 480.0))
         .with_dimensions(glutin::dpi::LogicalSize::new(1300.0, 730.0));
     let (window, mut device, mut factory, mut main_color, mut main_depth) =
         gfx_window_glutin::init::<ColorFormat, DepthFormat>(window, context, &events_loop);
@@ -118,17 +119,18 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                             .to_physical(window_hidpi_factor)
                             .to_logical(hidpi_factor)
                             .into();
-                    },
+                    }
                     HiDpiFactorChanged(new_factor) => {
                         window_hidpi_factor = new_factor;
                         hidpi_factor = window_hidpi_factor.round();
                         frame_size.hidpi_factor = hidpi_factor;
-                        frame_size.logical_size = window.get_inner_size()
+                        frame_size.logical_size = window
+                            .get_inner_size()
                             .unwrap()
                             .to_physical(window_hidpi_factor)
                             .to_logical(hidpi_factor)
                             .into();
-                    },
+                    }
                     Focused(false) => {
                         // If the window is unfocused, unset modifiers, or
                         // Alt-Tab will set it permanently & cause trouble. No,
@@ -137,7 +139,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                         imgui.set_key_alt(false);
                         imgui.set_key_shift(false);
                         imgui.set_key_super(false);
-                    },
+                    }
                     KeyboardInput { input, .. } => {
                         use glutin::VirtualKeyCode as Key;
 
@@ -176,7 +178,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                                 scene.chord(ctrl(&imgui), imgui.key_shift(), imgui.key_alt(), key);
                             }
                         }
-                    },
+                    }
                     CursorMoved { position, .. } => {
                         // Rescale position from glutin logical coordinates to our logical
                         // coordinates
@@ -186,14 +188,16 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                             .into();
                         mouse_state.pos = pos;
                         scene.mouse_moved(pos);
-                    },
+                    }
                     MouseInput { state, button, .. } => match button {
                         MouseButton::Left => mouse_state.pressed[0] = state == Pressed,
                         MouseButton::Right => mouse_state.pressed[1] = state == Pressed,
                         MouseButton::Middle => mouse_state.pressed[2] = state == Pressed,
-                        MouseButton::Other(i) => if let Some(b) = mouse_state.pressed.get_mut(2 + i as usize) {
-                            *b = state == Pressed;
-                        },
+                        MouseButton::Other(i) => {
+                            if let Some(b) = mouse_state.pressed.get_mut(2 + i as usize) {
+                                *b = state == Pressed;
+                            }
+                        }
                     },
                     MouseWheel {
                         delta: MouseScrollDelta::LineDelta(x, y),
@@ -202,9 +206,15 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                     } => {
                         mouse_state.wheel = y;
                         if !mouse_captured {
-                            scene.mouse_wheel(ctrl(&imgui), imgui.key_shift(), imgui.key_alt(), x, y);
+                            scene.mouse_wheel(
+                                ctrl(&imgui),
+                                imgui.key_shift(),
+                                imgui.key_alt(),
+                                x,
+                                y,
+                            );
                         }
-                    },
+                    }
                     MouseWheel {
                         delta: MouseScrollDelta::PixelDelta(pos),
                         phase: TouchPhase::Moved,
@@ -217,9 +227,15 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                             .to_logical(hidpi_factor);
                         mouse_state.wheel = diff.y as f32;
                         if !mouse_captured {
-                            scene.mouse_wheel(ctrl(&imgui), imgui.key_shift(), imgui.key_alt(), diff.x as f32, diff.y as f32);
+                            scene.mouse_wheel(
+                                ctrl(&imgui),
+                                imgui.key_shift(),
+                                imgui.key_alt(),
+                                diff.x as f32,
+                                diff.y as f32,
+                            );
                         }
-                    },
+                    }
                     ReceivedCharacter(c) => imgui.add_input_character(c),
                     _ => (),
                 }

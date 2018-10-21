@@ -1,10 +1,10 @@
+use std::collections::BTreeMap;
 use std::io;
 use std::path::Path;
-use std::collections::BTreeMap;
 
-use ndarray::Array3;
+use lodepng::ffi::{ColorType, State as PngState};
 use lodepng::{self, RGBA};
-use lodepng::ffi::{State as PngState, ColorType};
+use ndarray::Array3;
 
 pub const NORTH: i32 = 1;
 pub const SOUTH: i32 = 2;
@@ -64,7 +64,7 @@ impl IconFile {
     pub fn rect_of(&self, icon_state: &str, dir: i32) -> Option<Rect> {
         let state_index = match self.metadata.state_names.get(icon_state) {
             Some(&i) => i,
-            None => return None
+            None => return None,
         };
         let state = &self.metadata.states[state_index];
 
@@ -83,11 +83,14 @@ impl IconFile {
         let icon_index = state.offset as u32 + dir_idx;
         let icon_count = self.image.width / self.metadata.width;
         let (icon_x, icon_y) = (icon_index % icon_count, icon_index / icon_count);
-        Some((icon_x * self.metadata.width, icon_y * self.metadata.height,
-            self.metadata.width, self.metadata.height))
+        Some((
+            icon_x * self.metadata.width,
+            icon_y * self.metadata.height,
+            self.metadata.width,
+            self.metadata.height,
+        ))
     }
 }
-
 
 // ----------------------------------------------------------------------------
 // Image manipulation
@@ -144,10 +147,10 @@ impl Image {
         Ok(Image::from_rgba(bitmap))
     }
 
-    #[cfg(feature="png")]
+    #[cfg(feature = "png")]
     pub fn to_file(&self, path: &Path) -> io::Result<()> {
-        use std::fs::File;
         use png::{Encoder, HasParameters};
+        use std::fs::File;
 
         let mut encoder = Encoder::new(File::create(path)?, self.width, self.height);
         encoder.set(::png::ColorType::RGBA);
@@ -163,19 +166,30 @@ impl Image {
         use ndarray::Axis;
 
         let mut destination = self.data.slice_mut(s![
-            pos.1 as isize .. (pos.1 + crop.3) as isize,
-            pos.0 as isize .. (pos.0 + crop.2) as isize,
-            ..]);
+            pos.1 as isize..(pos.1 + crop.3) as isize,
+            pos.0 as isize..(pos.0 + crop.2) as isize,
+            ..
+        ]);
         let source = other.data.slice(s![
-            crop.1 as isize .. (crop.1 + crop.3) as isize,
-            crop.0 as isize .. (crop.0 + crop.2) as isize,
-            ..]);
+            crop.1 as isize..(crop.1 + crop.3) as isize,
+            crop.0 as isize..(crop.0 + crop.2) as isize,
+            ..
+        ]);
 
         // loop over each [r, g, b, a] available in the relevant area
-        for (mut dest, orig_src) in destination.lanes_mut(Axis(2)).into_iter().zip(source.lanes(Axis(2))) {
-            macro_rules! tint { ($i:expr) => {
-                mul255(*orig_src.get($i).unwrap_or(&255), *color.get($i).unwrap_or(&255))
-            }}
+        for (mut dest, orig_src) in destination
+            .lanes_mut(Axis(2))
+            .into_iter()
+            .zip(source.lanes(Axis(2)))
+        {
+            macro_rules! tint {
+                ($i:expr) => {
+                    mul255(
+                        *orig_src.get($i).unwrap_or(&255),
+                        *color.get($i).unwrap_or(&255),
+                    )
+                };
+            }
             let src = [tint!(0), tint!(1), tint!(2), tint!(3)];
 
             // out_A = src_A + dst_A (1 - src_A)
@@ -183,7 +197,9 @@ impl Image {
             let out_a = src[3] + mul255(dest[3], 255 - src[3]);
             if out_a != 0 {
                 for i in 0..3 {
-                    dest[i] = ((src[i] as u32 * src[3] as u32 + dest[i] as u32 * dest[3] as u32 * (255 - src[3] as u32) / 255) / out_a as u32) as u8;
+                    dest[i] = ((src[i] as u32 * src[3] as u32
+                        + dest[i] as u32 * dest[3] as u32 * (255 - src[3] as u32) / 255)
+                        / out_a as u32) as u8;
                 }
             } else {
                 for i in 0..3 {

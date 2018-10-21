@@ -3,7 +3,8 @@ use super::*;
 #[derive(Default)]
 pub struct Random;
 impl RenderPass for Random {
-    fn expand<'a>(&self,
+    fn expand<'a>(
+        &self,
         atom: &Atom<'a>,
         objtree: &'a ObjectTree,
         output: &mut Vec<Atom<'a>>,
@@ -21,7 +22,7 @@ impl RenderPass for Random {
                 }
                 if let Some(replacement) = rng.choose(&machines) {
                     output.push(Atom::from_type_ref(replacement, atom.loc));
-                    return true;  // consumed
+                    return true; // consumed
                 }
             }
         } else if atom.istype("/obj/machinery/vending/cola/random/") {
@@ -34,12 +35,12 @@ impl RenderPass for Random {
                 }
                 if let Some(replacement) = rng.choose(&machines) {
                     output.push(Atom::from_type_ref(replacement, atom.loc));
-                    return true;  // consumed
+                    return true; // consumed
                 }
             }
         } else if atom.istype("/obj/item/bedsheet/random/") {
             if let Some(root) = objtree.find("/obj/item/bedsheet") {
-                let mut sheets = vec![root.get()];  // basic bedsheet is included
+                let mut sheets = vec![root.get()]; // basic bedsheet is included
                 for child in root.children() {
                     if child.name != "random" {
                         sheets.push(child.get());
@@ -47,17 +48,14 @@ impl RenderPass for Random {
                 }
                 if let Some(replacement) = rng.choose(&sheets) {
                     output.push(Atom::from_type_ref(replacement, atom.loc));
-                    return true;  // consumed
+                    return true; // consumed
                 }
             }
         }
         false
     }
 
-    fn adjust_vars<'a>(&self,
-        atom: &mut Atom<'a>,
-        objtree: &'a ObjectTree,
-    ) {
+    fn adjust_vars<'a>(&self, atom: &mut Atom<'a>, objtree: &'a ObjectTree) {
         use rand::Rng;
         let mut rng = ::rand::thread_rng();
 
@@ -65,15 +63,30 @@ impl RenderPass for Random {
         const LEGIT_POSTERS: u32 = 35;
 
         if atom.istype("/obj/structure/sign/poster/contraband/random/") {
-            atom.set_var("icon_state", Constant::string(format!("poster{}", rng.gen_range(1, 1 + CONTRABAND_POSTERS))));
+            atom.set_var(
+                "icon_state",
+                Constant::string(format!(
+                    "poster{}",
+                    rng.gen_range(1, 1 + CONTRABAND_POSTERS)
+                )),
+            );
         } else if atom.istype("/obj/structure/sign/poster/official/random/") {
-            atom.set_var("icon_state", Constant::string(format!("poster{}_legit", rng.gen_range(1, 1 + LEGIT_POSTERS))));
+            atom.set_var(
+                "icon_state",
+                Constant::string(format!(
+                    "poster{}_legit",
+                    rng.gen_range(1, 1 + LEGIT_POSTERS)
+                )),
+            );
         } else if atom.istype("/obj/structure/sign/poster/random/") {
             let i = 1 + rng.gen_range(0, CONTRABAND_POSTERS + LEGIT_POSTERS);
             if i <= CONTRABAND_POSTERS {
                 atom.set_var("icon_state", Constant::string(format!("poster{}", i)));
             } else {
-                atom.set_var("icon_state", Constant::string(format!("poster{}_legit", i - CONTRABAND_POSTERS)));
+                atom.set_var(
+                    "icon_state",
+                    Constant::string(format!("poster{}_legit", i - CONTRABAND_POSTERS)),
+                );
             }
         } else if atom.istype("/obj/item/twohanded/required/kirbyplants/random/") {
             atom.set_var("icon", Constant::string("icons/obj/flora/plants.dmi"));
@@ -81,7 +94,10 @@ impl RenderPass for Random {
             if random == 0 {
                 atom.set_var("icon_state", Constant::string("applebush"));
             } else {
-                atom.set_var("icon_state", Constant::string(format!("plant-{:02}", random)));
+                atom.set_var(
+                    "icon_state",
+                    Constant::string(format!("plant-{:02}", random)),
+                );
             }
         } else if atom.istype("/obj/structure/sign/barsign/") {
             if let Some(root) = objtree.find("/datum/barsign") {
@@ -89,7 +105,7 @@ impl RenderPass for Random {
                 for child in root.children() {
                     if let Some(v) = child.vars.get("hidden") {
                         if !v.value.constant.as_ref().map_or(false, |c| c.to_bool()) {
-                            continue
+                            continue;
                         }
                     }
                     if let Some(icon) = child.vars.get("icon") {
@@ -104,9 +120,13 @@ impl RenderPass for Random {
             }
         } else if atom.istype("/obj/item/lipstick/random/") {
             atom.set_var("icon_state", Constant::string("lipstick"));
-            // random color is not outwardly visible
+        // random color is not outwardly visible
         } else if atom.istype("/obj/item/device/tape/random/") {
-            let icon = format!("tape_{}", rng.choose(&["white", "blue", "red", "yellow", "purple"]).unwrap());
+            let icon = format!(
+                "tape_{}",
+                rng.choose(&["white", "blue", "red", "yellow", "purple"])
+                    .unwrap()
+            );
             atom.set_var("icon_state", Constant::string(icon));
         }
     }

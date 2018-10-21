@@ -1,14 +1,14 @@
 //! The preprocessor.
 use std::collections::{HashMap, VecDeque};
-use std::{io, fmt};
 use std::fs::File;
 use std::path::{Path, PathBuf};
+use std::{fmt, io};
 
-use interval_tree::{IntervalTree, range};
+use interval_tree::{range, IntervalTree};
 
-use super::{DMError, Location, HasLocation, FileId, Context, Severity};
+use super::docs::{DocCollection, DocComment, DocTarget};
 use super::lexer::*;
-use super::docs::{DocComment, DocTarget, DocCollection};
+use super::{Context, DMError, FileId, HasLocation, Location, Severity};
 
 // ----------------------------------------------------------------------------
 // Macro representation and predefined macros
@@ -30,8 +30,7 @@ pub enum Define {
 impl fmt::Display for Define {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let subst = match self {
-            Define::Constant { ref subst, .. } |
-            Define::Function { ref subst, .. } => subst,
+            Define::Constant { ref subst, .. } | Define::Function { ref subst, .. } => subst,
         };
         if subst.is_empty() {
             fmt.write_str("(macro)")
@@ -115,12 +114,14 @@ impl DefineMap {
             return false;
         }
 
-        self.inner.iter().all(|(key, value)| rhs.inner.get(key).map_or(false, |v| {
-            if value.len() != v.len() {
-                return false;
-            }
-            value.iter().zip(v.iter()).all(|(lhs, rhs)| lhs.1 == rhs.1)
-        }))
+        self.inner.iter().all(|(key, value)| {
+            rhs.inner.get(key).map_or(false, |v| {
+                if value.len() != v.len() {
+                    return false;
+                }
+                value.iter().zip(v.iter()).all(|(lhs, rhs)| lhs.1 == rhs.1)
+            })
+        })
     }
 }
 
@@ -138,7 +139,7 @@ enum Include<'ctx> {
         name: String,
         location: Location,
         tokens: VecDeque<Token>,
-    }
+    },
 }
 
 impl<'ctx> Include<'ctx> {
@@ -210,11 +211,15 @@ impl<'ctx> Iterator for IncludeStack<'ctx> {
                     //Some(Err(e)) => return Some(Err(e)),
                     Some(t) => return Some(t),
                     None => {} // fall through
-                }
-                Some(&mut Include::Expansion { ref mut tokens, location, .. }) => match tokens.pop_front() {
+                },
+                Some(&mut Include::Expansion {
+                    ref mut tokens,
+                    location,
+                    ..
+                }) => match tokens.pop_front() {
                     Some(token) => return Some(LocatedToken { location, token }),
                     None => {} // fall through
-                }
+                },
                 None => return None,
             }
             self.stack.pop();
@@ -234,13 +239,25 @@ struct Ifdef {
 
 impl Ifdef {
     fn new(location: Location, active: bool) -> Ifdef {
-        Ifdef { location, active, chain_active: active }
+        Ifdef {
+            location,
+            active,
+            chain_active: active,
+        }
     }
     fn else_(self, location: Location) -> Ifdef {
-        Ifdef { location, active: !self.chain_active, chain_active: true }
+        Ifdef {
+            location,
+            active: !self.chain_active,
+            chain_active: true,
+        }
     }
     fn else_if(self, location: Location, active: bool) -> Ifdef {
-        Ifdef { location, active: !self.chain_active && active, chain_active: self.chain_active || active }
+        Ifdef {
+            location,
+            active: !self.chain_active && active,
+            chain_active: self.chain_active || active,
+        }
     }
 }
 
@@ -287,7 +304,8 @@ impl<'ctx> Preprocessor<'ctx> {
             let mut file = File::open(&env_file)?;
             file.read_to_end(&mut buffer)?;
         }
-        let include = Include::from_read(context, env_file.clone(), Box::new(io::Cursor::new(buffer)));
+        let include =
+            Include::from_read(context, env_file.clone(), Box::new(io::Cursor::new(buffer)));
 
         // Load the built-in macros.
         let mut defines = DefineMap::default();
@@ -329,7 +347,8 @@ impl<'ctx> Preprocessor<'ctx> {
                     line: !0,
                     column: i,
                 };
-                self.history.insert(range(start, end), (name.clone(), define));
+                self.history
+                    .insert(range(start, end), (name.clone(), define));
             }
         }
     }
@@ -351,20 +370,28 @@ impl<'ctx> Preprocessor<'ctx> {
 
     /// Branch a child preprocessor from this preprocessor's historic state at
     /// the start of the given file.
-    pub fn branch_at_file<'ctx2>(&self, file: FileId, context: &'ctx2 Context) -> Preprocessor<'ctx2> {
-        let location = Location { file, line: 0, column: 0 };
+    pub fn branch_at_file<'ctx2>(
+        &self,
+        file: FileId,
+        context: &'ctx2 Context,
+    ) -> Preprocessor<'ctx2> {
+        let location = Location {
+            file,
+            line: 0,
+            column: 0,
+        };
         let defines = DefineMap::from_history(&self.history, location);
 
         Preprocessor {
             context: context,
             env_file: self.env_file.clone(),
             include_stack: Default::default(),
-            history: Default::default(),  // TODO: support branching a second time
+            history: Default::default(), // TODO: support branching a second time
             defines,
             maps: Default::default(),
             skins: Default::default(),
             scripts: Default::default(),
-            ifdef_stack: Default::default(),  // should be fine
+            ifdef_stack: Default::default(), // should be fine
             ifdef_history: Default::default(),
             last_input_loc: location,
             last_printable_input_loc: location,
@@ -382,12 +409,12 @@ impl<'ctx> Preprocessor<'ctx> {
             context: context,
             env_file: self.env_file.clone(),
             include_stack: Default::default(),
-            history: Default::default(),  // TODO: support branching a second time
+            history: Default::default(), // TODO: support branching a second time
             defines: self.defines.clone(),
             maps: Default::default(),
             skins: Default::default(),
             scripts: Default::default(),
-            ifdef_stack: Default::default(),  // should be fine
+            ifdef_stack: Default::default(), // should be fine
             ifdef_history: Default::default(),
             last_input_loc: self.last_input_loc,
             last_printable_input_loc: self.last_printable_input_loc,
@@ -402,7 +429,11 @@ impl<'ctx> Preprocessor<'ctx> {
     /// Check whether this preprocessor's state as of the end of the given file
     /// matches the given child preprocessor.
     pub fn matches_end_of_file(&self, file: FileId, other: &Preprocessor) -> bool {
-        let location = Location { file, line: !0, column: !0 };
+        let location = Location {
+            file,
+            line: !0,
+            column: !0,
+        };
         let defines = DefineMap::from_history(&self.history, location);
         defines.equals(&other.defines)
     }
@@ -438,7 +469,8 @@ impl<'ctx> Preprocessor<'ctx> {
     }
 
     fn move_to_history(&mut self, name: String, previous: (Location, Define)) {
-        self.history.insert(range(previous.0, self.last_input_loc), (name, previous.1));
+        self.history
+            .insert(range(previous.0, self.last_input_loc), (name, previous.1));
     }
 
     // ------------------------------------------------------------------------
@@ -450,7 +482,8 @@ impl<'ctx> Preprocessor<'ctx> {
 
     fn pop_ifdef(&mut self) -> Option<Ifdef> {
         self.ifdef_stack.pop().map(|ifdef| {
-            self.ifdef_history.insert(range(ifdef.location, self.last_input_loc), ifdef.active);
+            self.ifdef_history
+                .insert(range(ifdef.location, self.last_input_loc), ifdef.active);
             ifdef
         })
     }
@@ -462,7 +495,7 @@ impl<'ctx> Preprocessor<'ctx> {
             self.last_input_loc = tok.location;
 
             if let Token::Punct(Punctuation::Newline) = tok.token {
-                break
+                break;
             }
 
             if let Err(e) = self.real_next(tok.token, true) {
@@ -470,8 +503,12 @@ impl<'ctx> Preprocessor<'ctx> {
             }
         }
 
-        let mut parser = ::parser::Parser::new(self.context,
-            self.output.drain(..).map(|token| LocatedToken::new(start, token)));
+        let mut parser = ::parser::Parser::new(
+            self.context,
+            self.output
+                .drain(..)
+                .map(|token| LocatedToken::new(start, token)),
+        );
         parser.set_fallback_location(start);
         let expr = parser.expression();
         let expr = parser.require(expr)?;
@@ -502,10 +539,16 @@ impl<'ctx> Preprocessor<'ctx> {
 
     fn check_danger_ident(&mut self, name: &str, kind: &str) {
         if let Some(loc) = self.danger_idents.get(name) {
-            self.context.register_error(DMError::new(*loc, format!(
-                "macro {:?} used immediately before being {}:\n\
-                https://secure.byond.com/forum/?post=2072419", name, kind
-            )).set_severity(Severity::Warning));
+            self.context.register_error(
+                DMError::new(
+                    *loc,
+                    format!(
+                        "macro {:?} used immediately before being {}:\n\
+                         https://secure.byond.com/forum/?post=2072419",
+                        name, kind
+                    ),
+                ).set_severity(Severity::Warning),
+            );
         }
     }
 
@@ -519,10 +562,13 @@ impl<'ctx> Preprocessor<'ctx> {
         macro_rules! next {
             () => {
                 match self.inner_next() {
-                    Some(x) => { _last_expected_loc = x.location; x.token },
-                    None => return Err(self.error("unexpected EOF"))
+                    Some(x) => {
+                        _last_expected_loc = x.location;
+                        x.token
+                    }
+                    None => return Err(self.error("unexpected EOF")),
                 }
-            }
+            };
         }
         macro_rules! expect_token {
             (($($i:ident),*) = $p:pat) => {
@@ -534,8 +580,8 @@ impl<'ctx> Preprocessor<'ctx> {
         }
 
         const ALL_DIRECTIVES: &[&str] = &[
-            "if", "ifdef", "ifndef", "elif", "else", "endif",
-            "include", "define", "undef", "warn", "error",
+            "if", "ifdef", "ifndef", "elif", "else", "endif", "include", "define", "undef", "warn",
+            "error",
         ];
         let disabled = !inside_condition && self.is_disabled();
         match read {
@@ -545,35 +591,41 @@ impl<'ctx> Preprocessor<'ctx> {
                 match &ident[..] {
                     // ifdefs
                     "endif" => {
-                        self.pop_ifdef().ok_or_else(||
-                            DMError::new(self.last_input_loc, "unmatched #endif"))?;
+                        self.pop_ifdef()
+                            .ok_or_else(|| DMError::new(self.last_input_loc, "unmatched #endif"))?;
                     }
                     "else" => {
-                        let last = self.pop_ifdef().ok_or_else(||
-                            DMError::new(self.last_input_loc, "unmatched #else"))?;
+                        let last = self
+                            .pop_ifdef()
+                            .ok_or_else(|| DMError::new(self.last_input_loc, "unmatched #else"))?;
                         self.ifdef_stack.push(last.else_(self.last_input_loc));
                     }
                     "ifdef" => {
                         expect_token!((define_name) = Token::Ident(define_name, _));
                         expect_token!(() = Token::Punct(Punctuation::Newline));
                         let enabled = self.is_defined(&define_name);
-                        self.ifdef_stack.push(Ifdef::new(self.last_input_loc, enabled));
+                        self.ifdef_stack
+                            .push(Ifdef::new(self.last_input_loc, enabled));
                     }
                     "ifndef" => {
                         expect_token!((define_name) = Token::Ident(define_name, _));
                         expect_token!(() = Token::Punct(Punctuation::Newline));
                         let enabled = !self.is_defined(&define_name);
-                        self.ifdef_stack.push(Ifdef::new(self.last_input_loc, enabled));
+                        self.ifdef_stack
+                            .push(Ifdef::new(self.last_input_loc, enabled));
                     }
                     "if" => {
                         let enabled = self.evaluate();
-                        self.ifdef_stack.push(Ifdef::new(self.last_input_loc, enabled));
+                        self.ifdef_stack
+                            .push(Ifdef::new(self.last_input_loc, enabled));
                     }
                     "elif" => {
-                        let last = self.pop_ifdef().ok_or_else(||
-                            DMError::new(self.last_input_loc, "unmatched #elif"))?;
+                        let last = self
+                            .pop_ifdef()
+                            .ok_or_else(|| DMError::new(self.last_input_loc, "unmatched #elif"))?;
                         let enabled = self.evaluate();
-                        self.ifdef_stack.push(last.else_if(self.last_input_loc, enabled));
+                        self.ifdef_stack
+                            .push(last.else_if(self.last_input_loc, enabled));
                     }
                     // --------------------------------------------------------
                     // anything other than ifdefs may be ifdef'd out
@@ -587,24 +639,43 @@ impl<'ctx> Preprocessor<'ctx> {
 
                         for candidate in vec![
                             self.env_file.parent().unwrap().join(&path),
-                            self.include_stack.top_file_path().parent().unwrap().join(&path),
+                            self.include_stack
+                                .top_file_path()
+                                .parent()
+                                .unwrap()
+                                .join(&path),
                             path,
-                        ].into_iter().rev() {
-                            if !candidate.exists() { continue }
+                        ].into_iter()
+                        .rev()
+                        {
+                            if !candidate.exists() {
+                                continue;
+                            }
                             // Double-match is used to let go of the borrow of
                             // `candidate` so it can be used in the second half.
-                            enum FileType { DMM, DMF, DMS, DM }
+                            enum FileType {
+                                DMM,
+                                DMF,
+                                DMS,
+                                DM,
+                            }
                             match match candidate.extension().and_then(|s| s.to_str()) {
                                 Some("dmm") => FileType::DMM,
                                 Some("dmf") => FileType::DMF,
                                 Some("dms") => FileType::DMS,
                                 Some("dm") => FileType::DM,
                                 Some(ext) => {
-                                    self.context.register_error(DMError::new(self.last_input_loc, format!("unknown extension {:?}", ext)));
+                                    self.context.register_error(DMError::new(
+                                        self.last_input_loc,
+                                        format!("unknown extension {:?}", ext),
+                                    ));
                                     return Ok(());
                                 }
                                 None => {
-                                    self.context.register_error(DMError::new(self.last_input_loc, "filename has no extension"));
+                                    self.context.register_error(DMError::new(
+                                        self.last_input_loc,
+                                        "filename has no extension",
+                                    ));
                                     return Ok(());
                                 }
                             } {
@@ -621,13 +692,18 @@ impl<'ctx> Preprocessor<'ctx> {
                                         self.output.push_back(Token::Punct(Punctuation::Newline));
                                         self.include_stack.stack.push(include);
                                     }
-                                    Err(e) => self.context.register_error(DMError::new(self.last_input_loc,
-                                        "failed to open file").set_cause(e)),
+                                    Err(e) => self.context.register_error(
+                                        DMError::new(self.last_input_loc, "failed to open file")
+                                            .set_cause(e),
+                                    ),
                                 },
                             }
                             return Ok(());
                         }
-                        self.context.register_error(DMError::new(self.last_input_loc, "failed to find file"));
+                        self.context.register_error(DMError::new(
+                            self.last_input_loc,
+                            "failed to find file",
+                        ));
                         return Ok(());
                     }
                     // both constant and function defines
@@ -666,10 +742,14 @@ impl<'ctx> Preprocessor<'ctx> {
                                         match next!() {
                                             Token::Ident(name, _) => params.push(name),
                                             Token::Punct(Punctuation::Ellipsis) => {
-                                                params.push("__VA_ARGS__".to_owned());  // default
+                                                params.push("__VA_ARGS__".to_owned()); // default
                                                 variadic = true;
                                             }
-                                            _ => return Err(self.error("malformed macro parameters, expected name"))
+                                            _ => {
+                                                return Err(self.error(
+                                                    "malformed macro parameters, expected name",
+                                                ))
+                                            }
                                         }
                                         match next!() {
                                             Token::Punct(Punctuation::Comma) => {}
@@ -681,7 +761,11 @@ impl<'ctx> Preprocessor<'ctx> {
                                                     _ => return Err(self.error("only the last parameter of a macro may be variadic"))
                                                 }
                                             }
-                                            _ => return Err(self.error("malformed macro parameters, expected comma"))
+                                            _ => {
+                                                return Err(self.error(
+                                                    "malformed macro parameters, expected comma",
+                                                ))
+                                            }
                                         }
                                     }
                                 }
@@ -702,18 +786,34 @@ impl<'ctx> Preprocessor<'ctx> {
                         let define = if params.is_empty() {
                             Define::Constant { subst, docs }
                         } else {
-                            Define::Function { params, subst, variadic, docs }
+                            Define::Function {
+                                params,
+                                subst,
+                                variadic,
+                                docs,
+                            }
                         };
                         // DEBUG can only be defined in the root .dme file
                         if define_name != "DEBUG" || self.in_environment() {
-                            if let Some(previous_loc) = self.defines.insert(define_name.clone(), (define_name_loc, define)) {
+                            if let Some(previous_loc) = self
+                                .defines
+                                .insert(define_name.clone(), (define_name_loc, define))
+                            {
                                 // DM doesn't issue a warning for this, but it's usually a mistake, so let's.
                                 // FILE_DIR is handled specially and sometimes makes sense to define multiple times.
                                 if define_name != "FILE_DIR" {
-                                    self.context.register_error(DMError::new(define_name_loc,
-                                        format!("macro redefined: {}", define_name)).set_severity(Severity::Warning));
-                                    self.context.register_error(DMError::new(previous_loc,
-                                        format!("previous definition of {}", define_name)).set_severity(Severity::Info));
+                                    self.context.register_error(
+                                        DMError::new(
+                                            define_name_loc,
+                                            format!("macro redefined: {}", define_name),
+                                        ).set_severity(Severity::Warning),
+                                    );
+                                    self.context.register_error(
+                                        DMError::new(
+                                            previous_loc,
+                                            format!("previous definition of {}", define_name),
+                                        ).set_severity(Severity::Info),
+                                    );
                                 }
                             }
                         }
@@ -727,21 +827,29 @@ impl<'ctx> Preprocessor<'ctx> {
                         if let Some(previous) = self.defines.remove(&define_name) {
                             self.move_to_history(define_name, previous);
                         } else {
-                            self.context.register_error(DMError::new(define_name_loc,
-                                format!("macro undefined while not defined: {}", define_name)
-                            ).set_severity(Severity::Warning));
+                            self.context.register_error(
+                                DMError::new(
+                                    define_name_loc,
+                                    format!("macro undefined while not defined: {}", define_name),
+                                ).set_severity(Severity::Warning),
+                            );
                         }
                     }
                     "warn" if disabled => {}
                     "warn" => {
                         expect_token!((text) = Token::String(text));
-                        self.context.register_error(DMError::new(self.last_input_loc, format!("#{} {}", ident, text))
-                            .set_severity(Severity::Warning));
+                        self.context.register_error(
+                            DMError::new(self.last_input_loc, format!("#{} {}", ident, text))
+                                .set_severity(Severity::Warning),
+                        );
                     }
                     "error" if disabled => {}
                     "error" => {
                         expect_token!((text) = Token::String(text));
-                        self.context.register_error(DMError::new(self.last_input_loc, format!("#{} {}", ident, text)));
+                        self.context.register_error(DMError::new(
+                            self.last_input_loc,
+                            format!("#{} {}", ident, text),
+                        ));
                     }
                     // none of this other stuff should even exist
                     other => {
@@ -751,8 +859,19 @@ impl<'ctx> Preprocessor<'ctx> {
                                 meant = each;
                             }
                         }
-                        return Err(DMError::new(self.last_input_loc, format!("unknown directive: #{}{}{}", ident,
-                            if !meant.is_empty() { ", did you mean #" } else { "" }, meant)));
+                        return Err(DMError::new(
+                            self.last_input_loc,
+                            format!(
+                                "unknown directive: #{}{}{}",
+                                ident,
+                                if !meant.is_empty() {
+                                    ", did you mean #"
+                                } else {
+                                    ""
+                                },
+                                meant
+                            ),
+                        ));
                     }
                 }
                 // yield a newline
@@ -767,26 +886,30 @@ impl<'ctx> Preprocessor<'ctx> {
 
                 // lint for BYOND bug
                 if self.in_interp_string > 0 {
-                    self.danger_idents.insert(ident.clone(), self.last_input_loc);
+                    self.danger_idents
+                        .insert(ident.clone(), self.last_input_loc);
                 }
 
                 // substitute special macros
                 if ident == "__FILE__" {
                     for include in self.include_stack.stack.iter().rev() {
                         if let Include::File { ref path, .. } = *include {
-                            self.output.push_back(Token::String(path.display().to_string()));
+                            self.output
+                                .push_back(Token::String(path.display().to_string()));
                             return Ok(());
                         }
                     }
                     self.output.push_back(Token::String(String::new()));
                     return Ok(());
                 } else if ident == "__LINE__" {
-                    self.output.push_back(Token::Int(self.last_input_loc.line as i32));
+                    self.output
+                        .push_back(Token::Int(self.last_input_loc.line as i32));
                     return Ok(());
                 }
 
                 // if it's a define, perform the substitution
-                match self.defines.get(ident).cloned() { // TODO
+                match self.defines.get(ident).cloned() {
+                    // TODO
                     Some((_, Define::Constant { subst, docs: _ })) => {
                         let e = Include::Expansion {
                             name: ident.to_owned(),
@@ -796,7 +919,15 @@ impl<'ctx> Preprocessor<'ctx> {
                         self.include_stack.stack.push(e);
                         return Ok(());
                     }
-                    Some((_, Define::Function { ref params, ref subst, variadic, docs: _ })) => {
+                    Some((
+                        _,
+                        Define::Function {
+                            ref params,
+                            ref subst,
+                            variadic,
+                            docs: _,
+                        },
+                    )) => {
                         // if it's not followed by an LParen, it isn't really a function call
                         match next!() {
                             Token::Punct(Punctuation::LParen) => {}
@@ -842,14 +973,16 @@ impl<'ctx> Preprocessor<'ctx> {
                         // check for correct number of arguments
                         if variadic {
                             if args.len() > params.len() {
-                                let new_arg = args.split_off(params.len() - 1).join(&Token::Punct(Punctuation::Comma));
+                                let new_arg = args
+                                    .split_off(params.len() - 1)
+                                    .join(&Token::Punct(Punctuation::Comma));
                                 args.push(new_arg);
                             } else if args.len() + 1 == params.len() {
                                 args.push(Vec::new());
                             }
                         }
                         if args.len() != params.len() {
-                            return Err(self.error("wrong number of arguments to macro call"))
+                            return Err(self.error("wrong number of arguments to macro call"));
                         }
 
                         // paste them into the expansion
@@ -858,37 +991,51 @@ impl<'ctx> Preprocessor<'ctx> {
                         while let Some(token) = input.next() {
                             match token {
                                 // just an ident = expand it
-                                Token::Ident(ident, ws) => match params.iter().position(|x| *x == ident) {
-                                    Some(i) => expansion.extend(args[i].iter().cloned()),
-                                    None => expansion.push_back(Token::Ident(ident, ws)),
-                                },
+                                Token::Ident(ident, ws) => {
+                                    match params.iter().position(|x| *x == ident) {
+                                        Some(i) => expansion.extend(args[i].iter().cloned()),
+                                        None => expansion.push_back(Token::Ident(ident, ws)),
+                                    }
+                                }
                                 // token paste = concat two idents together, if at all possible
                                 Token::Punct(Punctuation::TokenPaste) => {
                                     match (expansion.pop_back(), input.next()) {
-                                        (Some(Token::Ident(first, ws1)), Some(Token::Ident(second, ws))) => {
-                                            match params.iter().position(|x| *x == second) {
-                                                Some(i) => {
-                                                    let mut arg = args[i].iter().cloned();
-                                                    match arg.next() {
-                                                        Some(Token::Ident(second, ws)) => {
-                                                            expansion.push_back(Token::Ident(format!("{}{}", first, second), ws));
-                                                        }
-                                                        Some(other) => {
-                                                            expansion.push_back(Token::Ident(first, ws1));
-                                                            expansion.push_back(other);
-                                                        }
-                                                        None => {}
+                                        (
+                                            Some(Token::Ident(first, ws1)),
+                                            Some(Token::Ident(second, ws)),
+                                        ) => match params.iter().position(|x| *x == second) {
+                                            Some(i) => {
+                                                let mut arg = args[i].iter().cloned();
+                                                match arg.next() {
+                                                    Some(Token::Ident(second, ws)) => {
+                                                        expansion.push_back(Token::Ident(
+                                                            format!("{}{}", first, second),
+                                                            ws,
+                                                        ));
                                                     }
-                                                    expansion.extend(arg);
+                                                    Some(other) => {
+                                                        expansion
+                                                            .push_back(Token::Ident(first, ws1));
+                                                        expansion.push_back(other);
+                                                    }
+                                                    None => {}
                                                 }
-                                                None => expansion.push_back(Token::Ident(format!("{}{}", first, second), ws)),
+                                                expansion.extend(arg);
                                             }
-                                        }
+                                            None => expansion.push_back(Token::Ident(
+                                                format!("{}{}", first, second),
+                                                ws,
+                                            )),
+                                        },
                                         (non_ident_first, Some(Token::Ident(second, ws))) => {
                                             expansion.extend(non_ident_first);
                                             match params.iter().position(|x| *x == second) {
-                                                Some(i) => expansion.extend(args[i].iter().cloned()),
-                                                None => expansion.push_back(Token::Ident(second, ws)),
+                                                Some(i) => {
+                                                    expansion.extend(args[i].iter().cloned())
+                                                }
+                                                None => {
+                                                    expansion.push_back(Token::Ident(second, ws))
+                                                }
                                             }
                                         }
                                         (non_ident_first, non_ident_second) => {
@@ -897,29 +1044,48 @@ impl<'ctx> Preprocessor<'ctx> {
                                         }
                                     }
                                     // read the next ident and concat it into the previous ident
-                                },
+                                }
                                 // hash = must be followed by a param name, stringify the whole argument
                                 Token::Punct(Punctuation::Hash) => {
                                     match input.next() {
-                                        Some(Token::Ident(argname, _)) => match params.iter().position(|x| *x == argname) {
-                                            Some(i) => {
-                                                let mut string = String::new();
-                                                for each in &args[i] {
-                                                    use std::fmt::Write;
-                                                    if !string.is_empty() {
-                                                        string.push(' ');
+                                        Some(Token::Ident(argname, _)) => {
+                                            match params.iter().position(|x| *x == argname) {
+                                                Some(i) => {
+                                                    let mut string = String::new();
+                                                    for each in &args[i] {
+                                                        use std::fmt::Write;
+                                                        if !string.is_empty() {
+                                                            string.push(' ');
+                                                        }
+                                                        let _e = write!(string, "{}", each);
+                                                        #[cfg(debug_assertions)]
+                                                        {
+                                                            _e.unwrap();
+                                                        }
                                                     }
-                                                    let _e = write!(string, "{}", each);
-                                                    #[cfg(debug_assertions)] {
-                                                        _e.unwrap();
-                                                    }
+                                                    expansion.push_back(Token::String(string));
                                                 }
-                                                expansion.push_back(Token::String(string));
+                                                None => return Err(DMError::new(
+                                                    self.last_input_loc,
+                                                    format!(
+                                                        "can't stringify non-argument ident {:?}",
+                                                        argname
+                                                    ),
+                                                )),
                                             }
-                                            None => return Err(DMError::new(self.last_input_loc, format!("can't stringify non-argument ident {:?}", argname))),
                                         }
-                                        Some(tok) => return Err(DMError::new(self.last_input_loc, format!("can't stringify non-ident '{}'", tok))),
-                                        None => return Err(DMError::new(self.last_input_loc, "can't stringify EOF")),
+                                        Some(tok) => {
+                                            return Err(DMError::new(
+                                                self.last_input_loc,
+                                                format!("can't stringify non-ident '{}'", tok),
+                                            ))
+                                        }
+                                        None => {
+                                            return Err(DMError::new(
+                                                self.last_input_loc,
+                                                "can't stringify EOF",
+                                            ))
+                                        }
                                     }
                                 }
                                 _ => expansion.push_back(token),
@@ -942,7 +1108,7 @@ impl<'ctx> Preprocessor<'ctx> {
             Token::DocComment(doc) => {
                 self.docs_in.push_back((self.last_input_loc, doc));
                 return Ok(());
-            },
+            }
             // everything else is itself
             _ => {}
         }
@@ -976,8 +1142,8 @@ impl<'ctx> Iterator for Preprocessor<'ctx> {
             if let Some(tok) = self.inner_next() {
                 // linting for https://secure.byond.com/forum/?post=2072419
                 if !tok.token.is_whitespace() && tok.token != Token::Punct(Punctuation::Hash) {
-                    if tok.location.file != self.last_printable_input_loc.file ||
-                        tok.location.line > self.last_printable_input_loc.line
+                    if tok.location.file != self.last_printable_input_loc.file
+                        || tok.location.line > self.last_printable_input_loc.line
                     {
                         self.danger_idents.clear();
                     }
@@ -991,7 +1157,8 @@ impl<'ctx> Iterator for Preprocessor<'ctx> {
                 }
             } else {
                 while let Some(ifdef) = self.pop_ifdef() {
-                    self.context.register_error(DMError::new(ifdef.location, "unterminated #if/#ifdef"));
+                    self.context
+                        .register_error(DMError::new(ifdef.location, "unterminated #if/#ifdef"));
                 }
                 return None;
             }

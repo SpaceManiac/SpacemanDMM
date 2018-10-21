@@ -1,9 +1,9 @@
 //! Data structures for the parser to output mappings from input ranges to AST
 //! elements at those positions.
 
-use interval_tree::{IntervalTree, RangePairIter, RangeInclusive, range};
-use super::Location;
 use super::ast::*;
+use super::Location;
+use interval_tree::{range, IntervalTree, RangeInclusive, RangePairIter};
 
 pub type Iter<'a> = RangePairIter<'a, Location, Annotation>;
 
@@ -23,17 +23,17 @@ pub enum Annotation {
     UnscopedVar(String),
     ScopedCall(Vec<String>, String),
     ScopedVar(Vec<String>, String),
-    ParentCall,  // ..
-    ReturnVal,  // .
-    InSequence(usize),  // where in TreePath or TypePath is this ident
+    ParentCall,        // ..
+    ReturnVal,         // .
+    InSequence(usize), // where in TreePath or TypePath is this ident
 
     // error annotations, mostly for autocompletion
-    ScopedMissingIdent(Vec<String>),  // when a . is followed by a non-ident
+    ScopedMissingIdent(Vec<String>), // when a . is followed by a non-ident
     IncompleteTypePath(TypePath, PathOp),
     IncompleteTreePath(bool, Vec<String>),
 
-    ProcArguments(Vec<String>, String, usize),  // Vec empty for unscoped call
-    ProcArgument(usize),  // where in the prog arguments we are
+    ProcArguments(Vec<String>, String, usize), // Vec empty for unscoped call
+    ProcArgument(usize),                       // where in the prog arguments we are
 }
 
 pub struct AnnotationTree {
@@ -52,7 +52,8 @@ impl Default for AnnotationTree {
 
 impl AnnotationTree {
     pub fn insert(&mut self, place: ::std::ops::Range<Location>, value: Annotation) {
-        self.tree.insert(range(place.start, place.end.pred()), value);
+        self.tree
+            .insert(range(place.start, place.end.pred()), value);
         self.len += 1;
     }
 

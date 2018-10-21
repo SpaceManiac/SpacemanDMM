@@ -1,19 +1,20 @@
 //! A CLI tool to generate HTML documentation of DreamMaker codebases.
 #![forbid(unsafe_code)]
 extern crate dreammaker as dm;
+extern crate git2;
 extern crate pulldown_cmark;
 extern crate tera;
-extern crate git2;
 extern crate walkdir;
-#[macro_use] extern crate serde_derive;
+#[macro_use]
+extern crate serde_derive;
 
-mod template;
 mod markdown;
+mod template;
 
-use std::collections::{BTreeMap, BTreeSet};
 use std::cell::RefCell;
-use std::io::{self, Write};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use dm::docs::*;
@@ -37,7 +38,9 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
     // register tera extensions
     tera.register_filter("linkify_type", |input, _opts| match input {
-        tera::Value::String(s) => Ok(linkify_type(s.split("/").skip_while(|b| b.is_empty())).into()),
+        tera::Value::String(s) => {
+            Ok(linkify_type(s.split("/").skip_while(|b| b.is_empty())).into())
+        }
         tera::Value::Array(a) => Ok(linkify_type(a.iter().filter_map(|v| v.as_str())).into()),
         _ => Err("linkify_type() input must be string".into()),
     });
@@ -45,12 +48,16 @@ fn main() -> Result<(), Box<std::error::Error>> {
         tera::Value::String(s) => Ok(s.len().into()),
         tera::Value::Array(a) => Ok(a.len().into()),
         tera::Value::Object(o) => Ok(o.len().into()),
-        _ => Ok(0 .into()),
+        _ => Ok(0.into()),
     });
     tera.register_filter("substring", |input, opts| match input {
         tera::Value::String(s) => {
             let start = opts.get("start").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-            let mut end = opts.get("end").and_then(|v| v.as_u64()).map(|s| s as usize).unwrap_or(s.len());
+            let mut end = opts
+                .get("end")
+                .and_then(|v| v.as_u64())
+                .map(|s| s as usize)
+                .unwrap_or(s.len());
             if end > s.len() {
                 end = s.len();
             }
@@ -110,7 +117,12 @@ fn main() -> Result<(), Box<std::error::Error>> {
                 params = &[][..];
                 is_variadic = false;
             }
-            dm::preprocessor::Define::Function { docs: dc, params: macro_params, variadic, .. } => {
+            dm::preprocessor::Define::Function {
+                docs: dc,
+                params: macro_params,
+                variadic,
+                ..
+            } => {
                 docs = dc;
                 has_params = true;
                 params = macro_params;
@@ -122,15 +134,33 @@ fn main() -> Result<(), Box<std::error::Error>> {
         }
         let docs = DocBlock::parse(&docs.text());
         let module = module_entry(&mut modules, &context.file_path(range.start.file));
-        module.items_wip.push((range.start.line, ModuleItem::Define { name, teaser: docs.teaser().to_owned() }));
-        module.defines.insert(name, Define { docs, has_params, params, is_variadic, line: range.start.line });
+        module.items_wip.push((
+            range.start.line,
+            ModuleItem::Define {
+                name,
+                teaser: docs.teaser().to_owned(),
+            },
+        ));
+        module.defines.insert(
+            name,
+            Define {
+                docs,
+                has_params,
+                params,
+                is_variadic,
+                line: range.start.line,
+            },
+        );
         macro_count += 1;
     }
 
     // search the code tree for Markdown files
     // TODO: don't hardcode this?
     let mut index_docs = None;
-    for entry in walkdir::WalkDir::new("code").into_iter().filter_entry(is_visible) {
+    for entry in walkdir::WalkDir::new("code")
+        .into_iter()
+        .filter_entry(is_visible)
+    {
         use std::io::Read;
 
         let entry = entry?;
@@ -146,11 +176,14 @@ fn main() -> Result<(), Box<std::error::Error>> {
             index_docs = Some(DocBlock::parse_with_title(&buf));
         } else {
             let module = module_entry(&mut modules, &path);
-            module.items_wip.push((0, ModuleItem::DocComment(DocComment {
-                kind: CommentKind::Block,
-                target: DocTarget::EnclosingItem,
-                text: buf,
-            })));
+            module.items_wip.push((
+                0,
+                ModuleItem::DocComment(DocComment {
+                    kind: CommentKind::Block,
+                    target: DocTarget::EnclosingItem,
+                    text: buf,
+                }),
+            ));
         }
     }
 
@@ -162,10 +195,14 @@ fn main() -> Result<(), Box<std::error::Error>> {
         progress.update(&ty.path);
 
         let mut parsed_type = ParsedType::default();
-        parsed_type.name = ty.get().vars.get("name")
+        parsed_type.name = ty
+            .get()
+            .vars
+            .get("name")
             .and_then(|v| v.value.constant.as_ref())
             .and_then(|c| c.as_str())
-            .unwrap_or("").into();
+            .unwrap_or("")
+            .into();
 
         let mut anything = false;
         let mut substance = false;
@@ -196,14 +233,17 @@ fn main() -> Result<(), Box<std::error::Error>> {
                     is_tmp: decl.var_type.is_tmp,
                     path: &decl.var_type.type_path,
                 });
-                parsed_type.vars.insert(name, Var {
-                    docs: block,
-                    type_,
-                    // but `decl` is only used if it's on this type
-                    decl: if var.declaration.is_some() { "var" } else { "" },
-                    file: context.file_path(var.value.location.file),
-                    line: var.value.location.line,
-                });
+                parsed_type.vars.insert(
+                    name,
+                    Var {
+                        docs: block,
+                        type_,
+                        // but `decl` is only used if it's on this type
+                        decl: if var.declaration.is_some() { "var" } else { "" },
+                        file: context.file_path(var.value.location.file),
+                        line: var.value.location.line,
+                    },
+                );
                 anything = true;
                 substance = true;
             }
@@ -213,19 +253,29 @@ fn main() -> Result<(), Box<std::error::Error>> {
             let proc_value = proc.value.last().unwrap();
             if !proc_value.docs.is_empty() {
                 let block = DocBlock::parse(&proc_value.docs.text());
-                parsed_type.procs.insert(name, Proc {
-                    docs: block,
-                    params: proc_value.parameters.iter().map(|p| Param {
-                        name: p.name.clone(),
-                        type_path: format_type_path(&p.path),
-                    }).collect(),
-                    decl: match proc.declaration {
-                        Some(ref decl) => if decl.is_verb { "verb" } else { "proc" },
-                        None => "",
+                parsed_type.procs.insert(
+                    name,
+                    Proc {
+                        docs: block,
+                        params: proc_value
+                            .parameters
+                            .iter()
+                            .map(|p| Param {
+                                name: p.name.clone(),
+                                type_path: format_type_path(&p.path),
+                            }).collect(),
+                        decl: match proc.declaration {
+                            Some(ref decl) => if decl.is_verb {
+                                "verb"
+                            } else {
+                                "proc"
+                            },
+                            None => "",
+                        },
+                        file: context.file_path(proc_value.location.file),
+                        line: proc_value.location.line,
                     },
-                    file: context.file_path(proc_value.location.file),
-                    line: proc_value.location.line,
-                });
+                );
                 anything = true;
                 substance = true;
             }
@@ -233,12 +283,17 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
         // file the type under its module as well
         if let Some(ref block) = parsed_type.docs {
-            if let Some(module) = modules.get_mut(&module_path(&context.file_path(ty.location.file))) {
-                module.items_wip.push((ty.location.line, ModuleItem::Type {
-                    path: ty.get().pretty_path(),
-                    teaser: block.teaser().to_owned(),
-                    substance: substance,
-                }));
+            if let Some(module) =
+                modules.get_mut(&module_path(&context.file_path(ty.location.file)))
+            {
+                module.items_wip.push((
+                    ty.location.line,
+                    ModuleItem::Type {
+                        path: ty.get().pretty_path(),
+                        teaser: block.teaser().to_owned(),
+                        substance: substance,
+                    },
+                ));
             }
         }
 
@@ -266,20 +321,25 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
         let mut docs = DocCollection::default();
         let mut _first = true;
-        macro_rules! push_docs { () => {  // oof
-            if !docs.is_empty() {
-                let doc = ::std::mem::replace(&mut docs, Default::default());
-                if _first {
-                    _first = false;
-                    let (title, block) = DocBlock::parse_with_title(&doc.text());
-                    module.name = title;
-                    module.teaser = block.teaser().to_owned();
-                    module.items.push(ModuleItem::Docs(block.html));
-                } else {
-                    module.items.push(ModuleItem::Docs(markdown::render(&doc.text())));
+        macro_rules! push_docs {
+            () => {
+                // oof
+                if !docs.is_empty() {
+                    let doc = ::std::mem::replace(&mut docs, Default::default());
+                    if _first {
+                        _first = false;
+                        let (title, block) = DocBlock::parse_with_title(&doc.text());
+                        module.name = title;
+                        module.teaser = block.teaser().to_owned();
+                        module.items.push(ModuleItem::Docs(block.html));
+                    } else {
+                        module
+                            .items
+                            .push(ModuleItem::Docs(markdown::render(&doc.text())));
+                    }
                 }
-            }
-        }}
+            };
+        }
 
         let mut last_line = 0;
         for (line, item) in module.items_wip.drain(..) {
@@ -290,7 +350,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
                     }
                     docs.push(doc);
                     last_line = line;
-                },
+                }
                 other => {
                     push_docs!();
                     module.items.push(other);
@@ -301,17 +361,30 @@ fn main() -> Result<(), Box<std::error::Error>> {
     }
 
     drop(progress);
-    print!("documenting {} modules, {} macros, ", modules.len(), macro_count);
+    print!(
+        "documenting {} modules, {} macros, ",
+        modules.len(),
+        macro_count
+    );
     if count == 0 {
         println!("0 types");
     } else {
-        println!("{}/{}/{} types ({}%)", substance_count, types_with_docs.len(), count, (types_with_docs.len() * 100 / count));
+        println!(
+            "{}/{}/{} types ({}%)",
+            substance_count,
+            types_with_docs.len(),
+            count,
+            (types_with_docs.len() * 100 / count)
+        );
     }
 
     ALL_TYPE_NAMES.with(|all| {
-        all.borrow_mut().extend(types_with_docs.iter()
-            .filter(|(_, v)| v.substance)
-            .map(|(&t, _)| t.to_owned()));
+        all.borrow_mut().extend(
+            types_with_docs
+                .iter()
+                .filter(|(_, v)| v.substance)
+                .map(|(&t, _)| t.to_owned()),
+        );
     });
 
     // render
@@ -320,12 +393,14 @@ fn main() -> Result<(), Box<std::error::Error>> {
     template::save_resources(output_path)?;
 
     let env_filename = environment.display().to_string();
-    let world_name = objtree.find("/world")
+    let world_name = objtree
+        .find("/world")
         .and_then(|w| w.get().vars.get("name"))
         .and_then(|v| v.value.constant.as_ref())
         .and_then(|c| c.as_str())
         .unwrap_or("");
-    let title = index_docs.as_ref()
+    let title = index_docs
+        .as_ref()
         .and_then(|(title, _)| title.as_ref())
         .map(|s| &s[..])
         .unwrap_or(world_name);
@@ -356,33 +431,38 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
         progress.update("index.html");
         let mut index = create(&output_path.join("index.html"))?;
-        index.write_all(tera.render("dm_index.html", &Index {
-            env,
-            html: index_docs.as_ref().map(|(_, docs)| &docs.html[..]),
-            modules: build_index_tree(modules.iter().map(|(_path, module)| IndexTree {
-                htmlname: &module.htmlname,
-                full_name: &module.orig_filename,
-                self_name: match module.name {
-                    None => last_element(&module.htmlname),
-                    Some(ref t) => t.as_str(),
+        index.write_all(
+            tera.render(
+                "dm_index.html",
+                &Index {
+                    env,
+                    html: index_docs.as_ref().map(|(_, docs)| &docs.html[..]),
+                    modules: build_index_tree(modules.iter().map(|(_path, module)| IndexTree {
+                        htmlname: &module.htmlname,
+                        full_name: &module.orig_filename,
+                        self_name: match module.name {
+                            None => last_element(&module.htmlname),
+                            Some(ref t) => t.as_str(),
+                        },
+                        teaser: &module.teaser,
+                        no_substance: false,
+                        children: Vec::new(),
+                    })),
+                    types: build_index_tree(types_with_docs.iter().map(|(path, ty)| IndexTree {
+                        htmlname: &ty.htmlname,
+                        full_name: path,
+                        self_name: if ty.name.is_empty() {
+                            last_element(path)
+                        } else {
+                            &ty.name
+                        },
+                        teaser: ty.docs.as_ref().map_or("", |d| d.teaser()),
+                        no_substance: !ty.substance,
+                        children: Vec::new(),
+                    })),
                 },
-                teaser: &module.teaser,
-                no_substance: false,
-                children: Vec::new(),
-            })),
-            types: build_index_tree(types_with_docs.iter().map(|(path, ty)| IndexTree {
-                htmlname: &ty.htmlname,
-                full_name: path,
-                self_name: if ty.name.is_empty() {
-                    last_element(path)
-                } else {
-                    &ty.name
-                },
-                teaser: ty.docs.as_ref().map_or("", |d| d.teaser()),
-                no_substance: !ty.substance,
-                children: Vec::new(),
-            })),
-        })?.as_bytes())?;
+            )?.as_bytes(),
+        )?;
     }
 
     for (path, details) in modules.iter() {
@@ -403,12 +483,17 @@ fn main() -> Result<(), Box<std::error::Error>> {
         }
 
         let mut f = create(&output_path.join(&fname))?;
-        f.write_all(tera.render("dm_module.html", &ModuleArgs {
-            env,
-            base_href: &base,
-            path,
-            details,
-        })?.as_bytes())?;
+        f.write_all(
+            tera.render(
+                "dm_module.html",
+                &ModuleArgs {
+                    env,
+                    base_href: &base,
+                    path,
+                    details,
+                },
+            )?.as_bytes(),
+        )?;
     }
 
     for (path, details) in types_with_docs.iter() {
@@ -434,13 +519,18 @@ fn main() -> Result<(), Box<std::error::Error>> {
         }
 
         let mut f = create(&output_path.join(&fname))?;
-        f.write_all(tera.render("dm_type.html", &Type {
-            env,
-            base_href: &base,
-            path,
-            details,
-            types: &types_with_docs,
-        })?.as_bytes())?;
+        f.write_all(
+            tera.render(
+                "dm_type.html",
+                &Type {
+                    env,
+                    base_href: &base,
+                    path,
+                    details,
+                    types: &types_with_docs,
+                },
+            )?.as_bytes(),
+        )?;
     }
     drop(progress);
 
@@ -451,10 +541,16 @@ fn main() -> Result<(), Box<std::error::Error>> {
 // Helpers
 
 fn module_path(path: &Path) -> String {
-    path.with_extension("").display().to_string().replace("\\", "/")
+    path.with_extension("")
+        .display()
+        .to_string()
+        .replace("\\", "/")
 }
 
-fn module_entry<'a, 'b>(modules: &'a mut BTreeMap<String, Module<'b>>, path: &Path) -> &'a mut Module<'b> {
+fn module_entry<'a, 'b>(
+    modules: &'a mut BTreeMap<String, Module<'b>>,
+    path: &Path,
+) -> &'a mut Module<'b> {
     modules.entry(module_path(path)).or_insert_with(|| {
         let mut module = Module::default();
         module.htmlname = module_path(path);
@@ -464,7 +560,8 @@ fn module_entry<'a, 'b>(modules: &'a mut BTreeMap<String, Module<'b>>, path: &Pa
 }
 
 fn is_visible(entry: &walkdir::DirEntry) -> bool {
-    entry.file_name()
+    entry
+        .file_name()
         .to_str()
         .map(|s| !s.starts_with("."))
         .unwrap_or(true)
@@ -478,7 +575,7 @@ fn format_type_path(vec: &[String]) -> String {
     }
 }
 
-fn linkify_type<'a, I: Iterator<Item=&'a str>>(iter: I) -> String {
+fn linkify_type<'a, I: Iterator<Item = &'a str>>(iter: I) -> String {
     let mut output = String::new();
     let mut all_progress = String::new();
     let mut progress = String::new();
@@ -489,7 +586,12 @@ fn linkify_type<'a, I: Iterator<Item=&'a str>>(iter: I) -> String {
         progress.push_str(bit);
         if ALL_TYPE_NAMES.with(|t| t.borrow().contains(&all_progress)) {
             use std::fmt::Write;
-            let _ = write!(output, r#"/<a href="{}.html">{}</a>"#, &all_progress[1..], &progress[1..]);
+            let _ = write!(
+                output,
+                r#"/<a href="{}.html">{}</a>"#,
+                &all_progress[1..],
+                &progress[1..]
+            );
             progress.clear();
         }
     }
@@ -526,10 +628,15 @@ fn create(path: &Path) -> io::Result<File> {
 
 fn git_info(git: &mut Git) -> Result<(), git2::Error> {
     macro_rules! req {
-        ($e:expr) => { match $e { Some(x) => x, None => {
-            println!("incomplete git info: malformed or non-utf8 name");
-            return Ok(());
-        }}}
+        ($e:expr) => {
+            match $e {
+                Some(x) => x,
+                None => {
+                    println!("incomplete git info: malformed or non-utf8 name");
+                    return Ok(());
+                }
+            }
+        };
     }
 
     // get the revision
@@ -552,7 +659,10 @@ fn git_info(git: &mut Git) -> Result<(), git2::Error> {
     let upstream_oid = upstream.get().peel_to_commit()?.id();
     let upstream_name = req!(upstream.name()?);
     if repo.merge_base(head_oid, upstream_oid)? != head_oid {
-        println!("incomplete git info: HEAD is not an ancestor of {}", upstream_name);
+        println!(
+            "incomplete git info: HEAD is not an ancestor of {}",
+            upstream_name
+        );
         return Ok(());
     }
 
@@ -582,7 +692,7 @@ fn git_info(git: &mut Git) -> Result<(), git2::Error> {
         let at = req!(url.find("@"));
         let colon = req!(url.find(":"));
         if colon >= at {
-            git.web_url = format!("https://{}/{}", &url[at+1..colon], &url[colon+1..]);
+            git.web_url = format!("https://{}/{}", &url[at + 1..colon], &url[colon + 1..]);
         } else {
             println!("incomplete git info: weird SSH path: {}", url);
         }
@@ -599,7 +709,7 @@ struct Progress {
 impl Progress {
     fn update(&mut self, msg: &str) {
         print!("\r{}", msg);
-        for _ in msg.len() .. self.last_len {
+        for _ in msg.len()..self.last_len {
             print!(" ");
         }
         self.last_len = msg.len();
@@ -626,7 +736,7 @@ impl Drop for Progress {
 
 #[derive(Serialize)]
 struct IndexTree<'a> {
-    htmlname: &'a str,  // href="{{htmlname}}.html"
+    htmlname: &'a str, // href="{{htmlname}}.html"
     full_name: &'a str,
     self_name: &'a str,
     teaser: &'a str,
@@ -635,7 +745,8 @@ struct IndexTree<'a> {
 }
 
 fn build_index_tree<'a, I>(iter: I) -> Vec<IndexTree<'a>>
-    where I: IntoIterator<Item=IndexTree<'a>>
+where
+    I: IntoIterator<Item = IndexTree<'a>>,
 {
     let mut stack = vec![IndexTree {
         htmlname: "",
@@ -751,7 +862,7 @@ struct ParsedType<'a> {
 struct Var<'a> {
     docs: DocBlock,
     decl: &'static str,
-    #[serde(rename="type")]
+    #[serde(rename = "type")]
     type_: Option<VarType<'a>>,
     file: PathBuf,
     line: u32,
@@ -807,14 +918,11 @@ enum ModuleItem<'a> {
     DocComment(DocComment),
 
     // rendering
-    #[serde(rename="docs")]
+    #[serde(rename = "docs")]
     Docs(String),
-    #[serde(rename="define")]
-    Define {
-        name: &'a str,
-        teaser: String,
-    },
-    #[serde(rename="type")]
+    #[serde(rename = "define")]
+    Define { name: &'a str, teaser: String },
+    #[serde(rename = "type")]
     Type {
         path: &'a str,
         teaser: String,

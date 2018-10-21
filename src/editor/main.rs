@@ -1,48 +1,51 @@
 //! The map editor proper, with a GUI and everything.
-#![cfg_attr(not(debug_assertions), windows_subsystem="windows")]
-#![allow(dead_code)]  // TODO: remove when this is not a huge WIP
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![allow(dead_code)] // TODO: remove when this is not a huge WIP
 
 extern crate glutin;
-#[macro_use] extern crate gfx;
-extern crate gfx_window_glutin;
+#[macro_use]
+extern crate gfx;
 extern crate gfx_device_gl;
-#[macro_use] extern crate imgui;
+extern crate gfx_window_glutin;
+#[macro_use]
+extern crate imgui;
+extern crate divrem;
 extern crate imgui_gfx_renderer;
 extern crate lodepng;
 extern crate ndarray;
 extern crate nfd;
-extern crate divrem;
-#[macro_use] extern crate serde_derive;
-extern crate serde;
-extern crate toml;
-extern crate petgraph;
+#[macro_use]
+extern crate serde_derive;
 extern crate gfx_gl as gl;
-extern crate weak_table;
+extern crate petgraph;
+extern crate serde;
 extern crate slice_of_array;
+extern crate toml;
+extern crate weak_table;
 
-extern crate dreammaker as dm;
 extern crate dmm_tools;
+extern crate dreammaker as dm;
 
-mod support;
+mod config;
 mod dmi;
-mod map_repr;
+mod history;
 mod map_renderer;
+mod map_repr;
+mod support;
 mod tasks;
 mod tools;
-mod config;
-mod history;
 
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Arc};
-use std::borrow::Cow;
 
 use imgui::*;
 
 use dm::objtree::{ObjectTree, TypeRef};
 use dmm_tools::dmm::{Map, Prefab};
 
+use gfx_device_gl::{CommandBuffer, Factory, Resources};
 use glutin::VirtualKeyCode as Key;
-use gfx_device_gl::{Factory, Resources, CommandBuffer};
 type Encoder = gfx::Encoder<Resources, CommandBuffer>;
 type ColorFormat = gfx::format::Rgba8;
 type DepthFormat = gfx::format::DepthStencil;
@@ -137,7 +140,7 @@ enum MapState {
     Active {
         merge_base: Arc<Map>,
         hist: History,
-    }
+    },
 }
 
 struct NewMap {
@@ -254,8 +257,7 @@ impl EditorScene {
             }
             // need to re-render maps if the environment has changed
             map.state = match std::mem::replace(&mut map.state, MapState::Invalid) {
-                MapState::Pending(base) |
-                MapState::Preparing(base, _) => {
+                MapState::Pending(base) | MapState::Preparing(base, _) => {
                     let (tx, rx) = mpsc::channel();
                     let icons = environment.icons.clone();
                     let objtree = environment.objtree.clone();
@@ -264,7 +266,7 @@ impl EditorScene {
                         let _ = tx.send(map_repr::AtomMap::new(&base2, &icons, &objtree));
                     });
                     MapState::Preparing(base, rx)
-                },
+                }
                 MapState::Active { merge_base, hist } => {
                     let mut new_map = hist.current().clone();
                     let icons = environment.icons.clone();
@@ -274,8 +276,12 @@ impl EditorScene {
                         new_map.refresh_pops(&icons, &objtree);
                         let _ = tx.send(new_map);
                     });
-                    MapState::Refreshing { merge_base, hist, rx }
-                },
+                    MapState::Refreshing {
+                        merge_base,
+                        hist,
+                        rx,
+                    }
+                }
                 other => other,
             };
         }
@@ -287,10 +293,12 @@ impl EditorScene {
             match loading.rx.try_recv() {
                 Ok(Ok(env)) => self.finish_loading_env(env),
                 Ok(Err(e)) => {
-                    self.errors.push(format!("Error(s) loading environment: {}", e));
+                    self.errors
+                        .push(format!("Error(s) loading environment: {}", e));
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    self.errors.push("BUG: environment loading crashed".to_owned());
+                    self.errors
+                        .push("BUG: environment loading crashed".to_owned());
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     self.loading_env = Some(loading);
@@ -325,15 +333,26 @@ impl EditorScene {
                     for _ in 0..z {
                         map.rendered.push(None);
                     }
-                    MapState::Active { merge_base, hist: History::new("Loaded".to_owned(), val) }
+                    MapState::Active {
+                        merge_base,
+                        hist: History::new("Loaded".to_owned(), val),
+                    }
                 } else {
                     MapState::Preparing(merge_base, rx)
                 },
-                MapState::Refreshing { merge_base, mut hist, rx } => if let Ok(val) = rx.try_recv() {
+                MapState::Refreshing {
+                    merge_base,
+                    mut hist,
+                    rx,
+                } => if let Ok(val) = rx.try_recv() {
                     hist.replace_current(val);
                     MapState::Active { merge_base, hist }
                 } else {
-                    MapState::Refreshing { merge_base, hist, rx }
+                    MapState::Refreshing {
+                        merge_base,
+                        hist,
+                        rx,
+                    }
                 },
                 other => other,
             };
@@ -344,30 +363,30 @@ impl EditorScene {
                 let map_renderer = &mut self.map_renderer;
                 let factory = &mut self.factory;
                 let mut levels = Vec::new();
-                if !self.stacked_rendering {  // normal rendering
+                if !self.stacked_rendering {
+                    // normal rendering
                     levels.push(map.z_current);
-                } else if !self.stacked_inverted {  // stacked rendering
+                } else if !self.stacked_inverted {
+                    // stacked rendering
                     levels.extend((map.z_current..map.rendered.len()).rev());
-                } else {  // inverted stacked rendering
+                } else {
+                    // inverted stacked rendering
                     levels.extend(0..=map.z_current);
                 }
 
                 for z in levels {
                     if let Some(rendered) = map.rendered.get_mut(z) {
-                        rendered.fulfill(|| {
-                            map_renderer.render(
+                        rendered
+                            .fulfill(|| map_renderer.render(hist.current(), z as u32))
+                            .paint(
+                                map_renderer,
                                 hist.current(),
                                 z as u32,
-                            )
-                        }).paint(
-                            map_renderer,
-                            hist.current(),
-                            z as u32,
-                            map.center,
-                            factory,
-                            encoder,
-                            &self.target,
-                        );
+                                map.center,
+                                factory,
+                                encoder,
+                                &self.target,
+                            );
                     }
                 }
             }
@@ -376,16 +395,23 @@ impl EditorScene {
 
     fn run_ui(&mut self, ui: &Ui, renderer: &mut ImRenderer) -> bool {
         for tool in self.tools.iter_mut() {
-            tool.icon.prepare(self.environment.as_ref(), &mut tools::IconCtx::new(renderer, &mut self.map_renderer));
+            tool.icon.prepare(
+                self.environment.as_ref(),
+                &mut tools::IconCtx::new(renderer, &mut self.map_renderer),
+            );
         }
 
         #[cfg(not(target_os = "macos"))]
         macro_rules! ctrl_shortcut {
-            ($rest:expr) => (im_str!("Ctrl+{}", $rest))
+            ($rest:expr) => {
+                im_str!("Ctrl+{}", $rest)
+            };
         }
         #[cfg(target_os = "macos")]
         macro_rules! ctrl_shortcut {
-            ($rest:expr) => (im_str!("Cmd+{}", $rest))
+            ($rest:expr) => {
+                im_str!("Cmd+{}", $rest)
+            };
         }
 
         let mut continue_running = true;
@@ -397,55 +423,95 @@ impl EditorScene {
         ui.main_menu_bar(|| {
             ui.menu(im_str!("File")).build(|| {
                 let some_map = self.maps.get(self.map_current).is_some();
-                if ui.menu_item(im_str!("Open environment"))
+                if ui
+                    .menu_item(im_str!("Open environment"))
                     .shortcut(ctrl_shortcut!("Shift+O"))
-                    .build() { self.open_environment(); }
-                ui.menu(im_str!("Recent environments")).enabled(!self.config.recent.is_empty()).build(|| {
-                    let mut clicked = None;
-                    for (i, path) in self.config.recent.iter().enumerate() {
-                        if ui.menu_item(im_str!("{}", path.display()))
-                            .shortcut(im_str!("{}", i + 1))
-                            .build()
-                        {
-                            clicked = Some(path.to_owned());
+                    .build()
+                {
+                    self.open_environment();
+                }
+                ui.menu(im_str!("Recent environments"))
+                    .enabled(!self.config.recent.is_empty())
+                    .build(|| {
+                        let mut clicked = None;
+                        for (i, path) in self.config.recent.iter().enumerate() {
+                            if ui
+                                .menu_item(im_str!("{}", path.display()))
+                                .shortcut(im_str!("{}", i + 1))
+                                .build()
+                            {
+                                clicked = Some(path.to_owned());
+                            }
                         }
-                    }
-                    if let Some(clicked) = clicked {
-                        self.load_environment(clicked);
-                    }
-                });
-                if ui.menu_item(im_str!("Update environment"))
+                        if let Some(clicked) = clicked {
+                            self.load_environment(clicked);
+                        }
+                    });
+                if ui
+                    .menu_item(im_str!("Update environment"))
                     .shortcut(ctrl_shortcut!("U"))
                     .enabled(self.environment.is_some())
-                    .build() { self.reload_objtree(); }
+                    .build()
+                {
+                    self.reload_objtree();
+                }
                 ui.separator();
-                if ui.menu_item(im_str!("New"))
+                if ui
+                    .menu_item(im_str!("New"))
                     .shortcut(ctrl_shortcut!("N"))
-                    .build() { self.new_map(); }
-                if ui.menu_item(im_str!("Open"))
+                    .build()
+                {
+                    self.new_map();
+                }
+                if ui
+                    .menu_item(im_str!("Open"))
                     .shortcut(ctrl_shortcut!("O"))
-                    .build() { self.open_map(); }
-                if ui.menu_item(im_str!("Close"))
+                    .build()
+                {
+                    self.open_map();
+                }
+                if ui
+                    .menu_item(im_str!("Close"))
                     .shortcut(ctrl_shortcut!("W"))
                     .enabled(some_map)
-                    .build() { self.close_map(); }
+                    .build()
+                {
+                    self.close_map();
+                }
                 ui.separator();
-                if ui.menu_item(im_str!("Save"))
+                if ui
+                    .menu_item(im_str!("Save"))
                     .shortcut(ctrl_shortcut!("S"))
                     .enabled(some_map)
-                    .build() { self.save_map(); }
-                if ui.menu_item(im_str!("Save As"))
+                    .build()
+                {
+                    self.save_map();
+                }
+                if ui
+                    .menu_item(im_str!("Save As"))
                     .shortcut(ctrl_shortcut!("Shift+S"))
                     .enabled(some_map)
-                    .build() { self.save_map_as(false); }
-                if ui.menu_item(im_str!("Save Copy As"))
+                    .build()
+                {
+                    self.save_map_as(false);
+                }
+                if ui
+                    .menu_item(im_str!("Save Copy As"))
                     .enabled(some_map)
-                    .build() { self.save_map_as(true); }
-                if ui.menu_item(im_str!("Save All"))
+                    .build()
+                {
+                    self.save_map_as(true);
+                }
+                if ui
+                    .menu_item(im_str!("Save All"))
                     .enabled(!self.maps.is_empty())
-                    .build() { self.save_all(); }
+                    .build()
+                {
+                    self.save_all();
+                }
                 ui.separator();
-                if ui.menu_item(im_str!("Exit"))
+                if ui
+                    .menu_item(im_str!("Exit"))
                     .shortcut(im_str!("Alt+F4"))
                     .build()
                 {
@@ -460,14 +526,22 @@ impl EditorScene {
                 }
             }
             ui.menu(im_str!("Edit")).build(|| {
-                if ui.menu_item(im_str!("Undo"))
+                if ui
+                    .menu_item(im_str!("Undo"))
                     .shortcut(ctrl_shortcut!("Z"))
                     .enabled(can_undo)
-                    .build() { self.undo(); }
-                if ui.menu_item(im_str!("Redo"))
+                    .build()
+                {
+                    self.undo();
+                }
+                if ui
+                    .menu_item(im_str!("Redo"))
                     .shortcut(ctrl_shortcut!("Shift+Z"))
                     .enabled(can_redo)
-                    .build() { self.redo(); }
+                    .build()
+                {
+                    self.redo();
+                }
                 ui.separator();
                 ui.menu_item(im_str!("Cut"))
                     .shortcut(ctrl_shortcut!("X"))
@@ -496,9 +570,7 @@ impl EditorScene {
                     .build();
             });
             ui.menu(im_str!("Options")).build(|| {
-                ui.menu_item(im_str!("Frame areas"))
-                    .enabled(false)
-                    .build();
+                ui.menu_item(im_str!("Frame areas")).enabled(false).build();
                 ui.menu_item(im_str!("Show extra variables"))
                     .selected(&mut self.ui_extra_vars)
                     .build();
@@ -512,7 +584,11 @@ impl EditorScene {
                 ui.separator();
                 for &zoom in [0.5, 1.0, 2.0, 4.0].iter() {
                     let mut selected = self.map_renderer.zoom == zoom;
-                    if ui.menu_item(im_str!("{}%", 100.0 * zoom)).selected(&mut selected).build() {
+                    if ui
+                        .menu_item(im_str!("{}%", 100.0 * zoom))
+                        .selected(&mut selected)
+                        .build()
+                    {
                         self.map_renderer.zoom = zoom;
                     }
                 }
@@ -543,7 +619,11 @@ impl EditorScene {
                 ui.menu_item(im_str!("Lock positions"))
                     .selected(&mut self.ui_lock_windows)
                     .build();
-                if ui.menu_item(im_str!("Reset positions")).enabled(!self.ui_lock_windows).build() {
+                if ui
+                    .menu_item(im_str!("Reset positions"))
+                    .enabled(!self.ui_lock_windows)
+                    .build()
+                {
                     window_positions_cond = ImGuiCond::Always;
                 }
                 ui.separator();
@@ -580,12 +660,21 @@ impl EditorScene {
             self.counter = self.counter.wrapping_add(1);
             let mut i = 0;
             macro_rules! spinner {
-                () => (SPINNER[(self.counter / 10 + { i += 1; i }) % SPINNER.len()])
+                () => {
+                    SPINNER[(self.counter / 10 + {
+                        i += 1;
+                        i
+                    }) % SPINNER.len()]
+                };
             }
 
             if let Some(loading) = self.loading_env.as_ref() {
                 ui.separator();
-                ui.text(im_str!("{} Loading {}", spinner!(), file_name(&loading.path)));
+                ui.text(im_str!(
+                    "{} Loading {}",
+                    spinner!(),
+                    file_name(&loading.path)
+                ));
             }
             for map in self.maps.iter() {
                 if let Some(path) = map.path.as_ref() {
@@ -594,8 +683,7 @@ impl EditorScene {
                             ui.separator();
                             ui.text(im_str!("{} Loading {}", spinner!(), file_name(path)));
                         }
-                        MapState::Refreshing { .. } |
-                        MapState::Preparing(..) => {
+                        MapState::Refreshing { .. } | MapState::Preparing(..) => {
                             ui.separator();
                             ui.text(im_str!("{} Preparing {}", spinner!(), file_name(path)));
                         }
@@ -606,7 +694,10 @@ impl EditorScene {
 
             if self.errors.len() > self.last_errors {
                 ui.separator();
-                if ui.menu_item(im_str!("{} errors", self.errors.len() - self.last_errors)).build() {
+                if ui
+                    .menu_item(im_str!("{} errors", self.errors.len() - self.last_errors))
+                    .build()
+                {
                     self.ui_errors = true;
                 }
             }
@@ -618,7 +709,7 @@ impl EditorScene {
             .size((300.0, 300.0), ImGuiCond::FirstUseEver)
             .resizable(!self.ui_lock_windows)
             .build(|| {
-                let count = ui.fits_width(34.0);  // 32 + 2px border
+                let count = ui.fits_width(34.0); // 32 + 2px border
                 for (i, tool) in self.tools.iter().enumerate() {
                     if i % count != 0 {
                         ui.same_line(0.0);
@@ -640,7 +731,11 @@ impl EditorScene {
                         ui.text_wrapped(im_str!("{} - {}", tool.name, tool.help));
                     }
                     if let Some(ref env) = self.environment {
-                        tool.behavior.settings(ui, env, &mut tools::IconCtx::new(renderer, &mut self.map_renderer));
+                        tool.behavior.settings(
+                            ui,
+                            env,
+                            &mut tools::IconCtx::new(renderer, &mut self.map_renderer),
+                        );
                     } else if self.loading_env.is_some() {
                         ui.text(im_str!("The environment is loading..."));
                     } else {
@@ -675,31 +770,45 @@ impl EditorScene {
                 for (map_idx, map) in self.maps.iter_mut().enumerate() {
                     let dirty = map.state.hist().map_or(false, |h| h.is_dirty());
                     let title = match map.path {
-                        Some(ref path) => format!("{}{}##map_{}", file_name(path), if dirty { " *" } else { "" }, path.display()),
+                        Some(ref path) => format!(
+                            "{}{}##map_{}",
+                            file_name(path),
+                            if dirty { " *" } else { "" },
+                            path.display()
+                        ),
                         None => format!("Untitled##{}", map_idx),
                     };
-                    if ui.collapsing_header(&ImString::from(title)).default_open(true).build() {
+                    if ui
+                        .collapsing_header(&ImString::from(title))
+                        .default_open(true)
+                        .build()
+                    {
                         if let Some(hist) = map.state.hist() {
                             let world = hist.current();
                             if let Some(dmm) = map.state.base_dmm() {
-                                ui.text(im_str!("{:?}; {}-keys: {}",
+                                ui.text(im_str!(
+                                    "{:?}; {}-keys: {}",
                                     world.dim_xyz(),
                                     dmm.key_length,
-                                    dmm.dictionary.len()));
+                                    dmm.dictionary.len()
+                                ));
                             } else {
                                 ui.text(im_str!("{:?}", world.dim_xyz()));
                             }
                             for z in 0..world.dim_xyz().2 {
-                                if ui.small_button(im_str!("z = {}##map_{}_{}", z + 1, map_idx, z)) {
+                                if ui.small_button(im_str!("z = {}##map_{}_{}", z + 1, map_idx, z))
+                                {
                                     self.map_current = map_idx;
                                     map.z_current = z as usize;
                                 }
                             }
                         } else if let Some(dmm) = map.state.base_dmm() {
-                            ui.text(im_str!("{:?}; {}-keys: {}",
+                            ui.text(im_str!(
+                                "{:?}; {}-keys: {}",
                                 dmm.dim_xyz(),
                                 dmm.key_length,
-                                dmm.dictionary.len()));
+                                dmm.dictionary.len()
+                            ));
                         }
                     }
                 }
@@ -797,13 +906,21 @@ impl EditorScene {
                     for _ in 0..new_map.z {
                         rendered.push(None);
                     }
-                    let dmm = Map::new(new_map.x as usize, new_map.y as usize, new_map.z as usize,
-                        env.turf.clone(), env.area.clone());
+                    let dmm = Map::new(
+                        new_map.x as usize,
+                        new_map.y as usize,
+                        new_map.z as usize,
+                        env.turf.clone(),
+                        env.area.clone(),
+                    );
                     let atom_map = map_repr::AtomMap::new(&dmm, &env.icons, &env.objtree);
                     let desc = format!("New {}x{}x{} map", new_map.x, new_map.y, new_map.z);
                     self.maps.push(EditorMap {
                         path: None,
-                        state: MapState::Active { merge_base: Arc::new(dmm), hist: History::new(desc, atom_map) },
+                        state: MapState::Active {
+                            merge_base: Arc::new(dmm),
+                            hist: History::new(desc, atom_map),
+                        },
                         z_current: 0,
                         center: [new_map.x as f32 * 16.0, new_map.y as f32 * 16.0],
                         rendered,
@@ -814,7 +931,11 @@ impl EditorScene {
                     opened = false;
                 }
             }
-            if opened && !closed { Some(new_map) } else { None }
+            if opened && !closed {
+                Some(new_map)
+            } else {
+                None
+            }
         });
 
         if let Some(map) = self.maps.get_mut(self.map_current) {
@@ -828,7 +949,10 @@ impl EditorScene {
                 let mut keep = true;
                 let mut keep2 = true;
 
-                let EditInstance { ref mut inst, ref mut base } = edit;
+                let EditInstance {
+                    ref mut inst,
+                    ref mut base,
+                } = edit;
                 ui.window(im_str!("{}##{}/{:?}", base.fab.path, uid, inst))
                     .opened(&mut keep)
                     .position(ui.imgui().mouse_pos(), ImGuiCond::Appearing)
@@ -883,11 +1007,18 @@ impl EditorScene {
                     .always_auto_resize(true)
                     .opened(&mut opened)
                     .build(|| {
-                        ui.text(im_str!("maps[{}], map = {}, zoom = {}",
+                        ui.text(im_str!(
+                            "maps[{}], map = {}, zoom = {}",
                             self.maps.len(),
-                            self.map_current, self.map_renderer.zoom));
+                            self.map_current,
+                            self.map_renderer.zoom
+                        ));
                         if let Some(env) = self.environment.as_ref() {
-                            ui.text(im_str!("types[{}], icons[{}]", env.objtree.graph.node_count(), env.icons.len()));
+                            ui.text(im_str!(
+                                "types[{}], icons[{}]",
+                                env.objtree.graph.node_count(),
+                                env.icons.len()
+                            ));
                             ui.text(im_str!("turf = {}", env.turf));
                             ui.text(im_str!("area = {}", env.area));
                         }
@@ -896,10 +1027,17 @@ impl EditorScene {
                             if let Some(hist) = map.state.hist() {
                                 let current = hist.current();
                                 if let Some(level) = current.levels.get(map.z_current) {
-                                    ui.text(im_str!("draw_calls[{}], pops[{}], atoms[{}]", level.draw_calls.len(), current.pops.len(), level.instances.len()));
+                                    ui.text(im_str!(
+                                        "draw_calls[{}], pops[{}], atoms[{}]",
+                                        level.draw_calls.len(),
+                                        current.pops.len(),
+                                        level.instances.len()
+                                    ));
                                 }
                             }
-                            if let Some(rendered) = map.rendered.get(map.z_current).and_then(|x| x.as_ref()) {
+                            if let Some(rendered) =
+                                map.rendered.get(map.z_current).and_then(|x| x.as_ref())
+                            {
                                 ui.text(im_str!("timings: {:?}", rendered.duration));
                             }
                         }
@@ -946,11 +1084,15 @@ impl EditorScene {
             if let Some(hist) = map.state.hist() {
                 let (w, h, _, _) = self.target.get_dimensions();
                 let (cx, cy) = (w / 2, h / 2);
-                let tx = ((map.center[0].round() + (x as f32 - cx as f32) / self.map_renderer.zoom) / 32.0).floor() as i32;
-                let ty = ((map.center[1].round() + (cy as f32 - y as f32) / self.map_renderer.zoom) / 32.0).floor() as i32;
+                let tx = ((map.center[0].round() + (x as f32 - cx as f32) / self.map_renderer.zoom)
+                    / 32.0)
+                    .floor() as i32;
+                let ty = ((map.center[1].round() + (cy as f32 - y as f32) / self.map_renderer.zoom)
+                    / 32.0)
+                    .floor() as i32;
                 let (dim_x, dim_y, _) = hist.current().dim_xyz();
                 if tx >= 0 && ty >= 0 && tx < dim_x as i32 && ty < dim_y as i32 {
-                    return Some((tx as u32, ty as u32))
+                    return Some((tx as u32, ty as u32));
                 }
             }
         }
@@ -1018,10 +1160,12 @@ impl EditorScene {
             k!(Ctrl + Key3) => self.toggle_layer(3),
             k!(Ctrl + Key4) => self.toggle_layer(4),
             // misc
-            k!(Ctrl + Equals) |
-            k!(Ctrl + Add) => if self.map_renderer.zoom < 16.0 { self.map_renderer.zoom *= 2.0 },
-            k!(Ctrl + Subtract) |
-            k!(Ctrl + Minus) => if self.map_renderer.zoom > 0.0625 { self.map_renderer.zoom *= 0.5 },
+            k!(Ctrl + Equals) | k!(Ctrl + Add) => if self.map_renderer.zoom < 16.0 {
+                self.map_renderer.zoom *= 2.0
+            },
+            k!(Ctrl + Subtract) | k!(Ctrl + Minus) => if self.map_renderer.zoom > 0.0625 {
+                self.map_renderer.zoom *= 0.5
+            },
             k!(Ctrl + Tab) => self.tab_between_maps(1),
             k!(Ctrl + Shift + Tab) => self.tab_between_maps(-1),
             k!(F3) => self.ui_debug_mode = !self.ui_debug_mode,
@@ -1047,8 +1191,8 @@ impl EditorScene {
     fn load_environment(&mut self, path: PathBuf) {
         let path2 = path.clone();
         let rx = tasks::spawn(move || {
-            use dm::constants::Constant;
             use dm::ast::PathOp;
+            use dm::constants::Constant;
 
             fn format_path(path: &[(PathOp, String)]) -> String {
                 let mut s = String::new();
@@ -1079,20 +1223,23 @@ impl EditorScene {
             Ok(Environment {
                 objtree: Arc::new(objtree),
                 icons: Arc::new(IconCache::new(
-                    path.parent().expect("invalid environment file path"))),
+                    path.parent().expect("invalid environment file path"),
+                )),
                 turf,
                 area,
                 path,
             })
         });
-        self.loading_env = Some(LoadingEnvironment {
-            path: path2,
-            rx,
-        });
+        self.loading_env = Some(LoadingEnvironment { path: path2, rx });
     }
 
     fn new_map(&mut self) {
-        self.new_map = Some(NewMap { x: 32, y: 32, z: 1, created: false });
+        self.new_map = Some(NewMap {
+            x: 32,
+            y: 32,
+            z: 1,
+            created: false,
+        });
     }
 
     fn open_map(&mut self) {
@@ -1151,7 +1298,8 @@ impl EditorScene {
         if let Some(map) = self.maps.get_mut(self.map_current) {
             if let Some(hist) = map.state.hist() {
                 if map.path.is_none() {
-                    if let Ok(nfd::Response::Okay(fname)) = nfd::open_save_dialog(Some("dmm"), None) {
+                    if let Ok(nfd::Response::Okay(fname)) = nfd::open_save_dialog(Some("dmm"), None)
+                    {
                         map.path = Some(PathBuf::from(fname));
                     } else {
                         return;
@@ -1159,7 +1307,8 @@ impl EditorScene {
                 }
                 let path = map.path.as_ref().unwrap();
                 if let Err(e) = hist.current().save(map.state.base_dmm()).to_file(path) {
-                    self.errors.push(format!("Error writing {}:\n{}", path.display(), e));
+                    self.errors
+                        .push(format!("Error writing {}:\n{}", path.display(), e));
                 }
                 hist.mark_clean();
             }
@@ -1172,7 +1321,8 @@ impl EditorScene {
                 if let Ok(nfd::Response::Okay(fname)) = nfd::open_save_dialog(Some("dmm"), None) {
                     let path = PathBuf::from(fname);
                     if let Err(e) = hist.current().save(map.state.base_dmm()).to_file(&path) {
-                        self.errors.push(format!("Error writing {}:\n{}", path.display(), e));
+                        self.errors
+                            .push(format!("Error writing {}:\n{}", path.display(), e));
                     }
                     if !copy {
                         map.path = Some(path);
@@ -1201,7 +1351,8 @@ impl EditorScene {
         if self.maps.is_empty() {
             return;
         }
-        self.map_current = (self.map_current as isize + self.maps.len() as isize + offset) as usize % self.maps.len();
+        self.map_current = (self.map_current as isize + self.maps.len() as isize + offset) as usize
+            % self.maps.len();
     }
 
     fn undo(&mut self) {
@@ -1297,7 +1448,10 @@ impl EditPrefab {
     }
 
     fn show(&mut self, ui: &Ui, env: Option<&Environment>, extra_vars: bool) {
-        let EditPrefab { ref mut filter, ref mut fab } = self;
+        let EditPrefab {
+            ref mut filter,
+            ref mut fab,
+        } = self;
 
         // find the "best" type by chopping the path if needed
         let (red_paths, ty) = if let Some(env) = env.as_ref() {
@@ -1401,7 +1555,7 @@ fn root_node(ui: &Ui, ty: TypeRef, name: &str) {
 fn tree_node(ui: &Ui, ty: TypeRef) {
     let mut children = ty.children();
     if children.is_empty() {
-        ui.tree_node(im_str!("{}", ty.name)).leaf(true).build(||{});
+        ui.tree_node(im_str!("{}", ty.name)).leaf(true).build(|| {});
     } else {
         children.sort_by_key(|t| &t.get().name);
         ui.tree_node(im_str!("{}", ty.name)).build(|| {
@@ -1446,15 +1600,19 @@ fn prepare_tool_icon(
 ) -> tools::ToolIcon {
     use tools::ToolIcon;
     match icon {
-        ToolIcon::Dmi { icon, icon_state, tint, dir } => if let Some(env) = environment {
+        ToolIcon::Dmi {
+            icon,
+            icon_state,
+            tint,
+            dir,
+        } => if let Some(env) = environment {
             if let Some(id) = env.icons.get_index(icon.as_ref()) {
                 let icon = env.icons.get_icon(id);
                 if let Some([u1, v1, u2, v2]) = icon.uv_of(&icon_state, dir) {
-                    let tex = map_renderer.icon_textures.retrieve(
-                        &mut map_renderer.factory,
-                        &env.icons,
-                        id,
-                    ).clone();
+                    let tex = map_renderer
+                        .icon_textures
+                        .retrieve(&mut map_renderer.factory, &env.icons, id)
+                        .clone();
                     let samp = map_renderer.sampler.clone();
                     ToolIcon::Loaded {
                         tex: renderer.textures().insert((tex, samp)),
@@ -1469,19 +1627,26 @@ fn prepare_tool_icon(
                 ToolIcon::None
             }
         } else {
-            ToolIcon::Dmi { icon, icon_state, tint, dir }
-        },
-        ToolIcon::EmbeddedPng { data } => if let Ok(tex) = dmi::texture_from_bytes(&mut map_renderer.factory, data) {
-            let samp = map_renderer.sampler.clone();
-            ToolIcon::Loaded {
-                tex: renderer.textures().insert((tex, samp)),
-                uv0: (0.0, 0.0).into(),
-                uv1: (1.0, 1.0).into(),
-                tint: None,
+            ToolIcon::Dmi {
+                icon,
+                icon_state,
+                tint,
+                dir,
             }
-        } else {
-            ToolIcon::None
         },
+        ToolIcon::EmbeddedPng { data } => {
+            if let Ok(tex) = dmi::texture_from_bytes(&mut map_renderer.factory, data) {
+                let samp = map_renderer.sampler.clone();
+                ToolIcon::Loaded {
+                    tex: renderer.textures().insert((tex, samp)),
+                    uv0: (0.0, 0.0).into(),
+                    uv1: (1.0, 1.0).into(),
+                    tint: None,
+                }
+            } else {
+                ToolIcon::None
+            }
+        }
         other => other,
     }
 }
@@ -1544,7 +1709,13 @@ impl<'a> UiExt for Ui<'a> {
     }
 
     fn tool_icon(&self, active: bool, icon: &tools::ToolIcon, fallback: &ImStr) -> bool {
-        if let &tools::ToolIcon::Loaded { tex, uv0, uv1, tint } = icon {
+        if let &tools::ToolIcon::Loaded {
+            tex,
+            uv0,
+            uv1,
+            tint,
+        } = icon
+        {
             let col = if active {
                 self.imgui().style().colors[ImGuiCol::FrameBgActive as usize]
             } else {
@@ -1563,7 +1734,12 @@ impl<'a> UiExt for Ui<'a> {
     }
 }
 
-fn objtree_menu_root<'e>(ui: &Ui, ty: TypeRef<'e>, name: &str, selection: &mut Option<TypeRef<'e>>) {
+fn objtree_menu_root<'e>(
+    ui: &Ui,
+    ty: TypeRef<'e>,
+    name: &str,
+    selection: &mut Option<TypeRef<'e>>,
+) {
     if let Some(child) = ty.child(name) {
         objtree_menu_node(ui, child, selection);
     }
@@ -1577,15 +1753,14 @@ fn objtree_menu_node<'e>(ui: &Ui, ty: TypeRef<'e>, selection: &mut Option<TypeRe
         }
     } else {
         children.sort_by_key(|t| &t.get().name);
-        ui.menu(im_str!("{}", ty.name))
-            .build(|| {
-                if ui.menu_item(im_str!("{}", ty.name)).build() {
-                    *selection = Some(ty);
-                }
-                ui.separator();
-                for child in children {
-                    objtree_menu_node(ui, child, selection);
-                }
-            });
+        ui.menu(im_str!("{}", ty.name)).build(|| {
+            if ui.menu_item(im_str!("{}", ty.name)).build() {
+                *selection = Some(ty);
+            }
+            ui.separator();
+            for child in children {
+                objtree_menu_node(ui, child, selection);
+            }
+        });
     }
 }

@@ -3,16 +3,16 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-pub use petgraph::graph::NodeIndex;
+use linked_hash_map::LinkedHashMap;
 use petgraph::graph::Graph;
+pub use petgraph::graph::NodeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
-use linked_hash_map::LinkedHashMap;
 
-use super::ast::{Expression, VarType, PathOp, Prefab, Parameter};
+use super::ast::{Expression, Parameter, PathOp, Prefab, VarType};
 use super::constants::Constant;
 use super::docs::DocCollection;
-use super::{DMError, Location, Context};
+use super::{Context, DMError, Location};
 
 // ----------------------------------------------------------------------------
 // Variables
@@ -110,7 +110,11 @@ impl Type {
 
     // Used in the constant evaluator which holds an &mut ObjectTree and thus
     // can't be used with TypeRef.
-    pub(crate) fn get_value<'a>(&'a self, name: &str, objtree: &'a ObjectTree) -> Option<&'a VarValue> {
+    pub(crate) fn get_value<'a>(
+        &'a self,
+        name: &str,
+        objtree: &'a ObjectTree,
+    ) -> Option<&'a VarValue> {
         let mut current = Some(self);
         while let Some(ty) = current {
             if let Some(var) = ty.vars.get(name) {
@@ -121,7 +125,11 @@ impl Type {
         None
     }
 
-    pub(crate) fn get_declaration<'a>(&'a self, name: &str, objtree: &'a ObjectTree) -> Option<&'a VarDeclaration> {
+    pub(crate) fn get_declaration<'a>(
+        &'a self,
+        name: &str,
+        objtree: &'a ObjectTree,
+    ) -> Option<&'a VarDeclaration> {
         let mut current = Some(self);
         while let Some(ty) = current {
             if let Some(var) = ty.vars.get(name) {
@@ -163,13 +171,20 @@ impl<'a> TypeRef<'a> {
 
     /// Find the parent **path**, without taking `parent_type` into account.
     pub fn parent_path(&self) -> Option<TypeRef<'a>> {
-        self.tree.graph.neighbors_directed(self.idx, Direction::Incoming).next().map(|i| TypeRef::new(self.tree, i))
+        self.tree
+            .graph
+            .neighbors_directed(self.idx, Direction::Incoming)
+            .next()
+            .map(|i| TypeRef::new(self.tree, i))
     }
 
     /// Find the parent **type** based on `parent_type` var, or parent path if unspecified.
     pub fn parent_type(&self) -> Option<TypeRef<'a>> {
         let idx = self.parent_type;
-        self.tree.graph.node_weight(idx).map(|_| TypeRef::new(self.tree, idx))
+        self.tree
+            .graph
+            .node_weight(idx)
+            .map(|_| TypeRef::new(self.tree, idx))
     }
 
     /// Find a child **path** with the given name, if it exists.
@@ -215,21 +230,22 @@ impl<'a> TypeRef<'a> {
                     next = current.parent_path();
                 }
                 None
-            },
+            }
             // ':' looks for a child of us or of any of our children
             PathOp::Colon => {
                 if let Some(child) = self.child(name) {
                     return Some(child);
                 }
                 for idx in self.tree.graph.neighbors(self.idx) {
-                    if let Some(child) = TypeRef::new(self.tree, idx).navigate(PathOp::Colon, name) {
+                    if let Some(child) = TypeRef::new(self.tree, idx).navigate(PathOp::Colon, name)
+                    {
                         // Yes, simply returning the first thing that matches
                         // is the correct behavior.
                         return Some(child);
                     }
                 }
                 None
-            },
+            }
         }
     }
 
@@ -237,7 +253,9 @@ impl<'a> TypeRef<'a> {
     pub fn is_subtype_of(self, parent: &Type) -> bool {
         let mut current = Some(self);
         while let Some(ty) = current.take() {
-            if ::std::ptr::eq(ty.get(), parent) { return true }
+            if ::std::ptr::eq(ty.get(), parent) {
+                return true;
+            }
             current = ty.parent_type();
         }
         false
@@ -336,7 +354,9 @@ impl ObjectTree {
     }
 
     pub fn type_by_path<I>(&self, path: I) -> Option<TypeRef>
-        where I: IntoIterator, I::Item: AsRef<str>
+    where
+        I: IntoIterator,
+        I::Item: AsRef<str>,
     {
         let (exact, ty) = self.type_by_path_approx(path);
         if exact {
@@ -347,7 +367,9 @@ impl ObjectTree {
     }
 
     pub fn type_by_path_approx<I>(&self, path: I) -> (bool, TypeRef)
-        where I: IntoIterator, I::Item: AsRef<str>
+    where
+        I: IntoIterator,
+        I::Item: AsRef<str>,
     {
         let mut current = NodeIndex::new(0);
         let mut first = true;
@@ -374,7 +396,9 @@ impl ObjectTree {
     pub fn type_by_constant(&self, constant: &Constant) -> Option<TypeRef> {
         match constant {
             &Constant::String(ref string_path) => self.find(string_path),
-            &Constant::Prefab(Prefab { ref path, .. }) => self.type_by_path(path.iter().map(|(_, item)| item)),
+            &Constant::Prefab(Prefab { ref path, .. }) => {
+                self.type_by_path(path.iter().map(|(_, item)| item))
+            }
             _ => None,
         }
     }
@@ -409,7 +433,13 @@ impl ObjectTree {
                         0 => "/datum",
                         idx => &path[..idx],
                     };
-                    if let Some(name) = self.graph.node_weight(type_idx).unwrap().vars.get("parent_type") {
+                    if let Some(name) = self
+                        .graph
+                        .node_weight(type_idx)
+                        .unwrap()
+                        .vars
+                        .get("parent_type")
+                    {
                         location = name.value.location;
                         if let Some(expr) = name.value.expression.clone() {
                             match ::constants::simple_evaluate(name.value.location, expr) {
@@ -417,7 +447,9 @@ impl ObjectTree {
                                     parent_type_buf = s;
                                     parent_type = &parent_type_buf;
                                 }
-                                Ok(Constant::Prefab(Prefab { ref path, ref vars })) if vars.is_empty() => {
+                                Ok(Constant::Prefab(Prefab { ref path, ref vars }))
+                                    if vars.is_empty() =>
+                                {
                                     parent_type_buf = String::new();
                                     for &(_, ref piece) in path.iter() {
                                         parent_type_buf.push('/');
@@ -426,7 +458,10 @@ impl ObjectTree {
                                     parent_type = &parent_type_buf;
                                 }
                                 Ok(other) => {
-                                    context.register_error(DMError::new(location, format!("bad parent_type: {}", other)));
+                                    context.register_error(DMError::new(
+                                        location,
+                                        format!("bad parent_type: {}", other),
+                                    ));
                                 }
                                 Err(e) => {
                                     context.register_error(e);
@@ -440,21 +475,28 @@ impl ObjectTree {
                 if let Some(&idx) = self.types.get(parent_type) {
                     idx
                 } else {
-                    context.register_error(DMError::new(location, format!("bad parent type for {}: {}", path, parent_type)));
-                    NodeIndex::new(0)  // on bad parent_type, fall back to the root
+                    context.register_error(DMError::new(
+                        location,
+                        format!("bad parent type for {}: {}", path, parent_type),
+                    ));
+                    NodeIndex::new(0) // on bad parent_type, fall back to the root
                 }
             };
 
-            self.graph.node_weight_mut(type_idx)
-                .unwrap()
-                .parent_type = idx;
+            self.graph.node_weight_mut(type_idx).unwrap().parent_type = idx;
         }
     }
 
     // ------------------------------------------------------------------------
     // Parsing
 
-    fn subtype_or_add(&mut self, location: Location, parent: NodeIndex, child: &str, len: usize) -> NodeIndex {
+    fn subtype_or_add(
+        &mut self,
+        location: Location,
+        parent: NodeIndex,
+        child: &str,
+        len: usize,
+    ) -> NodeIndex {
         let mut neighbors = self.graph.neighbors(parent).detach();
         while let Some(target) = neighbors.next_node(&self.graph) {
             let node = self.graph.node_weight_mut(target).unwrap();
@@ -484,7 +526,12 @@ impl ObjectTree {
         node
     }
 
-    fn get_from_path<'a, I: Iterator<Item=&'a str>>(&mut self, location: Location, mut path: I, len: usize) -> Result<(NodeIndex, &'a str), DMError> {
+    fn get_from_path<'a, I: Iterator<Item = &'a str>>(
+        &mut self,
+        location: Location,
+        mut path: I,
+        len: usize,
+    ) -> Result<(NodeIndex, &'a str), DMError> {
         let mut current = NodeIndex::new(0);
         let mut last = match path.next() {
             Some(name) => name,
@@ -504,22 +551,25 @@ impl ObjectTree {
         Ok((current, last))
     }
 
-    fn register_var<'a, I>(&mut self,
+    fn register_var<'a, I>(
+        &mut self,
         location: Location,
         parent: NodeIndex,
         mut prev: &'a str,
         mut rest: I,
         comment: DocCollection,
-    ) -> Result<Option<&mut TypeVar>, DMError> where
-        I: Iterator<Item=&'a str>
+    ) -> Result<Option<&mut TypeVar>, DMError>
+    where
+        I: Iterator<Item = &'a str>,
     {
-        let (mut is_declaration, mut is_static, mut is_const, mut is_tmp) = (false, false, false, false);
+        let (mut is_declaration, mut is_static, mut is_const, mut is_tmp) =
+            (false, false, false, false);
 
         if is_var_decl(prev) {
             is_declaration = true;
             prev = match rest.next() {
                 Some(name) => name,
-                None => return Ok(None) // var{} block, children will be real vars
+                None => return Ok(None), // var{} block, children will be real vars
             };
             while prev == "global" || prev == "static" || prev == "tmp" || prev == "const" {
                 if let Some(name) = rest.next() {
@@ -528,11 +578,11 @@ impl ObjectTree {
                     is_tmp |= prev == "tmp";
                     prev = name;
                 } else {
-                    return Ok(None) // var/const{} block, children will be real vars
+                    return Ok(None); // var/const{} block, children will be real vars
                 }
             }
         } else if is_proc_decl(prev) {
-            return Err(DMError::new(location, "proc looks like a var"))
+            return Err(DMError::new(location, "proc looks like a var"));
         }
 
         let mut type_path = Vec::new();
@@ -542,31 +592,34 @@ impl ObjectTree {
         }
         let node = self.graph.node_weight_mut(parent).unwrap();
         // TODO: warn and merge docs for repeats
-        Ok(Some(node.vars.entry(prev.to_owned()).or_insert_with(|| TypeVar {
-            value: VarValue {
-                location,
-                expression: None,
-                constant: None,
-                being_evaluated: false,
-                docs: comment,
-            },
-            declaration: if is_declaration {
-                Some(VarDeclaration {
-                    var_type: VarType {
-                        is_static,
-                        is_const,
-                        is_tmp,
-                        type_path,
-                    },
+        Ok(Some(node.vars.entry(prev.to_owned()).or_insert_with(
+            || TypeVar {
+                value: VarValue {
                     location,
-                })
-            } else {
-                None
+                    expression: None,
+                    constant: None,
+                    being_evaluated: false,
+                    docs: comment,
+                },
+                declaration: if is_declaration {
+                    Some(VarDeclaration {
+                        var_type: VarType {
+                            is_static,
+                            is_const,
+                            is_tmp,
+                            type_path,
+                        },
+                        location,
+                    })
+                } else {
+                    None
+                },
             },
-        })))
+        )))
     }
 
-    fn register_proc(&mut self,
+    fn register_proc(
+        &mut self,
         location: Location,
         parent: NodeIndex,
         name: &str,
@@ -574,12 +627,12 @@ impl ObjectTree {
         parameters: Vec<Parameter>,
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let node = self.graph.node_weight_mut(parent).unwrap();
-        let proc = node.procs.entry(name.to_owned()).or_insert_with(Default::default);
+        let proc = node
+            .procs
+            .entry(name.to_owned())
+            .or_insert_with(Default::default);
         if proc.declaration.is_none() {
-            proc.declaration = is_verb.map(|is_verb| ProcDeclaration {
-                location,
-                is_verb,
-            });
+            proc.declaration = is_verb.map(|is_verb| ProcDeclaration { location, is_verb });
         }
 
         let len = proc.value.len();
@@ -592,7 +645,8 @@ impl ObjectTree {
     }
 
     // an entry which may be anything depending on the path
-    pub fn add_entry<'a, I: Iterator<Item=&'a str>>(&mut self,
+    pub fn add_entry<'a, I: Iterator<Item = &'a str>>(
+        &mut self,
         location: Location,
         mut path: I,
         len: usize,
@@ -605,13 +659,18 @@ impl ObjectTree {
             // proc{} block, children will be procs
         } else {
             let idx = self.subtype_or_add(location, parent, child, len);
-            self.graph.node_weight_mut(idx).unwrap().docs.extend(comment);
+            self.graph
+                .node_weight_mut(idx)
+                .unwrap()
+                .docs
+                .extend(comment);
         }
         Ok(())
     }
 
     // an entry which is definitely a var because a value is specified
-    pub fn add_var<'a, I: Iterator<Item=&'a str>>(&mut self,
+    pub fn add_var<'a, I: Iterator<Item = &'a str>>(
+        &mut self,
         location: Location,
         mut path: I,
         len: usize,
@@ -629,7 +688,8 @@ impl ObjectTree {
     }
 
     // an entry which is definitely a proc because an argument list is specified
-    pub fn add_proc<'a, I: Iterator<Item=&'a str>>(&mut self,
+    pub fn add_proc<'a, I: Iterator<Item = &'a str>>(
+        &mut self,
         location: Location,
         mut path: I,
         len: usize,
@@ -641,13 +701,19 @@ impl ObjectTree {
             is_verb = Some(proc_name == "verb");
             proc_name = match path.next() {
                 Some(name) => name,
-                None => return Err(DMError::new(location, "proc must have a name"))
+                None => return Err(DMError::new(location, "proc must have a name")),
             };
         } else if is_var_decl(proc_name) {
-            return Err(DMError::new(location, "var looks like a proc"))
+            return Err(DMError::new(location, "var looks like a proc"));
         }
         if let Some(other) = path.next() {
-            return Err(DMError::new(location, format!("proc name must be a single identifier (spurious {:?})", other)))
+            return Err(DMError::new(
+                location,
+                format!(
+                    "proc name must be a single identifier (spurious {:?})",
+                    other
+                ),
+            ));
         }
 
         self.register_proc(location, parent, proc_name, is_verb, parameters)

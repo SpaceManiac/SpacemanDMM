@@ -1,9 +1,9 @@
 //! BYOND built-in types, procs, and vars.
 
-use super::objtree::*;
 use super::ast::*;
-use super::{Location, FileId, DMError};
-use super::preprocessor::{DefineMap, Define};
+use super::objtree::*;
+use super::preprocessor::{Define, DefineMap};
+use super::{DMError, FileId, Location};
 
 /// Register BYOND builtin macros to the given define map.
 pub fn default_defines(defines: &mut DefineMap) {
@@ -150,10 +150,14 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         }
     }
     macro_rules! int {
-        ($e:expr) => {Expression::from(Term::Int($e))}
+        ($e:expr) => {
+            Expression::from(Term::Int($e))
+        };
     }
     macro_rules! string {
-        ($e:expr) => {Expression::from(Term::String($e.into()))}
+        ($e:expr) => {
+            Expression::from(Term::String($e.into()))
+        };
     }
 
     entries! {

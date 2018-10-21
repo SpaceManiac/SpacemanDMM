@@ -1,8 +1,8 @@
 //! The indentation processor.
 use std::collections::VecDeque;
 
-use super::{Location, HasLocation, Context};
-use super::lexer::{LocatedToken, Token, Punctuation};
+use super::lexer::{LocatedToken, Punctuation, Token};
+use super::{Context, HasLocation, Location};
 
 /// Eliminates blank lines, parses and validates indentation, braces, and semicolons.
 ///
@@ -29,10 +29,14 @@ impl<'ctx, I> HasLocation for IndentProcessor<'ctx, I> {
     }
 }
 
-impl<'ctx, I> IndentProcessor<'ctx, I> where
-    I: Iterator<Item=LocatedToken>
+impl<'ctx, I> IndentProcessor<'ctx, I>
+where
+    I: Iterator<Item = LocatedToken>,
 {
-    pub fn new<J: IntoIterator<Item=LocatedToken, IntoIter=I>>(context: &'ctx Context, inner: J) -> Self {
+    pub fn new<J: IntoIterator<Item = LocatedToken, IntoIter = I>>(
+        context: &'ctx Context,
+        inner: J,
+    ) -> Self {
         IndentProcessor {
             context,
             inner: inner.into_iter(),
@@ -53,12 +57,16 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
 
     #[inline]
     fn push(&mut self, tok: Token) {
-        self.output.push_back(LocatedToken::new(self.last_input_loc, tok));
+        self.output
+            .push_back(LocatedToken::new(self.last_input_loc, tok));
     }
 
     #[inline]
     fn push_eol(&mut self, tok: Token) {
-        self.output.push_back(LocatedToken::new(self.eol_location.unwrap_or(self.last_input_loc), tok));
+        self.output.push_back(LocatedToken::new(
+            self.eol_location.unwrap_or(self.last_input_loc),
+            tok,
+        ));
     }
 
     #[inline]
@@ -79,8 +87,7 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
                 }
                 return;
             }
-            Token::Punct(Punctuation::Tab) |
-            Token::Punct(Punctuation::Space) => {
+            Token::Punct(Punctuation::Tab) | Token::Punct(Punctuation::Space) => {
                 if let Some(spaces) = self.current_spaces.as_mut() {
                     *spaces += 1;
                 }
@@ -123,7 +130,9 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
                             // hope that truncating division will approximate
                             // a sane situation.
                             self.context.register_error(self.error(format!(
-                                "inconsistent indentation: {} % {} != 0", spaces, spaces_per_indent)));
+                                "inconsistent indentation: {} % {} != 0",
+                                spaces, spaces_per_indent
+                            )));
                         }
                         new_indents = spaces / spaces_per_indent;
                         self.current = Some((spaces_per_indent, new_indents));
@@ -137,7 +146,9 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
             } else if indents < new_indents {
                 // multiple indent is an error, register it but let it work
                 self.context.register_error(self.error(format!(
-                    "inconsistent multiple indentation: {} > 1", new_indents - indents)));
+                    "inconsistent multiple indentation: {} > 1",
+                    new_indents - indents
+                )));
                 for _ in indents..new_indents {
                     self.push_eol(Token::Punct(Punctuation::LBrace));
                 }
@@ -166,7 +177,8 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
             Token::Punct(Punctuation::RBrace) => {
                 self.current = match self.current {
                     None => {
-                        self.context.register_error(self.error("unmatched right brace"));
+                        self.context
+                            .register_error(self.error("unmatched right brace"));
                         None
                     }
                     Some((_, 1)) => None,
@@ -187,8 +199,9 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
     }
 }
 
-impl<'ctx, I> Iterator for IndentProcessor<'ctx, I> where
-    I: Iterator<Item=LocatedToken>
+impl<'ctx, I> Iterator for IndentProcessor<'ctx, I>
+where
+    I: Iterator<Item = LocatedToken>,
 {
     type Item = LocatedToken;
 

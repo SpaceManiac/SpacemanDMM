@@ -1,10 +1,10 @@
-use dm::objtree::*;
 use dm::constants::Constant;
+use dm::objtree::*;
 use minimap::{Atom, GetVar};
 
-pub mod transit_tube;
 pub mod random;
 pub mod structures;
+pub mod transit_tube;
 
 /// A map rendering pass.
 ///
@@ -13,49 +13,49 @@ pub mod structures;
 #[allow(unused_variables)]
 pub trait RenderPass: Sync {
     /// Filter atoms based solely on their typepath.
-    fn path_filter(&self,
-        path: &str,
-    ) -> bool { true }
+    fn path_filter(&self, path: &str) -> bool {
+        true
+    }
 
     /// Filter atoms at the beginning of the process.
     ///
     /// Return `false` to discard the atom.
-    fn early_filter(&self,
-        atom: &Atom,
-        objtree: &ObjectTree,
-    ) -> bool { true }
+    fn early_filter(&self, atom: &Atom, objtree: &ObjectTree) -> bool {
+        true
+    }
 
     /// Expand atoms, such as spawners into the atoms they spawn.
     ///
     /// Return `true` to consume the original atom.
-    fn expand<'a>(&self,
+    fn expand<'a>(
+        &self,
         atom: &Atom<'a>,
         objtree: &'a ObjectTree,
         output: &mut Vec<Atom<'a>>,
-    ) -> bool { false }
+    ) -> bool {
+        false
+    }
 
     /// Adjust the variables of an atom.
-    fn adjust_vars<'a>(&self,
-        atom: &mut Atom<'a>,
-        objtree: &'a ObjectTree,
-    ) {}
+    fn adjust_vars<'a>(&self, atom: &mut Atom<'a>, objtree: &'a ObjectTree) {}
 
     /// Apply overlays and underlays to an atom, in the form of pseudo-atoms.
-    fn overlays<'a>(&self,
+    fn overlays<'a>(
+        &self,
         atom: &mut Atom<'a>,
         objtree: &'a ObjectTree,
         underlays: &mut Vec<Atom<'a>>,
         overlays: &mut Vec<Atom<'a>>,
-    ) {}
+    ) {
+    }
 
     /// Filter atoms at the end of the process.
     ///
     /// Will act on adjusted atoms and pseudo-atoms from `adjust_vars` and
     /// `overlays`. Return `true` to keep and `false` to discard.
-    fn late_filter(&self,
-        atom: &Atom,
-        objtree: &ObjectTree,
-    ) -> bool { true }
+    fn late_filter(&self, atom: &Atom, objtree: &ObjectTree) -> bool {
+        true
+    }
 }
 
 pub struct RenderPassInfo {
@@ -66,26 +66,73 @@ pub struct RenderPassInfo {
 }
 
 macro_rules! pass {
-    ($typ:ty, $name:expr, $desc:expr, $def:expr) => (RenderPassInfo {
-        name: $name,
-        desc: $desc,
-        default: $def,
-        new: || Box::new(<$typ>::default())
-    })
+    ($typ:ty, $name:expr, $desc:expr, $def:expr) => {
+        RenderPassInfo {
+            name: $name,
+            desc: $desc,
+            default: $def,
+            new: || Box::new(<$typ>::default()),
+        }
+    };
 }
 
 pub const RENDER_PASSES: &[RenderPassInfo] = &[
-    pass!(HideSpace, "hide-space", "Do not render space tiles, instead leaving transparency.", true),
+    pass!(
+        HideSpace,
+        "hide-space",
+        "Do not render space tiles, instead leaving transparency.",
+        true
+    ),
     pass!(HideAreas, "hide-areas", "Do not render area icons.", true),
-    pass!(HideInvisible, "hide-invisible", "Do not render invisible or ephemeral objects such as mapping helpers.", true),
-    pass!(random::Random, "random", "Replace random spawners with one of their possibilities.", true),
-    pass!(Pretty, "pretty", "Add the minor cosmetic overlays for various objects.", true),
-    pass!(structures::Spawners, "spawners", "Replace object spawners with their spawned objects.", true),
-    pass!(FakeGlass, "fake-glass", "Add underlays to fake glass turfs.", true),
-    pass!(transit_tube::TransitTube, "transit-tube", "Add overlays to connect transit tubes together.", true),
-    pass!(structures::GravityGen, "gravity-gen", "Expand the gravity generator to the full structure.", true),
+    pass!(
+        HideInvisible,
+        "hide-invisible",
+        "Do not render invisible or ephemeral objects such as mapping helpers.",
+        true
+    ),
+    pass!(
+        random::Random,
+        "random",
+        "Replace random spawners with one of their possibilities.",
+        true
+    ),
+    pass!(
+        Pretty,
+        "pretty",
+        "Add the minor cosmetic overlays for various objects.",
+        true
+    ),
+    pass!(
+        structures::Spawners,
+        "spawners",
+        "Replace object spawners with their spawned objects.",
+        true
+    ),
+    pass!(
+        FakeGlass,
+        "fake-glass",
+        "Add underlays to fake glass turfs.",
+        true
+    ),
+    pass!(
+        transit_tube::TransitTube,
+        "transit-tube",
+        "Add overlays to connect transit tubes together.",
+        true
+    ),
+    pass!(
+        structures::GravityGen,
+        "gravity-gen",
+        "Expand the gravity generator to the full structure.",
+        true
+    ),
     pass!(Wires, "only-powernet", "Render only power cables.", false),
-    pass!(Pipes, "only-pipenet", "Render only atmospheric pipes.", false),
+    pass!(
+        Pipes,
+        "only-pipenet",
+        "Render only atmospheric pipes.",
+        false
+    ),
 ];
 
 pub fn configure(include: &str, exclude: &str) -> Vec<Box<RenderPass>> {
@@ -123,7 +170,8 @@ fn add_to<'a, S: Into<String>>(target: &mut Vec<Atom<'a>>, atom: &Atom<'a>, icon
 #[derive(Default)]
 pub struct HideSpace;
 impl RenderPass for HideSpace {
-    fn expand<'a>(&self,
+    fn expand<'a>(
+        &self,
         atom: &Atom<'a>,
         objtree: &'a ObjectTree,
         output: &mut Vec<Atom<'a>>,
@@ -154,14 +202,20 @@ pub struct HideInvisible;
 impl RenderPass for HideInvisible {
     fn early_filter(&self, atom: &Atom, objtree: &ObjectTree) -> bool {
         // invisible objects and syndicate balloons are not to show
-        if atom.get_var("invisibility", objtree).to_float().unwrap_or(0.) > 60. ||
-            atom.istype("/obj/effect/mapping_helpers/")
+        if atom
+            .get_var("invisibility", objtree)
+            .to_float()
+            .unwrap_or(0.)
+            > 60.
+            || atom.istype("/obj/effect/mapping_helpers/")
         {
             return false;
         }
-        if atom.get_var("icon", objtree).eq_resource("icons/obj/items_and_weapons.dmi") &&
-            atom.get_var("icon_state", objtree).eq_string("syndballoon") &&
-            !atom.istype("/obj/item/toy/syndicateballoon/")
+        if atom
+            .get_var("icon", objtree)
+            .eq_resource("icons/obj/items_and_weapons.dmi")
+            && atom.get_var("icon_state", objtree).eq_string("syndballoon")
+            && !atom.istype("/obj/item/toy/syndicateballoon/")
         {
             return false;
         }
@@ -172,7 +226,8 @@ impl RenderPass for HideInvisible {
 #[derive(Default)]
 pub struct FakeGlass;
 impl RenderPass for FakeGlass {
-    fn overlays<'a>(&self,
+    fn overlays<'a>(
+        &self,
         atom: &mut Atom<'a>,
         _objtree: &'a ObjectTree,
         underlays: &mut Vec<Atom<'a>>,
@@ -194,22 +249,21 @@ impl RenderPass for FakeGlass {
 #[derive(Default)]
 pub struct Pretty;
 impl RenderPass for Pretty {
-    fn adjust_vars<'a>(&self,
-        atom: &mut Atom<'a>,
-        _: &'a ObjectTree,
-    ) {
+    fn adjust_vars<'a>(&self, atom: &mut Atom<'a>, _: &'a ObjectTree) {
         if atom.istype("/obj/structure/bookcase/") {
             atom.set_var("icon_state", Constant::string("book-0"));
         }
     }
 
-    fn overlays<'a>(&self,
+    fn overlays<'a>(
+        &self,
         atom: &mut Atom<'a>,
         objtree: &'a ObjectTree,
         _: &mut Vec<Atom<'a>>,
         overlays: &mut Vec<Atom<'a>>,
     ) {
-        if atom.istype("/obj/item/storage/box/") && !atom.istype("/obj/item/storage/box/papersack/") {
+        if atom.istype("/obj/item/storage/box/") && !atom.istype("/obj/item/storage/box/papersack/")
+        {
             let mut copy = atom.clone();
             copy.set_var("icon_state", atom.get_var("illustration", objtree).clone());
             overlays.push(copy);

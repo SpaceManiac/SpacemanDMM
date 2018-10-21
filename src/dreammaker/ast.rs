@@ -103,7 +103,7 @@ pub enum BinaryOp {
     And,
     Or,
     In,
-    To,  // only appears in RHS of `In`
+    To, // only appears in RHS of `In`
 }
 
 impl fmt::Display for BinaryOp {
@@ -209,14 +209,17 @@ augmented! {
 
 /// A path optionally followed by a set of variables.
 #[derive(Clone, Hash, Eq, PartialEq, Debug)]
-pub struct Prefab<E=Expression> {
+pub struct Prefab<E = Expression> {
     pub path: TypePath,
     pub vars: LinkedHashMap<String, E>,
 }
 
 impl<E> From<TypePath> for Prefab<E> {
     fn from(path: TypePath) -> Self {
-        Prefab { path, vars: Default::default() }
+        Prefab {
+            path,
+            vars: Default::default(),
+        }
     }
 }
 
@@ -243,7 +246,7 @@ impl<E: fmt::Display> fmt::Display for Prefab<E> {
 
 /// The different forms of the `new` command.
 #[derive(Clone, Hash, Eq, PartialEq, Debug)]
-pub enum NewType<E=Expression> {
+pub enum NewType<E = Expression> {
     /// Implicit type, taken from context.
     Implicit,
     /// The name of a variable in which to find the prefab to instantiate.
@@ -301,15 +304,22 @@ pub enum Expression {
         if_: Box<Expression>,
         /// The value otherwise.
         else_: Box<Expression>,
-    }
+    },
 }
 
 impl Expression {
     /// If this expression consists of a single term, return it.
     pub fn as_term(&self) -> Option<&Term> {
         match self {
-            &Expression::Base { ref unary, ref follow, ref term }
-                if unary.is_empty() && follow.is_empty() => Some(term),
+            &Expression::Base {
+                ref unary,
+                ref follow,
+                ref term,
+            }
+                if unary.is_empty() && follow.is_empty() =>
+            {
+                Some(term)
+            }
             _ => None,
         }
     }
@@ -317,14 +327,18 @@ impl Expression {
     /// If this expression consists of a single term, return it.
     pub fn into_term(self) -> Option<Term> {
         match self {
-            Expression::Base { unary, follow, term } => {
+            Expression::Base {
+                unary,
+                follow,
+                term,
+            } => {
                 if unary.is_empty() && follow.is_empty() {
                     Some(term)
                 } else {
                     None
                 }
-            },
-            _ => None
+            }
+            _ => None,
         }
     }
 }
@@ -337,7 +351,7 @@ impl From<Term> for Expression {
                 unary: vec![],
                 follow: vec![],
                 term,
-            }
+            },
         }
     }
 }
@@ -359,7 +373,7 @@ pub enum Term {
     /// An `input` call.
     Input {
         args: Vec<Expression>,
-        input_type: InputType, // as
+        input_type: InputType,            // as
         in_list: Option<Box<Expression>>, // in
     },
     /// A `locate` call.
@@ -398,15 +412,23 @@ pub enum Term {
 impl From<Expression> for Term {
     fn from(expr: Expression) -> Term {
         match expr {
-            Expression::Base { term, unary, follow } => if unary.is_empty() && follow.is_empty() {
+            Expression::Base {
+                term,
+                unary,
+                follow,
+            } => if unary.is_empty() && follow.is_empty() {
                 match term {
                     Term::Expr(expr) => Term::from(*expr),
                     other => other,
                 }
             } else {
-                Term::Expr(Box::new(Expression::Base { term, unary, follow }))
+                Term::Expr(Box::new(Expression::Base {
+                    term,
+                    unary,
+                    follow,
+                }))
             },
-            other => Term::Expr(Box::new(other))
+            other => Term::Expr(Box::new(other)),
         }
     }
 }
@@ -427,10 +449,8 @@ pub enum IndexKind {
 impl IndexKind {
     pub fn len(self) -> usize {
         match self {
-            IndexKind::Dot |
-            IndexKind::Colon => 1,
-            IndexKind::SafeDot |
-            IndexKind::SafeColon => 2,
+            IndexKind::Dot | IndexKind::Colon => 1,
+            IndexKind::SafeDot | IndexKind::SafeColon => 2,
         }
     }
 }
@@ -565,22 +585,30 @@ impl VarType {
 }
 
 impl FromIterator<String> for VarType {
-    fn from_iter<T: IntoIterator<Item=String>>(iter: T) -> Self {
+    fn from_iter<T: IntoIterator<Item = String>>(iter: T) -> Self {
         let (mut is_static, mut is_const, mut is_tmp) = (false, false, false);
-        let type_path = iter.into_iter()
+        let type_path = iter
+            .into_iter()
             .skip_while(|p| {
                 if p == "global" || p == "static" {
-                    is_static = true; true
+                    is_static = true;
+                    true
                 } else if p == "const" {
-                    is_const = true; true
+                    is_const = true;
+                    true
                 } else if p == "tmp" {
-                    is_tmp = true; true
+                    is_tmp = true;
+                    true
                 } else {
                     false
                 }
-            })
-            .collect();
-        VarType { is_static, is_const, is_tmp, type_path }
+            }).collect();
+        VarType {
+            is_static,
+            is_const,
+            is_tmp,
+            type_path,
+        }
     }
 }
 
@@ -639,7 +667,11 @@ pub enum Statement {
     Vars(Vec<VarStatement>),
     Setting(String, SettingMode, Expression),
     Spawn(Option<Expression>, Vec<Statement>),
-    Switch(Expression, Vec<(Vec<Case>, Vec<Statement>)>, Option<Vec<Statement>>),
+    Switch(
+        Expression,
+        Vec<(Vec<Case>, Vec<Statement>)>,
+        Option<Vec<Statement>>,
+    ),
     TryCatch {
         try_block: Vec<Statement>,
         catch_params: Vec<TreePath>,

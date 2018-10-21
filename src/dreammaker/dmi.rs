@@ -1,8 +1,8 @@
+use std::collections::BTreeMap;
 use std::io;
 use std::path::Path;
-use std::collections::BTreeMap;
 
-use lodepng::ffi::{State as PngState};
+use lodepng::ffi::State as PngState;
 
 const VERSION: &str = "4.0";
 
@@ -143,7 +143,7 @@ fn parse_metadata(data: &str) -> Metadata {
 
     for line in lines {
         if line.starts_with("# END DMI") {
-            break
+            break;
         }
         let mut split = line.trim().splitn(2, " = ");
         let key = split.next().unwrap();
@@ -158,7 +158,9 @@ fn parse_metadata(data: &str) -> Metadata {
                 }
                 let unquoted = value[1..value.len() - 1].to_owned(); // TODO: unquote
                 assert!(!unquoted.contains("\\") && !unquoted.contains("\""));
-                metadata.state_names.insert(unquoted.clone(), metadata.states.len());
+                metadata
+                    .state_names
+                    .insert(unquoted.clone(), metadata.states.len());
 
                 state = Some(State {
                     offset: frames_so_far,
@@ -183,14 +185,18 @@ fn parse_metadata(data: &str) -> Metadata {
             "frames" => {
                 let state = state.as_mut().unwrap();
                 match state.frames {
-                    Frames::One => {},
+                    Frames::One => {}
                     _ => panic!(),
                 }
                 state.frames = Frames::Count(value.parse().unwrap());
             }
             "delay" => {
                 let state = state.as_mut().unwrap();
-                let mut vector: Vec<f32> = value.split(",").map(str::parse).collect::<Result<Vec<_>, _>>().unwrap();
+                let mut vector: Vec<f32> = value
+                    .split(",")
+                    .map(str::parse)
+                    .collect::<Result<Vec<_>, _>>()
+                    .unwrap();
                 match state.frames {
                     Frames::One => if vector.iter().all(|&n| n == 1.) {
                         state.frames = Frames::Count(vector.len());
@@ -201,7 +207,7 @@ fn parse_metadata(data: &str) -> Metadata {
                         vector.truncate(n);
                         state.frames = Frames::Delays(vector);
                     },
-                    Frames::Delays(_) => panic!()
+                    Frames::Delays(_) => panic!(),
                 }
             }
             "loop" => state.as_mut().unwrap().loop_ = value.parse().unwrap(),

@@ -1,11 +1,11 @@
 //! The lexer/tokenizer.
+use std::borrow::Cow;
+use std::fmt;
 use std::io;
 use std::str::FromStr;
-use std::fmt;
-use std::borrow::Cow;
 
-use super::{DMError, Location, HasLocation, FileId, Context, Severity};
 use super::docs::*;
+use super::{Context, DMError, FileId, HasLocation, Location, Severity};
 
 macro_rules! table {
     (
@@ -141,31 +141,148 @@ impl fmt::Display for Punctuation {
 /// character in the input, blazing fast. The code to generate it is contained
 /// in the following test.
 static SPEEDY_TABLE: [(usize, usize); 127] = [
-    (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
-    (0, 0), (0, 1), (1, 2), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
-    (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
-    (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
-    (2, 3), (3, 5), (5, 6), (6, 8), (0, 0), (8, 10), (10, 13), (13, 14),
-    (14, 15), (15, 16), (16, 19), (19, 22), (22, 23), (23, 26), (26, 29), (29, 33),
-    (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
-    (0, 0), (0, 0), (33, 34), (34, 35), (35, 40), (40, 42), (42, 46), (46, 49),
-    (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
-    (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
-    (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
-    (0, 0), (0, 0), (0, 0), (49, 50), (0, 0), (50, 51), (51, 53), (0, 0),
-    (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
-    (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
-    (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
-    (0, 0), (0, 0), (0, 0), (53, 55), (55, 58), (58, 59), (59, 62)];
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 1),
+    (1, 2),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (2, 3),
+    (3, 5),
+    (5, 6),
+    (6, 8),
+    (0, 0),
+    (8, 10),
+    (10, 13),
+    (13, 14),
+    (14, 15),
+    (15, 16),
+    (16, 19),
+    (19, 22),
+    (22, 23),
+    (23, 26),
+    (26, 29),
+    (29, 33),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (33, 34),
+    (34, 35),
+    (35, 40),
+    (40, 42),
+    (42, 46),
+    (46, 49),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (49, 50),
+    (0, 0),
+    (50, 51),
+    (51, 53),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (0, 0),
+    (53, 55),
+    (55, 58),
+    (58, 59),
+    (59, 62),
+];
 
 #[test]
 fn make_speedy_table() {
-    let everything: Vec<&str> = PUNCT_TABLE.iter()
+    let everything: Vec<&str> = PUNCT_TABLE
+        .iter()
         .map(|p| p.0)
         .filter(|s| !s.chars().any(|c| c.is_alphanumeric()))
         .collect();
     for each in everything.iter() {
-        assert!(each.len() == 1 || everything.contains(&&each[..each.len() - 1]), "no prefix: {}", each);
+        assert!(
+            each.len() == 1 || everything.contains(&&each[..each.len() - 1]),
+            "no prefix: {}",
+            each
+        );
     }
 
     let mut table = vec![];
@@ -200,7 +317,10 @@ fn filter_punct_table<'a>(filter: u8) -> &'static [(&'static str, Punctuation)] 
 }
 
 #[inline]
-fn filter_punct<'a>(input: &'a [(&'static str, Punctuation)], filter: &[u8]) -> &'a [(&'static str, Punctuation)] {
+fn filter_punct<'a>(
+    input: &'a [(&'static str, Punctuation)],
+    filter: &[u8],
+) -> &'a [(&'static str, Punctuation)] {
     // requires that PUNCT_TABLE be ordered, shorter entries be first,
     // and all entries with >1 character also have their prefix in the table
     let mut start = 0;
@@ -254,51 +374,24 @@ impl Token {
                 _ => continue,
             };
             match p {
-                In |
-                Eq |
-                NotEq |
-                Mod |
-                And |
-                BitAndAssign |
-                Mul |
-                Pow |
-                MulAssign |
-                Add |
-                AddAssign |
-                Sub |
-                SubAssign |
-                DivAssign |
-                Colon |
-                Less |
-                LShift |
-                LShiftAssign |
-                LessEq |
-                LessGreater |
-                Assign |
-                Greater |
-                GreaterEq |
-                RShift |
-                RShiftAssign |
-                QuestionMark |
-                BitXorAssign |
-                BitOrAssign |
-                Or => return true,
+                In | Eq | NotEq | Mod | And | BitAndAssign | Mul | Pow | MulAssign | Add
+                | AddAssign | Sub | SubAssign | DivAssign | Colon | Less | LShift
+                | LShiftAssign | LessEq | LessGreater | Assign | Greater | GreaterEq | RShift
+                | RShiftAssign | QuestionMark | BitXorAssign | BitOrAssign | Or => return true,
                 _ => {}
             }
         }
 
         // space
         match (prev, self) {
-            (&Token::Ident(_, true), _) |
-            (&Token::Punct(Comma), _) => true,
-            (&Token::Ident(..), &Token::Punct(_)) |
-            (&Token::Ident(..), &Token::InterpStringEnd(_)) |
-            (&Token::Ident(..), &Token::InterpStringPart(_)) |
-            (&Token::Punct(_), &Token::Ident(..)) |
-            (&Token::InterpStringBegin(_), &Token::Ident(..)) |
-            (&Token::InterpStringPart(_), &Token::Ident(..)) => false,
-            (&Token::Ident(..), _) |
-            (_, &Token::Ident(..)) => true,
+            (&Token::Ident(_, true), _) | (&Token::Punct(Comma), _) => true,
+            (&Token::Ident(..), &Token::Punct(_))
+            | (&Token::Ident(..), &Token::InterpStringEnd(_))
+            | (&Token::Ident(..), &Token::InterpStringPart(_))
+            | (&Token::Punct(_), &Token::Ident(..))
+            | (&Token::InterpStringBegin(_), &Token::Ident(..))
+            | (&Token::InterpStringPart(_), &Token::Ident(..)) => false,
+            (&Token::Ident(..), _) | (_, &Token::Ident(..)) => true,
             _ => false,
         }
     }
@@ -306,11 +399,11 @@ impl Token {
     /// Check whether this token is whitespace.
     pub fn is_whitespace(&self) -> bool {
         match *self {
-            Token::Punct(Punctuation::Tab) |
-            Token::Punct(Punctuation::Newline) |
-            Token::Punct(Punctuation::Space) |
-            Token::Eof => true,
-            _ => false
+            Token::Punct(Punctuation::Tab)
+            | Token::Punct(Punctuation::Newline)
+            | Token::Punct(Punctuation::Space)
+            | Token::Eof => true,
+            _ => false,
         }
     }
 }
@@ -374,7 +467,9 @@ impl fmt::Display for FormatFloat {
             if exp >= 6.0 || exp <= -5.0 {
                 let n2 = (n * 10.0f32.powf(5.0 - exp)).round() * 1.0e-5;
                 let mut precision = 0;
-                while precision < 5 && (n2 * 10.0f32.powi(precision)) != (n2 * 10.0f32.powi(precision)).round() {
+                while precision < 5
+                    && (n2 * 10.0f32.powi(precision)) != (n2 * 10.0f32.powi(precision)).round()
+                {
                     precision += 1;
                 }
                 write!(f, "{:.*}e{:+04}", precision as usize, n2, exp)
@@ -501,7 +596,7 @@ impl<I> HasLocation for LocationTracker<I> {
     }
 }
 
-impl<I: Iterator<Item=io::Result<u8>>> Iterator for LocationTracker<I> {
+impl<I: Iterator<Item = io::Result<u8>>> Iterator for LocationTracker<I> {
     type Item = Result<u8, DMError>;
 
     fn next(&mut self) -> Option<Result<u8, DMError>> {
@@ -526,9 +621,7 @@ impl<I: Iterator<Item=io::Result<u8>>> Iterator for LocationTracker<I> {
                 }
                 Some(Ok(ch))
             }
-            Some(Err(e)) => {
-                Some(Err(DMError::new(self.location, "i/o error").set_cause(e)))
-            }
+            Some(Err(e)) => Some(Err(DMError::new(self.location, "i/o error").set_cause(e))),
         }
     }
 }
@@ -559,7 +652,7 @@ impl<'ctx, I> fmt::Debug for Lexer<'ctx, I> {
     }
 }
 
-impl<'ctx, I: Iterator<Item=io::Result<u8>>> HasLocation for Lexer<'ctx, I> {
+impl<'ctx, I: Iterator<Item = io::Result<u8>>> HasLocation for Lexer<'ctx, I> {
     #[inline]
     fn location(&self) -> Location {
         self.input.location
@@ -568,12 +661,16 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> HasLocation for Lexer<'ctx, I> {
 
 impl<'ctx, R: io::Read> Lexer<'ctx, io::Bytes<R>> {
     /// Create a new lexer from a reader.
-    pub fn from_read(context: &'ctx Context, file_number: FileId, source: R) -> Lexer<io::Bytes<R>> {
+    pub fn from_read(
+        context: &'ctx Context,
+        file_number: FileId,
+        source: R,
+    ) -> Lexer<io::Bytes<R>> {
         Lexer::new(context, file_number, source.bytes())
     }
 }
 
-impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
+impl<'ctx, I: Iterator<Item = io::Result<u8>>> Lexer<'ctx, I> {
     /// Create a new lexer from a byte stream.
     pub fn new(context: &'ctx Context, file_number: FileId, input: I) -> Lexer<I> {
         Lexer {
@@ -629,8 +726,18 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         // read the first character and check for being a comment
         let mut comment = None;
         match self.next() {
-            Some(b'*') => comment = Some(DocComment::new(CommentKind::Block, DocTarget::FollowingItem)),
-            Some(b'!') => comment = Some(DocComment::new(CommentKind::Block, DocTarget::EnclosingItem)),
+            Some(b'*') => {
+                comment = Some(DocComment::new(
+                    CommentKind::Block,
+                    DocTarget::FollowingItem,
+                ))
+            }
+            Some(b'!') => {
+                comment = Some(DocComment::new(
+                    CommentKind::Block,
+                    DocTarget::EnclosingItem,
+                ))
+            }
             Some(ch) => buffer[1] = ch,
             None => {}
         }
@@ -641,7 +748,8 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
             match self.next() {
                 Some(val) => buffer[1] = val,
                 None => {
-                    self.context.register_error(self.error("still skipping comments at end of file"));
+                    self.context
+                        .register_error(self.error("still skipping comments at end of file"));
                     break;
                 }
             }
@@ -671,9 +779,16 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         // read the first character and check for being a comment
         let mut comment = None;
         match self.next() {
-            Some(b'/') => comment = Some(DocComment::new(CommentKind::Line, DocTarget::FollowingItem)),
-            Some(b'!') => comment = Some(DocComment::new(CommentKind::Line, DocTarget::EnclosingItem)),
-            Some(b'\n') => { self.put_back(Some(b'\n')); return None },
+            Some(b'/') => {
+                comment = Some(DocComment::new(CommentKind::Line, DocTarget::FollowingItem))
+            }
+            Some(b'!') => {
+                comment = Some(DocComment::new(CommentKind::Line, DocTarget::EnclosingItem))
+            }
+            Some(b'\n') => {
+                self.put_back(Some(b'\n'));
+                return None;
+            }
             Some(b'\\') => backslash = true,
             _ => {}
         }
@@ -710,7 +825,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         if first == b'.' {
             integer = false;
         } else if first == b'0' {
-            radix = 8;  // hate. let me tell you...
+            radix = 8; // hate. let me tell you...
             match self.next() {
                 Some(b'x') => radix = 16,
                 ch => self.put_back(ch),
@@ -718,7 +833,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         }
         loop {
             match self.next() {
-                Some(b'_') => {},
+                Some(b'_') => {}
                 Some(ch) if ch == b'.' || ch == b'e' || ch == b'E' => {
                     integer = false;
                     exponent |= ch == b'e' || ch == b'E';
@@ -728,7 +843,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                     buf.push(ch as char);
                 }
                 Some(b'#') if !integer => {
-                    buf.push('#');  // Keep pushing to `buf` in case of error.
+                    buf.push('#'); // Keep pushing to `buf` in case of error.
                     for &expect in b"INF" {
                         match self.next() {
                             Some(ch) if ch == expect => continue,
@@ -768,24 +883,29 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                 if let Ok(val) = f32::from_str(&buf) {
                     let val_str = val.to_string();
                     if val_str != buf {
-                        self.context.register_error(self.error(
-                            format!("precision loss of integer constant: \"{}\" to {}", buf, val)
-                        ).set_severity(Severity::Warning));
+                        self.context.register_error(
+                            self.error(format!(
+                                "precision loss of integer constant: \"{}\" to {}",
+                                buf, val
+                            )).set_severity(Severity::Warning),
+                        );
                     }
-                    return Token::Float(val)
+                    return Token::Float(val);
                 }
             }
-            self.context.register_error(self.error(
-                format!("bad base-{} integer \"{}\": {}", radix, buf, original_error)));
-            Token::Int(0)  // fallback
+            self.context.register_error(self.error(format!(
+                "bad base-{} integer \"{}\": {}",
+                radix, buf, original_error
+            )));
+            Token::Int(0) // fallback
         } else {
             // ignore radix
             match f32::from_str(&buf) {
                 Ok(val) => Token::Float(val),
                 Err(e) => {
-                    self.context.register_error(self.error(
-                        format!("bad float \"{}\": {}", buf, e)));
-                    Token::Float(0.0)  // fallback
+                    self.context
+                        .register_error(self.error(format!("bad float \"{}\": {}", buf, e)));
+                    Token::Float(0.0) // fallback
                 }
             }
         }
@@ -798,7 +918,10 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         loop {
             match self.next() {
                 Some(ch) if is_ident(ch) || is_digit(ch) => ident.push(ch),
-                ch => { self.put_back(ch); break }
+                ch => {
+                    self.put_back(ch);
+                    break;
+                }
             }
         }
         from_latin1(ident)
@@ -812,7 +935,8 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                 Some(b'\'') => break,
                 Some(ch) => buf.push(ch),
                 None => {
-                    self.context.register_error(DMError::new(start_loc, "unterminated resource literal"));
+                    self.context
+                        .register_error(DMError::new(start_loc, "unterminated resource literal"));
                     break;
                 }
             }
@@ -831,16 +955,17 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
             let ch = match self.next() {
                 Some(ch) => ch,
                 None => {
-                    self.context.register_error(DMError::new(start_loc, "unterminated string literal"));
+                    self.context
+                        .register_error(DMError::new(start_loc, "unterminated string literal"));
                     break;
                 }
             };
             if ch == end[idx] && !backslash {
                 idx += 1;
                 if idx == end.len() {
-                    break
+                    break;
                 }
-                continue
+                continue;
             } else if ch == end[0] && !backslash {
                 // TODO: this is a hack to fix the '""}' situation
                 buf.extend_from_slice(&end[..idx]);
@@ -854,7 +979,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                     backslash = false;
                     let next = self.skip_ws(true);
                     self.put_back(next);
-                },
+                }
                 /*b'"' | b'\'' | b'\\' | b'[' | b']' if backslash => {
                     backslash = false;
                     buf.push(ch);
@@ -889,7 +1014,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
     }
 
     fn read_punct(&mut self, first: u8) -> Option<Punctuation> {
-        let mut needle = [first, 0, 0, 0, 0, 0, 0, 0];  // poor man's StackVec
+        let mut needle = [first, 0, 0, 0, 0, 0, 0, 0]; // poor man's StackVec
         let mut needle_idx = 1;
 
         let mut items = filter_punct_table(first);
@@ -899,15 +1024,15 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                 candidate = Some(items[0].1);
             }
             if items.len() == 1 {
-                return candidate
+                return candidate;
             }
 
             match self.next() {
                 Some(b) => {
                     needle[needle_idx] = b;
                     needle_idx += 1;
-                },
-                None => return candidate,  // EOF
+                }
+                None => return candidate, // EOF
             }
             items = filter_punct(items, &needle[..needle_idx]);
         }
@@ -922,10 +1047,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         if punct != close {
             let next = self.next();
             match next {
-                Some(b'\r') |
-                Some(b' ') |
-                Some(b'\t') |
-                Some(b'\n') => {}
+                Some(b'\r') | Some(b' ') | Some(b'\t') | Some(b'\n') => {}
                 _ => punct = close,
             }
             self.put_back(next);
@@ -937,22 +1059,26 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         let mut skip_newlines = if skip_newlines { 2 } else { 0 };
         loop {
             match self.next() {
-                Some(b'\r') => {},
-                Some(b' ') |
-                Some(b'\t') if !self.at_line_head || skip_newlines > 0 => { self.close_allowed = false; },
-                Some(b'\n') if skip_newlines == 2 => { skip_newlines = 1; self.close_allowed = true; },
-                ch => return ch
+                Some(b'\r') => {}
+                Some(b' ') | Some(b'\t') if !self.at_line_head || skip_newlines > 0 => {
+                    self.close_allowed = false;
+                }
+                Some(b'\n') if skip_newlines == 2 => {
+                    skip_newlines = 1;
+                    self.close_allowed = true;
+                }
+                ch => return ch,
             }
         }
     }
 }
 
-impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
+impl<'ctx, I: Iterator<Item = io::Result<u8>>> Iterator for Lexer<'ctx, I> {
     type Item = LocatedToken;
 
     fn next(&mut self) -> Option<LocatedToken> {
-        use self::Token::*;
         use self::Punctuation::*;
+        use self::Token::*;
         let mut skip_newlines = false;
         let mut found_illegal = false;
         loop {
@@ -967,7 +1093,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                         return Some(LocatedToken {
                             location: location,
                             token: Token::Punct(Punctuation::Newline),
-                        })
+                        });
                     } else {
                         return None;
                     }
@@ -1047,7 +1173,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                         // check keywords
                         for &(name, value) in PUNCT_TABLE.iter() {
                             if name == ident {
-                                return Some(locate(Punct(value)))
+                                return Some(locate(Punct(value)));
                             }
                         }
                         self.close_allowed = true;
@@ -1058,16 +1184,17 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                         skip_newlines = true;
                         continue;
                     }
-                    b'@' => continue,  // TODO: parse these rather than ignoring them
+                    b'@' => continue, // TODO: parse these rather than ignoring them
                     _ => {
                         if !found_illegal {
-                            self.context.register_error(self.error(format!("illegal byte 0x{:x}", first)));
+                            self.context
+                                .register_error(self.error(format!("illegal byte 0x{:x}", first)));
                             found_illegal = true;
                         }
                         continue;
                     }
-                }
-            }
+                },
+            };
         }
     }
 }

@@ -1,6 +1,6 @@
-use std::sync::{Arc, RwLock};
+use std::collections::{hash_map, HashMap};
 use std::path::{Path, PathBuf};
-use std::collections::{HashMap, hash_map};
+use std::sync::{Arc, RwLock};
 
 use super::dmi::IconFile;
 
@@ -25,9 +25,12 @@ impl IconCache {
             Some(existing) => existing,
             None => {
                 let arc = load(path).map(Arc::new);
-                self.lock.write().unwrap().insert(path.to_owned(), arc.clone());
+                self.lock
+                    .write()
+                    .unwrap()
+                    .insert(path.to_owned(), arc.clone());
                 arc
-            },
+            }
         }
     }
 }

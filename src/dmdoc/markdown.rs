@@ -2,7 +2,7 @@
 
 use std::ops::Range;
 
-use pulldown_cmark::{self, Parser, Tag, Event};
+use pulldown_cmark::{self, Event, Parser, Tag};
 
 pub fn render(markdown: &str) -> String {
     let mut buf = String::new();
@@ -25,22 +25,25 @@ impl DocBlock {
 
     pub fn parse_with_title(markdown: &str) -> (Option<String>, Self) {
         let mut parser = parser(markdown).peekable();
-        (if let Some(&Event::Start(Tag::Header(1))) = parser.peek() {
-            parser.next();
-            let mut pieces = Vec::new();
-            loop {
-                match parser.next() {
-                    None | Some(Event::End(Tag::Header(1))) => break,
-                    Some(other) => pieces.push(other),
+        (
+            if let Some(&Event::Start(Tag::Header(1))) = parser.peek() {
+                parser.next();
+                let mut pieces = Vec::new();
+                loop {
+                    match parser.next() {
+                        None | Some(Event::End(Tag::Header(1))) => break,
+                        Some(other) => pieces.push(other),
+                    }
                 }
-            }
 
-            let mut title = String::new();
-            push_html(&mut title, pieces);
-            Some(title)
-        } else {
-            None
-        }, parse_main(parser))
+                let mut title = String::new();
+                push_html(&mut title, pieces);
+                Some(title)
+            } else {
+                None
+            },
+            parse_main(parser),
+        )
     }
 
     pub fn teaser(&self) -> &str {
@@ -52,7 +55,7 @@ fn parser(markdown: &str) -> Parser {
     Parser::new_with_broken_link_callback(
         markdown,
         pulldown_cmark::OPTION_ENABLE_TABLES,
-        Some(&::handle_crosslink)
+        Some(&::handle_crosslink),
     )
 }
 
@@ -79,10 +82,14 @@ fn parse_main(mut parser: ::std::iter::Peekable<Parser>) -> DocBlock {
     let has_description = parser.peek().is_some();
     push_html(&mut html, parser);
     trim_right(&mut html);
-    DocBlock { html, teaser, has_description }
+    DocBlock {
+        html,
+        teaser,
+        has_description,
+    }
 }
 
-fn push_html<'a, I: IntoIterator<Item=Event<'a>>>(buf: &mut String, iter: I) {
+fn push_html<'a, I: IntoIterator<Item = Event<'a>>>(buf: &mut String, iter: I) {
     pulldown_cmark::html::push_html(buf, iter.into_iter());
 }
 

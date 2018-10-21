@@ -1,16 +1,17 @@
 //! Parsing suite for DreamMaker, the language of the BYOND game engine.
 #![forbid(unsafe_code)]
 
-extern crate petgraph;
-extern crate linked_hash_map;
 extern crate interval_tree;
+extern crate linked_hash_map;
 extern crate lodepng;
-#[macro_use] extern crate bitflags;
+extern crate petgraph;
+#[macro_use]
+extern crate bitflags;
 extern crate noisy_float;
 
+use std::borrow::Cow;
 use std::io;
 use std::path::Path;
-use std::borrow::Cow;
 
 #[allow(unused_macros)]
 macro_rules! try_iter {
@@ -19,24 +20,24 @@ macro_rules! try_iter {
             Ok(x) => x,
             Err(e) => return Some(Err(From::from(e))),
         }
-    }
+    };
 }
 
 mod error;
 pub use error::*;
 
 // roughly in order of stage
-pub mod docs;
-pub mod lexer;
-pub mod preprocessor;
-pub mod indents;
-pub mod parser;
 pub mod annotation;
 pub mod ast;
-pub mod objtree;
 mod builtins;
 pub mod constants;
 pub mod dmi;
+pub mod docs;
+pub mod indents;
+pub mod lexer;
+pub mod objtree;
+pub mod parser;
+pub mod preprocessor;
 
 impl Context {
     /// Run the parsing suite on a given `.dme` file, producing an object tree.
@@ -45,10 +46,12 @@ impl Context {
     /// return a best-effort parse. Call `print_all_errors` to pretty-print
     /// errors to standard error.
     pub fn parse_environment(&self, dme: &Path) -> io::Result<objtree::ObjectTree> {
-        Ok(parser::parse(self,
-            indents::IndentProcessor::new(self,
-                preprocessor::Preprocessor::new(self, dme.to_owned())?
-            )
+        Ok(parser::parse(
+            self,
+            indents::IndentProcessor::new(
+                self,
+                preprocessor::Preprocessor::new(self, dme.to_owned())?,
+            ),
         ))
     }
 }
@@ -60,9 +63,10 @@ impl Context {
 ///
 /// If `show_ws` is true, braces and semicolons are included directly in the
 /// output rather than only being implied by the indentation.
-pub fn pretty_print<W, I>(w: &mut W, input: I, show_ws: bool) -> io::Result<()> where
+pub fn pretty_print<W, I>(w: &mut W, input: I, show_ws: bool) -> io::Result<()>
+where
     W: io::Write,
-    I: IntoIterator<Item=lexer::Token>
+    I: IntoIterator<Item = lexer::Token>,
 {
     let mut indents = 0;
     let mut needs_newline = false;
@@ -72,17 +76,23 @@ pub fn pretty_print<W, I>(w: &mut W, input: I, show_ws: bool) -> io::Result<()> 
             lexer::Token::Punct(lexer::Punctuation::LBrace) => {
                 indents += 1;
                 needs_newline = true;
-                if show_ws { write!(w, "{{")?; }
+                if show_ws {
+                    write!(w, "{{")?;
+                }
             }
             lexer::Token::Punct(lexer::Punctuation::RBrace) => {
                 indents -= 1;
                 needs_newline = true;
-                if show_ws { write!(w, "}}")?; }
+                if show_ws {
+                    write!(w, "}}")?;
+                }
             }
-            lexer::Token::Punct(lexer::Punctuation::Semicolon) |
-            lexer::Token::Punct(lexer::Punctuation::Newline) => {
+            lexer::Token::Punct(lexer::Punctuation::Semicolon)
+            | lexer::Token::Punct(lexer::Punctuation::Newline) => {
                 needs_newline = true;
-                if show_ws { write!(w, ";")?; }
+                if show_ws {
+                    write!(w, ";")?;
+                }
             }
             lexer::Token::DocComment(_) => {}
             other => {
@@ -161,7 +171,10 @@ pub const DEFAULT_ENV: &str = "tgstation.dme";
 /// Autodetect any `.dme` file in the current folder, or fall back to default.
 ///
 /// If multiple environments exist, the first non-default is preferred.
-pub fn detect_environment(root: &Path, default: &str) -> std::io::Result<Option<std::path::PathBuf>> {
+pub fn detect_environment(
+    root: &Path,
+    default: &str,
+) -> std::io::Result<Option<std::path::PathBuf>> {
     let mut result = None;
     for entry in std::fs::read_dir(root)? {
         if let Ok(entry) = entry {

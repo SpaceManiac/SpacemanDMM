@@ -2,17 +2,19 @@
 //! language server protocol.
 #![allow(dead_code)]
 
-use std::io::{self, Read, BufRead};
 use std::borrow::Cow;
-use std::path::{Path, PathBuf};
 use std::collections::HashMap;
+use std::io::{self, BufRead, Read};
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use jsonrpc;
-use langserver::{TextDocumentItem, TextDocumentIdentifier,
-    VersionedTextDocumentIdentifier, TextDocumentContentChangeEvent};
+use langserver::{
+    TextDocumentContentChangeEvent, TextDocumentIdentifier, TextDocumentItem,
+    VersionedTextDocumentIdentifier,
+};
 
-use super::{url_to_path, invalid_request};
+use super::{invalid_request, url_to_path};
 
 /// A store for the contents of currently-open documents, with appropriate
 /// fallback for documents which are not currently open.
@@ -38,7 +40,8 @@ impl DocumentStore {
         }
     }
 
-    pub fn change(&mut self,
+    pub fn change(
+        &mut self,
         doc_id: VersionedTextDocumentIdentifier,
         changes: Vec<TextDocumentContentChangeEvent>,
     ) -> Result<PathBuf, jsonrpc::Error> {
@@ -48,7 +51,7 @@ impl DocumentStore {
         // the client and the file is not open in the editor (the server has
         // not received an open notification before) the server can send `null`
         // to indicate that the version is known and the content on disk is the
-	    // truth (as speced with document content ownership)."
+        // truth (as speced with document content ownership)."
         let new_version = match doc_id.version {
             Some(version) => version,
             None => return Err(invalid_request("don't know how to deal with this")),
@@ -60,7 +63,10 @@ impl DocumentStore {
         };
 
         if new_version < document.version {
-            eprintln!("new_version: {} < document_version: {}", new_version, document.version);
+            eprintln!(
+                "new_version: {} < document_version: {}",
+                new_version, document.version
+            );
             return Err(invalid_request("version numbers shouldn't go backwards"));
         }
         document.version = new_version;
@@ -103,7 +109,10 @@ struct Document {
 
 impl Document {
     fn new(version: u64, text: String) -> Document {
-        Document { version, text: Rc::new(text) }
+        Document {
+            version,
+            text: Rc::new(text),
+        }
     }
 
     fn change(&mut self, change: TextDocumentContentChangeEvent) -> Result<(), jsonrpc::Error> {
@@ -118,7 +127,8 @@ impl Document {
         };
 
         let start_pos = total_offset(&self.text, range.start.line, range.start.character)?;
-        Rc::make_mut(&mut self.text).replace_range(start_pos .. start_pos + range_length as usize, &change.text);
+        Rc::make_mut(&mut self.text)
+            .replace_range(start_pos..start_pos + range_length as usize, &change.text);
         Ok(())
     }
 }
@@ -149,8 +159,12 @@ pub fn find_word(text: &str, offset: usize) -> &str {
         while !text.is_char_boundary(start_next) {
             start_next -= 1;
         }
-        if !text[start_next..start].chars().next().map_or(false, is_ident) {
-            break
+        if !text[start_next..start]
+            .chars()
+            .next()
+            .map_or(false, is_ident)
+        {
+            break;
         }
         start = start_next;
     }
@@ -163,7 +177,7 @@ pub fn find_word(text: &str, offset: usize) -> &str {
             end_next += 1;
         }
         if !text[end..end_next].chars().next().map_or(false, is_ident) {
-            break
+            break;
         }
         end = end_next;
     }
@@ -212,5 +226,7 @@ impl BufRead for Cursor {
         let amt = ::std::cmp::min(self.pos, self.inner.as_ref().len() as u64);
         Ok(&self.inner.as_bytes()[(amt as usize)..])
     }
-    fn consume(&mut self, amt: usize) { self.pos += amt as u64; }
+    fn consume(&mut self, amt: usize) {
+        self.pos += amt as u64;
+    }
 }

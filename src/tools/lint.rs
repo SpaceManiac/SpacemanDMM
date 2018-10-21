@@ -1,8 +1,8 @@
 //! Simplistic linting tools for maps, to automatically fix certain issues.
 use std::fmt;
 
-use dm::objtree::*;
 use dm::constants::Constant;
+use dm::objtree::*;
 use dmm::Map;
 
 macro_rules! lints {
@@ -36,10 +36,7 @@ lints! {
 }
 
 #[allow(unused_variables)]
-pub fn check(
-    objtree: &ObjectTree,
-    map: &mut Map,
-) -> Lints {
+pub fn check(objtree: &ObjectTree, map: &mut Map) -> Lints {
     let mut lints = Lints::default();
     let key_length = map.key_length;
 
@@ -55,7 +52,11 @@ pub fn check(
                     }
                 }
                 if found_turf != 1 {
-                    println!("    at {:?}: found {} turfs", map.zero_to_one((x, y, z)), found_turf);
+                    println!(
+                        "    at {:?}: found {} turfs",
+                        map.zero_to_one((x, y, z)),
+                        found_turf
+                    );
                 }
             }
         }
@@ -100,7 +101,8 @@ pub fn check(
 }
 
 pub fn retain_mut<T, F>(v: &mut Vec<T>, mut f: F)
-    where F: FnMut(&mut T) -> bool
+where
+    F: FnMut(&mut T) -> bool,
 {
     let len = v.len();
     let mut del = 0;
