@@ -6,7 +6,7 @@ use iterators::RangePairIter;
 /// An interval tree.
 #[derive(Debug, Clone)]
 pub struct IntervalTree<K, V> {
-    pub(crate) root: Option<Box<Node<K, V>>>
+    pub(crate) root: Option<Box<Node<K, V>>>,
 }
 
 impl<K, V> Default for IntervalTree<K, V> {

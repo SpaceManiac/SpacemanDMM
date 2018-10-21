@@ -103,7 +103,8 @@ impl AtomMap {
         let mut coords = HashMap::<(usize, usize, usize), Vec<&Prefab>>::new();
         for (z, level) in self.levels.iter().enumerate() {
             for (_, inst) in level.instances.keys_iter() {
-                coords.entry((inst.x as usize, (self.size.1 - 1 - inst.y) as usize, z as usize))
+                coords
+                    .entry((inst.x as usize, (self.size.1 - 1 - inst.y) as usize, z as usize))
                     .or_default()
                     .push(&inst.pop);
             }
@@ -181,7 +182,10 @@ impl AtomMap {
             key
         } else {
             let rc = Arc::new(prefab.to_owned());
-            self.pops.insert(rc.clone(), RenderPop::from_prefab(icons, objtree, &prefab).unwrap_or_default());
+            self.pops.insert(
+                rc.clone(),
+                RenderPop::from_prefab(icons, objtree, &prefab).unwrap_or_default(),
+            );
             rc
         }
     }
@@ -245,7 +249,9 @@ impl AtomMap {
         let (draw_call, start) = find_draw_call(draw_calls, pos);
 
         // extend the draw call or insert a new one
-        let rpop = pops.get(&instances.get_key(new_instance).pop).expect("instance with missing pop");
+        let rpop = pops
+            .get(&instances.get_key(new_instance).pop)
+            .expect("instance with missing pop");
         if pos == start {
             // in between two calls
             if draw_call > 0 && draw_calls[draw_call - 1].can_contain(rpop) {
@@ -315,7 +321,10 @@ impl AtomMap {
         self.add_instance((removed.old.x, removed.old.y, removed.z), pop);
     }
 
-    pub fn iter_instances<'a>(&'a self, (x, y, z): (u32, u32, u32)) -> impl Iterator<Item=(InstanceId, &'a Prefab)> + 'a {
+    pub fn iter_instances<'a>(
+        &'a self,
+        (x, y, z): (u32, u32, u32),
+    ) -> impl Iterator<Item = (InstanceId, &'a Prefab)> + 'a {
         let level = &self.levels[z as usize];
         level.sorted_order.iter().rev().filter_map(move |&idx| {
             let inst = &level.instances.get_key(idx);
@@ -382,8 +391,14 @@ impl AtomMap {
 }
 
 impl AtomZ {
-    fn prep_instance(&mut self, pops: &mut WeakKeyHashMap<Weak<Prefab>, RenderPop>, (x, y): (u32, u32), prefab: Arc<Prefab>) -> usize {
-        let vertices = pops.get(&prefab)
+    fn prep_instance(
+        &mut self,
+        pops: &mut WeakKeyHashMap<Weak<Prefab>, RenderPop>,
+        (x, y): (u32, u32),
+        prefab: Arc<Prefab>,
+    ) -> usize {
+        let vertices = pops
+            .get(&prefab)
             .map_or_else(|| [Vertex::default(); 4], |rpop| rpop.instance((x, y)));
         self.instances.push(Instance { x, y, pop: prefab }, vertices)
     }
@@ -479,8 +494,10 @@ impl<K, V> DualPool<K, V> {
         self.keys.len() - self.freelist.len()
     }
 
-    pub fn keys_iter<'a>(&'a self) -> impl Iterator<Item=(usize, &'a K)> + 'a {
-        self.keys.iter().enumerate()
+    pub fn keys_iter<'a>(&'a self) -> impl Iterator<Item = (usize, &'a K)> + 'a {
+        self.keys
+            .iter()
+            .enumerate()
             .filter(move |(i, _)| !self.freelist.contains(i))
     }
 }

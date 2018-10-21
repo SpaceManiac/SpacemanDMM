@@ -6,7 +6,8 @@ use walkdir::{DirEntry, WalkDir};
 use dmm_tools::*;
 
 fn is_visible(entry: &DirEntry) -> bool {
-    entry.path()
+    entry
+        .path()
         .file_name()
         .unwrap_or("".as_ref())
         .to_str()
@@ -22,10 +23,7 @@ fn files_with_extension<F: FnMut(&Path)>(ext: &str, mut f: F) {
             return;
         }
     };
-    for entry in WalkDir::new(dir)
-        .into_iter()
-        .filter_entry(is_visible)
-    {
+    for entry in WalkDir::new(dir).into_iter().filter_entry(is_visible) {
         let entry = entry.unwrap();
         if entry.file_type().is_file() && entry.path().extension() == Some(ext.as_ref()) {
             let path = entry.path();

@@ -20,12 +20,15 @@ fn floats() {
 
 #[test]
 fn nested_interpolation() {
-    assert_eq!(lex(r#""A[B"C"D]E""#), vec![
-        InterpStringBegin("A".into()),
-        Ident("B".into(), false),
-        String("C".into()),
-        Ident("D".into(), false),
-        InterpStringEnd("E".into()),
-        Punct(Newline),
-    ]);
+    assert_eq!(
+        lex(r#""A[B"C"D]E""#),
+        vec![
+            InterpStringBegin("A".into()),
+            Ident("B".into(), false),
+            String("C".into()),
+            Ident("D".into(), false),
+            InterpStringEnd("E".into()),
+            Punct(Newline),
+        ]
+    );
 }

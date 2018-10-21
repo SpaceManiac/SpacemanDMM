@@ -14,20 +14,20 @@ impl Query {
     /// Parse a symbol query.
     pub fn parse(query: &str) -> Option<Query> {
         if !any_alphanumeric(query) {
-            return None
+            return None;
         }
         Some(if query.starts_with("#") {
             Query::Define(query[1..].to_lowercase())
         } else if query.starts_with("var/") {
             let query = &query["var/".len()..];
             if !any_alphanumeric(query) {
-                return None
+                return None;
             }
             Query::Var(query.to_lowercase())
         } else if query.starts_with("proc/") {
             let query = &query["proc/".len()..];
             if !any_alphanumeric(query) {
-                return None
+                return None;
             }
             Query::Proc(query.to_lowercase())
         } else if query.contains("/") {

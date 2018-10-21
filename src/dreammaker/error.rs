@@ -81,7 +81,8 @@ impl Context {
         if let Some(severity) = self.print_severity {
             if error.severity <= severity {
                 let stderr = io::stderr();
-                self.pretty_print_error(&mut stderr.lock(), &error).expect("error writing to stderr");
+                self.pretty_print_error(&mut stderr.lock(), &error)
+                    .expect("error writing to stderr");
             }
         }
         self.errors.borrow_mut().push(error);
@@ -99,10 +100,13 @@ impl Context {
 
     /// Pretty-print a `DMError` to the given output.
     pub fn pretty_print_error<W: io::Write>(&self, w: &mut W, error: &DMError) -> io::Result<()> {
-        writeln!(w, "{}, line {}, column {}:",
+        writeln!(
+            w,
+            "{}, line {}, column {}:",
             self.file_path(error.location.file).display(),
             error.location.line,
-            error.location.column)?;
+            error.location.column,
+        )?;
         writeln!(w, "{}: {}\n", error.severity, error.description)
     }
 
@@ -188,11 +192,15 @@ pub trait HasLocation {
 }
 
 impl<'a, T: HasLocation> HasLocation for &'a T {
-    fn location(&self) -> Location { (**self).location() }
+    fn location(&self) -> Location {
+        (**self).location()
+    }
 }
 
 impl<'a, T: HasLocation> HasLocation for &'a mut T {
-    fn location(&self) -> Location { (**self).location() }
+    fn location(&self) -> Location {
+        (**self).location()
+    }
 }
 
 // ----------------------------------------------------------------------------

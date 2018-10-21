@@ -20,25 +20,25 @@ impl RequestRead for StdIo {
                     Ok(x) => x,
                     Err(e) => {
                         eprintln!("{:?}", e);
-                        return None
+                        return None;
                     }
                 }
-            }
+            };
         }
 
         // read the content-length
         let mut buffer = String::new();
         check!(io::stdin().read_line(&mut buffer));
         if buffer.is_empty() {
-            return None
+            return None;
         }
         let size = {
             let parts: Vec<&str> = buffer.split(' ').collect();
             if parts.len() != 2 {
-                return None
+                return None;
             }
             if !parts[0].eq_ignore_ascii_case("content-length:") {
-                return None
+                return None;
             }
             check!(usize::from_str_radix(parts[1].trim(), 10))
         };

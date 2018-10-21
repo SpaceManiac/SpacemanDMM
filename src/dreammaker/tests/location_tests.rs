@@ -62,7 +62,11 @@ fn reconstruct(tokens: &[LocatedToken], iffy: bool) -> String {
 
         let this_line = &mut reconstructed[line];
         if this_line.len() > column && !iffy {
-            panic!("column numbers went backwards: line {}, so far {:?}", line + 1, this_line);
+            panic!(
+                "column numbers went backwards: line {}, so far {:?}",
+                line + 1,
+                this_line
+            );
         }
         while this_line.len() < column {
             this_line.push(' ');

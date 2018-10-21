@@ -25,9 +25,7 @@ struct Edit<T, E> {
 impl<T, E> History<T, E> {
     pub fn new(desc: String, current: T) -> Self {
         let mut graph = Graph::default();
-        let idx = graph.add_node(Entry {
-            desc,
-        });
+        let idx = graph.add_node(Entry { desc });
         History {
             current,
             idx,
@@ -85,7 +83,10 @@ impl<T, E> History<T, E> {
     }
 
     pub fn can_redo(&self) -> bool {
-        self.graph.neighbors_directed(self.idx, Direction::Outgoing).next().is_some()
+        self.graph
+            .neighbors_directed(self.idx, Direction::Outgoing)
+            .next()
+            .is_some()
     }
 
     pub fn redo(&mut self, env: &E) {
