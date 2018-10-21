@@ -40,7 +40,7 @@ impl IconCache {
     }
 
     pub fn set_icons_root(&mut self, path: &Path) {
-        self.icons_root = Some(path.into())
+        self.icons_root = Some(path.into());
     }
 }
 

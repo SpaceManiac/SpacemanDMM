@@ -72,8 +72,7 @@ impl Context {
             self.icon_cache.set_icons_root(&parent);
         }
 
-        let pp = match dm::preprocessor::Preprocessor::new(&self.dm_context, environment.to_owned())
-        {
+        let pp = match dm::preprocessor::Preprocessor::new(&self.dm_context, environment.to_owned()) {
             Ok(pp) => pp,
             Err(e) => {
                 eprintln!("i/o error opening environment:\n{}", e);
