@@ -6,9 +6,7 @@ use dm::lexer::*;
 
 fn lex(f: &str) -> Vec<Token> {
     let context = Default::default();
-    let result = Lexer::new(&context, Default::default(), f.bytes().map(Ok))
-        .map(|t| t.token)
-        .collect();
+    let result = Lexer::new(&context, Default::default(), f.bytes().map(Ok)).map(|t| t.token).collect();
     context.assert_success();
     result
 }

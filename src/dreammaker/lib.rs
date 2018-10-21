@@ -46,13 +46,7 @@ impl Context {
     /// return a best-effort parse. Call `print_all_errors` to pretty-print
     /// errors to standard error.
     pub fn parse_environment(&self, dme: &Path) -> io::Result<objtree::ObjectTree> {
-        Ok(parser::parse(
-            self,
-            indents::IndentProcessor::new(
-                self,
-                preprocessor::Preprocessor::new(self, dme.to_owned())?,
-            ),
-        ))
+        Ok(parser::parse(self, indents::IndentProcessor::new(self, preprocessor::Preprocessor::new(self, dme.to_owned())?)))
     }
 }
 
@@ -87,8 +81,7 @@ where
                     write!(w, "}}")?;
                 }
             }
-            lexer::Token::Punct(lexer::Punctuation::Semicolon)
-            | lexer::Token::Punct(lexer::Punctuation::Newline) => {
+            lexer::Token::Punct(lexer::Punctuation::Semicolon) | lexer::Token::Punct(lexer::Punctuation::Newline) => {
                 needs_newline = true;
                 if show_ws {
                     write!(w, ";")?;
@@ -171,10 +164,7 @@ pub const DEFAULT_ENV: &str = "tgstation.dme";
 /// Autodetect any `.dme` file in the current folder, or fall back to default.
 ///
 /// If multiple environments exist, the first non-default is preferred.
-pub fn detect_environment(
-    root: &Path,
-    default: &str,
-) -> std::io::Result<Option<std::path::PathBuf>> {
+pub fn detect_environment(root: &Path, default: &str) -> std::io::Result<Option<std::path::PathBuf>> {
     let mut result = None;
     for entry in std::fs::read_dir(root)? {
         if let Ok(entry) = entry {

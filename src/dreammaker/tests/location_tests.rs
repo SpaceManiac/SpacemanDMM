@@ -18,8 +18,7 @@ fn simple_location_test() {
 "##.trim();
 
     let context = Default::default();
-    let located_tokens: Vec<_> =
-        Lexer::new(&context, Default::default(), code.bytes().map(Ok)).collect();
+    let located_tokens: Vec<_> = Lexer::new(&context, Default::default(), code.bytes().map(Ok)).collect();
     context.assert_success();
 
     assert_eq!(located_tokens[0].location.line, 1);
@@ -27,10 +26,7 @@ fn simple_location_test() {
 
     println!("---- lexer ----");
     for token in located_tokens.iter() {
-        println!(
-            "{}:{}: {:?}",
-            token.location.line, token.location.column, token.token
-        );
+        println!("{}:{}: {:?}", token.location.line, token.location.column, token.token);
     }
 
     let reconstructed = reconstruct(&located_tokens, false);
@@ -40,14 +36,10 @@ fn simple_location_test() {
     }
 
     println!("---- indent processor ----");
-    let indented_tokens: Vec<_> =
-        dm::indents::IndentProcessor::new(&context, located_tokens).collect();
+    let indented_tokens: Vec<_> = dm::indents::IndentProcessor::new(&context, located_tokens).collect();
     context.assert_success();
     for token in indented_tokens.iter() {
-        println!(
-            "{}:{}: {:?}",
-            token.location.line, token.location.column, token.token
-        );
+        println!("{}:{}: {:?}", token.location.line, token.location.column, token.token);
     }
     let reconstructed = reconstruct(&indented_tokens, true);
     println!("{}", reconstructed);
@@ -70,11 +62,7 @@ fn reconstruct(tokens: &[LocatedToken], iffy: bool) -> String {
 
         let this_line = &mut reconstructed[line];
         if this_line.len() > column && !iffy {
-            panic!(
-                "column numbers went backwards: line {}, so far {:?}",
-                line + 1,
-                this_line
-            );
+            panic!("column numbers went backwards: line {}, so far {:?}", line + 1, this_line);
         }
         while this_line.len() < column {
             this_line.push(' ');

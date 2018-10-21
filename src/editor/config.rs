@@ -63,12 +63,8 @@ fn save(cfg: &Config, path: &Path) -> io::Result<()> {
     use std::io::Write;
 
     let mut buffer = String::new();
-    cfg.serialize(
-        ::toml::ser::Serializer::new(&mut buffer)
-            .pretty_string(true)
-            .pretty_string_literal(false)
-            .pretty_array(true),
-    ).unwrap();
+    cfg.serialize(::toml::ser::Serializer::new(&mut buffer).pretty_string(true).pretty_string_literal(false).pretty_array(true))
+        .unwrap();
 
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;

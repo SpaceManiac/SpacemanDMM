@@ -48,12 +48,7 @@ pub fn item_proc(ty: TypeRef, name: &str, _proc: &TypeProc) -> CompletionItem {
     }
 }
 
-pub fn items_ty<'a>(
-    results: &mut Vec<CompletionItem>,
-    skip: &mut HashSet<(&str, &'a String)>,
-    ty: TypeRef<'a>,
-    query: &str,
-) {
+pub fn items_ty<'a>(results: &mut Vec<CompletionItem>, skip: &mut HashSet<(&str, &'a String)>, ty: TypeRef<'a>, query: &str) {
     // type variables
     for (name, var) in ty.get().vars.iter() {
         if !skip.insert(("var", name)) {
@@ -78,11 +73,7 @@ pub fn items_ty<'a>(
     }
 }
 
-pub fn combine_tree_path<'a, I>(
-    iter: &I,
-    mut absolute: bool,
-    mut parts: &'a [String],
-) -> impl Iterator<Item = &'a str>
+pub fn combine_tree_path<'a, I>(iter: &I, mut absolute: bool, mut parts: &'a [String]) -> impl Iterator<Item = &'a str>
 where
     I: Iterator<Item = (Span, &'a Annotation)> + Clone,
 {
@@ -116,11 +107,7 @@ where
 }
 
 impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
-    pub fn follow_type_path<'b, I>(
-        &'b self,
-        iter: &I,
-        mut parts: &'b [(PathOp, String)],
-    ) -> Option<TypePathResult<'b>>
+    pub fn follow_type_path<'b, I>(&'b self, iter: &I, mut parts: &'b [(PathOp, String)]) -> Option<TypePathResult<'b>>
     where
         I: Iterator<Item = (Span, &'a Annotation)> + Clone,
     {
@@ -182,13 +169,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         Some(TypePathResult { ty, decl, proc })
     }
 
-    pub fn tree_completions(
-        &self,
-        results: &mut Vec<CompletionItem>,
-        exact: bool,
-        ty: TypeRef,
-        query: &str,
-    ) {
+    pub fn tree_completions(&self, results: &mut Vec<CompletionItem>, exact: bool, ty: TypeRef, query: &str) {
         // path keywords
         for &name in ["proc", "var", "verb"].iter() {
             if contains(name, query) {
@@ -259,24 +240,14 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         }
     }
 
-    pub fn path_completions<'b, I>(
-        &'b self,
-        results: &mut Vec<CompletionItem>,
-        iter: &I,
-        parts: &'b [(PathOp, String)],
-        _last_op: PathOp,
-        query: &str,
-    ) where
+    pub fn path_completions<'b, I>(&'b self, results: &mut Vec<CompletionItem>, iter: &I, parts: &'b [(PathOp, String)], _last_op: PathOp, query: &str)
+    where
         I: Iterator<Item = (Span, &'b Annotation)> + Clone,
     {
         // TODO: take last_op into account
         match self.follow_type_path(iter, parts) {
             // '/datum/<complete types>'
-            Some(TypePathResult {
-                ty,
-                decl: None,
-                proc: None,
-            }) => {
+            Some(TypePathResult { ty, decl: None, proc: None }) => {
                 // path keywords
                 for &name in ["proc", "verb"].iter() {
                     if contains(name, query) {
@@ -301,11 +272,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             }
             // '/datum/proc/<complete procs>'
             // TODO: take the path op into acocunt (`/proc` vs `.proc`)
-            Some(TypePathResult {
-                ty,
-                decl: Some(decl),
-                proc: None,
-            }) => {
+            Some(TypePathResult { ty, decl: Some(decl), proc: None }) => {
                 let mut next = Some(ty);
                 let mut skip = HashSet::new();
                 while let Some(ty) = next {
@@ -333,12 +300,8 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         }
     }
 
-    pub fn unscoped_completions<'b, I>(
-        &'b self,
-        results: &mut Vec<CompletionItem>,
-        iter: &I,
-        query: &str,
-    ) where
+    pub fn unscoped_completions<'b, I>(&'b self, results: &mut Vec<CompletionItem>, iter: &I, query: &str)
+    where
         I: Iterator<Item = (Span, &'b Annotation)> + Clone,
     {
         let (ty, proc_name) = self.find_type_context(iter);
@@ -411,13 +374,8 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         }
     }
 
-    pub fn scoped_completions<'b, I>(
-        &'b self,
-        results: &mut Vec<CompletionItem>,
-        iter: &I,
-        priors: &[String],
-        query: &str,
-    ) where
+    pub fn scoped_completions<'b, I>(&'b self, results: &mut Vec<CompletionItem>, iter: &I, priors: &[String], query: &str)
+    where
         I: Iterator<Item = (Span, &'b Annotation)> + Clone,
     {
         let mut next = self.find_scoped_type(iter, priors);

@@ -158,9 +158,7 @@ fn parse_metadata(data: &str) -> Metadata {
                 }
                 let unquoted = value[1..value.len() - 1].to_owned(); // TODO: unquote
                 assert!(!unquoted.contains("\\") && !unquoted.contains("\""));
-                metadata
-                    .state_names
-                    .insert(unquoted.clone(), metadata.states.len());
+                metadata.state_names.insert(unquoted.clone(), metadata.states.len());
 
                 state = Some(State {
                     offset: frames_so_far,
@@ -192,11 +190,7 @@ fn parse_metadata(data: &str) -> Metadata {
             }
             "delay" => {
                 let state = state.as_mut().unwrap();
-                let mut vector: Vec<f32> = value
-                    .split(",")
-                    .map(str::parse)
-                    .collect::<Result<Vec<_>, _>>()
-                    .unwrap();
+                let mut vector: Vec<f32> = value.split(",").map(str::parse).collect::<Result<Vec<_>, _>>().unwrap();
                 match state.frames {
                     Frames::One => if vector.iter().all(|&n| n == 1.) {
                         state.frames = Frames::Count(vector.len());

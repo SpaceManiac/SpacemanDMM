@@ -25,10 +25,7 @@ impl IconCache {
             Some(existing) => existing,
             None => {
                 let arc = load(path).map(Arc::new);
-                self.lock
-                    .write()
-                    .unwrap()
-                    .insert(path.to_owned(), arc.clone());
+                self.lock.write().unwrap().insert(path.to_owned(), arc.clone());
                 arc
             }
         }

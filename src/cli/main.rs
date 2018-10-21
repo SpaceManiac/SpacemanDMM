@@ -30,23 +30,13 @@ use dmm_tools::*;
 fn main() {
     let opt = Opt::from_clap(
         &Opt::clap()
-            .long_version(
-                concat!(
-                    env!("CARGO_PKG_VERSION"),
-                    "\n",
-                    include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")),
-                ).trim_right(),
-            ).get_matches(),
+            .long_version(concat!(env!("CARGO_PKG_VERSION"), "\n", include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")),).trim_right())
+            .get_matches(),
     );
 
     let mut context = Context::default();
-    context
-        .dm_context
-        .set_print_severity(Some(dm::Severity::Error));
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(opt.jobs)
-        .build_global()
-        .expect("failed to initialize thread pool");
+    context.dm_context.set_print_severity(Some(dm::Severity::Error));
+    rayon::ThreadPoolBuilder::new().num_threads(opt.jobs).build_global().expect("failed to initialize thread pool");
     context.parallel = opt.jobs != 1;
 
     run(&opt, &opt.command, &mut context);
@@ -79,8 +69,7 @@ impl Context {
         };
         println!("parsing {}", environment.display());
 
-        let pp = match dm::preprocessor::Preprocessor::new(&self.dm_context, environment.to_owned())
-        {
+        let pp = match dm::preprocessor::Preprocessor::new(&self.dm_context, environment.to_owned()) {
             Ok(pp) => pp,
             Err(e) => {
                 eprintln!("i/o error opening environment:\n{}", e);
@@ -219,18 +208,8 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                 }
 
                 let mut report = Vec::new();
-                for &render_passes::RenderPassInfo {
-                    name,
-                    desc,
-                    default,
-                    new: _,
-                } in render_passes::RENDER_PASSES
-                {
-                    report.push(Pass {
-                        name,
-                        desc,
-                        default,
-                    });
+                for &render_passes::RenderPassInfo { name, desc, default, new: _ } in render_passes::RENDER_PASSES {
+                    report.push(Pass { name, desc, default });
                 }
                 output_json(&report);
             } else {
@@ -252,10 +231,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             }
         }
         // --------------------------------------------------------------------
-        Command::Check {
-            ref severity,
-            procs,
-        } => {
+        Command::Check { ref severity, procs } => {
             let severity = match severity.as_str() {
                 "error" => dm::Severity::Error,
                 "warning" => dm::Severity::Warning,
@@ -265,12 +241,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             context.dm_context.set_print_severity(Some(severity));
             context.procs = procs;
             context.objtree(opt);
-            *context.exit_status.get_mut() = context
-                .dm_context
-                .errors()
-                .iter()
-                .filter(|e| e.severity() <= severity)
-                .count() as isize;
+            *context.exit_status.get_mut() = context.dm_context.errors().iter().filter(|e| e.severity() <= severity).count() as isize;
         }
         // --------------------------------------------------------------------
         Command::Minimap {
@@ -284,14 +255,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             optipng,
         } => {
             context.objtree(opt);
-            if context
-                .dm_context
-                .errors()
-                .iter()
-                .filter(|e| e.severity() <= dm::Severity::Error)
-                .next()
-                .is_some()
-            {
+            if context.dm_context.errors().iter().filter(|e| e.severity() <= dm::Severity::Error).next().is_some() {
                 println!("there were some parsing errors; render may be inaccurate")
             }
             let Context {
@@ -356,12 +320,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                         exit_status.fetch_add(1, Ordering::Relaxed);
                         return;
                     }
-                    let outfile = format!(
-                        "{}/{}-{}.png",
-                        output,
-                        path.file_stem().unwrap().to_string_lossy(),
-                        1 + z
-                    );
+                    let outfile = format!("{}/{}-{}.png", output, path.file_stem().unwrap().to_string_lossy(), 1 + z);
                     println!("{}saving {}", prefix, outfile);
                     image.to_file(outfile.as_ref()).unwrap();
                     if pngcrush {
@@ -382,12 +341,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                     if optipng {
                         println!("{}optipng {}", prefix, outfile);
                         assert!(
-                            std::process::Command::new("optipng")
-                                .arg(&outfile)
-                                .stderr(std::process::Stdio::null())
-                                .status()
-                                .unwrap()
-                                .success(),
+                            std::process::Command::new("optipng").arg(&outfile).stderr(std::process::Stdio::null()).status().unwrap().success(),
                             "optipng failed"
                         );
                     }
@@ -404,11 +358,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             }
         }
         // --------------------------------------------------------------------
-        Command::LintMaps {
-            dry_run,
-            reformat,
-            ref files,
-        } => {
+        Command::LintMaps { dry_run, reformat, ref files } => {
             context.objtree(opt);
 
             for path in files.iter() {
@@ -425,10 +375,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             }
         }
         // --------------------------------------------------------------------
-        Command::DiffMaps {
-            ref left,
-            ref right,
-        } => {
+        Command::DiffMaps { ref left, ref right } => {
             use std::cmp::min;
 
             let path: &std::path::Path = left.as_ref();
@@ -447,10 +394,8 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             for z in 0..min(left_dims.2, right_dims.2) {
                 for y in 0..min(left_dims.1, right_dims.1) {
                     for x in 0..min(left_dims.0, right_dims.0) {
-                        let left_tile =
-                            &left_map.dictionary[&left_map.grid[(z, left_dims.1 - y - 1, x)]];
-                        let right_tile =
-                            &right_map.dictionary[&right_map.grid[(z, right_dims.1 - y - 1, x)]];
+                        let left_tile = &left_map.dictionary[&left_map.grid[(z, left_dims.1 - y - 1, x)]];
+                        let right_tile = &right_map.dictionary[&right_map.grid[(z, right_dims.1 - y - 1, x)]];
                         if left_tile != right_tile {
                             println!("    different tile: ({}, {}, {})", x + 1, y + 1, z + 1);
                         }
@@ -515,21 +460,9 @@ impl std::str::FromStr for CoordArg {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, String> {
-        match s
-            .split(",")
-            .map(|x| x.parse())
-            .collect::<Result<Vec<_>, std::num::ParseIntError>>()
-        {
-            Ok(ref vec) if vec.len() == 2 => Ok(CoordArg {
-                x: vec[0],
-                y: vec[1],
-                z: 0,
-            }),
-            Ok(ref vec) if vec.len() == 3 => Ok(CoordArg {
-                x: vec[0],
-                y: vec[1],
-                z: vec[2],
-            }),
+        match s.split(",").map(|x| x.parse()).collect::<Result<Vec<_>, std::num::ParseIntError>>() {
+            Ok(ref vec) if vec.len() == 2 => Ok(CoordArg { x: vec[0], y: vec[1], z: 0 }),
+            Ok(ref vec) if vec.len() == 3 => Ok(CoordArg { x: vec[0], y: vec[1], z: vec[2] }),
             Ok(_) => Err("must specify 2 or 3 coordinates".into()),
             Err(e) => Err(e.to_string()),
         }

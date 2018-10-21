@@ -216,10 +216,7 @@ pub struct Prefab<E = Expression> {
 
 impl<E> From<TypePath> for Prefab<E> {
     fn from(path: TypePath) -> Self {
-        Prefab {
-            path,
-            vars: Default::default(),
-        }
+        Prefab { path, vars: Default::default() }
     }
 }
 
@@ -311,15 +308,7 @@ impl Expression {
     /// If this expression consists of a single term, return it.
     pub fn as_term(&self) -> Option<&Term> {
         match self {
-            &Expression::Base {
-                ref unary,
-                ref follow,
-                ref term,
-            }
-                if unary.is_empty() && follow.is_empty() =>
-            {
-                Some(term)
-            }
+            &Expression::Base { ref unary, ref follow, ref term } if unary.is_empty() && follow.is_empty() => Some(term),
             _ => None,
         }
     }
@@ -327,11 +316,7 @@ impl Expression {
     /// If this expression consists of a single term, return it.
     pub fn into_term(self) -> Option<Term> {
         match self {
-            Expression::Base {
-                unary,
-                follow,
-                term,
-            } => {
+            Expression::Base { unary, follow, term } => {
                 if unary.is_empty() && follow.is_empty() {
                     Some(term)
                 } else {
@@ -347,11 +332,7 @@ impl From<Term> for Expression {
     fn from(term: Term) -> Expression {
         match term {
             Term::Expr(expr) => *expr,
-            term => Expression::Base {
-                unary: vec![],
-                follow: vec![],
-                term,
-            },
+            term => Expression::Base { unary: vec![], follow: vec![], term },
         }
     }
 }
@@ -412,21 +393,13 @@ pub enum Term {
 impl From<Expression> for Term {
     fn from(expr: Expression) -> Term {
         match expr {
-            Expression::Base {
-                term,
-                unary,
-                follow,
-            } => if unary.is_empty() && follow.is_empty() {
+            Expression::Base { term, unary, follow } => if unary.is_empty() && follow.is_empty() {
                 match term {
                     Term::Expr(expr) => Term::from(*expr),
                     other => other,
                 }
             } else {
-                Term::Expr(Box::new(Expression::Base {
-                    term,
-                    unary,
-                    follow,
-                }))
+                Term::Expr(Box::new(Expression::Base { term, unary, follow }))
             },
             other => Term::Expr(Box::new(other)),
         }
@@ -667,11 +640,7 @@ pub enum Statement {
     Vars(Vec<VarStatement>),
     Setting(String, SettingMode, Expression),
     Spawn(Option<Expression>, Vec<Statement>),
-    Switch(
-        Expression,
-        Vec<(Vec<Case>, Vec<Statement>)>,
-        Option<Vec<Statement>>,
-    ),
+    Switch(Expression, Vec<(Vec<Case>, Vec<Statement>)>, Option<Vec<Statement>>),
     TryCatch {
         try_block: Vec<Statement>,
         catch_params: Vec<TreePath>,

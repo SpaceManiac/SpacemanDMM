@@ -52,11 +52,7 @@ pub fn check(objtree: &ObjectTree, map: &mut Map) -> Lints {
                     }
                 }
                 if found_turf != 1 {
-                    println!(
-                        "    at {:?}: found {} turfs",
-                        map.zero_to_one((x, y, z)),
-                        found_turf
-                    );
+                    println!("    at {:?}: found {} turfs", map.zero_to_one((x, y, z)), found_turf);
                 }
             }
         }

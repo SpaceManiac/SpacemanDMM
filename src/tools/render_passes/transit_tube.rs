@@ -3,23 +3,14 @@ use super::*;
 #[derive(Default)]
 pub struct TransitTube;
 impl RenderPass for TransitTube {
-    fn overlays<'a>(
-        &self,
-        atom: &mut Atom<'a>,
-        objtree: &'a ObjectTree,
-        _: &mut Vec<Atom<'a>>,
-        overlays: &mut Vec<Atom<'a>>,
-    ) {
+    fn overlays<'a>(&self, atom: &mut Atom<'a>, objtree: &'a ObjectTree, _: &mut Vec<Atom<'a>>, overlays: &mut Vec<Atom<'a>>) {
         use dmi::*;
 
         if !atom.istype("/obj/structure/transit_tube/") {
             return;
         }
 
-        let dir = atom
-            .get_var("dir", objtree)
-            .to_int()
-            .unwrap_or(::dmi::SOUTH);
+        let dir = atom.get_var("dir", objtree).to_int().unwrap_or(::dmi::SOUTH);
         let mut fulfill = |items: &[i32]| {
             for &dir in items {
                 if dir == NORTHEAST || dir == NORTHWEST || dir == SOUTHEAST || dir == SOUTHWEST {
@@ -99,13 +90,7 @@ impl RenderPass for TransitTube {
     }
 }
 
-fn create_tube_overlay<'a>(
-    output: &mut Vec<Atom<'a>>,
-    objtree: &'a ObjectTree,
-    source: &Atom<'a>,
-    dir: i32,
-    shift: i32,
-) {
+fn create_tube_overlay<'a>(output: &mut Vec<Atom<'a>>, objtree: &'a ObjectTree, source: &Atom<'a>, dir: i32, shift: i32) {
     use dmi::*;
 
     let mut copy = Atom::from_type(objtree, "/atom", source.loc).unwrap();

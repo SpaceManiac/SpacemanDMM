@@ -20,12 +20,10 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
     let context = glutin::ContextBuilder::new().with_vsync(true);
     let window = glutin::WindowBuilder::new()
         .with_title(title)
-        .with_window_icon(
-            glutin::Icon::from_rgba(include_bytes!("res/gasmask.raw").to_vec(), 16, 16).ok(),
-        ).with_min_dimensions(glutin::dpi::LogicalSize::new(640.0, 480.0))
+        .with_window_icon(glutin::Icon::from_rgba(include_bytes!("res/gasmask.raw").to_vec(), 16, 16).ok())
+        .with_min_dimensions(glutin::dpi::LogicalSize::new(640.0, 480.0))
         .with_dimensions(glutin::dpi::LogicalSize::new(1300.0, 730.0));
-    let (window, mut device, mut factory, mut main_color, mut main_depth) =
-        gfx_window_glutin::init::<ColorFormat, DepthFormat>(window, context, &events_loop);
+    let (window, mut device, mut factory, mut main_color, mut main_depth) = gfx_window_glutin::init::<ColorFormat, DepthFormat>(window, context, &events_loop);
 
     // gfx's gl backend sets FRAMEBUFFER_SRGB permanently by default - actually
     // we want it off permanently. I've been told this is most sanely set on a
@@ -69,28 +67,19 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
     let mut hidpi_factor = window_hidpi_factor.round();
 
     let mut frame_size = FrameSize {
-        logical_size: window
-            .get_inner_size()
-            .unwrap()
-            .to_physical(window_hidpi_factor)
-            .to_logical(hidpi_factor)
-            .into(),
+        logical_size: window.get_inner_size().unwrap().to_physical(window_hidpi_factor).to_logical(hidpi_factor).into(),
         hidpi_factor,
     };
 
     let font_size = (13.0 * hidpi_factor) as f32;
 
-    imgui.fonts().add_default_font_with_config(
-        ImFontConfig::new()
-            .oversample_h(1)
-            .pixel_snap_h(true)
-            .size_pixels(font_size),
-    );
+    imgui
+        .fonts()
+        .add_default_font_with_config(ImFontConfig::new().oversample_h(1).pixel_snap_h(true).size_pixels(font_size));
 
     imgui.set_font_global_scale((1.0 / hidpi_factor) as f32);
 
-    let mut renderer = Renderer::init(&mut imgui, &mut factory, shaders, main_color.clone())
-        .expect("Failed to initialize renderer");
+    let mut renderer = Renderer::init(&mut imgui, &mut factory, shaders, main_color.clone()).expect("Failed to initialize renderer");
 
     configure_keys(&mut imgui);
 
@@ -115,21 +104,13 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                         gfx_window_glutin::update_views(&window, &mut main_color, &mut main_depth);
                         renderer.update_render_target(main_color.clone());
                         scene.update_render_target(&main_color, &main_depth);
-                        frame_size.logical_size = new_logical_size
-                            .to_physical(window_hidpi_factor)
-                            .to_logical(hidpi_factor)
-                            .into();
+                        frame_size.logical_size = new_logical_size.to_physical(window_hidpi_factor).to_logical(hidpi_factor).into();
                     }
                     HiDpiFactorChanged(new_factor) => {
                         window_hidpi_factor = new_factor;
                         hidpi_factor = window_hidpi_factor.round();
                         frame_size.hidpi_factor = hidpi_factor;
-                        frame_size.logical_size = window
-                            .get_inner_size()
-                            .unwrap()
-                            .to_physical(window_hidpi_factor)
-                            .to_logical(hidpi_factor)
-                            .into();
+                        frame_size.logical_size = window.get_inner_size().unwrap().to_physical(window_hidpi_factor).to_logical(hidpi_factor).into();
                     }
                     Focused(false) => {
                         // If the window is unfocused, unset modifiers, or
@@ -164,9 +145,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                             Some(Key::X) => imgui.set_key(16, pressed),
                             Some(Key::Y) => imgui.set_key(17, pressed),
                             Some(Key::Z) => imgui.set_key(18, pressed),
-                            Some(Key::LControl) | Some(Key::RControl) => {
-                                imgui.set_key_ctrl(pressed)
-                            }
+                            Some(Key::LControl) | Some(Key::RControl) => imgui.set_key_ctrl(pressed),
                             Some(Key::LShift) | Some(Key::RShift) => imgui.set_key_shift(pressed),
                             Some(Key::LAlt) | Some(Key::RAlt) => imgui.set_key_alt(pressed),
                             Some(Key::LWin) | Some(Key::RWin) => imgui.set_key_super(pressed),
@@ -182,10 +161,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                     CursorMoved { position, .. } => {
                         // Rescale position from glutin logical coordinates to our logical
                         // coordinates
-                        let pos = position
-                            .to_physical(window_hidpi_factor)
-                            .to_logical(hidpi_factor)
-                            .into();
+                        let pos = position.to_physical(window_hidpi_factor).to_logical(hidpi_factor).into();
                         mouse_state.pos = pos;
                         scene.mouse_moved(pos);
                     }
@@ -206,13 +182,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                     } => {
                         mouse_state.wheel = y;
                         if !mouse_captured {
-                            scene.mouse_wheel(
-                                ctrl(&imgui),
-                                imgui.key_shift(),
-                                imgui.key_alt(),
-                                x,
-                                y,
-                            );
+                            scene.mouse_wheel(ctrl(&imgui), imgui.key_shift(), imgui.key_alt(), x, y);
                         }
                     }
                     MouseWheel {
@@ -222,18 +192,10 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                     } => {
                         // Rescale pixel delta from glutin logical coordinates to our logical
                         // coordinates
-                        let diff = pos
-                            .to_physical(window_hidpi_factor)
-                            .to_logical(hidpi_factor);
+                        let diff = pos.to_physical(window_hidpi_factor).to_logical(hidpi_factor);
                         mouse_state.wheel = diff.y as f32;
                         if !mouse_captured {
-                            scene.mouse_wheel(
-                                ctrl(&imgui),
-                                imgui.key_shift(),
-                                imgui.key_alt(),
-                                diff.x as f32,
-                                diff.y as f32,
-                            );
+                            scene.mouse_wheel(ctrl(&imgui), imgui.key_shift(), imgui.key_alt(), diff.x as f32, diff.y as f32);
                         }
                     }
                     ReceivedCharacter(c) => imgui.add_input_character(c),
@@ -286,9 +248,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
 
             encoder.clear(&main_color, clear_color);
             scene.render(&mut encoder);
-            renderer
-                .render(ui, &mut factory, &mut encoder)
-                .expect("Rendering failed");
+            renderer.render(ui, &mut factory, &mut encoder).expect("Rendering failed");
             encoder.flush(&mut device);
             window.context().swap_buffers().unwrap();
             device.cleanup();

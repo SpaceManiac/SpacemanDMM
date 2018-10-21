@@ -33,10 +33,7 @@ impl<'ctx, I> IndentProcessor<'ctx, I>
 where
     I: Iterator<Item = LocatedToken>,
 {
-    pub fn new<J: IntoIterator<Item = LocatedToken, IntoIter = I>>(
-        context: &'ctx Context,
-        inner: J,
-    ) -> Self {
+    pub fn new<J: IntoIterator<Item = LocatedToken, IntoIter = I>>(context: &'ctx Context, inner: J) -> Self {
         IndentProcessor {
             context,
             inner: inner.into_iter(),
@@ -57,16 +54,12 @@ where
 
     #[inline]
     fn push(&mut self, tok: Token) {
-        self.output
-            .push_back(LocatedToken::new(self.last_input_loc, tok));
+        self.output.push_back(LocatedToken::new(self.last_input_loc, tok));
     }
 
     #[inline]
     fn push_eol(&mut self, tok: Token) {
-        self.output.push_back(LocatedToken::new(
-            self.eol_location.unwrap_or(self.last_input_loc),
-            tok,
-        ));
+        self.output.push_back(LocatedToken::new(self.eol_location.unwrap_or(self.last_input_loc), tok));
     }
 
     #[inline]
@@ -129,10 +122,7 @@ where
                             // Register the error, but cross our fingers and
                             // hope that truncating division will approximate
                             // a sane situation.
-                            self.context.register_error(self.error(format!(
-                                "inconsistent indentation: {} % {} != 0",
-                                spaces, spaces_per_indent
-                            )));
+                            self.context.register_error(self.error(format!("inconsistent indentation: {} % {} != 0", spaces, spaces_per_indent)));
                         }
                         new_indents = spaces / spaces_per_indent;
                         self.current = Some((spaces_per_indent, new_indents));
@@ -145,10 +135,7 @@ where
                 self.push_eol(Token::Punct(Punctuation::LBrace));
             } else if indents < new_indents {
                 // multiple indent is an error, register it but let it work
-                self.context.register_error(self.error(format!(
-                    "inconsistent multiple indentation: {} > 1",
-                    new_indents - indents
-                )));
+                self.context.register_error(self.error(format!("inconsistent multiple indentation: {} > 1", new_indents - indents)));
                 for _ in indents..new_indents {
                     self.push_eol(Token::Punct(Punctuation::LBrace));
                 }
@@ -177,8 +164,7 @@ where
             Token::Punct(Punctuation::RBrace) => {
                 self.current = match self.current {
                     None => {
-                        self.context
-                            .register_error(self.error("unmatched right brace"));
+                        self.context.register_error(self.error("unmatched right brace"));
                         None
                     }
                     Some((_, 1)) => None,

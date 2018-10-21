@@ -46,11 +46,7 @@ impl Map {
             dictionary: Default::default(),
             grid: Array3::default((1, 1, 1)),
         };
-        parse_map(
-            &mut map,
-            File::open(path)
-                .map_err(|e| DMError::new(Location::default(), "i/o error").set_cause(e))?,
-        )?;
+        parse_map(&mut map, File::open(path).map_err(|e| DMError::new(Location::default(), "i/o error").set_cause(e))?)?;
         Ok(map)
     }
 
@@ -58,18 +54,11 @@ impl Map {
         assert!(x > 0 && y > 0 && z > 0, "({}, {}, {})", x, y, z);
 
         let mut dictionary = BTreeMap::new();
-        dictionary.insert(
-            Key(0),
-            vec![Prefab::from_path(turf), Prefab::from_path(area)],
-        );
+        dictionary.insert(Key(0), vec![Prefab::from_path(turf), Prefab::from_path(area)]);
 
         let grid = Array3::default((z, y, x)); // default = 0
 
-        Map {
-            key_length: 1,
-            dictionary,
-            grid,
-        }
+        Map { key_length: 1, dictionary, grid }
     }
 
     pub fn to_file(&self, path: &Path) -> io::Result<()> {
@@ -195,8 +184,7 @@ impl fmt::Display for FormatKey {
 
 const BASE_52: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-const TGM_HEADER: &str =
-    "//MAP CONVERTED BY dmm2tgm.py THIS HEADER COMMENT PREVENTS RECONVERSION, DO NOT REMOVE";
+const TGM_HEADER: &str = "//MAP CONVERTED BY dmm2tgm.py THIS HEADER COMMENT PREVENTS RECONVERSION, DO NOT REMOVE";
 
 fn save_tgm(map: &Map, f: File) -> io::Result<()> {
     use std::io::Write;
@@ -332,17 +320,11 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
                         curr_var.truncate(length);
                         skip_whitespace = true;
                     } else if ch == b';' {
-                        curr_prefab.vars.insert(
-                            from_latin1(take(&mut curr_var)),
-                            parse_constant(chars.location(), take(&mut curr_datum))?,
-                        );
+                        curr_prefab.vars.insert(from_latin1(take(&mut curr_var)), parse_constant(chars.location(), take(&mut curr_datum))?);
                         skip_whitespace = true;
                     } else if ch == b'}' {
                         if !curr_var.is_empty() {
-                            curr_prefab.vars.insert(
-                                from_latin1(take(&mut curr_var)),
-                                parse_constant(chars.location(), take(&mut curr_datum))?,
-                            );
+                            curr_prefab.vars.insert(from_latin1(take(&mut curr_var)), parse_constant(chars.location(), take(&mut curr_datum))?);
                         }
                         in_varedit_block = false;
                     } else {
@@ -428,10 +410,7 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
                     max_y = max(max_y, curr_y);
                     reading_coord = Coord::Z;
                 } else {
-                    return Err(DMError::new(
-                        Location::default(),
-                        "Incorrect number of coordinates",
-                    ));
+                    return Err(DMError::new(Location::default(), "Incorrect number of coordinates"));
                 }
             } else if ch == b')' {
                 assert_eq!(reading_coord, Coord::Z);
@@ -442,12 +421,7 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
             } else {
                 match (ch as char).to_digit(10) {
                     Some(x) => curr_num = 10 * curr_num + x as usize,
-                    None => {
-                        return Err(DMError::new(
-                            Location::default(),
-                            "bad digit in map coordinate",
-                        ))
-                    }
+                    None => return Err(DMError::new(Location::default(), "bad digit in map coordinate")),
                 }
             }
         } else if in_map_string {
@@ -489,9 +463,7 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
     }
     max_y = max(max_y, curr_y);
 
-    map.grid = Array3::from_shape_fn((max_z, max_y, max_x), |(z, y, x)| {
-        grid[&(x + 1, y + 1, z + 1)]
-    });
+    map.grid = Array3::from_shape_fn((max_z, max_y, max_x), |(z, y, x)| grid[&(x + 1, y + 1, z + 1)]);
 
     Ok(())
 }
@@ -502,21 +474,15 @@ fn base_52_reverse(ch: u8) -> Result<KeyType, DMError> {
     } else if ch >= b'A' && ch <= b'Z' {
         Ok(26 + ch as KeyType - b'A' as KeyType)
     } else {
-        Err(DMError::new(
-            Location::default(),
-            format!("Not a base-52 character: {:?}", ch as char),
-        ))
+        Err(DMError::new(Location::default(), format!("Not a base-52 character: {:?}", ch as char)))
     }
 }
 
 fn advance_key(current: KeyType, next_digit: KeyType) -> Result<KeyType, DMError> {
-    current
-        .checked_mul(52)
-        .and_then(|b| b.checked_add(next_digit))
-        .ok_or_else(|| {
-            // https://secure.byond.com/forum/?post=2340796#comment23770802
-            DMError::new(Location::default(), "Key overflow, max is 'ymo'")
-        })
+    current.checked_mul(52).and_then(|b| b.checked_add(next_digit)).ok_or_else(|| {
+        // https://secure.byond.com/forum/?post=2340796#comment23770802
+        DMError::new(Location::default(), "Key overflow, max is 'ymo'")
+    })
 }
 
 fn parse_constant(location: Location, input: Vec<u8>) -> Result<Constant, DMError> {
@@ -526,25 +492,12 @@ fn parse_constant(location: Location, input: Vec<u8>) -> Result<Constant, DMErro
 
     let mut bytes = input.iter().map(|&x| Ok(x));
     let ctx = Context::default();
-    let expr =
-        match Parser::new(&ctx, Lexer::new(&ctx, Default::default(), &mut bytes)).expression()? {
-            Some(expr) => expr,
-            None => {
-                return Err(DMError::new(
-                    location,
-                    format!("not an expression: {}", from_latin1_borrowed(&input)),
-                ))
-            }
-        };
+    let expr = match Parser::new(&ctx, Lexer::new(&ctx, Default::default(), &mut bytes)).expression()? {
+        Some(expr) => expr,
+        None => return Err(DMError::new(location, format!("not an expression: {}", from_latin1_borrowed(&input)))),
+    };
     if bytes.next().is_some() {
-        return Err(DMError::new(
-            location,
-            format!(
-                "leftover: {:?} {}",
-                from_latin1_borrowed(&input),
-                bytes.len()
-            ),
-        ));
+        return Err(DMError::new(location, format!("leftover: {:?} {}", from_latin1_borrowed(&input), bytes.len())));
     }
     ::dm::constants::simple_evaluate(location, expr)
 }

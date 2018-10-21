@@ -43,17 +43,13 @@ pub struct AnnotationTree {
 
 impl Default for AnnotationTree {
     fn default() -> Self {
-        AnnotationTree {
-            tree: IntervalTree::new(),
-            len: 0,
-        }
+        AnnotationTree { tree: IntervalTree::new(), len: 0 }
     }
 }
 
 impl AnnotationTree {
     pub fn insert(&mut self, place: ::std::ops::Range<Location>, value: Annotation) {
-        self.tree
-            .insert(range(place.start, place.end.pred()), value);
+        self.tree.insert(range(place.start, place.end.pred()), value);
         self.len += 1;
     }
 

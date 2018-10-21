@@ -77,18 +77,13 @@ impl Query {
 }
 
 fn simplify<'a>(s: &'a str) -> impl Iterator<Item = char> + Clone + 'a {
-    s.chars()
-        .flat_map(|c| c.to_lowercase())
-        .filter(|c| c.is_alphanumeric())
+    s.chars().flat_map(|c| c.to_lowercase()).filter(|c| c.is_alphanumeric())
 }
 
 // ignore case and underscores
 pub fn starts_with<'a>(fulltext: &'a str, query: &'a str) -> bool {
     let mut query_chars = simplify(query);
-    simplify(fulltext)
-        .zip(&mut query_chars)
-        .all(|(a, b)| a == b)
-        && query_chars.next().is_none()
+    simplify(fulltext).zip(&mut query_chars).all(|(a, b)| a == b) && query_chars.next().is_none()
 }
 
 pub fn contains<'a>(fulltext: &'a str, query: &'a str) -> bool {
@@ -105,7 +100,5 @@ pub fn contains<'a>(fulltext: &'a str, query: &'a str) -> bool {
 }
 
 fn any_alphanumeric(text: &str) -> bool {
-    text.chars()
-        .flat_map(|c| c.to_lowercase())
-        .any(|c| c.is_alphanumeric())
+    text.chars().flat_map(|c| c.to_lowercase()).any(|c| c.is_alphanumeric())
 }

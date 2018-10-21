@@ -83,18 +83,12 @@ pub struct DrawCall {
 impl MapRenderer {
     pub fn new(factory: &mut Factory, _view: &RenderTargetView) -> MapRenderer {
         let pso = factory
-            .create_pipeline_simple(
-                include_bytes!("shaders/main_150.glslv"),
-                include_bytes!("shaders/main_150.glslf"),
-                pipe::new(),
-            ).expect("create_pipeline_simple failed");
+            .create_pipeline_simple(include_bytes!("shaders/main_150.glslv"), include_bytes!("shaders/main_150.glslf"), pipe::new())
+            .expect("create_pipeline_simple failed");
 
         let transform_buffer = factory.create_constant_buffer(1);
 
-        let sampler = factory.create_sampler(gfx::texture::SamplerInfo::new(
-            gfx::texture::FilterMethod::Scale,
-            gfx::texture::WrapMode::Clamp,
-        ));
+        let sampler = factory.create_sampler(gfx::texture::SamplerInfo::new(gfx::texture::FilterMethod::Scale, gfx::texture::WrapMode::Clamp));
 
         MapRenderer {
             icons: Arc::new(IconCache::new(".".as_ref())),
@@ -119,20 +113,12 @@ impl MapRenderer {
 
         let vbuf = self
             .factory
-            .create_buffer::<Vertex>(
-                vbuf_data.len(),
-                gfx::buffer::Role::Vertex,
-                gfx::memory::Usage::Dynamic,
-                gfx::memory::Bind::empty(),
-            ).expect("create vertex buffer");
+            .create_buffer::<Vertex>(vbuf_data.len(), gfx::buffer::Role::Vertex, gfx::memory::Usage::Dynamic, gfx::memory::Bind::empty())
+            .expect("create vertex buffer");
         let ibuf = self
             .factory
-            .create_buffer::<u32>(
-                ibuf_data.len(),
-                gfx::buffer::Role::Index,
-                gfx::memory::Usage::Dynamic,
-                gfx::memory::Bind::empty(),
-            ).expect("create index buffer");
+            .create_buffer::<u32>(ibuf_data.len(), gfx::buffer::Role::Index, gfx::memory::Usage::Dynamic, gfx::memory::Bind::empty())
+            .expect("create index buffer");
 
         RenderedMap {
             duration: [to_seconds(map.duration), to_seconds(Instant::now() - start)],
@@ -144,54 +130,27 @@ impl MapRenderer {
 }
 
 impl RenderedMap {
-    fn update_buffers(
-        &mut self,
-        map: &AtomMap,
-        z: u32,
-        factory: &mut Factory,
-        encoder: &mut Encoder,
-    ) {
+    fn update_buffers(&mut self, map: &AtomMap, z: u32, factory: &mut Factory, encoder: &mut Encoder) {
         let vbuf_data = map.vertex_buffer(z).flat();
         let ibuf_data = map.index_buffer(z);
         let ibuf_data = ibuf_data.flat();
 
         if self.vbuf.len() < vbuf_data.len() {
             self.vbuf = factory
-                .create_buffer::<Vertex>(
-                    vbuf_data.len(),
-                    gfx::buffer::Role::Vertex,
-                    gfx::memory::Usage::Dynamic,
-                    gfx::memory::Bind::empty(),
-                ).expect("create vertex buffer");
+                .create_buffer::<Vertex>(vbuf_data.len(), gfx::buffer::Role::Vertex, gfx::memory::Usage::Dynamic, gfx::memory::Bind::empty())
+                .expect("create vertex buffer");
         }
-        encoder
-            .update_buffer(&self.vbuf, vbuf_data, 0)
-            .expect("update vbuf");
+        encoder.update_buffer(&self.vbuf, vbuf_data, 0).expect("update vbuf");
 
         if self.ibuf.len() < ibuf_data.len() {
             self.ibuf = factory
-                .create_buffer::<u32>(
-                    ibuf_data.len(),
-                    gfx::buffer::Role::Index,
-                    gfx::memory::Usage::Dynamic,
-                    gfx::memory::Bind::empty(),
-                ).expect("create index buffer");
+                .create_buffer::<u32>(ibuf_data.len(), gfx::buffer::Role::Index, gfx::memory::Usage::Dynamic, gfx::memory::Bind::empty())
+                .expect("create index buffer");
         }
-        encoder
-            .update_buffer(&self.ibuf, ibuf_data, 0)
-            .expect("update ibuf");
+        encoder.update_buffer(&self.ibuf, ibuf_data, 0).expect("update ibuf");
     }
 
-    pub fn paint(
-        &mut self,
-        parent: &mut MapRenderer,
-        map: &AtomMap,
-        z: u32,
-        center: [f32; 2],
-        factory: &mut Factory,
-        encoder: &mut Encoder,
-        view: &RenderTargetView,
-    ) {
+    pub fn paint(&mut self, parent: &mut MapRenderer, map: &AtomMap, z: u32, center: [f32; 2], factory: &mut Factory, encoder: &mut Encoder, view: &RenderTargetView) {
         // update vertex and index buffers from the map
         if map.levels[z as usize].buffers_dirty.replace(false) {
             self.update_buffers(map, z, factory, encoder);
@@ -201,25 +160,13 @@ impl RenderedMap {
         let (x, y, _, _) = view.get_dimensions();
         let transform = Transform {
             transform: [
-                [
-                    2.0 / x as f32,
-                    0.0,
-                    0.0,
-                    -2.0 * center[0].round() / x as f32,
-                ],
-                [
-                    0.0,
-                    2.0 / y as f32,
-                    0.0,
-                    -2.0 * center[1].round() / y as f32,
-                ],
+                [2.0 / x as f32, 0.0, 0.0, -2.0 * center[0].round() / x as f32],
+                [0.0, 2.0 / y as f32, 0.0, -2.0 * center[1].round() / y as f32],
                 [0.0, 0.0, 1.0, 0.0],
                 [0.0, 0.0, 0.0, 1.0 / parent.zoom],
             ],
         };
-        encoder
-            .update_buffer(&parent.transform_buffer, &[transform], 0)
-            .expect("update_buffer failed");
+        encoder.update_buffer(&parent.transform_buffer, &[transform], 0).expect("update_buffer failed");
 
         let mut start = 0;
         for call in map.levels[z as usize].draw_calls.iter() {
@@ -227,10 +174,7 @@ impl RenderedMap {
                 start += call.len;
                 continue;
             }
-            let texture =
-                parent
-                    .icon_textures
-                    .retrieve(factory, &parent.icons, call.texture as usize);
+            let texture = parent.icon_textures.retrieve(factory, &parent.icons, call.texture as usize);
             let slice = gfx::Slice {
                 start: start,
                 end: start + call.len,
@@ -256,8 +200,7 @@ impl ::std::cmp::Eq for RenderPop {}
 
 impl ::std::cmp::Ord for RenderPop {
     fn cmp(&self, other: &Self) -> ::std::cmp::Ordering {
-        self.partial_cmp(other)
-            .expect("in RenderPop::cmp, a field was NaN")
+        self.partial_cmp(other).expect("in RenderPop::cmp, a field was NaN")
     }
 }
 
@@ -309,12 +252,7 @@ impl RenderPop {
         }
 
         let color = minimap::color_of(objtree, fab);
-        let color = [
-            color[0] as f32 / 255.0,
-            color[1] as f32 / 255.0,
-            color[2] as f32 / 255.0,
-            color[3] as f32 / 255.0,
-        ];
+        let color = [color[0] as f32 / 255.0, color[1] as f32 / 255.0, color[2] as f32 / 255.0, color[3] as f32 / 255.0];
 
         let pixel_x = fab.get_var("pixel_x", objtree).to_int().unwrap_or(0);
         let pixel_y = fab.get_var("pixel_y", objtree).to_int().unwrap_or(0);
@@ -338,10 +276,7 @@ impl RenderPop {
 
     pub fn instance(&self, loc: (u32, u32)) -> [Vertex; 4] {
         let uv = self.uv;
-        let loc = (
-            ((loc.0 * TILE_SIZE) as i32 + self.ofs_x) as f32,
-            ((loc.1 * TILE_SIZE) as i32 + self.ofs_y) as f32,
-        );
+        let loc = (((loc.0 * TILE_SIZE) as i32 + self.ofs_x) as f32, ((loc.1 * TILE_SIZE) as i32 + self.ofs_y) as f32);
         let (width, height) = (self.size[0], self.size[1]);
         let color = self.color;
 

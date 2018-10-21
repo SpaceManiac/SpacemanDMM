@@ -48,16 +48,12 @@ impl<K: Ord + Clone, V> Node<K, V> {
 
     ///returns the minimal key,value pair within this tree
     pub fn min_pair(&self) -> (&RangeInclusive<K>, &[V]) {
-        self.left
-            .as_ref()
-            .map_or((&self.key, &self.data), |n| n.min_pair())
+        self.left.as_ref().map_or((&self.key, &self.data), |n| n.min_pair())
     }
 
     ///returns the maximal key,value pair within this tree
     pub fn max_pair(&self) -> (&RangeInclusive<K>, &[V]) {
-        self.right
-            .as_ref()
-            .map_or((&self.key, &self.data), |n| n.max_pair())
+        self.right.as_ref().map_or((&self.key, &self.data), |n| n.max_pair())
     }
 
     /// Perform a single right rotation on this (sub) tree
@@ -189,14 +185,8 @@ impl<K: Ord + Clone, V> Node<K, V> {
     pub fn search_pair(&self, key: &RangeInclusive<K>) -> Option<(&RangeInclusive<K>, &[V])> {
         match self.key.cmp(key) {
             Ordering::Equal => Some((&self.key, &self.data)),
-            Ordering::Less => self
-                .right
-                .as_ref()
-                .map_or(None, |succ| succ.search_pair(key)),
-            Ordering::Greater => self
-                .left
-                .as_ref()
-                .map_or(None, |succ| succ.search_pair(key)),
+            Ordering::Less => self.right.as_ref().map_or(None, |succ| succ.search_pair(key)),
+            Ordering::Greater => self.left.as_ref().map_or(None, |succ| succ.search_pair(key)),
         }
     }
 
@@ -218,11 +208,7 @@ impl<K: Ord + Clone, V> Node<K, V> {
 
     /// recursively insert the (key,data) pair into the given optional succesor and return its new
     /// value
-    fn insert_in_successor(
-        succ: Option<Box<Self>>,
-        key: RangeInclusive<K>,
-        data: V,
-    ) -> Option<Box<Self>> {
+    fn insert_in_successor(succ: Option<Box<Self>>, key: RangeInclusive<K>, data: V) -> Option<Box<Self>> {
         Some(match succ {
             Some(succ) => succ.insert(key, data),
             None => Box::new(Node::new(key, data)),
@@ -249,19 +235,10 @@ pub mod tests {
     }
 
     ///returns the smallest key and value after the given key.
-    pub fn min_after<'a, V>(
-        key: &RangeInclusive<u64>,
-        root: &'a Box<Node<V>>,
-    ) -> Option<(&'a RangeInclusive<u64>, &'a [V])> {
+    pub fn min_after<'a, V>(key: &RangeInclusive<u64>, root: &'a Box<Node<V>>) -> Option<(&'a RangeInclusive<u64>, &'a [V])> {
         match root.key.cmp(key) {
-            Ordering::Equal => root
-                .right
-                .as_ref()
-                .map_or(None, |succ| Some(succ.min_pair())),
-            Ordering::Less => root
-                .right
-                .as_ref()
-                .map_or(None, |succ| min_after(key, succ)),
+            Ordering::Equal => root.right.as_ref().map_or(None, |succ| Some(succ.min_pair())),
+            Ordering::Less => root.right.as_ref().map_or(None, |succ| min_after(key, succ)),
             Ordering::Greater => match root.left {
                 Some(ref succ) => min_after(key, &succ).or(Some((&root.key, &root.data))),
                 None => Some((&root.key, &root.data)),
@@ -302,10 +279,7 @@ pub mod tests {
     fn is_interval_node<V>(node: &Box<Node<V>>) -> bool {
         let sorted = is_sorted_left(node) && is_sorted_right(node);
         let balanced = node.height == cmp::max(height(&node.left), height(&node.right)) + 1;
-        let proper_max = node.max == cmp::max(
-            subtree_max(&node.left),
-            cmp::max(subtree_max(&node.right), node.key.end),
-        );
+        let proper_max = node.max == cmp::max(subtree_max(&node.left), cmp::max(subtree_max(&node.right), node.key.end));
         return sorted && balanced && proper_max;
     }
 

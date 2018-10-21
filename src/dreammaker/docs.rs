@@ -69,11 +69,7 @@ pub struct DocComment {
 impl DocComment {
     /// Construct an empty DocComment with the given properties.
     pub fn new(kind: CommentKind, target: DocTarget) -> DocComment {
-        DocComment {
-            kind,
-            target,
-            text: String::new(),
-        }
+        DocComment { kind, target, text: String::new() }
     }
 
     /// Check if this comment is entirely textless.
@@ -125,9 +121,7 @@ fn simplify(out: &mut String, text: &str, ignore_char: char) -> bool {
             continue;
         }
 
-        let this_prefix = &line[..line.len() - line
-            .trim_left_matches(|c: char| c.is_whitespace() || c == ignore_char)
-            .len()];
+        let this_prefix = &line[..line.len() - line.trim_left_matches(|c: char| c.is_whitespace() || c == ignore_char).len()];
         match prefix {
             None => prefix = Some(this_prefix),
             Some(ref mut prefix) => {
@@ -146,10 +140,7 @@ fn simplify(out: &mut String, text: &str, ignore_char: char) -> bool {
             }
         }
 
-        let this_suffix = &line[line
-                                    .trim_right_matches(|c: char| {
-                                        c.is_whitespace() || c == ignore_char
-                                    }).len()..];
+        let this_suffix = &line[line.trim_right_matches(|c: char| c.is_whitespace() || c == ignore_char).len()..];
         match suffix {
             None => suffix = Some(this_suffix),
             Some(ref mut suffix) => {

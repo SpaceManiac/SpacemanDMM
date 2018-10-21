@@ -90,8 +90,7 @@ impl<'a, K: Ord + Clone, V> Iterator for RangePairIter<'a, K, V> {
     type Item = (RangeInclusive<K>, &'a V);
 
     fn next(&mut self) -> Option<(RangeInclusive<K>, &'a V)> {
-        self.get_next_node()
-            .map(|(n, i)| (n.key.clone(), &n.data[i]))
+        self.get_next_node().map(|(n, i)| (n.key.clone(), &n.data[i]))
     }
 }
 
@@ -134,48 +133,18 @@ fn test_iterators() {
     }
 
     let mut iter = RangePairIter::new(&tree, Bound::Included(0), Bound::Included(1000));
-    assert_eq!(
-        iter.next().expect("should have a few values").0,
-        RangeInclusive::new(1, 1)
-    );
-    assert_eq!(
-        iter.next().expect("should have a few values").0,
-        RangeInclusive::new(3, 3)
-    );
-    assert_eq!(
-        iter.next().expect("should have a few values").0,
-        RangeInclusive::new(10, 10)
-    );
-    assert_eq!(
-        iter.next().expect("should have a few values").0,
-        RangeInclusive::new(13, 13)
-    );
-    assert_eq!(
-        iter.next().expect("should have a few values").0,
-        RangeInclusive::new(17, 17)
-    );
-    assert_eq!(
-        iter.next().expect("should have a few values").0,
-        RangeInclusive::new(18, 18)
-    );
+    assert_eq!(iter.next().expect("should have a few values").0, RangeInclusive::new(1, 1));
+    assert_eq!(iter.next().expect("should have a few values").0, RangeInclusive::new(3, 3));
+    assert_eq!(iter.next().expect("should have a few values").0, RangeInclusive::new(10, 10));
+    assert_eq!(iter.next().expect("should have a few values").0, RangeInclusive::new(13, 13));
+    assert_eq!(iter.next().expect("should have a few values").0, RangeInclusive::new(17, 17));
+    assert_eq!(iter.next().expect("should have a few values").0, RangeInclusive::new(18, 18));
     assert!(iter.next().is_none());
 
     let mut iter = RangePairIter::new(&tree, Bound::Included(3), Bound::Included(17));
-    assert_eq!(
-        iter.next().expect("should have a few values").0,
-        RangeInclusive::new(3, 3)
-    );
-    assert_eq!(
-        iter.next().expect("should have a few values").0,
-        RangeInclusive::new(10, 10)
-    );
-    assert_eq!(
-        iter.next().expect("should have a few values").0,
-        RangeInclusive::new(13, 13)
-    );
-    assert_eq!(
-        iter.next().expect("should have a few values").0,
-        RangeInclusive::new(17, 17)
-    );
+    assert_eq!(iter.next().expect("should have a few values").0, RangeInclusive::new(3, 3));
+    assert_eq!(iter.next().expect("should have a few values").0, RangeInclusive::new(10, 10));
+    assert_eq!(iter.next().expect("should have a few values").0, RangeInclusive::new(13, 13));
+    assert_eq!(iter.next().expect("should have a few values").0, RangeInclusive::new(17, 17));
     assert!(iter.next().is_none());
 }

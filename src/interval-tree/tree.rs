@@ -198,11 +198,7 @@ impl<K: Ord, V> IntervalTree<K, V> {
     ///
     /// ```
     pub fn range(&self, range: RangeInclusive<K>) -> RangePairIter<K, V> {
-        RangePairIter::new(
-            self,
-            Bound::Included(range.start),
-            Bound::Included(range.end),
-        )
+        RangePairIter::new(self, Bound::Included(range.start), Bound::Included(range.end))
     }
 
     /// This function will return a read only iterator for all (key,value) pairs in the tree.

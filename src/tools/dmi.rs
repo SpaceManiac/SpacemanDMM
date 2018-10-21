@@ -83,12 +83,7 @@ impl IconFile {
         let icon_index = state.offset as u32 + dir_idx;
         let icon_count = self.image.width / self.metadata.width;
         let (icon_x, icon_y) = (icon_index % icon_count, icon_index / icon_count);
-        Some((
-            icon_x * self.metadata.width,
-            icon_y * self.metadata.height,
-            self.metadata.width,
-            self.metadata.height,
-        ))
+        Some((icon_x * self.metadata.width, icon_y * self.metadata.height, self.metadata.width, self.metadata.height))
     }
 }
 
@@ -165,29 +160,14 @@ impl Image {
     pub fn composite(&mut self, other: &Image, pos: (u32, u32), crop: Rect, color: [u8; 4]) {
         use ndarray::Axis;
 
-        let mut destination = self.data.slice_mut(s![
-            pos.1 as isize..(pos.1 + crop.3) as isize,
-            pos.0 as isize..(pos.0 + crop.2) as isize,
-            ..
-        ]);
-        let source = other.data.slice(s![
-            crop.1 as isize..(crop.1 + crop.3) as isize,
-            crop.0 as isize..(crop.0 + crop.2) as isize,
-            ..
-        ]);
+        let mut destination = self.data.slice_mut(s![pos.1 as isize..(pos.1 + crop.3) as isize, pos.0 as isize..(pos.0 + crop.2) as isize, ..]);
+        let source = other.data.slice(s![crop.1 as isize..(crop.1 + crop.3) as isize, crop.0 as isize..(crop.0 + crop.2) as isize, ..]);
 
         // loop over each [r, g, b, a] available in the relevant area
-        for (mut dest, orig_src) in destination
-            .lanes_mut(Axis(2))
-            .into_iter()
-            .zip(source.lanes(Axis(2)))
-        {
+        for (mut dest, orig_src) in destination.lanes_mut(Axis(2)).into_iter().zip(source.lanes(Axis(2))) {
             macro_rules! tint {
                 ($i:expr) => {
-                    mul255(
-                        *orig_src.get($i).unwrap_or(&255),
-                        *color.get($i).unwrap_or(&255),
-                    )
+                    mul255(*orig_src.get($i).unwrap_or(&255), *color.get($i).unwrap_or(&255))
                 };
             }
             let src = [tint!(0), tint!(1), tint!(2), tint!(3)];
@@ -197,9 +177,7 @@ impl Image {
             let out_a = src[3] + mul255(dest[3], 255 - src[3]);
             if out_a != 0 {
                 for i in 0..3 {
-                    dest[i] = ((src[i] as u32 * src[3] as u32
-                        + dest[i] as u32 * dest[3] as u32 * (255 - src[3] as u32) / 255)
-                        / out_a as u32) as u8;
+                    dest[i] = ((src[i] as u32 * src[3] as u32 + dest[i] as u32 * dest[3] as u32 * (255 - src[3] as u32) / 255) / out_a as u32) as u8;
                 }
             } else {
                 for i in 0..3 {

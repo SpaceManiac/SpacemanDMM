@@ -79,9 +79,7 @@ impl Constant {
 
     pub fn index(&self, key: &Constant) -> Option<&Constant> {
         match (self, key) {
-            (&Constant::List(ref elements), &Constant::Int(i)) => {
-                return elements.get(i as usize).map(|&(ref k, _)| k)
-            }
+            (&Constant::List(ref elements), &Constant::Int(i)) => return elements.get(i as usize).map(|&(ref k, _)| k),
             (&Constant::List(ref elements), key) => for &(ref k, ref v) in elements {
                 if key == k {
                     return v.as_ref();
@@ -184,10 +182,7 @@ impl fmt::Display for Constant {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Constant::Null(_) => f.write_str("null"),
-            Constant::New {
-                ref type_,
-                ref args,
-            } => {
+            Constant::New { ref type_, ref args } => {
                 write!(f, "new{}", type_)?;
                 if let Some(args) = args.as_ref() {
                     write!(f, "(")?;
@@ -264,24 +259,15 @@ pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree, sloppy: boo
     let mut been_sloppy = false;
 
     for ty in tree.graph.node_indices() {
-        let keys: Vec<String> = tree
-            .graph
-            .node_weight(ty)
-            .unwrap()
-            .vars
-            .keys()
-            .cloned()
-            .collect();
+        let keys: Vec<String> = tree.graph.node_weight(ty).unwrap().vars.keys().cloned().collect();
         for key in keys {
             if !tree
                 .graph
                 .node_weight(ty)
                 .unwrap()
                 .get_declaration(&key, tree)
-                .map_or(true, |x| {
-                    x.var_type.is_const_evaluable()
-                        && (x.var_type.is_const || ty != NodeIndex::new(0))
-                }) {
+                .map_or(true, |x| x.var_type.is_const_evaluable() && (x.var_type.is_const || ty != NodeIndex::new(0)))
+            {
                 continue; // skip non-constant-evaluable vars
             }
             match constant_ident_lookup(tree, ty, &key, false) {
@@ -299,15 +285,8 @@ pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree, sloppy: boo
                     };
 
                     context.register_error(DMError::new(
-                        tree.graph.node_weight(ty).unwrap().vars[&key]
-                            .value
-                            .location,
-                        format!(
-                            "undefined var '{}' on type '{}'{}",
-                            key,
-                            tree.graph.node_weight(ty).unwrap().path,
-                            extra
-                        ),
+                        tree.graph.node_weight(ty).unwrap().vars[&key].value.location,
+                        format!("undefined var '{}' on type '{}'{}", key, tree.graph.node_weight(ty).unwrap().path, extra),
                     ));
                 }
             }
@@ -326,11 +305,7 @@ pub fn simple_evaluate(location: Location, expr: Expression) -> Result<Constant,
 }
 
 /// Evaluate an expression in the preprocessor, with `defined()` available.
-pub fn preprocessor_evaluate(
-    location: Location,
-    expr: Expression,
-    defines: &DefineMap,
-) -> Result<Constant, DMError> {
+pub fn preprocessor_evaluate(location: Location, expr: Expression, defines: &DefineMap) -> Result<Constant, DMError> {
     ConstantFolder {
         tree: None,
         location,
@@ -344,22 +319,11 @@ enum ConstLookup {
     Continue(Option<NodeIndex>),
 }
 
-fn constant_ident_lookup(
-    tree: &mut ObjectTree,
-    ty: NodeIndex,
-    ident: &str,
-    must_be_static: bool,
-) -> Result<ConstLookup, DMError> {
+fn constant_ident_lookup(tree: &mut ObjectTree, ty: NodeIndex, ident: &str, must_be_static: bool) -> Result<ConstLookup, DMError> {
     // try to read the currently-set value if we can and
     // substitute that in, otherwise try to evaluate it.
     let (location, type_hint, expr) = {
-        let decl = match tree
-            .graph
-            .node_weight(ty)
-            .unwrap()
-            .get_declaration(ident, tree)
-            .cloned()
-        {
+        let decl = match tree.graph.node_weight(ty).unwrap().get_declaration(ident, tree).cloned() {
             Some(decl) => decl,
             None => return Ok(ConstLookup::Continue(None)), // definitely doesn't exist
         };
@@ -372,28 +336,16 @@ fn constant_ident_lookup(
             }
             Some(var) => match var.value.constant.clone() {
                 Some(constant) => {
-                    return Ok(ConstLookup::Found(
-                        decl.var_type.type_path.clone(),
-                        constant,
-                    ));
+                    return Ok(ConstLookup::Found(decl.var_type.type_path.clone(), constant));
                 }
                 None => match var.value.expression.clone() {
                     Some(expr) => {
                         if var.value.being_evaluated {
-                            return Err(DMError::new(
-                                var.value.location,
-                                format!("recursive constant reference: {}", ident),
-                            ));
+                            return Err(DMError::new(var.value.location, format!("recursive constant reference: {}", ident)));
                         } else if !decl.var_type.is_const_evaluable() {
-                            return Err(DMError::new(
-                                var.value.location,
-                                format!("non-const variable: {}", ident),
-                            ));
+                            return Err(DMError::new(var.value.location, format!("non-const variable: {}", ident)));
                         } else if !decl.var_type.is_static && must_be_static {
-                            return Err(DMError::new(
-                                var.value.location,
-                                format!("non-static variable: {}", ident),
-                            ));
+                            return Err(DMError::new(var.value.location, format!("non-static variable: {}", ident)));
                         }
                         var.value.being_evaluated = true;
                         (var.value.location, decl.var_type.type_path, expr)
@@ -413,22 +365,9 @@ fn constant_ident_lookup(
         defines: None,
         location,
         ty,
-    }.expr(
-        expr,
-        if type_hint.is_empty() {
-            None
-        } else {
-            Some(&type_hint)
-        },
-    )?;
+    }.expr(expr, if type_hint.is_empty() { None } else { Some(&type_hint) })?;
     // and store it into 'value', then return it
-    let var = tree
-        .graph
-        .node_weight_mut(ty)
-        .unwrap()
-        .vars
-        .get_mut(ident)
-        .unwrap();
+    let var = tree.graph.node_weight_mut(ty).unwrap().vars.get_mut(ident).unwrap();
     var.value.constant = Some(value.clone());
     var.value.being_evaluated = false;
     Ok(ConstLookup::Found(type_hint, value))
@@ -448,22 +387,10 @@ impl<'a> HasLocation for ConstantFolder<'a> {
 }
 
 impl<'a> ConstantFolder<'a> {
-    fn expr(
-        &mut self,
-        expression: Expression,
-        type_hint: Option<&TreePath>,
-    ) -> Result<Constant, DMError> {
+    fn expr(&mut self, expression: Expression, type_hint: Option<&TreePath>) -> Result<Constant, DMError> {
         Ok(match expression {
-            Expression::Base {
-                unary,
-                term,
-                follow,
-            } => {
-                let base_type_hint = if follow.is_empty() && unary.is_empty() {
-                    type_hint
-                } else {
-                    None
-                };
+            Expression::Base { unary, term, follow } => {
+                let base_type_hint = if follow.is_empty() && unary.is_empty() { type_hint } else { None };
                 let mut term = self.term(term, base_type_hint)?;
                 for each in follow {
                     term = self.follow(term, each)?;
@@ -497,19 +424,12 @@ impl<'a> ConstantFolder<'a> {
     }
 
     /// arguments or keyword arguments
-    fn arguments(
-        &mut self,
-        v: Vec<Expression>,
-    ) -> Result<Vec<(Constant, Option<Constant>)>, DMError> {
+    fn arguments(&mut self, v: Vec<Expression>) -> Result<Vec<(Constant, Option<Constant>)>, DMError> {
         let mut out = Vec::new();
         for each in v {
             out.push(match each {
                 // handle associations
-                Expression::AssignOp {
-                    op: AssignOp::Assign,
-                    lhs,
-                    rhs,
-                } => {
+                Expression::AssignOp { op: AssignOp::Assign, lhs, rhs } => {
                     let key = match Term::from(*lhs) {
                         Term::Ident(ident) => Constant::String(ident),
                         other => self.term(other, None)?,
@@ -541,10 +461,7 @@ impl<'a> ConstantFolder<'a> {
                     None => Err(self.error(format!("unknown typepath {}", full_path))),
                 }
             }
-            (term, follow) => Err(self.error(format!(
-                "non-constant expression follower: {} {:?}",
-                term, follow
-            ))),
+            (term, follow) => Err(self.error(format!("non-constant expression follower: {} {:?}", term, follow))),
         }
     }
 
@@ -559,22 +476,11 @@ impl<'a> ConstantFolder<'a> {
             // float ops
             (UnaryOp::Neg, Float(i)) => Float(-i),
             // unsupported
-            (op, term) => {
-                return Err(self.error(format!(
-                    "non-constant unary operation: {}",
-                    op.around(&term)
-                )))
-            }
+            (op, term) => return Err(self.error(format!("non-constant unary operation: {}", op.around(&term)))),
         })
     }
 
-    #[cfg_attr(rustfmt, rustfmt_skip)]
-    fn binary(
-        &mut self,
-        mut lhs: Constant,
-        mut rhs: Constant,
-        op: BinaryOp,
-    ) -> Result<Constant, DMError> {
+    fn binary(&mut self, mut lhs: Constant, mut rhs: Constant, op: BinaryOp) -> Result<Constant, DMError> {
         use self::Constant::*;
 
         macro_rules! numeric {
@@ -588,6 +494,8 @@ impl<'a> ConstantFolder<'a> {
                 }
             }
         }
+        // Rustfmt eats the + on the macro for some reason.
+        #[cfg_attr(rustfmt, rustfmt_skip)]
         numeric!(Add +);
         numeric!(Sub -);
         numeric!(Mul *);
@@ -605,9 +513,7 @@ impl<'a> ConstantFolder<'a> {
                 }
                 return Ok(Constant::from(lhs.pow(rhs as u32)));
             }
-            (BinaryOp::Pow, Int(lhs), Float(rhs)) => {
-                return Ok(Constant::from((lhs as f32).powf(rhs.raw())))
-            }
+            (BinaryOp::Pow, Int(lhs), Float(rhs)) => return Ok(Constant::from((lhs as f32).powf(rhs.raw()))),
             (BinaryOp::Pow, Float(lhs), Int(rhs)) => return Ok(Constant::from(lhs.powi(rhs))),
             (BinaryOp::Pow, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs.powf(rhs))),
             (_, lhs_, rhs_) => {
@@ -636,9 +542,7 @@ impl<'a> ConstantFolder<'a> {
             (BinaryOp::NotEq, lhs, rhs) => Ok(Constant::from(lhs != rhs)),
             (BinaryOp::And, lhs, rhs) => Ok(if lhs.to_bool() { rhs } else { lhs }),
             (BinaryOp::Or, lhs, rhs) => Ok(if lhs.to_bool() { lhs } else { rhs }),
-            (op, lhs, rhs) => {
-                Err(self.error(format!("non-constant {:?}: {} {} {}", op, lhs, op, rhs)))
-            }
+            (op, lhs, rhs) => Err(self.error(format!("non-constant {:?}: {} {} {}", op, lhs, op, rhs))),
         }
     }
 
@@ -719,10 +623,7 @@ impl<'a> ConstantFolder<'a> {
             // TODO: find a type annotation by looking up 'k' on the prefab's type
             vars.insert(k, self.expr(v, None)?);
         }
-        Ok(Prefab {
-            path: prefab.path,
-            vars,
-        })
+        Ok(Prefab { path: prefab.path, vars })
     }
 
     fn ident(&mut self, ident: String, must_be_static: bool) -> Result<Constant, DMError> {
@@ -730,12 +631,7 @@ impl<'a> ConstantFolder<'a> {
         self.recursive_lookup(ty, &ident, must_be_static)
     }
 
-    fn recursive_lookup(
-        &mut self,
-        ty: NodeIndex,
-        ident: &str,
-        must_be_static: bool,
-    ) -> Result<Constant, DMError> {
+    fn recursive_lookup(&mut self, ty: NodeIndex, ident: &str, must_be_static: bool) -> Result<Constant, DMError> {
         let mut idx = Some(ty);
         while let Some(ty) = idx {
             let location = self.location;
@@ -743,9 +639,7 @@ impl<'a> ConstantFolder<'a> {
                 return Err(self.error("cannot reference variables in this context"));
             }
             let tree = self.tree.as_mut().unwrap();
-            match constant_ident_lookup(tree, ty, &ident, must_be_static)
-                .map_err(|e| DMError::new(location, e.into_description()))?
-            {
+            match constant_ident_lookup(tree, ty, &ident, must_be_static).map_err(|e| DMError::new(location, e.into_description()))? {
                 ConstLookup::Found(_, v) => return Ok(v),
                 ConstLookup::Continue(i) => idx = i,
             }

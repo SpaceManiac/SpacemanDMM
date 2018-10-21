@@ -43,10 +43,7 @@ use dm::FileId;
 fn main() {
     std::env::set_var("RUST_BACKTRACE", "1");
 
-    eprintln!(
-        "dm-langserver {}  Copyright (C) 2017-2018  Tad Hardesty",
-        env!("CARGO_PKG_VERSION")
-    );
+    eprintln!("dm-langserver {}  Copyright (C) 2017-2018  Tad Hardesty", env!("CARGO_PKG_VERSION"));
     eprintln!("This program comes with ABSOLUTELY NO WARRANTY. This is free software,");
     eprintln!("and you are welcome to redistribute it under the conditions of the GNU");
     eprintln!("General Public License version 3.");
@@ -55,10 +52,7 @@ fn main() {
         Ok(path) => eprintln!("executable: {}", path.display()),
         Err(e) => eprintln!("exe check failure: {}", e),
     }
-    eprint!(
-        "{}",
-        include_str!(concat!(env!("OUT_DIR"), "/build-info.txt"))
-    );
+    eprint!("{}", include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")));
     match std::env::current_dir() {
         Ok(path) => eprintln!("directory: {}", path.display()),
         Err(e) => eprintln!("dir check failure: {}", e),
@@ -129,8 +123,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             method: T::METHOD.to_owned(),
             params: Some(value_to_params(params)),
         }));
-        self.write
-            .write(serde_json::to_string(&request).expect("notification bad to_string"))
+        self.write.write(serde_json::to_string(&request).expect("notification bad to_string"))
     }
 
     fn show_message<S>(&mut self, typ: MessageType, message: S)
@@ -139,9 +132,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
     {
         let message = message.into();
         eprintln!("{:?}: {}", typ, message);
-        self.issue_notification::<langserver::notification::ShowMessage>(
-            langserver::ShowMessageParams { typ, message },
-        )
+        self.issue_notification::<langserver::notification::ShowMessage>(langserver::ShowMessageParams { typ, message })
     }
 
     fn show_status<S>(&mut self, message: S)
@@ -162,33 +153,18 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         if loc.file == dm::FileId::builtins() {
             String::new()
         } else {
-            format!(
-                "file:{}#{}",
-                self.root
-                    .join(self.context.file_path(loc.file))
-                    .display()
-                    .to_string()
-                    .replace("\\", "/"),
-                loc.line
-            )
+            format!("file:{}#{}", self.root.join(self.context.file_path(loc.file)).display().to_string().replace("\\", "/"), loc.line)
         }
     }
 
-    fn convert_location(
-        &self,
-        loc: dm::Location,
-        one: &str,
-        two: &str,
-        three: &str,
-    ) -> Result<langserver::Location, jsonrpc::Error> {
+    fn convert_location(&self, loc: dm::Location, one: &str, two: &str, three: &str) -> Result<langserver::Location, jsonrpc::Error> {
         let pos = langserver::Position {
             line: loc.line.saturating_sub(1) as u64,
             character: loc.column.saturating_sub(1) as u64,
         };
         Ok(langserver::Location {
             uri: if loc.file == dm::FileId::builtins() {
-                Url::parse(&format!("dm://docs/reference.dm#{}{}{}", one, two, three))
-                    .map_err(invalid_request)?
+                Url::parse(&format!("dm://docs/reference.dm#{}{}{}", one, two, three)).map_err(invalid_request)?
             } else {
                 self.file_url(loc.file)?
             },
@@ -217,15 +193,13 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             Ok(pp) => pp,
             Err(err) => {
                 use std::error::Error;
-                self.issue_notification::<langserver::notification::PublishDiagnostics>(
-                    langserver::PublishDiagnosticsParams {
-                        uri: path_to_url(environment)?,
-                        diagnostics: vec![langserver::Diagnostic {
-                            message: err.description().to_owned(),
-                            ..Default::default()
-                        }],
-                    },
-                );
+                self.issue_notification::<langserver::notification::PublishDiagnostics>(langserver::PublishDiagnosticsParams {
+                    uri: path_to_url(environment)?,
+                    diagnostics: vec![langserver::Diagnostic {
+                        message: err.description().to_owned(),
+                        ..Default::default()
+                    }],
+                });
                 eprintln!("{:?}", err);
                 return Ok(());
             }
@@ -236,11 +210,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         self.preprocessor = Some(pp);
         self.issue_notification::<extras::WindowStatus>(Default::default());
         let elapsed = start.elapsed();
-        eprintln!(
-            "parsed in {}.{:03}s",
-            elapsed.as_secs(),
-            elapsed.subsec_nanos() / 1_000_000
-        );
+        eprintln!("parsed in {}.{:03}s", elapsed.as_secs(), elapsed.subsec_nanos() / 1_000_000);
 
         // initial diagnostics pump
         let mut map: HashMap<_, Vec<_>> = HashMap::new();
@@ -253,45 +223,30 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             let diag = langserver::Diagnostic {
                 message: error.description().to_owned(),
                 severity: Some(convert_severity(error.severity())),
-                range: langserver::Range {
-                    start: pos,
-                    end: pos,
-                },
+                range: langserver::Range { start: pos, end: pos },
                 ..Default::default()
             };
-            map.entry(self.context.file_path(loc.file))
-                .or_insert_with(Default::default)
-                .push(diag);
+            map.entry(self.context.file_path(loc.file)).or_insert_with(Default::default).push(diag);
         }
 
         for (path, diagnostics) in map {
             let joined_path = self.root.join(path);
-            self.issue_notification::<langserver::notification::PublishDiagnostics>(
-                langserver::PublishDiagnosticsParams {
-                    uri: path_to_url(joined_path)?,
-                    diagnostics,
-                },
-            );
+            self.issue_notification::<langserver::notification::PublishDiagnostics>(langserver::PublishDiagnosticsParams {
+                uri: path_to_url(joined_path)?,
+                diagnostics,
+            });
         }
 
         Ok(())
     }
 
-    fn get_annotations(
-        &mut self,
-        path: &Path,
-    ) -> Result<(FileId, FileId, Rc<AnnotationTree>), jsonrpc::Error> {
+    fn get_annotations(&mut self, path: &Path) -> Result<(FileId, FileId, Rc<AnnotationTree>), jsonrpc::Error> {
         Ok(match self.annotations.entry(path.to_owned()) {
             Entry::Occupied(o) => o.get().clone(),
             Entry::Vacant(v) => {
                 let stripped = match path.strip_prefix(&self.root) {
                     Ok(path) => path,
-                    Err(_) => {
-                        return Err(invalid_request(format!(
-                            "outside workspace: {}",
-                            path.display()
-                        )))
-                    }
+                    Err(_) => return Err(invalid_request(format!("outside workspace: {}", path.display()))),
                 };
                 let preprocessor = match self.preprocessor {
                     Some(ref pp) => pp,
@@ -311,8 +266,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                     parser.annotate_to(&mut annotations);
                     parser.run();
                 }
-                v.insert((real_file_id, file_id, Rc::new(annotations)))
-                    .clone()
+                v.insert((real_file_id, file_id, Rc::new(annotations))).clone()
             }
         })
     }
@@ -354,13 +308,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         (found, proc_name)
     }
 
-    fn find_unscoped_var<'b, I>(
-        &'b self,
-        iter: &I,
-        ty: Option<TypeRef<'b>>,
-        proc_name: Option<(&'b str, usize)>,
-        var_name: &str,
-    ) -> UnscopedVar<'b>
+    fn find_unscoped_var<'b, I>(&'b self, iter: &I, ty: Option<TypeRef<'b>>, proc_name: Option<(&'b str, usize)>, var_name: &str) -> UnscopedVar<'b>
     where
         I: Iterator<Item = (Span, &'b Annotation)> + Clone,
     {
@@ -368,10 +316,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         for (span, annotation) in iter.clone() {
             if let Annotation::LocalVarScope(var_type, name) = annotation {
                 if name == var_name {
-                    return UnscopedVar::Local {
-                        loc: span.start,
-                        var_type,
-                    };
+                    return UnscopedVar::Local { loc: span.start, var_type };
                 }
             }
         }
@@ -382,11 +327,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             if let Some(proc) = ty.get().procs.get(proc_name) {
                 for param in proc.value[idx].parameters.iter() {
                     if &param.name == var_name {
-                        return UnscopedVar::Parameter {
-                            ty,
-                            proc: proc_name,
-                            param,
-                        };
+                        return UnscopedVar::Parameter { ty, proc: proc_name, param };
                     }
                 }
             }
@@ -429,9 +370,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                     Some(decl) => self.objtree.type_by_path(&decl.var_type.type_path),
                     None => None,
                 },
-                UnscopedVar::Local { var_type, .. } => {
-                    self.objtree.type_by_path(&var_type.type_path)
-                }
+                UnscopedVar::Local { var_type, .. } => self.objtree.type_by_path(&var_type.type_path),
                 UnscopedVar::None => None,
             };
         }
@@ -458,10 +397,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
 
             let mut outputs: Vec<Output> = match serde_json::from_str(&message) {
                 Ok(Request::Single(call)) => self.handle_call(call).into_iter().collect(),
-                Ok(Request::Batch(calls)) => calls
-                    .into_iter()
-                    .flat_map(|call| self.handle_call(call))
-                    .collect(),
+                Ok(Request::Batch(calls)) => calls.into_iter().flat_map(|call| self.handle_call(call)).collect(),
                 Err(decode_error) => vec![Output::Failure(jsonrpc::Failure {
                     jsonrpc: VERSION,
                     error: jsonrpc::Error {
@@ -479,8 +415,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 _ => Response::Batch(outputs),
             };
 
-            self.write
-                .write(serde_json::to_string(&response).expect("response bad to_string"));
+            self.write.write(serde_json::to_string(&response).expect("response bad to_string"));
         }
     }
 
@@ -489,11 +424,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             Call::Invalid(id) => Some(Output::invalid_request(id, VERSION)),
             Call::MethodCall(method_call) => {
                 let id = method_call.id.clone();
-                Some(Output::from(
-                    self.handle_method_call(method_call),
-                    id,
-                    VERSION,
-                ))
+                Some(Output::from(self.handle_method_call(method_call), id, VERSION))
             }
             Call::Notification(notification) => {
                 if let Err(e) = self.handle_notification(notification) {
@@ -1080,8 +1011,7 @@ fn url_to_path(url: Url) -> Result<PathBuf, jsonrpc::Error> {
     if url.scheme() != "file" {
         return Err(invalid_request("URI must have 'file' scheme"));
     }
-    url.to_file_path()
-        .map_err(|_| invalid_request("URI must be a valid path"))
+    url.to_file_path().map_err(|_| invalid_request("URI must be a valid path"))
 }
 
 fn path_to_url(path: PathBuf) -> Result<Url, jsonrpc::Error> {
@@ -1099,19 +1029,9 @@ fn convert_severity(severity: dm::Severity) -> langserver::DiagnosticSeverity {
 }
 
 enum UnscopedVar<'a> {
-    Parameter {
-        ty: TypeRef<'a>,
-        proc: &'a str,
-        param: &'a dm::ast::Parameter,
-    },
-    Variable {
-        ty: TypeRef<'a>,
-        var: &'a dm::objtree::TypeVar,
-    },
-    Local {
-        loc: dm::Location,
-        var_type: &'a dm::ast::VarType,
-    },
+    Parameter { ty: TypeRef<'a>, proc: &'a str, param: &'a dm::ast::Parameter },
+    Variable { ty: TypeRef<'a>, var: &'a dm::objtree::TypeVar },
+    Local { loc: dm::Location, var_type: &'a dm::ast::VarType },
     None,
 }
 

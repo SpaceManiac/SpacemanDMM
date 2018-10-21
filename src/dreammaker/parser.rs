@@ -157,16 +157,8 @@ enum Op {
 impl Op {
     fn build(self, lhs: Box<Expression>, rhs: Box<Expression>) -> Expression {
         match self {
-            Op::BinaryOp(op) => Expression::BinaryOp {
-                op: op,
-                lhs: lhs,
-                rhs: rhs,
-            },
-            Op::AssignOp(op) => Expression::AssignOp {
-                op: op,
-                lhs: lhs,
-                rhs: rhs,
-            },
+            Op::BinaryOp(op) => Expression::BinaryOp { op: op, lhs: lhs, rhs: rhs },
+            Op::AssignOp(op) => Expression::AssignOp { op: op, lhs: lhs, rhs: rhs },
         }
     }
 }
@@ -422,19 +414,10 @@ where
     pub fn finalize_object_tree(mut self) -> ObjectTree {
         let procs_total = self.procs_good + self.procs_bad;
         if procs_total > 0 {
-            eprintln!(
-                "parsed {}/{} proc bodies ({}%)",
-                self.procs_good,
-                procs_total,
-                (self.procs_good * 100 / procs_total)
-            );
+            eprintln!("parsed {}/{} proc bodies ({}%)", self.procs_good, procs_total, (self.procs_good * 100 / procs_total));
         }
 
-        let sloppy = self
-            .context
-            .errors()
-            .iter()
-            .any(|p| p.severity() == Severity::Error);
+        let sloppy = self.context.errors().iter().any(|p| p.severity() == Severity::Error);
         self.tree.finalize(self.context, sloppy);
         self.tree
     }
@@ -454,9 +437,7 @@ where
                 self.put_back(got);
                 self.error(message)
             }
-            Err(err) => self
-                .error(format!("i/o error, expected one of: {}", expected))
-                .set_cause(err),
+            Err(err) => self.error(format!("i/o error, expected one of: {}", expected)).set_cause(err),
         }
     }
 
@@ -483,10 +464,7 @@ where
                     token: Token::DocComment(dc),
                 }) => match dc.target {
                     DocTarget::EnclosingItem if self.in_docs == 0 => {
-                        self.module_docs
-                            .entry(location.file)
-                            .or_default()
-                            .push((location.line, dc));
+                        self.module_docs.entry(location.file).or_default().push((location.line, dc));
                     }
                     DocTarget::EnclosingItem => self.docs_enclosing.push(dc),
                     DocTarget::FollowingItem => self.docs_following.push(dc),
@@ -586,10 +564,7 @@ where
     // ------------------------------------------------------------------------
     // Doc comment tracking
 
-    fn doc_comment<R, F: FnOnce(&mut Self) -> Status<R>>(
-        &mut self,
-        f: F,
-    ) -> Status<(DocCollection, R)> {
+    fn doc_comment<R, F: FnOnce(&mut Self) -> Status<R>>(&mut self, f: F) -> Status<(DocCollection, R)> {
         use std::mem::replace;
 
         let enclosing = replace(&mut self.docs_enclosing, Default::default());
@@ -617,14 +592,10 @@ where
         // handle leading slash
         match self.next("'/'")? {
             Token::Punct(Punctuation::Slash) => absolute = true,
-            Token::Punct(p @ Punctuation::Dot)
-            | Token::Punct(p @ Punctuation::CloseColon)
-            | Token::Punct(p @ Punctuation::Colon) => {
+            Token::Punct(p @ Punctuation::Dot) | Token::Punct(p @ Punctuation::CloseColon) | Token::Punct(p @ Punctuation::Colon) => {
                 spurious_lead = true;
-                self.context.register_error(
-                    self.error(format!("path started by '{}', should be unprefixed", p))
-                        .set_severity(Severity::Warning),
-                );
+                self.context
+                    .register_error(self.error(format!("path started by '{}', should be unprefixed", p)).set_severity(Severity::Warning));
             }
             t => {
                 self.put_back(t);
@@ -640,11 +611,8 @@ where
             None if !(absolute || spurious_lead) => return Ok(None),
             None => {
                 slash_loc.column += 1;
-                self.annotate_precise(slash_loc..slash_loc, || {
-                    Annotation::IncompleteTreePath(absolute, parts.clone())
-                });
-                self.context
-                    .register_error(self.error("path has no effect"));
+                self.annotate_precise(slash_loc..slash_loc, || Annotation::IncompleteTreePath(absolute, parts.clone()));
+                self.context.register_error(self.error("path has no effect"));
                 return success((absolute, Vec::new()));
             }
         }
@@ -652,13 +620,9 @@ where
         loop {
             match self.next("'/'")? {
                 Token::Punct(Punctuation::Slash) => {}
-                Token::Punct(p @ Punctuation::Dot)
-                | Token::Punct(p @ Punctuation::CloseColon)
-                | Token::Punct(p @ Punctuation::Colon) => {
-                    self.context.register_error(
-                        self.error(format!("path separated by '{}', should be '/'", p))
-                            .set_severity(Severity::Warning),
-                    );
+                Token::Punct(p @ Punctuation::Dot) | Token::Punct(p @ Punctuation::CloseColon) | Token::Punct(p @ Punctuation::Colon) => {
+                    self.context
+                        .register_error(self.error(format!("path separated by '{}', should be '/'", p)).set_severity(Severity::Warning));
                 }
                 t => {
                     self.put_back(t);
@@ -670,9 +634,7 @@ where
                 parts.push(i);
             } else {
                 slash_loc.column += 1;
-                self.annotate_precise(slash_loc..slash_loc, || {
-                    Annotation::IncompleteTreePath(absolute, parts.clone())
-                });
+                self.annotate_precise(slash_loc..slash_loc, || Annotation::IncompleteTreePath(absolute, parts.clone()));
             }
         }
 
@@ -699,12 +661,8 @@ where
             parts: &path,
         };
         if absolute && parent.parent.is_some() {
-            self.context.register_error(
-                self.error(format!(
-                    "nested absolute path: {} inside {}",
-                    new_stack, parent
-                )).set_severity(Severity::Warning),
-            );
+            self.context
+                .register_error(self.error(format!("nested absolute path: {} inside {}", new_stack, parent)).set_severity(Severity::Warning));
         }
 
         require!(self.var_annotations());
@@ -713,12 +671,7 @@ where
         match self.next("contents")? {
             t @ Punct(LBrace) => {
                 // `thing{` - block
-                if let Err(e) = self.tree.add_entry(
-                    self.location,
-                    new_stack.iter(),
-                    new_stack.len(),
-                    Default::default(),
-                ) {
+                if let Err(e) = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), Default::default()) {
                     self.context.register_error(e);
                 }
                 self.put_back(t);
@@ -726,12 +679,7 @@ where
                 let (comment, ()) = require!(self.doc_comment(|this| this.tree_block(new_stack)));
                 // TODO: make this duplicate less work?
                 if !comment.is_empty() {
-                    let _ = self.tree.add_entry(
-                        self.location,
-                        new_stack.iter(),
-                        new_stack.len(),
-                        comment,
-                    );
+                    let _ = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), comment);
                 }
                 self.annotate(start, || Annotation::TreeBlock(new_stack.to_vec()));
                 SUCCESS
@@ -746,10 +694,7 @@ where
                     require!(this.statement_terminator());
                     success(expr)
                 }));
-                if let Err(e) =
-                    self.tree
-                        .add_var(location, new_stack.iter(), new_stack.len(), expr, comment)
-                {
+                if let Err(e) = self.tree.add_var(location, new_stack.iter(), new_stack.len(), expr, comment) {
                     self.context.register_error(e);
                 }
                 self.annotate(entry_start, || Annotation::Variable(new_stack.to_vec()));
@@ -758,8 +703,7 @@ where
             Punct(LParen) => {
                 // `something(` - proc
                 let location = self.location;
-                let parameters =
-                    require!(self.separated(Comma, RParen, None, Parser::proc_parameter));
+                let parameters = require!(self.separated(Comma, RParen, None, Parser::proc_parameter));
 
                 // split off a subparser so we can keep parsing the objtree
                 // even when the proc body doesn't parse
@@ -784,22 +728,13 @@ where
                     SUCCESS
                 }));
 
-                match self
-                    .tree
-                    .add_proc(location, new_stack.iter(), new_stack.len(), parameters)
-                {
+                match self.tree.add_proc(location, new_stack.iter(), new_stack.len(), parameters) {
                     Ok((idx, proc)) => {
                         proc.docs.extend(comment);
                         // manually performed for borrowck reasons
                         if let Some(dest) = self.annotations.as_mut() {
-                            dest.insert(
-                                entry_start..body_start,
-                                Annotation::ProcHeader(new_stack.to_vec(), idx),
-                            );
-                            dest.insert(
-                                body_start..self.location,
-                                Annotation::ProcBody(new_stack.to_vec(), idx),
-                            );
+                            dest.insert(entry_start..body_start, Annotation::ProcHeader(new_stack.to_vec(), idx));
+                            dest.insert(body_start..self.location, Annotation::ProcBody(new_stack.to_vec(), idx));
                         }
                     }
                     Err(e) => self.context.register_error(e),
@@ -807,8 +742,7 @@ where
 
                 if self.procs {
                     let result = {
-                        let mut subparser: Parser<'ctx, '_, _> =
-                            Parser::new(self.context, body_tt.into_iter());
+                        let mut subparser: Parser<'ctx, '_, _> = Parser::new(self.context, body_tt.into_iter());
                         if let Some(a) = self.annotations.as_mut() {
                             subparser.annotations = Some(&mut *a);
                         }
@@ -830,10 +764,7 @@ where
                 // usually `thing;` - a contentless declaration
                 // TODO: allow enclosing-targeting docs here somehow?
                 let comment = ::std::mem::replace(&mut self.docs_following, Default::default());
-                if let Err(e) =
-                    self.tree
-                        .add_entry(self.location, new_stack.iter(), new_stack.len(), comment)
-                {
+                if let Err(e) = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), comment) {
                     self.context.register_error(e);
                 }
                 self.put_back(other);
@@ -869,19 +800,12 @@ where
         };
         if path.first().map_or(false, |i| i == "var") {
             path.remove(0);
-            self.context.register_error(
-                DMError::new(leading_loc, "'var/' is unnecessary here")
-                    .set_severity(Severity::Hint),
-            );
+            self.context.register_error(DMError::new(leading_loc, "'var/' is unnecessary here").set_severity(Severity::Hint));
         }
         let location = self.location;
         require!(self.var_annotations());
         // = <expr>
-        let default = if let Some(()) = self.exact(Punct(Assign))? {
-            Some(require!(self.expression()))
-        } else {
-            None
-        };
+        let default = if let Some(()) = self.exact(Punct(Assign))? { Some(require!(self.expression())) } else { None };
         let (input_type, in_list) = require!(self.input_specifier());
         success(Parameter {
             path,
@@ -913,16 +837,11 @@ where
 
     fn tree_block(&mut self, parent: PathStack) -> Status<()> {
         leading!(self.exact(Token::Punct(Punctuation::LBrace)));
-        Ok(Some(require!(
-            self.tree_entries(parent, Token::Punct(Punctuation::RBrace))
-        )))
+        Ok(Some(require!(self.tree_entries(parent, Token::Punct(Punctuation::RBrace)))))
     }
 
     fn root(&mut self) -> Status<()> {
-        let root = PathStack {
-            parent: None,
-            parts: &[],
-        };
+        let root = PathStack { parent: None, parts: &[] };
         self.tree_entries(root, Token::Eof)
     }
 
@@ -964,8 +883,7 @@ where
         let mut as_what = match InputType::from_str(&ident) {
             Some(what) => what,
             None => {
-                self.context
-                    .register_error(self.error(format!("bad input type: '{}'", ident)));
+                self.context.register_error(self.error(format!("bad input type: '{}'", ident)));
                 InputType::default()
             }
         };
@@ -974,8 +892,7 @@ where
             match InputType::from_str(&ident) {
                 Some(what) => as_what |= what,
                 None => {
-                    self.context
-                        .register_error(self.error(format!("bad input type: '{}'", ident)));
+                    self.context.register_error(self.error(format!("bad input type: '{}'", ident)));
                 }
             }
         }
@@ -1011,11 +928,7 @@ where
         success(result)
     }
 
-    fn statement(
-        &mut self,
-        loop_ctx: &LoopContext,
-        vars: &mut Vec<(Location, VarType, String)>,
-    ) -> Status<Statement> {
+    fn statement(&mut self, loop_ctx: &LoopContext, vars: &mut Vec<(Location, VarType, String)>) -> Status<Statement> {
         // BLOCK STATEMENTS
         if let Some(()) = self.exact_ident("if")? {
             // statement :: 'if' '(' expression ')' block ('else' 'if' '(' expression ')' block)* ('else' block)?
@@ -1047,10 +960,7 @@ where
             require!(self.exact(Token::Punct(Punctuation::LParen)));
             let expr = require!(self.expression());
             require!(self.exact(Token::Punct(Punctuation::RParen)));
-            success(Statement::While(
-                expr,
-                require!(self.block(&LoopContext::While)),
-            ))
+            success(Statement::While(expr, require!(self.block(&LoopContext::While))))
         } else if let Some(()) = self.exact_ident("do")? {
             // statement :: 'do' block 'while' '(' expression ')' ';'
             let block = require!(self.block(&LoopContext::DoWhile));
@@ -1084,26 +994,14 @@ where
                 // in-list form ("for list")
                 let (var_type, name) = match init {
                     // this is a really terrible way to do this
-                    Statement::Var(VarStatement {
-                        var_type,
-                        name,
-                        value: Some(value),
-                    }) => {
+                    Statement::Var(VarStatement { var_type, name, value: Some(value) }) => {
                         // for(var/a = 1 to
                         require!(self.exact_ident("to"));
                         let rhs = require!(self.expression());
                         return success(require!(self.for_range(Some(var_type), name, value, rhs)));
                     }
-                    Statement::Var(VarStatement {
-                        var_type,
-                        name,
-                        value: None,
-                    }) => (Some(var_type), name),
-                    Statement::Expr(Expression::BinaryOp {
-                        op: BinaryOp::In,
-                        lhs,
-                        rhs,
-                    }) => {
+                    Statement::Var(VarStatement { var_type, name, value: None }) => (Some(var_type), name),
+                    Statement::Expr(Expression::BinaryOp { op: BinaryOp::In, lhs, rhs }) => {
                         let name = match lhs.into_term() {
                             Some(Term::Ident(name)) => name,
                             _ => return Err(self.error("for-list must start with variable")),
@@ -1114,11 +1012,7 @@ where
                         //   let a: Box<(NonCopy, NonCopy)>;
                         //   let (b, c) = *a;
                         match { *rhs } {
-                            Expression::BinaryOp {
-                                op: BinaryOp::To,
-                                lhs,
-                                rhs,
-                            } => {
+                            Expression::BinaryOp { op: BinaryOp::To, lhs, rhs } => {
                                 return success(require!(self.for_range(None, name, *lhs, *rhs)));
                             }
                             rhs => {
@@ -1178,10 +1072,7 @@ where
             } else {
                 expr = None;
             }
-            success(Statement::Spawn(
-                expr,
-                require!(self.block(&LoopContext::None)),
-            ))
+            success(Statement::Spawn(expr, require!(self.block(&LoopContext::None))))
         } else if let Some(()) = self.exact_ident("switch")? {
             require!(self.exact(Token::Punct(Punctuation::LParen)));
             let expr = require!(self.expression());
@@ -1190,24 +1081,14 @@ where
             let mut cases = Vec::new();
             while let Some(()) = self.exact_ident("if")? {
                 require!(self.exact(Token::Punct(Punctuation::LParen)));
-                let what = require!(self.separated(
-                    Punctuation::Comma,
-                    Punctuation::RParen,
-                    None,
-                    Parser::case
-                ));
+                let what = require!(self.separated(Punctuation::Comma, Punctuation::RParen, None, Parser::case));
                 if what.is_empty() {
-                    self.context
-                        .register_error(self.error("switch case cannot be empty"));
+                    self.context.register_error(self.error("switch case cannot be empty"));
                 }
                 let block = require!(self.block(loop_ctx));
                 cases.push((what, block));
             }
-            let default = if let Some(()) = self.exact_ident("else")? {
-                Some(require!(self.block(loop_ctx)))
-            } else {
-                None
-            };
+            let default = if let Some(()) = self.exact_ident("else")? { Some(require!(self.block(loop_ctx))) } else { None };
             require!(self.exact(Token::Punct(Punctuation::RBrace)));
             success(Statement::Switch(expr, cases, default))
         } else if let Some(()) = self.exact_ident("try")? {
@@ -1216,24 +1097,15 @@ where
             require!(self.exact_ident("catch"));
             let catch_params;
             if let Some(()) = self.exact(Token::Punct(Punctuation::LParen))? {
-                catch_params = require!(self.separated(
-                    Punctuation::Comma,
-                    Punctuation::RParen,
-                    None,
-                    |this| {
-                        // TODO: improve upon this cheap approximation
-                        success(leading!(this.tree_path()).1)
-                    }
-                ));
+                catch_params = require!(self.separated(Punctuation::Comma, Punctuation::RParen, None, |this| {
+                    // TODO: improve upon this cheap approximation
+                    success(leading!(this.tree_path()).1)
+                }));
             } else {
                 catch_params = Vec::new();
             }
             let catch_block = require!(self.block(loop_ctx));
-            success(Statement::TryCatch {
-                try_block,
-                catch_params,
-                catch_block,
-            })
+            success(Statement::TryCatch { try_block, catch_params, catch_block })
         // SINGLE-LINE STATEMENTS
         } else if let Some(()) = self.exact_ident("set")? {
             let name = require!(self.ident());
@@ -1264,10 +1136,7 @@ where
                 if let Some(Term::Ident(ref name)) = expr.as_term() {
                     if let Some(()) = self.exact(Token::Punct(Punctuation::Colon))? {
                         // it's a label! check for a block
-                        return success(Statement::Label(
-                            name.to_owned(),
-                            require!(self.block(loop_ctx)),
-                        ));
+                        return success(Statement::Label(name.to_owned(), require!(self.block(loop_ctx))));
                     }
                 }
             }
@@ -1307,11 +1176,7 @@ where
     }
 
     // Single-line statements. Can appear in for loops. Followed by a semicolon.
-    fn simple_statement(
-        &mut self,
-        in_for: bool,
-        vars: &mut Vec<(Location, VarType, String)>,
-    ) -> Status<Statement> {
+    fn simple_statement(&mut self, in_for: bool, vars: &mut Vec<(Location, VarType, String)>) -> Status<Statement> {
         if let Some(()) = self.exact_ident("var")? {
             // statement :: 'var' type_path name ('=' value)
             let mut var_stmts = Vec::new();
@@ -1327,10 +1192,7 @@ where
 
                 let var_type = tree_path.into_iter().collect::<VarType>();
                 if var_type.is_tmp {
-                    self.context.register_error(
-                        DMError::new(type_path_start, "var/tmp has no effect here")
-                            .set_severity(Severity::Warning),
-                    );
+                    self.context.register_error(DMError::new(type_path_start, "var/tmp has no effect here").set_severity(Severity::Warning));
                 }
 
                 if self.annotations.is_some() {
@@ -1342,23 +1204,12 @@ where
                 } else {
                     None
                 };
-                let (input_types, in_list) = if !in_for {
-                    require!(self.input_specifier())
-                } else {
-                    (InputType::default(), None)
-                };
+                let (input_types, in_list) = if !in_for { require!(self.input_specifier()) } else { (InputType::default(), None) };
                 if !input_types.is_empty() || in_list.is_some() {
-                    self.context.register_error(
-                        self.error("input specifier has no effect here")
-                            .set_severity(Severity::Warning),
-                    );
+                    self.context.register_error(self.error("input specifier has no effect here").set_severity(Severity::Warning));
                 }
 
-                var_stmts.push(VarStatement {
-                    var_type,
-                    name,
-                    value,
-                });
+                var_stmts.push(VarStatement { var_type, name, value });
                 if in_for || self.exact(Token::Punct(Punctuation::Comma))?.is_none() {
                     break;
                 }
@@ -1386,19 +1237,9 @@ where
 
     // for(var/a = 1 to 20
     // for(var/a in 1 to 20
-    fn for_range(
-        &mut self,
-        var_type: Option<VarType>,
-        name: String,
-        start: Expression,
-        end: Expression,
-    ) -> Status<Statement> {
+    fn for_range(&mut self, var_type: Option<VarType>, name: String, start: Expression, end: Expression) -> Status<Statement> {
         // step 2
-        let step = if let Some(()) = self.exact_ident("step")? {
-            Some(require!(self.expression()))
-        } else {
-            None
-        };
+        let step = if let Some(()) = self.exact_ident("step")? { Some(require!(self.expression())) } else { None };
         // )
         require!(self.exact(Token::Punct(Punctuation::RParen)));
         // {...}
@@ -1465,9 +1306,7 @@ where
             parts.push((sep, ident));
         } else {
             separator_loc.column += 1;
-            self.annotate_precise(separator_loc..separator_loc, || {
-                Annotation::IncompleteTypePath(parts.clone(), sep)
-            });
+            self.annotate_precise(separator_loc..separator_loc, || Annotation::IncompleteTypePath(parts.clone(), sep));
         }
 
         // followed by more path elements, empty ones ignored
@@ -1477,9 +1316,7 @@ where
                 parts.push((sep, ident));
             } else {
                 separator_loc.column += 1;
-                self.annotate_precise(separator_loc..separator_loc, || {
-                    Annotation::IncompleteTypePath(parts.clone(), sep)
-                });
+                self.annotate_precise(separator_loc..separator_loc, || Annotation::IncompleteTypePath(parts.clone(), sep));
             }
         }
 
@@ -1493,18 +1330,13 @@ where
         // parse vars if we find them
         let mut vars = LinkedHashMap::default();
         if let Some(()) = self.exact(Token::Punct(Punctuation::LBrace))? {
-            self.separated(
-                Punctuation::Semicolon,
-                Punctuation::RBrace,
-                Some(()),
-                |this| {
-                    let key = require!(this.ident());
-                    require!(this.exact(Token::Punct(Punctuation::Assign)));
-                    let value = require!(this.expression());
-                    vars.insert(key, value);
-                    SUCCESS
-                },
-            )?;
+            self.separated(Punctuation::Semicolon, Punctuation::RBrace, Some(()), |this| {
+                let key = require!(this.ident());
+                require!(this.exact(Token::Punct(Punctuation::Assign)));
+                let value = require!(this.expression());
+                vars.insert(key, value);
+                SUCCESS
+            })?;
         }
 
         success(Prefab { path: parts, vars })
@@ -1550,12 +1382,7 @@ where
         success(expr)
     }
 
-    fn expression_part(
-        &mut self,
-        lhs: Expression,
-        prev_op: OpInfo,
-        in_ternary: bool,
-    ) -> Status<Expression> {
+    fn expression_part(&mut self, lhs: Expression, prev_op: OpInfo, in_ternary: bool) -> Status<Expression> {
         use std::cmp::Ordering;
 
         let mut bits = vec![lhs];
@@ -1621,10 +1448,7 @@ where
             for (item, op) in iter.zip(&mut ops_iter) {
                 result = op.build(Box::new(result), Box::new(item));
             }
-            ops_iter
-                .next()
-                .unwrap()
-                .build(Box::new(result), Box::new(rhs))
+            ops_iter.next().unwrap().build(Box::new(result), Box::new(rhs))
         })
     }
 
@@ -1717,10 +1541,7 @@ where
             },
 
             // term :: 'call' arglist arglist
-            Token::Ident(ref i, _) if i == "call" => Term::DynamicCall(
-                require!(self.arguments(&[], "call")),
-                require!(self.arguments(&[], "call*")),
-            ),
+            Token::Ident(ref i, _) if i == "call" => Term::DynamicCall(require!(self.arguments(&[], "call")), require!(self.arguments(&[], "call*"))),
 
             // term :: 'input' arglist input_specifier
             Token::Ident(ref i, _) if i == "input" => match self.arguments(&[], "input")? {
@@ -1739,14 +1560,8 @@ where
             Token::Ident(ref i, _) if i == "locate" => match self.arguments(&[], "locate")? {
                 Some(args) => {
                     // warn against this mistake
-                    if let Some(&Expression::BinaryOp {
-                        op: BinaryOp::In, ..
-                    }) = args.get(0)
-                    {
-                        self.context.register_error(
-                            self.error("bad 'locate(in)', should be 'locate() in'")
-                                .set_severity(Severity::Warning),
-                        );
+                    if let Some(&Expression::BinaryOp { op: BinaryOp::In, .. }) = args.get(0) {
+                        self.context.register_error(self.error("bad 'locate(in)', should be 'locate() in'").set_severity(Severity::Warning));
                     }
 
                     // read "in" clause
@@ -1773,9 +1588,7 @@ where
                 let first_token = self.updated_location();
                 match self.arguments(&[], &i)? {
                     Some(args) => {
-                        self.annotate_precise(start..first_token, || {
-                            Annotation::UnscopedCall(i.clone())
-                        });
+                        self.annotate_precise(start..first_token, || Annotation::UnscopedCall(i.clone()));
                         Term::Call(i, args)
                     }
                     None => {
@@ -1805,9 +1618,7 @@ where
                 } else {
                     // bare dot
                     dot_loc.column += 1;
-                    self.annotate_precise(dot_loc..dot_loc, || {
-                        Annotation::IncompleteTypePath(Vec::new(), PathOp::Dot)
-                    });
+                    self.annotate_precise(dot_loc..dot_loc, || Annotation::IncompleteTypePath(Vec::new(), PathOp::Dot));
                     self.annotate(start, || Annotation::ReturnVal);
                     Term::Ident(".".to_owned())
                 }
@@ -1866,13 +1677,9 @@ where
             // follow :: '.' ident arglist?
             // TODO: only apply these rules if there is no whitespace around the punctuation
             Token::Punct(Punctuation::Dot) => self.follow_index(IndexKind::Dot, belongs_to),
-            Token::Punct(Punctuation::CloseColon) if !belongs_to.is_empty() || !in_ternary => {
-                self.follow_index(IndexKind::Colon, belongs_to)
-            }
+            Token::Punct(Punctuation::CloseColon) if !belongs_to.is_empty() || !in_ternary => self.follow_index(IndexKind::Colon, belongs_to),
             Token::Punct(Punctuation::SafeDot) => self.follow_index(IndexKind::SafeDot, belongs_to),
-            Token::Punct(Punctuation::SafeColon) => {
-                self.follow_index(IndexKind::SafeColon, belongs_to)
-            }
+            Token::Punct(Punctuation::SafeColon) => self.follow_index(IndexKind::SafeColon, belongs_to),
 
             other => return self.try_another(other),
         }
@@ -1885,9 +1692,7 @@ where
             Some(ident) => ident,
             None => {
                 index_op_loc.column += kind.len() as u16;
-                self.annotate_precise(index_op_loc..index_op_loc, || {
-                    Annotation::ScopedMissingIdent(belongs_to.clone())
-                });
+                self.annotate_precise(index_op_loc..index_op_loc, || Annotation::ScopedMissingIdent(belongs_to.clone()));
                 // register the parse error, but keep going
                 self.context.register_error(self.describe_parse_error());
                 String::new()
@@ -1899,17 +1704,13 @@ where
             Some(args) => {
                 if !belongs_to.is_empty() {
                     let past = ::std::mem::replace(belongs_to, Vec::new());
-                    self.annotate_precise(start..end, || {
-                        Annotation::ScopedCall(past, ident.clone())
-                    });
+                    self.annotate_precise(start..end, || Annotation::ScopedCall(past, ident.clone()));
                 }
                 Follow::Call(kind, ident, args)
             }
             None => {
                 if !belongs_to.is_empty() {
-                    self.annotate_precise(start..end, || {
-                        Annotation::ScopedVar(belongs_to.clone(), ident.clone())
-                    });
+                    self.annotate_precise(start..end, || Annotation::ScopedVar(belongs_to.clone(), ident.clone()));
                     belongs_to.push(ident.clone());
                 }
                 Follow::Field(kind, ident)
@@ -1938,9 +1739,7 @@ where
             }
         });
         let end = self.location; // location of the closing parenthesis
-        self.annotate_precise(start..end, || {
-            Annotation::ProcArguments(parents.to_owned(), proc.to_owned(), arguments.len())
-        });
+        self.annotate_precise(start..end, || Annotation::ProcArguments(parents.to_owned(), proc.to_owned(), arguments.len()));
         match result {
             Ok(Some(_)) => success(arguments),
             Ok(None) => Ok(None),
@@ -1950,28 +1749,17 @@ where
 
     fn pick_arguments(&mut self) -> Status<Vec<(Option<Expression>, Expression)>> {
         leading!(self.exact(Token::Punct(Punctuation::LParen)));
-        success(require!(self.separated(
-            Punctuation::Comma,
-            Punctuation::RParen,
-            None,
-            |this| {
-                let expr = leading!(this.expression());
-                if let Some(()) = this.exact(Token::Punct(Punctuation::Semicolon))? {
-                    success((Some(expr), require!(this.expression())))
-                } else {
-                    success((None, expr))
-                }
+        success(require!(self.separated(Punctuation::Comma, Punctuation::RParen, None, |this| {
+            let expr = leading!(this.expression());
+            if let Some(()) = this.exact(Token::Punct(Punctuation::Semicolon))? {
+                success((Some(expr), require!(this.expression())))
+            } else {
+                success((None, expr))
             }
-        )))
+        })))
     }
 
-    fn separated<R: Clone, F: FnMut(&mut Self) -> Status<R>>(
-        &mut self,
-        sep: Punctuation,
-        terminator: Punctuation,
-        allow_empty: Option<R>,
-        mut f: F,
-    ) -> Status<Vec<R>> {
+    fn separated<R: Clone, F: FnMut(&mut Self) -> Status<R>>(&mut self, sep: Punctuation, terminator: Punctuation, allow_empty: Option<R>, mut f: F) -> Status<Vec<R>> {
         let mut comma_legal = false;
         let mut elems = Vec::new();
         loop {

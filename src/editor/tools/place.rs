@@ -27,10 +27,7 @@ impl PaletteEntry {
 impl ToolBehavior for Place {
     fn settings(&mut self, ui: &Ui, env: &Environment, ctx: &mut IconCtx) {
         let mut i = 0;
-        let Place {
-            palette,
-            pal_current,
-        } = self;
+        let Place { palette, pal_current } = self;
 
         let count = ui.fits_width(34.0);
         palette.retain_mut(|pal| {
@@ -39,11 +36,7 @@ impl ToolBehavior for Place {
             }
 
             let mut keep = true;
-            ui.tool_icon(
-                i == *pal_current,
-                pal.icon.prepare(Some(env), ctx),
-                im_str!("{}", pal.fab.path),
-            );
+            ui.tool_icon(i == *pal_current, pal.icon.prepare(Some(env), ctx), im_str!("{}", pal.fab.path));
             if ui.is_item_hovered() {
                 ui.tooltip_text(im_str!("{:#}", pal.fab));
                 if ui.imgui().is_mouse_clicked(ImMouseButton::Left) {

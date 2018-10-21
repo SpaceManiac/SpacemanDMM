@@ -81,8 +81,7 @@ impl Context {
         if let Some(severity) = self.print_severity {
             if error.severity <= severity {
                 let stderr = io::stderr();
-                self.pretty_print_error(&mut stderr.lock(), &error)
-                    .expect("error writing to stderr");
+                self.pretty_print_error(&mut stderr.lock(), &error).expect("error writing to stderr");
             }
         }
         self.errors.borrow_mut().push(error);
@@ -100,13 +99,7 @@ impl Context {
 
     /// Pretty-print a `DMError` to the given output.
     pub fn pretty_print_error<W: io::Write>(&self, w: &mut W, error: &DMError) -> io::Result<()> {
-        writeln!(
-            w,
-            "{}, line {}, column {}:",
-            self.file_path(error.location.file).display(),
-            error.location.line,
-            error.location.column
-        )?;
+        writeln!(w, "{}, line {}, column {}:", self.file_path(error.location.file).display(), error.location.line, error.location.column)?;
         writeln!(w, "{}: {}\n", error.severity, error.description)
     }
 
@@ -120,8 +113,7 @@ impl Context {
         let mut printed = false;
         for err in errors.iter() {
             if err.severity <= min_severity {
-                self.pretty_print_error(stderr, &err)
-                    .expect("error writing to stderr");
+                self.pretty_print_error(stderr, &err).expect("error writing to stderr");
                 printed = true;
             }
         }
@@ -286,11 +278,7 @@ impl DMError {
 
 impl fmt::Display for DMError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}:{}:{}",
-            self.location.line, self.location.column, self.description
-        )
+        write!(f, "{}:{}:{}", self.location.line, self.location.column, self.description)
     }
 }
 

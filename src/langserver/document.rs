@@ -9,10 +9,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use jsonrpc;
-use langserver::{
-    TextDocumentContentChangeEvent, TextDocumentIdentifier, TextDocumentItem,
-    VersionedTextDocumentIdentifier,
-};
+use langserver::{TextDocumentContentChangeEvent, TextDocumentIdentifier, TextDocumentItem, VersionedTextDocumentIdentifier};
 
 use super::{invalid_request, url_to_path};
 
@@ -40,11 +37,7 @@ impl DocumentStore {
         }
     }
 
-    pub fn change(
-        &mut self,
-        doc_id: VersionedTextDocumentIdentifier,
-        changes: Vec<TextDocumentContentChangeEvent>,
-    ) -> Result<PathBuf, jsonrpc::Error> {
+    pub fn change(&mut self, doc_id: VersionedTextDocumentIdentifier, changes: Vec<TextDocumentContentChangeEvent>) -> Result<PathBuf, jsonrpc::Error> {
         let path = url_to_path(doc_id.uri)?;
 
         // "If a versioned text document identifier is sent from the server to
@@ -63,10 +56,7 @@ impl DocumentStore {
         };
 
         if new_version < document.version {
-            eprintln!(
-                "new_version: {} < document_version: {}",
-                new_version, document.version
-            );
+            eprintln!("new_version: {} < document_version: {}", new_version, document.version);
             return Err(invalid_request("version numbers shouldn't go backwards"));
         }
         document.version = new_version;
@@ -109,10 +99,7 @@ struct Document {
 
 impl Document {
     fn new(version: u64, text: String) -> Document {
-        Document {
-            version,
-            text: Rc::new(text),
-        }
+        Document { version, text: Rc::new(text) }
     }
 
     fn change(&mut self, change: TextDocumentContentChangeEvent) -> Result<(), jsonrpc::Error> {
@@ -127,8 +114,7 @@ impl Document {
         };
 
         let start_pos = total_offset(&self.text, range.start.line, range.start.character)?;
-        Rc::make_mut(&mut self.text)
-            .replace_range(start_pos..start_pos + range_length as usize, &change.text);
+        Rc::make_mut(&mut self.text).replace_range(start_pos..start_pos + range_length as usize, &change.text);
         Ok(())
     }
 }
@@ -159,11 +145,7 @@ pub fn find_word(text: &str, offset: usize) -> &str {
         while !text.is_char_boundary(start_next) {
             start_next -= 1;
         }
-        if !text[start_next..start]
-            .chars()
-            .next()
-            .map_or(false, is_ident)
-        {
+        if !text[start_next..start].chars().next().map_or(false, is_ident) {
             break;
         }
         start = start_next;

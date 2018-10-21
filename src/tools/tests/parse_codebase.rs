@@ -6,13 +6,7 @@ use std::path::Path;
 use walkdir::{DirEntry, WalkDir};
 
 fn is_visible(entry: &DirEntry) -> bool {
-    entry
-        .path()
-        .file_name()
-        .unwrap_or("".as_ref())
-        .to_str()
-        .map(|s| !s.starts_with("."))
-        .unwrap_or(true)
+    entry.path().file_name().unwrap_or("".as_ref()).to_str().map(|s| !s.starts_with(".")).unwrap_or(true)
 }
 
 fn files_with_extension<F: FnMut(&Path)>(ext: &str, mut f: F) {

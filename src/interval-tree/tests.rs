@@ -153,22 +153,14 @@ fn test_range_iter_non_pointwise() {
     t.insert(RangeInclusive::new(6, 10), 1338);
     t.insert(RangeInclusive::new(12, 36), 1339);
     t.insert(RangeInclusive::new(32, 40), 1340);
-    assert_eq!(
-        t.range(RangeInclusive::new(9, 14))
-            .map(|(k, _)| k.start)
-            .collect::<Vec<u64>>(),
-        vec![6, 12]
-    )
+    assert_eq!(t.range(RangeInclusive::new(9, 14)).map(|(k, _)| k.start).collect::<Vec<u64>>(), vec![6, 12])
 }
 
 fn random_range() -> RangeInclusive<u64> {
     let offset = rand::random::<u64>();
     let len: u64;
     if rand::random::<bool>() {
-        len = cmp::min(
-            rand::random::<u64>() % 500,
-            0xff_ff_ff_ff_ff_ff_ff_ff - offset,
-        )
+        len = cmp::min(rand::random::<u64>() % 500, 0xff_ff_ff_ff_ff_ff_ff_ff - offset)
     } else {
         len = rand::random::<u64>() % (0xff_ff_ff_ff_ff_ff_ff_ff - offset)
     }
@@ -195,15 +187,8 @@ fn test_range_iter_nontrivial() {
             //assert!(t.test_theban_interval_tree());
         };
         let query = random_range();
-        let should = set
-            .iter()
-            .filter(|r| ::range::intersect(&query, r))
-            .map(|r| r.clone())
-            .collect::<Vec<RangeInclusive<u64>>>();
-        let is = t
-            .range(query)
-            .map(|(r, _)| r)
-            .collect::<Vec<RangeInclusive<u64>>>();
+        let should = set.iter().filter(|r| ::range::intersect(&query, r)).map(|r| r.clone()).collect::<Vec<RangeInclusive<u64>>>();
+        let is = t.range(query).map(|(r, _)| r).collect::<Vec<RangeInclusive<u64>>>();
         assert_eq!(should, is);
     }
 }

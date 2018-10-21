@@ -38,9 +38,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
     // register tera extensions
     tera.register_filter("linkify_type", |input, _opts| match input {
-        tera::Value::String(s) => {
-            Ok(linkify_type(s.split("/").skip_while(|b| b.is_empty())).into())
-        }
+        tera::Value::String(s) => Ok(linkify_type(s.split("/").skip_while(|b| b.is_empty())).into()),
         tera::Value::Array(a) => Ok(linkify_type(a.iter().filter_map(|v| v.as_str())).into()),
         _ => Err("linkify_type() input must be string".into()),
     });
@@ -53,11 +51,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
     tera.register_filter("substring", |input, opts| match input {
         tera::Value::String(s) => {
             let start = opts.get("start").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-            let mut end = opts
-                .get("end")
-                .and_then(|v| v.as_u64())
-                .map(|s| s as usize)
-                .unwrap_or(s.len());
+            let mut end = opts.get("end").and_then(|v| v.as_u64()).map(|s| s as usize).unwrap_or(s.len());
             if end > s.len() {
                 end = s.len();
             }
@@ -157,10 +151,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
     // search the code tree for Markdown files
     // TODO: don't hardcode this?
     let mut index_docs = None;
-    for entry in walkdir::WalkDir::new("code")
-        .into_iter()
-        .filter_entry(is_visible)
-    {
+    for entry in walkdir::WalkDir::new("code").into_iter().filter_entry(is_visible) {
         use std::io::Read;
 
         let entry = entry?;
@@ -195,14 +186,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
         progress.update(&ty.path);
 
         let mut parsed_type = ParsedType::default();
-        parsed_type.name = ty
-            .get()
-            .vars
-            .get("name")
-            .and_then(|v| v.value.constant.as_ref())
-            .and_then(|c| c.as_str())
-            .unwrap_or("")
-            .into();
+        parsed_type.name = ty.get().vars.get("name").and_then(|v| v.value.constant.as_ref()).and_then(|c| c.as_str()).unwrap_or("").into();
 
         let mut anything = false;
         let mut substance = false;
@@ -283,9 +267,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
         // file the type under its module as well
         if let Some(ref block) = parsed_type.docs {
-            if let Some(module) =
-                modules.get_mut(&module_path(&context.file_path(ty.location.file)))
-            {
+            if let Some(module) = modules.get_mut(&module_path(&context.file_path(ty.location.file))) {
                 module.items_wip.push((
                     ty.location.line,
                     ModuleItem::Type {
@@ -333,9 +315,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
                         module.teaser = block.teaser().to_owned();
                         module.items.push(ModuleItem::Docs(block.html));
                     } else {
-                        module
-                            .items
-                            .push(ModuleItem::Docs(markdown::render(&doc.text())));
+                        module.items.push(ModuleItem::Docs(markdown::render(&doc.text())));
                     }
                 }
             };
@@ -361,30 +341,15 @@ fn main() -> Result<(), Box<std::error::Error>> {
     }
 
     drop(progress);
-    print!(
-        "documenting {} modules, {} macros, ",
-        modules.len(),
-        macro_count
-    );
+    print!("documenting {} modules, {} macros, ", modules.len(), macro_count);
     if count == 0 {
         println!("0 types");
     } else {
-        println!(
-            "{}/{}/{} types ({}%)",
-            substance_count,
-            types_with_docs.len(),
-            count,
-            (types_with_docs.len() * 100 / count)
-        );
+        println!("{}/{}/{} types ({}%)", substance_count, types_with_docs.len(), count, (types_with_docs.len() * 100 / count));
     }
 
     ALL_TYPE_NAMES.with(|all| {
-        all.borrow_mut().extend(
-            types_with_docs
-                .iter()
-                .filter(|(_, v)| v.substance)
-                .map(|(&t, _)| t.to_owned()),
-        );
+        all.borrow_mut().extend(types_with_docs.iter().filter(|(_, v)| v.substance).map(|(&t, _)| t.to_owned()));
     });
 
     // render
@@ -399,15 +364,9 @@ fn main() -> Result<(), Box<std::error::Error>> {
         .and_then(|v| v.value.constant.as_ref())
         .and_then(|c| c.as_str())
         .unwrap_or("");
-    let title = index_docs
-        .as_ref()
-        .and_then(|(title, _)| title.as_ref())
-        .map(|s| &s[..])
-        .unwrap_or(world_name);
+    let title = index_docs.as_ref().and_then(|(title, _)| title.as_ref()).map(|s| &s[..]).unwrap_or(world_name);
     let mut env = Environment {
-        dmdoc: DmDoc {
-            version: env!("CARGO_PKG_VERSION"),
-        },
+        dmdoc: DmDoc { version: env!("CARGO_PKG_VERSION") },
         filename: &env_filename,
         world_name,
         title,
@@ -451,11 +410,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
                     types: build_index_tree(types_with_docs.iter().map(|(path, ty)| IndexTree {
                         htmlname: &ty.htmlname,
                         full_name: path,
-                        self_name: if ty.name.is_empty() {
-                            last_element(path)
-                        } else {
-                            &ty.name
-                        },
+                        self_name: if ty.name.is_empty() { last_element(path) } else { &ty.name },
                         teaser: ty.docs.as_ref().map_or("", |d| d.teaser()),
                         no_substance: !ty.substance,
                         children: Vec::new(),
@@ -483,17 +438,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
         }
 
         let mut f = create(&output_path.join(&fname))?;
-        f.write_all(
-            tera.render(
-                "dm_module.html",
-                &ModuleArgs {
-                    env,
-                    base_href: &base,
-                    path,
-                    details,
-                },
-            )?.as_bytes(),
-        )?;
+        f.write_all(tera.render("dm_module.html", &ModuleArgs { env, base_href: &base, path, details })?.as_bytes())?;
     }
 
     for (path, details) in types_with_docs.iter() {
@@ -541,16 +486,10 @@ fn main() -> Result<(), Box<std::error::Error>> {
 // Helpers
 
 fn module_path(path: &Path) -> String {
-    path.with_extension("")
-        .display()
-        .to_string()
-        .replace("\\", "/")
+    path.with_extension("").display().to_string().replace("\\", "/")
 }
 
-fn module_entry<'a, 'b>(
-    modules: &'a mut BTreeMap<String, Module<'b>>,
-    path: &Path,
-) -> &'a mut Module<'b> {
+fn module_entry<'a, 'b>(modules: &'a mut BTreeMap<String, Module<'b>>, path: &Path) -> &'a mut Module<'b> {
     modules.entry(module_path(path)).or_insert_with(|| {
         let mut module = Module::default();
         module.htmlname = module_path(path);
@@ -560,11 +499,7 @@ fn module_entry<'a, 'b>(
 }
 
 fn is_visible(entry: &walkdir::DirEntry) -> bool {
-    entry
-        .file_name()
-        .to_str()
-        .map(|s| !s.starts_with("."))
-        .unwrap_or(true)
+    entry.file_name().to_str().map(|s| !s.starts_with(".")).unwrap_or(true)
 }
 
 fn format_type_path(vec: &[String]) -> String {
@@ -586,12 +521,7 @@ fn linkify_type<'a, I: Iterator<Item = &'a str>>(iter: I) -> String {
         progress.push_str(bit);
         if ALL_TYPE_NAMES.with(|t| t.borrow().contains(&all_progress)) {
             use std::fmt::Write;
-            let _ = write!(
-                output,
-                r#"/<a href="{}.html">{}</a>"#,
-                &all_progress[1..],
-                &progress[1..]
-            );
+            let _ = write!(output, r#"/<a href="{}.html">{}</a>"#, &all_progress[1..], &progress[1..]);
             progress.clear();
         }
     }
@@ -659,10 +589,7 @@ fn git_info(git: &mut Git) -> Result<(), git2::Error> {
     let upstream_oid = upstream.get().peel_to_commit()?.id();
     let upstream_name = req!(upstream.name()?);
     if repo.merge_base(head_oid, upstream_oid)? != head_oid {
-        println!(
-            "incomplete git info: HEAD is not an ancestor of {}",
-            upstream_name
-        );
+        println!("incomplete git info: HEAD is not an ancestor of {}", upstream_name);
         return Ok(());
     }
 
@@ -923,9 +850,5 @@ enum ModuleItem<'a> {
     #[serde(rename = "define")]
     Define { name: &'a str, teaser: String },
     #[serde(rename = "type")]
-    Type {
-        path: &'a str,
-        teaser: String,
-        substance: bool,
-    },
+    Type { path: &'a str, teaser: String, substance: bool },
 }

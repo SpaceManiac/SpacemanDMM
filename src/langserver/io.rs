@@ -58,12 +58,7 @@ impl ResponseWrite for StdIo {
     fn write(&self, output: String) {
         let stdout = io::stdout();
         let mut stdout_lock = stdout.lock();
-        write!(
-            stdout_lock,
-            "Content-Length: {}\r\n\r\n{}",
-            output.len(),
-            output
-        ).unwrap();
+        write!(stdout_lock, "Content-Length: {}\r\n\r\n{}", output.len(), output).unwrap();
         stdout_lock.flush().unwrap();
     }
 }

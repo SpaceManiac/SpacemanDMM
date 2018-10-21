@@ -52,11 +52,7 @@ impl DocBlock {
 }
 
 fn parser(markdown: &str) -> Parser {
-    Parser::new_with_broken_link_callback(
-        markdown,
-        pulldown_cmark::OPTION_ENABLE_TABLES,
-        Some(&::handle_crosslink),
-    )
+    Parser::new_with_broken_link_callback(markdown, pulldown_cmark::OPTION_ENABLE_TABLES, Some(&::handle_crosslink))
 }
 
 fn parse_main(mut parser: ::std::iter::Peekable<Parser>) -> DocBlock {
@@ -82,11 +78,7 @@ fn parse_main(mut parser: ::std::iter::Peekable<Parser>) -> DocBlock {
     let has_description = parser.peek().is_some();
     push_html(&mut html, parser);
     trim_right(&mut html);
-    DocBlock {
-        html,
-        teaser,
-        has_description,
-    }
+    DocBlock { html, teaser, has_description }
 }
 
 fn push_html<'a, I: IntoIterator<Item = Event<'a>>>(buf: &mut String, iter: I) {

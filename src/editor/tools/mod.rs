@@ -12,12 +12,7 @@ use {Environment, History};
 
 mod place;
 
-pub const NO_TINT: ImVec4 = ImVec4 {
-    x: 1.0,
-    y: 1.0,
-    z: 1.0,
-    w: 1.0,
-};
+pub const NO_TINT: ImVec4 = ImVec4 { x: 1.0, y: 1.0, z: 1.0, w: 1.0 };
 
 pub struct Tool {
     pub name: &'static str,
@@ -29,21 +24,9 @@ pub struct Tool {
 
 pub enum ToolIcon {
     None,
-    Dmi {
-        icon: PathBuf,
-        icon_state: String,
-        tint: ImVec4,
-        dir: i32,
-    },
-    EmbeddedPng {
-        data: &'static [u8],
-    },
-    Loaded {
-        tex: ImTexture,
-        uv0: ImVec2,
-        uv1: ImVec2,
-        tint: Option<ImVec4>,
-    },
+    Dmi { icon: PathBuf, icon_state: String, tint: ImVec4, dir: i32 },
+    EmbeddedPng { data: &'static [u8] },
+    Loaded { tex: ImTexture, uv0: ImVec2, uv1: ImVec2, tint: Option<ImVec4> },
 }
 
 #[allow(unused_variables)]
@@ -71,10 +54,7 @@ impl Tool {
     }
 
     fn show_objtree(self) -> Self {
-        Tool {
-            objtree: true,
-            ..self
-        }
+        Tool { objtree: true, ..self }
     }
 
     fn dmi(self, icon: PathBuf, icon_state: String) -> Self {
@@ -106,12 +86,7 @@ impl ToolIcon {
         let (_, ty) = env.find_closest_type(&prefab.path);
         let ty = ty?;
 
-        let icon = prefab
-            .vars
-            .get("icon")
-            .or_else(|| ty.get_value("icon")?.constant.as_ref())?
-            .as_path()?
-            .to_owned();
+        let icon = prefab.vars.get("icon").or_else(|| ty.get_value("icon")?.constant.as_ref())?.as_path()?.to_owned();
         let icon_state = prefab
             .vars
             .get("icon_state")
@@ -126,20 +101,9 @@ impl ToolIcon {
             .and_then(|v| v.to_int())
             .unwrap_or(dmi::SOUTH);
         let color = ::dmm_tools::minimap::color_of(&env.objtree, prefab);
-        let tint = [
-            color[0] as f32 / 255.0,
-            color[1] as f32 / 255.0,
-            color[2] as f32 / 255.0,
-            color[3] as f32 / 255.0,
-        ]
-            .into();
+        let tint = [color[0] as f32 / 255.0, color[1] as f32 / 255.0, color[2] as f32 / 255.0, color[3] as f32 / 255.0].into();
 
-        Some(ToolIcon::Dmi {
-            icon,
-            icon_state,
-            dir,
-            tint,
-        })
+        Some(ToolIcon::Dmi { icon, icon_state, dir, tint })
     }
 
     pub fn prepare(&mut self, environment: Option<&Environment>, ctx: &mut IconCtx) -> &mut Self {
@@ -155,14 +119,8 @@ pub struct IconCtx<'a> {
 }
 
 impl<'a> IconCtx<'a> {
-    pub fn new(
-        renderer: &'a mut ::ImRenderer,
-        map_renderer: &'a mut ::map_renderer::MapRenderer,
-    ) -> Self {
-        IconCtx {
-            renderer,
-            map_renderer,
-        }
+    pub fn new(renderer: &'a mut ::ImRenderer, map_renderer: &'a mut ::map_renderer::MapRenderer) -> Self {
+        IconCtx { renderer, map_renderer }
     }
 }
 

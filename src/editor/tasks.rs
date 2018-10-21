@@ -11,14 +11,8 @@ pub struct Task<R> {
 }
 
 impl<R: Send + 'static> Task<R> {
-    pub fn spawn<S: Into<String>, F: FnOnce() -> Result<R, Err> + Send + 'static>(
-        name: S,
-        f: F,
-    ) -> Self {
-        Task {
-            name: name.into(),
-            rx: spawn(f),
-        }
+    pub fn spawn<S: Into<String>, F: FnOnce() -> Result<R, Err> + Send + 'static>(name: S, f: F) -> Self {
+        Task { name: name.into(), rx: spawn(f) }
     }
 
     pub fn name(&self) -> &str {
@@ -37,9 +31,7 @@ impl<R: Send + 'static> Task<R> {
     }
 }
 
-pub fn spawn<R: Send + 'static, F: FnOnce() -> Result<R, Err> + Send + 'static>(
-    f: F,
-) -> Receiver<Result<R, Err>> {
+pub fn spawn<R: Send + 'static, F: FnOnce() -> Result<R, Err> + Send + 'static>(f: F) -> Receiver<Result<R, Err>> {
     let (tx, rx) = channel();
     thread::spawn(move || {
         // TODO: catch unwind
