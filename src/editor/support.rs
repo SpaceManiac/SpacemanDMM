@@ -216,12 +216,16 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                             .to_physical(window_hidpi_factor)
                             .to_logical(hidpi_factor);
                         mouse_state.wheel = diff.y as f32;
+                        #[cfg(not(target_os = "macos"))]
+                        let x_diff = diff.x as f32;
+                        #[cfg(target_os = "macos")]
+                        let x_diff = -diff.x as f32;
                         if !mouse_captured {
                             scene.mouse_wheel(
                                 ctrl(&imgui),
                                 imgui.key_shift(),
-                                imgui.key_alt(),
-                                diff.x as f32,
+                                imgui.key_alt(), 
+                                x_diff,
                                 diff.y as f32,
                             );
                         }
