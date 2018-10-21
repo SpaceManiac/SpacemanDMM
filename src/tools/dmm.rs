@@ -117,7 +117,10 @@ impl Map {
 
 impl Prefab {
     pub fn from_path<S: Into<String>>(path: S) -> Prefab {
-        Prefab { path: path.into(), vars: Default::default() }
+        Prefab {
+            path: path.into(),
+            vars: Default::default(),
+        }
     }
 }
 
@@ -273,11 +276,11 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
         if ch == b'\n' || ch == b'\r' {
             in_comment_line = false;
             comment_trigger = false;
-            continue
+            continue;
         } else if in_comment_line {
-            continue
+            continue;
         } else if ch == b'\t' {
-            continue
+            continue;
         }
 
         if ch == b'/' && !in_quote_block {
@@ -319,19 +322,23 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
                     } else if ch == b'=' && curr_var.is_empty() {
                         curr_var = take(&mut curr_datum);
                         let mut length = curr_var.len();
-                        while length > 0 && (curr_var[length-1] as char).is_whitespace() {
+                        while length > 0 && (curr_var[length - 1] as char).is_whitespace() {
                             length -= 1;
                         }
                         curr_var.truncate(length);
                         skip_whitespace = true;
                     } else if ch == b';' {
-                        curr_prefab.vars.insert(from_latin1(take(&mut curr_var)),
-                            parse_constant(chars.location(), take(&mut curr_datum))?);
+                        curr_prefab.vars.insert(
+                            from_latin1(take(&mut curr_var)),
+                            parse_constant(chars.location(), take(&mut curr_datum))?,
+                        );
                         skip_whitespace = true;
                     } else if ch == b'}' {
                         if !curr_var.is_empty() {
-                            curr_prefab.vars.insert(from_latin1(take(&mut curr_var)),
-                                parse_constant(chars.location(), take(&mut curr_datum))?);
+                            curr_prefab.vars.insert(
+                                from_latin1(take(&mut curr_var)),
+                                parse_constant(chars.location(), take(&mut curr_datum))?,
+                            );
                         }
                         in_varedit_block = false;
                     } else {
@@ -387,7 +394,9 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
     // grid
     #[derive(PartialEq, Debug)]
     enum Coord {
-        X, Y, Z
+        X,
+        Y,
+        Z,
     }
 
     let mut grid = BTreeMap::new();
@@ -426,7 +435,7 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
             } else {
                 match (ch as char).to_digit(10) {
                     Some(x) => curr_num = 10 * curr_num + x as usize,
-                    None => return Err(DMError::new(Location::default(), "bad digit in map coordinate"))
+                    None => return Err(DMError::new(Location::default(), "bad digit in map coordinate")),
                 }
             }
         } else if in_map_string {

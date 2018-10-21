@@ -8,12 +8,19 @@ pub struct Node<K, V> {
     height: u32,
     pub max: K,
     pub left: Option<Box<Node<K, V>>>,
-    pub right:Option<Box<Node<K, V>>>,
+    pub right: Option<Box<Node<K, V>>>,
 }
 
 impl<K: Ord + Clone, V> Node<K, V> {
     pub fn new(key: RangeInclusive<K>, data: V) -> Self {
-        Node { max: key.end.clone(), key: key, data: vec![data], height: 1, left: None, right: None }
+        Node {
+            max: key.end.clone(),
+            key: key,
+            data: vec![data],
+            height: 1,
+            left: None,
+            right: None,
+        }
     }
 
     fn diff_of_successors_height(&self) -> i32 {
@@ -40,13 +47,13 @@ impl<K: Ord + Clone, V> Node<K, V> {
     }
 
     ///returns the minimal key,value pair within this tree
-    pub fn min_pair(&self) -> (&RangeInclusive<K>,&[V]) {
-        self.left.as_ref().map_or((&self.key,&self.data), |n| n.min_pair())
+    pub fn min_pair(&self) -> (&RangeInclusive<K>, &[V]) {
+        self.left.as_ref().map_or((&self.key, &self.data), |n| n.min_pair())
     }
 
     ///returns the maximal key,value pair within this tree
-    pub fn max_pair(&self) -> (&RangeInclusive<K>,&[V]) {
-        self.right.as_ref().map_or((&self.key,&self.data), |n| n.max_pair())
+    pub fn max_pair(&self) -> (&RangeInclusive<K>, &[V]) {
+        self.right.as_ref().map_or((&self.key, &self.data), |n| n.max_pair())
     }
 
     /// Perform a single right rotation on this (sub) tree
@@ -101,7 +108,7 @@ impl<K: Ord + Clone, V> Node<K, V> {
             2 => self.rotate_left_successor(),
             1 | 0 | -1 => self,
             -2 => self.rotate_right_successor(),
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
@@ -133,7 +140,7 @@ impl<K: Ord + Clone, V> Node<K, V> {
     fn drop_min(mut self: Box<Self>) -> (Option<Box<Self>>, Box<Self>) {
         match self.left.take() {
             Some(left) => Node::drop_min_from_left(self, left),
-            None => (self.right.take(), self)
+            None => (self.right.take(), self),
         }
     }
 
@@ -150,19 +157,19 @@ impl<K: Ord + Clone, V> Node<K, V> {
     // empty: None.
     //
     //
-    pub fn delete(mut self: Box<Self>, key: RangeInclusive<K>) -> Option<Box<Self>>{
+    pub fn delete(mut self: Box<Self>, key: RangeInclusive<K>) -> Option<Box<Self>> {
         match self.key.cmp(&key) {
             Ordering::Equal => return self.delete_root(),
             Ordering::Less => {
                 if let Some(succ) = self.right.take() {
                     self.right = succ.delete(key);
-                    return Some(self.updated_node())
+                    return Some(self.updated_node());
                 }
             },
             Ordering::Greater => {
                 if let Some(succ) = self.left.take() {
                     self.left = succ.delete(key);
-                    return Some(self.updated_node())
+                    return Some(self.updated_node());
                 }
             }
         }
@@ -175,11 +182,11 @@ impl<K: Ord + Clone, V> Node<K, V> {
     }
 
     /// returns a read only reference paie to the data stored under key in the tree given by root
-    pub fn search_pair(&self, key: &RangeInclusive<K>) -> Option<(&RangeInclusive<K>, &[V])>{
+    pub fn search_pair(&self, key: &RangeInclusive<K>) -> Option<(&RangeInclusive<K>, &[V])> {
         match self.key.cmp(key) {
             Ordering::Equal => Some((&self.key, &self.data)),
             Ordering::Less => self.right.as_ref().map_or(None, |succ| succ.search_pair(key)),
-            Ordering::Greater => self.left.as_ref().map_or(None, |succ| succ.search_pair(key))
+            Ordering::Greater => self.left.as_ref().map_or(None, |succ| succ.search_pair(key)),
         }
     }
 
@@ -201,7 +208,7 @@ impl<K: Ord + Clone, V> Node<K, V> {
     fn insert_in_successor(succ: Option<Box<Self>>, key: RangeInclusive<K>, data: V) -> Option<Box<Self>> {
         Some(match succ {
             Some(succ) => succ.insert(key, data),
-            None => Box::new(Node::new(key, data))
+            None => Box::new(Node::new(key, data)),
         })
     }
 }

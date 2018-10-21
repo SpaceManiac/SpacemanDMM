@@ -24,7 +24,10 @@ impl<R: Send + 'static> Task<R> {
 
     pub fn poll<F: FnMut(Result<R, Err>)>(&self, mut f: F) -> bool {
         match self.rx.try_recv() {
-            Ok(v) => { f(v); true },
+            Ok(v) => {
+                f(v);
+                true
+            }
             Err(TryRecvError::Empty) => true,
             Err(TryRecvError::Disconnected) => false,
         }

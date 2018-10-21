@@ -89,7 +89,7 @@ impl RenderPass for Random {
                 for child in root.children() {
                     if let Some(v) = child.vars.get("hidden") {
                         if !v.value.constant.as_ref().map_or(false, |c| c.to_bool()) {
-                            continue
+                            continue;
                         }
                     }
                     if let Some(icon) = child.vars.get("icon") {

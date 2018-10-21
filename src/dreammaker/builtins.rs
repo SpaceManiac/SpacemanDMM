@@ -150,10 +150,14 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         }
     }
     macro_rules! int {
-        ($e:expr) => {Expression::from(Term::Int($e))}
+        ($e:expr) => {
+            Expression::from(Term::Int($e))
+        };
     }
     macro_rules! string {
-        ($e:expr) => {Expression::from(Term::String($e.into()))}
+        ($e:expr) => {
+            Expression::from(Term::String($e.into()))
+        };
     }
 
     entries! {

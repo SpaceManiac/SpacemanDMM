@@ -7,8 +7,8 @@ extern crate git2;
 extern crate walkdir;
 #[macro_use] extern crate serde_derive;
 
-mod template;
 mod markdown;
+mod template;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::cell::RefCell;
@@ -45,12 +45,16 @@ fn main() -> Result<(), Box<std::error::Error>> {
         tera::Value::String(s) => Ok(s.len().into()),
         tera::Value::Array(a) => Ok(a.len().into()),
         tera::Value::Object(o) => Ok(o.len().into()),
-        _ => Ok(0 .into()),
+        _ => Ok(0.into()),
     });
     tera.register_filter("substring", |input, opts| match input {
         tera::Value::String(s) => {
             let start = opts.get("start").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-            let mut end = opts.get("end").and_then(|v| v.as_u64()).map(|s| s as usize).unwrap_or(s.len());
+            let mut end = opts
+                .get("end")
+                .and_then(|v| v.as_u64())
+                .map(|s| s as usize)
+                .unwrap_or(s.len());
             if end > s.len() {
                 end = s.len();
             }
@@ -110,7 +114,12 @@ fn main() -> Result<(), Box<std::error::Error>> {
                 params = &[][..];
                 is_variadic = false;
             }
-            dm::preprocessor::Define::Function { docs: dc, params: macro_params, variadic, .. } => {
+            dm::preprocessor::Define::Function {
+                docs: dc,
+                params: macro_params,
+                variadic,
+                ..
+            } => {
                 docs = dc;
                 has_params = true;
                 params = macro_params;
@@ -122,8 +131,23 @@ fn main() -> Result<(), Box<std::error::Error>> {
         }
         let docs = DocBlock::parse(&docs.text());
         let module = module_entry(&mut modules, &context.file_path(range.start.file));
-        module.items_wip.push((range.start.line, ModuleItem::Define { name, teaser: docs.teaser().to_owned() }));
-        module.defines.insert(name, Define { docs, has_params, params, is_variadic, line: range.start.line });
+        module.items_wip.push((
+            range.start.line,
+            ModuleItem::Define {
+                name,
+                teaser: docs.teaser().to_owned(),
+            },
+        ));
+        module.defines.insert(
+            name,
+            Define {
+                docs,
+                has_params,
+                params,
+                is_variadic,
+                line: range.start.line,
+            },
+        );
         macro_count += 1;
     }
 
@@ -162,10 +186,14 @@ fn main() -> Result<(), Box<std::error::Error>> {
         progress.update(&ty.path);
 
         let mut parsed_type = ParsedType::default();
-        parsed_type.name = ty.get().vars.get("name")
+        parsed_type.name = ty
+            .get()
+            .vars
+            .get("name")
             .and_then(|v| v.value.constant.as_ref())
             .and_then(|c| c.as_str())
-            .unwrap_or("").into();
+            .unwrap_or("")
+            .into();
 
         let mut anything = false;
         let mut substance = false;
@@ -234,11 +262,14 @@ fn main() -> Result<(), Box<std::error::Error>> {
         // file the type under its module as well
         if let Some(ref block) = parsed_type.docs {
             if let Some(module) = modules.get_mut(&module_path(&context.file_path(ty.location.file))) {
-                module.items_wip.push((ty.location.line, ModuleItem::Type {
-                    path: ty.get().pretty_path(),
-                    teaser: block.teaser().to_owned(),
-                    substance: substance,
-                }));
+                module.items_wip.push((
+                    ty.location.line,
+                    ModuleItem::Type {
+                        path: ty.get().pretty_path(),
+                        teaser: block.teaser().to_owned(),
+                        substance: substance,
+                    },
+                ));
             }
         }
 
@@ -305,7 +336,13 @@ fn main() -> Result<(), Box<std::error::Error>> {
     if count == 0 {
         println!("0 types");
     } else {
-        println!("{}/{}/{} types ({}%)", substance_count, types_with_docs.len(), count, (types_with_docs.len() * 100 / count));
+        println!(
+            "{}/{}/{} types ({}%)",
+            substance_count,
+            types_with_docs.len(),
+            count,
+            (types_with_docs.len() * 100 / count)
+        );
     }
 
     ALL_TYPE_NAMES.with(|all| {
@@ -320,12 +357,14 @@ fn main() -> Result<(), Box<std::error::Error>> {
     template::save_resources(output_path)?;
 
     let env_filename = environment.display().to_string();
-    let world_name = objtree.find("/world")
+    let world_name = objtree
+        .find("/world")
         .and_then(|w| w.get().vars.get("name"))
         .and_then(|v| v.value.constant.as_ref())
         .and_then(|c| c.as_str())
         .unwrap_or("");
-    let title = index_docs.as_ref()
+    let title = index_docs
+        .as_ref()
         .and_then(|(title, _)| title.as_ref())
         .map(|s| &s[..])
         .unwrap_or(world_name);
@@ -489,7 +528,12 @@ fn linkify_type<'a, I: Iterator<Item=&'a str>>(iter: I) -> String {
         progress.push_str(bit);
         if ALL_TYPE_NAMES.with(|t| t.borrow().contains(&all_progress)) {
             use std::fmt::Write;
-            let _ = write!(output, r#"/<a href="{}.html">{}</a>"#, &all_progress[1..], &progress[1..]);
+            let _ = write!(
+                output,
+                r#"/<a href="{}.html">{}</a>"#,
+                &all_progress[1..],
+                &progress[1..]
+            );
             progress.clear();
         }
     }
@@ -526,10 +570,15 @@ fn create(path: &Path) -> io::Result<File> {
 
 fn git_info(git: &mut Git) -> Result<(), git2::Error> {
     macro_rules! req {
-        ($e:expr) => { match $e { Some(x) => x, None => {
-            println!("incomplete git info: malformed or non-utf8 name");
-            return Ok(());
-        }}}
+        ($e:expr) => {
+            match $e {
+                Some(x) => x,
+                None => {
+                    println!("incomplete git info: malformed or non-utf8 name");
+                    return Ok(());
+                }
+            }
+        };
     }
 
     // get the revision
@@ -582,7 +631,7 @@ fn git_info(git: &mut Git) -> Result<(), git2::Error> {
         let at = req!(url.find("@"));
         let colon = req!(url.find(":"));
         if colon >= at {
-            git.web_url = format!("https://{}/{}", &url[at+1..colon], &url[colon+1..]);
+            git.web_url = format!("https://{}/{}", &url[at + 1..colon], &url[colon + 1..]);
         } else {
             println!("incomplete git info: weird SSH path: {}", url);
         }
@@ -599,7 +648,7 @@ struct Progress {
 impl Progress {
     fn update(&mut self, msg: &str) {
         print!("\r{}", msg);
-        for _ in msg.len() .. self.last_len {
+        for _ in msg.len()..self.last_len {
             print!(" ");
         }
         self.last_len = msg.len();
@@ -635,7 +684,8 @@ struct IndexTree<'a> {
 }
 
 fn build_index_tree<'a, I>(iter: I) -> Vec<IndexTree<'a>>
-    where I: IntoIterator<Item=IndexTree<'a>>
+where
+    I: IntoIterator<Item=IndexTree<'a>>,
 {
     let mut stack = vec![IndexTree {
         htmlname: "",

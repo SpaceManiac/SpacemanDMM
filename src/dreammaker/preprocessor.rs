@@ -115,12 +115,14 @@ impl DefineMap {
             return false;
         }
 
-        self.inner.iter().all(|(key, value)| rhs.inner.get(key).map_or(false, |v| {
-            if value.len() != v.len() {
-                return false;
-            }
-            value.iter().zip(v.iter()).all(|(lhs, rhs)| lhs.1 == rhs.1)
-        }))
+        self.inner.iter().all(|(key, value)| {
+            rhs.inner.get(key).map_or(false, |v| {
+                if value.len() != v.len() {
+                    return false;
+                }
+                value.iter().zip(v.iter()).all(|(lhs, rhs)| lhs.1 == rhs.1)
+            })
+        })
     }
 }
 
@@ -138,7 +140,7 @@ enum Include<'ctx> {
         name: String,
         location: Location,
         tokens: VecDeque<Token>,
-    }
+    },
 }
 
 impl<'ctx> Include<'ctx> {
@@ -210,11 +212,15 @@ impl<'ctx> Iterator for IncludeStack<'ctx> {
                     //Some(Err(e)) => return Some(Err(e)),
                     Some(t) => return Some(t),
                     None => {} // fall through
-                }
-                Some(&mut Include::Expansion { ref mut tokens, location, .. }) => match tokens.pop_front() {
+                },
+                Some(&mut Include::Expansion {
+                    ref mut tokens,
+                    location,
+                    ..
+                }) => match tokens.pop_front() {
                     Some(token) => return Some(LocatedToken { location, token }),
                     None => {} // fall through
-                }
+                },
                 None => return None,
             }
             self.stack.pop();
@@ -234,13 +240,25 @@ struct Ifdef {
 
 impl Ifdef {
     fn new(location: Location, active: bool) -> Ifdef {
-        Ifdef { location, active, chain_active: active }
+        Ifdef {
+            location,
+            active,
+            chain_active: active,
+        }
     }
     fn else_(self, location: Location) -> Ifdef {
-        Ifdef { location, active: !self.chain_active, chain_active: true }
+        Ifdef {
+            location,
+            active: !self.chain_active,
+            chain_active: true,
+        }
     }
     fn else_if(self, location: Location, active: bool) -> Ifdef {
-        Ifdef { location, active: !self.chain_active && active, chain_active: self.chain_active || active }
+        Ifdef {
+            location,
+            active: !self.chain_active && active,
+            chain_active: self.chain_active || active,
+        }
     }
 }
 
@@ -296,9 +314,7 @@ impl<'ctx> Preprocessor<'ctx> {
         Ok(Preprocessor {
             context,
             env_file,
-            include_stack: IncludeStack {
-                stack: vec![include],
-            },
+            include_stack: IncludeStack { stack: vec![include] },
             history: Default::default(),
             defines,
             maps: Default::default(),
@@ -462,7 +478,7 @@ impl<'ctx> Preprocessor<'ctx> {
             self.last_input_loc = tok.location;
 
             if let Token::Punct(Punctuation::Newline) = tok.token {
-                break
+                break;
             }
 
             if let Err(e) = self.real_next(tok.token, true) {
@@ -470,8 +486,10 @@ impl<'ctx> Preprocessor<'ctx> {
             }
         }
 
-        let mut parser = ::parser::Parser::new(self.context,
-            self.output.drain(..).map(|token| LocatedToken::new(start, token)));
+        let mut parser = ::parser::Parser::new(
+            self.context,
+            self.output.drain(..).map(|token| LocatedToken::new(start, token)),
+        );
         parser.set_fallback_location(start);
         let expr = parser.expression();
         let expr = parser.require(expr)?;
@@ -519,10 +537,13 @@ impl<'ctx> Preprocessor<'ctx> {
         macro_rules! next {
             () => {
                 match self.inner_next() {
-                    Some(x) => { _last_expected_loc = x.location; x.token },
-                    None => return Err(self.error("unexpected EOF"))
+                    Some(x) => {
+                        _last_expected_loc = x.location;
+                        x.token
+                    }
+                    None => return Err(self.error("unexpected EOF")),
                 }
-            }
+            };
         }
         macro_rules! expect_token {
             (($($i:ident),*) = $p:pat) => {
@@ -590,17 +611,27 @@ impl<'ctx> Preprocessor<'ctx> {
                             self.include_stack.top_file_path().parent().unwrap().join(&path),
                             path,
                         ].into_iter().rev() {
-                            if !candidate.exists() { continue }
+                            if !candidate.exists() {
+                                continue;
+                            }
                             // Double-match is used to let go of the borrow of
                             // `candidate` so it can be used in the second half.
-                            enum FileType { DMM, DMF, DMS, DM }
+                            enum FileType {
+                                DMM,
+                                DMF,
+                                DMS,
+                                DM,
+                            }
                             match match candidate.extension().and_then(|s| s.to_str()) {
                                 Some("dmm") => FileType::DMM,
                                 Some("dmf") => FileType::DMF,
                                 Some("dms") => FileType::DMS,
                                 Some("dm") => FileType::DM,
                                 Some(ext) => {
-                                    self.context.register_error(DMError::new(self.last_input_loc, format!("unknown extension {:?}", ext)));
+                                    self.context.register_error(DMError::new(
+                                        self.last_input_loc,
+                                        format!("unknown extension {:?}", ext),
+                                    ));
                                     return Ok(());
                                 }
                                 None => {
@@ -669,7 +700,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                                 params.push("__VA_ARGS__".to_owned());  // default
                                                 variadic = true;
                                             }
-                                            _ => return Err(self.error("malformed macro parameters, expected name"))
+                                            _ => return Err(self.error("malformed macro parameters, expected name")),
                                         }
                                         match next!() {
                                             Token::Punct(Punctuation::Comma) => {}
@@ -681,7 +712,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                                     _ => return Err(self.error("only the last parameter of a macro may be variadic"))
                                                 }
                                             }
-                                            _ => return Err(self.error("malformed macro parameters, expected comma"))
+                                            _ => return Err(self.error("malformed macro parameters, expected comma")),
                                         }
                                     }
                                 }
@@ -849,7 +880,7 @@ impl<'ctx> Preprocessor<'ctx> {
                             }
                         }
                         if args.len() != params.len() {
-                            return Err(self.error("wrong number of arguments to macro call"))
+                            return Err(self.error("wrong number of arguments to macro call"));
                         }
 
                         // paste them into the expansion
@@ -871,7 +902,10 @@ impl<'ctx> Preprocessor<'ctx> {
                                                     let mut arg = args[i].iter().cloned();
                                                     match arg.next() {
                                                         Some(Token::Ident(second, ws)) => {
-                                                            expansion.push_back(Token::Ident(format!("{}{}", first, second), ws));
+                                                            expansion.push_back(Token::Ident(
+                                                                format!("{}{}", first, second),
+                                                                ws,
+                                                            ));
                                                         }
                                                         Some(other) => {
                                                             expansion.push_back(Token::Ident(first, ws1));

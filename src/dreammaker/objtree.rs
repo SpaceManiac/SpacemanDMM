@@ -163,7 +163,11 @@ impl<'a> TypeRef<'a> {
 
     /// Find the parent **path**, without taking `parent_type` into account.
     pub fn parent_path(&self) -> Option<TypeRef<'a>> {
-        self.tree.graph.neighbors_directed(self.idx, Direction::Incoming).next().map(|i| TypeRef::new(self.tree, i))
+        self.tree
+            .graph
+            .neighbors_directed(self.idx, Direction::Incoming)
+            .next()
+            .map(|i| TypeRef::new(self.tree, i))
     }
 
     /// Find the parent **type** based on `parent_type` var, or parent path if unspecified.
@@ -237,7 +241,9 @@ impl<'a> TypeRef<'a> {
     pub fn is_subtype_of(self, parent: &Type) -> bool {
         let mut current = Some(self);
         while let Some(ty) = current.take() {
-            if ::std::ptr::eq(ty.get(), parent) { return true }
+            if ::std::ptr::eq(ty.get(), parent) {
+                return true;
+            }
             current = ty.parent_type();
         }
         false
@@ -336,7 +342,9 @@ impl ObjectTree {
     }
 
     pub fn type_by_path<I>(&self, path: I) -> Option<TypeRef>
-        where I: IntoIterator, I::Item: AsRef<str>
+    where
+        I: IntoIterator,
+        I::Item: AsRef<str>,
     {
         let (exact, ty) = self.type_by_path_approx(path);
         if exact {
@@ -347,7 +355,9 @@ impl ObjectTree {
     }
 
     pub fn type_by_path_approx<I>(&self, path: I) -> (bool, TypeRef)
-        where I: IntoIterator, I::Item: AsRef<str>
+    where
+        I: IntoIterator,
+        I::Item: AsRef<str>,
     {
         let mut current = NodeIndex::new(0);
         let mut first = true;
@@ -440,7 +450,10 @@ impl ObjectTree {
                 if let Some(&idx) = self.types.get(parent_type) {
                     idx
                 } else {
-                    context.register_error(DMError::new(location, format!("bad parent type for {}: {}", path, parent_type)));
+                    context.register_error(DMError::new(
+                        location,
+                        format!("bad parent type for {}: {}", path, parent_type),
+                    ));
                     NodeIndex::new(0)  // on bad parent_type, fall back to the root
                 }
             };
@@ -484,7 +497,12 @@ impl ObjectTree {
         node
     }
 
-    fn get_from_path<'a, I: Iterator<Item=&'a str>>(&mut self, location: Location, mut path: I, len: usize) -> Result<(NodeIndex, &'a str), DMError> {
+    fn get_from_path<'a, I: Iterator<Item=&'a str>>(
+        &mut self,
+        location: Location,
+        mut path: I,
+        len: usize,
+    ) -> Result<(NodeIndex, &'a str), DMError> {
         let mut current = NodeIndex::new(0);
         let mut last = match path.next() {
             Some(name) => name,
@@ -504,14 +522,16 @@ impl ObjectTree {
         Ok((current, last))
     }
 
-    fn register_var<'a, I>(&mut self,
+    fn register_var<'a, I>(
+        &mut self,
         location: Location,
         parent: NodeIndex,
         mut prev: &'a str,
         mut rest: I,
         comment: DocCollection,
-    ) -> Result<Option<&mut TypeVar>, DMError> where
-        I: Iterator<Item=&'a str>
+    ) -> Result<Option<&mut TypeVar>, DMError>
+    where
+        I: Iterator<Item=&'a str>,
     {
         let (mut is_declaration, mut is_static, mut is_const, mut is_tmp) = (false, false, false, false);
 
@@ -519,7 +539,7 @@ impl ObjectTree {
             is_declaration = true;
             prev = match rest.next() {
                 Some(name) => name,
-                None => return Ok(None) // var{} block, children will be real vars
+                None => return Ok(None), // var{} block, children will be real vars
             };
             while prev == "global" || prev == "static" || prev == "tmp" || prev == "const" {
                 if let Some(name) = rest.next() {
@@ -528,11 +548,11 @@ impl ObjectTree {
                     is_tmp |= prev == "tmp";
                     prev = name;
                 } else {
-                    return Ok(None) // var/const{} block, children will be real vars
+                    return Ok(None); // var/const{} block, children will be real vars
                 }
             }
         } else if is_proc_decl(prev) {
-            return Err(DMError::new(location, "proc looks like a var"))
+            return Err(DMError::new(location, "proc looks like a var"));
         }
 
         let mut type_path = Vec::new();
@@ -566,7 +586,8 @@ impl ObjectTree {
         })))
     }
 
-    fn register_proc(&mut self,
+    fn register_proc(
+        &mut self,
         location: Location,
         parent: NodeIndex,
         name: &str,
@@ -592,7 +613,8 @@ impl ObjectTree {
     }
 
     // an entry which may be anything depending on the path
-    pub fn add_entry<'a, I: Iterator<Item=&'a str>>(&mut self,
+    pub fn add_entry<'a, I: Iterator<Item = &'a str>>(
+        &mut self,
         location: Location,
         mut path: I,
         len: usize,
@@ -611,7 +633,8 @@ impl ObjectTree {
     }
 
     // an entry which is definitely a var because a value is specified
-    pub fn add_var<'a, I: Iterator<Item=&'a str>>(&mut self,
+    pub fn add_var<'a, I: Iterator<Item = &'a str>>(
+        &mut self,
         location: Location,
         mut path: I,
         len: usize,
@@ -629,7 +652,8 @@ impl ObjectTree {
     }
 
     // an entry which is definitely a proc because an argument list is specified
-    pub fn add_proc<'a, I: Iterator<Item=&'a str>>(&mut self,
+    pub fn add_proc<'a, I: Iterator<Item = &'a str>>(
+        &mut self,
         location: Location,
         mut path: I,
         len: usize,
@@ -641,13 +665,16 @@ impl ObjectTree {
             is_verb = Some(proc_name == "verb");
             proc_name = match path.next() {
                 Some(name) => name,
-                None => return Err(DMError::new(location, "proc must have a name"))
+                None => return Err(DMError::new(location, "proc must have a name")),
             };
         } else if is_var_decl(proc_name) {
-            return Err(DMError::new(location, "var looks like a proc"))
+            return Err(DMError::new(location, "var looks like a proc"));
         }
         if let Some(other) = path.next() {
-            return Err(DMError::new(location, format!("proc name must be a single identifier (spurious {:?})", other)))
+            return Err(DMError::new(
+                location,
+                format!("proc name must be a single identifier (spurious {:?})", other),
+            ));
         }
 
         self.register_proc(location, parent, proc_name, is_verb, parameters)

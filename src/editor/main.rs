@@ -137,7 +137,7 @@ enum MapState {
     Active {
         merge_base: Arc<Map>,
         hist: History,
-    }
+    },
 }
 
 struct NewMap {
@@ -325,11 +325,18 @@ impl EditorScene {
                     for _ in 0..z {
                         map.rendered.push(None);
                     }
-                    MapState::Active { merge_base, hist: History::new("Loaded".to_owned(), val) }
+                    MapState::Active {
+                        merge_base,
+                        hist: History::new("Loaded".to_owned(), val),
+                    }
                 } else {
                     MapState::Preparing(merge_base, rx)
                 },
-                MapState::Refreshing { merge_base, mut hist, rx } => if let Ok(val) = rx.try_recv() {
+                MapState::Refreshing {
+                    merge_base,
+                    mut hist,
+                    rx,
+                } => if let Ok(val) = rx.try_recv() {
                     hist.replace_current(val);
                     MapState::Active { merge_base, hist }
                 } else {
@@ -376,16 +383,23 @@ impl EditorScene {
 
     fn run_ui(&mut self, ui: &Ui, renderer: &mut ImRenderer) -> bool {
         for tool in self.tools.iter_mut() {
-            tool.icon.prepare(self.environment.as_ref(), &mut tools::IconCtx::new(renderer, &mut self.map_renderer));
+            tool.icon.prepare(
+                self.environment.as_ref(),
+                &mut tools::IconCtx::new(renderer, &mut self.map_renderer),
+            );
         }
 
         #[cfg(not(target_os = "macos"))]
         macro_rules! ctrl_shortcut {
-            ($rest:expr) => (im_str!("Ctrl+{}", $rest))
+            ($rest:expr) => {
+                im_str!("Ctrl+{}", $rest)
+            };
         }
         #[cfg(target_os = "macos")]
         macro_rules! ctrl_shortcut {
-            ($rest:expr) => (im_str!("Cmd+{}", $rest))
+            ($rest:expr) => {
+                im_str!("Cmd+{}", $rest)
+            };
         }
 
         let mut continue_running = true;
@@ -580,7 +594,12 @@ impl EditorScene {
             self.counter = self.counter.wrapping_add(1);
             let mut i = 0;
             macro_rules! spinner {
-                () => (SPINNER[(self.counter / 10 + { i += 1; i }) % SPINNER.len()])
+                () => {
+                    SPINNER[(self.counter / 10 + {
+                        i += 1;
+                        i
+                    }) % SPINNER.len()]
+                };
             }
 
             if let Some(loading) = self.loading_env.as_ref() {
@@ -675,17 +694,24 @@ impl EditorScene {
                 for (map_idx, map) in self.maps.iter_mut().enumerate() {
                     let dirty = map.state.hist().map_or(false, |h| h.is_dirty());
                     let title = match map.path {
-                        Some(ref path) => format!("{}{}##map_{}", file_name(path), if dirty { " *" } else { "" }, path.display()),
+                        Some(ref path) => format!(
+                            "{}{}##map_{}",
+                            file_name(path),
+                            if dirty { " *" } else { "" },
+                            path.display()
+                        ),
                         None => format!("Untitled##{}", map_idx),
                     };
                     if ui.collapsing_header(&ImString::from(title)).default_open(true).build() {
                         if let Some(hist) = map.state.hist() {
                             let world = hist.current();
                             if let Some(dmm) = map.state.base_dmm() {
-                                ui.text(im_str!("{:?}; {}-keys: {}",
+                                ui.text(im_str!(
+                                    "{:?}; {}-keys: {}",
                                     world.dim_xyz(),
                                     dmm.key_length,
-                                    dmm.dictionary.len()));
+                                    dmm.dictionary.len()
+                                ));
                             } else {
                                 ui.text(im_str!("{:?}", world.dim_xyz()));
                             }
@@ -696,10 +722,12 @@ impl EditorScene {
                                 }
                             }
                         } else if let Some(dmm) = map.state.base_dmm() {
-                            ui.text(im_str!("{:?}; {}-keys: {}",
+                            ui.text(im_str!(
+                                "{:?}; {}-keys: {}",
                                 dmm.dim_xyz(),
                                 dmm.key_length,
-                                dmm.dictionary.len()));
+                                dmm.dictionary.len()
+                            ));
                         }
                     }
                 }
@@ -797,13 +825,21 @@ impl EditorScene {
                     for _ in 0..new_map.z {
                         rendered.push(None);
                     }
-                    let dmm = Map::new(new_map.x as usize, new_map.y as usize, new_map.z as usize,
-                        env.turf.clone(), env.area.clone());
+                    let dmm = Map::new(
+                        new_map.x as usize,
+                        new_map.y as usize,
+                        new_map.z as usize,
+                        env.turf.clone(),
+                        env.area.clone(),
+                    );
                     let atom_map = map_repr::AtomMap::new(&dmm, &env.icons, &env.objtree);
                     let desc = format!("New {}x{}x{} map", new_map.x, new_map.y, new_map.z);
                     self.maps.push(EditorMap {
                         path: None,
-                        state: MapState::Active { merge_base: Arc::new(dmm), hist: History::new(desc, atom_map) },
+                        state: MapState::Active {
+                            merge_base: Arc::new(dmm),
+                            hist: History::new(desc, atom_map),
+                        },
                         z_current: 0,
                         center: [new_map.x as f32 * 16.0, new_map.y as f32 * 16.0],
                         rendered,
@@ -814,7 +850,11 @@ impl EditorScene {
                     opened = false;
                 }
             }
-            if opened && !closed { Some(new_map) } else { None }
+            if opened && !closed {
+                Some(new_map)
+            } else {
+                None
+            }
         });
 
         if let Some(map) = self.maps.get_mut(self.map_current) {
@@ -828,7 +868,10 @@ impl EditorScene {
                 let mut keep = true;
                 let mut keep2 = true;
 
-                let EditInstance { ref mut inst, ref mut base } = edit;
+                let EditInstance {
+                    ref mut inst,
+                    ref mut base,
+                } = edit;
                 ui.window(im_str!("{}##{}/{:?}", base.fab.path, uid, inst))
                     .opened(&mut keep)
                     .position(ui.imgui().mouse_pos(), ImGuiCond::Appearing)
@@ -883,11 +926,18 @@ impl EditorScene {
                     .always_auto_resize(true)
                     .opened(&mut opened)
                     .build(|| {
-                        ui.text(im_str!("maps[{}], map = {}, zoom = {}",
+                        ui.text(im_str!(
+                            "maps[{}], map = {}, zoom = {}",
                             self.maps.len(),
-                            self.map_current, self.map_renderer.zoom));
+                            self.map_current,
+                            self.map_renderer.zoom
+                        ));
                         if let Some(env) = self.environment.as_ref() {
-                            ui.text(im_str!("types[{}], icons[{}]", env.objtree.graph.node_count(), env.icons.len()));
+                            ui.text(im_str!(
+                                "types[{}], icons[{}]",
+                                env.objtree.graph.node_count(),
+                                env.icons.len()
+                            ));
                             ui.text(im_str!("turf = {}", env.turf));
                             ui.text(im_str!("area = {}", env.area));
                         }
@@ -896,7 +946,12 @@ impl EditorScene {
                             if let Some(hist) = map.state.hist() {
                                 let current = hist.current();
                                 if let Some(level) = current.levels.get(map.z_current) {
-                                    ui.text(im_str!("draw_calls[{}], pops[{}], atoms[{}]", level.draw_calls.len(), current.pops.len(), level.instances.len()));
+                                    ui.text(im_str!(
+                                        "draw_calls[{}], pops[{}], atoms[{}]",
+                                        level.draw_calls.len(),
+                                        current.pops.len(),
+                                        level.instances.len()
+                                    ));
                                 }
                             }
                             if let Some(rendered) = map.rendered.get(map.z_current).and_then(|x| x.as_ref()) {
@@ -950,7 +1005,7 @@ impl EditorScene {
                 let ty = ((map.center[1].round() + (cy as f32 - y as f32) / self.map_renderer.zoom) / 32.0).floor() as i32;
                 let (dim_x, dim_y, _) = hist.current().dim_xyz();
                 if tx >= 0 && ty >= 0 && tx < dim_x as i32 && ty < dim_y as i32 {
-                    return Some((tx as u32, ty as u32))
+                    return Some((tx as u32, ty as u32));
                 }
             }
         }
@@ -1078,21 +1133,22 @@ impl EditorScene {
 
             Ok(Environment {
                 objtree: Arc::new(objtree),
-                icons: Arc::new(IconCache::new(
-                    path.parent().expect("invalid environment file path"))),
+                icons: Arc::new(IconCache::new(path.parent().expect("invalid environment file path"))),
                 turf,
                 area,
                 path,
             })
         });
-        self.loading_env = Some(LoadingEnvironment {
-            path: path2,
-            rx,
-        });
+        self.loading_env = Some(LoadingEnvironment { path: path2, rx });
     }
 
     fn new_map(&mut self) {
-        self.new_map = Some(NewMap { x: 32, y: 32, z: 1, created: false });
+        self.new_map = Some(NewMap {
+            x: 32,
+            y: 32,
+            z: 1,
+            created: false,
+        });
     }
 
     fn open_map(&mut self) {
@@ -1297,7 +1353,10 @@ impl EditPrefab {
     }
 
     fn show(&mut self, ui: &Ui, env: Option<&Environment>, extra_vars: bool) {
-        let EditPrefab { ref mut filter, ref mut fab } = self;
+        let EditPrefab {
+            ref mut filter,
+            ref mut fab,
+        } = self;
 
         // find the "best" type by chopping the path if needed
         let (red_paths, ty) = if let Some(env) = env.as_ref() {
@@ -1401,7 +1460,7 @@ fn root_node(ui: &Ui, ty: TypeRef, name: &str) {
 fn tree_node(ui: &Ui, ty: TypeRef) {
     let mut children = ty.children();
     if children.is_empty() {
-        ui.tree_node(im_str!("{}", ty.name)).leaf(true).build(||{});
+        ui.tree_node(im_str!("{}", ty.name)).leaf(true).build(|| {});
     } else {
         children.sort_by_key(|t| &t.get().name);
         ui.tree_node(im_str!("{}", ty.name)).build(|| {
@@ -1446,15 +1505,19 @@ fn prepare_tool_icon(
 ) -> tools::ToolIcon {
     use tools::ToolIcon;
     match icon {
-        ToolIcon::Dmi { icon, icon_state, tint, dir } => if let Some(env) = environment {
+        ToolIcon::Dmi {
+            icon,
+            icon_state,
+            tint,
+            dir,
+        } => if let Some(env) = environment {
             if let Some(id) = env.icons.get_index(icon.as_ref()) {
                 let icon = env.icons.get_icon(id);
                 if let Some([u1, v1, u2, v2]) = icon.uv_of(&icon_state, dir) {
-                    let tex = map_renderer.icon_textures.retrieve(
-                        &mut map_renderer.factory,
-                        &env.icons,
-                        id,
-                    ).clone();
+                    let tex = map_renderer
+                        .icon_textures
+                        .retrieve(&mut map_renderer.factory, &env.icons, id)
+                        .clone();
                     let samp = map_renderer.sampler.clone();
                     ToolIcon::Loaded {
                         tex: renderer.textures().insert((tex, samp)),
@@ -1469,7 +1532,12 @@ fn prepare_tool_icon(
                 ToolIcon::None
             }
         } else {
-            ToolIcon::Dmi { icon, icon_state, tint, dir }
+            ToolIcon::Dmi {
+                icon,
+                icon_state,
+                tint,
+                dir,
+            }
         },
         ToolIcon::EmbeddedPng { data } => if let Ok(tex) = dmi::texture_from_bytes(&mut map_renderer.factory, data) {
             let samp = map_renderer.sampler.clone();

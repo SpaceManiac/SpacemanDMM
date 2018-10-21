@@ -123,7 +123,8 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                         window_hidpi_factor = new_factor;
                         hidpi_factor = window_hidpi_factor.round();
                         frame_size.hidpi_factor = hidpi_factor;
-                        frame_size.logical_size = window.get_inner_size()
+                        frame_size.logical_size = window
+                            .get_inner_size()
                             .unwrap()
                             .to_physical(window_hidpi_factor)
                             .to_logical(hidpi_factor)
@@ -162,9 +163,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                             Some(Key::X) => imgui.set_key(16, pressed),
                             Some(Key::Y) => imgui.set_key(17, pressed),
                             Some(Key::Z) => imgui.set_key(18, pressed),
-                            Some(Key::LControl) | Some(Key::RControl) => {
-                                imgui.set_key_ctrl(pressed)
-                            }
+                            Some(Key::LControl) | Some(Key::RControl) => imgui.set_key_ctrl(pressed),
                             Some(Key::LShift) | Some(Key::RShift) => imgui.set_key_shift(pressed),
                             Some(Key::LAlt) | Some(Key::RAlt) => imgui.set_key_alt(pressed),
                             Some(Key::LWin) | Some(Key::RWin) => imgui.set_key_super(pressed),
@@ -217,7 +216,13 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                             .to_logical(hidpi_factor);
                         mouse_state.wheel = diff.y as f32;
                         if !mouse_captured {
-                            scene.mouse_wheel(ctrl(&imgui), imgui.key_shift(), imgui.key_alt(), diff.x as f32, diff.y as f32);
+                            scene.mouse_wheel(
+                                ctrl(&imgui),
+                                imgui.key_shift(),
+                                imgui.key_alt(),
+                                diff.x as f32,
+                                diff.y as f32,
+                            );
                         }
                     },
                     ReceivedCharacter(c) => imgui.add_input_character(c),

@@ -12,10 +12,10 @@ extern crate serde_json;
 extern crate dreammaker as dm;
 extern crate dmm_tools;
 
-use std::fmt;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicIsize, Ordering};
+use std::fmt;
 use std::path::Path;
+use std::sync::atomic::{AtomicIsize, Ordering};
 
 use structopt::StructOpt;
 
@@ -62,9 +62,12 @@ impl Context {
         let environment: &std::path::Path = match opt.environment {
             Some(ref env) => env.as_ref(),
             None => match dm::detect_environment_default() {
-                Ok(Some(found)) => { pathbuf = found; &pathbuf },
+                Ok(Some(found)) => {
+                    pathbuf = found;
+                    &pathbuf
+                }
                 _ => dm::DEFAULT_ENV.as_ref(),
-            }
+            },
         };
         println!("parsing {}", environment.display());
 
@@ -243,7 +246,12 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             context.dm_context.set_print_severity(Some(severity));
             context.procs = procs;
             context.objtree(opt);
-            *context.exit_status.get_mut() = context.dm_context.errors().iter().filter(|e| e.severity() <= severity).count() as isize;
+            *context.exit_status.get_mut() = context
+                .dm_context
+                .errors()
+                .iter()
+                .filter(|e| e.severity() <= severity)
+                .count() as isize;
         },
         // --------------------------------------------------------------------
         Command::Minimap {
@@ -251,10 +259,23 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             pngcrush, optipng,
         } => {
             context.objtree(opt);
-            if context.dm_context.errors().iter().filter(|e| e.severity() <= dm::Severity::Error).next().is_some() {
+            if context
+                .dm_context
+                .errors()
+                .iter()
+                .filter(|e| e.severity() <= dm::Severity::Error)
+                .next()
+                .is_some()
+            {
                 println!("there were some parsing errors; render may be inaccurate")
             }
-            let Context { ref objtree, ref icon_cache, ref exit_status, parallel, .. } = *context;
+            let Context {
+                ref objtree,
+                ref icon_cache,
+                ref exit_status,
+                parallel,
+                ..
+            } = *context;
 
             let render_passes = &dmm_tools::render_passes::configure(enable, disable);
             let paths: Vec<&Path> = files.iter().map(|p| p.as_ref()).collect();
@@ -281,7 +302,11 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
 
                 let (dim_x, dim_y, dim_z) = map.dim_xyz();
                 let mut min = min.unwrap_or(CoordArg { x: 0, y: 0, z: 0 });
-                let mut max = max.unwrap_or(CoordArg { x: dim_x + 1, y: dim_y + 1, z: dim_z + 1 });
+                let mut max = max.unwrap_or(CoordArg {
+                    x: dim_x + 1,
+                    y: dim_y + 1,
+                    z: dim_z + 1,
+                });
                 min.x = clamp(min.x, 1, dim_x);
                 min.y = clamp(min.y, 1, dim_y);
                 min.z = clamp(min.z, 1, dim_z);
@@ -306,7 +331,12 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                         exit_status.fetch_add(1, Ordering::Relaxed);
                         return;
                     }
-                    let outfile = format!("{}/{}-{}.png", output, path.file_stem().unwrap().to_string_lossy(), 1 + z);
+                    let outfile = format!(
+                        "{}/{}-{}.png",
+                        output,
+                        path.file_stem().unwrap().to_string_lossy(),
+                        1 + z
+                    );
                     println!("{}saving {}", prefix, outfile);
                     image.to_file(outfile.as_ref()).unwrap();
                     if pngcrush {
@@ -449,13 +479,21 @@ impl std::str::FromStr for CoordArg {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, String> {
-        match s.split(",").map(|x| x.parse()).collect::<Result<Vec<_>, std::num::ParseIntError>>() {
-            Ok(ref vec) if vec.len() == 2 => {
-                Ok(CoordArg { x: vec[0], y: vec[1], z: 0 })
-            }
-            Ok(ref vec) if vec.len() == 3 => {
-                Ok(CoordArg { x: vec[0], y: vec[1], z: vec[2] })
-            }
+        match s
+            .split(",")
+            .map(|x| x.parse())
+            .collect::<Result<Vec<_>, std::num::ParseIntError>>()
+        {
+            Ok(ref vec) if vec.len() == 2 => Ok(CoordArg {
+                x: vec[0],
+                y: vec[1],
+                z: 0,
+            }),
+            Ok(ref vec) if vec.len() == 3 => Ok(CoordArg {
+                x: vec[0],
+                y: vec[1],
+                z: vec[2],
+            }),
             Ok(_) => Err("must specify 2 or 3 coordinates".into()),
             Err(e) => Err(e.to_string()),
         }

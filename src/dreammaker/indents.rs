@@ -123,7 +123,9 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
                             // hope that truncating division will approximate
                             // a sane situation.
                             self.context.register_error(self.error(format!(
-                                "inconsistent indentation: {} % {} != 0", spaces, spaces_per_indent)));
+                                "inconsistent indentation: {} % {} != 0",
+                                spaces, spaces_per_indent
+                            )));
                         }
                         new_indents = spaces / spaces_per_indent;
                         self.current = Some((spaces_per_indent, new_indents));
@@ -137,7 +139,9 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
             } else if indents < new_indents {
                 // multiple indent is an error, register it but let it work
                 self.context.register_error(self.error(format!(
-                    "inconsistent multiple indentation: {} > 1", new_indents - indents)));
+                    "inconsistent multiple indentation: {} > 1",
+                    new_indents - indents,
+                )));
                 for _ in indents..new_indents {
                     self.push_eol(Token::Punct(Punctuation::LBrace));
                 }

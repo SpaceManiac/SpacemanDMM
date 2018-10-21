@@ -41,7 +41,10 @@ use dm::objtree::TypeRef;
 fn main() {
     std::env::set_var("RUST_BACKTRACE", "1");
 
-    eprintln!("dm-langserver {}  Copyright (C) 2017-2018  Tad Hardesty", env!("CARGO_PKG_VERSION"));
+    eprintln!(
+        "dm-langserver {}  Copyright (C) 2017-2018  Tad Hardesty",
+        env!("CARGO_PKG_VERSION")
+    );
     eprintln!("This program comes with ABSOLUTELY NO WARRANTY. This is free software,");
     eprintln!("and you are welcome to redistribute it under the conditions of the GNU");
     eprintln!("General Public License version 3.");
@@ -110,7 +113,8 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
     // ------------------------------------------------------------------------
     // General input and output utilities
 
-    fn issue_notification<T>(&mut self, params: T::Params) where
+    fn issue_notification<T>(&mut self, params: T::Params)
+    where
         T: langserver::notification::Notification,
         T::Params: serde::Serialize,
     {
@@ -198,7 +202,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                             message: err.description().to_owned(),
                             .. Default::default()
                         }],
-                    }
+                    },
                 );
                 eprintln!("{:?}", err);
                 return Ok(());
@@ -210,7 +214,11 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         self.preprocessor = Some(pp);
         self.issue_notification::<extras::WindowStatus>(Default::default());
         let elapsed = start.elapsed();
-        eprintln!("parsed in {}.{:03}s", elapsed.as_secs(), elapsed.subsec_nanos() / 1_000_000);
+        eprintln!(
+            "parsed in {}.{:03}s",
+            elapsed.as_secs(),
+            elapsed.subsec_nanos() / 1_000_000
+        );
 
         // initial diagnostics pump
         let mut map: HashMap<_, Vec<_>> = HashMap::new();
@@ -240,7 +248,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 langserver::PublishDiagnosticsParams {
                     uri: path_to_url(joined_path)?,
                     diagnostics,
-                }
+                },
             );
         }
 
@@ -279,7 +287,8 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
     }
 
     fn find_type_context<'b, I, Ign>(&self, iter: &I) -> (Option<TypeRef>, Option<(&'b str, usize)>)
-        where I: Iterator<Item=(Ign, &'b Annotation)> + Clone
+    where
+        I: Iterator<Item = (Ign, &'b Annotation)> + Clone,
     {
         let mut found = None;
         let mut proc_name = None;
@@ -314,14 +323,24 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         (found, proc_name)
     }
 
-    fn find_unscoped_var<'b, I>(&'b self, iter: &I, ty: Option<TypeRef<'b>>, proc_name: Option<(&'b str, usize)>, var_name: &str) -> UnscopedVar<'b>
-        where I: Iterator<Item=(Span, &'b Annotation)> + Clone
+    fn find_unscoped_var<'b, I>(
+        &'b self,
+        iter: &I,
+        ty: Option<TypeRef<'b>>,
+        proc_name: Option<(&'b str, usize)>,
+        var_name: &str,
+    ) -> UnscopedVar<'b>
+    where
+        I: Iterator<Item = (Span, &'b Annotation)> + Clone,
     {
         // local variables
         for (span, annotation) in iter.clone() {
             if let Annotation::LocalVarScope(var_type, name) = annotation {
                 if name == var_name {
-                    return UnscopedVar::Local { loc: span.start, var_type }
+                    return UnscopedVar::Local {
+                        loc: span.start,
+                        var_type,
+                    };
                 }
             }
         }
@@ -386,7 +405,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                     next = self.objtree.type_by_path(&decl.var_type.type_path);
                 }
             } else {
-                break
+                break;
             }
         }
         next
@@ -402,17 +421,15 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             let mut outputs: Vec<Output> = match serde_json::from_str(&message) {
                 Ok(Request::Single(call)) => self.handle_call(call).into_iter().collect(),
                 Ok(Request::Batch(calls)) => calls.into_iter().flat_map(|call| self.handle_call(call)).collect(),
-                Err(decode_error) => {
-                    vec![Output::Failure(jsonrpc::Failure {
-                        jsonrpc: VERSION,
-                        error: jsonrpc::Error {
-                            code: jsonrpc::ErrorCode::ParseError,
-                            message: decode_error.to_string(),
-                            data: None,
-                        },
-                        id: jsonrpc::Id::Null,
-                    })]
-                }
+                Err(decode_error) => vec![Output::Failure(jsonrpc::Failure {
+                    jsonrpc: VERSION,
+                    error: jsonrpc::Error {
+                        code: jsonrpc::ErrorCode::ParseError,
+                        message: decode_error.to_string(),
+                        data: None,
+                    },
+                    id: jsonrpc::Id::Null,
+                })],
             };
 
             let response = match outputs.len() {
@@ -427,9 +444,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
 
     fn handle_call(&mut self, call: Call) -> Option<Output> {
         match call {
-            Call::Invalid(id) => {
-                Some(Output::invalid_request(id, VERSION))
-            },
+            Call::Invalid(id) => Some(Output::invalid_request(id, VERSION)),
             Call::MethodCall(method_call) => {
                 let id = method_call.id.clone();
                 Some(Output::from(self.handle_method_call(method_call), id, VERSION))
@@ -1003,7 +1018,7 @@ fn value_to_params(value: serde_json::Value) -> jsonrpc::Params {
         serde_json::Value::Null => jsonrpc::Params::None,
         serde_json::Value::Array(x) => jsonrpc::Params::Array(x),
         serde_json::Value::Object(x) => jsonrpc::Params::Map(x),
-        _ => panic!("bad value to params conversion")
+        _ => panic!("bad value to params conversion"),
     }
 }
 

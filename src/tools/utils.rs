@@ -24,8 +24,12 @@ impl<R: Read> Iterator for Chars<R> {
             Some(Err(e)) => return Some(Err(e)),
         };
         let width = utf8_char_width(first_byte);
-        if width == 1 { return Some(Ok(first_byte as char)) }
-        if width == 0 { return Some(Err(ErrorKind::InvalidData.into())) }
+        if width == 1 {
+            return Some(Ok(first_byte as char));
+        }
+        if width == 0 {
+            return Some(Err(ErrorKind::InvalidData.into()));
+        }
         let mut buf = [first_byte, 0, 0, 0];
         {
             let mut start = 1;
