@@ -202,7 +202,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                     } => {
                         mouse_state.wheel = y;
                         if !mouse_captured {
-                            scene.mouse_wheel(ctrl(&imgui), imgui.key_shift(), imgui.key_alt(), x, y);
+                            scene.mouse_wheel(ctrl(&imgui), imgui.key_shift(), imgui.key_alt(), 4.0 * 32.0 * x, 4.0 * 32.0 * y);
                         }
                     },
                     MouseWheel {

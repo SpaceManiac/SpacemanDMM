@@ -973,8 +973,8 @@ impl EditorScene {
         }
 
         if let Some(map) = self.maps.get_mut(self.map_current) {
-            let scroll_y = 4.0 * 32.0 * mul * y / self.map_renderer.zoom;
-            let scroll_x = 4.0 * 32.0 * mul * -x / self.map_renderer.zoom;
+            let scroll_y = mul * y / self.map_renderer.zoom;
+            let scroll_x = mul * -x / self.map_renderer.zoom;
             if ctrl {
                 map.center[0] += scroll_y;
                 map.center[1] += scroll_x;
