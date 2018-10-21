@@ -7,6 +7,7 @@ use super::dmi::IconFile;
 #[derive(Default)]
 pub struct IconCache {
     lock: RwLock<HashMap<PathBuf, Option<Arc<IconFile>>>>,
+    icons_root: Option<PathBuf>,
 }
 
 impl IconCache {
@@ -14,7 +15,11 @@ impl IconCache {
         let map = self.lock.get_mut().unwrap();
         (match map.entry(path.to_owned()) {
             hash_map::Entry::Occupied(entry) => entry.into_mut().as_mut(),
-            hash_map::Entry::Vacant(entry) => entry.insert(load(path).map(Arc::new)).as_mut(),
+            hash_map::Entry::Vacant(entry) => entry.insert(
+                match &self.icons_root {
+                    Some(root) => load(&root.join(path)),
+                    _ => load(path),
+                }.map(Arc::new)).as_mut(),
         }.map(|x| &**x))
     }
 
@@ -24,11 +29,18 @@ impl IconCache {
         match existing {
             Some(existing) => existing,
             None => {
-                let arc = load(path).map(Arc::new);
+                let arc = match &self.icons_root {
+                    Some(root) => load(&root.join(path)),
+                    None => load(&path),
+                }.map(Arc::new);
                 self.lock.write().unwrap().insert(path.to_owned(), arc.clone());
                 arc
             },
         }
+    }
+
+    pub fn set_icons_root(&mut self, path: &Path) {
+        self.icons_root = Some(path.into())
     }
 }
 
