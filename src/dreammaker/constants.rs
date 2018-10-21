@@ -568,6 +568,7 @@ impl<'a> ConstantFolder<'a> {
         })
     }
 
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     fn binary(
         &mut self,
         mut lhs: Constant,
@@ -587,7 +588,7 @@ impl<'a> ConstantFolder<'a> {
                 }
             }
         }
-        numeric!(Add);
+        numeric!(Add +);
         numeric!(Sub -);
         numeric!(Mul *);
         numeric!(Div /);

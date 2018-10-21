@@ -1046,48 +1046,48 @@ impl<'ctx> Preprocessor<'ctx> {
                                     // read the next ident and concat it into the previous ident
                                 }
                                 // hash = must be followed by a param name, stringify the whole argument
-                                Token::Punct(Punctuation::Hash) => {
-                                    match input.next() {
-                                        Some(Token::Ident(argname, _)) => {
-                                            match params.iter().position(|x| *x == argname) {
-                                                Some(i) => {
-                                                    let mut string = String::new();
-                                                    for each in &args[i] {
-                                                        use std::fmt::Write;
-                                                        if !string.is_empty() {
-                                                            string.push(' ');
-                                                        }
-                                                        let _e = write!(string, "{}", each);
-                                                        #[cfg(debug_assertions)]
-                                                        {
-                                                            _e.unwrap();
-                                                        }
+                                Token::Punct(Punctuation::Hash) => match input.next() {
+                                    Some(Token::Ident(argname, _)) => {
+                                        match params.iter().position(|x| *x == argname) {
+                                            Some(i) => {
+                                                let mut string = String::new();
+                                                for each in &args[i] {
+                                                    use std::fmt::Write;
+                                                    if !string.is_empty() {
+                                                        string.push(' ');
                                                     }
-                                                    expansion.push_back(Token::String(string));
+                                                    let _e = write!(string, "{}", each);
+                                                    #[cfg(debug_assertions)]
+                                                    {
+                                                        _e.unwrap();
+                                                    }
                                                 }
-                                                None => return Err(DMError::new(
+                                                expansion.push_back(Token::String(string));
+                                            }
+                                            None => {
+                                                return Err(DMError::new(
                                                     self.last_input_loc,
                                                     format!(
                                                         "can't stringify non-argument ident {:?}",
                                                         argname
                                                     ),
-                                                )),
+                                                ))
                                             }
                                         }
-                                        Some(tok) => {
-                                            return Err(DMError::new(
-                                                self.last_input_loc,
-                                                format!("can't stringify non-ident '{}'", tok),
-                                            ))
-                                        }
-                                        None => {
-                                            return Err(DMError::new(
-                                                self.last_input_loc,
-                                                "can't stringify EOF",
-                                            ))
-                                        }
                                     }
-                                }
+                                    Some(tok) => {
+                                        return Err(DMError::new(
+                                            self.last_input_loc,
+                                            format!("can't stringify non-ident '{}'", tok),
+                                        ))
+                                    }
+                                    None => {
+                                        return Err(DMError::new(
+                                            self.last_input_loc,
+                                            "can't stringify EOF",
+                                        ))
+                                    }
+                                },
                                 _ => expansion.push_back(token),
                             }
                         }
