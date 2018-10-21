@@ -216,7 +216,10 @@ pub struct Prefab<E=Expression> {
 
 impl<E> From<TypePath> for Prefab<E> {
     fn from(path: TypePath) -> Self {
-        Prefab { path, vars: Default::default() }
+        Prefab {
+            path,
+            vars: Default::default(),
+        }
     }
 }
 
@@ -324,7 +327,7 @@ impl Expression {
                     None
                 }
             },
-            _ => None
+            _ => None,
         }
     }
 }
@@ -337,7 +340,7 @@ impl From<Term> for Expression {
                 unary: vec![],
                 follow: vec![],
                 term,
-            }
+            },
         }
     }
 }
@@ -406,7 +409,7 @@ impl From<Expression> for Term {
             } else {
                 Term::Expr(Box::new(Expression::Base { term, unary, follow }))
             },
-            other => Term::Expr(Box::new(other))
+            other => Term::Expr(Box::new(other)),
         }
     }
 }
@@ -567,20 +570,28 @@ impl VarType {
 impl FromIterator<String> for VarType {
     fn from_iter<T: IntoIterator<Item=String>>(iter: T) -> Self {
         let (mut is_static, mut is_const, mut is_tmp) = (false, false, false);
-        let type_path = iter.into_iter()
+        let type_path = iter
+            .into_iter()
             .skip_while(|p| {
                 if p == "global" || p == "static" {
-                    is_static = true; true
+                    is_static = true;
+                    true
                 } else if p == "const" {
-                    is_const = true; true
+                    is_const = true;
+                    true
                 } else if p == "tmp" {
-                    is_tmp = true; true
+                    is_tmp = true;
+                    true
                 } else {
                     false
                 }
-            })
-            .collect();
-        VarType { is_static, is_const, is_tmp, type_path }
+            }).collect();
+        VarType {
+            is_static,
+            is_const,
+            is_tmp,
+            type_path,
+        }
     }
 }
 

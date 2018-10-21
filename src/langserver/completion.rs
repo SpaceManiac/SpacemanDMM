@@ -44,11 +44,16 @@ pub fn item_proc(ty: TypeRef, name: &str, _proc: &TypeProc) -> CompletionItem {
             CompletionItemKind::Method
         }),
         detail: Some(ty.pretty_path().to_owned()),
-        .. Default::default()
+        ..Default::default()
     }
 }
 
-pub fn items_ty<'a>(results: &mut Vec<CompletionItem>, skip: &mut HashSet<(&str, &'a String)>, ty: TypeRef<'a>, query: &str) {
+pub fn items_ty<'a>(
+    results: &mut Vec<CompletionItem>,
+    skip: &mut HashSet<(&str, &'a String)>,
+    ty: TypeRef<'a>,
+    query: &str,
+) {
     // type variables
     for (name, var) in ty.get().vars.iter() {
         if !skip.insert(("var", name)) {
@@ -82,7 +87,7 @@ pub fn combine_tree_path<'a, I>(iter: &I, mut absolute: bool, mut parts: &'a [St
     }}
     // if we're on the right side of a 'var/', start the lookup there
     if let Some(i) = parts.iter().position(|x| x == "var") {
-        parts = &parts[i+1..];
+        parts = &parts[i + 1..];
         absolute = true;
     }
     // if we're on the right side of a 'list/', start the lookup there
@@ -107,7 +112,8 @@ pub fn combine_tree_path<'a, I>(iter: &I, mut absolute: bool, mut parts: &'a [St
 
 impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
     pub fn follow_type_path<'b, I>(&'b self, iter: &I, mut parts: &'b [(PathOp, String)]) -> Option<TypePathResult<'b>>
-        where I: Iterator<Item=(Span, &'a Annotation)> + Clone
+    where
+        I: Iterator<Item = (Span, &'a Annotation)> + Clone,
     {
         // cut off the part of the path we haven't selected
         if_annotation! { Annotation::InSequence(idx) in iter; {
@@ -121,17 +127,19 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
 
         // use the first path op to select the starting type of the lookup
         if parts.is_empty() {
-            return Some(TypePathResult { ty: self.objtree.root(), decl: None, proc: None });
+            return Some(TypePathResult {
+                ty: self.objtree.root(),
+                decl: None,
+                proc: None,
+            });
         }
         let mut ty = match parts[0].0 {
             PathOp::Colon => return None,  // never finds anything, apparently?
             PathOp::Slash => self.objtree.root(),
-            PathOp::Dot => {
-                match self.find_type_context(iter) {
-                    (Some(base), _) => base,
-                    (None, _) => self.objtree.root(),
-                }
-            }
+            PathOp::Dot => match self.find_type_context(iter) {
+                (Some(base), _) => base,
+                (None, _) => self.objtree.root(),
+            },
         };
 
         // follow the path ops until we hit 'proc' or 'verb'
@@ -236,13 +244,24 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         }
     }
 
-    pub fn path_completions<'b, I>(&'b self, results: &mut Vec<CompletionItem>, iter: &I, parts: &'b [(PathOp, String)], _last_op: PathOp, query: &str)
-        where I: Iterator<Item=(Span, &'b Annotation)> + Clone
+    pub fn path_completions<'b, I>(
+        &'b self,
+        results: &mut Vec<CompletionItem>,
+        iter: &I,
+        parts: &'b [(PathOp, String)],
+        _last_op: PathOp,
+        query: &str,
+    ) where
+        I: Iterator<Item = (Span, &'b Annotation)> + Clone,
     {
         // TODO: take last_op into account
         match self.follow_type_path(iter, parts) {
             // '/datum/<complete types>'
-            Some(TypePathResult { ty, decl: None, proc: None }) => {
+            Some(TypePathResult {
+                ty,
+                decl: None,
+                proc: None,
+            }) => {
                 // path keywords
                 for &name in ["proc", "verb"].iter() {
                     if contains(name, query) {
@@ -267,7 +286,11 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             },
             // '/datum/proc/<complete procs>'
             // TODO: take the path op into acocunt (`/proc` vs `.proc`)
-            Some(TypePathResult { ty, decl: Some(decl), proc: None }) => {
+            Some(TypePathResult {
+                ty,
+                decl: Some(decl),
+                proc: None,
+            }) => {
                 let mut next = Some(ty);
                 let mut skip = HashSet::new();
                 while let Some(ty) = next {
@@ -279,10 +302,10 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                         // declarations only
                         let mut proc_decl = match proc.declaration.as_ref() {
                             Some(decl) => decl,
-                            None => continue
+                            None => continue,
                         };
                         if proc_decl.is_verb != (decl == "verb") {
-                            continue
+                            continue;
                         }
                         if contains(name, query) {
                             results.push(item_proc(ty, name, proc));
@@ -296,7 +319,8 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
     }
 
     pub fn unscoped_completions<'b, I>(&'b self, results: &mut Vec<CompletionItem>, iter: &I, query: &str)
-        where I: Iterator<Item=(Span, &'b Annotation)> + Clone
+    where
+        I: Iterator<Item = (Span, &'b Annotation)> + Clone,
     {
         let (ty, proc_name) = self.find_type_context(iter);
 
@@ -368,8 +392,14 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         }
     }
 
-    pub fn scoped_completions<'b, I>(&'b self, results: &mut Vec<CompletionItem>, iter: &I, priors: &[String], query: &str)
-        where I: Iterator<Item=(Span, &'b Annotation)> + Clone
+    pub fn scoped_completions<'b, I>(
+        &'b self,
+        results: &mut Vec<CompletionItem>,
+        iter: &I,
+        priors: &[String],
+        query: &str,
+    ) where
+        I: Iterator<Item = (Span, &'b Annotation)> + Clone,
     {
         let mut next = self.find_scoped_type(iter, priors);
         let mut skip = HashSet::new();

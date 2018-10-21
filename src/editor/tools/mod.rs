@@ -43,14 +43,11 @@ pub enum ToolIcon {
 
 #[allow(unused_variables)]
 pub trait ToolBehavior {
-    fn settings(&mut self, ui: &Ui, env: &Environment, ctx: &mut IconCtx) {
-    }
+    fn settings(&mut self, ui: &Ui, env: &Environment, ctx: &mut IconCtx) {}
 
-    fn click(&mut self, hist: &mut History, env: &Environment, loc: (u32, u32, u32)) {
-    }
+    fn click(&mut self, hist: &mut History, env: &Environment, loc: (u32, u32, u32)) {}
 
-    fn pick(&mut self, env: &Environment, prefab: &Prefab) {
-    }
+    fn pick(&mut self, env: &Environment, prefab: &Prefab) {}
 }
 
 impl Tool {
@@ -73,11 +70,22 @@ impl Tool {
     }
 
     fn dmi(self, icon: PathBuf, icon_state: String) -> Self {
-        Tool { icon: ToolIcon::Dmi { icon, icon_state, tint: NO_TINT, dir: dmi::SOUTH }, ..self }
+        Tool {
+            icon: ToolIcon::Dmi {
+                icon,
+                icon_state,
+                tint: NO_TINT,
+                dir: dmi::SOUTH,
+            },
+            ..self
+        }
     }
 
     fn png(self, data: &'static [u8]) -> Self {
-        Tool { icon: ToolIcon::EmbeddedPng { data }, ..self }
+        Tool {
+            icon: ToolIcon::EmbeddedPng { data },
+            ..self
+        }
     }
 
     fn build(self, tools: &mut Vec<Tool>) {

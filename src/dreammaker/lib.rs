@@ -19,7 +19,7 @@ macro_rules! try_iter {
             Ok(x) => x,
             Err(e) => return Some(Err(From::from(e))),
         }
-    }
+    };
 }
 
 mod error;
@@ -72,17 +72,23 @@ pub fn pretty_print<W, I>(w: &mut W, input: I, show_ws: bool) -> io::Result<()> 
             lexer::Token::Punct(lexer::Punctuation::LBrace) => {
                 indents += 1;
                 needs_newline = true;
-                if show_ws { write!(w, "{{")?; }
+                if show_ws {
+                    write!(w, "{{")?;
+                }
             }
             lexer::Token::Punct(lexer::Punctuation::RBrace) => {
                 indents -= 1;
                 needs_newline = true;
-                if show_ws { write!(w, "}}")?; }
+                if show_ws {
+                    write!(w, "}}")?;
+                }
             }
             lexer::Token::Punct(lexer::Punctuation::Semicolon) |
             lexer::Token::Punct(lexer::Punctuation::Newline) => {
                 needs_newline = true;
-                if show_ws { write!(w, ";")?; }
+                if show_ws {
+                    write!(w, ";")?;
+                }
             }
             lexer::Token::DocComment(_) => {}
             other => {

@@ -25,11 +25,14 @@ pub struct Context<'a> {
     pub render_passes: &'a [Box<RenderPass>],
 }
 
-pub fn generate(
-    ctx: Context,
-    icon_cache: &IconCache,
-) -> Result<Image, ()> {
-    let Context { objtree, map, grid, render_passes, .. } = ctx;
+pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
+    let Context {
+        objtree,
+        map,
+        grid,
+        render_passes,
+        ..
+    } = ctx;
 
     // transform min/max from bottom-left-based to top-left-based
     // probably doesn't belong here
@@ -42,16 +45,26 @@ pub fn generate(
     let mut overlays = Vec::new();
 
     for (y, row) in grid.axis_iter(Axis(0)).enumerate() {
-        if y < min_y || y > max_y { continue }
+        if y < min_y || y > max_y {
+            continue;
+        }
         for (x, e) in row.iter().enumerate() {
-            if x < ctx.min.0 || x > ctx.max.0 { continue }
+            if x < ctx.min.0 || x > ctx.max.0 {
+                continue;
+            }
             for mut atom in get_atom_list(objtree, &map.dictionary[e], (x as u32, y as u32), render_passes) {
                 // icons which differ from their map states
                 let p = &atom.type_.path;
                 if p == "/obj/structure/table/wood/fancy/black" {
-                    atom.set_var("icon", Constant::Resource("icons/obj/smooth_structures/fancy_table_black.dmi".into()));
+                    atom.set_var(
+                        "icon",
+                        Constant::Resource("icons/obj/smooth_structures/fancy_table_black.dmi".into()),
+                    );
                 } else if p == "/obj/structure/table/wood/fancy" {
-                    atom.set_var("icon", Constant::Resource("icons/obj/smooth_structures/fancy_table.dmi".into()));
+                    atom.set_var(
+                        "icon",
+                        Constant::Resource("icons/obj/smooth_structures/fancy_table.dmi".into()),
+                    );
                 } else if subtype(p, "/turf/closed/mineral/") {
                     atom.set_var("pixel_x", Constant::Int(-4));
                     atom.set_var("pixel_y", Constant::Int(-4));
@@ -67,18 +80,24 @@ pub fn generate(
                         let mut copy = atom.clone();
                         copy.set_var("icon_state", Constant::string($icon));
                         overlays.push(copy);
-                    }}
+                    }};
                 }
                 if subtype(p, "/obj/structure/closet/") {
                     // closet doors
                     if atom.get_var("opened", objtree).to_bool() {
-                        let var = if atom.get_var("icon_door_override", objtree).to_bool() { "icon_door" } else { "icon_state" };
+                        let var = if atom.get_var("icon_door_override", objtree).to_bool() {
+                            "icon_door"
+                        } else {
+                            "icon_state"
+                        };
                         if let &Constant::String(ref door) = atom.get_var(var, objtree) {
                             add_overlay!(format!("{}_open", door));
                         }
                     } else {
-                        if let &Constant::String(ref door) = atom.get_var_notnull("icon_door", objtree)
-                                .unwrap_or_else(|| atom.get_var("icon_state", objtree)) {
+                        if let &Constant::String(ref door) = atom
+                            .get_var_notnull("icon_door", objtree)
+                            .unwrap_or_else(|| atom.get_var("icon_state", objtree))
+                        {
                             add_overlay!(format!("{}_door", door));
                         }
                         if atom.get_var("welded", objtree).to_bool() {
@@ -122,7 +141,7 @@ pub fn generate(
                             "scrub_map" => "scrub_off",
                             "scrub_map_on" => "scrub_on",
                             _ => "",
-                        }
+                        },
                         _ => "",
                     };
                     if !aboveground.is_empty() {
@@ -175,7 +194,7 @@ pub fn generate(
             &Constant::Resource(ref path) | &Constant::String(ref path) => path,
             _ => {
                 println!("no icon: {}", atom.type_.path);
-                continue
+                continue;
             }
         };
         let icon_state = match atom.get_var("icon_state", objtree) {
@@ -196,7 +215,7 @@ pub fn generate(
                 icon_file.metadata.height as i32;
             let mut loc = (
                 ((atom.loc.0 - ctx.min.0 as u32) * TILE_SIZE) as i32 + pixel_x,
-                ((atom.loc.1 + 1 - min_y as u32) * TILE_SIZE) as i32 - pixel_y
+                ((atom.loc.1 + 1 - min_y as u32) * TILE_SIZE) as i32 - pixel_y,
             );
 
             // OOB handling
@@ -204,25 +223,29 @@ pub fn generate(
                 rect.0 += (-loc.0) as u32;
                 match rect.2.checked_sub((-loc.0) as u32) {
                     Some(s) => rect.2 = s,
-                    None => continue 'atom  // out of the viewport
+                    None => continue 'atom, // out of the viewport
                 }
                 loc.0 = 0;
             }
             while loc.0 + rect.2 as i32 > map_image.width as i32 {
                 rect.2 -= 1;
-                if rect.2 == 0 { continue 'atom }
+                if rect.2 == 0 {
+                    continue 'atom;
+                }
             }
             if loc.1 < 0 {
                 rect.1 += (-loc.1) as u32;
                 match rect.3.checked_sub((-loc.1) as u32) {
                     Some(s) => rect.3 = s,
-                    None => continue 'atom  // out of the viewport
+                    None => continue 'atom, // out of the viewport
                 }
                 loc.1 = 0;
             }
             while loc.1 + rect.3 as i32 > map_image.height as i32 {
                 rect.3 -= 1;
-                if rect.3 == 0 { continue 'atom }
+                if rect.3 == 0 {
+                    continue 'atom;
+                }
             }
             let loc = (loc.0 as u32, loc.1 as u32);
 
@@ -259,7 +282,7 @@ pub fn get_atom_list<'a>(
             Some(x) => x,
             None => {
                 println!("Warning: missing {:?}", fab.path);
-                continue
+                continue;
             }
         };
 
@@ -316,7 +339,7 @@ impl<'a> Atom<'a> {
             type_: type_,
             prefab: None,
             vars: Default::default(),
-            loc
+            loc,
         }
     }
 
@@ -349,7 +372,7 @@ pub trait GetVar {
     fn get_var_notnull<'a>(&'a self, key: &str, objtree: &'a ObjectTree) -> Option<&'a Constant> {
         match self.get_var_inner(key, objtree) {
             None | Some(&Constant::Null(_)) => None,
-            Some(other) => Some(other)
+            Some(other) => Some(other),
         }
     }
 
@@ -466,7 +489,12 @@ pub fn color_of<T: GetVar + ?Sized>(objtree: &ObjectTree, atom: &T) -> [u8; 4] {
             if color.len() == 7 {  // #rrggbb
                 [(sum >> 16) as u8, (sum >> 8) as u8, sum as u8, alpha]
             } else if color.len() == 4 {  // #rgb
-                [(0x11 * ((sum >> 8) & 0xf)) as u8, (0x11 * ((sum >> 4) & 0xf)) as u8, (0x11 * (sum & 0xf)) as u8, alpha]
+                [
+                    (0x11 * ((sum >> 8) & 0xf)) as u8,
+                    (0x11 * ((sum >> 4) & 0xf)) as u8,
+                    (0x11 * (sum & 0xf)) as u8,
+                    alpha,
+                ]
             } else {
                 [255, 255, 255, alpha]  // invalid
             }
@@ -515,7 +543,9 @@ fn calculate_adjacencies(ctx: Context, atom: &Atom, flags: i32) -> i32 {
     let check_one = |direction, flag| {
         if find_type_in_direction(ctx, atom, direction, flags) {
             flag
-        } else { 0 }
+        } else {
+            0
+        }
     };
 
     for &dir in &[SOUTH, NORTH, EAST, WEST] {
@@ -554,9 +584,12 @@ fn find_type_in_direction<'a>(ctx: Context, source: &Atom, direction: i32, flags
     let new_loc = (new_loc.0 as u32, new_loc.1 as u32);
 
     // TODO: make this not call get_atom_list way too many times
-    let atom_list = get_atom_list(ctx.objtree,
+    let atom_list = get_atom_list(
+        ctx.objtree,
         &ctx.map.dictionary[&ctx.grid[ndarray::Dim([new_loc.1 as usize, new_loc.0 as usize])]],
-        new_loc, ctx.render_passes);
+        new_loc,
+        ctx.render_passes,
+    );
     match source.get_var("canSmoothWith", ctx.objtree) {
         &Constant::List(ref elements) => if flags & SMOOTH_MORE != 0 {
             // smooth with canSmoothWith + subtypes
@@ -630,21 +663,21 @@ fn cardinal_smooth<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, source: &At
 }
 
 fn diagonal_smooth<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, source: &Atom<'a>, adjacencies: i32) {
-    let presets = if adjacencies == N_NORTH|N_WEST {
+    let presets = if adjacencies == N_NORTH | N_WEST {
         ["d-se", "d-se-0"]
-    } else if adjacencies == N_NORTH|N_EAST {
+    } else if adjacencies == N_NORTH | N_EAST {
         ["d-sw", "d-sw-0"]
-    } else if adjacencies == N_SOUTH|N_WEST {
+    } else if adjacencies == N_SOUTH | N_WEST {
         ["d-ne", "d-ne-0"]
-    } else if adjacencies == N_SOUTH|N_EAST {
+    } else if adjacencies == N_SOUTH | N_EAST {
         ["d-nw", "d-nw-0"]
-    } else if adjacencies == N_NORTH|N_WEST|N_NORTHWEST {
+    } else if adjacencies == N_NORTH | N_WEST | N_NORTHWEST {
         ["d-se", "d-se-1"]
-    } else if adjacencies == N_NORTH|N_EAST|N_NORTHEAST {
+    } else if adjacencies == N_NORTH | N_EAST | N_NORTHEAST {
         ["d-sw", "d-sw-1"]
-    } else if adjacencies == N_SOUTH|N_WEST|N_SOUTHWEST {
+    } else if adjacencies == N_SOUTH | N_WEST | N_SOUTHWEST {
         ["d-ne", "d-ne-1"]
-    } else if adjacencies == N_SOUTH|N_EAST|N_SOUTHEAST {
+    } else if adjacencies == N_SOUTH | N_EAST | N_SOUTHEAST {
         ["d-nw", "d-nw-1"]
     } else {
         return cardinal_smooth(output, ctx, source, adjacencies);
@@ -653,7 +686,11 @@ fn diagonal_smooth<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, source: &At
     // turf underneath
     if subtype(&source.type_.path, "/turf/closed/wall/") {
         // BYOND memes
-        if source.get_var("fixed_underlay", ctx.objtree).index(&Constant::string("space")).is_some() {
+        if source
+            .get_var("fixed_underlay", ctx.objtree)
+            .index(&Constant::string("space"))
+            .is_some()
+        {
             output.push(Atom::from_type(ctx.objtree, "/turf/open/space/basic", source.loc).unwrap());
         } else {
             let dir = flip(reverse_ndir(adjacencies));
@@ -666,9 +703,12 @@ fn diagonal_smooth<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, source: &At
                 if !(new_loc.0 < 0 || new_loc.1 < 0 || new_loc.0 >= dim_x as i32 || new_loc.1 >= dim_y as i32) {
                     let new_loc = (new_loc.0 as u32, new_loc.1 as u32);
                     // TODO: make this not call get_atom_list way too many times
-                    let atom_list = get_atom_list(ctx.objtree,
+                    let atom_list = get_atom_list(
+                        ctx.objtree,
                         &ctx.map.dictionary[&ctx.grid[ndarray::Dim([new_loc.1 as usize, new_loc.0 as usize])]],
-                        new_loc, ctx.render_passes);
+                        new_loc,
+                        ctx.render_passes,
+                    );
                     for mut atom in atom_list {
                         if subtype(&atom.type_.path, "/turf/open/") {
                             atom.loc = source.loc;
@@ -730,14 +770,14 @@ fn flip(direction: i32) -> i32 {
 
 fn reverse_ndir(ndir: i32) -> i32 {
     use dmi::*;
-    const NW1: i32 = N_NORTH|N_WEST;
-    const NW2: i32 = NW1|N_NORTHWEST;
-    const NE1: i32 = N_NORTH|N_EAST;
-    const NE2: i32 = NE1|N_NORTHEAST;
-    const SW1: i32 = N_SOUTH|N_WEST;
-    const SW2: i32 = SW1|N_SOUTHWEST;
-    const SE1: i32 = N_SOUTH|N_EAST;
-    const SE2: i32 = SE1|N_SOUTHEAST;
+    const NW1: i32 = N_NORTH | N_WEST;
+    const NW2: i32 = NW1 | N_NORTHWEST;
+    const NE1: i32 = N_NORTH | N_EAST;
+    const NE2: i32 = NE1 | N_NORTHEAST;
+    const SW1: i32 = N_SOUTH | N_WEST;
+    const SW2: i32 = SW1 | N_SOUTHWEST;
+    const SE1: i32 = N_SOUTH | N_EAST;
+    const SE2: i32 = SE1 | N_SOUTHEAST;
 
     match ndir {
         N_NORTH => NORTH,
@@ -781,4 +821,3 @@ fn right_45(dir: i32) -> i32 {
         e => e,
     }
 }
-

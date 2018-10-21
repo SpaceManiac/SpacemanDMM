@@ -160,12 +160,17 @@ static SPEEDY_TABLE: [(usize, usize); 127] = [
 
 #[test]
 fn make_speedy_table() {
-    let everything: Vec<&str> = PUNCT_TABLE.iter()
+    let everything: Vec<&str> = PUNCT_TABLE
+        .iter()
         .map(|p| p.0)
         .filter(|s| !s.chars().any(|c| c.is_alphanumeric()))
         .collect();
     for each in everything.iter() {
-        assert!(each.len() == 1 || everything.contains(&&each[..each.len() - 1]), "no prefix: {}", each);
+        assert!(
+            each.len() == 1 || everything.contains(&&each[..each.len() - 1]),
+            "no prefix: {}",
+            each
+        );
     }
 
     let mut table = vec![];
@@ -189,7 +194,11 @@ fn make_speedy_table() {
     }
 
     if &SPEEDY_TABLE[..] != &table[..] {
-        panic!("\n\nSpeedy table outdated, replace with:\n\nstatic SPEEDY_TABLE: [(usize, usize); {}] = {:?};\n\n", table.len(), table);
+        panic!(
+            "\n\nSpeedy table outdated, replace with:\n\nstatic SPEEDY_TABLE: [(usize, usize); {}] = {:?};\n\n",
+            table.len(),
+            table
+        );
     }
 }
 
@@ -526,9 +535,7 @@ impl<I: Iterator<Item=io::Result<u8>>> Iterator for LocationTracker<I> {
                 }
                 Some(Ok(ch))
             }
-            Some(Err(e)) => {
-                Some(Err(DMError::new(self.location, "i/o error").set_cause(e)))
-            }
+            Some(Err(e)) => Some(Err(DMError::new(self.location, "i/o error").set_cause(e))),
         }
     }
 }
@@ -673,7 +680,10 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         match self.next() {
             Some(b'/') => comment = Some(DocComment::new(CommentKind::Line, DocTarget::FollowingItem)),
             Some(b'!') => comment = Some(DocComment::new(CommentKind::Line, DocTarget::EnclosingItem)),
-            Some(b'\n') => { self.put_back(Some(b'\n')); return None },
+            Some(b'\n') => {
+                self.put_back(Some(b'\n'));
+                return None;
+            }
             Some(b'\\') => backslash = true,
             _ => {}
         }
@@ -798,7 +808,10 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         loop {
             match self.next() {
                 Some(ch) if is_ident(ch) || is_digit(ch) => ident.push(ch),
-                ch => { self.put_back(ch); break }
+                ch => {
+                    self.put_back(ch);
+                    break;
+                }
             }
         }
         from_latin1(ident)
@@ -838,9 +851,9 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
             if ch == end[idx] && !backslash {
                 idx += 1;
                 if idx == end.len() {
-                    break
+                    break;
                 }
-                continue
+                continue;
             } else if ch == end[0] && !backslash {
                 // TODO: this is a hack to fix the '""}' situation
                 buf.extend_from_slice(&end[..idx]);
@@ -899,7 +912,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                 candidate = Some(items[0].1);
             }
             if items.len() == 1 {
-                return candidate
+                return candidate;
             }
 
             match self.next() {
@@ -967,7 +980,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                         return Some(LocatedToken {
                             location: location,
                             token: Token::Punct(Punctuation::Newline),
-                        })
+                        });
                     } else {
                         return None;
                     }
@@ -1047,7 +1060,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                         // check keywords
                         for &(name, value) in PUNCT_TABLE.iter() {
                             if name == ident {
-                                return Some(locate(Punct(value)))
+                                return Some(locate(Punct(value)));
                             }
                         }
                         self.close_allowed = true;
@@ -1066,8 +1079,8 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                         }
                         continue;
                     }
-                }
-            }
+                },
+            };
         }
     }
 }

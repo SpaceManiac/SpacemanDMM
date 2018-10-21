@@ -100,7 +100,8 @@ pub fn check(
 }
 
 pub fn retain_mut<T, F>(v: &mut Vec<T>, mut f: F)
-    where F: FnMut(&mut T) -> bool
+where
+    F: FnMut(&mut T) -> bool,
 {
     let len = v.len();
     let mut del = 0;

@@ -92,7 +92,8 @@ impl MapRenderer {
 
         let sampler = factory.create_sampler(gfx::texture::SamplerInfo::new(
             gfx::texture::FilterMethod::Scale,
-            gfx::texture::WrapMode::Clamp));
+            gfx::texture::WrapMode::Clamp,
+        ));
 
         MapRenderer {
             icons: Arc::new(IconCache::new(".".as_ref())),
@@ -164,7 +165,16 @@ impl RenderedMap {
         encoder.update_buffer(&self.ibuf, ibuf_data, 0).expect("update ibuf");
     }
 
-    pub fn paint(&mut self, parent: &mut MapRenderer, map: &AtomMap, z: u32, center: [f32; 2], factory: &mut Factory, encoder: &mut Encoder, view: &RenderTargetView) {
+    pub fn paint(
+        &mut self,
+        parent: &mut MapRenderer,
+        map: &AtomMap,
+        z: u32,
+        center: [f32; 2],
+        factory: &mut Factory,
+        encoder: &mut Encoder,
+        view: &RenderTargetView,
+    ) {
         // update vertex and index buffers from the map
         if map.levels[z as usize].buffers_dirty.replace(false) {
             self.update_buffers(map, z, factory, encoder);
@@ -178,9 +188,11 @@ impl RenderedMap {
                 [0.0, 2.0 / y as f32, 0.0, -2.0 * center[1].round() / y as f32],
                 [0.0, 0.0, 1.0, 0.0],
                 [0.0, 0.0, 0.0, 1.0 / parent.zoom],
-            ]
+            ],
         };
-        encoder.update_buffer(&parent.transform_buffer, &[transform], 0).expect("update_buffer failed");
+        encoder
+            .update_buffer(&parent.transform_buffer, &[transform], 0)
+            .expect("update_buffer failed");
 
         let mut start = 0;
         for call in map.levels[z as usize].draw_calls.iter() {
@@ -188,7 +200,9 @@ impl RenderedMap {
                 start += call.len;
                 continue;
             }
-            let texture = parent.icon_textures.retrieve(factory, &parent.icons, call.texture as usize);
+            let texture = parent
+                .icon_textures
+                .retrieve(factory, &parent.icons, call.texture as usize);
             let slice = gfx::Slice {
                 start: start,
                 end: start + call.len,
@@ -267,8 +281,11 @@ impl RenderPop {
 
         let color = minimap::color_of(objtree, fab);
         let color = [
-            color[0] as f32 / 255.0, color[1] as f32 / 255.0,
-            color[2] as f32 / 255.0, color[3] as f32 / 255.0];
+            color[0] as f32 / 255.0,
+            color[1] as f32 / 255.0,
+            color[2] as f32 / 255.0,
+            color[3] as f32 / 255.0,
+        ];
 
         let pixel_x = fab.get_var("pixel_x", objtree).to_int().unwrap_or(0);
         let pixel_y = fab.get_var("pixel_y", objtree).to_int().unwrap_or(0);

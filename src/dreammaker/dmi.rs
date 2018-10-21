@@ -143,7 +143,7 @@ fn parse_metadata(data: &str) -> Metadata {
 
     for line in lines {
         if line.starts_with("# END DMI") {
-            break
+            break;
         }
         let mut split = line.trim().splitn(2, " = ");
         let key = split.next().unwrap();
@@ -201,7 +201,7 @@ fn parse_metadata(data: &str) -> Metadata {
                         vector.truncate(n);
                         state.frames = Frames::Delays(vector);
                     },
-                    Frames::Delays(_) => panic!()
+                    Frames::Delays(_) => panic!(),
                 }
             }
             "loop" => state.as_mut().unwrap().loop_ = value.parse().unwrap(),

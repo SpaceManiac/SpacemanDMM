@@ -15,7 +15,7 @@ enum Visiting {
 pub struct RangePairIter<'a, K: 'a, V: 'a> {
     start: Bound<K>,
     end: Bound<K>,
-    stack: Vec<(&'a Node<K, V>, Visiting)>
+    stack: Vec<(&'a Node<K, V>, Visiting)>,
 }
 
 impl<'a, K: Ord, V> RangePairIter<'a, K, V> {
@@ -73,7 +73,7 @@ impl<'a, K: Ord, V> RangePairIter<'a, K, V> {
                         self.stack.push((node, Visiting::Right));
                     } else {
                         self.stack.push((node, Visiting::Middle(i + 1)));
-                        return Some((node, i))
+                        return Some((node, i));
                     }
                 }
             }

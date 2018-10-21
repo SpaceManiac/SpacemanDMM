@@ -31,7 +31,11 @@ fn check_indentor() {
     let context = Context::default();
     with_test_dme(&context, |mut preprocessor| {
         let mut string = Vec::new();
-        pretty_print(&mut string, indents::IndentProcessor::new(&context, &mut preprocessor).map(|t| t.token), true).unwrap();
+        pretty_print(
+            &mut string,
+            indents::IndentProcessor::new(&context, &mut preprocessor).map(|t| t.token),
+            true,
+        ).unwrap();
         context.assert_success();
     });
 }

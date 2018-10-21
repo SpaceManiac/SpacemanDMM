@@ -69,7 +69,11 @@ pub struct DocComment {
 impl DocComment {
     /// Construct an empty DocComment with the given properties.
     pub fn new(kind: CommentKind, target: DocTarget) -> DocComment {
-        DocComment { kind, target, text: String::new() }
+        DocComment {
+            kind,
+            target,
+            text: String::new(),
+        }
     }
 
     /// Check if this comment is entirely textless.
@@ -121,7 +125,9 @@ fn simplify(out: &mut String, text: &str, ignore_char: char) -> bool {
             continue;
         }
 
-        let this_prefix = &line[..line.len() - line.trim_left_matches(|c: char| c.is_whitespace() || c == ignore_char).len()];
+        let this_prefix = &line[..line.len() - line
+            .trim_left_matches(|c: char| c.is_whitespace() || c == ignore_char)
+            .len()];
         match prefix {
             None => prefix = Some(this_prefix),
             Some(ref mut prefix) => {
@@ -130,7 +136,9 @@ fn simplify(out: &mut String, text: &str, ignore_char: char) -> bool {
                 loop {
                     no_match = chars.as_str();
                     match chars.next() {
-                        Some(ch) => if Some(ch) != this_chars.next() { break },
+                        Some(ch) => if Some(ch) != this_chars.next() {
+                            break;
+                        },
                         None => break,
                     }
                 }
@@ -147,7 +155,9 @@ fn simplify(out: &mut String, text: &str, ignore_char: char) -> bool {
                 loop {
                     no_match = chars.as_str();
                     match chars.next_back() {
-                        Some(ch) => if Some(ch) != this_chars.next_back() { break },
+                        Some(ch) => if Some(ch) != this_chars.next_back() {
+                            break;
+                        },
                         None => break,
                     }
                 }
@@ -174,7 +184,7 @@ fn simplify(out: &mut String, text: &str, ignore_char: char) -> bool {
         for _ in 0..newlines {
             out.push_str("\n");
         }
-        out.push_str(&line[prefix_len..line.len()-suffix_len]);
+        out.push_str(&line[prefix_len..line.len() - suffix_len]);
         anything = true;
         newlines = 1;
     }

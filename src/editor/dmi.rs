@@ -53,7 +53,13 @@ impl IconCache {
     }
 
     pub fn get_index(&self, relative_file_path: &Path) -> Option<usize> {
-        let existing = self.lock.read().expect("IconCache poisoned").paths.get(relative_file_path).cloned();
+        let existing = self
+            .lock
+            .read()
+            .expect("IconCache poisoned")
+            .paths
+            .get(relative_file_path)
+            .cloned();
         // shouldn't be inlined or the lifetime of the lock will be extended
         match existing {
             // inner None = failure to load, don't keep trying every time
@@ -72,7 +78,7 @@ impl IconCache {
                     lock.paths.insert(relative_file_path.to_owned(), None);
                     None
                 }
-            }
+            },
         }
     }
 
@@ -174,7 +180,7 @@ impl IconFile {
         }
         let state_index = match self.metadata.state_names.get(icon_state) {
             Some(&i) => i,
-            None => return None
+            None => return None,
         };
         let state = &self.metadata.states[state_index];
 
@@ -193,8 +199,12 @@ impl IconFile {
         let icon_index = state.offset as u32 + dir_idx;
         let icon_count = self.width / self.metadata.width;
         let (icon_x, icon_y) = (icon_index % icon_count, icon_index / icon_count);
-        Some((icon_x * self.metadata.width, icon_y * self.metadata.height,
-            self.metadata.width, self.metadata.height))
+        Some((
+            icon_x * self.metadata.width,
+            icon_y * self.metadata.height,
+            self.metadata.width,
+            self.metadata.height,
+        ))
     }
 }
 

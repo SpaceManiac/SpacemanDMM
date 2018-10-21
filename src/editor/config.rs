@@ -20,7 +20,7 @@ impl Config {
     pub fn make_recent(&mut self, recent: &Path) {
         if let Some(first) = self.recent.first() {
             if first == recent {
-                return  // no work to do
+                return;  // no work to do
             }
         }
 
@@ -63,10 +63,12 @@ fn save(cfg: &Config, path: &Path) -> io::Result<()> {
     use serde::Serialize;
 
     let mut buffer = String::new();
-    cfg.serialize(::toml::ser::Serializer::new(&mut buffer)
-        .pretty_string(true)
-        .pretty_string_literal(false)
-        .pretty_array(true)).unwrap();
+    cfg.serialize(
+        ::toml::ser::Serializer::new(&mut buffer)
+            .pretty_string(true)
+            .pretty_string_literal(false)
+            .pretty_array(true),
+    ).unwrap();
 
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
