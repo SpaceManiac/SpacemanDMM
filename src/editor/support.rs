@@ -217,7 +217,12 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
                             .to_logical(hidpi_factor);
                         mouse_state.wheel = diff.y as f32;
                         if !mouse_captured {
-                            scene.mouse_wheel(ctrl(&imgui), imgui.key_shift(), imgui.key_alt(), diff.x as f32, diff.y as f32);
+                            #[cfg(not(target_os = "macos"))]
+                            let diff_x = diff.x as f32;
+                            #[cfg(target_os = "macos")]
+                            let diff_x = -diff.x as f32;
+                            
+                            scene.mouse_wheel(ctrl(&imgui), imgui.key_shift(), imgui.key_alt(), diff_x, diff.y as f32);
                         }
                     },
                     ReceivedCharacter(c) => imgui.add_input_character(c),
