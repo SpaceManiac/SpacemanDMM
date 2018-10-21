@@ -61,7 +61,7 @@ impl Context {
         let pathbuf;
         let environment: &std::path::Path = match opt.environment {
             Some(ref env) => env.as_ref(),
-            None => match dm::detect_environment(".".as_ref(), dm::DEFAULT_ENV) {
+            None => match dm::detect_environment_default() {
                 Ok(Some(found)) => { pathbuf = found; &pathbuf },
                 _ => dm::DEFAULT_ENV.as_ref(),
             }

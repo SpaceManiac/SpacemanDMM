@@ -60,7 +60,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
     });
 
     // parse environment
-    let environment = match dm::detect_environment(".".as_ref(), dm::DEFAULT_ENV)? {
+    let environment = match dm::detect_environment_default()? {
         Some(env) => env,
         None => {
             eprintln!("Unable to find a .dme file in this directory");
@@ -316,6 +316,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
     // render
     println!("saving static resources");
+    fs::create_dir_all(output_path)?;
     template::save_resources(output_path)?;
 
     let env_filename = environment.display().to_string();
