@@ -315,7 +315,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                 max.z = clamp(max.z, min.z, dim_z);
                 println!("{}rendering from {} to {}", prefix, min, max);
 
-                for z in (min.z - 1)..(max.z) {
+                let do_z_level = |z| {
                     println!("{}generating z={}", prefix, 1 + z);
                     let minimap_context = minimap::Context {
                         objtree: &objtree,
@@ -360,6 +360,13 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                             .unwrap()
                             .success(), "optipng failed");
                     }
+                };
+
+                if parallel {
+                    use rayon::iter::{IntoParallelIterator, ParallelIterator};
+                    ((min.z - 1)..(max.z)).into_par_iter().for_each(do_z_level);
+                } else {
+                    ((min.z - 1)..(max.z)).into_iter().for_each(do_z_level);
                 }
             };
 
