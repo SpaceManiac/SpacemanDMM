@@ -99,6 +99,8 @@ pub struct EditorScene {
     ui_extra_vars: bool,
     stacked_rendering: bool,
     stacked_inverted: bool,
+
+    mouse_drag_pos: Option<(i32, i32)>
 }
 
 pub struct Environment {
@@ -197,6 +199,7 @@ impl EditorScene {
             ui_extra_vars: false,
             stacked_rendering: false,
             stacked_inverted: false,
+            mouse_drag_pos: None,
         };
         ed.finish_init();
         ed
@@ -754,7 +757,18 @@ impl EditorScene {
                     ui.open_popup(im_str!("context"));
                 }
             }
+            
+            if ui.imgui().is_mouse_down(ImMouseButton::Middle)
+            && self.mouse_drag_pos.is_none() {
+                self.mouse_drag_pos = Some(self.last_mouse_pos);
+            }
         }
+
+        if !ui.imgui().is_mouse_down(ImMouseButton::Middle)
+        && self.mouse_drag_pos.is_some() {
+            self.mouse_drag_pos = None;
+        }
+
         if let Some((x, y)) = self.context_tile {
             let mut open = false;
             ui.popup(im_str!("context"), || {
@@ -915,6 +929,14 @@ impl EditorScene {
                         })
                     }
                 }
+            }
+
+            // Handle mouse dragging.
+            if let Some(pos) = self.mouse_drag_pos {
+                let diff = (self.last_mouse_pos.0 - pos.0, self.last_mouse_pos.1 - pos.1);
+                map.center[0] -= diff.0 as f32 / self.map_renderer.zoom;
+                map.center[1] += diff.1 as f32 / self.map_renderer.zoom;
+                self.mouse_drag_pos = Some(self.last_mouse_pos);
             }
         }
 
