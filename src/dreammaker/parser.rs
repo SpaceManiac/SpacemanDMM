@@ -744,19 +744,7 @@ where
                     SUCCESS
                 }));
 
-                match self.tree.add_proc(location, new_stack.iter(), new_stack.len(), parameters) {
-                    Ok((idx, proc)) => {
-                        proc.docs.extend(comment);
-                        // manually performed for borrowck reasons
-                        if let Some(dest) = self.annotations.as_mut() {
-                            dest.insert(entry_start..body_start, Annotation::ProcHeader(new_stack.to_vec(), idx));
-                            dest.insert(body_start..self.location, Annotation::ProcBody(new_stack.to_vec(), idx));
-                        }
-                    }
-                    Err(e) => self.context.register_error(e),
-                };
-
-                if self.procs {
+                let code = if self.procs {
                     let result = {
                         let mut subparser: Parser<'ctx, '_, _> = Parser::new(self.context, body_tt.into_iter());
                         if let Some(a) = self.annotations.as_mut() {
@@ -770,10 +758,29 @@ where
                     } else {
                         self.procs_bad += 1;
                     }
-                    if let Err(err) = result {
-                        self.context.register_error(err);
+                    match result {
+                        Err(err) => {
+                            self.context.register_error(err);
+                            None
+                        },
+                        Ok(code) => {
+                            Some(code)
+                        }
                     }
-                }
+                } else { None };
+
+                match self.tree.add_proc(location, new_stack.iter(), new_stack.len(), parameters, code) {
+                    Ok((idx, proc)) => {
+                        proc.docs.extend(comment);
+                        // manually performed for borrowck reasons
+                        if let Some(dest) = self.annotations.as_mut() {
+                            dest.insert(entry_start..body_start, Annotation::ProcHeader(new_stack.to_vec(), idx));
+                            dest.insert(body_start..self.location, Annotation::ProcBody(new_stack.to_vec(), idx));
+                        }
+                    }
+                    Err(e) => self.context.register_error(e),
+                };
+
                 SUCCESS
             }
             other => {
