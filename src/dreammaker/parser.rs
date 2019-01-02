@@ -1640,6 +1640,10 @@ where
 
                     // read "in" clause
                     let in_list = if let Some(()) = self.exact(Token::Punct(Punctuation::In))? {
+                        if args.len() > 1 {
+                            self.context.register_error(DMError::new(start, "bad 'locate(x, y, z) in'")
+                                .set_severity(Severity::Warning));
+                        }
                         Some(Box::new(require!(self.expression())))
                     } else {
                         None

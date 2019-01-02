@@ -757,7 +757,7 @@ impl EditorScene {
                     ui.open_popup(im_str!("context"));
                 }
             }
-            
+
             if ui.imgui().is_mouse_down(ImMouseButton::Middle)
             && self.mouse_drag_pos.is_none() {
                 self.mouse_drag_pos = Some(self.last_mouse_pos);
