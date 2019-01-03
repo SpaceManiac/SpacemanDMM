@@ -709,17 +709,18 @@ impl EditorScene {
                     if ui.collapsing_header(&ImString::from(title)).default_open(true).build() {
                         if let Some(hist) = map.state.hist() {
                             let world = hist.current();
+                            let dims = world.dim_xyz();
                             if let Some(dmm) = map.state.base_dmm() {
                                 ui.text(im_str!(
                                     "{:?}; {}-keys: {}",
-                                    world.dim_xyz(),
+                                    dims,
                                     dmm.key_length,
                                     dmm.dictionary.len()
                                 ));
                             } else {
-                                ui.text(im_str!("{:?}", world.dim_xyz()));
+                                ui.text(im_str!("{:?}", dims));
                             }
-                            for z in 0..world.dim_xyz().2 {
+                            for z in 0..dims.2 {
                                 let clicked;
                                 if let Some(&mut Some(ref mut rendered)) = map.rendered.get_mut(z as usize) {
                                     let map_renderer::RenderedMap { ref mut thumbnail_id, ref thumbnail, .. } = rendered;
@@ -727,10 +728,19 @@ impl EditorScene {
                                     let tex = *thumbnail_id.fulfill(|| {
                                         renderer.textures().insert((thumbnail.clone(), map_renderer.sampler.clone()))
                                     });
+                                    let start = ui.get_cursor_screen_pos();
+                                    let is_current = self.map_current == map_idx && map.z_current == z as usize;
                                     ui.image(tex, (THUMBNAIL_SIZE as f32, THUMBNAIL_SIZE as f32))
-                                        .border_col(ui.frame_color(self.map_current == map_idx && map.z_current == z as usize))
+                                        .border_col(ui.frame_color(is_current))
                                         .build();
                                     clicked = ui.is_item_hovered() && ui.imgui().is_mouse_clicked(ImMouseButton::Left);
+                                    if clicked || (is_current && ui.is_item_hovered() && ui.imgui().is_mouse_down(ImMouseButton::Left)) {
+                                        let pos = ui.imgui().mouse_pos();
+                                        map.center = [
+                                            (pos.0 - start.0 - 1.0) * 32.0 * dims.0 as f32 / THUMBNAIL_SIZE as f32,
+                                            (THUMBNAIL_SIZE as f32 - (pos.1 - start.1 - 1.0)) * 32.0 * dims.1 as f32 / THUMBNAIL_SIZE as f32,
+                                        ];
+                                    }
                                 } else {
                                     clicked = ui.button(
                                         im_str!("z = {}##map_{}_{}", z + 1, map_idx, z),
