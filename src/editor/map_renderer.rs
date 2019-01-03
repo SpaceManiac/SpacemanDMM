@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use gfx;
 use gfx::traits::{Factory as FactoryTrait, FactoryExt};
-use {Resources, Factory, Encoder, ColorFormat, RenderTargetView};
+use {Resources, Factory, Encoder, ColorFormat, RenderTargetView, Texture};
 
 use slice_of_array::prelude::*;
 
@@ -15,6 +15,7 @@ use dmm_tools::minimap::{self, GetVar};
 
 use dmi::*;
 use map_repr::AtomMap;
+use imgui::ImTexture;
 
 const TILE_SIZE: u32 = 32;
 
@@ -68,6 +69,9 @@ pub struct MapRenderer {
 
 pub struct RenderedMap {
     pub duration: [f32; 2],
+    pub thumbnail: Texture,
+    pub thumbnail_target: RenderTargetView,
+    pub thumbnail_id: Option<ImTexture>,
 
     vbuf: gfx::handle::Buffer<Resources, Vertex>,
     ibuf: gfx::handle::Buffer<Resources, u32>,
@@ -129,8 +133,29 @@ impl MapRenderer {
             gfx::memory::Bind::empty(),
         ).expect("create index buffer");
 
+        let texture = self.factory.create_texture::<gfx::format::R8_G8_B8_A8>(
+            gfx::texture::Kind::D2(::THUMBNAIL_SIZE, ::THUMBNAIL_SIZE, gfx::texture::AaMode::Single),
+            1,
+            gfx::memory::Bind::RENDER_TARGET | gfx::memory::Bind::SHADER_RESOURCE,
+            gfx::memory::Usage::Data,
+            Some(gfx::format::ChannelType::Unorm),
+        ).expect("create thumbnail texture");
+        let thumbnail = self.factory.view_texture_as_shader_resource::<ColorFormat>(
+            &texture,
+            (1, 1),
+            gfx::format::Swizzle::new(),
+        ).expect("view thumbnail as shader resource");
+        let thumbnail_target = self.factory.view_texture_as_render_target::<ColorFormat>(
+            &texture,
+            0,
+            None,
+        ).expect("view thumbnail as render target");
+
         RenderedMap {
             duration: [to_seconds(map.duration), to_seconds(Instant::now() - start)],
+            thumbnail,
+            thumbnail_target,
+            thumbnail_id: None,
 
             vbuf,
             ibuf,
@@ -165,33 +190,18 @@ impl RenderedMap {
         encoder.update_buffer(&self.ibuf, ibuf_data, 0).expect("update ibuf");
     }
 
-    pub fn paint(
-        &mut self,
+    fn inner_paint(
+        &self,
         parent: &mut MapRenderer,
         map: &AtomMap,
         z: u32,
-        center: [f32; 2],
         factory: &mut Factory,
         encoder: &mut Encoder,
         view: &RenderTargetView,
+        transform: [[f32; 4]; 4],
     ) {
-        // update vertex and index buffers from the map
-        if map.levels[z as usize].buffers_dirty.replace(false) {
-            self.update_buffers(map, z, factory, encoder);
-        }
-
-        // (0, 0) is the center of the screen, 1.0 = 1 pixel
-        let (x, y, _, _) = view.get_dimensions();
-        let transform = Transform {
-            transform: [
-                [2.0 / x as f32, 0.0, 0.0, -2.0 * center[0].round() / x as f32],
-                [0.0, 2.0 / y as f32, 0.0, -2.0 * center[1].round() / y as f32],
-                [0.0, 0.0, 1.0, 0.0],
-                [0.0, 0.0, 0.0, 1.0 / parent.zoom],
-            ],
-        };
         encoder
-            .update_buffer(&parent.transform_buffer, &[transform], 0)
+            .update_buffer(&parent.transform_buffer, &[Transform { transform }], 0)
             .expect("update_buffer failed");
 
         let mut start = 0;
@@ -220,6 +230,42 @@ impl RenderedMap {
             encoder.draw(&slice, &parent.pso, &data);
             start += call.len;
         }
+    }
+
+    pub fn paint(
+        &mut self,
+        parent: &mut MapRenderer,
+        map: &AtomMap,
+        z: u32,
+        center: [f32; 2],
+        factory: &mut Factory,
+        encoder: &mut Encoder,
+        view: &RenderTargetView,
+    ) {
+        // update vertex and index buffers from the map
+        if map.levels[z as usize].buffers_dirty.replace(false) {
+            self.update_buffers(map, z, factory, encoder);
+        }
+
+        // thumbnail render
+        encoder.clear(&self.thumbnail_target, [0.0, 0.0, 0.0, 0.0]);
+        self.inner_paint(parent, map, z, factory, encoder, &self.thumbnail_target, [
+            [2.0 / map.size.0 as f32 / TILE_SIZE as f32, 0.0, 0.0, -1.0],
+            [0.0, -2.0 / map.size.1 as f32 / TILE_SIZE as f32, 0.0, 1.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]);
+
+        // regular render
+        let (x, y, _, _) = view.get_dimensions();
+        let zoom = parent.zoom;
+        self.inner_paint(parent, map, z, factory, encoder, view, [
+            // (0, 0) is the center of the screen, 1.0 = 1 pixel
+            [2.0 / x as f32, 0.0, 0.0, -2.0 * center[0].round() / x as f32],
+            [0.0, 2.0 / y as f32, 0.0, -2.0 * center[1].round() / y as f32],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0 / zoom],
+        ]);
     }
 }
 

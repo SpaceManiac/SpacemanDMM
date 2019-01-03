@@ -56,6 +56,7 @@ type History = history::History<map_repr::AtomMap, Environment>;
 
 const RED_TEXT: &[(ImGuiCol, [f32; 4])] = &[(ImGuiCol::Text, [1.0, 0.25, 0.25, 1.0])];
 const GREEN_TEXT: &[(ImGuiCol, [f32; 4])] = &[(ImGuiCol::Text, [0.25, 1.0, 0.25, 1.0])];
+const THUMBNAIL_SIZE: u16 = 186;
 
 fn main() {
     support::run("SpacemanDMM".to_owned(), [0.25, 0.25, 0.5, 1.0]);
@@ -691,7 +692,7 @@ impl EditorScene {
         ui.window(im_str!("Maps"))
             .position((logical_size.0 as f32 - 230.0, 30.0), window_positions_cond)
             .movable(!self.ui_lock_windows)
-            .size((220.0, logical_size.1 as f32 - 40.0), window_positions_cond)
+            .size((THUMBNAIL_SIZE as f32 + 34.0, logical_size.1 as f32 - 40.0), window_positions_cond)
             .resizable(!self.ui_lock_windows)
             .build(|| {
                 for (map_idx, map) in self.maps.iter_mut().enumerate() {
@@ -719,7 +720,24 @@ impl EditorScene {
                                 ui.text(im_str!("{:?}", world.dim_xyz()));
                             }
                             for z in 0..world.dim_xyz().2 {
-                                if ui.small_button(im_str!("z = {}##map_{}_{}", z + 1, map_idx, z)) {
+                                let clicked;
+                                if let Some(&mut Some(ref mut rendered)) = map.rendered.get_mut(z as usize) {
+                                    let map_renderer::RenderedMap { ref mut thumbnail_id, ref thumbnail, .. } = rendered;
+                                    let map_renderer = &self.map_renderer;
+                                    let tex = *thumbnail_id.fulfill(|| {
+                                        renderer.textures().insert((thumbnail.clone(), map_renderer.sampler.clone()))
+                                    });
+                                    ui.image(tex, (THUMBNAIL_SIZE as f32, THUMBNAIL_SIZE as f32))
+                                        .border_col(ui.frame_color(self.map_current == map_idx && map.z_current == z as usize))
+                                        .build();
+                                    clicked = ui.is_item_hovered() && ui.imgui().is_mouse_clicked(ImMouseButton::Left);
+                                } else {
+                                    clicked = ui.button(
+                                        im_str!("z = {}##map_{}_{}", z + 1, map_idx, z),
+                                        (THUMBNAIL_SIZE as f32 + 2.0, THUMBNAIL_SIZE as f32 + 2.0),
+                                    );
+                                }
+                                if clicked {
                                     self.map_current = map_idx;
                                     map.z_current = z as usize;
                                 }
@@ -1625,6 +1643,7 @@ trait UiExt {
     fn fits_width(&self, width: f32) -> usize;
     fn objtree_menu<'e>(&self, env: &'e Environment, selection: &mut Option<TypeRef<'e>>);
     fn tool_icon(&self, active: bool, icon: &tools::ToolIcon, fallback: &ImStr) -> bool;
+    fn frame_color(&self, active: bool) -> ImVec4;
 }
 
 impl<'a> UiExt for Ui<'a> {
@@ -1643,20 +1662,23 @@ impl<'a> UiExt for Ui<'a> {
 
     fn tool_icon(&self, active: bool, icon: &tools::ToolIcon, fallback: &ImStr) -> bool {
         if let &tools::ToolIcon::Loaded { tex, uv0, uv1, tint } = icon {
-            let col = if active {
-                self.imgui().style().colors[ImGuiCol::FrameBgActive as usize]
-            } else {
-                self.imgui().style().colors[ImGuiCol::FrameBg as usize]
-            };
             self.image(tex, (32.0, 32.0))
                 .uv0(uv0)
                 .uv1(uv1)
-                .border_col(col)
+                .border_col(self.frame_color(active))
                 .tint_col(tint.unwrap_or(self.imgui().style().colors[ImGuiCol::Text as usize]))
                 .build();
             self.is_item_hovered() && self.imgui().is_mouse_clicked(ImMouseButton::Left)
         } else {
             self.button(fallback, (34.0, 34.0))
+        }
+    }
+
+    fn frame_color(&self, active: bool) -> ImVec4 {
+        if active {
+            self.imgui().style().colors[ImGuiCol::FrameBgActive as usize]
+        } else {
+            self.imgui().style().colors[ImGuiCol::FrameBg as usize]
         }
     }
 }
