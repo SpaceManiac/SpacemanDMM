@@ -261,8 +261,8 @@ impl RenderedMap {
         let zoom = parent.zoom;
         self.inner_paint(parent, map, z, factory, encoder, view, [
             // (0, 0) is the center of the screen, 1.0 = 1 pixel
-            [2.0 / x as f32, 0.0, 0.0, -2.0 * center[0].round() / x as f32],
-            [0.0, 2.0 / y as f32, 0.0, -2.0 * center[1].round() / y as f32],
+            [2.0 / x as f32, 0.0, 0.0, -2.0 * (center[0] * zoom).round() / zoom / x as f32],
+            [0.0, 2.0 / y as f32, 0.0, -2.0 * (center[1] * zoom).round() / zoom / y as f32],
             [0.0, 0.0, 1.0, 0.0],
             [0.0, 0.0, 0.0, 1.0 / zoom],
         ]);
