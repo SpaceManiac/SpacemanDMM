@@ -67,8 +67,11 @@ impl IconFile {
             None if icon_state == "" => 0,
             None => return None,
         };
-        let state = &self.metadata.states[state_index];
+        let index = self.index_of_state(&self.metadata.states[state_index], dir, 0);
+        Some(self.rect_of_index(index))
+    }
 
+    pub fn index_of_state(&self, state: &State, dir: i32, frame: u32) -> u32 {
         let dir_idx = match (state.dirs, dir) {
             (Dirs::One, _) => 0,
             (Dirs::Eight, NORTHWEST) => 7,
@@ -81,15 +84,18 @@ impl IconFile {
             (_, _) => 0,
         };
 
-        let icon_index = state.offset as u32 + dir_idx;
+        state.offset as u32 + dir_idx + frame * state.dirs.len() as u32
+    }
+
+    pub fn rect_of_index(&self, icon_index: u32) -> Rect {
         let icon_count = self.image.width / self.metadata.width;
         let (icon_x, icon_y) = (icon_index % icon_count, icon_index / icon_count);
-        Some((
+        (
             icon_x * self.metadata.width,
             icon_y * self.metadata.height,
             self.metadata.width,
             self.metadata.height,
-        ))
+        )
     }
 }
 

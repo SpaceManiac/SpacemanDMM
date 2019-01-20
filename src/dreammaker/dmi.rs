@@ -36,14 +36,14 @@ pub struct State {
     pub frames: Frames,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Dirs {
     One,
     Four,
     Eight,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Frames {
     /// Without an explicit setting, only one frame
     One,
@@ -68,6 +68,12 @@ impl Metadata {
     #[inline]
     pub fn from_str(data: &str) -> Metadata {
         parse_metadata(data)
+    }
+}
+
+impl State {
+    pub fn num_sprites(&self) -> usize {
+        self.dirs.len() * self.frames.len()
     }
 }
 
