@@ -64,6 +64,7 @@ impl IconFile {
     pub fn rect_of(&self, icon_state: &str, dir: i32) -> Option<Rect> {
         let state_index = match self.metadata.state_names.get(icon_state) {
             Some(&i) => i,
+            None if icon_state == "" => 0,
             None => return None,
         };
         let state = &self.metadata.states[state_index];

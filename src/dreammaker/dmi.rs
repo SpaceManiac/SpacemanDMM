@@ -137,7 +137,6 @@ fn parse_metadata(data: &str) -> Metadata {
     assert_eq!(lines.next().unwrap(), "# BEGIN DMI");
     assert_eq!(lines.next().unwrap(), &format!("version = {}", VERSION));
 
-    metadata.state_names.insert(String::new(), 0);
     let mut state: Option<State> = None;
     let mut frames_so_far = 0;
 
@@ -158,7 +157,9 @@ fn parse_metadata(data: &str) -> Metadata {
                 }
                 let unquoted = value[1..value.len() - 1].to_owned(); // TODO: unquote
                 assert!(!unquoted.contains('\\') && !unquoted.contains('"'));
-                metadata.state_names.insert(unquoted.clone(), metadata.states.len());
+                if !metadata.state_names.contains_key(&unquoted) {
+                    metadata.state_names.insert(unquoted.clone(), metadata.states.len());
+                }
 
                 state = Some(State {
                     offset: frames_so_far,
