@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use ndarray::{self, Axis};
 
 use dm::objtree::*;
@@ -190,21 +188,17 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
             }
         }
 
-        let icon = match atom.get_var("icon", objtree) {
-            &Constant::Resource(ref path) | &Constant::String(ref path) => path,
-            _ => {
+        let icon = match atom.get_var("icon", objtree).as_path() {
+            Some(path) => path,
+            None => {
                 println!("no icon: {}", atom.type_.path);
                 continue;
             }
         };
-        let icon_state = match atom.get_var("icon_state", objtree) {
-            &Constant::String(ref string) => string,
-            _ => "",
-        };
+        let icon_state = atom.get_var("icon_state", objtree).as_str().unwrap_or("");
         let dir = atom.get_var("dir", objtree).to_int().unwrap_or(::dmi::SOUTH);
 
-        let path: &Path = icon.as_ref();
-        let icon_file = match icon_cache.retrieve_shared(path) {
+        let icon_file = match icon_cache.retrieve_shared(icon) {
             Some(icon_file) => icon_file,
             None => continue 'atom,
         };
