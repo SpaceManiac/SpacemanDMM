@@ -204,6 +204,24 @@ impl<'a> TypeRef<'a> {
         }
     }
 
+    /// Recursively visit this and all parent **types**.
+    pub fn visit_parent_types<F: FnMut(TypeRef<'a>)>(&self, f: &mut F) {
+        let mut next = Some(*self);
+        while let Some(current) = next {
+            f(current);
+            next = current.parent_type();
+        }
+    }
+
+    /// Recursively visit this and all parent **paths**.
+    pub fn visit_parent_paths<F: FnMut(TypeRef<'a>)>(&self, f: &mut F) {
+        let mut next = Some(*self);
+        while let Some(current) = next {
+            f(current);
+            next = current.parent_path();
+        }
+    }
+
     /// Navigate the tree according to the given path operator.
     pub fn navigate(self, op: PathOp, name: &str) -> Option<TypeRef<'a>> {
         match op {
