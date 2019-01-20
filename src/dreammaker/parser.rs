@@ -301,11 +301,11 @@ impl TTKind {
         }
     }
 
-    fn is_end(&self, token: &Token) -> bool {
+    fn is_end(self, token: &Token) -> bool {
         match (self, token) {
-            (&TTKind::Paren, &Token::Punct(Punctuation::RParen)) => true,
-            (&TTKind::Brace, &Token::Punct(Punctuation::RBrace)) => true,
-            (&TTKind::Bracket, &Token::Punct(Punctuation::RBracket)) => true,
+            (TTKind::Paren, &Token::Punct(Punctuation::RParen)) => true,
+            (TTKind::Brace, &Token::Punct(Punctuation::RBrace)) => true,
+            (TTKind::Bracket, &Token::Punct(Punctuation::RBracket)) => true,
             _ => false,
         }
     }
@@ -1538,10 +1538,10 @@ where
         }
 
         let mut belongs_to = Vec::new();
-        let term = if unary_ops.len() > 0 {
-            require!(self.term(&mut belongs_to))
-        } else {
+        let term = if unary_ops.is_empty() {
             leading!(self.term(&mut belongs_to))
+        } else {
+            require!(self.term(&mut belongs_to))
         };
 
         // Read follows
@@ -1570,8 +1570,8 @@ where
 
         success(Expression::Base {
             unary: unary_ops,
-            term: term,
-            follow: follow,
+            term,
+            follow,
         })
     }
 
@@ -1764,7 +1764,7 @@ where
             Token::Punct(Punctuation::SafeDot) => self.follow_index(IndexKind::SafeDot, belongs_to),
             Token::Punct(Punctuation::SafeColon) => self.follow_index(IndexKind::SafeColon, belongs_to),
 
-            other => return self.try_another(other),
+            other => self.try_another(other),
         }
     }
 

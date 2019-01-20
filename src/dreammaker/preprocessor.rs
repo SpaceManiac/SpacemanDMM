@@ -58,8 +58,15 @@ pub struct DefineMap {
 
 impl DefineMap {
     /// Returns the number of elements in the map.
+    #[inline]
     pub fn len(&self) -> usize {
         self.inner.len()
+    }
+
+    /// Returns true if the map is empty.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
     }
 
     /// Returns true if the map contains a value for the specified key.
@@ -154,7 +161,7 @@ impl<'ctx> Include<'ctx> {
         Include::File {
             file: idx,
             lexer: Lexer::from_read(context, idx, read),
-            path: path,
+            path,
         }
     }
 }
@@ -176,7 +183,7 @@ struct IncludeStack<'ctx> {
 impl<'ctx> IncludeStack<'ctx> {
     fn top_file_path(&self) -> &Path {
         for each in self.stack.iter().rev() {
-            if let &Include::File { ref path, .. } = each {
+            if let Include::File { ref path, .. } = each {
                 return path;
             }
         }
@@ -184,7 +191,7 @@ impl<'ctx> IncludeStack<'ctx> {
     }
     fn top_no_expand(&self) -> &str {
         for each in self.stack.iter().rev() {
-            if let &Include::Expansion { ref name, .. } = each {
+            if let Include::Expansion { ref name, .. } = each {
                 return name;
             }
         }
@@ -372,7 +379,7 @@ impl<'ctx> Preprocessor<'ctx> {
         let defines = DefineMap::from_history(&self.history, location);
 
         Preprocessor {
-            context: context,
+            context,
             env_file: self.env_file.clone(),
             include_stack: Default::default(),
             history: Default::default(),  // TODO: support branching a second time
@@ -395,7 +402,7 @@ impl<'ctx> Preprocessor<'ctx> {
     /// Branch a child preprocessor from this preprocessor's current state.
     pub fn branch<'ctx2>(&self, context: &'ctx2 Context) -> Preprocessor<'ctx2> {
         Preprocessor {
-            context: context,
+            context,
             env_file: self.env_file.clone(),
             include_stack: Default::default(),
             history: Default::default(),  // TODO: support branching a second time
@@ -1003,7 +1010,7 @@ impl<'ctx> Iterator for Preprocessor<'ctx> {
             if let Some(token) = self.output.pop_front() {
                 return Some(LocatedToken {
                     location: self.last_input_loc,
-                    token: token,
+                    token,
                 });
             }
 

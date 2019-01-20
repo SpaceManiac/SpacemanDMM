@@ -66,13 +66,12 @@ impl Constant {
     }
 
     pub fn contains_key(&self, key: &Constant) -> bool {
-        match self {
-            &Constant::List(ref elements) => for &(ref k, _) in elements {
+        if let Constant::List(ref elements) = *self {
+            for &(ref k, _) in elements {
                 if key == k {
                     return true;
                 }
-            },
-            _ => {}
+            }
         }
         false
     }
@@ -91,57 +90,57 @@ impl Constant {
     }
 
     pub fn to_bool(&self) -> bool {
-        match self {
-            &Constant::Null(_) => false,
-            &Constant::Int(i) => i != 0,
-            &Constant::Float(f) => f != 0.,
-            &Constant::String(ref s) => !s.is_empty(),
+        match *self {
+            Constant::Null(_) => false,
+            Constant::Int(i) => i != 0,
+            Constant::Float(f) => f != 0.,
+            Constant::String(ref s) => !s.is_empty(),
             _ => true,
         }
     }
 
     pub fn to_float(&self) -> Option<f32> {
-        match self {
-            &Constant::Int(i) => Some(i as f32),
-            &Constant::Float(f) => Some(f.raw()),
+        match *self {
+            Constant::Int(i) => Some(i as f32),
+            Constant::Float(f) => Some(f.raw()),
             _ => None,
         }
     }
 
     pub fn to_int(&self) -> Option<i32> {
-        match self {
-            &Constant::Int(i) => Some(i),
-            &Constant::Float(f) => Some(f.raw() as i32),
+        match *self {
+            Constant::Int(i) => Some(i),
+            Constant::Float(f) => Some(f.raw() as i32),
             _ => None,
         }
     }
 
     pub fn eq_string(&self, string: &str) -> bool {
-        match self {
-            &Constant::String(ref s) => s == string,
+        match *self {
+            Constant::String(ref s) => s == string,
             _ => false,
         }
     }
 
     pub fn eq_resource(&self, resource: &str) -> bool {
         match self {
-            &Constant::String(ref s) |
-            &Constant::Resource(ref s) => s == resource,
+            Constant::String(ref s) |
+            Constant::Resource(ref s) => s == resource,
             _ => false,
         }
     }
 
     pub fn as_str(&self) -> Option<&str> {
-        match self {
-            &Constant::String(ref s) => Some(s.as_ref()),
+        match *self {
+            Constant::String(ref s) => Some(s.as_ref()),
             _ => None,
         }
     }
 
     pub fn as_path(&self) -> Option<&Path> {
-        match self {
-            &Constant::String(ref s) |
-            &Constant::Resource(ref s) => Some(s.as_ref()),
+        match *self {
+            Constant::String(ref s) |
+            Constant::Resource(ref s) => Some(s.as_ref()),
             _ => None,
         }
     }
@@ -642,7 +641,7 @@ impl<'a> ConstantFolder<'a> {
             Term::Int(v) => Constant::Int(v),
             Term::Float(v) => Constant::from(v),
             Term::Expr(expr) => self.expr(*expr, type_hint)?,
-            _ => return Err(self.error(format!("non-constant expression"))),
+            _ => return Err(self.error("non-constant expression".to_owned())),
         })
     }
 

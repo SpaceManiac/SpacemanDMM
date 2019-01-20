@@ -15,7 +15,7 @@ impl<K: Ord + Clone, V> Node<K, V> {
     pub fn new(key: RangeInclusive<K>, data: V) -> Self {
         Node {
             max: key.end.clone(),
-            key: key,
+            key,
             data: vec![data],
             height: 1,
             left: None,
@@ -119,7 +119,7 @@ impl<K: Ord + Clone, V> Node<K, V> {
     }
 
     //Return a new Interval tree, where the root has been removed
-    fn delete_root(mut self: Box<Self>) -> Option<Box<Self>> {
+    fn delete_root(mut self) -> Option<Box<Self>> {
         match (self.left.take(), self.right.take()) {
             (None,    None)    => None,
             (Some(l), None)    => Some(l),
@@ -185,8 +185,8 @@ impl<K: Ord + Clone, V> Node<K, V> {
     pub fn search_pair(&self, key: &RangeInclusive<K>) -> Option<(&RangeInclusive<K>, &[V])> {
         match self.key.cmp(key) {
             Ordering::Equal => Some((&self.key, &self.data)),
-            Ordering::Less => self.right.as_ref().map_or(None, |succ| succ.search_pair(key)),
-            Ordering::Greater => self.left.as_ref().map_or(None, |succ| succ.search_pair(key)),
+            Ordering::Less => self.right.as_ref().and_then(|succ| succ.search_pair(key)),
+            Ordering::Greater => self.left.as_ref().and_then(|succ| succ.search_pair(key)),
         }
     }
 

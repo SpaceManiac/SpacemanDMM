@@ -137,7 +137,7 @@ impl Type {
 
 #[inline]
 pub fn subpath(path: &str, parent: &str) -> bool {
-    debug_assert!(path.starts_with("/") && parent.starts_with("/") && parent.ends_with("/"));
+    debug_assert!(path.starts_with('/') && parent.starts_with('/') && parent.ends_with('/'));
     path == &parent[..parent.len() - 1] || path.starts_with(parent)
 }
 
@@ -395,14 +395,14 @@ impl ObjectTree {
                 }
             }
             return (false, TypeRef::new(self, current));
-        }
-        return (true, TypeRef::new(self, current));
+    }
+        (true, TypeRef::new(self, current))
     }
 
     pub fn type_by_constant(&self, constant: &Constant) -> Option<TypeRef> {
-        match constant {
-            &Constant::String(ref string_path) => self.find(string_path),
-            &Constant::Prefab(Prefab { ref path, .. }) => self.type_by_path(path.iter().map(|(_, item)| item)),
+        match *constant {
+            Constant::String(ref string_path) => self.find(string_path),
+            Constant::Prefab(Prefab { ref path, .. }) => self.type_by_path(path.iter().map(|(_, item)| item)),
             _ => None,
         }
     }
@@ -424,16 +424,12 @@ impl ObjectTree {
                 let mut parent_type_buf;
                 let parent_type = if path == "/atom" {
                     "/datum"
-                } else if path == "/turf" {
+                } else if path == "/turf" || path == "/area" {
                     "/atom"
-                } else if path == "/area" {
-                    "/atom"
-                } else if path == "/obj" {
-                    "/atom/movable"
-                } else if path == "/mob" {
+                } else if path == "/obj" || path == "/mob" {
                     "/atom/movable"
                 } else {
-                    let mut parent_type = match path.rfind("/").unwrap() {
+                    let mut parent_type = match path.rfind('/').unwrap() {
                         0 => "/datum",
                         idx => &path[..idx],
                     };
@@ -505,7 +501,7 @@ impl ObjectTree {
             path: path.clone(),
             vars: Default::default(),
             procs: Default::default(),
-            location: location,
+            location,
             location_specificity: len,
             parent_type: NodeIndex::new(BAD_NODE_INDEX),
             docs: Default::default(),

@@ -154,7 +154,7 @@ pub struct Location {
 impl Location {
     /// Pack this Location for use in `u64`-keyed structures.
     pub fn pack(self) -> u64 {
-        ((self.file.0 as u64) << 48) | ((self.line as u64) << 16) | (self.column as u64)
+        (u64::from(self.file.0) << 48) | (u64::from(self.line) << 16) | u64::from(self.column)
     }
 
     /// Return the predecessor of this `Location`.

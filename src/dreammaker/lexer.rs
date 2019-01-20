@@ -203,7 +203,7 @@ fn make_speedy_table() {
 }
 
 #[inline]
-fn filter_punct_table<'a>(filter: u8) -> &'static [(&'static str, Punctuation)] {
+fn filter_punct_table(filter: u8) -> &'static [(&'static str, Punctuation)] {
     let &(start, end) = SPEEDY_TABLE.get(filter as usize).unwrap_or(&(0, 0));
     &PUNCT_TABLE[start..end]
 }
@@ -353,7 +353,7 @@ impl<'a> fmt::Display for Quote<'a> {
         let s = self.0;
         if s.contains("\"}") {
             write!(f, "@@{}@", s)
-        } else if s.contains("\"") || s.contains("\n") {
+        } else if s.contains('"') || s.contains('\n') {
             write!(f, "{{\"{}\"}}", s)
         } else {
             write!(f, "\"{}\"", s)
@@ -881,7 +881,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                 // `backslash` is false hereafter
                 b'[' => {
                     self.interp_stack.push(Interpolation {
-                        end: end,
+                        end,
                         bracket_depth: 1,
                     });
                     interp_opened = true;
@@ -978,7 +978,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                         let mut location = self.location();
                         location.column += 1;
                         return Some(LocatedToken {
-                            location: location,
+                            location,
                             token: Token::Punct(Punctuation::Newline),
                         });
                     } else {

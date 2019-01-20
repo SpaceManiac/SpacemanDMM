@@ -72,8 +72,8 @@ impl Metadata {
 }
 
 impl Dirs {
-    pub fn len(&self) -> usize {
-        match *self {
+    pub fn len(self) -> usize {
+        match self {
             Dirs::One => 1,
             Dirs::Four => 4,
             Dirs::Eight => 8,
@@ -157,7 +157,7 @@ fn parse_metadata(data: &str) -> Metadata {
                     metadata.states.push(state);
                 }
                 let unquoted = value[1..value.len() - 1].to_owned(); // TODO: unquote
-                assert!(!unquoted.contains("\\") && !unquoted.contains("\""));
+                assert!(!unquoted.contains('\\') && !unquoted.contains('"'));
                 metadata.state_names.insert(unquoted.clone(), metadata.states.len());
 
                 state = Some(State {
@@ -190,7 +190,7 @@ fn parse_metadata(data: &str) -> Metadata {
             }
             "delay" => {
                 let state = state.as_mut().unwrap();
-                let mut vector: Vec<f32> = value.split(",").map(str::parse).collect::<Result<Vec<_>, _>>().unwrap();
+                let mut vector: Vec<f32> = value.split(',').map(str::parse).collect::<Result<Vec<_>, _>>().unwrap();
                 match state.frames {
                     Frames::One => if vector.iter().all(|&n| n == 1.) {
                         state.frames = Frames::Count(vector.len());
