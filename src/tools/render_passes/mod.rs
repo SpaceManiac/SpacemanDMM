@@ -215,8 +215,9 @@ impl RenderPass for Pretty {
             copy.set_var("icon_state", atom.get_var("illustration", objtree).clone());
             overlays.push(copy);
         } else if atom.istype("/obj/machinery/firealarm/") {
-            add_to(overlays, atom, "overlay_0");
-            add_to(overlays, atom, "overlay_clear");
+            add_to(overlays, atom, "fire_overlay");
+            add_to(overlays, atom, "fire_0");
+            add_to(overlays, atom, "fire_off");
         } else if atom.istype("/obj/structure/tank_dispenser/") {
             if let &Constant::Int(oxygen) = atom.get_var("oxygentanks", objtree) {
                 if oxygen >= 4 {
