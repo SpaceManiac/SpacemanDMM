@@ -90,6 +90,6 @@ fn push_html<'a, I: IntoIterator<Item=Event<'a>>>(buf: &mut String, iter: I) {
 }
 
 fn trim_right(buf: &mut String) {
-    let len = buf.trim_right().len();
+    let len = buf.trim_end().len();
     buf.truncate(len);
 }

@@ -126,7 +126,7 @@ fn simplify(out: &mut String, text: &str, ignore_char: char) -> bool {
         }
 
         let this_prefix = &line[..line.len() - line
-            .trim_left_matches(|c: char| c.is_whitespace() || c == ignore_char)
+            .trim_start_matches(|c: char| c.is_whitespace() || c == ignore_char)
             .len()];
         match prefix {
             None => prefix = Some(this_prefix),
@@ -146,7 +146,7 @@ fn simplify(out: &mut String, text: &str, ignore_char: char) -> bool {
             }
         }
 
-        let this_suffix = &line[line.trim_right_matches(|c: char| c.is_whitespace() || c == ignore_char).len()..];
+        let this_suffix = &line[line.trim_end_matches(|c: char| c.is_whitespace() || c == ignore_char).len()..];
         match suffix {
             None => suffix = Some(this_suffix),
             Some(ref mut suffix) => {

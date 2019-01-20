@@ -30,7 +30,7 @@ fn main() {
         .long_version(concat!(
             env!("CARGO_PKG_VERSION"), "\n",
             include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")),
-        ).trim_right())
+        ).trim_end())
         .get_matches());
 
     let mut context = Context::default();
