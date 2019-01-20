@@ -159,8 +159,8 @@ impl RenderPass for HideInvisible {
         {
             return false;
         }
-        if atom.get_var("icon", objtree).eq_resource("icons/obj/items_and_weapons.dmi") &&
-            atom.get_var("icon_state", objtree).eq_string("syndballoon") &&
+        if atom.get_var("icon", objtree) == "icons/obj/items_and_weapons.dmi" &&
+            atom.get_var("icon_state", objtree) == "syndballoon" &&
             !atom.istype("/obj/item/toy/syndicateballoon/")
         {
             return false;

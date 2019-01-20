@@ -89,6 +89,13 @@ impl Constant {
         None
     }
 
+    pub fn is_null(&self) -> bool {
+        match *self {
+            Constant::Null(_) => true,
+            _ => false,
+        }
+    }
+
     pub fn to_bool(&self) -> bool {
         match *self {
             Constant::Null(_) => false,
@@ -175,6 +182,16 @@ impl From<bool> for Constant {
         match value {
             true => Constant::Int(1),
             false => Constant::Int(0),
+        }
+    }
+}
+
+impl PartialEq<str> for Constant {
+    fn eq(&self, other: &str) -> bool {
+        match self {
+            Constant::String(ref s) |
+            Constant::Resource(ref s) => s == other,
+            _ => false,
         }
     }
 }
