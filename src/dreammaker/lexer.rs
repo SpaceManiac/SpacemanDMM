@@ -380,15 +380,16 @@ impl fmt::Display for FormatFloat {
             f.write_str("0")
         } else {
             let exp = n.abs().log10().floor();
+            let factor = 10.0f32.powf(5.0 - exp);
             if exp >= 6.0 || exp <= -5.0 {
-                let n2 = (n * 10.0f32.powf(5.0 - exp)).round() * 1.0e-5;
+                let n2 = (n * factor).round() * 1.0e-5;
                 let mut precision = 0;
                 while precision < 5 && (n2 * 10.0f32.powi(precision)) != (n2 * 10.0f32.powi(precision)).round() {
                     precision += 1;
                 }
                 write!(f, "{:.*}e{:+04}", precision as usize, n2, exp)
             } else {
-                let n2 = (n * 10.0f32.powf(5.0 - exp)).round() * 10.0f32.powf(exp - 5.0);
+                let n2 = (n * factor).round() / factor;
                 write!(f, "{}", n2)
             }
         }

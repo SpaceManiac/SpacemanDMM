@@ -28,6 +28,12 @@ fn floats() {
 
     assert_eq!(FormatFloat(std::f32::INFINITY).to_string(), "1.#INF");
     assert_eq!(FormatFloat(-std::f32::INFINITY).to_string(), "-1.#INF");
+
+    assert_eq!(FormatFloat(2.9).to_string(), "2.9");
+    assert_eq!(FormatFloat(2.4).to_string(), "2.4");
+    assert_eq!(FormatFloat(120.0).to_string(), "120");
+    assert_eq!(FormatFloat(200.0).to_string(), "200");
+    assert_eq!(FormatFloat(250.0).to_string(), "250");
 }
 
 #[test]
