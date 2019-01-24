@@ -222,14 +222,20 @@ impl fmt::Display for Constant {
             Constant::List(ref list) => {
                 write!(f, "list(")?;
                 let mut first = true;
+                let mut previous_assoc = false;
                 for &(ref key, ref val) in list.iter() {
                     if !first {
                         write!(f, ",")?;
+                        if previous_assoc {
+                            write!(f, " ")?;
+                        }
                     }
                     first = false;
+                    previous_assoc = false;
                     write!(f, "{}", key)?;
                     if let Some(val) = val.as_ref() {
                         write!(f, " = {}", val)?;
+                        previous_assoc = true;
                     }
                 }
                 write!(f, ")")

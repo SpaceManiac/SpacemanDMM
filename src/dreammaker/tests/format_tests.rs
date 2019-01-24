@@ -29,3 +29,17 @@ fn floats() {
     assert_eq!(FormatFloat(std::f32::INFINITY).to_string(), "1.#INF");
     assert_eq!(FormatFloat(-std::f32::INFINITY).to_string(), "-1.#INF");
 }
+
+#[test]
+fn lists() {
+    use dm::constants::Constant::{self, *};
+
+    assert_eq!(List(vec![
+        (Constant::string("KNOCKDOWN"), Some(Int(0))),
+        (Constant::string("THROW"), Some(Int(0))),
+    ]).to_string(), r#"list("KNOCKDOWN" = 0, "THROW" = 0)"#);
+    assert_eq!(List(vec![
+        (Constant::string("neutral"), None),
+        (Constant::string("Syndicate"), None),
+    ]).to_string(), r#"list("neutral","Syndicate")"#);
+}
