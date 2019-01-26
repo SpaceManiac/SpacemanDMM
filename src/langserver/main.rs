@@ -349,9 +349,11 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         let ty = ty.unwrap_or(self.objtree.root());
         if let Some((proc_name, idx)) = proc_name {
             if let Some(proc) = ty.get().procs.get(proc_name) {
-                for param in proc.value[idx].parameters.iter() {
-                    if &param.name == var_name {
-                        return UnscopedVar::Parameter { ty, proc: proc_name, param };
+                if let Some(value) = proc.value.get(idx) {
+                    for param in value.parameters.iter() {
+                        if &param.name == var_name {
+                            return UnscopedVar::Parameter { ty, proc: proc_name, param };
+                        }
                     }
                 }
             }
