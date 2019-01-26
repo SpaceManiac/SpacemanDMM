@@ -53,7 +53,15 @@ pub struct ProcValue {
     pub location: Location,
     pub parameters: Vec<Parameter>,
     pub docs: DocCollection,
-    pub code: Option<Vec<Statement>>,
+    pub code: Code,
+}
+
+#[derive(Debug, Clone)]
+pub enum Code {
+    Present(Vec<Statement>),
+    Invalid(DMError),
+    Builtin,
+    Disabled,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -608,7 +616,7 @@ impl ObjectTree {
         name: &str,
         is_verb: Option<bool>,
         parameters: Vec<Parameter>,
-        code: Option<Vec<Statement>>,
+        code: Code,
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let node = self.graph.node_weight_mut(parent).unwrap();
         let proc = node.procs.entry(name.to_owned()).or_insert_with(Default::default);
@@ -675,7 +683,7 @@ impl ObjectTree {
         mut path: I,
         len: usize,
         parameters: Vec<Parameter>,
-        code: Option<Vec<Statement>>,
+        code: Code,
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let (parent, mut proc_name) = self.get_from_path(location, &mut path, len)?;
         let mut is_verb = None;

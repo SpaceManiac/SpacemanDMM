@@ -717,6 +717,8 @@ where
                 SUCCESS
             }
             Punct(LParen) => {
+                use objtree::Code;
+
                 // `something(` - proc
                 let location = self.location;
                 let parameters = require!(self.separated(Comma, RParen, None, Parser::proc_parameter));
@@ -760,14 +762,17 @@ where
                     }
                     match result {
                         Err(err) => {
+                            let err2 = err.clone();
                             self.context.register_error(err);
-                            None
+                            Code::Invalid(err2)
                         },
                         Ok(code) => {
-                            Some(code)
+                            Code::Present(code)
                         }
                     }
-                } else { None };
+                } else {
+                    Code::Disabled
+                };
 
                 match self.tree.add_proc(location, new_stack.iter(), new_stack.len(), parameters, code) {
                     Ok((idx, proc)) => {

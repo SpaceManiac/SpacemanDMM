@@ -298,3 +298,14 @@ impl error::Error for DMError {
         self.cause.as_ref().map(|x| &**x as &error::Error)
     }
 }
+
+impl Clone for DMError {
+    fn clone(&self) -> DMError {
+        DMError {
+            location: self.location,
+            severity: self.severity,
+            description: self.description.clone(),
+            cause: None,  // not trivially cloneable
+        }
+    }
+}
