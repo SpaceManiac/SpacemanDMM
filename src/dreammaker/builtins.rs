@@ -132,7 +132,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
                 $(
                     tree.add_proc(location, elems.iter().cloned(), elems.len() + 1, vec![$(
                         Parameter { name: stringify!($arg).to_owned(), .. Default::default() }
-                    ),*])?;
+                    ),*], None)?;
                     break;
                 )*
                 tree.add_entry(location, elems.iter().cloned(), elems.len() + 1, Default::default())?;

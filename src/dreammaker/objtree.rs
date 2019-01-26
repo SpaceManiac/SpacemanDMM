@@ -9,7 +9,7 @@ use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 use linked_hash_map::LinkedHashMap;
 
-use super::ast::{Expression, VarType, PathOp, Prefab, Parameter};
+use super::ast::{Expression, VarType, PathOp, Prefab, Parameter, Statement};
 use super::constants::Constant;
 use super::docs::DocCollection;
 use super::{DMError, Location, Context};
@@ -53,6 +53,7 @@ pub struct ProcValue {
     pub location: Location,
     pub parameters: Vec<Parameter>,
     pub docs: DocCollection,
+    pub code: Option<Vec<Statement>>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -607,6 +608,7 @@ impl ObjectTree {
         name: &str,
         is_verb: Option<bool>,
         parameters: Vec<Parameter>,
+        code: Option<Vec<Statement>>,
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let node = self.graph.node_weight_mut(parent).unwrap();
         let proc = node.procs.entry(name.to_owned()).or_insert_with(Default::default);
@@ -622,6 +624,7 @@ impl ObjectTree {
             location,
             parameters,
             docs: Default::default(),
+            code
         });
         Ok((len, proc.value.last_mut().unwrap()))
     }
@@ -672,6 +675,7 @@ impl ObjectTree {
         mut path: I,
         len: usize,
         parameters: Vec<Parameter>,
+        code: Option<Vec<Statement>>,
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let (parent, mut proc_name) = self.get_from_path(location, &mut path, len)?;
         let mut is_verb = None;
@@ -691,7 +695,7 @@ impl ObjectTree {
             ));
         }
 
-        self.register_proc(location, parent, proc_name, is_verb, parameters)
+        self.register_proc(location, parent, proc_name, is_verb, parameters, code)
     }
 }
 
