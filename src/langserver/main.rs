@@ -477,7 +477,7 @@ handle_method_call! {
         } else if let Some(path) = init.root_path {
             self.root = PathBuf::from(path);
         } else {
-            return Err(invalid_request("must provide root_uri or root_path"))
+            return Err(invalid_request("No root directory was specified. Use 'Open Folder' or equivalent to open your DM environment."))
         }
         self.status = InitStatus::Running;
         InitializeResult {
