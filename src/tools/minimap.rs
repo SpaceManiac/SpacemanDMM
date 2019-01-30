@@ -1,3 +1,6 @@
+use std::sync::RwLock;
+use std::collections::HashSet;
+
 use ndarray::{self, Axis};
 
 use dm::objtree::*;
@@ -21,6 +24,7 @@ pub struct Context<'a> {
     pub min: (usize, usize),
     pub max: (usize, usize),
     pub render_passes: &'a [Box<RenderPass>],
+    pub errors: &'a RwLock<HashSet<String>>,
 }
 
 pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
@@ -50,7 +54,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
             if x < ctx.min.0 || x > ctx.max.0 {
                 continue;
             }
-            for mut atom in get_atom_list(objtree, &map.dictionary[e], (x as u32, y as u32), render_passes) {
+            for mut atom in get_atom_list(objtree, &map.dictionary[e], (x as u32, y as u32), render_passes, Some(ctx.errors)) {
                 // icons which differ from their map states
                 let p = &atom.type_.path;
                 if p == "/obj/structure/table/wood/fancy/black" {
@@ -249,7 +253,11 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
             // the real business
             map_image.composite(&icon_file.image, loc, rect, color);
         } else {
-            //println!("Missing icon: type={}, icon={}, icon_state={}", atom.type_.path, icon, icon_state);
+            let key = format!("bad icon: {}, state: {}", icon.display(), icon_state);
+            if !ctx.errors.read().unwrap().contains(&key) {
+                println!("{}", key);
+                ctx.errors.write().unwrap().insert(key);
+            }
         }
     }
 
@@ -261,6 +269,7 @@ pub fn get_atom_list<'a>(
     prefabs: &'a [Prefab],
     loc: (u32, u32),
     render_passes: &[Box<RenderPass>],
+    errors: Option<&RwLock<HashSet<String>>>,
 ) -> Vec<Atom<'a>> {
     let mut result = Vec::new();
 
@@ -275,7 +284,13 @@ pub fn get_atom_list<'a>(
         let atom = match Atom::from_prefab(objtree, fab, loc) {
             Some(x) => x,
             None => {
-                println!("Warning: missing {:?}", fab.path);
+                if let Some(errors) = errors {
+                    let key = format!("bad path: {}", fab.path);
+                    if !errors.read().unwrap().contains(&key) {
+                        println!("{}", key);
+                        errors.write().unwrap().insert(key);
+                    }
+                }
                 continue;
             }
         };
@@ -583,6 +598,7 @@ fn find_type_in_direction<'a>(ctx: Context, source: &Atom, direction: i32, flags
         &ctx.map.dictionary[&ctx.grid[ndarray::Dim([new_loc.1 as usize, new_loc.0 as usize])]],
         new_loc,
         ctx.render_passes,
+        None,
     );
     match source.get_var("canSmoothWith", ctx.objtree) {
         &Constant::List(ref elements) => if flags & SMOOTH_MORE != 0 {
@@ -702,6 +718,7 @@ fn diagonal_smooth<'a>(output: &mut Vec<Atom<'a>>, ctx: Context<'a>, source: &At
                         &ctx.map.dictionary[&ctx.grid[ndarray::Dim([new_loc.1 as usize, new_loc.0 as usize])]],
                         new_loc,
                         ctx.render_passes,
+                        None,
                     );
                     for mut atom in atom_list {
                         if subtype(&atom.type_.path, "/turf/open/") {

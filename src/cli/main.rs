@@ -16,6 +16,8 @@ use std::collections::HashMap;
 use std::fmt;
 use std::path::Path;
 use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::RwLock;
+use std::collections::HashSet;
 
 use structopt::StructOpt;
 
@@ -283,6 +285,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
 
             let render_passes = &dmm_tools::render_passes::configure(enable, disable);
             let paths: Vec<&Path> = files.iter().map(|p| p.as_ref()).collect();
+            let errors: RwLock<HashSet<String>> = Default::default();
 
             let perform_job = move |path: &Path| {
                 let prefix = if parallel {
@@ -328,6 +331,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                         min: (min.x - 1, min.y - 1),
                         max: (max.x - 1, max.y - 1),
                         render_passes: &render_passes,
+                        errors: &errors,
                     };
                     let image = minimap::generate(minimap_context, icon_cache).unwrap();
                     if let Err(e) = std::fs::create_dir_all(output) {
