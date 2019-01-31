@@ -1,0 +1,11 @@
+[package]
+name = "dreamchecker"
+version = "0.1.0"
+authors = ["Tad Hardesty <tad@platymuus.com>"]
+
+[[bin]]
+name = "dreamchecker"
+path = "main.rs"
+
+[dependencies]
+dreammaker = { path = "../dreammaker" }

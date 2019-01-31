@@ -316,6 +316,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "dreamchecker"
+version = "0.1.0"
+dependencies = [
+ "dreammaker 0.1.0",
+]
+
+[[package]]
 name = "dreammaker"
 version = "0.1.0"
 dependencies = [
