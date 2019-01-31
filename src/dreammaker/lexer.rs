@@ -368,8 +368,11 @@ impl fmt::Display for FormatFloat {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let n = self.0;
         if n.is_nan() {
-            // Not sure what is actually correct here.
-            f.write_str("1.#NaN")
+            if n.is_sign_negative() {
+                f.write_str("-1.#IND")
+            } else {
+                f.write_str("1.#IND")
+            }
         } else if n.is_infinite() {
             if n.is_sign_negative() {
                 f.write_str("-1.#INF")
