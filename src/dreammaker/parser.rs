@@ -1186,6 +1186,10 @@ where
             let label = self.ident()?;
             require!(self.statement_terminator());
             success(Statement::Continue(label))
+        } else if let Some(()) = self.exact_ident("del")? {
+            let expr = require!(self.expression());
+            require!(self.statement_terminator());
+            success(Statement::Del(expr))
         } else {
             let result = leading!(self.simple_statement(false, vars));
 

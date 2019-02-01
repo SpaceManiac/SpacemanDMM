@@ -659,6 +659,7 @@ pub enum Statement {
     Continue(Option<String>),
     Break(Option<String>),
     Label(String, Vec<Statement>),
+    Del(Expression),
 }
 
 #[derive(Debug, Clone, PartialEq)]
