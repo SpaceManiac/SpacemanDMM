@@ -188,5 +188,5 @@ pub fn detect_environment(root: &Path, default: &str) -> std::io::Result<Option<
 }
 
 pub fn detect_environment_default() -> std::io::Result<Option<std::path::PathBuf>> {
-    detect_environment("".as_ref(), DEFAULT_ENV)
+    detect_environment(".".as_ref(), DEFAULT_ENV)
 }
