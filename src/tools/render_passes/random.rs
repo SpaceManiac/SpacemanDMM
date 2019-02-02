@@ -1,5 +1,7 @@
 use super::*;
 
+use rand::seq::SliceRandom;
+
 #[derive(Default)]
 pub struct Random;
 impl RenderPass for Random {
@@ -8,7 +10,6 @@ impl RenderPass for Random {
         objtree: &'a ObjectTree,
         output: &mut Vec<Atom<'a>>,
     ) -> bool {
-        use rand::Rng;
         let mut rng = ::rand::thread_rng();
 
         if atom.istype("/obj/machinery/vending/snack/random/") {
@@ -19,7 +20,7 @@ impl RenderPass for Random {
                         machines.push(child.get());
                     }
                 }
-                if let Some(replacement) = rng.choose(&machines) {
+                if let Some(replacement) = machines.choose(&mut rng) {
                     output.push(Atom::from_type_ref(replacement, atom.loc));
                     return true;  // consumed
                 }
@@ -32,7 +33,7 @@ impl RenderPass for Random {
                         machines.push(child.get());
                     }
                 }
-                if let Some(replacement) = rng.choose(&machines) {
+                if let Some(replacement) = machines.choose(&mut rng) {
                     output.push(Atom::from_type_ref(replacement, atom.loc));
                     return true;  // consumed
                 }
@@ -45,7 +46,7 @@ impl RenderPass for Random {
                         sheets.push(child.get());
                     }
                 }
-                if let Some(replacement) = rng.choose(&sheets) {
+                if let Some(replacement) = sheets.choose(&mut rng) {
                     output.push(Atom::from_type_ref(replacement, atom.loc));
                     return true;  // consumed
                 }
@@ -98,7 +99,7 @@ impl RenderPass for Random {
                         }
                     }
                 }
-                if let Some(c) = rng.choose(&signs) {
+                if let Some(c) = signs.choose(&mut rng) {
                     atom.set_var("icon_state", c.clone());
                 }
             }
@@ -106,7 +107,7 @@ impl RenderPass for Random {
             atom.set_var("icon_state", Constant::string("lipstick"));
             // random color is not outwardly visible
         } else if atom.istype("/obj/item/device/tape/random/") {
-            let icon = format!("tape_{}", rng.choose(&["white", "blue", "red", "yellow", "purple"]).unwrap());
+            let icon = format!("tape_{}", ["white", "blue", "red", "yellow", "purple"].choose(&mut rng).unwrap());
             atom.set_var("icon_state", Constant::string(icon));
         }
     }

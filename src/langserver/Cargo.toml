@@ -20,4 +20,4 @@ petgraph = { version = "0.4.9", default-features = false }
 
 [build-dependencies]
 chrono = "0.4.0"
-git2 = { version = "0.7", default-features = false }
+git2 = { version = "0.8", default-features = false }

@@ -54,7 +54,7 @@ impl DocBlock {
 fn parser(markdown: &str) -> Parser {
     Parser::new_with_broken_link_callback(
         markdown,
-        pulldown_cmark::OPTION_ENABLE_TABLES,
+        pulldown_cmark::Options::ENABLE_TABLES,
         Some(&::handle_crosslink),
     )
 }

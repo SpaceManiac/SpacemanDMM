@@ -98,7 +98,7 @@ impl Map {
 
     #[inline]
     pub fn z_level(&self, z: usize) -> Grid {
-        self.grid.subview(Axis(0), z)
+        self.grid.index_axis(Axis(0), z)
     }
 
     #[inline]
