@@ -1001,6 +1001,8 @@ handle_notification! {
         let path = self.docs.change(params.text_document, params.content_changes)?;
         self.annotations.remove(&path);
     }
+
+    on DidChangeConfiguration(&mut self, _) {}
 }
 
 // ----------------------------------------------------------------------------
