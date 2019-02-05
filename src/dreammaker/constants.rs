@@ -55,6 +55,9 @@ pub enum ConstFn {
 }
 
 impl Constant {
+    // ------------------------------------------------------------------------
+    // Constructors
+
     pub fn null() -> &'static Constant {
         static NULL: Constant = Constant::Null(None);
         &NULL
@@ -65,29 +68,8 @@ impl Constant {
         Constant::String(s.into())
     }
 
-    pub fn contains_key(&self, key: &Constant) -> bool {
-        if let Constant::List(ref elements) = *self {
-            for &(ref k, _) in elements {
-                if key == k {
-                    return true;
-                }
-            }
-        }
-        false
-    }
-
-    pub fn index(&self, key: &Constant) -> Option<&Constant> {
-        match (self, key) {
-            (&Constant::List(ref elements), &Constant::Int(i)) => return elements.get(i as usize).map(|&(ref k, _)| k),
-            (&Constant::List(ref elements), key) => for &(ref k, ref v) in elements {
-                if key == k {
-                    return v.as_ref();
-                }
-            },
-            _ => {}
-        }
-        None
-    }
+    // ------------------------------------------------------------------------
+    // Conversions
 
     pub fn is_null(&self) -> bool {
         match *self {
@@ -122,6 +104,24 @@ impl Constant {
         }
     }
 
+    pub fn as_str(&self) -> Option<&str> {
+        match *self {
+            Constant::String(ref s) => Some(s.as_ref()),
+            _ => None,
+        }
+    }
+
+    pub fn as_path(&self) -> Option<&Path> {
+        match *self {
+            Constant::String(ref s) |
+            Constant::Resource(ref s) => Some(s.as_ref()),
+            _ => None,
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // Comparisons
+
     pub fn eq_string(&self, string: &str) -> bool {
         match *self {
             Constant::String(ref s) => s == string,
@@ -137,19 +137,31 @@ impl Constant {
         }
     }
 
-    pub fn as_str(&self) -> Option<&str> {
-        match *self {
-            Constant::String(ref s) => Some(s.as_ref()),
-            _ => None,
+    // ------------------------------------------------------------------------
+    // Operations
+
+    pub fn contains_key(&self, key: &Constant) -> bool {
+        if let Constant::List(ref elements) = *self {
+            for &(ref k, _) in elements {
+                if key == k {
+                    return true;
+                }
+            }
         }
+        false
     }
 
-    pub fn as_path(&self) -> Option<&Path> {
-        match *self {
-            Constant::String(ref s) |
-            Constant::Resource(ref s) => Some(s.as_ref()),
-            _ => None,
+    pub fn index(&self, key: &Constant) -> Option<&Constant> {
+        match (self, key) {
+            (&Constant::List(ref elements), &Constant::Int(i)) => return elements.get(i as usize).map(|&(ref k, _)| k),
+            (&Constant::List(ref elements), key) => for &(ref k, ref v) in elements {
+                if key == k {
+                    return v.as_ref();
+                }
+            },
+            _ => {}
         }
+        None
     }
 }
 
