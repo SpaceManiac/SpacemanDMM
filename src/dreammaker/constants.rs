@@ -1,5 +1,6 @@
 //! The constant folder/evaluator, used by the preprocessor and object tree.
 use std::fmt;
+use std::ops;
 use std::path::Path;
 
 use linked_hash_map::LinkedHashMap;
@@ -53,6 +54,9 @@ pub enum ConstFn {
     /// The `sound()` type constructor.
     Sound,
 }
+
+/// A constant-evaluation error (usually type mismatch).
+pub struct EvalError;
 
 impl Constant {
     // ------------------------------------------------------------------------
@@ -163,6 +167,14 @@ impl Constant {
         }
         None
     }
+
+    pub fn negate(&self) -> Result<Constant, EvalError> {
+        Ok(match *self {
+            Constant::Int(i) => Constant::Int(-i),
+            Constant::Float(i) => Constant::Float(-i),
+            _ => return Err(EvalError),
+        })
+    }
 }
 
 impl Default for Constant {
@@ -205,6 +217,22 @@ impl PartialEq<str> for Constant {
             Constant::Resource(ref s) => s == other,
             _ => false,
         }
+    }
+}
+
+impl ops::Not for Constant {
+    type Output = Constant;
+
+    fn not(self) -> Constant {
+        <&Constant>::not(&self)
+    }
+}
+
+impl<'a> ops::Not for &'a Constant {
+    type Output = Constant;
+
+    fn not(self) -> Constant {
+        Constant::from(!self.to_bool())
     }
 }
 
