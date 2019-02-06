@@ -318,6 +318,28 @@ impl fmt::Display for ConstFn {
 // ----------------------------------------------------------------------------
 // The constant evaluator
 
+impl Expression {
+    /// Evaluate this expression in the absence of any surrounding context.
+    pub fn simple_evaluate(self, location: Location) -> Result<Constant, DMError> {
+        ConstantFolder {
+            tree: None,
+            location,
+            ty: NodeIndex::new(0),
+            defines: None,
+        }.expr(self, None)
+    }
+}
+
+/// Evaluate an expression in the preprocessor, with `defined()` available.
+pub fn preprocessor_evaluate(location: Location, expr: Expression, defines: &DefineMap) -> Result<Constant, DMError> {
+    ConstantFolder {
+        tree: None,
+        location,
+        ty: NodeIndex::new(0),
+        defines: Some(defines),
+    }.expr(expr, None)
+}
+
 /// Evaluate all the type-level variables in an object tree into constants.
 pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree, sloppy: bool) {
     let mut been_sloppy = false;
@@ -363,26 +385,6 @@ pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree, sloppy: boo
             }
         }
     }
-}
-
-/// Evaluate an expression in the absence of any surrounding context.
-pub fn simple_evaluate(location: Location, expr: Expression) -> Result<Constant, DMError> {
-    ConstantFolder {
-        tree: None,
-        location,
-        ty: NodeIndex::new(0),
-        defines: None,
-    }.expr(expr, None)
-}
-
-/// Evaluate an expression in the preprocessor, with `defined()` available.
-pub fn preprocessor_evaluate(location: Location, expr: Expression, defines: &DefineMap) -> Result<Constant, DMError> {
-    ConstantFolder {
-        tree: None,
-        location,
-        ty: NodeIndex::new(0),
-        defines: Some(defines),
-    }.expr(expr, None)
 }
 
 enum ConstLookup {

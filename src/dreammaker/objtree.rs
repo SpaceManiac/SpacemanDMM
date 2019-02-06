@@ -445,7 +445,7 @@ impl ObjectTree {
                     if let Some(name) = self.graph.node_weight(type_idx).unwrap().vars.get("parent_type") {
                         location = name.value.location;
                         if let Some(expr) = name.value.expression.clone() {
-                            match ::constants::simple_evaluate(name.value.location, expr) {
+                            match expr.simple_evaluate(name.value.location) {
                                 Ok(Constant::String(s)) => {
                                     parent_type_buf = s;
                                     parent_type = &parent_type_buf;

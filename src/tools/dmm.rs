@@ -515,5 +515,5 @@ fn parse_constant(location: Location, input: Vec<u8>) -> Result<Constant, DMErro
     if bytes.next().is_some() {
         return Err(DMError::new(location, format!("leftover: {:?} {}", from_latin1_borrowed(&input), bytes.len())));
     }
-    ::dm::constants::simple_evaluate(location, expr)
+    expr.simple_evaluate(location)
 }
