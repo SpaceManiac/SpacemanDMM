@@ -40,11 +40,11 @@ fn test_contains(){
 fn test_empty(){
     let data = 1337;
     let mut t = IntervalTree::<i32>::new();
-    assert!(t.empty());
+    assert!(t.is_empty());
     t.insert(RangeInclusive::new(1,1), data);
     t.insert(RangeInclusive::new(2,2), data+1);
     t.insert(RangeInclusive::new(3,3), data+2);
-    assert!(!t.empty());
+    assert!(!t.is_empty());
 }
 
 #[test]
@@ -66,7 +66,7 @@ fn test_remove(){
     assert!(!t.contains(RangeInclusive::new(1,1)));
     assert!(!t.contains(RangeInclusive::new(2,2)));
     assert!(!t.contains(RangeInclusive::new(3,3)));
-    assert!(t.empty());
+    assert!(t.is_empty());
 }
 
 #[test]

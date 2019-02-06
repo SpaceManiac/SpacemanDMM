@@ -32,12 +32,12 @@ impl<K, V> IntervalTree<K, V> {
 /// extern crate interval_tree;
 ///
 /// let mut t=interval_tree::IntervalTree::<u64, i32>::new();
-/// assert!(t.empty());
+/// assert!(t.is_empty());
 /// t.insert(interval_tree::range(2,2),25);
-/// assert!(!t.empty());
+/// assert!(!t.is_empty());
 ///
 /// ```
-    pub fn empty(&self) -> bool { self.root.is_none() }
+    pub fn is_empty(&self) -> bool { self.root.is_none() }
 
 /// This function will return the hieght of the tree. An empty tree hash height 0, one with only
 /// one elemente has height 1 etc.
@@ -86,10 +86,10 @@ impl<K: Ord + Clone, V> IntervalTree<K, V> {
 /// let mut t=interval_tree::IntervalTree::<u64, i32>::new();
 /// t.insert(interval_tree::range(2,2),25);
 /// t.remove(interval_tree::range(2,2));
-/// assert!(t.empty());
+/// assert!(t.is_empty());
 /// // deleting nonexistant keys doesn't do anything
 /// t.remove(interval_tree::range(3,3));
-/// assert!(t.empty());
+/// assert!(t.is_empty());
 /// ```
     pub fn remove(&mut self, key: RangeInclusive<K>) {
         match self.root.take() {
