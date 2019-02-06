@@ -396,7 +396,7 @@ fn constant_ident_lookup(
     tree: &mut ObjectTree,
     ty: NodeIndex,
     ident: &str,
-    must_be_static: bool,
+    must_be_const: bool,
 ) -> Result<ConstLookup, DMError> {
     // try to read the currently-set value if we can and
     // substitute that in, otherwise try to evaluate it.
@@ -428,12 +428,12 @@ fn constant_ident_lookup(
                         } else if !decl.var_type.is_const_evaluable() {
                             return Err(DMError::new(
                                 var.value.location,
-                                format!("non-const variable: {}", ident),
+                                format!("non-const-evaluable variable: {}", ident),
                             ));
-                        } else if !decl.var_type.is_static && must_be_static {
+                        } else if !decl.var_type.is_const && must_be_const {
                             return Err(DMError::new(
                                 var.value.location,
-                                format!("non-static variable: {}", ident),
+                                format!("non-const variable: {}", ident),
                             ));
                         }
                         var.value.being_evaluated = true;
@@ -544,11 +544,11 @@ impl<'a> ConstantFolder<'a> {
     fn follow(&mut self, term: Constant, follow: Follow) -> Result<Constant, DMError> {
         match (term, follow) {
             // Meant to handle the GLOB.SCI_FREQ case:
-            //     /datum/globals/var/static/SCI_FREQ = 1351
+            //     /datum/globals/var/const/SCI_FREQ = 1351
             //     /var/datum/globals/GLOB = null
             //     /obj/var/freq = GLOB.SCI_FREQ   // initial() is 1351
             // If it's a reference to a type-hinted value, look up the field in
-            // its static variables (but not non-static variables).
+            // its const variables (but not non-const variables).
             (Constant::Null(Some(type_hint)), Follow::Field(_, field_name)) => {
                 let mut full_path = String::new();
                 for each in type_hint {
@@ -722,12 +722,12 @@ impl<'a> ConstantFolder<'a> {
         })
     }
 
-    fn ident(&mut self, ident: String, must_be_static: bool) -> Result<Constant, DMError> {
+    fn ident(&mut self, ident: String, must_be_const: bool) -> Result<Constant, DMError> {
         let ty = self.ty;
-        self.recursive_lookup(ty, &ident, must_be_static)
+        self.recursive_lookup(ty, &ident, must_be_const)
     }
 
-    fn recursive_lookup(&mut self, ty: NodeIndex, ident: &str, must_be_static: bool) -> Result<Constant, DMError> {
+    fn recursive_lookup(&mut self, ty: NodeIndex, ident: &str, must_be_const: bool) -> Result<Constant, DMError> {
         let mut idx = Some(ty);
         while let Some(ty) = idx {
             let location = self.location;
@@ -735,7 +735,7 @@ impl<'a> ConstantFolder<'a> {
                 return Err(self.error("cannot reference variables in this context"));
             }
             let tree = self.tree.as_mut().unwrap();
-            match constant_ident_lookup(tree, ty, &ident, must_be_static)
+            match constant_ident_lookup(tree, ty, &ident, must_be_const)
                 .map_err(|e| DMError::new(location, e.into_description()))?
             {
                 ConstLookup::Found(_, v) => return Ok(v),
