@@ -992,23 +992,24 @@ where
                 self.skip_phantom_semicolons()?;
             }
 
-            success(Statement::If(arms, else_arm))
+            success(Statement::If { arms, else_arm })
         } else if let Some(()) = self.exact_ident("while")? {
             // statement :: 'while' '(' expression ')' block
             require!(self.exact(Token::Punct(Punctuation::LParen)));
-            let expr = require!(self.expression());
+            let condition = require!(self.expression());
             require!(self.exact(Token::Punct(Punctuation::RParen)));
-            success(Statement::While(expr, require!(self.block(&LoopContext::While))))
+            let block = require!(self.block(&LoopContext::While));
+            success(Statement::While { condition, block })
         } else if let Some(()) = self.exact_ident("do")? {
             // statement :: 'do' block 'while' '(' expression ')' ';'
             let block = require!(self.block(&LoopContext::DoWhile));
             self.skip_phantom_semicolons()?;
             require!(self.exact_ident("while"));
             require!(self.exact(Token::Punct(Punctuation::LParen)));
-            let expr = require!(self.expression());
+            let condition = require!(self.expression());
             require!(self.exact(Token::Punct(Punctuation::RParen)));
             require!(self.statement_terminator());
-            success(Statement::DoWhile(block, expr))
+            success(Statement::DoWhile { block, condition })
         } else if let Some(()) = self.exact_ident("for")? {
             // for (Var [as Type] [in List]) Statement
             // for (Init, Test, Inc) Statement
@@ -1122,7 +1123,10 @@ where
             } else {
                 expr = None;
             }
-            success(Statement::Spawn(expr, require!(self.block(&LoopContext::None))))
+            success(Statement::Spawn {
+                delay: expr,
+                block: require!(self.block(&LoopContext::None))
+            })
         } else if let Some(()) = self.exact_ident("switch")? {
             require!(self.exact(Token::Punct(Punctuation::LParen)));
             let expr = require!(self.expression());
@@ -1144,7 +1148,7 @@ where
                 None
             };
             require!(self.exact(Token::Punct(Punctuation::RBrace)));
-            success(Statement::Switch(expr, cases, default))
+            success(Statement::Switch { input: expr, cases, default })
         } else if let Some(()) = self.exact_ident("try")? {
             let try_block = require!(self.block(loop_ctx));
             self.skip_phantom_semicolons()?;
@@ -1177,7 +1181,7 @@ where
             let value = require!(self.expression());
             require!(self.statement_terminator());
             // TODO: warn on weird values for these
-            success(Statement::Setting(name, mode, value))
+            success(Statement::Setting { name, mode, value })
         } else if let Some(()) = self.exact_ident("break")? {
             let label = self.ident()?;
             require!(self.statement_terminator());
@@ -1198,7 +1202,10 @@ where
                 if let Some(Term::Ident(ref name)) = expr.as_term() {
                     if let Some(()) = self.exact(Token::Punct(Punctuation::Colon))? {
                         // it's a label! check for a block
-                        return success(Statement::Label(name.to_owned(), require!(self.block(loop_ctx))));
+                        return success(Statement::Label {
+                            name: name.to_owned(),
+                            block: require!(self.block(loop_ctx)),
+                        });
                     }
                 }
             }

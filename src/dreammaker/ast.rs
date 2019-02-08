@@ -620,9 +620,18 @@ pub enum Statement {
     Expr(Expression),
     Return(Option<Expression>),
     Throw(Expression),
-    While(Expression, Vec<Statement>),
-    DoWhile(Vec<Statement>, Expression),
-    If(Vec<(Expression, Vec<Statement>)>, Option<Vec<Statement>>),
+    While {
+        condition: Expression,
+        block: Vec<Statement>,
+    },
+    DoWhile {
+        block: Vec<Statement>,
+        condition: Expression,
+    },
+    If {
+        arms: Vec<(Expression, Vec<Statement>)>,
+        else_arm: Option<Vec<Statement>>
+    },
     ForLoop {
         init: Option<Box<Statement>>,
         test: Option<Expression>,
@@ -648,9 +657,20 @@ pub enum Statement {
     },
     Var(VarStatement),
     Vars(Vec<VarStatement>),
-    Setting(String, SettingMode, Expression),
-    Spawn(Option<Expression>, Vec<Statement>),
-    Switch(Expression, Vec<(Vec<Case>, Vec<Statement>)>, Option<Vec<Statement>>),
+    Setting {
+        name: String,
+        mode: SettingMode,
+        value: Expression
+    },
+    Spawn {
+        delay: Option<Expression>,
+        block: Vec<Statement>,
+    },
+    Switch {
+        input: Expression,
+        cases: Vec<(Vec<Case>, Vec<Statement>)>,
+        default: Option<Vec<Statement>>,
+    },
     TryCatch {
         try_block: Vec<Statement>,
         catch_params: Vec<TreePath>,
@@ -658,7 +678,10 @@ pub enum Statement {
     },
     Continue(Option<String>),
     Break(Option<String>),
-    Label(String, Vec<Statement>),
+    Label {
+        name: String,
+        block: Vec<Statement>,
+    },
     Del(Expression),
 }
 
