@@ -8,7 +8,7 @@ use ndarray::{self, Array3, Axis};
 use linked_hash_map::LinkedHashMap;
 
 use dm::{DMError, Location, HasLocation};
-use dm::lexer::{LocationTracker, from_latin1, from_latin1_borrowed};
+use dm::lexer::{LocationTracker, from_latin1};
 use dm::constants::Constant;
 
 const MAX_KEY_LENGTH: u8 = 3;
@@ -330,14 +330,14 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
                     } else if ch == b';' {
                         curr_prefab.vars.insert(
                             from_latin1(take(&mut curr_var)),
-                            parse_constant(chars.location(), take(&mut curr_datum))?,
+                            dm::constants::evaluate_str(chars.location(), &take(&mut curr_datum))?,
                         );
                         skip_whitespace = true;
                     } else if ch == b'}' {
                         if !curr_var.is_empty() {
                             curr_prefab.vars.insert(
                                 from_latin1(take(&mut curr_var)),
-                                parse_constant(chars.location(), take(&mut curr_datum))?,
+                                dm::constants::evaluate_str(chars.location(), &take(&mut curr_datum))?,
                             );
                         }
                         in_varedit_block = false;
@@ -499,21 +499,4 @@ fn advance_key(current: KeyType, next_digit: KeyType) -> Result<KeyType, DMError
         // https://secure.byond.com/forum/?post=2340796#comment23770802
         DMError::new(Location::default(), "Key overflow, max is 'ymo'")
     })
-}
-
-fn parse_constant(location: Location, input: Vec<u8>) -> Result<Constant, DMError> {
-    use dm::Context;
-    use dm::lexer::Lexer;
-    use dm::parser::Parser;
-
-    let mut bytes = input.iter().map(|&x| Ok(x));
-    let ctx = Context::default();
-    let expr = match Parser::new(&ctx, Lexer::new(&ctx, Default::default(), &mut bytes)).expression()? {
-        Some(expr) => expr,
-        None => return Err(DMError::new(location, format!("not an expression: {}", from_latin1_borrowed(&input)))),
-    };
-    if bytes.next().is_some() {
-        return Err(DMError::new(location, format!("leftover: {:?} {}", from_latin1_borrowed(&input), bytes.len())));
-    }
-    expr.simple_evaluate(location)
 }

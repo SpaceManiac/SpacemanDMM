@@ -318,6 +318,23 @@ impl fmt::Display for ConstFn {
 // ----------------------------------------------------------------------------
 // The constant evaluator
 
+pub fn evaluate_str(location: Location, input: &[u8]) -> Result<Constant, DMError> {
+    use super::Context;
+    use super::lexer::{Lexer, from_latin1_borrowed};
+    use super::parser::Parser;
+
+    let mut bytes = input.iter().map(|&x| Ok(x));
+    let ctx = Context::default();
+    let expr = match Parser::new(&ctx, Lexer::new(&ctx, Default::default(), &mut bytes)).expression()? {
+        Some(expr) => expr,
+        None => return Err(DMError::new(location, format!("not an expression: {}", from_latin1_borrowed(&input)))),
+    };
+    if bytes.next().is_some() {
+        return Err(DMError::new(location, format!("leftover: {:?} {}", from_latin1_borrowed(&input), bytes.len())));
+    }
+    expr.simple_evaluate(location)
+}
+
 impl Expression {
     /// Evaluate this expression in the absence of any surrounding context.
     pub fn simple_evaluate(self, location: Location) -> Result<Constant, DMError> {
