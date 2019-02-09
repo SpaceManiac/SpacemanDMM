@@ -1,12 +1,21 @@
 //! DreamChecker, a robust static analysis and typechecking engine for
 //! DreamMaker.
-#![allow(dead_code)]
+#![allow(dead_code, unused_variables)]
 
 extern crate dreammaker as dm;
 use dm::objtree::{ProcValue, Code};
-use dm::ast::{Statement, Expression, VarStatement};
+use dm::ast::*;
 
-use std::collections::HashMap;
+enum Type {
+    Any,
+    Null,
+    String,
+    Resource,
+    Number,
+    List,
+    Instance(String),
+    Typepath(String),
+}
 
 struct ProcAnalyzer {
 }
@@ -20,10 +29,10 @@ impl ProcAnalyzer {
 
     fn visit_statement(&mut self, statement: &Statement) {
         match statement {
-            Statement::Expr(expr) => self.visit_expression(expr),
-            Statement::Return(Some(expr)) => self.visit_expression(expr),
+            Statement::Expr(expr) => { self.visit_expression(expr); },
+            Statement::Return(Some(expr)) => { self.visit_expression(expr); },
             Statement::Return(None) => {},
-            Statement::Throw(expr) => self.visit_expression(expr),
+            Statement::Throw(expr) => { self.visit_expression(expr); },
             Statement::While { condition, block } => {
                 self.visit_expression(condition);
                 self.visit_block(block);
@@ -85,7 +94,7 @@ impl ProcAnalyzer {
                 for &(ref case, ref block) in cases.iter() {
                     for case_part in case.iter() {
                         match case_part {
-                            dm::ast::Case::Exact(expr) => self.visit_expression(expr),
+                            dm::ast::Case::Exact(expr) => { self.visit_expression(expr); },
                             dm::ast::Case::Range(start, end) => {
                                 self.visit_expression(start);
                                 self.visit_expression(end);
@@ -105,38 +114,61 @@ impl ProcAnalyzer {
             Statement::Continue(_) => {},
             Statement::Break(_) => {},
             Statement::Label { name: _, block } => self.visit_block(block),
-            Statement::Del(expr) => self.visit_expression(expr),
-        }
-    }
-
-    fn visit_expression(&mut self, expression: &Expression) {
-        match expression {
-            Expression::Base { unary, term, follow } => {
-                // TODO: the meat
-            },
-            Expression::BinaryOp { lhs, rhs, .. } => {
-                self.visit_expression(lhs);
-                self.visit_expression(rhs);
-            },
-            Expression::AssignOp { lhs, rhs, .. } => {
-                self.visit_expression(rhs);
-                // TODO: visit LHS?
-            },
-            Expression::TernaryOp { cond, if_, else_ } => {
-                self.visit_expression(cond);
-                self.visit_expression(if_);
-                self.visit_expression(else_);
-            }
+            Statement::Del(expr) => { self.visit_expression(expr); },
         }
     }
 
     fn visit_var(&mut self, var: &VarStatement) {
+    }
+
+    fn visit_expression(&mut self, expression: &Expression) -> Type {
+        match expression {
+            Expression::Base { unary, term, follow } => {
+                let mut ty = self.visit_term(term);
+                for each in follow.iter() {
+                    ty = self.visit_follow(ty, each);
+                }
+                for each in unary.iter().rev() {
+                    ty = self.visit_unary(ty, each);
+                }
+                ty
+            },
+            Expression::BinaryOp { lhs, rhs, .. } => {
+                let lty = self.visit_expression(lhs);
+                let rty = self.visit_expression(rhs);
+                unimplemented!()
+            },
+            Expression::AssignOp { lhs, rhs, .. } => {
+                self.visit_expression(rhs)
+                // TODO: visit LHS?
+            },
+            Expression::TernaryOp { cond, if_, else_ } => {
+                // TODO: be sensible
+                self.visit_expression(cond);
+                let ty = self.visit_expression(if_);
+                self.visit_expression(else_);
+                ty
+            }
+        }
+    }
+
+    fn visit_term(&mut self, term: &Term) -> Type {
+        unimplemented!()
+    }
+
+    fn visit_follow(&mut self, lhs: Type, rhs: &Follow) -> Type {
+        unimplemented!()
+    }
+
+    fn visit_unary(&mut self, rhs: Type, op: &UnaryOp) -> Type {
+        unimplemented!()
     }
 }
 
 fn some_analysis(func: &ProcValue, code: &[Statement]) {
     println!("{:?}", func.parameters);
     println!("{:#?}", code);
+    ProcAnalyzer{}.visit_block(code);
 }
 
 fn main() {
