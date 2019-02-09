@@ -89,6 +89,8 @@ struct Engine<'a, R: 'a, W: 'a> {
     objtree: dm::objtree::ObjectTree,
 
     annotations: HashMap<PathBuf, (FileId, FileId, Rc<AnnotationTree>)>,
+
+    cap_related_info: bool,
 }
 
 impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
@@ -107,6 +109,8 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             objtree: Default::default(),
 
             annotations: Default::default(),
+
+            cap_related_info: false,
         }
     }
 
@@ -220,7 +224,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         let mut map: HashMap<_, Vec<_>> = HashMap::new();
         for error in self.context.errors().iter() {
             let loc = error.location();
-            let related_information = if error.notes().is_empty() {
+            let related_information = if !self.cap_related_info || error.notes().is_empty() {
                 None
             } else {
                 let mut notes = Vec::with_capacity(error.notes().len());
@@ -245,6 +249,21 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             map.entry(self.context.file_path(loc.file))
                 .or_insert_with(Default::default)
                 .push(diag);
+
+            if !self.cap_related_info {
+                // Fallback in case the client does not support related info
+                for note in error.notes().iter() {
+                    let diag = langserver::Diagnostic {
+                        message: note.description().to_owned(),
+                        severity: Some(langserver::DiagnosticSeverity::Information),
+                        range: location_to_range(note.location()),
+                        .. Default::default()
+                    };
+                    map.entry(self.context.file_path(note.location().file))
+                        .or_insert_with(Default::default)
+                        .push(diag);
+                }
+            }
         }
 
         for (path, diagnostics) in map {
@@ -485,6 +504,18 @@ handle_method_call! {
             return Err(invalid_request("No root directory was specified. Use 'Open Folder' or equivalent to open your DM environment."))
         }
         self.status = InitStatus::Running;
+
+        self.cap_related_info = match init.capabilities.text_document {
+            Some(doc_caps) => match doc_caps.publish_diagnostics {
+                Some(publish_caps) => match publish_caps.related_information {
+                    Some(value) => value,
+                    None => false,
+                },
+                None => false,
+            },
+            None => false,
+        };
+
         InitializeResult {
             capabilities: ServerCapabilities {
                 definition_provider: Some(true),
