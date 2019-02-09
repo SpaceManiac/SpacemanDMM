@@ -245,6 +245,7 @@ impl fmt::Display for Severity {
 
 /// An error produced during DM parsing, with location information.
 #[derive(Debug)]
+#[must_use]
 pub struct DMError {
     location: Location,
     severity: Severity,

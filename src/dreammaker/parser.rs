@@ -609,8 +609,9 @@ where
             Token::Punct(p @ Punctuation::CloseColon) |
             Token::Punct(p @ Punctuation::Colon) => {
                 spurious_lead = true;
-                self.context.register_error(self.error(format!("path started by '{}', should be unprefixed", p))
-                    .set_severity(Severity::Warning));
+                self.error(format!("path started by '{}', should be unprefixed", p))
+                    .set_severity(Severity::Warning)
+                    .register(self.context);
             }
             t => { self.put_back(t); }
         }
@@ -638,8 +639,9 @@ where
                 Token::Punct(p @ Punctuation::Dot) |
                 Token::Punct(p @ Punctuation::CloseColon) |
                 Token::Punct(p @ Punctuation::Colon) => {
-                    self.context.register_error(self.error(format!("path separated by '{}', should be '/'", p))
-                        .set_severity(Severity::Warning));
+                    self.error(format!("path separated by '{}', should be '/'", p))
+                        .set_severity(Severity::Warning)
+                        .register(self.context);
                 }
                 t => { self.put_back(t); break; }
             }
@@ -677,8 +679,9 @@ where
             parts: &path,
         };
         if absolute && parent.parent.is_some() {
-            self.context.register_error(self.error(format!("nested absolute path: {} inside {}", new_stack, parent))
-                .set_severity(Severity::Warning));
+            self.error(format!("nested absolute path: {} inside {}", new_stack, parent))
+                .set_severity(Severity::Warning)
+                .register(self.context);
         }
 
         require!(self.var_annotations());
@@ -822,14 +825,15 @@ where
         let name = match path.pop() {
             Some(name) => name,
             None => {
-                self.context.register_error(self.describe_parse_error());
+                self.describe_parse_error().register(self.context);
                 "".to_owned()
             }
         };
         if path.first().map_or(false, |i| i == "var") {
             path.remove(0);
-            self.context.register_error(DMError::new(leading_loc, "'var/' is unnecessary here")
-                .set_severity(Severity::Hint));
+            DMError::new(leading_loc, "'var/' is unnecessary here")
+                .set_severity(Severity::Hint)
+                .register(self.context);
         }
         let location = self.location;
         require!(self.var_annotations());
@@ -1261,8 +1265,9 @@ where
 
                 let var_type = tree_path.into_iter().collect::<VarType>();
                 if var_type.is_tmp {
-                    self.context.register_error(DMError::new(type_path_start, "var/tmp has no effect here")
-                        .set_severity(Severity::Warning));
+                    DMError::new(type_path_start, "var/tmp has no effect here")
+                        .set_severity(Severity::Warning)
+                        .register(self.context);
                 }
 
                 if self.annotations.is_some() {
@@ -1280,8 +1285,9 @@ where
                     (InputType::default(), None)
                 };
                 if !input_types.is_empty() || in_list.is_some() {
-                    self.context.register_error(self.error("input specifier has no effect here")
-                        .set_severity(Severity::Warning));
+                    self.error("input specifier has no effect here")
+                        .set_severity(Severity::Warning)
+                        .register(self.context);
                 }
 
                 var_stmts.push(VarStatement { var_type, name, value });
@@ -1657,15 +1663,17 @@ where
                 Some(args) => {
                     // warn against this mistake
                     if let Some(&Expression::BinaryOp { op: BinaryOp::In, .. } ) = args.get(0) {
-                        self.context.register_error(self.error("bad 'locate(in)', should be 'locate() in'")
-                            .set_severity(Severity::Warning));
+                        self.error("bad 'locate(in)', should be 'locate() in'")
+                            .set_severity(Severity::Warning)
+                            .register(self.context);
                     }
 
                     // read "in" clause
                     let in_list = if let Some(()) = self.exact(Token::Punct(Punctuation::In))? {
                         if args.len() > 1 {
-                            self.context.register_error(DMError::new(start, "bad 'locate(x, y, z) in'")
-                                .set_severity(Severity::Warning));
+                            DMError::new(start, "bad 'locate(x, y, z) in'")
+                                .set_severity(Severity::Warning)
+                                .register(self.context);
                         }
                         Some(Box::new(require!(self.expression())))
                     } else {

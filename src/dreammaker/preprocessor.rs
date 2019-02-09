@@ -659,8 +659,11 @@ impl<'ctx> Preprocessor<'ctx> {
                                         self.output.push_back(Token::Punct(Punctuation::Newline));
                                         self.include_stack.stack.push(include);
                                     }
-                                    Err(e) => self.context.register_error(DMError::new(self.last_input_loc,
-                                        "failed to open file").set_cause(e)),
+                                    Err(e) => {
+                                        DMError::new(self.last_input_loc, "failed to open file")
+                                            .set_cause(e)
+                                            .register(self.context);
+                                    }
                                 },
                             }
                             return Ok(());
@@ -765,16 +768,17 @@ impl<'ctx> Preprocessor<'ctx> {
                         if let Some(previous) = self.defines.remove(&define_name) {
                             self.move_to_history(define_name, previous);
                         } else {
-                            self.context.register_error(DMError::new(define_name_loc,
-                                format!("macro undefined while not defined: {}", define_name)
-                            ).set_severity(Severity::Warning));
+                            DMError::new(define_name_loc, format!("macro undefined while not defined: {}", define_name))
+                                .set_severity(Severity::Warning)
+                                .register(self.context);
                         }
                     }
                     "warn" if disabled => {}
                     "warn" => {
                         expect_token!((text) = Token::String(text));
-                        self.context.register_error(DMError::new(self.last_input_loc, format!("#{} {}", ident, text))
-                            .set_severity(Severity::Warning));
+                        DMError::new(self.last_input_loc, format!("#{} {}", ident, text))
+                            .set_severity(Severity::Warning)
+                            .register(self.context);
                     }
                     "error" if disabled => {}
                     "error" => {

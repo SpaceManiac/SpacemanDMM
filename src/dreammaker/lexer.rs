@@ -782,9 +782,9 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                 if let Ok(val) = f32::from_str(&buf) {
                     let val_str = val.to_string();
                     if val_str != buf {
-                        self.context.register_error(self.error(
-                            format!("precision loss of integer constant: \"{}\" to {}", buf, val)
-                        ).set_severity(Severity::Warning));
+                        self.error(format!("precision loss of integer constant: \"{}\" to {}", buf, val))
+                            .set_severity(Severity::Warning)
+                            .register(self.context);
                     }
                     return Token::Float(val)
                 }
