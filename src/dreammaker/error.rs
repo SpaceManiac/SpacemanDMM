@@ -107,7 +107,18 @@ impl Context {
             error.location.line,
             error.location.column,
         )?;
-        writeln!(w, "{}: {}\n", error.severity, error.description)
+        writeln!(w, "{}: {}", error.severity, error.description)?;
+        for note in error.notes().iter() {
+            writeln!(
+                w,
+                "{}:{}:{}: {}",
+                self.file_path(note.location.file).display(),
+                note.location.line,
+                note.location.column,
+                note.description,
+            )?;
+        }
+        writeln!(w)
     }
 
     /// Pretty-print all registered diagnostics to standard error.
@@ -238,7 +249,15 @@ pub struct DMError {
     location: Location,
     severity: Severity,
     description: String,
+    notes: Vec<DiagnosticNote>,
     cause: Option<Box<error::Error + Send + Sync>>,
+}
+
+/// An additional note attached to an error, at some other location.
+#[derive(Debug, Clone)]
+pub struct DiagnosticNote {
+    location: Location,
+    description: String,
 }
 
 #[allow(unused_variables)]
@@ -248,6 +267,7 @@ impl DMError {
             location,
             severity: Default::default(),
             description: desc.into(),
+            notes: Vec::new(),
             cause: None,
         }
     }
@@ -260,6 +280,19 @@ impl DMError {
     pub fn set_severity(mut self, severity: Severity) -> DMError {
         self.severity = severity;
         self
+    }
+
+    pub fn add_note<S: Into<String>>(mut self, location: Location, desc: S) -> DMError {
+        self.notes.push(DiagnosticNote {
+            location,
+            description: desc.into(),
+        });
+        self
+    }
+
+    #[inline]
+    pub fn register(self, context: &Context) {
+        context.register_error(self)
     }
 
     /// Get the location in the code at which this error was observed.
@@ -280,6 +313,11 @@ impl DMError {
     /// Deconstruct this error, returning only the description.
     pub fn into_description(self) -> String {
         self.description
+    }
+
+    /// Get the additional notes associated with this error.
+    pub fn notes(&self) -> &[DiagnosticNote] {
+        &self.notes
     }
 }
 
@@ -305,7 +343,20 @@ impl Clone for DMError {
             location: self.location,
             severity: self.severity,
             description: self.description.clone(),
+            notes: self.notes.clone(),
             cause: None,  // not trivially cloneable
         }
+    }
+}
+
+impl DiagnosticNote {
+    /// Get the location in the code at which this error was observed.
+    pub fn location(&self) -> Location {
+        self.location
+    }
+
+    /// Get the description associated with this error.
+    pub fn description(&self) -> &str {
+        &self.description
     }
 }

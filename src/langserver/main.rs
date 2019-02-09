@@ -159,10 +159,6 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
     }
 
     fn convert_location(&self, loc: dm::Location, one: &str, two: &str, three: &str) -> Result<langserver::Location, jsonrpc::Error> {
-        let pos = langserver::Position {
-            line: loc.line.saturating_sub(1) as u64,
-            character: loc.column.saturating_sub(1) as u64,
-        };
         Ok(langserver::Location {
             uri: if loc.file == dm::FileId::builtins() {
                 Url::parse(&format!("dm://docs/reference.dm#{}{}{}", one, two, three))
@@ -170,7 +166,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             } else {
                 self.file_url(loc.file)?
             },
-            range: langserver::Range::new(pos, pos),
+            range: location_to_range(loc),
         })
     }
 
@@ -224,17 +220,26 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         let mut map: HashMap<_, Vec<_>> = HashMap::new();
         for error in self.context.errors().iter() {
             let loc = error.location();
-            let pos = langserver::Position {
-                line: loc.line.saturating_sub(1) as u64,
-                character: loc.column.saturating_sub(1) as u64,
+            let related_information = if error.notes().is_empty() {
+                None
+            } else {
+                let mut notes = Vec::with_capacity(error.notes().len());
+                for note in error.notes().iter() {
+                    notes.push(langserver::DiagnosticRelatedInformation {
+                        location: langserver::Location {
+                            uri: self.file_url(note.location().file)?,
+                            range: location_to_range(note.location()),
+                        },
+                        message: note.description().to_owned(),
+                    });
+                }
+                Some(notes)
             };
             let diag = langserver::Diagnostic {
                 message: error.description().to_owned(),
                 severity: Some(convert_severity(error.severity())),
-                range: langserver::Range {
-                    start: pos,
-                    end: pos,
-                },
+                range: location_to_range(loc),
+                related_information,
                 .. Default::default()
             };
             map.entry(self.context.file_path(loc.file))
@@ -1083,4 +1088,16 @@ fn ignore_root(t: Option<TypeRef>) -> Option<TypeRef> {
         Some(t) if t.is_root() => None,
         other => other,
     }
+}
+
+fn location_to_position(loc: dm::Location) -> langserver::Position  {
+    langserver::Position {
+        line: loc.line.saturating_sub(1) as u64,
+        character: loc.column.saturating_sub(1) as u64,
+    }
+}
+
+fn location_to_range(loc: dm::Location) -> langserver::Range {
+    let pos = location_to_position(loc);
+    langserver::Range::new(pos, pos)
 }

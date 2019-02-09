@@ -748,10 +748,10 @@ impl<'ctx> Preprocessor<'ctx> {
                                 // DM doesn't issue a warning for this, but it's usually a mistake, so let's.
                                 // FILE_DIR is handled specially and sometimes makes sense to define multiple times.
                                 if define_name != "FILE_DIR" {
-                                    self.context.register_error(DMError::new(define_name_loc,
-                                        format!("macro redefined: {}", define_name)).set_severity(Severity::Warning));
-                                    self.context.register_error(DMError::new(previous_loc,
-                                        format!("previous definition of {}", define_name)).set_severity(Severity::Info));
+                                    DMError::new(define_name_loc, format!("macro redefined: {}", define_name))
+                                        .set_severity(Severity::Warning)
+                                        .add_note(previous_loc, format!("previous definition of {}", define_name))
+                                        .register(self.context);
                                 }
                             }
                         }
