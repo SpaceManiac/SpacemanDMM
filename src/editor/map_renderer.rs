@@ -142,7 +142,7 @@ impl MapRenderer {
         ).expect("create thumbnail texture");
         let thumbnail = self.factory.view_texture_as_shader_resource::<ColorFormat>(
             &texture,
-            (1, 1),
+            (0, 0),
             gfx::format::Swizzle::new(),
         ).expect("view thumbnail as shader resource");
         let thumbnail_target = self.factory.view_texture_as_render_target::<ColorFormat>(
