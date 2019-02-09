@@ -80,8 +80,28 @@ impl ProcAnalyzer {
                 }
                 self.visit_block(block);
             },
-            Statement::Switch { .. } => {}  // TODO
-            Statement::TryCatch { .. } => {}  // TODO
+            Statement::Switch { input, cases, default } => {
+                self.visit_expression(input);
+                for &(ref case, ref block) in cases.iter() {
+                    for case_part in case.iter() {
+                        match case_part {
+                            dm::ast::Case::Exact(expr) => self.visit_expression(expr),
+                            dm::ast::Case::Range(start, end) => {
+                                self.visit_expression(start);
+                                self.visit_expression(end);
+                            }
+                        }
+                    }
+                    self.visit_block(block);
+                }
+                if let Some(default) = default {
+                    self.visit_block(default);
+                }
+            },
+            Statement::TryCatch { try_block, catch_block, .. } => {
+                self.visit_block(try_block);
+                self.visit_block(catch_block);
+            },
             Statement::Continue(_) => {},
             Statement::Break(_) => {},
             Statement::Label { name: _, block } => self.visit_block(block),
@@ -90,6 +110,24 @@ impl ProcAnalyzer {
     }
 
     fn visit_expression(&mut self, expression: &Expression) {
+        match expression {
+            Expression::Base { unary, term, follow } => {
+                // TODO: the meat
+            },
+            Expression::BinaryOp { lhs, rhs, .. } => {
+                self.visit_expression(lhs);
+                self.visit_expression(rhs);
+            },
+            Expression::AssignOp { lhs, rhs, .. } => {
+                self.visit_expression(rhs);
+                // TODO: visit LHS?
+            },
+            Expression::TernaryOp { cond, if_, else_ } => {
+                self.visit_expression(cond);
+                self.visit_expression(if_);
+                self.visit_expression(else_);
+            }
+        }
     }
 
     fn visit_var(&mut self, var: &VarStatement) {
