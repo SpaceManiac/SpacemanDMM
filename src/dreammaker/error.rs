@@ -6,7 +6,7 @@ use std::cell::{RefCell, Ref};
 use std::collections::HashMap;
 
 /// An identifier referring to a loaded file.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct FileId(u16);
 
 const FILEID_BUILTINS: FileId = FileId(0x0000);

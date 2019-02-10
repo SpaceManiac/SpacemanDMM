@@ -151,11 +151,6 @@ enum Include<'ctx> {
 }
 
 impl<'ctx> Include<'ctx> {
-    fn from_file(context: &'ctx Context, path: PathBuf) -> io::Result<Include> {
-        let reader = io::BufReader::new(File::open(&path)?);
-        Ok(Include::from_read(context, path, Box::new(reader)))
-    }
-
     fn from_read(context: &'ctx Context, path: PathBuf, read: Box<io::Read>) -> Include {
         let idx = context.register_file(&path);
         Include::File {
@@ -276,6 +271,7 @@ pub struct Preprocessor<'ctx> {
     env_file: PathBuf,
 
     include_stack: IncludeStack<'ctx>,
+    include_locations: HashMap<FileId, Location>,
     last_input_loc: Location,
     output: VecDeque<Token>,
     ifdef_stack: Vec<Ifdef>,
@@ -322,6 +318,7 @@ impl<'ctx> Preprocessor<'ctx> {
             context,
             env_file,
             include_stack: IncludeStack { stack: vec![include] },
+            include_locations: Default::default(),
             history: Default::default(),
             defines,
             maps: Default::default(),
@@ -382,6 +379,7 @@ impl<'ctx> Preprocessor<'ctx> {
             context,
             env_file: self.env_file.clone(),
             include_stack: Default::default(),
+            include_locations: Default::default(),
             history: Default::default(),  // TODO: support branching a second time
             defines,
             maps: Default::default(),
@@ -405,6 +403,7 @@ impl<'ctx> Preprocessor<'ctx> {
             context,
             env_file: self.env_file.clone(),
             include_stack: Default::default(),
+            include_locations: Default::default(),
             history: Default::default(),  // TODO: support branching a second time
             defines: self.defines.clone(),
             maps: Default::default(),
@@ -525,6 +524,29 @@ impl<'ctx> Preprocessor<'ctx> {
     // ------------------------------------------------------------------------
     // Internal utilities
 
+    fn prepare_include_file(&mut self, path: PathBuf) -> Result<Include<'ctx>, DMError> {
+        // Attempt to open the file.
+        let read = io::BufReader::new(File::open(&path).map_err(|e|
+            DMError::new(self.last_input_loc, format!("failed to open file: #include {:?}", path))
+                .set_cause(e))?);
+
+        // Make sure the file hasn't already been included.
+        // All DM source is effectively `#pragma once`.
+        let file_id = self.context.register_file(&path);
+        if let Some(&loc) = self.include_locations.get(&file_id) {
+            Err(DMError::new(self.last_input_loc, format!("duplicate #include {:?}", path))
+                .set_severity(Severity::Warning)
+                .add_note(loc, "previously included here"))
+        } else {
+            self.include_locations.insert(file_id, self.last_input_loc);
+            Ok(Include::File {
+                path,
+                file: file_id,
+                lexer: Lexer::from_read(&self.context, file_id, Box::new(read)),
+            })
+        }
+    }
+
     fn check_danger_ident(&mut self, name: &str, kind: &str) {
         if let Some(loc) = self.danger_idents.get(name) {
             self.context.register_error(DMError::new(*loc, format!(
@@ -616,7 +638,7 @@ impl<'ctx> Preprocessor<'ctx> {
                         for candidate in vec![
                             self.env_file.parent().unwrap().join(&path),
                             self.include_stack.top_file_path().parent().unwrap().join(&path),
-                            path,
+                            path.clone(),
                         ].into_iter().rev() {
                             if !candidate.exists() {
                                 continue;
@@ -651,24 +673,20 @@ impl<'ctx> Preprocessor<'ctx> {
                                 FileType::DMS => self.scripts.push(candidate),
                                 // TODO: warn if a file is double-included, and
                                 // don't include it a second time
-                                FileType::DM => match Include::from_file(self.context, candidate) {
+                                FileType::DM => match self.prepare_include_file(candidate) {
                                     Ok(include) => {
                                         // A phantom newline keeps the include
                                         // directive being indented from making
                                         // the first line of the file indented.
                                         self.output.push_back(Token::Punct(Punctuation::Newline));
                                         self.include_stack.stack.push(include);
-                                    }
-                                    Err(e) => {
-                                        DMError::new(self.last_input_loc, "failed to open file")
-                                            .set_cause(e)
-                                            .register(self.context);
-                                    }
+                                    },
+                                    Err(e) => self.context.register_error(e),
                                 },
                             }
                             return Ok(());
                         }
-                        self.context.register_error(DMError::new(self.last_input_loc, "failed to find file"));
+                        self.context.register_error(DMError::new(self.last_input_loc, format!("failed to find #include {:?}", path)));
                         return Ok(());
                     }
                     // both constant and function defines
