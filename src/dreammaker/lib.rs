@@ -188,5 +188,9 @@ pub fn detect_environment(root: &Path, default: &str) -> std::io::Result<Option<
 }
 
 pub fn detect_environment_default() -> std::io::Result<Option<std::path::PathBuf>> {
-    detect_environment(".".as_ref(), DEFAULT_ENV)
+    // Return a path in the current directory `.` ...
+    detect_environment(".".as_ref(), DEFAULT_ENV).map(|o| o.map(|path| {
+        // ... but without `./` preceding it.
+        path.strip_prefix(".").map(|p| p.to_owned()).unwrap_or(path)
+    }))
 }
