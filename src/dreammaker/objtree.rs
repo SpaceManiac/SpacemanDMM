@@ -296,6 +296,19 @@ impl<'a> TypeRef<'a> {
         }
         None
     }
+
+    pub fn get_proc_declaration(self, name: &str) -> Option<&'a ProcDeclaration> {
+        let mut current: Option<TypeRef<'a>> = Some(self);
+        while let Some(ty) = current {
+            if let Some(proc) = ty.get().procs.get(name) {
+                if let Some(decl) = proc.declaration.as_ref() {
+                    return Some(decl);
+                }
+            }
+            current = ty.parent_type();
+        }
+        None
+    }
 }
 
 impl<'a> ::std::ops::Deref for TypeRef<'a> {
