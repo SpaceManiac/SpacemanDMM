@@ -4,7 +4,11 @@
 
 extern crate dreammaker as dm;
 use dm::objtree::{ProcValue, Code};
+use dm::constants::{Constant, ConstFn};
 use dm::ast::*;
+
+// ----------------------------------------------------------------------------
+// Helper structures
 
 enum Type {
     Any,
@@ -16,6 +20,52 @@ enum Type {
     Instance(String),
     Typepath(String),
 }
+
+impl Type {
+    fn from_constant(constant: &Constant) -> Type {
+        match constant {
+            Constant::Null(_) => Type::Null,
+            Constant::String(_) => Type::String,
+            Constant::Resource(_) => Type::Resource,
+            Constant::Int(_) => Type::Number,
+            Constant::Float(_) => Type::Number,
+            Constant::List(_) => Type::List,
+            Constant::Call(func, _) => match func {
+                ConstFn::Icon => Type::Instance("/icon".to_owned()),
+                ConstFn::Matrix => Type::Instance("/matrix".to_owned()),
+                ConstFn::Newlist => Type::List,
+                ConstFn::Sound => Type::Instance("/sound".to_owned()),
+            },
+            // TODO: New => Instance, Prefab => Typepath
+            _ => Type::Any,
+        }
+    }
+}
+
+/// An 'atom' in the type analysis. A type/set of possible types, as well as a
+/// known constant value if available.
+struct Analysis {
+    ty: Type,
+    value: Option<Constant>,
+}
+
+impl From<Type> for Analysis {
+    fn from(ty: Type) -> Analysis {
+        Analysis { ty, value: None }
+    }
+}
+
+impl From<Constant> for Analysis {
+    fn from(value: Constant) -> Analysis {
+        Analysis {
+            ty: Type::from_constant(&value),
+            value: Some(value),
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Procedure analyzer
 
 struct ProcAnalyzer {
 }
@@ -121,7 +171,7 @@ impl ProcAnalyzer {
     fn visit_var(&mut self, var: &VarStatement) {
     }
 
-    fn visit_expression(&mut self, expression: &Expression) -> Type {
+    fn visit_expression(&mut self, expression: &Expression) -> Analysis {
         match expression {
             Expression::Base { unary, term, follow } => {
                 let mut ty = self.visit_term(term);
@@ -152,15 +202,25 @@ impl ProcAnalyzer {
         }
     }
 
-    fn visit_term(&mut self, term: &Term) -> Type {
+    fn visit_term(&mut self, term: &Term) -> Analysis {
+        match term {
+            Term::Null => Analysis::from(Type::Null),
+            Term::New { type_, .. } => match type_ {
+                NewType::Implicit => Analysis::from(Type::Any),  // TODO: type hinting
+                NewType::Ident(_) => Analysis::from(Type::Any),  // TODO: lookup
+                // TODO: evaluate path operators
+                NewType::Prefab(prefab) => Analysis::from(Type::Instance(format!("{:?}", prefab.path))),
+            },
+            Term::List(_) => Analysis::from(Type::List),
+            _ => Analysis::from(Type::Any),
+        }
+    }
+
+    fn visit_follow(&mut self, lhs: Analysis, rhs: &Follow) -> Analysis {
         unimplemented!()
     }
 
-    fn visit_follow(&mut self, lhs: Type, rhs: &Follow) -> Type {
-        unimplemented!()
-    }
-
-    fn visit_unary(&mut self, rhs: Type, op: &UnaryOp) -> Type {
+    fn visit_unary(&mut self, rhs: Analysis, op: &UnaryOp) -> Analysis {
         unimplemented!()
     }
 }
