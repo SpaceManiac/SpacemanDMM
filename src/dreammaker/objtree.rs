@@ -130,7 +130,7 @@ impl Type {
         None
     }
 
-    pub(crate) fn get_declaration<'a>(&'a self, name: &str, objtree: &'a ObjectTree) -> Option<&'a VarDeclaration> {
+    pub(crate) fn get_var_declaration<'a>(&'a self, name: &str, objtree: &'a ObjectTree) -> Option<&'a VarDeclaration> {
         let mut current = Some(self);
         while let Some(ty) = current {
             if let Some(var) = ty.vars.get(name) {
@@ -282,8 +282,8 @@ impl<'a> TypeRef<'a> {
     }
 
     #[inline]
-    pub fn get_declaration(self, name: &str) -> Option<&'a VarDeclaration> {
-        self.get().get_declaration(name, self.tree)
+    pub fn get_var_declaration(self, name: &str) -> Option<&'a VarDeclaration> {
+        self.get().get_var_declaration(name, self.tree)
     }
 
     pub fn get_proc(self, name: &str) -> Option<&'a ProcValue> {

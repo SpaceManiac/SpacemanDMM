@@ -218,7 +218,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
             if !var.value.docs.is_empty() {
                 let block = DocBlock::parse(&var.value.docs.text());
                 // `type` is pulled from the parent if necessary
-                let type_ = ty.get_declaration(name).map(|decl| VarType {
+                let type_ = ty.get_var_declaration(name).map(|decl| VarType {
                     is_static: decl.var_type.is_static,
                     is_const: decl.var_type.is_const,
                     is_tmp: decl.var_type.is_tmp,

@@ -415,7 +415,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         } else {
             next = match self.find_unscoped_var(iter, next, proc_name, first) {
                 UnscopedVar::Parameter { param, .. } => self.objtree.type_by_path(&param.path),
-                UnscopedVar::Variable { ty, .. } => match ty.get_declaration(first) {
+                UnscopedVar::Variable { ty, .. } => match ty.get_var_declaration(first) {
                     Some(decl) => self.objtree.type_by_path(&decl.var_type.type_path),
                     None => None,
                 },
@@ -427,7 +427,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         // find the rest; only look on the type we've found
         for var_name in priors {
             if let Some(current) = next.take() {
-                if let Some(decl) = current.get_declaration(var_name) {
+                if let Some(decl) = current.get_var_declaration(var_name) {
                     next = self.objtree.type_by_path(&decl.var_type.type_path);
                 }
             } else {

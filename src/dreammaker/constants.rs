@@ -368,7 +368,7 @@ pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree, sloppy: boo
                 .graph
                 .node_weight(ty)
                 .unwrap()
-                .get_declaration(&key, tree)
+                .get_var_declaration(&key, tree)
                 .map_or(true, |x| {
                     x.var_type.is_const_evaluable() && (x.var_type.is_const || ty != NodeIndex::new(0))
                 })
@@ -422,7 +422,7 @@ fn constant_ident_lookup(
             .graph
             .node_weight(ty)
             .unwrap()
-            .get_declaration(ident, tree)
+            .get_var_declaration(ident, tree)
             .cloned()
         {
             Some(decl) => decl,
