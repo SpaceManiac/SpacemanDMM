@@ -264,6 +264,24 @@ impl<'a> TypeRef<'a> {
         }
     }
 
+    /// Find another type relative to this type.
+    pub fn navigate_path<S: AsRef<str>>(self, pieces: &[(PathOp, S)]) -> Option<TypeRef<'a>> {
+        let mut iter = pieces.iter();
+        let mut next = match iter.next() {
+            Some(&(PathOp::Slash, ref s)) => self.tree.root().child(s.as_ref()),
+            Some(&(op, ref s)) => self.navigate(op, s.as_ref()),
+            None => return Some(self),
+        };
+        for &(op, ref s) in iter {
+            if let Some(current) = next {
+                next = current.navigate(op, s.as_ref());
+            } else {
+                return None;
+            }
+        }
+        next
+    }
+
     /// Checks whether this type is a subtype of the given type.
     pub fn is_subtype_of(self, parent: &Type) -> bool {
         let mut current = Some(self);
