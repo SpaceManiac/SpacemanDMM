@@ -3,38 +3,38 @@
 #![allow(dead_code, unused_variables)]
 
 extern crate dreammaker as dm;
-use dm::objtree::{ProcValue, Code};
+use dm::objtree::{ProcValue, Code, ObjectTree, TypeRef};
 use dm::constants::{Constant, ConstFn};
 use dm::ast::*;
 
 // ----------------------------------------------------------------------------
 // Helper structures
 
-enum Type {
+enum Type<'o> {
     Any,
     Null,
     String,
     Resource,
     Number,
-    List,
-    Instance(String),
-    Typepath(String),
+    List(Option<TypeRef<'o>>),
+    Instance(TypeRef<'o>),
+    Typepath(TypeRef<'o>),
 }
 
-impl Type {
-    fn from_constant(constant: &Constant) -> Type {
+impl<'o> Type<'o> {
+    fn from_constant(objtree: &'o ObjectTree, constant: &Constant) -> Type<'o> {
         match constant {
             Constant::Null(_) => Type::Null,
             Constant::String(_) => Type::String,
             Constant::Resource(_) => Type::Resource,
             Constant::Int(_) => Type::Number,
             Constant::Float(_) => Type::Number,
-            Constant::List(_) => Type::List,
+            Constant::List(_) => Type::List(None),
             Constant::Call(func, _) => match func {
-                ConstFn::Icon => Type::Instance("/icon".to_owned()),
-                ConstFn::Matrix => Type::Instance("/matrix".to_owned()),
-                ConstFn::Newlist => Type::List,
-                ConstFn::Sound => Type::Instance("/sound".to_owned()),
+                ConstFn::Icon => Type::Instance(objtree.find("/icon").unwrap()),
+                ConstFn::Matrix => Type::Instance(objtree.find("/matrix").unwrap()),
+                ConstFn::Newlist => Type::List(None),
+                ConstFn::Sound => Type::Instance(objtree.find("/sound").unwrap()),
             },
             // TODO: New => Instance, Prefab => Typepath
             _ => Type::Any,
@@ -44,21 +44,21 @@ impl Type {
 
 /// An 'atom' in the type analysis. A type/set of possible types, as well as a
 /// known constant value if available.
-struct Analysis {
-    ty: Type,
+struct Analysis<'o> {
+    ty: Type<'o>,
     value: Option<Constant>,
 }
 
-impl From<Type> for Analysis {
-    fn from(ty: Type) -> Analysis {
+impl<'o> From<Type<'o>> for Analysis<'o> {
+    fn from(ty: Type<'o>) -> Analysis<'o> {
         Analysis { ty, value: None }
     }
 }
 
-impl From<Constant> for Analysis {
-    fn from(value: Constant) -> Analysis {
+impl<'o> Analysis<'o> {
+    fn from_value(objtree: &'o ObjectTree, value: Constant) -> Analysis<'o> {
         Analysis {
-            ty: Type::from_constant(&value),
+            ty: Type::from_constant(objtree, &value),
             value: Some(value),
         }
     }
@@ -67,10 +67,12 @@ impl From<Constant> for Analysis {
 // ----------------------------------------------------------------------------
 // Procedure analyzer
 
-struct ProcAnalyzer {
+struct ProcAnalyzer<'o> {
+    objtree: &'o ObjectTree,
+    ty: TypeRef<'o>,
 }
 
-impl ProcAnalyzer {
+impl<'o> ProcAnalyzer<'o> {
     fn visit_block(&mut self, block: &[Statement]) {
         for stmt in block.iter() {
             self.visit_statement(stmt);
@@ -171,7 +173,7 @@ impl ProcAnalyzer {
     fn visit_var(&mut self, var: &VarStatement) {
     }
 
-    fn visit_expression(&mut self, expression: &Expression) -> Analysis {
+    fn visit_expression(&mut self, expression: &Expression) -> Analysis<'o> {
         match expression {
             Expression::Base { unary, term, follow } => {
                 let mut ty = self.visit_term(term);
@@ -202,33 +204,38 @@ impl ProcAnalyzer {
         }
     }
 
-    fn visit_term(&mut self, term: &Term) -> Analysis {
+    fn visit_term(&mut self, term: &Term) -> Analysis<'o> {
         match term {
-            Term::Null => Analysis::from(Type::Null),
+            Term::Null => Type::Null.into(),
             Term::New { type_, .. } => match type_ {
-                NewType::Implicit => Analysis::from(Type::Any),  // TODO: type hinting
-                NewType::Ident(_) => Analysis::from(Type::Any),  // TODO: lookup
-                // TODO: evaluate path operators
-                NewType::Prefab(prefab) => Analysis::from(Type::Instance(format!("{:?}", prefab.path))),
+                NewType::Implicit => Type::Any.into(),  // TODO: type hinting
+                NewType::Ident(_) => Type::Any.into(),  // TODO: lookup
+                NewType::Prefab(prefab) => {
+                    if let Some(ty) = self.ty.navigate_path(&prefab.path) {
+                        Type::Instance(ty).into()
+                    } else {
+                        Type::Any.into()  // TODO: report lookup error
+                    }
+                },
             },
-            Term::List(_) => Analysis::from(Type::List),
-            _ => Analysis::from(Type::Any),
+            Term::List(_) => Type::List(None).into(),
+            _ => Type::Any.into(),
         }
     }
 
-    fn visit_follow(&mut self, lhs: Analysis, rhs: &Follow) -> Analysis {
+    fn visit_follow(&mut self, lhs: Analysis<'o>, rhs: &Follow) -> Analysis<'o> {
         unimplemented!()
     }
 
-    fn visit_unary(&mut self, rhs: Analysis, op: &UnaryOp) -> Analysis {
+    fn visit_unary(&mut self, rhs: Analysis<'o>, op: &UnaryOp) -> Analysis<'o> {
         unimplemented!()
     }
 }
 
-fn some_analysis(func: &ProcValue, code: &[Statement]) {
+fn some_analysis(objtree: &ObjectTree, ty: TypeRef, func: &ProcValue, code: &[Statement]) {
     println!("{:?}", func.parameters);
     println!("{:#?}", code);
-    ProcAnalyzer{}.visit_block(code);
+    ProcAnalyzer { objtree, ty }.visit_block(code);
 }
 
 fn main() {
@@ -255,7 +262,7 @@ fn main() {
                 match value.code {
                     Code::Present(ref code) => {
                         present += 1;
-                        some_analysis(&value, code);
+                        some_analysis(&tree, ty, &value, code);
                         std::process::exit(0);
                     }
                     Code::Invalid(_) => invalid += 1,
