@@ -6,7 +6,7 @@ extern crate glutin;
 #[macro_use] extern crate gfx;
 extern crate gfx_window_glutin;
 extern crate gfx_device_gl;
-#[macro_use] extern crate imgui;
+extern crate imgui;
 extern crate imgui_gfx_renderer;
 extern crate lodepng;
 extern crate ndarray;

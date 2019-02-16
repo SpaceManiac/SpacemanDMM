@@ -3,7 +3,6 @@
 
 extern crate rayon;
 extern crate structopt;
-#[macro_use] extern crate structopt_derive;
 
 extern crate serde;
 extern crate serde_json;
