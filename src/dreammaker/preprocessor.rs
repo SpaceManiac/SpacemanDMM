@@ -466,14 +466,14 @@ impl<'ctx> Preprocessor<'ctx> {
     // ------------------------------------------------------------------------
     // Macro definition handling
 
-    fn annotate_macro(&mut self, use_loc: Location, ident: &str, def_loc: Location) {
+    fn annotate_macro(&mut self, ident: &str, def_loc: Location) {
         if self.include_stack.in_expansion() {
             return;
         }
 
         if let Some(annotations) = self.annotations.as_mut() {
             annotations.insert(
-                use_loc .. use_loc.add_columns(ident.len() as u16),
+                self.last_input_loc .. self.last_input_loc.add_columns(ident.len() as u16),
                 Annotation::Macro(ident.to_owned(), def_loc));
         }
     }
@@ -867,7 +867,7 @@ impl<'ctx> Preprocessor<'ctx> {
 
                 // substitute special macros
                 if ident == "__FILE__" {
-                    self.annotate_macro(_last_expected_loc, ident, Location::builtins());
+                    self.annotate_macro(ident, Location::builtins());
                     for include in self.include_stack.stack.iter().rev() {
                         if let Include::File { ref path, .. } = *include {
                             self.output.push_back(Token::String(path.display().to_string()));
@@ -877,7 +877,7 @@ impl<'ctx> Preprocessor<'ctx> {
                     self.output.push_back(Token::String(String::new()));
                     return Ok(());
                 } else if ident == "__LINE__" {
-                    self.annotate_macro(_last_expected_loc, ident, Location::builtins());
+                    self.annotate_macro(ident, Location::builtins());
                     self.output.push_back(Token::Int(self.last_input_loc.line as i32));
                     return Ok(());
                 }
@@ -885,7 +885,7 @@ impl<'ctx> Preprocessor<'ctx> {
                 // if it's a define, perform the substitution
                 match self.defines.get(ident).cloned() { // TODO
                     Some((location, Define::Constant { subst, docs: _ })) => {
-                        self.annotate_macro(_last_expected_loc, ident, location);
+                        self.annotate_macro(ident, location);
 
                         let e = Include::Expansion {
                             name: ident.to_owned(),
@@ -911,7 +911,7 @@ impl<'ctx> Preprocessor<'ctx> {
                             }
                         }
 
-                        self.annotate_macro(_last_expected_loc, ident, location);
+                        self.annotate_macro(ident, location);
 
                         // read arguments
                         let mut args = Vec::new();
