@@ -3,6 +3,7 @@
 #![allow(dead_code, unused_variables)]
 
 extern crate dreammaker as dm;
+use dm::Context;
 use dm::objtree::{ProcValue, Code, ObjectTree, TypeRef};
 use dm::constants::{Constant, ConstFn};
 use dm::ast::*;
@@ -10,6 +11,7 @@ use dm::ast::*;
 // ----------------------------------------------------------------------------
 // Helper structures
 
+#[derive(Copy, Clone, Debug)]
 enum Type<'o> {
     Any,
     Null,
@@ -56,6 +58,10 @@ impl<'o> From<Type<'o>> for Analysis<'o> {
 }
 
 impl<'o> Analysis<'o> {
+    fn empty() -> Analysis<'o> {
+        Type::Any.into()
+    }
+
     fn from_value(objtree: &'o ObjectTree, value: Constant) -> Analysis<'o> {
         Analysis {
             ty: Type::from_constant(objtree, &value),
@@ -68,6 +74,7 @@ impl<'o> Analysis<'o> {
 // Procedure analyzer
 
 struct ProcAnalyzer<'o> {
+    context: &'o Context,
     objtree: &'o ObjectTree,
     ty: TypeRef<'o>,
 }
@@ -81,21 +88,21 @@ impl<'o> ProcAnalyzer<'o> {
 
     fn visit_statement(&mut self, statement: &Statement) {
         match statement {
-            Statement::Expr(expr) => { self.visit_expression(expr); },
-            Statement::Return(Some(expr)) => { self.visit_expression(expr); },
+            Statement::Expr(expr) => { self.visit_expression(expr, None); },
+            Statement::Return(Some(expr)) => { self.visit_expression(expr, None); },
             Statement::Return(None) => {},
-            Statement::Throw(expr) => { self.visit_expression(expr); },
+            Statement::Throw(expr) => { self.visit_expression(expr, None); },
             Statement::While { condition, block } => {
-                self.visit_expression(condition);
+                self.visit_expression(condition, None);
                 self.visit_block(block);
             },
             Statement::DoWhile { block, condition } => {
                 self.visit_block(block);
-                self.visit_expression(condition);
+                self.visit_expression(condition, None);
             },
             Statement::If { arms, else_arm } => {
                 for &(ref condition, ref block) in arms.iter() {
-                    self.visit_expression(condition);
+                    self.visit_expression(condition, None);
                     self.visit_block(block);
                 }
                 if let Some(else_arm) = else_arm {
@@ -107,7 +114,7 @@ impl<'o> ProcAnalyzer<'o> {
                     self.visit_statement(init);
                 }
                 if let Some(test) = test {
-                    self.visit_expression(test);
+                    self.visit_expression(test, None);
                 }
                 if let Some(inc) = inc {
                     self.visit_statement(inc);
@@ -116,15 +123,15 @@ impl<'o> ProcAnalyzer<'o> {
             },
             Statement::ForList { in_list, block, .. } => {
                 if let Some(in_list) = in_list {
-                    self.visit_expression(in_list);
+                    self.visit_expression(in_list, None);
                 }
                 self.visit_block(block);
             },
             Statement::ForRange { start, end, step, block, .. } => {
-                self.visit_expression(start);
-                self.visit_expression(end);
+                self.visit_expression(start, None);
+                self.visit_expression(end, None);
                 if let Some(step) = step {
-                    self.visit_expression(step);
+                    self.visit_expression(step, None);
                 }
                 self.visit_block(block);
             },
@@ -137,19 +144,19 @@ impl<'o> ProcAnalyzer<'o> {
             Statement::Setting { .. } => {},
             Statement::Spawn { delay, block } => {
                 if let Some(delay) = delay {
-                    self.visit_expression(delay);
+                    self.visit_expression(delay, None);
                 }
                 self.visit_block(block);
             },
             Statement::Switch { input, cases, default } => {
-                self.visit_expression(input);
+                self.visit_expression(input, None);
                 for &(ref case, ref block) in cases.iter() {
                     for case_part in case.iter() {
                         match case_part {
-                            dm::ast::Case::Exact(expr) => { self.visit_expression(expr); },
+                            dm::ast::Case::Exact(expr) => { self.visit_expression(expr, None); },
                             dm::ast::Case::Range(start, end) => {
-                                self.visit_expression(start);
-                                self.visit_expression(end);
+                                self.visit_expression(start, None);
+                                self.visit_expression(end, None);
                             }
                         }
                     }
@@ -166,14 +173,14 @@ impl<'o> ProcAnalyzer<'o> {
             Statement::Continue(_) => {},
             Statement::Break(_) => {},
             Statement::Label { name: _, block } => self.visit_block(block),
-            Statement::Del(expr) => { self.visit_expression(expr); },
+            Statement::Del(expr) => { self.visit_expression(expr, None); },
         }
     }
 
     fn visit_var(&mut self, var: &VarStatement) {
     }
 
-    fn visit_expression(&mut self, expression: &Expression) -> Analysis<'o> {
+    fn visit_expression(&mut self, expression: &Expression, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
         match expression {
             Expression::Base { unary, term, follow } => {
                 let mut ty = self.visit_term(term);
@@ -186,19 +193,20 @@ impl<'o> ProcAnalyzer<'o> {
                 ty
             },
             Expression::BinaryOp { lhs, rhs, .. } => {
-                let lty = self.visit_expression(lhs);
-                let rty = self.visit_expression(rhs);
-                unimplemented!()
+                let lty = self.visit_expression(lhs, None);
+                let rty = self.visit_expression(rhs, None);
+                //unimplemented!()
+                Analysis::empty()
             },
             Expression::AssignOp { lhs, rhs, .. } => {
-                self.visit_expression(rhs)
+                self.visit_expression(rhs, type_hint)
                 // TODO: visit LHS?
             },
             Expression::TernaryOp { cond, if_, else_ } => {
                 // TODO: be sensible
-                self.visit_expression(cond);
-                let ty = self.visit_expression(if_);
-                self.visit_expression(else_);
+                self.visit_expression(cond, None);
+                let ty = self.visit_expression(if_, type_hint);
+                self.visit_expression(else_, type_hint);
                 ty
             }
         }
@@ -224,23 +232,43 @@ impl<'o> ProcAnalyzer<'o> {
     }
 
     fn visit_follow(&mut self, lhs: Analysis<'o>, rhs: &Follow) -> Analysis<'o> {
-        unimplemented!()
+        match rhs {
+            Follow::Index(expr) => {
+                Type::Any.into()
+            },
+            Follow::Field(kind, name) => {
+                Type::Any.into()
+            },
+            Follow::Call(kind, name, arguments) => {
+                // TODO: checking
+                Type::Any.into()
+            },
+        }
     }
 
     fn visit_unary(&mut self, rhs: Analysis<'o>, op: &UnaryOp) -> Analysis<'o> {
-        unimplemented!()
+        match (op, rhs.ty) {
+            (UnaryOp::Not, _) => Type::Number.into(),
+            (UnaryOp::Neg, Type::Number) => Type::Number.into(),
+            (UnaryOp::BitNot, Type::Number) => Type::Number.into(),
+            (UnaryOp::PreIncr, Type::Number) => Type::Number.into(),
+            (UnaryOp::PostIncr, Type::Number) => Type::Number.into(),
+            (UnaryOp::PreDecr, Type::Number) => Type::Number.into(),
+            (UnaryOp::PostDecr, Type::Number) => Type::Number.into(),
+            _ => Type::Any.into(),
+        }
     }
 }
 
-fn some_analysis(objtree: &ObjectTree, ty: TypeRef, func: &ProcValue, code: &[Statement]) {
+fn some_analysis(context: &Context, objtree: &ObjectTree, ty: TypeRef, func: &ProcValue, code: &[Statement]) {
     println!("{:?}", func.parameters);
     println!("{:#?}", code);
-    ProcAnalyzer { objtree, ty }.visit_block(code);
+    ProcAnalyzer { context, objtree, ty }.visit_block(code);
 }
 
 fn main() {
-    let mut context = dm::Context::default();
-    context.set_print_severity(Some(dm::Severity::Error));
+    let mut context = Context::default();
+    context.set_print_severity(Some(dm::Severity::Info));
     let env = dm::detect_environment_default()
         .expect("error detecting .dme")
         .expect("no .dme found");
@@ -262,8 +290,7 @@ fn main() {
                 match value.code {
                     Code::Present(ref code) => {
                         present += 1;
-                        some_analysis(&tree, ty, &value, code);
-                        std::process::exit(0);
+                        some_analysis(&context, &tree, ty, &value, code);
                     }
                     Code::Invalid(_) => invalid += 1,
                     Code::Builtin => builtin += 1,
