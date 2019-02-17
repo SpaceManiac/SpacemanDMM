@@ -1,7 +1,7 @@
 use std::collections::Bound;
 use range::RangeInclusive;
 use node::{Node, height};
-use iterators::RangePairIter;
+use iterators::{RangePairIter, IntoIter};
 
 /// An interval tree.
 #[derive(Debug, Clone)]
@@ -180,6 +180,18 @@ impl<K: Ord + Clone, V> IntervalTree<K, V> {
 /// ```
     pub fn max<'a>(&'a self) -> Option<(&'a RangeInclusive<K>, &'a [V])> {
         self.root.as_ref().map(|n| n.max_pair())
+    }
+
+/// Return an iterator for all (key,value) pairs in the tree, consuming the tree in the process.
+    pub fn into_iter(self) -> IntoIter<K, V> {
+        IntoIter::new(self)
+    }
+
+/// Merge all (key, value) pairs from another tree into this one, consuming it.
+    pub fn merge(&mut self, other: IntervalTree<K, V>) {
+        for (k, v) in other.into_iter() {
+            self.insert(k, v);
+        }
     }
 }
 

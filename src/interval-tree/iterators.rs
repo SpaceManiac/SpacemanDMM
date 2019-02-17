@@ -1,4 +1,5 @@
 use std::collections::Bound;
+use std::vec;
 use {IntervalTree, RangeInclusive};
 use node::Node;
 
@@ -112,6 +113,53 @@ fn intersect<T: Ord>(start: &Bound<T>, end: &Bound<T>, range: &RangeInclusive<T>
     })
 }
 
+pub struct IntoIter<K, V> {
+    stack: Vec<Node<K, V>>,
+    current: Option<(RangeInclusive<K>, vec::IntoIter<V>)>,
+}
+
+impl<K, V> IntoIter<K, V> {
+    pub(crate) fn new(tree: IntervalTree<K, V>) -> Self {
+        let mut this = IntoIter {
+            stack: Vec::new(),
+            current: None,
+        };
+        this.push_node(tree.root);
+        this
+    }
+
+    fn push_node(&mut self, mut node: Option<Box<Node<K, V>>>) {
+        while let Some(mut current) = node {
+            node = current.left.take();
+            self.stack.push(*current);
+        }
+    }
+}
+
+impl<K: Clone, V> Iterator for IntoIter<K, V> {
+    type Item = (RangeInclusive<K>, V);
+
+    fn next(&mut self) -> Option<(RangeInclusive<K>, V)> {
+        loop {
+            if let Some((key, mut iter)) = self.current.take() {
+                if let Some(value) = iter.next() {
+                    self.current = Some((key.clone(), iter));
+                    return Some((key, value));
+                }
+            }
+
+            if self.current.is_none() {
+                let mut node = match self.stack.pop() {
+                    Some(node) => node,
+                    None => return None,
+                };
+                self.push_node(node.right.take());
+                self.current = Some((node.key, node.data.into_iter()));
+            }
+        }
+    }
+}
+
 #[test]
 fn test_iterators() {
     let mut tree = IntervalTree::<u64, i32>::new();
@@ -143,4 +191,27 @@ fn test_iterators() {
     assert_eq!(iter.next().expect("should have a few values").0, RangeInclusive::new(13,13));
     assert_eq!(iter.next().expect("should have a few values").0, RangeInclusive::new(17,17));
     assert!(iter.next().is_none());
+}
+
+#[test]
+fn test_into_iter() {
+    let mut tree = IntervalTree::<u64, i32>::new();
+    tree.insert(RangeInclusive::new(18,18), 1337);
+    tree.insert(RangeInclusive::new(13,13), 1338);
+    tree.insert(RangeInclusive::new(17,17), 1339);
+    tree.insert(RangeInclusive::new(10,10), 1321);
+    tree.insert(RangeInclusive::new(1 ,1), 1321);
+    tree.insert(RangeInclusive::new(1 ,1), 1350);
+    tree.insert(RangeInclusive::new(3 ,3), 1322);
+
+    let values: Vec<_> = tree.into_iter().collect();
+    assert_eq!(values, vec![
+        (RangeInclusive::new(1, 1), 1321),
+        (RangeInclusive::new(1, 1), 1350),
+        (RangeInclusive::new(3, 3), 1322),
+        (RangeInclusive::new(10, 10), 1321),
+        (RangeInclusive::new(13, 13), 1338),
+        (RangeInclusive::new(17, 17), 1339),
+        (RangeInclusive::new(18, 18), 1337),
+    ]);
 }
