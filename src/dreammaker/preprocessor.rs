@@ -9,6 +9,7 @@ use interval_tree::{IntervalTree, range};
 use super::{DMError, Location, HasLocation, FileId, Context, Severity};
 use super::lexer::*;
 use super::docs::{DocComment, DocTarget, DocCollection};
+use super::annotation::*;
 
 // ----------------------------------------------------------------------------
 // Macro representation and predefined macros
@@ -184,6 +185,7 @@ impl<'ctx> IncludeStack<'ctx> {
         }
         "".as_ref()
     }
+
     fn top_no_expand(&self) -> &str {
         for each in self.stack.iter().rev() {
             if let Include::Expansion { ref name, .. } = each {
@@ -191,6 +193,13 @@ impl<'ctx> IncludeStack<'ctx> {
             }
         }
         ""
+    }
+
+    fn in_expansion(&self) -> bool {
+        match self.stack.last() {
+            Some(Include::Expansion { .. }) => true,
+            _ => false,
+        }
     }
 }
 
@@ -276,6 +285,7 @@ pub struct Preprocessor<'ctx> {
     output: VecDeque<Token>,
     ifdef_stack: Vec<Ifdef>,
     ifdef_history: IntervalTree<Location, bool>,
+    annotations: Option<AnnotationTree>,
 
     history: DefineHistory,
     defines: DefineMap,
@@ -333,6 +343,7 @@ impl<'ctx> Preprocessor<'ctx> {
             docs_in: Default::default(),
             docs_out: Default::default(),
             in_interp_string: 0,
+            annotations: None,
         })
     }
 
@@ -394,6 +405,7 @@ impl<'ctx> Preprocessor<'ctx> {
             docs_in: Default::default(),
             docs_out: Default::default(),
             in_interp_string: 0,
+            annotations: None,
         }
     }
 
@@ -418,6 +430,7 @@ impl<'ctx> Preprocessor<'ctx> {
             docs_in: Default::default(),
             docs_out: Default::default(),
             in_interp_string: 0,
+            annotations: None,
         }
     }
 
@@ -440,8 +453,30 @@ impl<'ctx> Preprocessor<'ctx> {
         idx
     }
 
+    /// Enable source file annotations.
+    pub fn enable_annotations(&mut self) {
+        self.annotations = Some(AnnotationTree::default());
+    }
+
+    /// Retrieve computer annotations.
+    pub fn take_annotations(&mut self) -> Option<AnnotationTree> {
+        self.annotations.take()
+    }
+
     // ------------------------------------------------------------------------
     // Macro definition handling
+
+    fn annotate_macro(&mut self, use_loc: Location, ident: &str, def_loc: Location) {
+        if self.include_stack.in_expansion() {
+            return;
+        }
+
+        if let Some(annotations) = self.annotations.as_mut() {
+            annotations.insert(
+                use_loc .. use_loc.add_columns(ident.len() as u16),
+                Annotation::Macro(ident.to_owned(), def_loc));
+        }
+    }
 
     fn in_environment(&self) -> bool {
         for include in self.include_stack.stack.iter().rev() {
@@ -832,6 +867,7 @@ impl<'ctx> Preprocessor<'ctx> {
 
                 // substitute special macros
                 if ident == "__FILE__" {
+                    self.annotate_macro(_last_expected_loc, ident, Location::builtins());
                     for include in self.include_stack.stack.iter().rev() {
                         if let Include::File { ref path, .. } = *include {
                             self.output.push_back(Token::String(path.display().to_string()));
@@ -841,13 +877,16 @@ impl<'ctx> Preprocessor<'ctx> {
                     self.output.push_back(Token::String(String::new()));
                     return Ok(());
                 } else if ident == "__LINE__" {
+                    self.annotate_macro(_last_expected_loc, ident, Location::builtins());
                     self.output.push_back(Token::Int(self.last_input_loc.line as i32));
                     return Ok(());
                 }
 
                 // if it's a define, perform the substitution
                 match self.defines.get(ident).cloned() { // TODO
-                    Some((_, Define::Constant { subst, docs: _ })) => {
+                    Some((location, Define::Constant { subst, docs: _ })) => {
+                        self.annotate_macro(_last_expected_loc, ident, location);
+
                         let e = Include::Expansion {
                             name: ident.to_owned(),
                             tokens: subst.into_iter().collect(),
@@ -856,7 +895,7 @@ impl<'ctx> Preprocessor<'ctx> {
                         self.include_stack.stack.push(e);
                         return Ok(());
                     }
-                    Some((_, Define::Function { ref params, ref subst, variadic, docs: _ })) => {
+                    Some((location, Define::Function { ref params, ref subst, variadic, docs: _ })) => {
                         // if it's not followed by an LParen, it isn't really a function call
                         match next!() {
                             Token::Punct(Punctuation::LParen) => {}
@@ -871,6 +910,8 @@ impl<'ctx> Preprocessor<'ctx> {
                                 return Ok(());
                             }
                         }
+
+                        self.annotate_macro(_last_expected_loc, ident, location);
 
                         // read arguments
                         let mut args = Vec::new();

@@ -8,11 +8,7 @@ use super::preprocessor::{DefineMap, Define};
 /// Register BYOND builtin macros to the given define map.
 pub fn default_defines(defines: &mut DefineMap) {
     use super::lexer::Token::*;
-    let location = Location {
-        file: FileId::builtins(),
-        line: 1,
-        column: 1,
-    };
+    let location = Location::builtins();
 
     macro_rules! c {
         ($($i:ident = $($x:expr),*;)*) => {

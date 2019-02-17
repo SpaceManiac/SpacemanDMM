@@ -27,6 +27,9 @@ pub enum Annotation {
     ReturnVal,  // .
     InSequence(usize),  // where in TreePath or TypePath is this ident
 
+    // a macro is called here, which is defined at this location
+    Macro(String, Location),
+
     // error annotations, mostly for autocompletion
     ScopedMissingIdent(Vec<String>),  // when a . is followed by a non-ident
     IncompleteTypePath(TypePath, PathOp),
@@ -36,6 +39,7 @@ pub enum Annotation {
     ProcArgument(usize),  // where in the prog arguments we are
 }
 
+#[derive(Debug)]
 pub struct AnnotationTree {
     tree: IntervalTree<Location, Annotation>,
     len: usize,
@@ -54,6 +58,11 @@ impl AnnotationTree {
     pub fn insert(&mut self, place: ::std::ops::Range<Location>, value: Annotation) {
         self.tree.insert(range(place.start, place.end.pred()), value);
         self.len += 1;
+    }
+
+    pub fn merge(&mut self, other: AnnotationTree) {
+        self.len += other.len;
+        self.tree.merge(other.tree);
     }
 
     pub fn len(&self) -> usize {

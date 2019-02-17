@@ -163,6 +163,10 @@ pub struct Location {
 }
 
 impl Location {
+    pub fn builtins() -> Location {
+        Location { file: FileId::builtins(), line: 1, column: 1 }
+    }
+
     /// Pack this Location for use in `u64`-keyed structures.
     pub fn pack(self) -> u64 {
         (u64::from(self.file.0) << 48) | (u64::from(self.line) << 16) | u64::from(self.column)
@@ -182,6 +186,11 @@ impl Location {
         } else {
             panic!("cannot take pred() of lowest possible Location")
         }
+        self
+    }
+
+    pub fn add_columns(mut self, num: u16) -> Location {
+        self.column += num;
         self
     }
 
