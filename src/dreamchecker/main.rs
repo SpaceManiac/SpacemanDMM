@@ -183,7 +183,12 @@ impl<'o> ProcAnalyzer<'o> {
     fn visit_expression(&mut self, expression: &Expression, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
         match expression {
             Expression::Base { unary, term, follow } => {
-                let mut ty = self.visit_term(term);
+                let base_type_hint = if follow.is_empty() && unary.is_empty() {
+                    type_hint
+                } else {
+                    None
+                };
+                let mut ty = self.visit_term(term, base_type_hint);
                 for each in follow.iter() {
                     ty = self.visit_follow(ty, each);
                 }
@@ -192,15 +197,14 @@ impl<'o> ProcAnalyzer<'o> {
                 }
                 ty
             },
-            Expression::BinaryOp { lhs, rhs, .. } => {
+            Expression::BinaryOp { op, lhs, rhs } => {
                 let lty = self.visit_expression(lhs, None);
                 let rty = self.visit_expression(rhs, None);
-                //unimplemented!()
-                Analysis::empty()
+                self.visit_binary(lty, rty, *op)
             },
             Expression::AssignOp { lhs, rhs, .. } => {
-                self.visit_expression(rhs, type_hint)
-                // TODO: visit LHS?
+                self.visit_expression(lhs, None);
+                self.visit_expression(rhs, None)
             },
             Expression::TernaryOp { cond, if_, else_ } => {
                 // TODO: be sensible
@@ -212,11 +216,16 @@ impl<'o> ProcAnalyzer<'o> {
         }
     }
 
-    fn visit_term(&mut self, term: &Term) -> Analysis<'o> {
+    fn visit_term(&mut self, term: &Term, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
         match term {
             Term::Null => Type::Null.into(),
             Term::New { type_, .. } => match type_ {
-                NewType::Implicit => Type::Any.into(),  // TODO: type hinting
+                NewType::Implicit => if let Some(hint) = type_hint {
+                    Type::Instance(hint).into()
+                } else {
+                    eprintln!("NewType::Implicit with no type hint");
+                    Analysis::empty()
+                },
                 NewType::Ident(_) => Type::Any.into(),  // TODO: lookup
                 NewType::Prefab(prefab) => {
                     if let Some(ty) = self.ty.navigate_path(&prefab.path) {
@@ -227,6 +236,19 @@ impl<'o> ProcAnalyzer<'o> {
                 },
             },
             Term::List(_) => Type::List(None).into(),
+            Term::Prefab(prefab) => {
+                if let Some(ty) = self.ty.navigate_path(&prefab.path) {
+                    Type::Typepath(ty).into()
+                } else {
+                    Type::Any.into()
+                }
+            },
+            Term::String(text) => Analysis::from_value(self.objtree, Constant::String(text.to_owned())),
+            Term::Resource(text) => Analysis::from_value(self.objtree, Constant::Resource(text.to_owned())),
+            Term::Int(number) => Analysis::from_value(self.objtree, Constant::from(*number)),
+            Term::Float(number) => Analysis::from_value(self.objtree, Constant::from(*number)),
+            Term::Expr(expr) => self.visit_expression(expr, type_hint),
+            Term::InterpString(..) => Type::String.into(),
             _ => Type::Any.into(),
         }
     }
@@ -258,11 +280,13 @@ impl<'o> ProcAnalyzer<'o> {
             _ => Type::Any.into(),
         }
     }
+
+    fn visit_binary(&mut self, lhs: Analysis<'o>, rhs: Analysis<'o>, op: BinaryOp) -> Analysis<'o> {
+        Analysis::empty()
+    }
 }
 
 fn some_analysis(context: &Context, objtree: &ObjectTree, ty: TypeRef, func: &ProcValue, code: &[Statement]) {
-    println!("{:?}", func.parameters);
-    println!("{:#?}", code);
     ProcAnalyzer { context, objtree, ty }.visit_block(code);
 }
 
@@ -285,12 +309,17 @@ fn main() {
     let mut disabled = 0;
 
     tree.root().recurse(&mut |ty| {
-        for proc in ty.procs.values() {
+        for (name, proc) in ty.procs.iter() {
             for value in proc.value.iter() {
                 match value.code {
                     Code::Present(ref code) => {
                         present += 1;
-                        some_analysis(&context, &tree, ty, &value, code);
+                        println!("{:?} {} {:?}", ty, name, value.parameters);
+                        ProcAnalyzer {
+                            context: &context,
+                            objtree: &tree,
+                            ty,
+                        }.visit_block(code);
                     }
                     Code::Invalid(_) => invalid += 1,
                     Code::Builtin => builtin += 1,
