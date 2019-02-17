@@ -291,20 +291,21 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                     Some(ref pp) => pp,
                     None => return Err(invalid_request("no preprocessor")),
                 };
-                let context = Default::default();
                 let (real_file_id, mut preprocessor) = match self.context.get_file(&stripped) {
-                    Some(id) => (id, preprocessor.branch_at_file(id, &context)),
-                    None => (FileId::default(), preprocessor.branch(&context)),
+                    Some(id) => (id, preprocessor.branch_at_file(id, &self.context)),
+                    None => (FileId::default(), preprocessor.branch(&self.context)),
                 };
                 let contents = self.docs.read(path).map_err(invalid_request)?;
                 let file_id = preprocessor.push_file(stripped.to_owned(), contents);
-                let indent = dm::indents::IndentProcessor::new(&context, preprocessor);
+                preprocessor.enable_annotations();
                 let mut annotations = AnnotationTree::default();
                 {
-                    let mut parser = dm::parser::Parser::new(&context, indent);
+                    let indent = dm::indents::IndentProcessor::new(&self.context, &mut preprocessor);
+                    let mut parser = dm::parser::Parser::new(&self.context, indent);
                     parser.annotate_to(&mut annotations);
                     parser.run();
                 }
+                annotations.merge(preprocessor.take_annotations().unwrap());
                 v.insert((real_file_id, file_id, Rc::new(annotations))).clone()
             }
         })
@@ -854,6 +855,9 @@ handle_method_call! {
                     }
                 }
             }
+        },
+        Annotation::Macro(name, location) => {
+            results.push(self.convert_location(*location, "/DM", "/preprocessor/", name)?);
         },
         }
 
