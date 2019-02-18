@@ -89,10 +89,11 @@ struct ProcAnalyzer<'o> {
     objtree: &'o ObjectTree,
     ty: TypeRef<'o>,
     local_vars: HashMap<String, Analysis<'o>>,
+    proc_name: &'o str,
 }
 
 impl<'o> ProcAnalyzer<'o> {
-    fn new(context: &'o Context, objtree: &'o ObjectTree, ty: TypeRef<'o>) -> Self {
+    fn new(context: &'o Context, objtree: &'o ObjectTree, ty: TypeRef<'o>, proc_name: &'o str) -> Self {
         let mut local_vars = HashMap::new();
         local_vars.insert(".".to_owned(), Analysis::empty());
         local_vars.insert("args".to_owned(), Type::List(None).into());
@@ -107,6 +108,7 @@ impl<'o> ProcAnalyzer<'o> {
             objtree,
             ty,
             local_vars,
+            proc_name,
         }
     }
 
@@ -127,7 +129,12 @@ impl<'o> ProcAnalyzer<'o> {
     fn visit_statement(&mut self, statement: &Statement) {
         match statement {
             Statement::Expr(expr) => { self.visit_expression(expr, None); },
-            Statement::Return(Some(expr)) => { self.visit_expression(expr, None); },
+            Statement::Return(Some(expr)) => {
+                // TODO: factor in the previous return type if there was one
+                let return_type = self.visit_expression(expr, None);
+                self.local_vars.insert(".".to_owned(), return_type);
+                // TODO: break out of the analysis for this branch?
+            },
             Statement::Return(None) => {},
             Statement::Throw(expr) => { self.visit_expression(expr, None); },
             Statement::While { condition, block } => {
@@ -329,6 +336,16 @@ impl<'o> ProcAnalyzer<'o> {
                     Analysis::empty()
                 }
             },
+            Term::ParentCall(args) => {
+                // TODO: handle same-type overrides correctly
+                if let Some(src) = self.ty.parent_type() {
+                    let args: Vec<_> = args.iter().map(|e| self.visit_expression(e, None)).collect();
+                    self.visit_call(src, self.proc_name, &args)
+                } else {
+                    eprintln!("visit_term: can't parent call from the root");
+                    Analysis::empty()
+                }
+            }
             _ => {
                 eprintln!("visit_term: don't know about {:?}", term);
                 Analysis::empty()
@@ -344,14 +361,24 @@ impl<'o> ProcAnalyzer<'o> {
             Follow::Call(IndexKind::SafeColon, _, _) => Analysis::empty(),
 
             Follow::Index(expr) => {
-                eprintln!("visit_follow: Index {:?}", expr);
-                Analysis::empty()
+                if let Type::List(lty) = lhs.ty {
+                    self.visit_expression(expr, None);
+                    if let Some(ty) = lty {
+                        Type::Instance(ty).into()
+                    } else {
+                        Analysis::empty()
+                    }
+                } else {
+                    eprintln!("visit_follow: can't index {:?}", lhs);
+                    Analysis::empty()
+                }
             },
             Follow::Field(kind, name) => {
+                eprintln!("visit_follow: {:?} field {:?}", lhs, name);
                 Analysis::empty()
             },
             Follow::Call(kind, name, arguments) => {
-                // TODO: checking
+                eprintln!("visit_follow: {:?} call {:?}", lhs, name);
                 Analysis::empty()
             },
         }
@@ -376,12 +403,19 @@ impl<'o> ProcAnalyzer<'o> {
     }
 
     fn visit_binary(&mut self, lhs: Analysis<'o>, rhs: Analysis<'o>, op: BinaryOp) -> Analysis<'o> {
-        eprintln!("visit_binary: don't know anything about {}", op);
+        //eprintln!("visit_binary: don't know anything about {}", op);
         Analysis::empty()
     }
 
-    fn visit_call(&mut self, src: TypeRef<'o>, proc: &str, args: &[Analysis<'o>]) -> Analysis<'o> {
-        eprintln!("visit_call: src={:?} proc={} args={:?}", src, proc, args);
+    fn visit_call(&mut self, src: TypeRef<'o>, proc_name: &str, args: &[Analysis<'o>]) -> Analysis<'o> {
+        let proc = match src.get_proc(proc_name) {
+            Some(proc) => proc,
+            None => {
+                eprintln!("visit_call: proc {} does not exist on {}", proc_name, src.pretty_path());
+                return Analysis::empty();
+            }
+        };
+        //eprintln!("visit_call: src={:?} proc={:?} args={:?}", src, proc, args);
         Analysis::empty()
     }
 }
@@ -410,8 +444,8 @@ fn main() {
                 match value.code {
                     Code::Present(ref code) => {
                         present += 1;
-                        println!("{:?} {} {:?}", ty, name, value.parameters);
-                        ProcAnalyzer::new(&context, &tree, ty).run(value, code);
+                        println!("\n{} {} {:?}", ty.pretty_path(), name, value.parameters);
+                        ProcAnalyzer::new(&context, &tree, ty, name).run(value, code);
                     }
                     Code::Invalid(_) => invalid += 1,
                     Code::Builtin => builtin += 1,
