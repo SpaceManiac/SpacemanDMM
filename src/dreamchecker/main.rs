@@ -8,6 +8,8 @@ use dm::objtree::{ProcValue, Code, ObjectTree, TypeRef};
 use dm::constants::{Constant, ConstFn};
 use dm::ast::*;
 
+use std::collections::HashMap;
+
 // ----------------------------------------------------------------------------
 // Helper structures
 
@@ -21,6 +23,7 @@ enum Type<'o> {
     List(Option<TypeRef<'o>>),
     Instance(TypeRef<'o>),
     Typepath(TypeRef<'o>),
+    Global,
 }
 
 impl<'o> Type<'o> {
@@ -46,6 +49,7 @@ impl<'o> Type<'o> {
 
 /// An 'atom' in the type analysis. A type/set of possible types, as well as a
 /// known constant value if available.
+#[derive(Debug, Clone)]
 struct Analysis<'o> {
     ty: Type<'o>,
     value: Option<Constant>,
@@ -60,6 +64,13 @@ impl<'o> From<Type<'o>> for Analysis<'o> {
 impl<'o> Analysis<'o> {
     fn empty() -> Analysis<'o> {
         Type::Any.into()
+    }
+
+    fn null() -> Analysis<'o> {
+        Analysis {
+            ty: Type::Null,
+            value: Some(Constant::Null(None)),
+        }
     }
 
     fn from_value(objtree: &'o ObjectTree, value: Constant) -> Analysis<'o> {
@@ -77,10 +88,33 @@ struct ProcAnalyzer<'o> {
     context: &'o Context,
     objtree: &'o ObjectTree,
     ty: TypeRef<'o>,
+    local_vars: HashMap<String, Analysis<'o>>,
 }
 
 impl<'o> ProcAnalyzer<'o> {
+    fn new(context: &'o Context, objtree: &'o ObjectTree, ty: TypeRef<'o>) -> Self {
+        let mut local_vars = HashMap::new();
+        local_vars.insert(".".to_owned(), Analysis::empty());
+        local_vars.insert("args".to_owned(), Type::List(None).into());
+        local_vars.insert("usr".to_owned(), Type::Instance(objtree.find("/mob").unwrap()).into());
+        if !ty.is_root() {
+            local_vars.insert("src".to_owned(), Type::Instance(ty).into());
+        }
+        local_vars.insert("global".to_owned(), Type::Global.into());
+
+        ProcAnalyzer {
+            context,
+            objtree,
+            ty,
+            local_vars,
+        }
+    }
+
     fn run(&mut self, proc: &ProcValue, block: &[Statement]) {
+        for param in proc.parameters.iter() {
+            // TODO: actually make use of the path or input_type here
+            self.local_vars.insert(param.name.to_owned(), Analysis::empty());
+        }
         self.visit_block(block);
     }
 
@@ -182,6 +216,25 @@ impl<'o> ProcAnalyzer<'o> {
     }
 
     fn visit_var(&mut self, var: &VarStatement) {
+        // Calculate type hint
+        let type_hint;
+        if var.var_type.type_path.is_empty() {
+            type_hint = None;
+        } else {
+            type_hint = self.objtree.type_by_path(&var.var_type.type_path);
+            if type_hint.is_none() {
+                eprintln!("visit_var: not found {:?}", var.var_type.type_path);
+            }
+        };
+
+        // Visit the expression if it's there
+        let val = match var.value {
+            Some(ref expr) => self.visit_expression(expr, type_hint),
+            None => Analysis::null(),
+        };
+
+        // Save var to locals
+        self.local_vars.insert(var.name.to_owned(), val);
     }
 
     fn visit_expression(&mut self, expression: &Expression, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
@@ -222,7 +275,7 @@ impl<'o> ProcAnalyzer<'o> {
 
     fn visit_term(&mut self, term: &Term, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
         match term {
-            Term::Null => Type::Null.into(),
+            Term::Null => Analysis::null(),
             Term::New { type_, .. } => match type_ {
                 NewType::Implicit => if let Some(hint) = type_hint {
                     Type::Instance(hint).into()
@@ -255,6 +308,27 @@ impl<'o> ProcAnalyzer<'o> {
             Term::Float(number) => Analysis::from_value(self.objtree, Constant::from(*number)),
             Term::Expr(expr) => self.visit_expression(expr, type_hint),
             Term::InterpString(..) => Type::String.into(),
+            Term::Call(unscoped_name, args) => {
+                let src = self.ty;
+                let args: Vec<_> = args.iter().map(|e| self.visit_expression(e, None)).collect();
+                self.visit_call(src, unscoped_name, &args)
+            },
+            Term::Ident(unscoped_name) => {
+                if let Some(var) = self.local_vars.get(unscoped_name) {
+                    var.clone()
+                } else if let Some(decl) = self.ty.get_var_declaration(unscoped_name) {
+                    if let Some(ty) = self.objtree.type_by_path(&decl.var_type.type_path) {
+                        Type::Instance(ty).into()
+                    } else {
+                        eprintln!("visit_term: ident {} with type {} failed to resolve",
+                            unscoped_name, FormatTreePath(&decl.var_type.type_path));
+                        Analysis::empty()
+                    }
+                } else {
+                    eprintln!("visit_term: ident {} failed to resolve", unscoped_name);
+                    Analysis::empty()
+                }
+            },
             _ => {
                 eprintln!("visit_term: don't know about {:?}", term);
                 Analysis::empty()
@@ -264,13 +338,15 @@ impl<'o> ProcAnalyzer<'o> {
 
     fn visit_follow(&mut self, lhs: Analysis<'o>, rhs: &Follow) -> Analysis<'o> {
         match rhs {
-            Follow::Index(expr) => {
-                Analysis::empty()
-            },
             Follow::Field(IndexKind::Colon, _) => Analysis::empty(),
             Follow::Field(IndexKind::SafeColon, _) => Analysis::empty(),
             Follow::Call(IndexKind::Colon, _, _) => Analysis::empty(),
             Follow::Call(IndexKind::SafeColon, _, _) => Analysis::empty(),
+
+            Follow::Index(expr) => {
+                eprintln!("visit_follow: Index {:?}", expr);
+                Analysis::empty()
+            },
             Follow::Field(kind, name) => {
                 Analysis::empty()
             },
@@ -300,7 +376,12 @@ impl<'o> ProcAnalyzer<'o> {
     }
 
     fn visit_binary(&mut self, lhs: Analysis<'o>, rhs: Analysis<'o>, op: BinaryOp) -> Analysis<'o> {
-        eprintln!("visit_binary: don't know anything");
+        eprintln!("visit_binary: don't know anything about {}", op);
+        Analysis::empty()
+    }
+
+    fn visit_call(&mut self, src: TypeRef<'o>, proc: &str, args: &[Analysis<'o>]) -> Analysis<'o> {
+        eprintln!("visit_call: src={:?} proc={} args={:?}", src, proc, args);
         Analysis::empty()
     }
 }
@@ -330,11 +411,7 @@ fn main() {
                     Code::Present(ref code) => {
                         present += 1;
                         println!("{:?} {} {:?}", ty, name, value.parameters);
-                        ProcAnalyzer {
-                            context: &context,
-                            objtree: &tree,
-                            ty,
-                        }.run(value, code);
+                        ProcAnalyzer::new(&context, &tree, ty).run(value, code);
                     }
                     Code::Invalid(_) => invalid += 1,
                     Code::Builtin => builtin += 1,
