@@ -80,6 +80,10 @@ struct ProcAnalyzer<'o> {
 }
 
 impl<'o> ProcAnalyzer<'o> {
+    fn run(&mut self, proc: &ProcValue, block: &[Statement]) {
+        self.visit_block(block);
+    }
+
     fn visit_block(&mut self, block: &[Statement]) {
         for stmt in block.iter() {
             self.visit_statement(stmt);
@@ -231,7 +235,8 @@ impl<'o> ProcAnalyzer<'o> {
                     if let Some(ty) = self.ty.navigate_path(&prefab.path) {
                         Type::Instance(ty).into()
                     } else {
-                        Type::Any.into()  // TODO: report lookup error
+                        eprintln!("visit_term: path {} failed to resolve", FormatTypePath(&prefab.path));
+                        Analysis::empty()
                     }
                 },
             },
@@ -240,7 +245,8 @@ impl<'o> ProcAnalyzer<'o> {
                 if let Some(ty) = self.ty.navigate_path(&prefab.path) {
                     Type::Typepath(ty).into()
                 } else {
-                    Type::Any.into()
+                    eprintln!("visit_term: path {} failed to resolve", FormatTypePath(&prefab.path));
+                    Analysis::empty()
                 }
             },
             Term::String(text) => Analysis::from_value(self.objtree, Constant::String(text.to_owned())),
@@ -249,27 +255,35 @@ impl<'o> ProcAnalyzer<'o> {
             Term::Float(number) => Analysis::from_value(self.objtree, Constant::from(*number)),
             Term::Expr(expr) => self.visit_expression(expr, type_hint),
             Term::InterpString(..) => Type::String.into(),
-            _ => Type::Any.into(),
+            _ => {
+                eprintln!("visit_term: don't know about {:?}", term);
+                Analysis::empty()
+            }
         }
     }
 
     fn visit_follow(&mut self, lhs: Analysis<'o>, rhs: &Follow) -> Analysis<'o> {
         match rhs {
             Follow::Index(expr) => {
-                Type::Any.into()
+                Analysis::empty()
             },
+            Follow::Field(IndexKind::Colon, _) => Analysis::empty(),
+            Follow::Field(IndexKind::SafeColon, _) => Analysis::empty(),
+            Follow::Call(IndexKind::Colon, _, _) => Analysis::empty(),
+            Follow::Call(IndexKind::SafeColon, _, _) => Analysis::empty(),
             Follow::Field(kind, name) => {
-                Type::Any.into()
+                Analysis::empty()
             },
             Follow::Call(kind, name, arguments) => {
                 // TODO: checking
-                Type::Any.into()
+                Analysis::empty()
             },
         }
     }
 
     fn visit_unary(&mut self, rhs: Analysis<'o>, op: &UnaryOp) -> Analysis<'o> {
         match (op, rhs.ty) {
+            // !x just evaluates the "truthiness" of x and negates it, returning 1 or 0
             (UnaryOp::Not, _) => Type::Number.into(),
             (UnaryOp::Neg, Type::Number) => Type::Number.into(),
             (UnaryOp::BitNot, Type::Number) => Type::Number.into(),
@@ -277,17 +291,18 @@ impl<'o> ProcAnalyzer<'o> {
             (UnaryOp::PostIncr, Type::Number) => Type::Number.into(),
             (UnaryOp::PreDecr, Type::Number) => Type::Number.into(),
             (UnaryOp::PostDecr, Type::Number) => Type::Number.into(),
-            _ => Type::Any.into(),
+            (_, Type::Any) => Analysis::empty(),
+            _ => {
+                eprintln!("visit_unary: don't know how to {:?} {:?}", op, rhs.ty);
+                Analysis::empty()
+            }
         }
     }
 
     fn visit_binary(&mut self, lhs: Analysis<'o>, rhs: Analysis<'o>, op: BinaryOp) -> Analysis<'o> {
+        eprintln!("visit_binary: don't know anything");
         Analysis::empty()
     }
-}
-
-fn some_analysis(context: &Context, objtree: &ObjectTree, ty: TypeRef, func: &ProcValue, code: &[Statement]) {
-    ProcAnalyzer { context, objtree, ty }.visit_block(code);
 }
 
 fn main() {
@@ -319,7 +334,7 @@ fn main() {
                             context: &context,
                             objtree: &tree,
                             ty,
-                        }.visit_block(code);
+                        }.run(value, code);
                     }
                     Code::Invalid(_) => invalid += 1,
                     Code::Builtin => builtin += 1,
