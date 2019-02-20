@@ -51,13 +51,14 @@ impl<'o> Type<'o> {
 /// known constant value if available.
 #[derive(Debug, Clone)]
 struct Analysis<'o> {
+    static_ty: Option<TypeRef<'o>>,
     ty: Type<'o>,
     value: Option<Constant>,
 }
 
 impl<'o> From<Type<'o>> for Analysis<'o> {
     fn from(ty: Type<'o>) -> Analysis<'o> {
-        Analysis { ty, value: None }
+        Analysis { static_ty: None, ty, value: None }
     }
 }
 
@@ -68,13 +69,23 @@ impl<'o> Analysis<'o> {
 
     fn null() -> Analysis<'o> {
         Analysis {
+            static_ty: None,
             ty: Type::Null,
             value: Some(Constant::Null(None)),
         }
     }
 
+    fn from_static_type(ty: TypeRef<'o>) -> Analysis<'o> {
+        Analysis {
+            static_ty: Some(ty),
+            ty: Type::Instance(ty),
+            value: None,
+        }
+    }
+
     fn from_value(objtree: &'o ObjectTree, value: Constant) -> Analysis<'o> {
         Analysis {
+            static_ty: None,
             ty: Type::from_constant(objtree, &value),
             value: Some(value),
         }
@@ -97,9 +108,9 @@ impl<'o> ProcAnalyzer<'o> {
         let mut local_vars = HashMap::new();
         local_vars.insert(".".to_owned(), Analysis::empty());
         local_vars.insert("args".to_owned(), Type::List(None).into());
-        local_vars.insert("usr".to_owned(), Type::Instance(objtree.find("/mob").unwrap()).into());
+        local_vars.insert("usr".to_owned(), Analysis::from_static_type(objtree.find("/mob").unwrap()));
         if !ty.is_root() {
-            local_vars.insert("src".to_owned(), Type::Instance(ty).into());
+            local_vars.insert("src".to_owned(), Analysis::from_static_type(ty));
         }
         local_vars.insert("global".to_owned(), Type::Global.into());
 
@@ -235,13 +246,14 @@ impl<'o> ProcAnalyzer<'o> {
         };
 
         // Visit the expression if it's there
-        let val = match var.value {
+        let mut analysis = match var.value {
             Some(ref expr) => self.visit_expression(expr, type_hint),
             None => Analysis::null(),
         };
+        analysis.static_ty = type_hint;
 
         // Save var to locals
-        self.local_vars.insert(var.name.to_owned(), val);
+        self.local_vars.insert(var.name.to_owned(), analysis);
     }
 
     fn visit_expression(&mut self, expression: &Expression, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
@@ -283,22 +295,40 @@ impl<'o> ProcAnalyzer<'o> {
     fn visit_term(&mut self, term: &Term, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
         match term {
             Term::Null => Analysis::null(),
-            Term::New { type_, .. } => match type_ {
-                NewType::Implicit => if let Some(hint) = type_hint {
-                    Type::Instance(hint).into()
-                } else {
-                    eprintln!("NewType::Implicit with no type hint");
-                    Analysis::empty()
-                },
-                NewType::Ident(_) => Type::Any.into(),  // TODO: lookup
-                NewType::Prefab(prefab) => {
-                    if let Some(ty) = self.ty.navigate_path(&prefab.path) {
-                        Type::Instance(ty).into()
+            Term::New { type_, args } => {
+                // determine the type being new'd
+                let typepath = match type_ {
+                    NewType::Implicit => if let Some(hint) = type_hint {
+                        Some(hint)
                     } else {
-                        eprintln!("visit_term: path {} failed to resolve", FormatTypePath(&prefab.path));
-                        Analysis::empty()
-                    }
-                },
+                        eprintln!("NewType::Implicit with no type hint");
+                        None
+                    },
+                    NewType::Ident(_) => None,  // TODO: lookup
+                    NewType::Prefab(prefab) => {
+                        if let Some(ty) = self.ty.navigate_path(&prefab.path) {
+                            Some(ty)
+                        } else {
+                            eprintln!("visit_term: path {} failed to resolve", FormatTypePath(&prefab.path));
+                            None
+                        }
+                    },
+                };
+
+                // call to the New() method
+                if let Some(typepath) = typepath {
+                    let args_vec: Vec<_>;
+                    let args = if let Some(args) = args {
+                        args_vec = args.iter().map(|e| self.visit_expression(e, None)).collect();
+                        &args_vec[..]
+                    } else {
+                        &[]
+                    };
+                    self.visit_call(typepath, "New", args);
+                    Type::Instance(typepath).into()
+                } else {
+                    Analysis::empty()
+                }
             },
             Term::List(_) => Type::List(None).into(),
             Term::Prefab(prefab) => {
@@ -325,7 +355,7 @@ impl<'o> ProcAnalyzer<'o> {
                     var.clone()
                 } else if let Some(decl) = self.ty.get_var_declaration(unscoped_name) {
                     if let Some(ty) = self.objtree.type_by_path(&decl.var_type.type_path) {
-                        Type::Instance(ty).into()
+                        Analysis::from_static_type(ty)
                     } else {
                         eprintln!("visit_term: ident {} with type {} failed to resolve",
                             unscoped_name, FormatTreePath(&decl.var_type.type_path));
