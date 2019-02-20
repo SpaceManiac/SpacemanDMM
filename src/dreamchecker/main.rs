@@ -112,7 +112,11 @@ impl<'o> ProcAnalyzer<'o> {
         if !ty.is_root() {
             local_vars.insert("src".to_owned(), Analysis::from_static_type(ty));
         }
-        local_vars.insert("global".to_owned(), Type::Global.into());
+        local_vars.insert("global".to_owned(), Analysis {
+            static_ty: Some(objtree.root()),
+            ty: Type::Global,
+            value: None,
+        });
 
         ProcAnalyzer {
             context,
