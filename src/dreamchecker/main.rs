@@ -125,8 +125,8 @@ impl<'o> ProcAnalyzer<'o> {
 
     fn run(&mut self, proc: &ProcValue, block: &[Statement]) {
         for param in proc.parameters.iter() {
-            // TODO: actually make use of the path or input_type here
-            self.local_vars.insert(param.name.to_owned(), Analysis::empty());
+            let analysis = self.static_type(&param.path);
+            self.local_vars.insert(param.name.to_owned(), analysis);
         }
         self.visit_block(block);
     }
@@ -346,13 +346,8 @@ impl<'o> ProcAnalyzer<'o> {
                 if let Some(var) = self.local_vars.get(unscoped_name) {
                     var.clone()
                 } else if let Some(decl) = self.ty.get_var_declaration(unscoped_name) {
-                    if let Some(ty) = self.objtree.type_by_path(&decl.var_type.type_path) {
-                        Analysis::from_static_type(ty)
-                    } else {
-                        eprintln!("visit_term: ident {} with type {} failed to resolve",
-                            unscoped_name, FormatTreePath(&decl.var_type.type_path));
-                        Analysis::empty()
-                    }
+                    self.static_type(&decl.var_type.type_path)
+                    // eprintln!("visit_term: ident {} with type {} failed to resolve",
                 } else {
                     eprintln!("visit_term: ident {} failed to resolve", unscoped_name);
                     Analysis::empty()
@@ -397,18 +392,14 @@ impl<'o> ProcAnalyzer<'o> {
             Follow::Field(kind, name) => {
                 if let Some(ty) = lhs.static_ty {
                     if let Some(decl) = ty.get_var_declaration(name) {
-                        if let Some(var_ty) = self.objtree.type_by_path(&decl.var_type.type_path) {
-                            Analysis::from_static_type(var_ty)
-                        } else {
-                            eprintln!("visit_follow: {:?} field {:?}: unable to resolve {:?}", lhs, name, &decl.var_type.type_path);
-                            Analysis::empty()
-                        }
+                        self.static_type(&decl.var_type.type_path)
+                        // eprintln!("visit_follow: {:?} field {:?}: failed to resolve {}"
                     } else {
                         eprintln!("visit_follow: {:?} field: no variable {:?}", lhs, name);
                         Analysis::empty()
                     }
                 } else {
-                    eprintln!("visit_follow: {:?} field: no static type", lhs);
+                    eprintln!("visit_follow: {:?} field {:?}: no static type", lhs, name);
                     Analysis::empty()
                 }
             },
@@ -416,7 +407,7 @@ impl<'o> ProcAnalyzer<'o> {
                 if let Some(ty) = lhs.static_ty {
                     self.visit_call(ty, name, arguments)
                 } else {
-                    eprintln!("visit_follow: {:?} call: no static type", lhs);
+                    eprintln!("visit_follow: {:?} call {:?}: no static type", lhs, name);
                     Analysis::empty()
                 }
             },
@@ -458,6 +449,21 @@ impl<'o> ProcAnalyzer<'o> {
         };
         //eprintln!("visit_call: src={:?} proc={:?} args={:?}", src, proc, args);
         Analysis::empty()
+    }
+
+    fn static_type(&self, of: &Vec<String>) -> Analysis<'o> {
+        if of.is_empty() {
+            Analysis::empty()
+        } else if of[0] == "list" {
+            let mut analysis = Analysis::from_static_type(self.objtree.find("/list").unwrap());
+            analysis.ty = Type::List(self.objtree.type_by_path(&of[1..]));
+            analysis
+        } else if let Some(ty) = self.objtree.type_by_path(of) {
+            Analysis::from_static_type(ty)
+        } else {
+            eprintln!("failed to find type: {}", FormatTreePath(of));
+            Analysis::empty()
+        }
     }
 }
 
