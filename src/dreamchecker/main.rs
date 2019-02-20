@@ -317,14 +317,7 @@ impl<'o> ProcAnalyzer<'o> {
 
                 // call to the New() method
                 if let Some(typepath) = typepath {
-                    let args_vec: Vec<_>;
-                    let args = if let Some(args) = args {
-                        args_vec = args.iter().map(|e| self.visit_expression(e, None)).collect();
-                        &args_vec[..]
-                    } else {
-                        &[]
-                    };
-                    self.visit_call(typepath, "New", args);
+                    self.visit_call(typepath, "New", args.as_ref().map_or(&[], |v| &v[..]));
                     Type::Instance(typepath).into()
                 } else {
                     Analysis::empty()
@@ -347,8 +340,7 @@ impl<'o> ProcAnalyzer<'o> {
             Term::InterpString(..) => Type::String.into(),
             Term::Call(unscoped_name, args) => {
                 let src = self.ty;
-                let args: Vec<_> = args.iter().map(|e| self.visit_expression(e, None)).collect();
-                self.visit_call(src, unscoped_name, &args)
+                self.visit_call(src, unscoped_name, args)
             },
             Term::Ident(unscoped_name) => {
                 if let Some(var) = self.local_vars.get(unscoped_name) {
@@ -369,8 +361,7 @@ impl<'o> ProcAnalyzer<'o> {
             Term::ParentCall(args) => {
                 // TODO: handle same-type overrides correctly
                 if let Some(src) = self.ty.parent_type() {
-                    let args: Vec<_> = args.iter().map(|e| self.visit_expression(e, None)).collect();
-                    self.visit_call(src, self.proc_name, &args)
+                    self.visit_call(src, self.proc_name, args)
                 } else {
                     eprintln!("visit_term: can't parent call from the root");
                     Analysis::empty()
@@ -404,12 +395,30 @@ impl<'o> ProcAnalyzer<'o> {
                 }
             },
             Follow::Field(kind, name) => {
-                eprintln!("visit_follow: {:?} field {:?}", lhs, name);
-                Analysis::empty()
+                if let Some(ty) = lhs.static_ty {
+                    if let Some(decl) = ty.get_var_declaration(name) {
+                        if let Some(var_ty) = self.objtree.type_by_path(&decl.var_type.type_path) {
+                            Analysis::from_static_type(var_ty)
+                        } else {
+                            eprintln!("visit_follow: {:?} field {:?}: unable to resolve {:?}", lhs, name, &decl.var_type.type_path);
+                            Analysis::empty()
+                        }
+                    } else {
+                        eprintln!("visit_follow: {:?} field: no variable {:?}", lhs, name);
+                        Analysis::empty()
+                    }
+                } else {
+                    eprintln!("visit_follow: {:?} field: no static type", lhs);
+                    Analysis::empty()
+                }
             },
             Follow::Call(kind, name, arguments) => {
-                eprintln!("visit_follow: {:?} call {:?}", lhs, name);
-                Analysis::empty()
+                if let Some(ty) = lhs.static_ty {
+                    self.visit_call(ty, name, arguments)
+                } else {
+                    eprintln!("visit_follow: {:?} call: no static type", lhs);
+                    Analysis::empty()
+                }
             },
         }
     }
@@ -437,7 +446,9 @@ impl<'o> ProcAnalyzer<'o> {
         Analysis::empty()
     }
 
-    fn visit_call(&mut self, src: TypeRef<'o>, proc_name: &str, args: &[Analysis<'o>]) -> Analysis<'o> {
+    fn visit_call(&mut self, src: TypeRef<'o>, proc_name: &str, args: &[Expression]) -> Analysis<'o> {
+        //let args: Vec<_> = args.iter().map(|e| self.visit_expression(e, None)).collect();
+
         let proc = match src.get_proc(proc_name) {
             Some(proc) => proc,
             None => {
