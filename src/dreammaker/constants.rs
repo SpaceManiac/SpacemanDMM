@@ -692,7 +692,7 @@ impl<'a> ConstantFolder<'a> {
                 type_: match type_ {
                     NewType::Prefab(e) => Some(self.prefab(e)?),
                     NewType::Implicit => None,
-                    NewType::Ident(_) => return Err(self.error("non-constant new expression")),
+                    NewType::MiniExpr { .. } => return Err(self.error("non-constant new expression")),
                 },
                 args: match args {
                     Some(args) => Some(self.arguments(args)?),

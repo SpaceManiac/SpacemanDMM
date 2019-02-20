@@ -271,10 +271,13 @@ impl<'a, E: fmt::Display> fmt::Display for FormatVars<'a, E> {
 pub enum NewType {
     /// Implicit type, taken from context.
     Implicit,
-    /// The name of a variable in which to find the prefab to instantiate.
-    Ident(String),
     /// A prefab to be instantiated.
     Prefab(Prefab),
+    /// A "mini-expression" in which to find the prefab to instantiate.
+    MiniExpr {
+        ident: String,
+        fields: Vec<IndexOrField>,
+    },
 }
 
 /// The structure of an expression, a tree of terms and operators.
@@ -470,6 +473,24 @@ pub enum Follow {
     Field(IndexKind, String),
     /// Call a method of the value.
     Call(IndexKind, String, Vec<Expression>),
+}
+
+/// Like a `Follow` but supports index or fields only.
+#[derive(Debug, Clone, PartialEq)]
+pub enum IndexOrField {
+    /// Index the value by an expression.
+    Index(Box<Expression>),
+    /// Access a field of the value.
+    Field(IndexKind, String),
+}
+
+impl From<IndexOrField> for Follow {
+    fn from(input: IndexOrField) -> Follow {
+        match input {
+            IndexOrField::Index(expr) => Follow::Index(expr),
+            IndexOrField::Field(kind, name) => Follow::Field(kind, name),
+        }
+    }
 }
 
 /// A parameter declaration in the header of a proc.

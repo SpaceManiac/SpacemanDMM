@@ -304,7 +304,6 @@ impl<'o> ProcAnalyzer<'o> {
                         eprintln!("NewType::Implicit with no type hint");
                         None
                     },
-                    NewType::Ident(_) => None,  // TODO: lookup
                     NewType::Prefab(prefab) => {
                         if let Some(ty) = self.ty.navigate_path(&prefab.path) {
                             Some(ty)
@@ -313,6 +312,7 @@ impl<'o> ProcAnalyzer<'o> {
                             None
                         }
                     },
+                    NewType::MiniExpr { .. } => None,  // TODO: evaluate
                 };
 
                 // call to the New() method
