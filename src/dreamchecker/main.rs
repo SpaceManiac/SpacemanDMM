@@ -177,9 +177,17 @@ impl<'o> ProcAnalyzer<'o> {
                 }
                 self.visit_block(block);
             },
-            Statement::ForList { in_list, block, .. } => {
+            Statement::ForList { in_list, block, var_type, name, .. } => {
                 if let Some(in_list) = in_list {
                     self.visit_expression(in_list, None);
+                }
+                if let Some(var_type) = var_type {
+                    // TODO: make this less hacky
+                    self.visit_var(&VarStatement {
+                        var_type: var_type.clone(),
+                        name: name.to_owned(),
+                        value: None,
+                    });
                 }
                 self.visit_block(block);
             },
