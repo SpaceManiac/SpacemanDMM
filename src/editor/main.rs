@@ -1161,16 +1161,6 @@ impl EditorScene {
         let path2 = path.clone();
         let rx = tasks::spawn(move || {
             use dm::constants::Constant;
-            use dm::ast::PathOp;
-
-            fn format_path(path: &[(PathOp, String)]) -> String {
-                let mut s = String::new();
-                for &(_, ref part) in path.iter() {
-                    s.push_str("/");
-                    s.push_str(part);
-                }
-                s
-            }
 
             let context = dm::Context::default();
             let objtree = context.parse_environment(&path)?;
@@ -1179,12 +1169,12 @@ impl EditorScene {
             if let Some(world) = objtree.find("/world") {
                 if let Some(turf_var) = world.get_value("turf") {
                     if let Some(Constant::Prefab(ref prefab)) = turf_var.constant {
-                        turf = format_path(&prefab.path);
+                        turf = dm::ast::FormatTreePath(&prefab.path).to_string();
                     }
                 }
                 if let Some(area_var) = world.get_value("area") {
                     if let Some(Constant::Prefab(ref prefab)) = area_var.constant {
-                        area = format_path(&prefab.path);
+                        area = dm::ast::FormatTreePath(&prefab.path).to_string();
                     }
                 }
             }

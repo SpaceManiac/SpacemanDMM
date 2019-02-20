@@ -19,19 +19,15 @@ impl RenderPass for Spawners {
             &Constant::List(ref elements) => {
                 for &(ref key, _) in elements {
                     // TODO: use a more civilized lookup method
-                    let mut type_key = String::new();
-                    let reference;
-                    match key {
-                        &Constant::String(ref s) => reference = s,
+                    let type_key;
+                    let reference = match key {
+                        &Constant::String(ref s) => s,
                         &Constant::Prefab(ref fab) => {
-                            for each in fab.path.iter() {
-                                use std::fmt::Write;
-                                let _ = write!(type_key, "{}{}", each.0, each.1);
-                            }
-                            reference = &type_key;
-                        }
+                            type_key = dm::ast::FormatTreePath(&fab.path).to_string();
+                            &type_key
+                        },
                         _ => continue,
-                    }
+                    };
                     output.push(Atom::from_type(objtree, reference, atom.loc).unwrap());
                 }
                 true  // don't include the original atom
