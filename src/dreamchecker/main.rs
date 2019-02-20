@@ -36,10 +36,10 @@ impl<'o> Type<'o> {
             Constant::Float(_) => Type::Number,
             Constant::List(_) => Type::List(None),
             Constant::Call(func, _) => match func {
-                ConstFn::Icon => Type::Instance(objtree.find("/icon").unwrap()),
-                ConstFn::Matrix => Type::Instance(objtree.find("/matrix").unwrap()),
+                ConstFn::Icon => Type::Instance(objtree.expect("/icon")),
+                ConstFn::Matrix => Type::Instance(objtree.expect("/matrix")),
                 ConstFn::Newlist => Type::List(None),
-                ConstFn::Sound => Type::Instance(objtree.find("/sound").unwrap()),
+                ConstFn::Sound => Type::Instance(objtree.expect("/sound")),
             },
             // TODO: New => Instance, Prefab => Typepath
             _ => Type::Any,
@@ -108,7 +108,7 @@ impl<'o> ProcAnalyzer<'o> {
         let mut local_vars = HashMap::new();
         local_vars.insert(".".to_owned(), Analysis::empty());
         local_vars.insert("args".to_owned(), Type::List(None).into());
-        local_vars.insert("usr".to_owned(), Analysis::from_static_type(objtree.find("/mob").unwrap()));
+        local_vars.insert("usr".to_owned(), Analysis::from_static_type(objtree.expect("/mob")));
         if !ty.is_root() {
             local_vars.insert("src".to_owned(), Analysis::from_static_type(ty));
         }
@@ -455,7 +455,7 @@ impl<'o> ProcAnalyzer<'o> {
         if of.is_empty() {
             Analysis::empty()
         } else if of[0] == "list" {
-            let mut analysis = Analysis::from_static_type(self.objtree.find("/list").unwrap());
+            let mut analysis = Analysis::from_static_type(self.objtree.expect("/list"));
             analysis.ty = Type::List(self.objtree.type_by_path(&of[1..]));
             analysis
         } else if let Some(ty) = self.objtree.type_by_path(of) {

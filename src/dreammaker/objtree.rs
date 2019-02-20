@@ -395,6 +395,13 @@ impl ObjectTree {
         self.types.get(path).map(|&ix| TypeRef::new(self, ix))
     }
 
+    pub fn expect(&self, path: &str) -> TypeRef {
+        match self.types.get(path) {
+            Some(&ix) => TypeRef::new(self, ix),
+            None => panic!("type not found: {:?}", path),
+        }
+    }
+
     pub fn parent_of(&self, type_: &Type) -> Option<&Type> {
         self.graph.node_weight(type_.parent_type)
     }

@@ -12,7 +12,7 @@ fn main() {
     // Used to check https://github.com/tgstation/tgstation/pull/38171
     // for mistakes transferring between `flags_1` and `item_flags`.
     println!("---- item_flags example ----");
-    objtree.find("/obj/item").expect("no root").recurse(&mut |ty| {
+    objtree.expect("/obj/item").recurse(&mut |ty| {
         print!("{}: ", ty.path);
         let mut flags_1 = ty
             .get_value("flags_1")
@@ -63,7 +63,7 @@ fn main() {
     // Used to check https://github.com/tgstation/tgstation/pull/38116
     // for changes to any machinery types's `anchored` value, and to find
     // machinery for which `anchored = TRUE` was then redundant.
-    objtree.find("/obj/machinery").expect("no root").recurse(&mut |ty| {
+    objtree.expect("/obj/machinery").recurse(&mut |ty| {
         // print every type's `anchored` value for diffing
         let var = ty.get_value("anchored").unwrap();
         let anch = var.constant.as_ref().unwrap().to_bool();
