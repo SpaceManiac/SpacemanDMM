@@ -1777,29 +1777,25 @@ where
     }
 
     fn follow(&mut self, belongs_to: &mut Vec<String>, in_ternary: bool) -> Status<Follow> {
-        match self.next("field access")? {
+        let kind = match self.next("field access")? {
             // follow :: '[' expression ']'
             Token::Punct(Punctuation::LBracket) => {
                 belongs_to.clear();
                 let expr = require!(self.expression());
                 require!(self.exact(Token::Punct(Punctuation::RBracket)));
-                success(Follow::Index(Box::new(expr)))
+                return success(Follow::Index(Box::new(expr)))
             }
 
             // follow :: '.' ident arglist?
             // TODO: only apply these rules if there is no whitespace around the punctuation
-            Token::Punct(Punctuation::Dot) => self.follow_index(IndexKind::Dot, belongs_to),
-            Token::Punct(Punctuation::CloseColon) if !belongs_to.is_empty() || !in_ternary => {
-                self.follow_index(IndexKind::Colon, belongs_to)
-            },
-            Token::Punct(Punctuation::SafeDot) => self.follow_index(IndexKind::SafeDot, belongs_to),
-            Token::Punct(Punctuation::SafeColon) => self.follow_index(IndexKind::SafeColon, belongs_to),
+            Token::Punct(Punctuation::Dot) => IndexKind::Dot,
+            Token::Punct(Punctuation::CloseColon) if !belongs_to.is_empty() || !in_ternary => IndexKind::Colon,
+            Token::Punct(Punctuation::SafeDot) => IndexKind::SafeDot,
+            Token::Punct(Punctuation::SafeColon) => IndexKind::SafeColon,
 
-            other => self.try_another(other),
-        }
-    }
+            other => return self.try_another(other),
+        };
 
-    fn follow_index(&mut self, kind: IndexKind, belongs_to: &mut Vec<String>) -> Status<Follow> {
         let mut index_op_loc = self.location;
         let start = self.updated_location();
         let ident = match self.ident()? {
