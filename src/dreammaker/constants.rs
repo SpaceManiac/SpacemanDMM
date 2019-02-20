@@ -22,7 +22,7 @@ pub enum Constant {
     /// A `new` call.
     New {
         /// The type to be instantiated.
-        type_: NewType<Constant>,
+        type_: Option<Prefab<Constant>>,
         /// The list of arugments to pass to the `New()` proc.
         args: Option<Vec<(Constant, Option<Constant>)>>,
     },
@@ -241,7 +241,10 @@ impl fmt::Display for Constant {
         match *self {
             Constant::Null(_) => f.write_str("null"),
             Constant::New { ref type_, ref args } => {
-                write!(f, "new{}", type_)?;
+                f.write_str("new")?;
+                if let Some(prefab) = type_ {
+                    write!(f, " {}", prefab)?;
+                }
                 if let Some(args) = args.as_ref() {
                     write!(f, "(")?;
                     let mut first = true;
@@ -665,8 +668,8 @@ impl<'a> ConstantFolder<'a> {
             Term::Null => Constant::Null(type_hint.cloned()),
             Term::New { type_, args } => Constant::New {
                 type_: match type_ {
-                    NewType::Prefab(e) => NewType::Prefab(self.prefab(e)?),
-                    NewType::Implicit => NewType::Implicit,
+                    NewType::Prefab(e) => Some(self.prefab(e)?),
+                    NewType::Implicit => None,
                     NewType::Ident(_) => return Err(self.error("non-constant new expression")),
                 },
                 args: match args {
