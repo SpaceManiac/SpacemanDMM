@@ -11,6 +11,28 @@ use super::objtree::*;
 use super::ast::*;
 use super::preprocessor::DefineMap;
 
+/// An absolute typepath and optional variables.
+#[derive(Clone, Hash, Eq, PartialEq, Debug)]
+pub struct Pop {
+    pub path: TreePath,
+    pub vars: LinkedHashMap<String, Constant>,
+}
+
+impl From<TreePath> for Pop {
+    fn from(path: TreePath) -> Self {
+        Pop {
+            path,
+            vars: Default::default(),
+        }
+    }
+}
+
+impl fmt::Display for Pop {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}{}", FormatTreePath(&self.path), FormatVars(&self.vars))
+    }
+}
+
 /// A DM constant, usually a literal or simple combination of other constants.
 ///
 /// This is intended to represent the degree to which constants are evaluated
@@ -22,7 +44,7 @@ pub enum Constant {
     /// A `new` call.
     New {
         /// The type to be instantiated.
-        type_: Option<Prefab<Constant>>,
+        type_: Option<Pop>,
         /// The list of arugments to pass to the `New()` proc.
         args: Option<Vec<(Constant, Option<Constant>)>>,
     },
@@ -31,7 +53,7 @@ pub enum Constant {
     /// A call to a constant type constructor.
     Call(ConstFn, Vec<(Constant, Option<Constant>)>),
     /// A prefab literal.
-    Prefab(Prefab<Constant>),
+    Prefab(Pop),
     /// A string literal.
     String(String),
     /// A resource literal.
@@ -730,16 +752,34 @@ impl<'a> ConstantFolder<'a> {
         })
     }
 
-    fn prefab(&mut self, prefab: Prefab) -> Result<Prefab<Constant>, DMError> {
+    fn prefab(&mut self, prefab: Prefab) -> Result<Pop, DMError> {
+        // Resolve the possibly-relative into an entirely-absolute path.
+        let all_absolute = prefab.path.iter().all(|&(op, _)| op == PathOp::Slash);
+        let path: TreePath = if all_absolute {
+            // If the path is all slashes, that's just the absolute path.
+            prefab.path.iter().map(|&(_, ref name)| name.to_owned()).collect()
+        } else if let Some(tree) = self.tree.as_ref() {
+            // Otherwise, attempt resolution.
+            let relative_to = TypeRef::new(tree, self.ty);
+            if let Some(ty) = relative_to.navigate_path(&prefab.path) {
+                ty.path[1..].split("/").map(ToOwned::to_owned).collect()
+            } else {
+                return Err(self.error(format!("could not resolve {} relative to {}",
+                    FormatTypePath(&prefab.path), relative_to.pretty_path())));
+            }
+        } else {
+            return Err(self.error(format!("cannot resolve relative type path {} without an object tree",
+                FormatTypePath(&prefab.path))));
+        };
+
+        // Visit the vars recursively.
         let mut vars = LinkedHashMap::new();
         for (k, v) in prefab.vars {
             // TODO: find a type annotation by looking up 'k' on the prefab's type
             vars.insert(k, self.expr(v, None)?);
         }
-        Ok(Prefab {
-            path: prefab.path,
-            vars,
-        })
+
+        Ok(Pop { path, vars })
     }
 
     fn ident(&mut self, ident: String, must_be_const: bool) -> Result<Constant, DMError> {

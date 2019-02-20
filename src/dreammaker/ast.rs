@@ -229,14 +229,14 @@ augmented! {
     RShift = RShiftAssign;
 }
 
-/// A path optionally followed by a set of variables.
-#[derive(Clone, Hash, Eq, PartialEq, Debug)]
-pub struct Prefab<E=Expression> {
+/// A typepath optionally followed by a set of variables.
+#[derive(Clone, PartialEq, Debug)]
+pub struct Prefab {
     pub path: TypePath,
-    pub vars: LinkedHashMap<String, E>,
+    pub vars: LinkedHashMap<String, Expression>,
 }
 
-impl<E> From<TypePath> for Prefab<E> {
+impl From<TypePath> for Prefab {
     fn from(path: TypePath) -> Self {
         Prefab {
             path,
@@ -245,15 +245,15 @@ impl<E> From<TypePath> for Prefab<E> {
     }
 }
 
-impl<E: fmt::Display> fmt::Display for Prefab<E> {
+/// Formatting helper for variable arrays.
+pub struct FormatVars<'a, E>(pub &'a LinkedHashMap<String, E>);
+
+impl<'a, E: fmt::Display> fmt::Display for FormatVars<'a, E> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for each in self.path.iter() {
-            write!(f, "{}{}", each.0, each.1)?;
-        }
-        if !self.vars.is_empty() {
+        if !self.0.is_empty() {
             write!(f, " {{")?;
             let mut first = true;
-            for (k, v) in self.vars.iter() {
+            for (k, v) in self.0.iter() {
                 if !first {
                     write!(f, "; ")?;
                 }
@@ -267,24 +267,14 @@ impl<E: fmt::Display> fmt::Display for Prefab<E> {
 }
 
 /// The different forms of the `new` command.
-#[derive(Clone, Hash, Eq, PartialEq, Debug)]
-pub enum NewType<E=Expression> {
+#[derive(Clone, PartialEq, Debug)]
+pub enum NewType {
     /// Implicit type, taken from context.
     Implicit,
     /// The name of a variable in which to find the prefab to instantiate.
     Ident(String),
     /// A prefab to be instantiated.
-    Prefab(Prefab<E>),
-}
-
-impl<E: fmt::Display> fmt::Display for NewType<E> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            NewType::Implicit => Ok(()),
-            NewType::Ident(ref name) => write!(f, " {}", name),
-            NewType::Prefab(ref prefab) => write!(f, " {}", prefab),
-        }
-    }
+    Prefab(Prefab),
 }
 
 /// The structure of an expression, a tree of terms and operators.

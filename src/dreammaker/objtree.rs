@@ -9,8 +9,8 @@ use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 use linked_hash_map::LinkedHashMap;
 
-use super::ast::{Expression, VarType, PathOp, Prefab, Parameter, Statement};
-use super::constants::Constant;
+use super::ast::{Expression, VarType, PathOp, Parameter, Statement};
+use super::constants::{Constant, Pop};
 use super::docs::DocCollection;
 use super::{DMError, Location, Context};
 
@@ -161,7 +161,7 @@ pub struct TypeRef<'a> {
 
 impl<'a> TypeRef<'a> {
     #[inline]
-    fn new(tree: &'a ObjectTree, idx: NodeIndex) -> TypeRef<'a> {
+    pub(crate) fn new(tree: &'a ObjectTree, idx: NodeIndex) -> TypeRef<'a> {
         TypeRef { tree, idx }
     }
 
@@ -442,7 +442,7 @@ impl ObjectTree {
     pub fn type_by_constant(&self, constant: &Constant) -> Option<TypeRef> {
         match *constant {
             Constant::String(ref string_path) => self.find(string_path),
-            Constant::Prefab(Prefab { ref path, .. }) => self.type_by_path(path.iter().map(|(_, item)| item)),
+            Constant::Prefab(Pop { ref path, .. }) => self.type_by_path(path),
             _ => None,
         }
     }
@@ -481,9 +481,9 @@ impl ObjectTree {
                                     parent_type_buf = s;
                                     parent_type = &parent_type_buf;
                                 }
-                                Ok(Constant::Prefab(Prefab { ref path, ref vars })) if vars.is_empty() => {
+                                Ok(Constant::Prefab(Pop { ref path, ref vars })) if vars.is_empty() => {
                                     parent_type_buf = String::new();
-                                    for &(_, ref piece) in path.iter() {
+                                    for piece in path.iter() {
                                         parent_type_buf.push('/');
                                         parent_type_buf.push_str(&piece);
                                     }
