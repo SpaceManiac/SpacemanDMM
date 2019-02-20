@@ -557,6 +557,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         client/var/authenticate;
         client/var/bounds;
         client/var/byond_version;
+        client/var/byond_build;
         client/var/CGI;
         client/var/ckey;
         client/var/color;
