@@ -195,11 +195,19 @@ impl<'o> ProcAnalyzer<'o> {
                 }
                 self.visit_block(block);
             },
-            Statement::ForRange { start, end, step, block, .. } => {
+            Statement::ForRange { var_type, name, start, end, step, block } => {
                 self.visit_expression(start, None);
                 self.visit_expression(end, None);
                 if let Some(step) = step {
                     self.visit_expression(step, None);
+                }
+                if let Some(var_type) = var_type {
+                    // TODO: pass 'start' through to 'value'
+                    self.visit_var(&VarStatement {
+                        var_type: var_type.clone(),
+                        name: name.to_owned(),
+                        value: None,
+                    });
                 }
                 self.visit_block(block);
             },
