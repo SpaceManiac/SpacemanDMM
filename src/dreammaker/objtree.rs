@@ -304,11 +304,16 @@ impl<'a> TypeRef<'a> {
         self.get().get_var_declaration(name, self.tree)
     }
 
-    pub fn get_proc(self, name: &str) -> Option<&'a ProcValue> {
+    pub fn get_proc(self, name: &'a str) -> Option<ProcRef<'a>> {
         let mut current: Option<TypeRef<'a>> = Some(self);
         while let Some(ty) = current {
             if let Some(proc) = ty.get().procs.get(name) {
-                return proc.value.last();
+                return Some(ProcRef {
+                    ty,
+                    list: &proc.value,
+                    name,
+                    idx: proc.value.len() - 1,
+                });
             }
             current = ty.parent_type();
         }
@@ -349,6 +354,73 @@ impl<'a> ::std::cmp::PartialEq for TypeRef<'a> {
 }
 
 impl<'a> ::std::cmp::Eq for TypeRef<'a> {}
+
+// ----------------------------------------------------------------------------
+// Proc references
+
+#[derive(Clone, Copy)]
+pub struct ProcRef<'a> {
+    ty: TypeRef<'a>,
+    list: &'a [ProcValue],
+    name: &'a str,
+    idx: usize,
+}
+
+impl<'a> ProcRef<'a> {
+    pub fn get(self) -> &'a ProcValue {
+        &self.list[self.idx]
+    }
+
+    pub fn ty(self) -> TypeRef<'a> {
+        self.ty
+    }
+
+    pub fn name(&self) -> &str {
+        self.name
+    }
+
+    pub fn index(self) -> usize {
+        self.idx
+    }
+
+    pub fn parent_proc(self) -> Option<ProcRef<'a>> {
+        if let Some(idx) = self.idx.checked_sub(1) {
+            Some(ProcRef {
+                ty: self.ty,
+                list: self.list,
+                name: self.name,
+                idx,
+            })
+        } else {
+            self.ty.parent_type().and_then(|ty| ty.get_proc(self.name))
+        }
+    }
+}
+
+impl<'a> ::std::ops::Deref for ProcRef<'a> {
+    type Target = ProcValue;
+    fn deref(&self) -> &ProcValue {
+        self.get()
+    }
+}
+
+impl<'a> fmt::Debug for ProcRef<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}/proc/{}", self.ty.path, self.name)?;
+        if self.list.len() > 1 {
+            write!(f, "[{}/{}]", self.idx, self.list.len())?;
+        }
+        Ok(())
+    }
+}
+
+impl<'a> ::std::cmp::PartialEq for ProcRef<'a> {
+    fn eq(&self, other: &ProcRef<'a>) -> bool {
+        self.ty == other.ty && self.name == other.name && self.idx == other.idx
+    }
+}
+
+impl<'a> std::cmp::Eq for ProcRef<'a> {}
 
 // ----------------------------------------------------------------------------
 // The object tree itself

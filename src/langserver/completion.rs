@@ -164,7 +164,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             if let Some((_, proc_name)) = iter.next() {
                 // '/datum/proc/proc_name'
                 if let Some(proc_ref) = ty.get_proc(proc_name) {
-                    proc = Some((proc_name.as_str(), proc_ref));
+                    proc = Some((proc_name.as_str(), proc_ref.get()));
                 }
             }
             // else '/datum/proc', no results
