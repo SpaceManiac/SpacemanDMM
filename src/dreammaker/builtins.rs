@@ -749,6 +749,18 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         image/var/override;
         image/var/transform;
         mutable_appearance/parent_type = path!(/image);
+
+        savefile;
+        savefile/var/cd;
+        savefile/var/dir;
+        savefile/var/eof;
+        savefile/var/name;
+        savefile/proc/ExportText(/* path=cd, file */);
+        savefile/proc/Flush();
+        savefile/proc/ImportText(/* path=cd, file */);
+        savefile/proc/Lock(timeout);
+        savefile/proc/Unlock();
+        savefile/proc/New(filename, timeout);
     };
 
     Ok(())
