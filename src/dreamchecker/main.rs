@@ -577,7 +577,10 @@ fn main() {
             match proc.code {
                 Code::Present(ref code) => {
                     present += 1;
-                    println!("\n{:?} {:?}", proc, proc.parameters);
+                    println!("\n{} at {}:{}",
+                        proc,
+                        context.file_path(proc.location.file).display(),
+                        proc.location.line);
                     ProcAnalyzer::new(&mut env, &context, &tree, proc).run(code);
                 }
                 Code::Invalid(_) => invalid += 1,
