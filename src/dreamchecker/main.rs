@@ -195,35 +195,24 @@ impl<'o> ProcAnalyzer<'o> {
                     self.visit_expression(in_list, None);
                 }
                 if let Some(var_type) = var_type {
-                    // TODO: make this less hacky
-                    self.visit_var(&VarStatement {
-                        var_type: var_type.clone(),
-                        name: name.to_owned(),
-                        value: None,
-                    });
+                    self.visit_var(var_type, name, None);
                 }
                 self.visit_block(block);
             },
             Statement::ForRange { var_type, name, start, end, step, block } => {
-                self.visit_expression(start, None);
                 self.visit_expression(end, None);
                 if let Some(step) = step {
                     self.visit_expression(step, None);
                 }
                 if let Some(var_type) = var_type {
-                    // TODO: pass 'start' through to 'value'
-                    self.visit_var(&VarStatement {
-                        var_type: var_type.clone(),
-                        name: name.to_owned(),
-                        value: None,
-                    });
+                    self.visit_var(var_type, name, Some(start));
                 }
                 self.visit_block(block);
             },
-            Statement::Var(var) => self.visit_var(var),
+            Statement::Var(var) => self.visit_var_stmt(var),
             Statement::Vars(vars) => {
                 for each in vars.iter() {
-                    self.visit_var(each);
+                    self.visit_var_stmt(each);
                 }
             },
             Statement::Setting { .. } => {},
@@ -262,27 +251,31 @@ impl<'o> ProcAnalyzer<'o> {
         }
     }
 
-    fn visit_var(&mut self, var: &VarStatement) {
+    fn visit_var_stmt(&mut self, var: &VarStatement) {
+        self.visit_var(&var.var_type, &var.name, var.value.as_ref())
+    }
+
+    fn visit_var(&mut self, var_type: &VarType, name: &str, value: Option<&Expression>) {
         // Calculate type hint
         let type_hint;
-        if var.var_type.type_path.is_empty() {
+        if var_type.type_path.is_empty() {
             type_hint = None;
         } else {
-            type_hint = self.objtree.type_by_path(&var.var_type.type_path);
+            type_hint = self.objtree.type_by_path(&var_type.type_path);
             if type_hint.is_none() {
-                eprintln!("visit_var: not found {:?}", var.var_type.type_path);
+                eprintln!("visit_var: not found {:?}", var_type.type_path);
             }
         };
 
         // Visit the expression if it's there
-        let mut analysis = match var.value {
+        let mut analysis = match value {
             Some(ref expr) => self.visit_expression(expr, type_hint),
             None => Analysis::null(),
         };
         analysis.static_ty = type_hint;
 
         // Save var to locals
-        self.local_vars.insert(var.name.to_owned(), analysis);
+        self.local_vars.insert(name.to_owned(), analysis);
     }
 
     fn visit_expression(&mut self, expression: &Expression, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
