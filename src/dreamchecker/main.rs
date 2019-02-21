@@ -383,7 +383,44 @@ impl<'o> ProcAnalyzer<'o> {
                     eprintln!("visit_term: can't parent call from the root");
                     Analysis::empty()
                 }
-            }
+            },
+            Term::Locate { args, .. } => {
+                // TODO: deal with in_list
+                if args.len() == 3 {  // X,Y,Z - it's gotta be a turf
+                    Type::Instance(self.objtree.expect("/turf")).into()
+                } else {
+                    Analysis::empty()
+                }
+            },
+            Term::Input { args, input_type, .. } => {
+                // TODO: deal with in_list
+                let without_null = *input_type - InputType::NULL;
+                if input_type.contains(InputType::ANYTHING) {
+                    Analysis::empty()
+                } else if without_null == InputType::MOB {
+                    Type::Instance(self.objtree.expect("/mob")).into()
+                } else if without_null == InputType::OBJ {
+                    Type::Instance(self.objtree.expect("/obj")).into()
+                } else if without_null == InputType::AREA {
+                    Type::Instance(self.objtree.expect("/area")).into()
+                } else if without_null == InputType::TURF {
+                    Type::Instance(self.objtree.expect("/turf")).into()
+                } else if without_null == InputType::TEXT || without_null == InputType::MESSAGE || without_null == InputType::KEY || without_null == InputType::PASSWORD || without_null == InputType::COLOR || without_null.is_empty() {
+                    Type::String.into()
+                } else if without_null == InputType::NUM {
+                    Type::Number.into()
+                } else if without_null == InputType::ICON {
+                    Type::Instance(self.objtree.expect("/icon")).into()
+                } else if without_null == InputType::SOUND {
+                    Type::Instance(self.objtree.expect("/sound")).into()
+                } else if without_null == InputType::FILE {
+                    // TODO: it's not clear that this is correct
+                    Type::Resource.into()
+                } else {
+                    eprintln!("visit_term: weird input() type: {:?}", input_type);
+                    Analysis::empty()
+                }
+            },
             _ => {
                 eprintln!("visit_term: don't know about {:?}", term);
                 Analysis::empty()
