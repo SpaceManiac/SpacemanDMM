@@ -303,8 +303,8 @@ impl<'o> ProcAnalyzer<'o> {
                 self.visit_binary(lty, rty, *op)
             },
             Expression::AssignOp { lhs, rhs, .. } => {
-                self.visit_expression(lhs, None);
-                self.visit_expression(rhs, None)
+                let lhs = self.visit_expression(lhs, None);
+                self.visit_expression(rhs, lhs.static_ty)
             },
             Expression::TernaryOp { cond, if_, else_ } => {
                 // TODO: be sensible
