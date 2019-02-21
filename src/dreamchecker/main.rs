@@ -93,9 +93,17 @@ impl<'o> Analysis<'o> {
 }
 
 // ----------------------------------------------------------------------------
+// Analysis environment
+
+#[derive(Default)]
+struct Env {
+}
+
+// ----------------------------------------------------------------------------
 // Procedure analyzer
 
 struct ProcAnalyzer<'o> {
+    env: &'o mut Env,
     context: &'o Context,
     objtree: &'o ObjectTree,
     ty: TypeRef<'o>,
@@ -104,7 +112,7 @@ struct ProcAnalyzer<'o> {
 }
 
 impl<'o> ProcAnalyzer<'o> {
-    fn new(context: &'o Context, objtree: &'o ObjectTree, ty: TypeRef<'o>, proc_name: &'o str) -> Self {
+    fn new(env: &'o mut Env, context: &'o Context, objtree: &'o ObjectTree, ty: TypeRef<'o>, proc_name: &'o str) -> Self {
         let mut local_vars = HashMap::new();
         local_vars.insert(".".to_owned(), Analysis::empty());
         local_vars.insert("args".to_owned(), Type::List(None).into());
@@ -119,6 +127,7 @@ impl<'o> ProcAnalyzer<'o> {
         });
 
         ProcAnalyzer {
+            env,
             context,
             objtree,
             ty,
@@ -505,6 +514,8 @@ fn main() {
     let mut builtin = 0;
     let mut disabled = 0;
 
+    let mut env = Env::default();
+
     tree.root().recurse(&mut |ty| {
         for (name, proc) in ty.procs.iter() {
             for value in proc.value.iter() {
@@ -512,7 +523,7 @@ fn main() {
                     Code::Present(ref code) => {
                         present += 1;
                         println!("\n{} {} {:?}", ty.pretty_path(), name, value.parameters);
-                        ProcAnalyzer::new(&context, &tree, ty, name).run(value, code);
+                        ProcAnalyzer::new(&mut env, &context, &tree, ty, name).run(value, code);
                     }
                     Code::Invalid(_) => invalid += 1,
                     Code::Builtin => builtin += 1,
