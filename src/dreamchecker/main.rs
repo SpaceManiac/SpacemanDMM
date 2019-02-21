@@ -4,7 +4,7 @@
 
 extern crate dreammaker as dm;
 use dm::Context;
-use dm::objtree::{ProcValue, Code, ObjectTree, TypeRef};
+use dm::objtree::{Code, ObjectTree, TypeRef, ProcRef};
 use dm::constants::{Constant, ConstFn};
 use dm::ast::*;
 
@@ -107,12 +107,14 @@ struct ProcAnalyzer<'o> {
     context: &'o Context,
     objtree: &'o ObjectTree,
     ty: TypeRef<'o>,
+    proc_ref: ProcRef<'o>,
     local_vars: HashMap<String, Analysis<'o>>,
-    proc_name: &'o str,
 }
 
 impl<'o> ProcAnalyzer<'o> {
-    fn new(env: &'o mut Env, context: &'o Context, objtree: &'o ObjectTree, ty: TypeRef<'o>, proc_name: &'o str) -> Self {
+    fn new(env: &'o mut Env, context: &'o Context, objtree: &'o ObjectTree, proc_ref: ProcRef<'o>) -> Self {
+        let ty = proc_ref.ty();
+
         let mut local_vars = HashMap::new();
         local_vars.insert(".".to_owned(), Analysis::empty());
         local_vars.insert("args".to_owned(), Type::List(None).into());
@@ -131,13 +133,13 @@ impl<'o> ProcAnalyzer<'o> {
             context,
             objtree,
             ty,
+            proc_ref,
             local_vars,
-            proc_name,
         }
     }
 
-    fn run(&mut self, proc: &ProcValue, block: &[Statement]) {
-        for param in proc.parameters.iter() {
+    fn run(&mut self, block: &[Statement]) {
+        for param in self.proc_ref.parameters.iter() {
             let analysis = self.static_type(&param.path);
             self.local_vars.insert(param.name.to_owned(), analysis);
         }
@@ -339,7 +341,10 @@ impl<'o> ProcAnalyzer<'o> {
 
                 // call to the New() method
                 if let Some(typepath) = typepath {
-                    self.visit_call(typepath, "New", args.as_ref().map_or(&[], |v| &v[..]));
+                    self.visit_call(
+                        Type::Instance(typepath).into(),
+                        typepath.get_proc("New").expect("couldn't find New proc"),
+                        args.as_ref().map_or(&[], |v| &v[..]));
                     Type::Instance(typepath).into()
                 } else {
                     Analysis::empty()
@@ -362,7 +367,12 @@ impl<'o> ProcAnalyzer<'o> {
             Term::InterpString(..) => Type::String.into(),
             Term::Call(unscoped_name, args) => {
                 let src = self.ty;
-                self.visit_call(src, unscoped_name, args)
+                if let Some(proc) = self.ty.get_proc(unscoped_name) {
+                    self.visit_call(Type::Instance(src).into(), proc, args)
+                } else {
+                    eprintln!("visit_term: proc {} does not exist on {}", unscoped_name, self.ty.pretty_path());
+                    Analysis::empty()
+                }
             },
             Term::Ident(unscoped_name) => {
                 if let Some(var) = self.local_vars.get(unscoped_name) {
@@ -376,17 +386,19 @@ impl<'o> ProcAnalyzer<'o> {
                 }
             },
             Term::ParentCall(args) => {
-                // TODO: handle same-type overrides correctly
-                if let Some(src) = self.ty.parent_type() {
-                    self.visit_call(src, self.proc_name, args)
+                if let Some(proc) = self.proc_ref.parent_proc() {
+                    // TODO: if args are empty, call w/ same args
+                    let src = self.ty;
+                    self.visit_call(Type::Instance(src).into(), proc, args)
                 } else {
-                    eprintln!("visit_term: can't parent call from the root");
+                    eprintln!("visit_term: proc has no parent: {:?}", self.proc_ref);
                     Analysis::empty()
                 }
             },
             Term::SelfCall(args) => {
                 let src = self.ty;
-                self.visit_call(src, self.proc_name, args)
+                let proc = self.proc_ref;
+                self.visit_call(Type::Instance(src).into(), proc, args)
             },
             Term::Locate { args, .. } => {
                 // TODO: deal with in_list
@@ -481,7 +493,12 @@ impl<'o> ProcAnalyzer<'o> {
             },
             Follow::Call(kind, name, arguments) => {
                 if let Some(ty) = lhs.static_ty {
-                    self.visit_call(ty, name, arguments)
+                    if let Some(proc) = ty.get_proc(name) {
+                        self.visit_call(lhs, proc, arguments)
+                    } else {
+                        eprintln!("visit_follow: proc {} does not exist on {}", name, ty.pretty_path());
+                        Analysis::empty()
+                    }
                 } else {
                     eprintln!("visit_follow: {:?} call {:?}: no static type", lhs, name);
                     Analysis::empty()
@@ -513,16 +530,8 @@ impl<'o> ProcAnalyzer<'o> {
         Analysis::empty()
     }
 
-    fn visit_call(&mut self, src: TypeRef<'o>, proc_name: &str, args: &[Expression]) -> Analysis<'o> {
+    fn visit_call(&mut self, src: Analysis<'o>, proc: ProcRef, args: &[Expression]) -> Analysis<'o> {
         //let args: Vec<_> = args.iter().map(|e| self.visit_expression(e, None)).collect();
-
-        let proc = match src.get_proc(proc_name) {
-            Some(proc) => proc,
-            None => {
-                eprintln!("visit_call: proc {} does not exist on {}", proc_name, src.pretty_path());
-                return Analysis::empty();
-            }
-        };
         //eprintln!("visit_call: src={:?} proc={:?} args={:?}", src, proc, args);
         Analysis::empty()
     }
@@ -564,18 +573,16 @@ fn main() {
     let mut env = Env::default();
 
     tree.root().recurse(&mut |ty| {
-        for (name, proc) in ty.procs.iter() {
-            for value in proc.value.iter() {
-                match value.code {
-                    Code::Present(ref code) => {
-                        present += 1;
-                        println!("\n{} {} {:?}", ty.pretty_path(), name, value.parameters);
-                        ProcAnalyzer::new(&mut env, &context, &tree, ty, name).run(value, code);
-                    }
-                    Code::Invalid(_) => invalid += 1,
-                    Code::Builtin => builtin += 1,
-                    Code::Disabled => disabled += 1,
+        for proc in ty.iter_self_procs() {
+            match proc.code {
+                Code::Present(ref code) => {
+                    present += 1;
+                    println!("\n{:?} {:?}", proc, proc.parameters);
+                    ProcAnalyzer::new(&mut env, &context, &tree, proc).run(code);
                 }
+                Code::Invalid(_) => invalid += 1,
+                Code::Builtin => builtin += 1,
+                Code::Disabled => disabled += 1,
             }
         }
     });

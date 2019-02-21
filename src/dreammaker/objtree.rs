@@ -332,6 +332,18 @@ impl<'a> TypeRef<'a> {
         }
         None
     }
+
+    pub fn iter_self_procs(self) -> impl Iterator<Item=ProcRef<'a>> {
+        self.get().procs.iter().flat_map(move |(name, type_proc)| {
+            let list = &type_proc.value;
+            (0..list.len()).map(move |idx| ProcRef {
+                ty: self,
+                list,
+                name,
+                idx,
+            })
+        })
+    }
 }
 
 impl<'a> ::std::ops::Deref for TypeRef<'a> {
