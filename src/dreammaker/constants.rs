@@ -765,7 +765,7 @@ impl<'a> ConstantFolder<'a> {
                 ty.path[1..].split("/").map(ToOwned::to_owned).collect()
             } else {
                 return Err(self.error(format!("could not resolve {} relative to {}",
-                    FormatTypePath(&prefab.path), relative_to.pretty_path())));
+                    FormatTypePath(&prefab.path), relative_to)));
             }
         } else {
             return Err(self.error(format!("cannot resolve relative type path {} without an object tree",

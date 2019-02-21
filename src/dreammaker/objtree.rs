@@ -359,6 +359,12 @@ impl<'a> fmt::Debug for TypeRef<'a> {
     }
 }
 
+impl<'a> fmt::Display for TypeRef<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(self.pretty_path())
+    }
+}
+
 impl<'a> ::std::cmp::PartialEq for TypeRef<'a> {
     fn eq(&self, other: &Self) -> bool {
         ::std::ptr::eq(self.tree, other.tree) && self.idx == other.idx
@@ -417,6 +423,12 @@ impl<'a> ::std::ops::Deref for ProcRef<'a> {
 }
 
 impl<'a> fmt::Debug for ProcRef<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}/proc/{}[{}/{}]", self.ty, self.name, self.idx, self.list.len())
+    }
+}
+
+impl<'a> fmt::Display for ProcRef<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}/proc/{}", self.ty.path, self.name)?;
         if self.list.len() > 1 {
