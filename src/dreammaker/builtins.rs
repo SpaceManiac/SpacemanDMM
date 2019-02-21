@@ -5,6 +5,9 @@ use super::ast::*;
 use super::{Location, FileId, DMError};
 use super::preprocessor::{DefineMap, Define};
 
+const DM_VERSION: i32 = 512;
+const DM_BUILD: i32 = 1464;
+
 /// Register BYOND builtin macros to the given define map.
 pub fn default_defines(defines: &mut DefineMap) {
     use super::lexer::Token::*;
@@ -20,7 +23,8 @@ pub fn default_defines(defines: &mut DefineMap) {
         }
     }
     c! {
-        DM_VERSION = Int(512);
+        DM_VERSION = Int(DM_VERSION);
+        DM_BUILD = Int(DM_BUILD);
 
         // eye and sight
         SEEINVIS = Int(2);
@@ -454,6 +458,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         atom/var/tmp/x;  // not editable
         atom/var/tmp/y;  // not editable
         atom/var/tmp/z;  // not editable
+        atom/var/list/filters;
         atom/proc/Click(location, control, params);
         atom/proc/DblClick(location, control, params);
         atom/proc/Enter(/*atom/movable*/O, /*atom*/oldloc);
@@ -483,6 +488,8 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         atom/movable/var/step_size;
         atom/movable/var/step_x;
         atom/movable/var/step_y;
+        atom/movable/var/list/vis_contents;
+        atom/movable/var/tmp/list/vis_locs;
         atom/movable/proc/Bump(/*atom*/Obstacle);
         atom/movable/proc/Cross(/*atom/movable*/O);
         atom/movable/proc/Crossed(/*atom/movable*/O);
@@ -495,6 +502,8 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
 
         turf/parent_type = path!(/atom);
         turf/layer = int!(2);
+        turf/var/list/vis_contents;
+        turf/var/tmp/list/vis_locs;
 
         obj/parent_type = path!(/atom/movable);
         obj/layer = int!(3);
@@ -516,6 +525,8 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         var/static/world/world;
         world/var/address;
         world/var/area/area = path!(/area);
+        world/var/byond_build = int!(DM_BUILD);
+        world/var/byond_version = int!(DM_VERSION);
         world/var/cache_lifespan = int!(30);
         world/var/contents;
         world/var/cpu;
@@ -748,6 +759,10 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         image/var/z;
         image/var/override;
         image/var/transform;
+        image/var/list/vis_contents;
+        image/var/list/filters;
+        image/var/name;  // undocumented
+        image/var/mouse_opacity;  // undocumented
         mutable_appearance/parent_type = path!(/image);
 
         savefile;
