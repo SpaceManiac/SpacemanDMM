@@ -457,6 +457,9 @@ impl<'o> ProcAnalyzer<'o> {
                     } else {
                         Analysis::empty()
                     }
+                } else if lhs.static_ty == Some(self.objtree.expect("/list")) {
+                    // TODO: keep track of what /list was declared
+                    Analysis::empty()
                 } else {
                     eprintln!("visit_follow: can't index {:?}", lhs);
                     Analysis::empty()
