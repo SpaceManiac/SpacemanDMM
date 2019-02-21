@@ -384,6 +384,10 @@ impl<'o> ProcAnalyzer<'o> {
                     Analysis::empty()
                 }
             },
+            Term::SelfCall(args) => {
+                let src = self.ty;
+                self.visit_call(src, self.proc_name, args)
+            },
             Term::Locate { args, .. } => {
                 // TODO: deal with in_list
                 if args.len() == 3 {  // X,Y,Z - it's gotta be a turf
@@ -421,10 +425,20 @@ impl<'o> ProcAnalyzer<'o> {
                     Analysis::empty()
                 }
             },
-            _ => {
-                eprintln!("visit_term: don't know about {:?}", term);
-                Analysis::empty()
-            }
+            Term::DynamicCall(lhs_args, rhs_args) => {
+                Analysis::empty()  // TODO
+            },
+            Term::Pick(choices) => {
+                if choices.len() == 1 {
+                    match self.visit_expression(&choices[0].1, None).ty {
+                        Type::List(Some(inst)) => Type::Instance(inst).into(),
+                        _ => Analysis::empty(),
+                    }
+                } else {
+                    // TODO: common superset of all choices
+                    Analysis::empty()
+                }
+            },
         }
     }
 
