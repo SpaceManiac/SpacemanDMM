@@ -312,6 +312,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         proc/json_decode(JSON);
         proc/json_encode(Value);
         proc/length(E);
+        proc/lentext(T);  // deprecated
         proc/link(url);
         proc/list(A,B,C/*,...*/);  // +1 form
         proc/list2params(List);
@@ -562,6 +563,26 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         world/var/version = int!(0);
         world/var/view = int!(5);
         world/var/visibility = int!(1);
+        world/proc/AddCredits();
+        world/proc/ClearMedal();
+        world/Del();
+        world/proc/Export();
+        world/proc/GetConfig();
+        world/proc/GetCredits();
+        world/proc/GetMedal();
+        world/proc/GetScores();
+        world/proc/Import();
+        world/proc/IsBanned();
+        world/proc/IsSubscribed();
+        world/proc/New();
+        world/proc/OpenPort();
+        world/proc/PayCredits();
+        world/proc/Reboot();
+        world/proc/Repop();
+        world/proc/SetConfig();
+        world/proc/SetMedal();
+        world/proc/SetScores();
+        world/proc/Topic();
 
         client;
         client/var/address;
