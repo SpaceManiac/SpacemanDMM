@@ -119,9 +119,9 @@ impl Env {
                 }
 
                 if !missing.is_empty() {
-                    DMError::new(proc.location, format!("override of {} is missing keyword args from parent: {:?}",
+                    DMError::new(proc.location, format!("override of {} is missing keyword args from parent: \"{}\"",
                             proc.name(),
-                            missing.join(", "),
+                            missing.join("\", \""),
                         ))
                         .add_note(use_site, format!("for example, {} is called here", current))
                         .register(context);
@@ -400,7 +400,10 @@ impl<'o> ProcAnalyzer<'o> {
                     self.visit_call(
                         Type::Instance(typepath).into(),
                         typepath.get_proc("New").expect("couldn't find New proc"),
-                        args.as_ref().map_or(&[], |v| &v[..]));
+                        args.as_ref().map_or(&[], |v| &v[..]),
+                        // New calls are exact: `new /datum()` will always call
+                        // `/datum/New()` and never an override.
+                        true);
                     Type::Instance(typepath).into()
                 } else {
                     Analysis::empty()
@@ -425,7 +428,7 @@ impl<'o> ProcAnalyzer<'o> {
             Term::Call(unscoped_name, args) => {
                 let src = self.ty;
                 if let Some(proc) = self.ty.get_proc(unscoped_name) {
-                    self.visit_call(Type::Instance(src).into(), proc, args)
+                    self.visit_call(Type::Instance(src).into(), proc, args, false)
                 } else {
                     self.show_header();
                     println!("visit_term: proc does not exist: {:?} on {}", unscoped_name, self.ty);
@@ -447,7 +450,8 @@ impl<'o> ProcAnalyzer<'o> {
                 if let Some(proc) = self.proc_ref.parent_proc() {
                     // TODO: if args are empty, call w/ same args
                     let src = self.ty;
-                    self.visit_call(Type::Instance(src).into(), proc, args)
+                    // Parent calls are exact, and won't ever call an override.
+                    self.visit_call(Type::Instance(src).into(), proc, args, true)
                 } else {
                     self.show_header();
                     println!("visit_term: proc has no parent: {}", self.proc_ref);
@@ -457,7 +461,8 @@ impl<'o> ProcAnalyzer<'o> {
             Term::SelfCall(args) => {
                 let src = self.ty;
                 let proc = self.proc_ref;
-                self.visit_call(Type::Instance(src).into(), proc, args)
+                // Self calls are exact, and won't ever call an override.
+                self.visit_call(Type::Instance(src).into(), proc, args, true)
             },
             Term::Locate { args, .. } => {
                 // TODO: deal with in_list
@@ -556,7 +561,7 @@ impl<'o> ProcAnalyzer<'o> {
             Follow::Call(kind, name, arguments) => {
                 if let Some(ty) = lhs.static_ty {
                     if let Some(proc) = ty.get_proc(name) {
-                        self.visit_call(lhs, proc, arguments)
+                        self.visit_call(lhs, proc, arguments, false)
                     } else {
                         self.show_header();
                         println!("visit_follow: proc does not exist: {} on {}", name, ty);
@@ -595,7 +600,7 @@ impl<'o> ProcAnalyzer<'o> {
         Analysis::empty()
     }
 
-    fn visit_call(&mut self, src: Analysis<'o>, proc: ProcRef, args: &[Expression]) -> Analysis<'o> {
+    fn visit_call(&mut self, src: Analysis<'o>, proc: ProcRef, args: &[Expression], is_exact: bool) -> Analysis<'o> {
         // identify and register kwargs used
         for arg in args {
             let mut argument_value = arg;
@@ -603,15 +608,15 @@ impl<'o> ProcAnalyzer<'o> {
                 match lhs.as_term() {
                     Some(Term::Ident(name)) |
                     Some(Term::String(name)) => {
-                        // don't visit_expression the kwarg key
+                        // Don't visit_expression the kwarg key.
                         argument_value = rhs;
 
-                        // check that that kwarg actually exists
+                        // Check that that kwarg actually exists.
                         if proc.parameters.iter().find(|p| p.name == *name).is_none() {
                             self.show_header();
                             println!("visit_call: call with bad kwarg: {:?} on {}", name, proc);
-                        } else {
-                            // if it does, mark it as "used"
+                        } else if !is_exact {
+                            // If it does, mark it as "used".
                             self.env.used_kwargs.entry(proc.to_string())
                                 .or_default()
                                 // TODO: use a more accurate location

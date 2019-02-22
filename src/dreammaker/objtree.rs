@@ -414,6 +414,11 @@ impl<'a> ProcRef<'a> {
             self.ty.parent_type().and_then(|ty| ty.get_proc(self.name))
         }
     }
+
+    /// Returns whether this is the public-facing version (final override) of this proc.
+    pub fn is_externally_visible(self) -> bool {
+        self.idx + 1 == self.list.len()
+    }
 }
 
 impl<'a> ::std::ops::Deref for ProcRef<'a> {
