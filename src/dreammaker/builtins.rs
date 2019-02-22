@@ -453,7 +453,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         datum/var/const/type;  // not editable
         datum/var/const/parent_type;  // not editable
         datum/var/tag;
-        datum/var/const/vars;  // not editable
+        datum/var/const/list/vars;  // not editable
         datum/proc/New();
         datum/proc/Del();
         datum/proc/Read(/*savefile*/F);
@@ -490,7 +490,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         atom/var/mouse_opacity;
         atom/var/name;
         atom/var/opacity;
-        atom/var/tmp/overlays;  // not editable
+        atom/var/tmp/list/overlays;  // not editable
         //atom/var/override;  // listed under /atom but docs say /image only
         atom/var/pixel_x;
         atom/var/pixel_y;
@@ -500,8 +500,8 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         atom/var/suffix;
         atom/var/text;
         atom/var/transform;
-        atom/var/tmp/underlays;  // not editable
-        atom/var/tmp/verbs;  // not editable
+        atom/var/tmp/list/underlays;  // not editable
+        atom/var/tmp/list/verbs;  // not editable
         atom/var/tmp/x;  // not editable
         atom/var/tmp/y;  // not editable
         atom/var/tmp/z;  // not editable
@@ -807,8 +807,8 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         image/var/icon_state;
         image/var/text;
         image/var/dir;
-        image/var/underlays;
-        image/var/overlays;
+        image/var/list/underlays;
+        image/var/list/overlays;
         image/var/atom/loc;
         image/var/layer = int!(5);
         image/var/maptext;
