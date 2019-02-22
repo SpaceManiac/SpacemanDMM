@@ -415,7 +415,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             next = self.objtree.find("/mob");
         } else {
             next = match self.find_unscoped_var(iter, next, proc_name, first) {
-                UnscopedVar::Parameter { param, .. } => self.objtree.type_by_path(&param.path),
+                UnscopedVar::Parameter { param, .. } => self.objtree.type_by_path(&param.var_type.type_path),
                 UnscopedVar::Variable { ty, .. } => match ty.get_var_declaration(first) {
                     Some(decl) => self.objtree.type_by_path(&decl.var_type.type_path),
                     None => None,
@@ -975,7 +975,7 @@ handle_method_call! {
                             label: param.name.clone(),
                             documentation: None,
                         });
-                        for each in param.path.iter() {
+                        for each in param.var_type.type_path.iter() {
                             let _ = write!(label, "{}{}", sep, each);
                             sep = "/";
                         }

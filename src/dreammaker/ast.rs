@@ -496,7 +496,7 @@ impl From<IndexOrField> for Follow {
 /// A parameter declaration in the header of a proc.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Parameter {
-    pub path: Vec<String>,
+    pub var_type: VarType,
     pub name: String,
     pub default: Option<Expression>,
     pub input_type: InputType,
@@ -506,9 +506,7 @@ pub struct Parameter {
 
 impl fmt::Display for Parameter {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        for each in self.path.iter() {
-            write!(fmt, "{}/", each)?;
-        }
+        write!(fmt, "{}{}", self.var_type, self.name)?;
         fmt.write_str(&self.name)?;
         if !self.input_type.is_empty() {
             write!(fmt, " as {}", self.input_type)?;
@@ -580,7 +578,7 @@ type_table! {
 }
 
 /// A type which may be ascribed to a `var`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct VarType {
     pub is_static: bool,
     pub is_const: bool,
@@ -631,17 +629,17 @@ impl FromIterator<String> for VarType {
 impl fmt::Display for VarType {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         if self.is_static {
-            fmt.write_str("/static")?;
+            fmt.write_str("static/")?;
         }
         if self.is_const {
-            fmt.write_str("/const")?;
+            fmt.write_str("const/")?;
         }
         if self.is_tmp {
-            fmt.write_str("/tmp")?;
+            fmt.write_str("tmp/")?;
         }
         for bit in self.type_path.iter() {
-            fmt.write_str("/")?;
             fmt.write_str(bit)?;
+            fmt.write_str("/")?;
         }
         Ok(())
     }

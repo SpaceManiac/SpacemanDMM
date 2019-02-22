@@ -140,7 +140,7 @@ impl<'o> ProcAnalyzer<'o> {
 
     fn run(&mut self, block: &[Statement]) {
         for param in self.proc_ref.parameters.iter() {
-            let analysis = self.static_type(&param.path);
+            let analysis = self.static_type(&param.var_type.type_path);
             self.local_vars.insert(param.name.to_owned(), analysis);
         }
         self.visit_block(block);

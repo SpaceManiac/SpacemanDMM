@@ -835,6 +835,12 @@ where
                 .set_severity(Severity::Hint)
                 .register(self.context);
         }
+        let mut var_type: VarType = path.into_iter().collect();
+        if var_type.is_static {
+            DMError::new(leading_loc, "'static/' has no effect here")
+                .set_severity(Severity::Warning)
+                .register(self.context);
+        }
         let location = self.location;
         require!(self.var_annotations());
         // = <expr>
@@ -845,7 +851,7 @@ where
         };
         let (input_type, in_list) = require!(self.input_specifier());
         success(Parameter {
-            path,
+            var_type,
             name,
             default,
             input_type,
