@@ -164,6 +164,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         line: 1,
         column: 1,
     };
+    let _context = ::Context::default();
 
     macro_rules! entries {
         ($($($elem:ident)/ * $(($($arg:ident $(= $ignored:expr)*),*))* $(= $val:expr)*;)*) => {
@@ -175,7 +176,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
                     break;
                 )*
                 $(
-                    tree.add_proc(location, elems.iter().cloned(), elems.len() + 1, vec![$(
+                    tree.add_proc(&_context, location, elems.iter().cloned(), elems.len() + 1, vec![$(
                         Parameter { name: stringify!($arg).to_owned(), .. Default::default() }
                     ),*], Code::Builtin)?;
                     break;

@@ -777,7 +777,7 @@ where
                     Code::Disabled
                 };
 
-                match self.tree.add_proc(location, new_stack.iter(), new_stack.len(), parameters, code) {
+                match self.tree.add_proc(self.context, location, new_stack.iter(), new_stack.len(), parameters, code) {
                     Ok((idx, proc)) => {
                         proc.docs.extend(comment);
                         // manually performed for borrowck reasons

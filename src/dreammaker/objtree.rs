@@ -749,29 +749,51 @@ impl ObjectTree {
 
     fn register_proc(
         &mut self,
+        context: &Context,
         location: Location,
         parent: NodeIndex,
         name: &str,
-        is_verb: Option<bool>,
+        mut declaration: Option<bool>,
         parameters: Vec<Parameter>,
         code: Code,
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let node = self.graph.node_weight_mut(parent).unwrap();
         let proc = node.procs.entry(name.to_owned()).or_insert_with(Default::default);
-        if proc.declaration.is_none() {
-            proc.declaration = is_verb.map(|is_verb| ProcDeclaration {
-                location,
-                is_verb,
-            });
+        if let Some(is_verb) = declaration {
+            if let Some(ref decl) = proc.declaration {
+                DMError::new(location, format!("duplicate definition of {}/{}",
+                        if is_verb { "verb" } else { "proc" },
+                        name,
+                    ))
+                    .add_note(decl.location, "previous definition")
+                    .register(context);
+                declaration = None;  // suppress the later check
+            } else {
+                proc.declaration = Some(ProcDeclaration {
+                    location,
+                    is_verb,
+                });
+            }
         }
 
-        let len = proc.value.len();
-        proc.value.push(ProcValue {
+        let value = ProcValue {
             location,
             parameters,
             docs: Default::default(),
             code
-        });
+        };
+
+        let len = proc.value.len();
+        if declaration.is_some() && !proc.value.is_empty() {
+            // Show the error now, make up for it by putting the original
+            // at the beginning of the list (so `..()` finds it).
+            DMError::new(proc.value[0].location, format!("procedure override precedes definition"))
+                .add_note(location, "definition is here")
+                .register(context);
+            proc.value.insert(0, value);
+        } else {
+            proc.value.push(value);
+        }
         Ok((len, proc.value.last_mut().unwrap()))
     }
 
@@ -819,6 +841,7 @@ impl ObjectTree {
     // an entry which is definitely a proc because an argument list is specified
     pub fn add_proc<'a, I: Iterator<Item = &'a str>>(
         &mut self,
+        context: &Context,
         location: Location,
         mut path: I,
         len: usize,
@@ -843,7 +866,7 @@ impl ObjectTree {
             ));
         }
 
-        self.register_proc(location, parent, proc_name, is_verb, parameters, code)
+        self.register_proc(context, location, parent, proc_name, is_verb, parameters, code)
     }
 }
 
