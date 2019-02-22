@@ -3,12 +3,12 @@
 #![allow(dead_code, unused_variables)]
 
 extern crate dreammaker as dm;
-use dm::Context;
+use dm::{Context, DMError, Location};
 use dm::objtree::{Code, ObjectTree, TypeRef, ProcRef};
 use dm::constants::{Constant, ConstFn};
 use dm::ast::*;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::cell::Cell;
 
 // ----------------------------------------------------------------------------
@@ -98,6 +98,38 @@ impl<'o> Analysis<'o> {
 
 #[derive(Default)]
 struct Env {
+    used_kwargs: HashMap<String, HashMap<String, Location>>,
+}
+
+impl Env {
+    fn check_kwargs(&self, context: &Context, proc: ProcRef) {
+        let param_names: HashSet<&String> = proc.parameters.iter().map(|p| &p.name).collect();
+
+        let mut next = proc.parent_proc();
+        while let Some(current) = next {
+            if let Some(kwargs) = self.used_kwargs.get(&current.to_string()) {
+                let mut missing = Vec::new();
+                let mut use_site = Location::default();
+
+                for (keyword, location) in kwargs.iter() {
+                    if !param_names.contains(keyword) {
+                        missing.push(&keyword[..]);
+                        use_site = *location;
+                    }
+                }
+
+                if !missing.is_empty() {
+                    DMError::new(proc.location, format!("override of {} is missing keyword args from parent: {:?}",
+                            proc.name(),
+                            missing.join(", "),
+                        ))
+                        .add_note(use_site, format!("for example, {} is called here", current))
+                        .register(context);
+                }
+            }
+            next = current.parent_proc();
+        }
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -564,8 +596,35 @@ impl<'o> ProcAnalyzer<'o> {
     }
 
     fn visit_call(&mut self, src: Analysis<'o>, proc: ProcRef, args: &[Expression]) -> Analysis<'o> {
-        //let args: Vec<_> = args.iter().map(|e| self.visit_expression(e, None)).collect();
-        //println!("visit_call: src={:?} proc={:?} args={:?}", src, proc, args);
+        // identify and register kwargs used
+        for arg in args {
+            let mut argument_value = arg;
+            if let Expression::AssignOp { op: AssignOp::Assign, lhs, rhs } = arg {
+                match lhs.as_term() {
+                    Some(Term::Ident(name)) |
+                    Some(Term::String(name)) => {
+                        // don't visit_expression the kwarg key
+                        argument_value = rhs;
+
+                        // check that that kwarg actually exists
+                        if proc.parameters.iter().find(|p| p.name == *name).is_none() {
+                            self.show_header();
+                            println!("visit_call: call with bad kwarg: {:?} on {}", name, proc);
+                        } else {
+                            // if it does, mark it as "used"
+                            self.env.used_kwargs.entry(proc.to_string())
+                                .or_default()
+                                // TODO: use a more accurate location
+                                .insert(name.clone(), self.proc_ref.location);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            self.visit_expression(argument_value, None);
+        }
+
         Analysis::empty()
     }
 
@@ -606,6 +665,7 @@ fn main() {
 
     let mut env = Env::default();
 
+    // First pass: analyze all proc bodies
     tree.root().recurse(&mut |ty| {
         for proc in ty.iter_self_procs() {
             match proc.code {
@@ -617,6 +677,13 @@ fn main() {
                 Code::Builtin => builtin += 1,
                 Code::Disabled => disabled += 1,
             }
+        }
+    });
+
+    // Second pass: warn about procs which are missing kwargs their parents have
+    tree.root().recurse(&mut |ty| {
+        for proc in ty.iter_self_procs() {
+            env.check_kwargs(&context, proc);
         }
     });
 
