@@ -297,6 +297,14 @@ impl<'o> ProcAnalyzer<'o> {
                 }
                 ty
             },
+            Expression::BinaryOp { op: BinaryOp::Or, lhs, rhs } => {
+                // It appears that DM does this in more cases than this, but
+                // this is the only case I've seen it used in the wild.
+                // ex: var/datum/cache_entry/E = cache[key] || new
+                let lty = self.visit_expression(lhs, type_hint);
+                let rty = self.visit_expression(rhs, type_hint);
+                self.visit_binary(lty, rty, BinaryOp::Or)
+            },
             Expression::BinaryOp { op, lhs, rhs } => {
                 let lty = self.visit_expression(lhs, None);
                 let rty = self.visit_expression(rhs, None);
