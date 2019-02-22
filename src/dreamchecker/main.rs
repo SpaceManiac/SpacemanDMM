@@ -117,7 +117,7 @@ impl<'o> ProcAnalyzer<'o> {
 
         let mut local_vars = HashMap::new();
         local_vars.insert(".".to_owned(), Analysis::empty());
-        local_vars.insert("args".to_owned(), Type::List(None).into());
+        local_vars.insert("args".to_owned(), Analysis::from_static_type(objtree.expect("/list")));
         local_vars.insert("usr".to_owned(), Analysis::from_static_type(objtree.expect("/mob")));
         if !ty.is_root() {
             local_vars.insert("src".to_owned(), Analysis::from_static_type(ty));
