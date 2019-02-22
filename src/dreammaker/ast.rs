@@ -596,6 +596,12 @@ impl VarType {
     pub fn is_normal(&self) -> bool {
         !(self.is_static || self.is_const || self.is_tmp)
     }
+
+    pub fn mark_list(&mut self, list_count: u32) {
+        if list_count > 0 {
+            self.type_path.insert(0, "list".to_owned());
+        }
+    }
 }
 
 impl FromIterator<String> for VarType {

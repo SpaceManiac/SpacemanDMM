@@ -842,7 +842,7 @@ where
                 .register(self.context);
         }
         let location = self.location;
-        require!(self.var_annotations());
+        var_type.mark_list(require!(self.var_annotations()));
         // = <expr>
         let default = if let Some(()) = self.exact(Punct(Assign))? {
             Some(require!(self.expression()))
@@ -897,15 +897,17 @@ where
     // Statements
 
     /// Parse list size declarations.
-    fn var_annotations(&mut self) -> Status<()> {
+    fn var_annotations(&mut self) -> Status<u32> {
         use super::lexer::Token::Punct;
         use super::lexer::Punctuation::*;
+        let mut list_count = 0;
         // TODO: parse the declarations as expressions rather than giving up
         while let Some(()) = self.exact(Punct(LBracket))? {
             self.put_back(Punct(LBracket));
             require!(self.ignore_group(LBracket, RBracket));
+            list_count += 1;
         }
-        SUCCESS
+        success(list_count)
     }
 
     /// Parse an optional 'as' input_type and 'in' expression pair.
@@ -1267,14 +1269,13 @@ where
                     None => return Err(self.error("'var' must be followed by a name")),
                 };
 
-                require!(self.var_annotations());
-
-                let var_type = tree_path.into_iter().collect::<VarType>();
+                let mut var_type = tree_path.into_iter().collect::<VarType>();
                 if var_type.is_tmp {
                     DMError::new(type_path_start, "var/tmp has no effect here")
                         .set_severity(Severity::Warning)
                         .register(self.context);
                 }
+                var_type.mark_list(require!(self.var_annotations()));
 
                 if self.annotations.is_some() {
                     vars.push((self.location, var_type.clone(), name.clone()));
