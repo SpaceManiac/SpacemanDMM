@@ -9,7 +9,7 @@ use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 use linked_hash_map::LinkedHashMap;
 
-use super::ast::{Expression, VarType, VarSuffix, PathOp, Parameter, Statement};
+use super::ast::{Expression, VarType, VarSuffix, PathOp, Parameter, Statement, ProcDeclKind};
 use super::constants::{Constant, Pop};
 use super::docs::DocCollection;
 use super::{DMError, Location, Context};
@@ -45,7 +45,7 @@ pub struct TypeVar {
 #[derive(Debug, Clone)]
 pub struct ProcDeclaration {
     pub location: Location,
-    pub is_verb: bool,
+    pub kind: ProcDeclKind,
 }
 
 #[derive(Debug, Clone)]
@@ -759,25 +759,22 @@ impl ObjectTree {
         location: Location,
         parent: NodeIndex,
         name: &str,
-        mut declaration: Option<bool>,
+        mut declaration: Option<ProcDeclKind>,
         parameters: Vec<Parameter>,
         code: Code,
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let node = self.graph.node_weight_mut(parent).unwrap();
         let proc = node.procs.entry(name.to_owned()).or_insert_with(Default::default);
-        if let Some(is_verb) = declaration {
+        if let Some(kind) = declaration {
             if let Some(ref decl) = proc.declaration {
-                DMError::new(location, format!("duplicate definition of {}/{}",
-                        if is_verb { "verb" } else { "proc" },
-                        name,
-                    ))
+                DMError::new(location, format!("duplicate definition of {}/{}", kind, name))
                     .add_note(decl.location, "previous definition")
                     .register(context);
                 declaration = None;  // suppress the later check
             } else {
                 proc.declaration = Some(ProcDeclaration {
                     location,
-                    is_verb,
+                    kind,
                 });
             }
         }
@@ -855,9 +852,9 @@ impl ObjectTree {
         code: Code,
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let (parent, mut proc_name) = self.get_from_path(location, &mut path, len)?;
-        let mut is_verb = None;
-        if is_proc_decl(proc_name) {
-            is_verb = Some(proc_name == "verb");
+        let mut declaration = None;
+        if let Some(kind) = ProcDeclKind::from_name(proc_name) {
+            declaration = Some(kind);
             proc_name = match path.next() {
                 Some(name) => name,
                 None => return Err(DMError::new(location, "proc must have a name")),
@@ -872,7 +869,7 @@ impl ObjectTree {
             ));
         }
 
-        self.register_proc(context, location, parent, proc_name, is_verb, parameters, code)
+        self.register_proc(context, location, parent, proc_name, declaration, parameters, code)
     }
 }
 

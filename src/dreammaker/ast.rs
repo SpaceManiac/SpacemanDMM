@@ -493,6 +493,47 @@ impl From<IndexOrField> for Follow {
     }
 }
 
+/// The proc declaration kind, either `proc` or `verb`.
+///
+/// DM requires referinging proc paths to include whether the target is
+/// declared as a proc or verb, even though the two modes are functionally
+/// identical in many other respects.
+#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
+pub enum ProcDeclKind {
+    Proc,
+    Verb,
+}
+
+impl ProcDeclKind {
+    /// Attempt to convert a string to a declaration kind.
+    pub fn from_name(name: &str) -> Option<ProcDeclKind> {
+        match name {
+            "proc" => Some(ProcDeclKind::Proc),
+            "verb" => Some(ProcDeclKind::Verb),
+            _ => None,
+        }
+    }
+
+    /// Return whether `self` is `ProcDeclKind::Verb`.
+    pub fn is_verb(self) -> bool {
+        self == ProcDeclKind::Verb
+    }
+
+    /// Return the string representation of this declaration kind.
+    pub fn name(self) -> &'static str {
+        match self {
+            ProcDeclKind::Proc => "proc",
+            ProcDeclKind::Verb => "verb",
+        }
+    }
+}
+
+impl fmt::Display for ProcDeclKind {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str(self.name())
+    }
+}
+
 /// A parameter declaration in the header of a proc.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Parameter {

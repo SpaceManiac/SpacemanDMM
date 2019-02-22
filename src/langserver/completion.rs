@@ -304,7 +304,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                             Some(decl) => decl,
                             None => continue,
                         };
-                        if proc_decl.is_verb != (decl == "verb") {
+                        if proc_decl.kind.is_verb() != (decl == "verb") {
                             continue;
                         }
                         if contains(name, query) {

@@ -597,7 +597,7 @@ handle_method_call! {
 
             for (proc_name, pv) in ty.procs.iter() {
                 if let Some(decl) = pv.declaration.as_ref() {
-                    if query.matches_proc(&proc_name, decl.is_verb) {
+                    if query.matches_proc(&proc_name, decl.kind) {
                         results.push(SymbolInformation {
                             name: proc_name.clone(),
                             kind: if idx.index() == 0 {
@@ -730,7 +730,7 @@ handle_method_call! {
                             infos.push_front(message);
                             if let Some(ref decl) = proc.declaration {
                                 let mut declaration = String::new();
-                                declaration.push_str(if decl.is_verb { "verb" } else { "proc" });
+                                declaration.push_str(decl.kind.name());
                                 declaration.push_str("/**");
                                 declaration.push_str(last);
                                 declaration.push_str("**");

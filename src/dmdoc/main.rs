@@ -248,7 +248,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
                         type_path: format_type_path(&p.var_type.type_path),
                     }).collect(),
                     decl: match proc.declaration {
-                        Some(ref decl) => if decl.is_verb { "verb" } else { "proc" },
+                        Some(ref decl) => decl.kind.name(),
                         None => "",
                     },
                     file: context.file_path(proc_value.location.file),
