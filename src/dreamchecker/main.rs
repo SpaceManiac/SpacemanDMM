@@ -363,7 +363,7 @@ impl<'o> ProcAnalyzer<'o> {
                 if let Some(ty) = self.ty.navigate_path(&prefab.path) {
                     Type::Typepath(ty).into()
                 } else {
-                    eprintln!("visit_term: path {} failed to resolve", FormatTypePath(&prefab.path));
+                    eprintln!("visit_term: failed to resolve path {}", FormatTypePath(&prefab.path));
                     Analysis::empty()
                 }
             },
@@ -378,7 +378,7 @@ impl<'o> ProcAnalyzer<'o> {
                 if let Some(proc) = self.ty.get_proc(unscoped_name) {
                     self.visit_call(Type::Instance(src).into(), proc, args)
                 } else {
-                    eprintln!("visit_term: proc {} does not exist on {}", unscoped_name, self.ty.pretty_path());
+                    eprintln!("visit_term: proc does not exist: {:?} on {}", unscoped_name, self.ty);
                     Analysis::empty()
                 }
             },
@@ -387,9 +387,8 @@ impl<'o> ProcAnalyzer<'o> {
                     var.clone()
                 } else if let Some(decl) = self.ty.get_var_declaration(unscoped_name) {
                     self.static_type(&decl.var_type.type_path)
-                    // eprintln!("visit_term: ident {} with type {} failed to resolve",
                 } else {
-                    eprintln!("visit_term: ident {} failed to resolve", unscoped_name);
+                    eprintln!("visit_term: ident failed to resolve: {:?}", unscoped_name);
                     Analysis::empty()
                 }
             },
@@ -491,11 +490,11 @@ impl<'o> ProcAnalyzer<'o> {
                         self.static_type(&decl.var_type.type_path)
                         // eprintln!("visit_follow: {:?} field {:?}: failed to resolve {}"
                     } else {
-                        eprintln!("visit_follow: {:?} field: no variable {:?}", lhs, name);
+                        eprintln!("visit_follow: field does not exist: {:?} on {}", name, ty);
                         Analysis::empty()
                     }
                 } else {
-                    eprintln!("visit_follow: {:?} field {:?}: no static type", lhs, name);
+                    eprintln!("visit_follow: field requires static type: {:?} on {:?}", name, lhs);
                     Analysis::empty()
                 }
             },
@@ -504,11 +503,11 @@ impl<'o> ProcAnalyzer<'o> {
                     if let Some(proc) = ty.get_proc(name) {
                         self.visit_call(lhs, proc, arguments)
                     } else {
-                        eprintln!("visit_follow: proc {} does not exist on {}", name, ty.pretty_path());
+                        eprintln!("visit_follow: proc does not exist: {} on {}", name, ty);
                         Analysis::empty()
                     }
                 } else {
-                    eprintln!("visit_follow: {:?} call {:?}: no static type", lhs, name);
+                    eprintln!("visit_follow: proc call require static type: {:?} on {:?}", name, lhs);
                     Analysis::empty()
                 }
             },
