@@ -9,6 +9,7 @@ use dm::constants::{Constant, ConstFn};
 use dm::ast::*;
 
 use std::collections::HashMap;
+use std::cell::Cell;
 
 // ----------------------------------------------------------------------------
 // Helper structures
@@ -109,6 +110,7 @@ struct ProcAnalyzer<'o> {
     ty: TypeRef<'o>,
     proc_ref: ProcRef<'o>,
     local_vars: HashMap<String, Analysis<'o>>,
+    shown_header: Cell<bool>,
 }
 
 impl<'o> ProcAnalyzer<'o> {
@@ -135,6 +137,17 @@ impl<'o> ProcAnalyzer<'o> {
             ty,
             proc_ref,
             local_vars,
+            shown_header: Cell::new(false),
+        }
+    }
+
+    fn show_header(&self) {
+        if !self.shown_header.get() {
+            self.shown_header.set(true);
+            println!("\n{} at {}:{}",
+                self.proc_ref,
+                self.context.file_path(self.proc_ref.location.file).display(),
+                self.proc_ref.location.line);
         }
     }
 
@@ -265,7 +278,8 @@ impl<'o> ProcAnalyzer<'o> {
         } else {
             type_hint = self.objtree.type_by_path(&var_type.type_path);
             if type_hint.is_none() {
-                eprintln!("visit_var: not found {:?}", var_type.type_path);
+                self.show_header();
+                println!("visit_var: not found {:?}", var_type.type_path);
             }
         };
 
@@ -333,14 +347,16 @@ impl<'o> ProcAnalyzer<'o> {
                     NewType::Implicit => if let Some(hint) = type_hint {
                         Some(hint)
                     } else {
-                        eprintln!("NewType::Implicit with no type hint");
+                        self.show_header();
+                        println!("NewType::Implicit with no type hint");
                         None
                     },
                     NewType::Prefab(prefab) => {
                         if let Some(ty) = self.ty.navigate_path(&prefab.path) {
                             Some(ty)
                         } else {
-                            eprintln!("visit_term: path {} failed to resolve", FormatTypePath(&prefab.path));
+                            self.show_header();
+                            println!("visit_term: path {} failed to resolve", FormatTypePath(&prefab.path));
                             None
                         }
                     },
@@ -363,7 +379,8 @@ impl<'o> ProcAnalyzer<'o> {
                 if let Some(ty) = self.ty.navigate_path(&prefab.path) {
                     Type::Typepath(ty).into()
                 } else {
-                    eprintln!("visit_term: failed to resolve path {}", FormatTypePath(&prefab.path));
+                    self.show_header();
+                    println!("visit_term: failed to resolve path {}", FormatTypePath(&prefab.path));
                     Analysis::empty()
                 }
             },
@@ -378,7 +395,8 @@ impl<'o> ProcAnalyzer<'o> {
                 if let Some(proc) = self.ty.get_proc(unscoped_name) {
                     self.visit_call(Type::Instance(src).into(), proc, args)
                 } else {
-                    eprintln!("visit_term: proc does not exist: {:?} on {}", unscoped_name, self.ty);
+                    self.show_header();
+                    println!("visit_term: proc does not exist: {:?} on {}", unscoped_name, self.ty);
                     Analysis::empty()
                 }
             },
@@ -388,7 +406,8 @@ impl<'o> ProcAnalyzer<'o> {
                 } else if let Some(decl) = self.ty.get_var_declaration(unscoped_name) {
                     self.static_type(&decl.var_type.type_path)
                 } else {
-                    eprintln!("visit_term: ident failed to resolve: {:?}", unscoped_name);
+                    self.show_header();
+                    println!("visit_term: ident failed to resolve: {:?}", unscoped_name);
                     Analysis::empty()
                 }
             },
@@ -398,7 +417,8 @@ impl<'o> ProcAnalyzer<'o> {
                     let src = self.ty;
                     self.visit_call(Type::Instance(src).into(), proc, args)
                 } else {
-                    eprintln!("visit_term: proc has no parent: {:?}", self.proc_ref);
+                    self.show_header();
+                    println!("visit_term: proc has no parent: {}", self.proc_ref);
                     Analysis::empty()
                 }
             },
@@ -440,7 +460,8 @@ impl<'o> ProcAnalyzer<'o> {
                     // TODO: it's not clear that this is correct
                     Type::Resource.into()
                 } else {
-                    eprintln!("visit_term: weird input() type: {:?}", input_type);
+                    self.show_header();
+                    println!("visit_term: weird input() type: {:?}", input_type);
                     Analysis::empty()
                 }
             },
@@ -480,7 +501,8 @@ impl<'o> ProcAnalyzer<'o> {
                     // TODO: keep track of what /list was declared
                     Analysis::empty()
                 } else {
-                    eprintln!("visit_follow: can't index {:?}", lhs);
+                    //self.show_header();
+                    //println!("visit_follow: can't index {:?}", lhs);
                     Analysis::empty()
                 }
             },
@@ -488,13 +510,14 @@ impl<'o> ProcAnalyzer<'o> {
                 if let Some(ty) = lhs.static_ty {
                     if let Some(decl) = ty.get_var_declaration(name) {
                         self.static_type(&decl.var_type.type_path)
-                        // eprintln!("visit_follow: {:?} field {:?}: failed to resolve {}"
                     } else {
-                        eprintln!("visit_follow: field does not exist: {:?} on {}", name, ty);
+                        self.show_header();
+                        println!("visit_follow: field does not exist: {:?} on {}", name, ty);
                         Analysis::empty()
                     }
                 } else {
-                    eprintln!("visit_follow: field requires static type: {:?} on {:?}", name, lhs);
+                    self.show_header();
+                    println!("visit_follow: field access requires static type: {:?} on {:?}", name, lhs);
                     Analysis::empty()
                 }
             },
@@ -503,11 +526,13 @@ impl<'o> ProcAnalyzer<'o> {
                     if let Some(proc) = ty.get_proc(name) {
                         self.visit_call(lhs, proc, arguments)
                     } else {
-                        eprintln!("visit_follow: proc does not exist: {} on {}", name, ty);
+                        self.show_header();
+                        println!("visit_follow: proc does not exist: {} on {}", name, ty);
                         Analysis::empty()
                     }
                 } else {
-                    eprintln!("visit_follow: proc call require static type: {:?} on {:?}", name, lhs);
+                    self.show_header();
+                    println!("visit_follow: proc call require static type: {:?} on {:?}", name, lhs);
                     Analysis::empty()
                 }
             },
@@ -526,20 +551,21 @@ impl<'o> ProcAnalyzer<'o> {
             (UnaryOp::PostDecr, Type::Number) => Type::Number.into(),
             (_, Type::Any) => Analysis::empty(),
             _ => {
-                eprintln!("visit_unary: don't know how to {:?} {:?}", op, rhs.ty);
+                self.show_header();
+                println!("visit_unary: don't know how to {:?} {:?}", op, rhs.ty);
                 Analysis::empty()
             }
         }
     }
 
     fn visit_binary(&mut self, lhs: Analysis<'o>, rhs: Analysis<'o>, op: BinaryOp) -> Analysis<'o> {
-        //eprintln!("visit_binary: don't know anything about {}", op);
+        //println!("visit_binary: don't know anything about {}", op);
         Analysis::empty()
     }
 
     fn visit_call(&mut self, src: Analysis<'o>, proc: ProcRef, args: &[Expression]) -> Analysis<'o> {
         //let args: Vec<_> = args.iter().map(|e| self.visit_expression(e, None)).collect();
-        //eprintln!("visit_call: src={:?} proc={:?} args={:?}", src, proc, args);
+        //println!("visit_call: src={:?} proc={:?} args={:?}", src, proc, args);
         Analysis::empty()
     }
 
@@ -553,7 +579,8 @@ impl<'o> ProcAnalyzer<'o> {
         } else if let Some(ty) = self.objtree.type_by_path(of) {
             Analysis::from_static_type(ty)
         } else {
-            eprintln!("failed to find type: {}", FormatTreePath(of));
+            self.show_header();
+            println!("failed to find type: {}", FormatTreePath(of));
             Analysis::empty()
         }
     }
@@ -584,10 +611,6 @@ fn main() {
             match proc.code {
                 Code::Present(ref code) => {
                     present += 1;
-                    println!("\n{} at {}:{}",
-                        proc,
-                        context.file_path(proc.location.file).display(),
-                        proc.location.line);
                     ProcAnalyzer::new(&mut env, &context, &tree, proc).run(code);
                 }
                 Code::Invalid(_) => invalid += 1,
