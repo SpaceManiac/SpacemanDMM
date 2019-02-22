@@ -380,7 +380,7 @@ impl<'o> ProcAnalyzer<'o> {
                         Some(hint)
                     } else {
                         self.show_header();
-                        println!("NewType::Implicit with no type hint");
+                        println!("visit_term(New): NewType::Implicit with no type hint");
                         None
                     },
                     NewType::Prefab(prefab) => {
@@ -388,7 +388,7 @@ impl<'o> ProcAnalyzer<'o> {
                             Some(ty)
                         } else {
                             self.show_header();
-                            println!("visit_term: path {} failed to resolve", FormatTypePath(&prefab.path));
+                            println!("visit_term(New): failed to resolve path {}", FormatTypePath(&prefab.path));
                             None
                         }
                     },
@@ -415,7 +415,7 @@ impl<'o> ProcAnalyzer<'o> {
                     Type::Typepath(ty).into()
                 } else {
                     self.show_header();
-                    println!("visit_term: failed to resolve path {}", FormatTypePath(&prefab.path));
+                    println!("visit_term(Prefab): failed to resolve path {}", FormatTypePath(&prefab.path));
                     Analysis::empty()
                 }
             },
