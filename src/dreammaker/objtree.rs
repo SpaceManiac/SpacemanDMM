@@ -9,7 +9,7 @@ use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 use linked_hash_map::LinkedHashMap;
 
-use super::ast::{Expression, VarType, PathOp, Parameter, Statement};
+use super::ast::{Expression, VarType, VarSuffix, PathOp, Parameter, Statement};
 use super::constants::{Constant, Pop};
 use super::docs::DocCollection;
 use super::{DMError, Location, Context};
@@ -686,6 +686,7 @@ impl ObjectTree {
         mut prev: &'a str,
         mut rest: I,
         comment: DocCollection,
+        suffix: VarSuffix,
     ) -> Result<Option<&mut TypeVar>, DMError>
     where
         I: Iterator<Item=&'a str>,
@@ -717,24 +718,27 @@ impl ObjectTree {
             type_path.push(prev.to_owned());
             prev = each;
         }
+        let mut var_type = VarType {
+            is_static,
+            is_const,
+            is_tmp,
+            type_path,
+        };
+        var_type.suffix(&suffix);
+
         let node = self.graph.node_weight_mut(parent).unwrap();
         // TODO: warn and merge docs for repeats
         Ok(Some(node.vars.entry(prev.to_owned()).or_insert_with(|| TypeVar {
             value: VarValue {
                 location,
-                expression: None,
+                expression: suffix.into_initializer(),
                 constant: None,
                 being_evaluated: false,
                 docs: comment,
             },
             declaration: if is_declaration {
                 Some(VarDeclaration {
-                    var_type: VarType {
-                        is_static,
-                        is_const,
-                        is_tmp,
-                        type_path,
-                    },
+                    var_type,
                     location,
                 })
             } else {
@@ -778,10 +782,11 @@ impl ObjectTree {
         mut path: I,
         len: usize,
         comment: DocCollection,
+        suffix: VarSuffix,
     ) -> Result<(), DMError> {
         let (parent, child) = self.get_from_path(location, &mut path, len)?;
         if is_var_decl(child) {
-            self.register_var(location, parent, "var", path, comment)?;
+            self.register_var(location, parent, "var", path, comment, suffix)?;
         } else if is_proc_decl(child) {
             // proc{} block, children will be procs
         } else {
@@ -799,9 +804,10 @@ impl ObjectTree {
         len: usize,
         expr: Expression,
         comment: DocCollection,
+        suffix: VarSuffix,
     ) -> Result<(), DMError> {
         let (parent, initial) = self.get_from_path(location, &mut path, len)?;
-        if let Some(type_var) = self.register_var(location, parent, initial, path, comment)? {
+        if let Some(type_var) = self.register_var(location, parent, initial, path, comment, suffix)? {
             type_var.value.location = location;
             type_var.value.expression = Some(expr);
             Ok(())

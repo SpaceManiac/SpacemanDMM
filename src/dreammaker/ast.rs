@@ -597,8 +597,8 @@ impl VarType {
         !(self.is_static || self.is_const || self.is_tmp)
     }
 
-    pub fn mark_list(&mut self, list_count: u32) {
-        if list_count > 0 {
+    pub fn suffix(&mut self, suffix: &VarSuffix) {
+        if suffix.list.len() > 0 {
             self.type_path.insert(0, "list".to_owned());
         }
     }
@@ -648,6 +648,33 @@ impl fmt::Display for VarType {
             fmt.write_str("/")?;
         }
         Ok(())
+    }
+}
+
+/// Suffixes which may appear after a variable's name in its declaration.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct VarSuffix {
+    // var/L[], var/L[10]
+    pub list: Vec<Option<Expression>>,
+}
+
+impl VarSuffix {
+    pub fn is_empty(&self) -> bool {
+        self.list.is_empty()
+    }
+
+    pub fn into_initializer(self) -> Option<Expression> {
+        // `var/L[10]` is equivalent to `var/list/L = new /list(10)`
+        // `var/L[2][][3]` is equivalent to `var/list/list/list = new /list(2, 3)`
+        let args: Vec<_> = self.list.into_iter().filter_map(|x| x).collect();
+        if args.is_empty() {
+            None
+        } else {
+            Some(Expression::from(Term::New {
+                type_: NewType::Prefab(Prefab::from(vec![(PathOp::Slash, "list".to_owned())])),
+                args: Some(args),
+            }))
+        }
     }
 }
 

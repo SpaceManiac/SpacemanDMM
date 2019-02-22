@@ -684,13 +684,13 @@ where
                 .register(self.context);
         }
 
-        require!(self.var_annotations());
+        let var_suffix = require!(self.var_suffix());
 
         // read the contents for real
         match self.next("contents")? {
             t @ Punct(LBrace) => {
                 // `thing{` - block
-                if let Err(e) = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), Default::default()) {
+                if let Err(e) = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), Default::default(), var_suffix) {
                     self.context.register_error(e);
                 }
                 self.put_back(t);
@@ -698,7 +698,7 @@ where
                 let (comment, ()) = require!(self.doc_comment(|this| this.tree_block(new_stack)));
                 // TODO: make this duplicate less work?
                 if !comment.is_empty() {
-                    let _ = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), comment);
+                    let _ = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), comment, Default::default());
                 }
                 self.annotate(start, || Annotation::TreeBlock(new_stack.to_vec()));
                 SUCCESS
@@ -713,7 +713,7 @@ where
                     require!(this.statement_terminator());
                     success(expr)
                 }));
-                if let Err(e) = self.tree.add_var(location, new_stack.iter(), new_stack.len(), expr, comment) {
+                if let Err(e) = self.tree.add_var(location, new_stack.iter(), new_stack.len(), expr, comment, var_suffix) {
                     self.context.register_error(e);
                 }
                 self.annotate(entry_start, || Annotation::Variable(new_stack.to_vec()));
@@ -795,7 +795,7 @@ where
                 // usually `thing;` - a contentless declaration
                 // TODO: allow enclosing-targeting docs here somehow?
                 let comment = ::std::mem::replace(&mut self.docs_following, Default::default());
-                if let Err(e) = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), comment) {
+                if let Err(e) = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), comment, var_suffix) {
                     self.context.register_error(e);
                 }
                 self.put_back(other);
@@ -842,7 +842,8 @@ where
                 .register(self.context);
         }
         let location = self.location;
-        var_type.mark_list(require!(self.var_annotations()));
+        // In parameters, the expression within the annotation is ignored.
+        var_type.suffix(&require!(self.var_suffix()));
         // = <expr>
         let default = if let Some(()) = self.exact(Punct(Assign))? {
             Some(require!(self.expression()))
@@ -897,17 +898,17 @@ where
     // Statements
 
     /// Parse list size declarations.
-    fn var_annotations(&mut self) -> Status<u32> {
+    fn var_suffix(&mut self) -> Status<VarSuffix> {
         use super::lexer::Token::Punct;
         use super::lexer::Punctuation::*;
-        let mut list_count = 0;
+
+        let mut list = Vec::new();
         // TODO: parse the declarations as expressions rather than giving up
         while let Some(()) = self.exact(Punct(LBracket))? {
-            self.put_back(Punct(LBracket));
-            require!(self.ignore_group(LBracket, RBracket));
-            list_count += 1;
+            list.push(self.expression()?);
+            require!(self.exact(Punct(RBracket)));
         }
-        success(list_count)
+        success(VarSuffix { list })
     }
 
     /// Parse an optional 'as' input_type and 'in' expression pair.
@@ -1275,7 +1276,8 @@ where
                         .set_severity(Severity::Warning)
                         .register(self.context);
                 }
-                var_type.mark_list(require!(self.var_annotations()));
+                let var_suffix = require!(self.var_suffix());
+                var_type.suffix(&var_suffix);
 
                 if self.annotations.is_some() {
                     vars.push((self.location, var_type.clone(), name.clone()));
@@ -1284,7 +1286,7 @@ where
                 let value = if let Some(()) = self.exact(Token::Punct(Punctuation::Assign))? {
                     Some(require!(self.expression()))
                 } else {
-                    None
+                    var_suffix.into_initializer()
                 };
                 let (input_types, in_list) = if !in_for {
                     require!(self.input_specifier())
@@ -2001,19 +2003,5 @@ where
                 require!(self.read_any_tt(target));
             }
         }
-    }
-
-    fn ignore_group(&mut self, left: Punctuation, right: Punctuation) -> Status<()> {
-        leading!(self.exact(Token::Punct(left)));
-        let mut depth = 1;
-        while depth > 0 {
-            let n = self.next("anything")?;
-            match n {
-                Token::Punct(p) if p == left => depth += 1,
-                Token::Punct(p) if p == right => depth -= 1,
-                _ => {}
-            }
-        }
-        SUCCESS
     }
 }

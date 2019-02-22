@@ -171,7 +171,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
                 #![allow(unreachable_code)]
                 let elems = [$(stringify!($elem)),*];
                 $(
-                    tree.add_var(location, elems.iter().cloned(), elems.len() + 1, $val, Default::default())?;
+                    tree.add_var(location, elems.iter().cloned(), elems.len() + 1, $val, Default::default(), Default::default())?;
                     break;
                 )*
                 $(
@@ -180,7 +180,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
                     ),*], Code::Builtin)?;
                     break;
                 )*
-                tree.add_entry(location, elems.iter().cloned(), elems.len() + 1, Default::default())?;
+                tree.add_entry(location, elems.iter().cloned(), elems.len() + 1, Default::default(), Default::default())?;
                 break;
             })*
         }
