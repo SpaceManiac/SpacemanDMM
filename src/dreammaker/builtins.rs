@@ -295,7 +295,14 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         proc/abs(A);
         proc/addtext(Arg1, Arg2/*, ...*/);
         proc/alert(Usr/*=usr*/,Message,Title,Button1/*="Ok"*/,Button2,Button3);
-        proc/animate(Object, vars, time, loop, easing, flags);  // +2 forms
+        proc/animate(Object, time, loop, easing, flags, // +2 forms
+            // these kwargs
+            alpha, color, infra_luminosity, layer, maptext_width, maptext_height,
+            maptext_x, maptext_y, luminosity, pixel_x, pixel_y, pixel_w, pixel_z,
+            transform, dir, icon, icon_state, invisibility, maptext, suffix, appearance,
+            dir,
+            // filters only
+            size, x, y, offset, flags);
         proc/arccos(X);
         proc/arcsin(X);
         proc/arglist(List);  // special form
@@ -317,7 +324,14 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         proc/fexists(File);
         proc/file(Path);
         proc/file2text(File);
-        proc/filter(type, parameters/*, ...*/);
+        proc/filter(type,
+            // TODO: check the validity of these kwargs based on "type"
+            size,  // blur, outline, drop_shadow, wave
+            color,  // outline, drop_shadow
+            x, y,  // drop_shadow, motion_blur, wave
+            offset,  // drop_shadow, wave
+            flags  // wave
+        );
         proc/findlasttext(Haystack,Needle,Start=0,End=1);
         proc/findlasttextEx(Haystack,Needle,Start=0,End=1);
         proc/findtext(Haystack,Needle,Start=1,End=0);
@@ -336,7 +350,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         proc/hearers(Depth=world.view,Center=usr);
         proc/html_decode(HtmlText);
         proc/html_encode(PlainText);
-        proc/icon(icon,state,dir,frame,moving);  // SNA
+        proc/icon(icon,icon_state,dir,frame,moving);  // SNA
         proc/icon_states(Icon, mode=0);
         proc/image(icon,loc,icon_state,layer,dir);  // SNA
         proc/initial(Var);  // special form
@@ -831,6 +845,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         image/var/list/filters;
         image/var/name;  // undocumented
         image/var/mouse_opacity;  // undocumented
+        image/New(icon, loc, icon_state, layer, dir);
         mutable_appearance/parent_type = path!(/image);
 
         savefile;
