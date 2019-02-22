@@ -401,6 +401,7 @@ impl<'a> ProcRef<'a> {
         self.idx
     }
 
+    /// Look up the immediate parent, `..()`.
     pub fn parent_proc(self) -> Option<ProcRef<'a>> {
         if let Some(idx) = self.idx.checked_sub(1) {
             Some(ProcRef {

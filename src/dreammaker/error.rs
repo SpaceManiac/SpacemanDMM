@@ -111,7 +111,7 @@ impl Context {
         for note in error.notes().iter() {
             writeln!(
                 w,
-                "{}:{}:{}: {}",
+                "- {}:{}:{}: {}",
                 self.file_path(note.location.file).display(),
                 note.location.line,
                 note.location.column,
