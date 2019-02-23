@@ -639,11 +639,16 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
 
         // read the first character and check for being a comment
         let mut comment = None;
-        match self.next() {
+        let firstchar = self.next();
+        match firstchar {
             Some(b'*') => comment = Some(DocComment::new(CommentKind::Block, DocTarget::FollowingItem)),
             Some(b'!') => comment = Some(DocComment::new(CommentKind::Block, DocTarget::EnclosingItem)),
+            _ => {},
+        }
+
+        match firstchar {
             Some(ch) => buffer[1] = ch,
-            None => {}
+            None => {},
         }
 
         loop {
