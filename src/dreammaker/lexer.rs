@@ -1089,7 +1089,12 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                     b'@' => continue,  // TODO: parse these rather than ignoring them
                     _ => {
                         if !found_illegal {
-                            self.context.register_error(self.error(format!("illegal byte 0x{:x}", first)));
+                            let mut msg = format!("illegal byte 0x{:x}", first);
+                            if first >= b' ' && first <= b'~' {
+                                use std::fmt::Write;
+                                let _ = write!(msg, " ({:?})", first as char);
+                            }
+                            self.context.register_error(self.error(msg));
                             found_illegal = true;
                         }
                         continue;
