@@ -9,7 +9,6 @@ use dm::constants::{Constant, ConstFn};
 use dm::ast::*;
 
 use std::collections::{HashMap, HashSet};
-use std::cell::Cell;
 
 // ----------------------------------------------------------------------------
 // Helper structures
@@ -142,7 +141,7 @@ struct ProcAnalyzer<'o> {
     ty: TypeRef<'o>,
     proc_ref: ProcRef<'o>,
     local_vars: HashMap<String, Analysis<'o>>,
-    shown_header: Cell<bool>,
+    messages: Vec<String>,
 }
 
 impl<'o> ProcAnalyzer<'o> {
@@ -169,26 +168,30 @@ impl<'o> ProcAnalyzer<'o> {
             ty,
             proc_ref,
             local_vars,
-            shown_header: Cell::new(false),
-        }
-    }
-
-    fn show_header(&self) {
-        if !self.shown_header.get() {
-            self.shown_header.set(true);
-            println!("\n{} at {}:{}",
-                self.proc_ref,
-                self.context.file_path(self.proc_ref.location.file).display(),
-                self.proc_ref.location.line);
+            messages: Vec::new(),
         }
     }
 
     fn run(&mut self, block: &[Statement]) {
-        for param in self.proc_ref.parameters.iter() {
+        for param in self.proc_ref.get().parameters.iter() {
             let analysis = self.static_type(&param.var_type.type_path);
             self.local_vars.insert(param.name.to_owned(), analysis);
         }
         self.visit_block(block);
+
+        // TODO: maybe actually have span information on AST elements, so that
+        // the locations here can be more precise.
+        let mut error = DMError::new(self.proc_ref.location, "");
+        for message in self.messages.drain(..) {
+            error = error.add_note(self.proc_ref.location, message);
+        }
+        if !error.notes().is_empty() {
+            error.register(self.context);
+        }
+    }
+
+    fn error<S: Into<String>>(&mut self, message: S) {
+        self.messages.push(message.into())
     }
 
     fn visit_block(&mut self, block: &[Statement]) {
@@ -310,8 +313,7 @@ impl<'o> ProcAnalyzer<'o> {
         } else {
             type_hint = self.objtree.type_by_path(&var_type.type_path);
             if type_hint.is_none() {
-                self.show_header();
-                println!("visit_var: not found {:?}", var_type.type_path);
+                self.error(format!("visit_var: not found {:?}", var_type.type_path));
             }
         };
 
@@ -379,16 +381,14 @@ impl<'o> ProcAnalyzer<'o> {
                     NewType::Implicit => if let Some(hint) = type_hint {
                         Some(hint)
                     } else {
-                        self.show_header();
-                        println!("visit_term(New): NewType::Implicit with no type hint");
+                        self.error("visit_term(New): NewType::Implicit with no type hint");
                         None
                     },
                     NewType::Prefab(prefab) => {
                         if let Some(ty) = self.ty.navigate_path(&prefab.path) {
                             Some(ty)
                         } else {
-                            self.show_header();
-                            println!("visit_term(New): failed to resolve path {}", FormatTypePath(&prefab.path));
+                            self.error(format!("visit_term(New): failed to resolve path {}", FormatTypePath(&prefab.path)));
                             None
                         }
                     },
@@ -414,8 +414,7 @@ impl<'o> ProcAnalyzer<'o> {
                 if let Some(ty) = self.ty.navigate_path(&prefab.path) {
                     Type::Typepath(ty).into()
                 } else {
-                    self.show_header();
-                    println!("visit_term(Prefab): failed to resolve path {}", FormatTypePath(&prefab.path));
+                    self.error(format!("visit_term(Prefab): failed to resolve path {}", FormatTypePath(&prefab.path)));
                     Analysis::empty()
                 }
             },
@@ -430,19 +429,19 @@ impl<'o> ProcAnalyzer<'o> {
                 if let Some(proc) = self.ty.get_proc(unscoped_name) {
                     self.visit_call(Type::Instance(src).into(), proc, args, false)
                 } else {
-                    self.show_header();
-                    println!("visit_term: proc does not exist: {:?} on {}", unscoped_name, self.ty);
+                    let msg = format!("visit_term: proc does not exist: {:?} on {}", unscoped_name, self.ty);
+                    self.error(msg);
                     Analysis::empty()
                 }
             },
             Term::Ident(unscoped_name) => {
                 if let Some(var) = self.local_vars.get(unscoped_name) {
-                    var.clone()
-                } else if let Some(decl) = self.ty.get_var_declaration(unscoped_name) {
+                    return var.clone()
+                }
+                if let Some(decl) = self.ty.get_var_declaration(unscoped_name) {
                     self.static_type(&decl.var_type.type_path)
                 } else {
-                    self.show_header();
-                    println!("visit_term: ident failed to resolve: {:?}", unscoped_name);
+                    self.error(format!("visit_term: ident failed to resolve: {:?}", unscoped_name));
                     Analysis::empty()
                 }
             },
@@ -453,8 +452,8 @@ impl<'o> ProcAnalyzer<'o> {
                     // Parent calls are exact, and won't ever call an override.
                     self.visit_call(Type::Instance(src).into(), proc, args, true)
                 } else {
-                    self.show_header();
-                    println!("visit_term: proc has no parent: {}", self.proc_ref);
+                    let msg = format!("visit_term: proc has no parent: {}", self.proc_ref);
+                    self.error(msg);
                     Analysis::empty()
                 }
             },
@@ -497,8 +496,7 @@ impl<'o> ProcAnalyzer<'o> {
                     // TODO: it's not clear that this is correct
                     Type::Resource.into()
                 } else {
-                    self.show_header();
-                    println!("visit_term: weird input() type: {:?}", input_type);
+                    self.error(format!("visit_term: weird input() type: {:?}", input_type));
                     Analysis::empty()
                 }
             },
@@ -548,13 +546,11 @@ impl<'o> ProcAnalyzer<'o> {
                     if let Some(decl) = ty.get_var_declaration(name) {
                         self.static_type(&decl.var_type.type_path)
                     } else {
-                        self.show_header();
-                        println!("visit_follow: field does not exist: {:?} on {}", name, ty);
+                        self.error(format!("visit_follow: field does not exist: {:?} on {}", name, ty));
                         Analysis::empty()
                     }
                 } else {
-                    self.show_header();
-                    println!("visit_follow: field access requires static type: {:?} on {:?}", name, lhs);
+                    self.error(format!("visit_follow: field access requires static type: {:?} on {:?}", name, lhs));
                     Analysis::empty()
                 }
             },
@@ -563,13 +559,11 @@ impl<'o> ProcAnalyzer<'o> {
                     if let Some(proc) = ty.get_proc(name) {
                         self.visit_call(lhs, proc, arguments, false)
                     } else {
-                        self.show_header();
-                        println!("visit_follow: proc does not exist: {} on {}", name, ty);
+                        self.error(format!("visit_follow: proc does not exist: {} on {}", name, ty));
                         Analysis::empty()
                     }
                 } else {
-                    self.show_header();
-                    println!("visit_follow: proc call require static type: {:?} on {:?}", name, lhs);
+                    self.error(format!("visit_follow: proc call require static type: {:?} on {:?}", name, lhs));
                     Analysis::empty()
                 }
             },
@@ -588,8 +582,7 @@ impl<'o> ProcAnalyzer<'o> {
             (UnaryOp::PostDecr, Type::Number) => Type::Number.into(),
             (_, Type::Any) => Analysis::empty(),
             _ => {
-                self.show_header();
-                println!("visit_unary: don't know how to {:?} {:?}", op, rhs.ty);
+                self.error(format!("visit_unary: don't know how to {:?} {:?}", op, rhs.ty));
                 Analysis::empty()
             }
         }
@@ -613,8 +606,7 @@ impl<'o> ProcAnalyzer<'o> {
 
                         // Check that that kwarg actually exists.
                         if proc.parameters.iter().find(|p| p.name == *name).is_none() {
-                            self.show_header();
-                            println!("visit_call: call with bad kwarg: {:?} on {}", name, proc);
+                            self.error(format!("visit_call: call with bad kwarg: {:?} on {}", name, proc));
                         } else if !is_exact {
                             // If it does, mark it as "used".
                             self.env.used_kwargs.entry(proc.to_string())
@@ -633,7 +625,7 @@ impl<'o> ProcAnalyzer<'o> {
         Analysis::empty()
     }
 
-    fn static_type(&self, of: &Vec<String>) -> Analysis<'o> {
+    fn static_type(&mut self, of: &Vec<String>) -> Analysis<'o> {
         if of.is_empty() {
             Analysis::empty()
         } else if of[0] == "list" {
@@ -643,8 +635,7 @@ impl<'o> ProcAnalyzer<'o> {
         } else if let Some(ty) = self.objtree.type_by_path(of) {
             Analysis::from_static_type(ty)
         } else {
-            self.show_header();
-            println!("failed to find type: {}", FormatTreePath(of));
+            self.error(format!("failed to find type: {}", FormatTreePath(of)));
             Analysis::empty()
         }
     }
