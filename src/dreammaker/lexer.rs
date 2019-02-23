@@ -824,8 +824,14 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
     fn read_resource(&mut self) -> String {
         let start_loc = self.location();
         let mut buf = Vec::new();
+        let mut backslash = false;
         loop {
             match self.next() {
+                Some(ch) if backslash => {
+                    backslash = false;
+                    buf.push(ch);
+                },
+                Some(b'\\') => backslash = true,
                 Some(b'\'') => break,
                 Some(ch) => buf.push(ch),
                 None => {
