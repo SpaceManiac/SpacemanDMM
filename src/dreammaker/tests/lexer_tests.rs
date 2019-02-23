@@ -32,3 +32,14 @@ fn nested_interpolation() {
         ]
     );
 }
+
+#[test]
+fn empty_block_comment() {
+    // This is legal. It should not do either of the following:
+    // - Error with "still skipping comments at end of file"
+    // - Yield a DocComment { text: "", .. }
+    assert_eq!(
+        lex(r#"/**/"#),
+        vec![Punct(Newline)]
+    )
+}

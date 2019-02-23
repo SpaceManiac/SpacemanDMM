@@ -678,7 +678,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
             }
         }
 
-        comment.map(Token::DocComment)
+        comment.filter(|c| !c.text.is_empty()).map(Token::DocComment)
     }
 
     fn skip_line_comment(&mut self) -> Option<Token> {
