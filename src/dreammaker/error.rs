@@ -109,14 +109,26 @@ impl Context {
         )?;
         writeln!(w, "{}: {}", error.severity, error.description)?;
         for note in error.notes().iter() {
-            writeln!(
-                w,
-                "- {}:{}:{}: {}",
-                self.file_path(note.location.file).display(),
-                note.location.line,
-                note.location.column,
-                note.description,
-            )?;
+            if note.location == error.location {
+                writeln!(w, "- {}", note.description, )?;
+            } else if note.location.file == error.location.file {
+                writeln!(
+                    w,
+                    "- {}:{}: {}",
+                    note.location.line,
+                    note.location.column,
+                    note.description,
+                )?;
+            } else {
+                writeln!(
+                    w,
+                    "- {}:{}:{}: {}",
+                    self.file_path(note.location.file).display(),
+                    note.location.line,
+                    note.location.column,
+                    note.description,
+                )?;
+            }
         }
         writeln!(w)
     }
