@@ -644,6 +644,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         world/proc/SetMedal();
         world/proc/SetScores();
         world/proc/Topic();
+        world/proc/Error();
 
         client;
         client/var/address;

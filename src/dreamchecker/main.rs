@@ -181,7 +181,7 @@ impl<'o> ProcAnalyzer<'o> {
 
         // TODO: maybe actually have span information on AST elements, so that
         // the locations here can be more precise.
-        let mut error = DMError::new(self.proc_ref.location, "");
+        let mut error = DMError::new(self.proc_ref.location, format!("problems in {}", self.proc_ref));
         for message in self.messages.drain(..) {
             error = error.add_note(self.proc_ref.location, message);
         }
