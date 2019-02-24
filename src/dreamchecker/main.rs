@@ -313,7 +313,7 @@ impl<'o> ProcAnalyzer<'o> {
         } else {
             type_hint = self.objtree.type_by_path(&var_type.type_path);
             if type_hint.is_none() {
-                self.error(format!("visit_var: not found {:?}", var_type.type_path));
+                self.error(format!("visit_var: failed to find type {}", FormatTreePath(&var_type.type_path)));
             }
         };
 
@@ -584,7 +584,7 @@ impl<'o> ProcAnalyzer<'o> {
             (UnaryOp::PostDecr, Type::Number) => Type::Number.into(),
             (_, Type::Any) => Analysis::empty(),
             _ => {
-                self.error(format!("visit_unary: don't know how to {:?} {:?}", op, rhs.ty));
+                //self.error(format!("visit_unary: don't know how to {:?} {:?}", op, rhs.ty));
                 Analysis::empty()
             }
         }

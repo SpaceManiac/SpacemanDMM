@@ -481,7 +481,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         atom/var/appearance_flags;
         atom/var/blend_mode;
         atom/var/color;
-        atom/var/list/contents;  // TODO: editable on movables only
+        atom/var/list/atom/contents;  // TODO: editable on movables only
         atom/var/density;
         atom/var/desc;
         atom/var/dir;
@@ -590,7 +590,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         world/var/byond_build = int!(DM_BUILD);
         world/var/byond_version = int!(DM_VERSION);
         world/var/cache_lifespan = int!(30);
-        world/var/list/contents;
+        world/var/list/atom/contents;
         world/var/cpu;
         world/var/executor;
         world/var/fps = int!(10);
