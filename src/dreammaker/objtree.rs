@@ -265,21 +265,42 @@ impl<'a> TypeRef<'a> {
     }
 
     /// Find another type relative to this type.
-    pub fn navigate_path<S: AsRef<str>>(self, pieces: &[(PathOp, S)]) -> Option<TypeRef<'a>> {
+    pub fn navigate_path<S: AsRef<str>>(self, pieces: &'a [(PathOp, S)]) -> Option<NavigatePathResult<'a>> {
+        let mut next = Some(self);
+        if let Some(&(PathOp::Slash, _)) = pieces.first() {
+            next = Some(self.tree.root());
+        }
+
         let mut iter = pieces.iter();
-        let mut next = match iter.next() {
-            Some(&(PathOp::Slash, ref s)) => self.tree.root().child(s.as_ref()),
-            Some(&(op, ref s)) => self.navigate(op, s.as_ref()),
-            None => return Some(self),
-        };
-        for &(op, ref s) in iter {
+        while let Some(&(op, ref s)) = iter.next() {
+            let name = s.as_ref();
             if let Some(current) = next {
-                next = current.navigate(op, s.as_ref());
+                // Check if it's `proc` or `verb` in the path.
+                // Note that this doesn't catch this confusing corner case:
+                //    /proc/foo()
+                //    /proc/bar()
+                //        return .foo
+                // It also doesn't yet handle the difference between `:proc`,
+                // `.proc`, and `/proc`, treating everything as `.proc`.
+                if let Some(kind) = ProcDeclKind::from_name(s.as_ref()) {
+                    if let Some((_, name)) = iter.next() {
+                        if let Some(proc_ref) = current.get_proc(name.as_ref()) {
+                            return Some(NavigatePathResult::ProcPath(proc_ref, kind));
+                        } else {
+                            // The proc doesn't exist, so lookup fails.
+                            return None;
+                        }
+                    }
+                    return Some(NavigatePathResult::ProcGroup(current, kind));
+                }
+
+                // Otherwise keep navigating as normal.
+                next = current.navigate(op, name.as_ref());
             } else {
                 return None;
             }
         }
-        next
+        next.map(NavigatePathResult::Type)
     }
 
     /// Checks whether this type is a subtype of the given type.
@@ -372,6 +393,36 @@ impl<'a> ::std::cmp::PartialEq for TypeRef<'a> {
 }
 
 impl<'a> ::std::cmp::Eq for TypeRef<'a> {}
+
+#[derive(Debug, Copy, Clone)]
+pub enum NavigatePathResult<'o> {
+    Type(TypeRef<'o>),
+    ProcGroup(TypeRef<'o>, ProcDeclKind),
+    ProcPath(ProcRef<'o>, ProcDeclKind),
+}
+
+impl<'o> NavigatePathResult<'o> {
+    pub fn ty(self) -> TypeRef<'o> {
+        match self {
+            NavigatePathResult::Type(ty) => ty,
+            NavigatePathResult::ProcGroup(ty, _) => ty,
+            NavigatePathResult::ProcPath(proc, _) => proc.ty(),
+        }
+    }
+
+    pub fn to_path(self) -> Vec<String> {
+        let mut path: Vec<String> = self.ty().path.split("/").skip(1).map(ToOwned::to_owned).collect();
+        match self {
+            NavigatePathResult::Type(_) => {},
+            NavigatePathResult::ProcGroup(_, kind) => path.push(kind.to_string()),
+            NavigatePathResult::ProcPath(proc, kind) => {
+                path.push(kind.to_string());
+                path.push(proc.name().to_owned());
+            }
+        }
+        path
+    }
+}
 
 // ----------------------------------------------------------------------------
 // Proc references

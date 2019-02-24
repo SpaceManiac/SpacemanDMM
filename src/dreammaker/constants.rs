@@ -12,6 +12,8 @@ use super::ast::*;
 use super::preprocessor::DefineMap;
 
 /// An absolute typepath and optional variables.
+///
+/// The path may involve `/proc` or `/verb` references.
 #[derive(Clone, Hash, Eq, PartialEq, Debug)]
 pub struct Pop {
     pub path: TreePath,
@@ -753,33 +755,42 @@ impl<'a> ConstantFolder<'a> {
     }
 
     fn prefab(&mut self, prefab: Prefab) -> Result<Pop, DMError> {
-        // Resolve the possibly-relative into an entirely-absolute path.
-        let all_absolute = prefab.path.iter().all(|&(op, _)| op == PathOp::Slash);
-        let path: TreePath = if all_absolute {
-            // If the path is all slashes, that's just the absolute path.
-            prefab.path.iter().map(|&(_, ref name)| name.to_owned()).collect()
-        } else if let Some(tree) = self.tree.as_ref() {
-            // Otherwise, attempt resolution.
-            let relative_to = TypeRef::new(tree, self.ty);
-            if let Some(ty) = relative_to.navigate_path(&prefab.path) {
-                ty.path[1..].split("/").map(ToOwned::to_owned).collect()
-            } else {
-                return Err(self.error(format!("could not resolve {} relative to {}",
-                    FormatTypePath(&prefab.path), relative_to)));
-            }
-        } else {
-            return Err(self.error(format!("cannot resolve relative type path {} without an object tree",
-                FormatTypePath(&prefab.path))));
+        let vars = self.vars(prefab.vars)?;
+
+        // If the path is all slashes, it's absolute, and doesn't need to be
+        // further resolved.
+        if prefab.path.iter().all(|&(op, _)| op == PathOp::Slash) {
+            let path: TreePath = prefab.path.iter().map(|&(_, ref name)| name.to_owned()).collect();
+            return Ok(Pop { path, vars })
+        }
+
+        // Otherwise, resolve it against our object tree, then stringify it.
+        let tree = match self.tree.as_ref() {
+            Some(tree) => tree,
+            None => return Err(self.error(format!(
+                "cannot resolve relative type path without an object tree: {}",
+                FormatTypePath(&prefab.path)))),
         };
 
+        let relative_to = TypeRef::new(tree, self.ty);
+        let found = match relative_to.navigate_path(&prefab.path) {
+            Some(found) => found,
+            None => return Err(self.error(format!("could not resolve {} relative to {}",
+                FormatTypePath(&prefab.path), relative_to))),
+        };
+
+        let path = found.to_path();
+        Ok(Pop { path, vars })
+    }
+
+    fn vars(&mut self, input: LinkedHashMap<String, Expression>) -> Result<LinkedHashMap<String, Constant>, DMError> {
         // Visit the vars recursively.
         let mut vars = LinkedHashMap::new();
-        for (k, v) in prefab.vars {
+        for (k, v) in input {
             // TODO: find a type annotation by looking up 'k' on the prefab's type
             vars.insert(k, self.expr(v, None)?);
         }
-
-        Ok(Pop { path, vars })
+        Ok(vars)
     }
 
     fn ident(&mut self, ident: String, must_be_const: bool) -> Result<Constant, DMError> {

@@ -75,7 +75,7 @@ impl fmt::Display for PathOp {
 /// A (typically absolute) tree path where the path operator is irrelevant.
 pub type TreePath = Vec<String>;
 
-pub struct FormatTreePath<'a>(pub &'a TreePath);
+pub struct FormatTreePath<'a>(pub &'a [String]);
 
 impl<'a> fmt::Display for FormatTreePath<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -89,7 +89,7 @@ impl<'a> fmt::Display for FormatTreePath<'a> {
 /// A series of identifiers separated by path operators.
 pub type TypePath = Vec<(PathOp, String)>;
 
-pub struct FormatTypePath<'a>(pub &'a TypePath);
+pub struct FormatTypePath<'a>(pub &'a [(PathOp, String)]);
 
 impl<'a> fmt::Display for FormatTypePath<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

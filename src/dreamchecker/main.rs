@@ -172,7 +172,7 @@ impl<'o> ProcAnalyzer<'o> {
         }
     }
 
-    fn run(&mut self, block: &[Statement]) {
+    fn run(&mut self, block: &'o [Statement]) {
         for param in self.proc_ref.get().parameters.iter() {
             let analysis = self.static_type(&param.var_type.type_path);
             self.local_vars.insert(param.name.to_owned(), analysis);
@@ -194,13 +194,13 @@ impl<'o> ProcAnalyzer<'o> {
         self.messages.push(message.into())
     }
 
-    fn visit_block(&mut self, block: &[Statement]) {
+    fn visit_block(&mut self, block: &'o [Statement]) {
         for stmt in block.iter() {
             self.visit_statement(stmt);
         }
     }
 
-    fn visit_statement(&mut self, statement: &Statement) {
+    fn visit_statement(&mut self, statement: &'o Statement) {
         match statement {
             Statement::Expr(expr) => { self.visit_expression(expr, None); },
             Statement::Return(Some(expr)) => {
@@ -301,11 +301,11 @@ impl<'o> ProcAnalyzer<'o> {
         }
     }
 
-    fn visit_var_stmt(&mut self, var: &VarStatement) {
+    fn visit_var_stmt(&mut self, var: &'o VarStatement) {
         self.visit_var(&var.var_type, &var.name, var.value.as_ref())
     }
 
-    fn visit_var(&mut self, var_type: &VarType, name: &str, value: Option<&Expression>) {
+    fn visit_var(&mut self, var_type: &VarType, name: &str, value: Option<&'o Expression>) {
         // Calculate type hint
         let type_hint;
         if var_type.type_path.is_empty() {
@@ -328,7 +328,7 @@ impl<'o> ProcAnalyzer<'o> {
         self.local_vars.insert(name.to_owned(), analysis);
     }
 
-    fn visit_expression(&mut self, expression: &Expression, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
+    fn visit_expression(&mut self, expression: &'o Expression, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
         match expression {
             Expression::Base { unary, term, follow } => {
                 let base_type_hint = if follow.is_empty() && unary.is_empty() {
@@ -372,7 +372,7 @@ impl<'o> ProcAnalyzer<'o> {
         }
     }
 
-    fn visit_term(&mut self, term: &Term, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
+    fn visit_term(&mut self, term: &'o Term, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
         match term {
             Term::Null => Analysis::null(),
             Term::New { type_, args } => {
@@ -385,8 +385,9 @@ impl<'o> ProcAnalyzer<'o> {
                         None
                     },
                     NewType::Prefab(prefab) => {
-                        if let Some(ty) = self.ty.navigate_path(&prefab.path) {
-                            Some(ty)
+                        if let Some(nav) = self.ty.navigate_path(&prefab.path) {
+                            // TODO: handle proc/verb paths here
+                            Some(nav.ty())
                         } else {
                             self.error(format!("visit_term(New): failed to resolve path {}", FormatTypePath(&prefab.path)));
                             None
@@ -411,8 +412,9 @@ impl<'o> ProcAnalyzer<'o> {
             },
             Term::List(_) => Type::List(None).into(),
             Term::Prefab(prefab) => {
-                if let Some(ty) = self.ty.navigate_path(&prefab.path) {
-                    Type::Typepath(ty).into()
+                if let Some(nav) = self.ty.navigate_path(&prefab.path) {
+                    // TODO: handle proc/verb paths here
+                    Type::Typepath(nav.ty()).into()
                 } else {
                     self.error(format!("visit_term(Prefab): failed to resolve path {}", FormatTypePath(&prefab.path)));
                     Analysis::empty()
@@ -517,7 +519,7 @@ impl<'o> ProcAnalyzer<'o> {
         }
     }
 
-    fn visit_follow(&mut self, lhs: Analysis<'o>, rhs: &Follow) -> Analysis<'o> {
+    fn visit_follow(&mut self, lhs: Analysis<'o>, rhs: &'o Follow) -> Analysis<'o> {
         match rhs {
             Follow::Field(IndexKind::Colon, _) => Analysis::empty(),
             Follow::Field(IndexKind::SafeColon, _) => Analysis::empty(),
@@ -593,7 +595,7 @@ impl<'o> ProcAnalyzer<'o> {
         Analysis::empty()
     }
 
-    fn visit_call(&mut self, src: Analysis<'o>, proc: ProcRef, args: &[Expression], is_exact: bool) -> Analysis<'o> {
+    fn visit_call(&mut self, src: Analysis<'o>, proc: ProcRef, args: &'o [Expression], is_exact: bool) -> Analysis<'o> {
         // identify and register kwargs used
         for arg in args {
             let mut argument_value = arg;
