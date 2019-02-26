@@ -1056,6 +1056,20 @@ where
                         let rhs = require!(self.expression());
                         return success(require!(self.for_range(Some(var_type), name, value, rhs)));
                     }
+                    Statement::Expr(Expression::AssignOp {
+                        op: AssignOp::Assign,
+                        lhs,
+                        rhs,
+                    }) => {
+                        // for(a = 1 to
+                        let name = match lhs.into_term() {
+                            Some(Term::Ident(name)) => name,
+                            _ => return Err(self.error("for-list must start with variable")),
+                        };
+                        require!(self.exact_ident("to"));
+                        let to_rhs = require!(self.expression());
+                        return success(require!(self.for_range(None, name, *rhs, to_rhs)));
+                    }
                     Statement::Var(VarStatement {
                         var_type,
                         name,
