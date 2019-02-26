@@ -1033,8 +1033,10 @@ where
             if let Some(()) = self.comma_or_semicolon()? {
                 // three-pronged loop form ("for loop")
                 let test = self.expression()?;
-                require!(self.comma_or_semicolon());
-                let inc = self.simple_statement(false, vars)?;
+                let inc = match self.comma_or_semicolon()? {
+                    Some(()) => self.simple_statement(false, vars)?,
+                    None => None,
+                };
                 require!(self.exact(Token::Punct(Punctuation::RParen)));
                 success(Statement::ForLoop {
                     init: init.map(Box::new),
