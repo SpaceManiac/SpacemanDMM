@@ -44,7 +44,9 @@ fn check_indentor() {
 fn check_parser() {
     let context = Context::default();
     with_test_dme(&context, |mut preprocessor| {
-        let _tree = parser::parse(&context, indents::IndentProcessor::new(&context, &mut preprocessor));
+        let mut parser = parser::Parser::new(&context, indents::IndentProcessor::new(&context, &mut preprocessor));
+        parser.enable_procs();
+        let _tree = parser.parse_object_tree();
         context.assert_success();
 
         println!("\n--------\nSuccess!\n--------");
