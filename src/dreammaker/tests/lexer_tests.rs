@@ -43,3 +43,22 @@ fn empty_block_comment() {
         vec![Punct(Newline)]
     )
 }
+
+#[test]
+fn raw_strings() {
+    let desired = Token::String("content".to_owned());
+    let stuff = lex(r###"
+@"content"
+@xcontentx
+@/content/
+@(x)contentx
+@(EOD)contentEOD
+@(very long terminator)contentvery long terminator
+@{"content"}
+@{content{
+"###);
+    for each in stuff.iter() {
+        if each == &Punct(Newline) { continue }
+        assert_eq!(each, &desired);
+    }
+}

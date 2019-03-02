@@ -916,6 +916,70 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         }
     }
 
+    fn read_raw_string_inner(&mut self, terminator: &[u8]) -> Token {
+        let start_loc = self.location();
+        let mut buf = Vec::new();
+        loop {
+            match self.next() {
+                Some(ch) => buf.push(ch),
+                None => {
+                    DMError::new(start_loc, "unterminated raw string")
+                        .register(self.context);
+                    break;
+                }
+            }
+            if buf.ends_with(terminator) {
+                let len = buf.len() - terminator.len();
+                buf.truncate(len);
+                break;
+            }
+        }
+        Token::String(from_latin1(buf))
+    }
+
+    fn read_raw_string(&mut self) -> Token {
+        // We just got the '@'. Let's see what the next character is.
+        match self.next() {
+            // @<LF> - error
+            Some(b'\n') |
+            None => {
+                self.error("unterminated raw string").register(self.context);
+                Token::String(String::new())
+            },
+            // @(<terminator string>)<string><terminator string> - no LF in contents
+            Some(b'(') => {
+                // build terminator until ), then read until that terminator
+                let mut terminator = Vec::new();
+                loop {
+                    match self.next() {
+                        Some(b')') => break,
+                        Some(ch) => terminator.push(ch),
+                        None => {
+                            self.error("unterminated raw string terminator").register(self.context);
+                            return Token::String(String::new())
+                        }
+                    }
+                }
+                if terminator.is_empty() {
+                    self.error("empty raw string terminator").register(self.context);
+                    return Token::String(String::new())
+                }
+                self.read_raw_string_inner(&terminator)
+            },
+            Some(b'{') => match self.next() {
+                // @{"<string>"} - LF allowed in contents
+                Some(b'"') => self.read_raw_string_inner(b"\"}"),
+                // @{<not ">{ -
+                other => {
+                    self.put_back(other);
+                    self.read_raw_string_inner(b"{")
+                }
+            },
+            // @<terminator char><string><terminator char>
+            Some(terminator) => self.read_raw_string_inner(&[terminator]),
+        }
+    }
+
     fn read_punct(&mut self, first: u8) -> Option<Punctuation> {
         let mut needle = [first, 0, 0, 0, 0, 0, 0, 0];  // poor man's StackVec
         let mut needle_idx = 1;
@@ -1086,7 +1150,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                         skip_newlines = true;
                         continue;
                     }
-                    b'@' => continue,  // TODO: parse these rather than ignoring them
+                    b'@' => Some(locate(self.read_raw_string())),
                     _ => {
                         if !found_illegal {
                             let mut msg = format!("illegal byte 0x{:x}", first);
