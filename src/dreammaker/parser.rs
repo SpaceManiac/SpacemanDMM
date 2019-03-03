@@ -673,11 +673,81 @@ where
         let entry_start = self.updated_location();
 
         // read and calculate the current path
-        let (absolute, path) = leading!(self.tree_path());
+        let (absolute, mut path) = leading!(self.tree_path());
+
+        // parse operator overloading definitions
+        if let Some(ref mut last_part) = path.last_mut() {
+            if *last_part == "operator" {
+                if self.exact(Punct(Mod))?.is_some() {
+                    last_part.push('%');
+                } else if self.exact(Punct(ModAssign))?.is_some() {
+                    last_part.push_str("%=");
+                } else if self.exact(Punct(BitAnd))?.is_some() {
+                    last_part.push('&');
+                } else if self.exact(Punct(BitAndAssign))?.is_some() {
+                    last_part.push_str("&=");
+                } else if self.exact(Punct(Mul))?.is_some() {
+                    last_part.push('*');
+                } else if self.exact(Punct(Pow))?.is_some() {
+                    last_part.push_str("**");
+                } else if self.exact(Punct(MulAssign))?.is_some() {
+                    last_part.push_str("*=");
+                } else if self.exact(Punct(Add))?.is_some() {
+                    last_part.push('+');
+                } else if self.exact(Punct(PlusPlus))?.is_some() {
+                    last_part.push_str("++");
+                } else if self.exact(Punct(AddAssign))?.is_some() {
+                    last_part.push_str("+=");
+                } else if self.exact(Punct(Sub))?.is_some() {
+                    last_part.push('-');
+                } else if self.exact(Punct(MinusMinus))?.is_some() {
+                    last_part.push_str("--");
+                } else if self.exact(Punct(SubAssign))?.is_some() {
+                    last_part.push_str("-=");
+                } else if self.exact(Punct(Less))?.is_some() {
+                    last_part.push('<');
+                } else if self.exact(Punct(LShift))?.is_some() {
+                    last_part.push_str("<<");
+                } else if self.exact(Punct(LShiftAssign))?.is_some() {
+                    last_part.push_str("<<=");
+                } else if self.exact(Punct(LessEq))?.is_some() {
+                    last_part.push_str("<=")
+                } else if self.exact(Punct(Greater))?.is_some() {
+                    last_part.push('>');
+                } else if self.exact(Punct(GreaterEq))?.is_some() {
+                    last_part.push_str(">=");
+                } else if self.exact(Punct(RShift))?.is_some() {
+                    last_part.push_str(">>");
+                } else if self.exact(Punct(RShiftAssign))?.is_some() {
+                    last_part.push_str(">>=");
+                } else if self.exact(Punct(BitXor))?.is_some() {
+                    last_part.push('^');
+                } else if self.exact(Punct(BitXorAssign))?.is_some() {
+                    last_part.push_str("^=");
+                } else if self.exact(Punct(BitOr))?.is_some() {
+                    last_part.push('|');
+                } else if self.exact(Punct(BitOrAssign))?.is_some() {
+                    last_part.push_str("|=");
+                } else if self.exact(Punct(BitNot))?.is_some() {
+                    last_part.push('~');
+                } else if self.exact(Punct(Equiv))?.is_some() {
+                    last_part.push_str("~=");
+                } else if self.exact(Punct(LBracket))?.is_some() {
+                    require!(self.exact(Punct(RBracket)));
+                    if self.exact(Punct(Assign))?.is_some() {
+                        last_part.push_str("[]=");
+                    } else {
+                        last_part.push_str("[]");
+                    }
+                }
+            }
+        } 
+
         let new_stack = PathStack {
             parent: if absolute { None } else { Some(&parent) },
             parts: &path,
         };
+
         if absolute && parent.parent.is_some() {
             self.error(format!("nested absolute path: {} inside {}", new_stack, parent))
                 .set_severity(Severity::Warning)
