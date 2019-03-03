@@ -498,7 +498,7 @@ impl<'o> ProcAnalyzer<'o> {
                     // TODO: it's not clear that this is correct
                     Type::Resource.into()
                 } else {
-                    self.error(format!("visit_term: weird input() type: {:?}", input_type));
+                    //self.error(format!("visit_term: weird input() type: {:?}", input_type));
                     Analysis::empty()
                 }
             },
