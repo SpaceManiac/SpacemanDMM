@@ -470,6 +470,11 @@ impl<'a> ProcRef<'a> {
     pub fn is_externally_visible(self) -> bool {
         self.idx + 1 == self.list.len()
     }
+
+    /// Check whether this proc is indicated to be varargs.
+    pub fn is_varargs(self) -> bool {
+        self.parameters.iter().any(|p| p.name == "...")
+    }
 }
 
 impl<'a> ::std::ops::Deref for ProcRef<'a> {
