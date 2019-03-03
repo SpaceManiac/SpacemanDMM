@@ -527,6 +527,13 @@ impl<'ctx> Preprocessor<'ctx> {
             }
         }
 
+        // If we're inside an inactive #if, don't actually evaluate.
+        // #ifdef FOO -- #if FOO == 5 will error otherwise.
+        if self.is_disabled() {
+            self.output.clear();
+            return Ok(false);
+        }
+
         let mut parser = ::parser::Parser::new(
             self.context,
             self.output.drain(..).map(|token| LocatedToken::new(start, token)),
