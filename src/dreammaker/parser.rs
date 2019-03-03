@@ -455,7 +455,7 @@ where
         Err(self.describe_parse_error())
     }
 
-    pub fn require<T>(&mut self, t: Result<Option<T>, DMError>) -> Result<T, DMError> {
+    fn require<T>(&mut self, t: Result<Option<T>, DMError>) -> Result<T, DMError> {
         match t {
             Ok(Some(v)) => Ok(v),
             Ok(None) => self.parse_error(),
@@ -741,7 +741,7 @@ where
                     }
                 }
             }
-        } 
+        }
 
         let new_stack = PathStack {
             parent: if absolute { None } else { Some(&parent) },
@@ -1533,7 +1533,11 @@ where
     }
 
     /// Parse an expression at the current position.
-    pub fn expression(&mut self) -> Status<Expression> {
+    pub fn require_expression(&mut self) -> Result<Expression, DMError> {
+        Ok(require!(self.expression()))
+    }
+
+    fn expression(&mut self) -> Status<Expression> {
         self.expression_ex(false)
     }
 

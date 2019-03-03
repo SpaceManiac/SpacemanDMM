@@ -352,10 +352,7 @@ pub fn evaluate_str(location: Location, input: &[u8]) -> Result<Constant, DMErro
 
     let mut bytes = input.iter().map(|&x| Ok(x));
     let ctx = Context::default();
-    let expr = match Parser::new(&ctx, Lexer::new(&ctx, Default::default(), &mut bytes)).expression()? {
-        Some(expr) => expr,
-        None => return Err(DMError::new(location, format!("not an expression: {}", from_latin1_borrowed(&input)))),
-    };
+    let expr = Parser::new(&ctx, Lexer::new(&ctx, Default::default(), &mut bytes)).require_expression()?;
     if bytes.next().is_some() {
         return Err(DMError::new(location, format!("leftover: {:?} {}", from_latin1_borrowed(&input), bytes.len())));
     }

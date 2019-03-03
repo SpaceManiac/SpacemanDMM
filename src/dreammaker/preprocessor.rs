@@ -539,8 +539,7 @@ impl<'ctx> Preprocessor<'ctx> {
             self.output.drain(..).map(|token| LocatedToken::new(start, token)),
         );
         parser.set_fallback_location(start);
-        let expr = parser.expression();
-        let expr = parser.require(expr)?;
+        let expr = parser.require_expression()?;
         Ok(::constants::preprocessor_evaluate(start, expr, &self.defines)?.to_bool())
     }
 
