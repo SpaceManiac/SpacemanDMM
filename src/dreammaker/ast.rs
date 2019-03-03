@@ -194,6 +194,12 @@ impl fmt::Display for AssignOp {
     }
 }
 
+/// The ternary operator, represented uniformly for convenience.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum TernaryOp {
+    Conditional,
+}
+
 macro_rules! augmented {
     ($($bin:ident = $aug:ident;)*) => {
         impl BinaryOp {

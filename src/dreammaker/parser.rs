@@ -155,6 +155,7 @@ impl OpInfo {
 enum Op {
     BinaryOp(BinaryOp),
     AssignOp(AssignOp),
+    TernaryOp(TernaryOp),
 }
 
 impl Op {
@@ -162,6 +163,7 @@ impl Op {
         match self {
             Op::BinaryOp(op) => Expression::BinaryOp { op, lhs, rhs },
             Op::AssignOp(op) => Expression::AssignOp { op, lhs, rhs },
+            Op::TernaryOp(_) => unreachable!(),
         }
     }
 }
@@ -251,6 +253,9 @@ oper_table! { BINARY_OPS;
         (BinaryOp, Or),
     }
     // ?               // ternary a ? b : c
+    Conditional {
+        (TernaryOp, Conditional = QuestionMark),
+    }
     // = += -= -= *= /= %= &= |= ^= <<= >>=
     Assign {
         (AssignOp, Assign),
@@ -1555,25 +1560,9 @@ where
             };
 
             // trampoline high-strength expression parts as the lhs of the newly found op
-            expr = require!(self.expression_part(expr, info, in_ternary));
+            expr = require!(self.expression_part(expr, info,
+                in_ternary || info.strength == Strength::Conditional));
         }
-
-        // TODO: this needs to be worked into the precedence table somehow
-        if let Some(()) = self.exact(Token::Punct(Punctuation::QuestionMark))? {
-            let if_ = require!(self.expression_ex(true));
-            match self.next("':'")? {
-                Token::Punct(Punctuation::Colon) |
-                Token::Punct(Punctuation::CloseColon) => {}
-                _ => return self.parse_error(),
-            }
-            let else_ = require!(self.expression());
-            expr = Expression::TernaryOp {
-                cond: Box::new(expr),
-                if_: Box::new(if_),
-                else_: Box::new(else_),
-            };
-        }
-
         success(expr)
     }
 
@@ -1598,7 +1587,8 @@ where
             match info.strength.cmp(&prev_op.strength) {
                 Ordering::Less => {
                     // the operator is stronger than us... recurse down
-                    rhs = require!(self.expression_part(rhs, info, in_ternary));
+                    rhs = require!(self.expression_part(rhs, info,
+                        in_ternary || info.strength == Strength::Conditional));
                 }
                 Ordering::Greater => {
                     // the operator is weaker than us... return up
@@ -1615,8 +1605,7 @@ where
         }
 
         // Handle ternary ops... they should have their own precedence or else.
-        // TODO: A?B:C should probably be handled here as well.
-        if prev_op.token == Punctuation::In {
+        if prev_op.strength == Strength::In {
             // "in" is optionally ternary: (x in 1 to 5)
             if let Some(()) = self.exact_ident("to")? {
                 rhs = Expression::BinaryOp {
@@ -1627,6 +1616,26 @@ where
                 // "step" could appear here but doesn't actually do anything.
                 // In for statements it is parsed by `for_range`.
             }
+        } else if prev_op.strength == Strength::Conditional {
+            // This is essentially a special associativity category.
+            let mut result = rhs;
+            while let Some(lhs) = bits.pop() {
+                // Ensure that the next thing we see is a ':' by now.
+                match self.next("':'")? {
+                    Token::Punct(Punctuation::Colon) |
+                    Token::Punct(Punctuation::CloseColon) => {}
+                    _ => return self.parse_error(),
+                }
+                // Read the else branch.
+                let else_ = require!(self.expression());
+                // Compose the result.
+                result = Expression::TernaryOp {
+                    cond: Box::new(lhs),
+                    if_: Box::new(result),
+                    else_: Box::new(else_),
+                }
+            }
+            return success(result);
         }
 
         // everything in 'ops' should be the same strength
