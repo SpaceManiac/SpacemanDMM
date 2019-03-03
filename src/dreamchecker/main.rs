@@ -399,7 +399,7 @@ impl<'o> ProcAnalyzer<'o> {
                 // call to the New() method
                 if let Some(typepath) = typepath {
                     self.visit_call(
-                        Type::Instance(typepath).into(),
+                        typepath,
                         typepath.get_proc("New").expect("couldn't find New proc"),
                         args.as_ref().map_or(&[], |v| &v[..]),
                         // New calls are exact: `new /datum()` will always call
@@ -429,7 +429,7 @@ impl<'o> ProcAnalyzer<'o> {
             Term::Call(unscoped_name, args) => {
                 let src = self.ty;
                 if let Some(proc) = self.ty.get_proc(unscoped_name) {
-                    self.visit_call(Type::Instance(src).into(), proc, args, false)
+                    self.visit_call(src, proc, args, false)
                 } else {
                     let msg = format!("visit_term: proc does not exist: {:?} on {}", unscoped_name, self.ty);
                     self.error(msg);
@@ -452,7 +452,7 @@ impl<'o> ProcAnalyzer<'o> {
                     // TODO: if args are empty, call w/ same args
                     let src = self.ty;
                     // Parent calls are exact, and won't ever call an override.
-                    self.visit_call(Type::Instance(src).into(), proc, args, true)
+                    self.visit_call(src, proc, args, true)
                 } else {
                     let msg = format!("visit_term: proc has no parent: {}", self.proc_ref);
                     self.error(msg);
@@ -463,7 +463,7 @@ impl<'o> ProcAnalyzer<'o> {
                 let src = self.ty;
                 let proc = self.proc_ref;
                 // Self calls are exact, and won't ever call an override.
-                self.visit_call(Type::Instance(src).into(), proc, args, true)
+                self.visit_call(src, proc, args, true)
             },
             Term::Locate { args, .. } => {
                 // TODO: deal with in_list
@@ -559,7 +559,7 @@ impl<'o> ProcAnalyzer<'o> {
             Follow::Call(kind, name, arguments) => {
                 if let Some(ty) = lhs.static_ty {
                     if let Some(proc) = ty.get_proc(name) {
-                        self.visit_call(lhs, proc, arguments, false)
+                        self.visit_call(ty, proc, arguments, false)
                     } else {
                         self.error(format!("visit_follow: proc does not exist: {} on {}", name, ty));
                         Analysis::empty()
@@ -595,7 +595,7 @@ impl<'o> ProcAnalyzer<'o> {
         Analysis::empty()
     }
 
-    fn visit_call(&mut self, src: Analysis<'o>, proc: ProcRef, args: &'o [Expression], is_exact: bool) -> Analysis<'o> {
+    fn visit_call(&mut self, src: TypeRef<'o>, proc: ProcRef, args: &'o [Expression], is_exact: bool) -> Analysis<'o> {
         // identify and register kwargs used
         for arg in args {
             let mut argument_value = arg;
@@ -611,7 +611,11 @@ impl<'o> ProcAnalyzer<'o> {
                             self.error(format!("visit_call: call with bad kwarg: {:?} on {}", name, proc));
                         } else if !is_exact {
                             // If it does, mark it as "used".
-                            self.env.used_kwargs.entry(proc.to_string())
+                            // Format with src/proc/foo here, rather than the
+                            // type the proc actually appears on, so that
+                            // calling /datum/foo() on a /datum/A won't
+                            // complain about /datum/B/foo().
+                            self.env.used_kwargs.entry(format!("{}/proc/{}", src, proc.name()))
                                 .or_default()
                                 // TODO: use a more accurate location
                                 .insert(name.clone(), self.proc_ref.location);
