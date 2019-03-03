@@ -597,13 +597,17 @@ impl<'o> ProcAnalyzer<'o> {
 
     fn visit_call(&mut self, src: TypeRef<'o>, proc: ProcRef, args: &'o [Expression], is_exact: bool) -> Analysis<'o> {
         // identify and register kwargs used
+        let mut any_kwargs_yet = false;
         for arg in args {
             let mut argument_value = arg;
+            let mut this_kwarg = false;
             if let Expression::AssignOp { op: AssignOp::Assign, lhs, rhs } = arg {
                 match lhs.as_term() {
                     Some(Term::Ident(name)) |
                     Some(Term::String(name)) => {
                         // Don't visit_expression the kwarg key.
+                        any_kwargs_yet = true;
+                        this_kwarg = true;
                         argument_value = rhs;
 
                         // Check that that kwarg actually exists.
@@ -623,6 +627,11 @@ impl<'o> ProcAnalyzer<'o> {
                     }
                     _ => {}
                 }
+            }
+
+            if any_kwargs_yet && !this_kwarg && !(proc.ty().is_root() && proc.name() == "animate") {
+                // TODO: don't hardcode the animate() exception
+                self.error(format!("proc called with non-kwargs after kwargs: {}()", proc.name()));
             }
 
             self.visit_expression(argument_value, None);
