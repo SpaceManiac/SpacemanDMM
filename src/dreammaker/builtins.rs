@@ -207,6 +207,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
     }
 
     entries! {
+        var/const/vars;
         // directions
         var/const/NORTH = int!(1);
         var/const/SOUTH = int!(2);
