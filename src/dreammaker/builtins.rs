@@ -544,7 +544,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         atom/movable/var/bound_y;
         atom/movable/var/bound_width;
         atom/movable/var/bound_height;
-        atom/movable/var/tmp/locs;  // not editable
+        atom/movable/var/tmp/list/locs;  // not editable
         atom/movable/var/screen_loc;
         atom/movable/var/glide_size;
         atom/movable/var/step_size;
