@@ -475,6 +475,11 @@ impl<'a> ProcRef<'a> {
     pub fn is_varargs(self) -> bool {
         self.parameters.iter().any(|p| p.name == "...")
     }
+
+    /// Get the declaration corresponding to this proc reference.
+    pub fn get_declaration(self) -> Option<&'a ProcDeclaration> {
+        self.ty.get_proc_declaration(self.name)
+    }
 }
 
 impl<'a> ::std::ops::Deref for ProcRef<'a> {
