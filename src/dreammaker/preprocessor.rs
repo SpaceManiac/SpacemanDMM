@@ -58,6 +58,12 @@ pub struct DefineMap {
 }
 
 impl DefineMap {
+    pub fn with_builtins() -> DefineMap {
+        let mut this = Default::default();
+        super::builtins::default_defines(&mut this);
+        this
+    }
+
     /// Returns the number of elements in the map.
     #[inline]
     pub fn len(&self) -> usize {
@@ -320,17 +326,13 @@ impl<'ctx> Preprocessor<'ctx> {
         }
         let include = Include::from_read(context, env_file.clone(), Box::new(io::Cursor::new(buffer)));
 
-        // Load the built-in macros.
-        let mut defines = DefineMap::default();
-        super::builtins::default_defines(&mut defines);
-
         Ok(Preprocessor {
             context,
             env_file,
             include_stack: IncludeStack { stack: vec![include] },
             include_locations: Default::default(),
             history: Default::default(),
-            defines,
+            defines: DefineMap::with_builtins(),
             maps: Default::default(),
             skins: Default::default(),
             scripts: Default::default(),
@@ -345,6 +347,31 @@ impl<'ctx> Preprocessor<'ctx> {
             in_interp_string: 0,
             annotations: None,
         })
+    }
+
+    pub fn from_buffer(context: &'ctx Context, env_file: PathBuf, buffer: &'static str) -> Self {
+        let include = Include::from_read(context, env_file.clone(), Box::new(io::Cursor::new(buffer)));
+        Preprocessor {
+            context,
+            env_file,
+            include_stack: IncludeStack { stack: vec![include] },
+            include_locations: Default::default(),
+            history: Default::default(),
+            defines: DefineMap::with_builtins(),
+            maps: Default::default(),
+            skins: Default::default(),
+            scripts: Default::default(),
+            ifdef_stack: Default::default(),
+            ifdef_history: Default::default(),
+            last_input_loc: Default::default(),
+            last_printable_input_loc: Default::default(),
+            output: Default::default(),
+            danger_idents: Default::default(),
+            docs_in: Default::default(),
+            docs_out: Default::default(),
+            in_interp_string: 0,
+            annotations: None,
+        }
     }
 
     /// Move all active defines to the define history.
