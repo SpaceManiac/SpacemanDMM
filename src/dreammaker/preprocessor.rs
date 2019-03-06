@@ -11,6 +11,9 @@ use super::lexer::*;
 use super::docs::{DocComment, DocTarget, DocCollection};
 use super::annotation::*;
 
+/// The maximum recursion depth of macro expansion.
+const MAX_RECURSION_DEPTH: usize = 32;
+
 // ----------------------------------------------------------------------------
 // Macro representation and predefined macros
 
@@ -907,16 +910,21 @@ impl<'ctx> Preprocessor<'ctx> {
                 }
 
                 // if it's a define, perform the substitution
-                match self.defines.get(ident).cloned() { // TODO
+                let mut expansion = self.defines.get(ident).cloned();  // TODO: don't clone?
+                if expansion.is_some() && self.include_stack.stack.len() > MAX_RECURSION_DEPTH {
+                    self.error(format!("expanding {:?} would exceed max recursion depth of {} levels",
+                        ident, MAX_RECURSION_DEPTH)).register(self.context);
+                    expansion = None;
+                }
+
+                match expansion {
                     Some((location, Define::Constant { subst, docs: _ })) => {
                         self.annotate_macro(ident, location);
-
-                        let e = Include::Expansion {
+                        self.include_stack.stack.push(Include::Expansion {
                             name: ident.to_owned(),
                             tokens: subst.into_iter().collect(),
                             location: self.last_input_loc,
-                        };
-                        self.include_stack.stack.push(e);
+                        });
                         return Ok(());
                     }
                     Some((location, Define::Function { ref params, ref subst, variadic, docs: _ })) => {
@@ -1053,12 +1061,11 @@ impl<'ctx> Preprocessor<'ctx> {
                                 _ => expansion.push_back(token),
                             }
                         }
-                        let e = Include::Expansion {
+                        self.include_stack.stack.push(Include::Expansion {
                             name: ident.to_owned(),
                             tokens: expansion,
                             location: self.last_input_loc,
-                        };
-                        self.include_stack.stack.push(e);
+                        });
                         return Ok(());
                     }
                     None => {}
