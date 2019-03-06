@@ -192,15 +192,6 @@ impl<'ctx> IncludeStack<'ctx> {
         "".as_ref()
     }
 
-    fn top_no_expand(&self) -> &str {
-        for each in self.stack.iter().rev() {
-            if let Include::Expansion { ref name, .. } = each {
-                return name;
-            }
-        }
-        ""
-    }
-
     fn in_expansion(&self) -> bool {
         match self.stack.last() {
             Some(Include::Expansion { .. }) => true,
@@ -890,7 +881,7 @@ impl<'ctx> Preprocessor<'ctx> {
             // anything other than directives may be ifdef'd out
             _ if disabled => return Ok(()),
             // identifiers may be macros
-            Token::Ident(ref ident, _) if ident != self.include_stack.top_no_expand() => {
+            Token::Ident(ref ident, _) => {
                 self.flush_docs();
 
                 // lint for BYOND bug
