@@ -453,6 +453,20 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         proc/winshow(player, window, show=1);
         proc/CRASH(message);  // kind of special, but let's pretend
 
+        // database builtin procs
+        proc/_dm_db_new_query();
+        proc/_dm_db_execute(db_query, sql_query, db_connection, cursor_handler, unknown);
+        proc/_dm_db_next_row(db_query, item, conversions);
+        proc/_dm_db_rows_affected(db_query);
+        proc/_dm_db_row_count(db_query);
+        proc/_dm_db_error_msg(db_query);
+        proc/_dm_db_columns(db_query, db_column);
+        proc/_dm_db_close(db_query);
+        proc/_dm_db_new_con();
+        proc/_dm_db_connect(db_con, dbi_handler, user_handler, password_handler, cursor_handler, unknown);
+        proc/_dm_db_quote(db_con, _str);
+        proc/_dm_db_is_connected(db_con);
+
         list;
         list/proc/Add(Item1, Item2/*,...*/);
         list/proc/Copy(Start=1, End=0);
