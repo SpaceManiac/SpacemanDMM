@@ -1506,7 +1506,7 @@ fn root_node(ui: &Ui, ty: TypeRef, name: &str) {
 }
 
 fn tree_node(ui: &Ui, ty: TypeRef) {
-    let mut children = ty.children();
+    let mut children: Vec<_> = ty.children().collect();
     if children.is_empty() {
         ui.tree_node(im_str!("{}", ty.name)).leaf(true).build(|| {});
     } else {
@@ -1690,7 +1690,7 @@ fn objtree_menu_root<'e>(ui: &Ui, ty: TypeRef<'e>, name: &str, selection: &mut O
 }
 
 fn objtree_menu_node<'e>(ui: &Ui, ty: TypeRef<'e>, selection: &mut Option<TypeRef<'e>>) {
-    let mut children = ty.children();
+    let mut children: Vec<_> = ty.children().collect();
     if children.is_empty() {
         if ui.menu_item(im_str!("{}", ty.name)).build() {
             *selection = Some(ty);

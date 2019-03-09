@@ -197,12 +197,8 @@ impl<'a> TypeRef<'a> {
     }
 
     /// Iterate over all child **paths**.
-    pub fn children(&self) -> Vec<TypeRef<'a>> {
-        let mut output = Vec::new();
-        for idx in self.tree.graph.neighbors(self.idx) {
-            output.push(TypeRef::new(self.tree, idx));
-        }
-        output
+    pub fn children(self) -> impl Iterator<Item=TypeRef<'a>> + 'a {
+        self.tree.graph.neighbors(self.idx).map(move |idx| TypeRef::new(self.tree, idx))
     }
 
     /// Recursively visit this and all child **paths**.
