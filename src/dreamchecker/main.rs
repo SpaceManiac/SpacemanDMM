@@ -8,7 +8,7 @@ use dm::objtree::{Code, ObjectTree, TypeRef, ProcRef};
 use dm::constants::{Constant, ConstFn};
 use dm::ast::*;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 // ----------------------------------------------------------------------------
 // Helper structures
@@ -104,15 +104,15 @@ struct BadOverride {
 struct KwargInfo {
     location: Location,
     // kwarg name -> location that the proc is called with that arg
-    called_at: HashMap<String, Location>,
+    called_at: BTreeMap<String, Location>,
     // Debug(ProcRef) -> its definition location
-    bad_overrides_at: HashMap<String, BadOverride>,
+    bad_overrides_at: BTreeMap<String, BadOverride>,
 }
 
 #[derive(Default)]
 struct Env {
     // Debug(ProcRef) -> KwargInfo
-    used_kwargs: HashMap<String, KwargInfo>,
+    used_kwargs: BTreeMap<String, KwargInfo>,
 }
 
 impl Env {
