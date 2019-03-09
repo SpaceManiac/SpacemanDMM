@@ -13,6 +13,7 @@ linked-hash-map = "0.5.0"
 lodepng = "2.1.5"
 bitflags = "1.0.3"
 noisy_float = "0.1.7"
+termcolor = "1.0.4"
 
 [dev-dependencies]
 walkdir = "2.0.1"

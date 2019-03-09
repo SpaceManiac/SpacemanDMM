@@ -5,6 +5,8 @@ use std::path::{PathBuf, Path};
 use std::cell::{RefCell, Ref};
 use std::collections::HashMap;
 
+use termcolor::{ColorSpec, Color};
+
 /// An identifier referring to a loaded file.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct FileId(u16);
@@ -80,7 +82,7 @@ impl Context {
     pub fn register_error(&self, error: DMError) {
         if let Some(severity) = self.print_severity {
             if error.severity <= severity {
-                let stderr = io::stderr();
+                let stderr = termcolor::StandardStream::stderr(termcolor::ColorChoice::Auto);
                 self.pretty_print_error(&mut stderr.lock(), &error)
                     .expect("error writing to stderr");
             }
@@ -99,7 +101,7 @@ impl Context {
     }
 
     /// Pretty-print a `DMError` to the given output.
-    pub fn pretty_print_error<W: io::Write>(&self, w: &mut W, error: &DMError) -> io::Result<()> {
+    pub fn pretty_print_error<W: termcolor::WriteColor>(&self, w: &mut W, error: &DMError) -> io::Result<()> {
         writeln!(
             w,
             "{}, line {}, column {}:",
@@ -107,7 +109,12 @@ impl Context {
             error.location.line,
             error.location.column,
         )?;
-        writeln!(w, "{}: {}", error.severity, error.description)?;
+
+        w.set_color(&error.severity.style())?;
+        write!(w, "{}", error.severity())?;
+        w.reset()?;
+        writeln!(w, ": {}", error.description())?;
+
         for note in error.notes().iter() {
             if note.location == error.location {
                 writeln!(w, "- {}", note.description, )?;
@@ -137,7 +144,7 @@ impl Context {
     ///
     /// Returns `true` if no errors were printed, `false` if any were.
     pub fn print_all_errors(&self, min_severity: Severity) -> bool {
-        let stderr = io::stderr();
+        let stderr = termcolor::StandardStream::stderr(termcolor::ColorChoice::Auto);
         let stderr = &mut stderr.lock();
         let errors = self.errors();
         let mut printed = false;
@@ -245,6 +252,19 @@ pub enum Severity {
     Warning = 2,
     Info = 3,
     Hint = 4,
+}
+
+impl Severity {
+    fn style(self) -> ColorSpec {
+        let mut spec = ColorSpec::new();
+        match self {
+            Severity::Error => { spec.set_fg(Some(Color::Red)); }
+            Severity::Warning => { spec.set_fg(Some(Color::Yellow)); }
+            Severity::Info => { spec.set_fg(Some(Color::White)).set_intense(true); }
+            Severity::Hint => {},
+        }
+        spec
+    }
 }
 
 impl Default for Severity {
