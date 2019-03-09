@@ -100,11 +100,16 @@ struct BadOverride {
     location: Location,
 }
 
+struct CalledAt {
+    location: Location,
+    others: u32,
+}
+
 #[derive(Default)]
 struct KwargInfo {
     location: Location,
     // kwarg name -> location that the proc is called with that arg
-    called_at: BTreeMap<String, Location>,
+    called_at: BTreeMap<String, CalledAt>,
     // Debug(ProcRef) -> its definition location
     bad_overrides_at: BTreeMap<String, BadOverride>,
 }
@@ -160,12 +165,17 @@ impl Env {
 
             // List call sites. If nobody ever calls these as kwargs, then
             // there's not gonna be a problem.
-            for (arg_name, &location) in kwarg_info.called_at.iter() {
+            for (arg_name, called_at) in kwarg_info.called_at.iter() {
                 if !missing.contains(arg_name) {
                     continue
                 }
 
-                error = error.add_note(location, format!("called here with {:?}", arg_name));
+                if called_at.others > 0 {
+                    error = error.add_note(called_at.location, format!("called with {:?} here, and {} others",
+                        arg_name, called_at.others));
+                } else {
+                    error = error.add_note(called_at.location, format!("called with {:?} here", arg_name));
+                }
             }
 
             error.register(context);
@@ -668,7 +678,12 @@ impl<'o> ProcAnalyzer<'o> {
                                 })
                                 .called_at
                                 // TODO: use a more accurate location
-                                .insert(name.clone(), self.proc_ref.location);
+                                .entry(name.clone())
+                                .and_modify(|ca| ca.others += 1)
+                                .or_insert(CalledAt {
+                                    location: self.proc_ref.location,
+                                    others: 0,
+                                });
                         }
                     }
                     _ => {}
