@@ -657,12 +657,16 @@ impl<'o> ProcAnalyzer<'o> {
 }
 
 fn main() {
+    const PRINT_SEVERITY: dm::Severity = dm::Severity::Info;
+
     let mut context = Context::default();
-    context.set_print_severity(Some(dm::Severity::Info));
-    let env = dm::detect_environment_default()
+    context.set_print_severity(Some(PRINT_SEVERITY));
+    let dme = dm::detect_environment_default()
         .expect("error detecting .dme")
         .expect("no .dme found");
-    let pp = dm::preprocessor::Preprocessor::new(&context, env)
+    println!("============================================================");
+    println!("Parsing {}...\n", dme.display());
+    let pp = dm::preprocessor::Preprocessor::new(&context, dme)
         .expect("i/o error opening .dme");
     let indents = dm::indents::IndentProcessor::new(&context, pp);
     let mut parser = dm::parser::Parser::new(&context, indents);
@@ -672,11 +676,12 @@ fn main() {
     let mut present = 0;
     let mut invalid = 0;
     let mut builtin = 0;
-    let mut disabled = 0;
 
     let mut env = Env::default();
 
     // First pass: analyze all proc bodies
+    println!("============================================================");
+    println!("Analyzing proc bodies...\n");
     tree.root().recurse(&mut |ty| {
         for proc in ty.iter_self_procs() {
             match proc.code {
@@ -686,17 +691,24 @@ fn main() {
                 }
                 Code::Invalid(_) => invalid += 1,
                 Code::Builtin => builtin += 1,
-                Code::Disabled => disabled += 1,
+                Code::Disabled => panic!("proc parsing was enabled, but also disabled. this is a bug"),
             }
         }
     });
 
+    println!("Procs analyzed: {}. Errored: {}. Builtins: {}.\n", present, invalid, builtin);
+
     // Second pass: warn about procs which are missing kwargs their parents have
+    println!("============================================================");
+    println!("Analyzing proc override validity...\n");
     tree.root().recurse(&mut |ty| {
         for proc in ty.iter_self_procs() {
             env.check_kwargs(&context, proc);
         }
     });
 
-    println!("{:?}", (present, invalid, builtin, disabled));
+    println!("============================================================");
+    let errors = context.errors().iter().filter(|each| each.severity() <= PRINT_SEVERITY).count();
+    println!("Found {} diagnostics", errors);
+    std::process::exit(if errors > 0 { 1 } else { 0 });
 }
