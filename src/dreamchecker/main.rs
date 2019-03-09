@@ -95,38 +95,80 @@ impl<'o> Analysis<'o> {
 // ----------------------------------------------------------------------------
 // Analysis environment
 
+struct BadOverride {
+    missing: Vec<String>,
+    location: Location,
+}
+
+#[derive(Default)]
+struct KwargInfo {
+    location: Location,
+    // kwarg name -> location that the proc is called with that arg
+    called_at: HashMap<String, Location>,
+    // Debug(ProcRef) -> its definition location
+    bad_overrides_at: HashMap<String, BadOverride>,
+}
+
 #[derive(Default)]
 struct Env {
-    used_kwargs: HashMap<String, HashMap<String, Location>>,
+    // Debug(ProcRef) -> KwargInfo
+    used_kwargs: HashMap<String, KwargInfo>,
 }
 
 impl Env {
-    fn check_kwargs(&self, context: &Context, proc: ProcRef) {
+    fn check_kwargs(&mut self, context: &Context, proc: ProcRef) {
         let param_names: HashSet<&String> = proc.parameters.iter().map(|p| &p.name).collect();
 
+        // Start at the parent - calls which immediately resolve to bad kwargs
+        // error earlier in the process.
         let mut next = proc.parent_proc();
         while let Some(current) = next {
-            if let Some(kwargs) = self.used_kwargs.get(&current.to_string()) {
+            if let Some(kwargs) = self.used_kwargs.get_mut(&current.to_string()) {
                 let mut missing = Vec::new();
-                let mut use_site = Location::default();
 
-                for (keyword, location) in kwargs.iter() {
+                for (keyword, location) in kwargs.called_at.iter() {
                     if !param_names.contains(keyword) {
-                        missing.push(&keyword[..]);
-                        use_site = *location;
+                        missing.push(keyword.to_owned());
                     }
                 }
 
                 if !missing.is_empty() {
-                    DMError::new(proc.location, format!("override of {:?} is missing keyword args from parent: \"{}\"",
-                            proc.name(),
-                            missing.join("\", \""),
-                        ))
-                        .add_note(use_site, format!("called here as {}", current))
-                        .register(context);
+                    kwargs.bad_overrides_at.insert(
+                        proc.ty().path.to_owned(),
+                        BadOverride { missing, location: proc.location });
                 }
             }
             next = current.parent_proc();
+        }
+    }
+
+    fn finish_check_kwargs(&self, context: &Context) {
+        for (base_procname, kwarg_info) in self.used_kwargs.iter() {
+            if kwarg_info.bad_overrides_at.is_empty() {
+                continue
+            }
+
+            // List out the child procs that are missing overrides.
+            let mut error = DMError::new(kwarg_info.location, format!("overrides of {} are missing keyword args", base_procname));
+            let mut missing = HashSet::new();
+            for (child_procname, bad_override) in kwarg_info.bad_overrides_at.iter() {
+                error = error.add_note(bad_override.location, format!("{} is missing \"{}\"",
+                    child_procname,
+                    bad_override.missing.join("\", \"")));
+                missing.extend(bad_override.missing.iter());
+            }
+
+            // List call sites. If nobody ever calls these as kwargs, then
+            // there's not gonna be a problem.
+            for (arg_name, &location) in kwarg_info.called_at.iter() {
+                if !missing.contains(arg_name) {
+                    continue
+                }
+
+                error = error.add_note(location, format!("called here with {:?}", arg_name));
+            }
+
+            error.register(context);
         }
     }
 }
@@ -620,7 +662,11 @@ impl<'o> ProcAnalyzer<'o> {
                             // calling /datum/foo() on a /datum/A won't
                             // complain about /datum/B/foo().
                             self.env.used_kwargs.entry(format!("{}/proc/{}", src, proc.name()))
-                                .or_default()
+                                .or_insert_with(|| KwargInfo {
+                                    location: proc.location,
+                                    .. Default::default()
+                                })
+                                .called_at
                                 // TODO: use a more accurate location
                                 .insert(name.clone(), self.proc_ref.location);
                         }
@@ -706,6 +752,7 @@ fn main() {
             env.check_kwargs(&context, proc);
         }
     });
+    env.finish_check_kwargs(&context);
 
     println!("============================================================");
     let errors = context.errors().iter().filter(|each| each.severity() <= PRINT_SEVERITY).count();
