@@ -476,6 +476,20 @@ impl<'a> ProcRef<'a> {
     pub fn get_declaration(self) -> Option<&'a ProcDeclaration> {
         self.ty.get_proc_declaration(self.name)
     }
+
+    /// Recursively visit this and all public-facing procs which override it.
+    pub fn recurse_children<F: FnMut(ProcRef<'a>)>(self, f: &mut F) {
+        self.ty.recurse(&mut move |ty| {
+            if let Some(proc) = ty.get().procs.get(self.name) {
+                f(ProcRef {
+                    ty,
+                    list: &proc.value,
+                    name: self.name,
+                    idx: proc.value.len() - 1,
+                });
+            }
+        });
+    }
 }
 
 impl<'a> ::std::ops::Deref for ProcRef<'a> {

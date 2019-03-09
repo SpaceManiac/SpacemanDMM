@@ -663,8 +663,18 @@ impl<'o> ProcAnalyzer<'o> {
                         argument_value = rhs;
 
                         // Check that that kwarg actually exists.
-                        if proc.parameters.iter().find(|p| p.name == *name).is_none() {
-                            self.error(format!("bad keyword argument {:?} to {}", name, proc));
+                        if !proc.parameters.iter().any(|p| p.name == *name) {
+                            // Search for a child proc that does have this keyword argument.
+                            let mut msg = format!("bad keyword argument {:?} to {}", name, proc);
+                            proc.recurse_children(&mut |child_proc| {
+                                if child_proc == proc { return }
+                                // TODO: use diagnostic notes here instead.
+                                if child_proc.parameters.iter().any(|p| p.name == *name) {
+                                    use std::fmt::Write;
+                                    let _ = write!(msg, "\nan override has this parameter: {}", child_proc);
+                                }
+                            });
+                            self.error(msg);
                         } else if !is_exact {
                             // If it does, mark it as "used".
                             // Format with src/proc/foo here, rather than the
