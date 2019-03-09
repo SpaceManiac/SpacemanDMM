@@ -118,11 +118,11 @@ impl Env {
                 }
 
                 if !missing.is_empty() {
-                    DMError::new(proc.location, format!("override of {} is missing keyword args from parent: \"{}\"",
+                    DMError::new(proc.location, format!("override of {:?} is missing keyword args from parent: \"{}\"",
                             proc.name(),
                             missing.join("\", \""),
                         ))
-                        .add_note(use_site, format!("for example, {} is called here", current))
+                        .add_note(use_site, format!("called here as {}", current))
                         .register(context);
                 }
             }
@@ -313,7 +313,7 @@ impl<'o> ProcAnalyzer<'o> {
         } else {
             type_hint = self.objtree.type_by_path(&var_type.type_path);
             if type_hint.is_none() {
-                self.error(format!("visit_var: failed to find type {}", FormatTreePath(&var_type.type_path)));
+                self.error(format!("undefined type: {}", FormatTreePath(&var_type.type_path)));
             }
         };
 
@@ -381,7 +381,7 @@ impl<'o> ProcAnalyzer<'o> {
                     NewType::Implicit => if let Some(hint) = type_hint {
                         Some(hint)
                     } else {
-                        self.error("visit_term(New): NewType::Implicit with no type hint");
+                        self.error("no type hint available on implicit new()");
                         None
                     },
                     NewType::Prefab(prefab) => {
@@ -389,7 +389,7 @@ impl<'o> ProcAnalyzer<'o> {
                             // TODO: handle proc/verb paths here
                             Some(nav.ty())
                         } else {
-                            self.error(format!("visit_term(New): failed to resolve path {}", FormatTypePath(&prefab.path)));
+                            self.error(format!("failed to resolve path {}", FormatTypePath(&prefab.path)));
                             None
                         }
                     },
@@ -416,7 +416,7 @@ impl<'o> ProcAnalyzer<'o> {
                     // TODO: handle proc/verb paths here
                     Type::Typepath(nav.ty()).into()
                 } else {
-                    self.error(format!("visit_term(Prefab): failed to resolve path {}", FormatTypePath(&prefab.path)));
+                    self.error(format!("failed to resolve path {}", FormatTypePath(&prefab.path)));
                     Analysis::empty()
                 }
             },
@@ -431,7 +431,7 @@ impl<'o> ProcAnalyzer<'o> {
                 if let Some(proc) = self.ty.get_proc(unscoped_name) {
                     self.visit_call(src, proc, args, false)
                 } else {
-                    let msg = format!("visit_term: proc does not exist: {:?} on {}", unscoped_name, self.ty);
+                    let msg = format!("undefined proc: {:?} on {}", unscoped_name, self.ty);
                     self.error(msg);
                     Analysis::empty()
                 }
@@ -443,7 +443,7 @@ impl<'o> ProcAnalyzer<'o> {
                 if let Some(decl) = self.ty.get_var_declaration(unscoped_name) {
                     self.static_type(&decl.var_type.type_path)
                 } else {
-                    self.error(format!("visit_term: ident failed to resolve: {:?}", unscoped_name));
+                    self.error(format!("undefined var: {:?}", unscoped_name));
                     Analysis::empty()
                 }
             },
@@ -454,7 +454,7 @@ impl<'o> ProcAnalyzer<'o> {
                     // Parent calls are exact, and won't ever call an override.
                     self.visit_call(src, proc, args, true)
                 } else {
-                    let msg = format!("visit_term: proc has no parent: {}", self.proc_ref);
+                    let msg = format!("proc has no parent: {:?}", self.proc_ref);
                     self.error(msg);
                     Analysis::empty()
                 }
@@ -548,11 +548,11 @@ impl<'o> ProcAnalyzer<'o> {
                     if let Some(decl) = ty.get_var_declaration(name) {
                         self.static_type(&decl.var_type.type_path)
                     } else {
-                        self.error(format!("visit_follow: field does not exist: {:?} on {}", name, ty));
+                        self.error(format!("undefined field: {:?} on {}", name, ty));
                         Analysis::empty()
                     }
                 } else {
-                    self.error(format!("visit_follow: field access requires static type: {:?} on {:?}", name, lhs));
+                    self.error(format!("field access requires static type: {:?}", name));
                     Analysis::empty()
                 }
             },
@@ -561,11 +561,11 @@ impl<'o> ProcAnalyzer<'o> {
                     if let Some(proc) = ty.get_proc(name) {
                         self.visit_call(ty, proc, arguments, false)
                     } else {
-                        self.error(format!("visit_follow: proc does not exist: {} on {}", name, ty));
+                        self.error(format!("undefined proc: {:?} on {}", name, ty));
                         Analysis::empty()
                     }
                 } else {
-                    self.error(format!("visit_follow: proc call require static type: {:?} on {:?}", name, lhs));
+                    self.error(format!("proc call require static type: {:?} on {:?}", name, lhs));
                     Analysis::empty()
                 }
             },
@@ -612,7 +612,7 @@ impl<'o> ProcAnalyzer<'o> {
 
                         // Check that that kwarg actually exists.
                         if proc.parameters.iter().find(|p| p.name == *name).is_none() {
-                            self.error(format!("visit_call: call with bad kwarg: {:?} on {}", name, proc));
+                            self.error(format!("bad keyword argument {:?} to {}", name, proc));
                         } else if !is_exact {
                             // If it does, mark it as "used".
                             // Format with src/proc/foo here, rather than the
@@ -650,7 +650,7 @@ impl<'o> ProcAnalyzer<'o> {
         } else if let Some(ty) = self.objtree.type_by_path(of) {
             Analysis::from_static_type(ty)
         } else {
-            self.error(format!("failed to find type: {}", FormatTreePath(of)));
+            self.error(format!("undefined type: {}", FormatTreePath(of)));
             Analysis::empty()
         }
     }
