@@ -564,6 +564,7 @@ handle_method_call! {
                         kind: SymbolKind::Constant,
                         location: self.convert_location(range.start, "/DM", "/preprocessor/", name)?,
                         container_name: None,
+                        deprecated: None,
                     });
                 }
             }
@@ -576,6 +577,7 @@ handle_method_call! {
                     kind: SymbolKind::Class,
                     location: self.convert_location(ty.location, &ty.path, "", "")?,
                     container_name: Some(ty.path[..ty.path.len() - ty.name.len() - 1].to_owned()),
+                    deprecated: None,
                 });
             }
 
@@ -590,6 +592,7 @@ handle_method_call! {
                             kind: SymbolKind::Field,
                             location: self.convert_location(decl.location, &ty.path, "/var/", var_name)?,
                             container_name: Some(ty.path.clone()),
+                            deprecated: None,
                         });
                     }
                 }
@@ -609,6 +612,7 @@ handle_method_call! {
                             },
                             location: self.convert_location(decl.location, &ty.path, "/proc/", proc_name)?,
                             container_name: Some(ty.path.clone()),
+                            deprecated: None,
                         });
                     }
                 }
@@ -972,7 +976,7 @@ handle_method_call! {
                     let mut sep = "";
                     for param in proc.value.last().unwrap().parameters.iter() {
                         params.push(ParameterInformation {
-                            label: param.name.clone(),
+                            label: ParameterLabel::Simple(param.name.clone()),
                             documentation: None,
                         });
                         for each in param.var_type.type_path.iter() {
