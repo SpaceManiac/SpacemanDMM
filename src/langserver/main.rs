@@ -75,6 +75,12 @@ enum InitStatus {
 
 type Span = interval_tree::RangeInclusive<dm::Location>;
 
+#[derive(Default, Debug)]
+struct ClientCaps {
+    related_info: bool,
+    label_offset_support: bool,
+}
+
 struct Engine<'a, R: 'a, W: 'a> {
     read: &'a R,
     write: &'a W,
@@ -90,7 +96,7 @@ struct Engine<'a, R: 'a, W: 'a> {
 
     annotations: HashMap<PathBuf, (FileId, FileId, Rc<AnnotationTree>)>,
 
-    cap_related_info: bool,
+    client_caps: ClientCaps,
 }
 
 impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
@@ -110,7 +116,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
 
             annotations: Default::default(),
 
-            cap_related_info: false,
+            client_caps: Default::default(),
         }
     }
 
@@ -224,7 +230,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         let mut map: HashMap<_, Vec<_>> = HashMap::new();
         for error in self.context.errors().iter() {
             let loc = error.location();
-            let related_information = if !self.cap_related_info || error.notes().is_empty() {
+            let related_information = if !self.client_caps.related_info || error.notes().is_empty() {
                 None
             } else {
                 let mut notes = Vec::with_capacity(error.notes().len());
@@ -250,7 +256,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 .or_insert_with(Default::default)
                 .push(diag);
 
-            if !self.cap_related_info {
+            if !self.client_caps.related_info {
                 // Fallback in case the client does not support related info
                 for note in error.notes().iter() {
                     let diag = langserver::Diagnostic {
@@ -506,16 +512,30 @@ handle_method_call! {
         }
         self.status = InitStatus::Running;
 
-        self.cap_related_info = match init.capabilities.text_document {
-            Some(doc_caps) => match doc_caps.publish_diagnostics {
-                Some(publish_caps) => match publish_caps.related_information {
-                    Some(value) => value,
-                    None => false,
-                },
-                None => false,
-            },
-            None => false,
-        };
+        // Extract relevant client capabilities.
+        if let Some(ref text_document) = init.capabilities.text_document {
+            if let Some(ref signature_help) = text_document.signature_help {
+                if let Some(ref signature_information) = signature_help.signature_information {
+                    if let Some(ref parameter_information) = signature_information.parameter_information {
+                        if let Some(label_offset_support) = parameter_information.label_offset_support {
+                            self.client_caps.label_offset_support = label_offset_support;
+                        }
+                    }
+                }
+            }
+
+            if let Some(ref publish_diagnostics) = text_document.publish_diagnostics {
+                if let Some(related_info) = publish_diagnostics.related_information {
+                    self.client_caps.related_info = related_info;
+                }
+            }
+        }
+        let debug = format!("{:?}", self.client_caps);
+        if let (Some(start), Some(end)) = (debug.find('{'), debug.rfind('}')) {
+            eprintln!("client capabilities: {}", &debug[start + 2..end - 1]);
+        } else {
+            eprintln!("client capabilities: {}", debug);
+        }
 
         InitializeResult {
             capabilities: ServerCapabilities {
@@ -975,16 +995,27 @@ handle_method_call! {
                     let mut label = format!("{}/{}(", ty.path, proc_name);
                     let mut sep = "";
                     for param in proc.value.last().unwrap().parameters.iter() {
-                        params.push(ParameterInformation {
-                            label: ParameterLabel::Simple(param.name.clone()),
-                            documentation: None,
-                        });
                         for each in param.var_type.type_path.iter() {
                             let _ = write!(label, "{}{}", sep, each);
                             sep = "/";
                         }
-                        let _ = write!(label, "{}{}", sep, param.name);
+                        label.push_str(sep);
+                        let start = label.len();
+                        label.push_str(&param.name);
+                        let end = label.len();
                         sep = ", ";
+
+                        if self.client_caps.label_offset_support {
+                            params.push(ParameterInformation {
+                                label: ParameterLabel::LabelOffsets([start as u64, end as u64]),
+                                documentation: None,
+                            });
+                        } else {
+                            params.push(ParameterInformation {
+                                label: ParameterLabel::Simple(param.name.clone()),
+                                documentation: None,
+                            });
+                        }
                     }
                     let _ = write!(label, ")");
 
