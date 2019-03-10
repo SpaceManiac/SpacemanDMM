@@ -168,10 +168,10 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         }
     }
 
-    fn convert_location(&self, loc: dm::Location, one: &str, two: &str, three: &str) -> Result<langserver::Location, jsonrpc::Error> {
+    fn convert_location(&self, loc: dm::Location, if_builtin: &[&str]) -> Result<langserver::Location, jsonrpc::Error> {
         Ok(langserver::Location {
             uri: if loc.file == dm::FileId::builtins() {
-                Url::parse(&format!("dm://docs/reference.dm#{}{}{}", one, two, three))
+                Url::parse(&format!("dm://docs/reference.dm#{}", if_builtin.join("")))
                     .map_err(invalid_request)?
             } else {
                 self.file_url(loc.file)?
@@ -584,7 +584,7 @@ handle_method_call! {
                     results.push(SymbolInformation {
                         name: name.to_owned(),
                         kind: SymbolKind::Constant,
-                        location: self.convert_location(range.start, "/DM", "/preprocessor/", name)?,
+                        location: self.convert_location(range.start, &["/DM/preprocessor/", name])?,
                         container_name: None,
                         deprecated: None,
                     });
@@ -597,7 +597,7 @@ handle_method_call! {
                 results.push(SymbolInformation {
                     name: ty.name.clone(),
                     kind: SymbolKind::Class,
-                    location: self.convert_location(ty.location, &ty.path, "", "")?,
+                    location: self.convert_location(ty.location, &[&ty.path])?,
                     container_name: Some(ty.path[..ty.path.len() - ty.name.len() - 1].to_owned()),
                     deprecated: None,
                 });
@@ -612,7 +612,7 @@ handle_method_call! {
                         results.push(SymbolInformation {
                             name: var_name.clone(),
                             kind: SymbolKind::Field,
-                            location: self.convert_location(decl.location, &ty.path, "/var/", var_name)?,
+                            location: self.convert_location(decl.location, &[&ty.path, "/var/", var_name])?,
                             container_name: Some(ty.path.clone()),
                             deprecated: None,
                         });
@@ -632,7 +632,7 @@ handle_method_call! {
                             } else {
                                 SymbolKind::Method
                             },
-                            location: self.convert_location(decl.location, &ty.path, "/proc/", proc_name)?,
+                            location: self.convert_location(decl.location, &[&ty.path, "/proc/", proc_name])?,
                             container_name: Some(ty.path.clone()),
                             deprecated: None,
                         });
@@ -796,18 +796,18 @@ handle_method_call! {
         match_annotation! { iter;
         Annotation::TreePath(absolute, parts) => {
             if let Some(ty) = self.objtree.type_by_path(completion::combine_tree_path(&iter, *absolute, parts)) {
-                results.push(self.convert_location(ty.location, &ty.path, "", "")?);
+                results.push(self.convert_location(ty.location, &[&ty.path])?);
             }
         },
         Annotation::TypePath(parts) => {
             match self.follow_type_path(&iter, parts) {
                 // '/datum/proc/foo'
                 Some(completion::TypePathResult { ty, decl: _, proc: Some((proc_name, proc)) }) => {
-                    results.push(self.convert_location(proc.location, &ty.path, "/proc/", proc_name)?);
+                    results.push(self.convert_location(proc.location, &[&ty.path, "/proc/", proc_name])?);
                 },
                 // 'datum/bar'
                 Some(completion::TypePathResult { ty, decl: None, proc: None }) => {
-                    results.push(self.convert_location(ty.location, &ty.path, "", "")?);
+                    results.push(self.convert_location(ty.location, &[&ty.path])?);
                 },
                 _ => {}
             }
@@ -817,7 +817,7 @@ handle_method_call! {
             let mut next = ty.or(Some(self.objtree.root()));
             while let Some(ty) = next {
                 if let Some(proc) = ty.procs.get(proc_name) {
-                    results.push(self.convert_location(proc.value.last().unwrap().location, &ty.path, "/proc/", proc_name)?);
+                    results.push(self.convert_location(proc.value.last().unwrap().location, &[&ty.path, "/proc/", proc_name])?);
                     break;
                 }
                 next = ty.parent_type();
@@ -827,13 +827,13 @@ handle_method_call! {
             let (ty, proc_name) = self.find_type_context(&iter);
             match self.find_unscoped_var(&iter, ty, proc_name, var_name) {
                 UnscopedVar::Parameter { ty, proc, param } => {
-                    results.push(self.convert_location(param.location, &ty.path, "/proc/", proc)?);
+                    results.push(self.convert_location(param.location, &[&ty.path, "/proc/", proc])?);
                 },
                 UnscopedVar::Variable { ty, var } => {
-                    results.push(self.convert_location(var.value.location, &ty.path, "/var/", var_name)?);
+                    results.push(self.convert_location(var.value.location, &[&ty.path, "/var/", var_name])?);
                 },
                 UnscopedVar::Local { loc, .. } => {
-                    results.push(self.convert_location(dm::Location { file: real_file_id, ..loc }, "", "", "")?);
+                    results.push(self.convert_location(dm::Location { file: real_file_id, ..loc }, &[])?);
                 },
                 UnscopedVar::None => {}
             }
@@ -842,7 +842,7 @@ handle_method_call! {
             let mut next = self.find_scoped_type(&iter, priors);
             while let Some(ty) = next {
                 if let Some(proc) = ty.procs.get(proc_name) {
-                    results.push(self.convert_location(proc.value.last().unwrap().location, &ty.path, "/proc/", proc_name)?);
+                    results.push(self.convert_location(proc.value.last().unwrap().location, &[&ty.path, "/proc/", proc_name])?);
                     break;
                 }
                 next = ignore_root(ty.parent_type());
@@ -852,7 +852,7 @@ handle_method_call! {
             let mut next = self.find_scoped_type(&iter, priors);
             while let Some(ty) = next {
                 if let Some(var) = ty.vars.get(var_name) {
-                    results.push(self.convert_location(var.value.location, &ty.path, "/var/", var_name)?);
+                    results.push(self.convert_location(var.value.location, &[&ty.path, "/var/", var_name])?);
                     break;
                 }
                 next = ignore_root(ty.parent_type());
@@ -869,7 +869,7 @@ handle_method_call! {
                     let mut next = ty.parent_type();
                     while let Some(ty) = next {
                         if let Some(proc) = ty.procs.get(proc_name) {
-                            results.push(self.convert_location(proc.value.last().unwrap().location, &ty.path, "/proc/", proc_name)?);
+                            results.push(self.convert_location(proc.value.last().unwrap().location, &[&ty.path, "/proc/", proc_name])?);
                             break;
                         }
                         next = ty.parent_type();
@@ -877,13 +877,13 @@ handle_method_call! {
                 } else if let Some(proc) = ty.procs.get(proc_name) {
                     // override, go to the previous version of the proc
                     if let Some(parent) = proc.value.get(idx - 1) {
-                        results.push(self.convert_location(parent.location, &ty.path, "/proc/", proc_name)?);
+                        results.push(self.convert_location(parent.location, &[&ty.path, "/proc/", proc_name])?);
                     }
                 }
             }
         },
         Annotation::MacroUse(name, location) => {
-            results.push(self.convert_location(*location, "/DM", "/preprocessor/", name)?);
+            results.push(self.convert_location(*location, &["/DM/preprocessor/", name])?);
         },
         }
 
@@ -942,7 +942,7 @@ handle_method_call! {
         if type_path.is_empty() {
             None
         } else if let Some(ty) = self.objtree.type_by_path(type_path) {
-            let ty_loc = self.convert_location(ty.location, &ty.path, "", "")?;
+            let ty_loc = self.convert_location(ty.location, &[&ty.path])?;
             Some(GotoDefinitionResponse::Scalar(ty_loc))
         } else {
             None
