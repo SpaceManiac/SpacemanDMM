@@ -193,7 +193,6 @@ struct ProcAnalyzer<'o> {
     ty: TypeRef<'o>,
     proc_ref: ProcRef<'o>,
     local_vars: HashMap<String, Analysis<'o>>,
-    messages: Vec<String>,
 }
 
 impl<'o> ProcAnalyzer<'o> {
@@ -220,30 +219,15 @@ impl<'o> ProcAnalyzer<'o> {
             ty,
             proc_ref,
             local_vars,
-            messages: Vec::new(),
         }
     }
 
     fn run(&mut self, block: &'o [Spanned<Statement>]) {
         for param in self.proc_ref.get().parameters.iter() {
-            let analysis = self.static_type(&param.var_type.type_path);
+            let analysis = self.static_type(param.location, &param.var_type.type_path);
             self.local_vars.insert(param.name.to_owned(), analysis);
         }
         self.visit_block(block);
-
-        // TODO: maybe actually have span information on AST elements, so that
-        // the locations here can be more precise.
-        let mut error = DMError::new(self.proc_ref.location, format!("problems in {}", self.proc_ref));
-        for message in self.messages.drain(..) {
-            error.add_note(self.proc_ref.location, message);
-        }
-        if !error.notes().is_empty() {
-            error.register(self.context);
-        }
-    }
-
-    fn error<S: Into<String>>(&mut self, message: S) {
-        self.messages.push(message.into())
     }
 
     fn visit_block(&mut self, block: &'o [Spanned<Statement>]) {
@@ -365,7 +349,8 @@ impl<'o> ProcAnalyzer<'o> {
         } else {
             type_hint = self.objtree.type_by_path(&var_type.type_path);
             if type_hint.is_none() {
-                self.error(format!("undefined type: {}", FormatTreePath(&var_type.type_path)));
+                DMError::new(location, format!("undefined type: {}", FormatTreePath(&var_type.type_path)))
+                    .register(self.context);
             }
         };
 
@@ -433,7 +418,8 @@ impl<'o> ProcAnalyzer<'o> {
                     NewType::Implicit => if let Some(hint) = type_hint {
                         Some(hint)
                     } else {
-                        self.error("no type hint available on implicit new()");
+                        DMError::new(location, "no type hint available on implicit new()")
+                            .register(self.context);
                         None
                     },
                     NewType::Prefab(prefab) => {
@@ -441,7 +427,8 @@ impl<'o> ProcAnalyzer<'o> {
                             // TODO: handle proc/verb paths here
                             Some(nav.ty())
                         } else {
-                            self.error(format!("failed to resolve path {}", FormatTypePath(&prefab.path)));
+                            DMError::new(location, format!("failed to resolve path {}", FormatTypePath(&prefab.path)))
+                                .register(self.context);
                             None
                         }
                     },
@@ -469,7 +456,8 @@ impl<'o> ProcAnalyzer<'o> {
                     // TODO: handle proc/verb paths here
                     Type::Typepath(nav.ty()).into()
                 } else {
-                    self.error(format!("failed to resolve path {}", FormatTypePath(&prefab.path)));
+                    DMError::new(location, format!("failed to resolve path {}", FormatTypePath(&prefab.path)))
+                        .register(self.context);
                     Analysis::empty()
                 }
             },
@@ -484,8 +472,8 @@ impl<'o> ProcAnalyzer<'o> {
                 if let Some(proc) = self.ty.get_proc(unscoped_name) {
                     self.visit_call(location, src, proc, args, false)
                 } else {
-                    let msg = format!("undefined proc: {:?} on {}", unscoped_name, self.ty);
-                    self.error(msg);
+                    DMError::new(location, format!("undefined proc: {:?} on {}", unscoped_name, self.ty))
+                        .register(self.context);
                     Analysis::empty()
                 }
             },
@@ -494,9 +482,10 @@ impl<'o> ProcAnalyzer<'o> {
                     return var.clone()
                 }
                 if let Some(decl) = self.ty.get_var_declaration(unscoped_name) {
-                    self.static_type(&decl.var_type.type_path)
+                    self.static_type(location, &decl.var_type.type_path)
                 } else {
-                    self.error(format!("undefined var: {:?}", unscoped_name));
+                    DMError::new(location, format!("undefined var: {:?}", unscoped_name))
+                        .register(self.context);
                     Analysis::empty()
                 }
             },
@@ -507,8 +496,8 @@ impl<'o> ProcAnalyzer<'o> {
                     // Parent calls are exact, and won't ever call an override.
                     self.visit_call(location, src, proc, args, true)
                 } else {
-                    let msg = format!("proc has no parent: {:?}", self.proc_ref);
-                    self.error(msg);
+                    DMError::new(location, format!("proc has no parent: {:?}", self.proc_ref))
+                        .register(self.context);
                     Analysis::empty()
                 }
             },
@@ -599,13 +588,15 @@ impl<'o> ProcAnalyzer<'o> {
             Follow::Field(kind, name) => {
                 if let Some(ty) = lhs.static_ty {
                     if let Some(decl) = ty.get_var_declaration(name) {
-                        self.static_type(&decl.var_type.type_path)
+                        self.static_type(location, &decl.var_type.type_path)
                     } else {
-                        self.error(format!("undefined field: {:?} on {}", name, ty));
+                        DMError::new(location, format!("undefined field: {:?} on {}", name, ty))
+                            .register(self.context);
                         Analysis::empty()
                     }
                 } else {
-                    self.error(format!("field access requires static type: {:?}", name));
+                    DMError::new(location, format!("field access requires static type: {:?}", name))
+                        .register(self.context);
                     Analysis::empty()
                 }
             },
@@ -614,11 +605,13 @@ impl<'o> ProcAnalyzer<'o> {
                     if let Some(proc) = ty.get_proc(name) {
                         self.visit_call(location, ty, proc, arguments, false)
                     } else {
-                        self.error(format!("undefined proc: {:?} on {}", name, ty));
+                        DMError::new(location, format!("undefined proc: {:?} on {}", name, ty))
+                            .register(self.context);
                         Analysis::empty()
                     }
                 } else {
-                    self.error(format!("proc call require static type: {:?} on {:?}", name, lhs));
+                    DMError::new(location, format!("proc call require static type: {:?} on {:?}", name, lhs))
+                        .register(self.context);
                     Analysis::empty()
                 }
             },
@@ -666,7 +659,7 @@ impl<'o> ProcAnalyzer<'o> {
                         // Check that that kwarg actually exists.
                         if !proc.parameters.iter().any(|p| p.name == *name) {
                             // Search for a child proc that does have this keyword argument.
-                            let mut error = DMError::new(self.proc_ref.location,
+                            let mut error = DMError::new(location,
                                 format!("bad keyword argument {:?} to {}", name, proc));
                             proc.recurse_children(&mut |child_proc| {
                                 if child_proc.ty() == proc.ty() { return }
@@ -691,7 +684,7 @@ impl<'o> ProcAnalyzer<'o> {
                                 .entry(name.clone())
                                 .and_modify(|ca| ca.others += 1)
                                 .or_insert(CalledAt {
-                                    location: self.proc_ref.location,
+                                    location: location,
                                     others: 0,
                                 });
                         }
@@ -702,7 +695,8 @@ impl<'o> ProcAnalyzer<'o> {
 
             if any_kwargs_yet && !this_kwarg && !(proc.ty().is_root() && proc.name() == "animate") {
                 // TODO: don't hardcode the animate() exception
-                self.error(format!("proc called with non-kwargs after kwargs: {}()", proc.name()));
+                DMError::new(location, format!("proc called with non-kwargs after kwargs: {}()", proc.name()))
+                    .register(self.context);
             }
 
             self.visit_expression(location, argument_value, None);
@@ -711,7 +705,7 @@ impl<'o> ProcAnalyzer<'o> {
         Analysis::empty()
     }
 
-    fn static_type(&mut self, of: &Vec<String>) -> Analysis<'o> {
+    fn static_type(&mut self, location: Location, of: &Vec<String>) -> Analysis<'o> {
         if of.is_empty() {
             Analysis::empty()
         } else if of[0] == "list" {
@@ -721,7 +715,8 @@ impl<'o> ProcAnalyzer<'o> {
         } else if let Some(ty) = self.objtree.type_by_path(of) {
             Analysis::from_static_type(ty)
         } else {
-            self.error(format!("undefined type: {}", FormatTreePath(of)));
+            DMError::new(location, format!("undefined type: {}", FormatTreePath(of)))
+                .register(self.context);
             Analysis::empty()
         }
     }
