@@ -543,6 +543,7 @@ handle_method_call! {
                 workspace_symbol_provider: Some(true),
                 hover_provider: Some(true),
                 document_symbol_provider: Some(true),
+                type_definition_provider: Some(TypeDefinitionProviderCapability::Simple(true)),
                 text_document_sync: Some(TextDocumentSyncCapability::Options(TextDocumentSyncOptions {
                     open_close: Some(true),
                     change: Some(TextDocumentSyncKind::Incremental),
@@ -890,6 +891,61 @@ handle_method_call! {
             None
         } else {
             Some(GotoDefinitionResponse::Array(results))
+        }
+    }
+
+    on GotoTypeDefinition(&mut self, params) {
+        // Like GotoDefinition, but only supports vars, then finds their types
+        let path = url_to_path(params.text_document.uri)?;
+        let (_, file_id, annotations) = self.get_annotations(&path)?;
+        let location = dm::Location {
+            file: file_id,
+            line: params.position.line as u32 + 1,
+            column: params.position.character as u16 + 1,
+        };
+
+        let mut type_path: &[String] = &[];
+
+        let iter = annotations.get_location(location);
+        match_annotation! { iter;
+        Annotation::UnscopedVar(var_name) => {
+            let (ty, proc_name) = self.find_type_context(&iter);
+            match self.find_unscoped_var(&iter, ty, proc_name, var_name) {
+                UnscopedVar::Parameter { param, .. } => {
+                    type_path = &param.var_type.type_path;
+                },
+                UnscopedVar::Variable { ty, .. } => {
+                    if let Some(decl) = ty.get_var_declaration(var_name) {
+                        type_path = &decl.var_type.type_path;
+                    }
+                },
+                UnscopedVar::Local { var_type, .. } => {
+                    type_path = &var_type.type_path;
+                },
+                UnscopedVar::None => {}
+            }
+        },
+        Annotation::ScopedVar(priors, var_name) => {
+            let mut next = self.find_scoped_type(&iter, priors);
+            while let Some(ty) = next {
+                if let Some(var) = ty.get().vars.get(var_name) {
+                    if let Some(ref decl) = var.declaration {
+                        type_path = &decl.var_type.type_path;
+                        break;
+                    }
+                }
+                next = ignore_root(ty.parent_type());
+            }
+        },
+        }
+
+        if type_path.is_empty() {
+            None
+        } else if let Some(ty) = self.objtree.type_by_path(type_path) {
+            let ty_loc = self.convert_location(ty.location, &ty.path, "", "")?;
+            Some(GotoDefinitionResponse::Scalar(ty_loc))
+        } else {
+            None
         }
     }
 
