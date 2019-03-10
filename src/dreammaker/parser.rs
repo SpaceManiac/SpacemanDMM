@@ -1026,7 +1026,7 @@ where
     }
 
     /// Parse a block
-    fn block(&mut self, loop_ctx: &LoopContext) -> Status<Vec<Statement>> {
+    fn block(&mut self, loop_ctx: &LoopContext) -> Status<Block> {
         let mut vars = Vec::new();
         let result = if let Some(()) = self.exact(Token::Punct(Punctuation::LBrace))? {
             let mut statements = Vec::new();
@@ -1054,7 +1054,10 @@ where
         success(result)
     }
 
-    fn statement(&mut self, loop_ctx: &LoopContext, vars: &mut Vec<(Location, VarType, String)>) -> Status<Statement> {
+    fn statement(&mut self, loop_ctx: &LoopContext, vars: &mut Vec<(Location, VarType, String)>) -> Status<Spanned<Statement>> {
+        let start = self.location();
+        let spanned = |v| success(Spanned::new(start, v));
+
         // BLOCK STATEMENTS
         if let Some(()) = self.exact_ident("if")? {
             // statement :: 'if' '(' expression ')' block ('else' 'if' '(' expression ')' block)* ('else' block)?
@@ -1080,14 +1083,14 @@ where
                 self.skip_phantom_semicolons()?;
             }
 
-            success(Statement::If { arms, else_arm })
+            spanned(Statement::If { arms, else_arm })
         } else if let Some(()) = self.exact_ident("while")? {
             // statement :: 'while' '(' expression ')' block
             require!(self.exact(Token::Punct(Punctuation::LParen)));
             let condition = require!(self.expression());
             require!(self.exact(Token::Punct(Punctuation::RParen)));
             let block = require!(self.block(&LoopContext::While));
-            success(Statement::While { condition, block })
+            spanned(Statement::While { condition, block })
         } else if let Some(()) = self.exact_ident("do")? {
             // statement :: 'do' block 'while' '(' expression ')' ';'
             let block = require!(self.block(&LoopContext::DoWhile));
@@ -1097,7 +1100,7 @@ where
             let condition = require!(self.expression());
             require!(self.exact(Token::Punct(Punctuation::RParen)));
             require!(self.statement_terminator());
-            success(Statement::DoWhile { block, condition })
+            spanned(Statement::DoWhile { block, condition })
         } else if let Some(()) = self.exact_ident("for")? {
             // for (Var [as Type] [in List]) Statement
             // for (Init, Test, Inc) Statement
@@ -1113,7 +1116,7 @@ where
                     None => None,
                 };
                 require!(self.exact(Token::Punct(Punctuation::RParen)));
-                success(Statement::ForLoop {
+                spanned(Statement::ForLoop {
                     init: init.map(Box::new),
                     test,
                     inc: inc.map(Box::new),
@@ -1131,7 +1134,7 @@ where
                         // for(var/a = 1 to
                         require!(self.exact_ident("to"));
                         let rhs = require!(self.expression());
-                        return success(require!(self.for_range(Some(var_type), name, value, rhs)));
+                        return spanned(require!(self.for_range(Some(var_type), name, value, rhs)));
                     }
                     Statement::Expr(Expression::AssignOp {
                         op: AssignOp::Assign,
@@ -1145,7 +1148,7 @@ where
                         };
                         require!(self.exact_ident("to"));
                         let to_rhs = require!(self.expression());
-                        return success(require!(self.for_range(None, name, *rhs, to_rhs)));
+                        return spanned(require!(self.for_range(None, name, *rhs, to_rhs)));
                     }
                     Statement::Var(VarStatement {
                         var_type,
@@ -1168,12 +1171,12 @@ where
                         //   let (b, c) = *a;
                         match {*rhs} {
                             Expression::BinaryOp { op: BinaryOp::To, lhs, rhs } => {
-                                return success(require!(self.for_range(None, name, *lhs, *rhs)));
+                                return spanned(require!(self.for_range(None, name, *lhs, *rhs)));
                             },
                             rhs => {
                                 // I love code duplication, don't you?
                                 require!(self.exact(Token::Punct(Punctuation::RParen)));
-                                return success(Statement::ForList {
+                                return spanned(Statement::ForList {
                                     var_type: None,
                                     name,
                                     input_type: InputType::default(),
@@ -1201,7 +1204,7 @@ where
                     let value = require!(self.expression());
                     if let Some(()) = self.exact_ident("to")? {
                         let rhs = require!(self.expression());
-                        return success(require!(self.for_range(var_type, name, value, rhs)));
+                        return spanned(require!(self.for_range(var_type, name, value, rhs)));
                     }
                     Some(value)
                 } else {
@@ -1209,7 +1212,7 @@ where
                 };
 
                 require!(self.exact(Token::Punct(Punctuation::RParen)));
-                success(Statement::ForList {
+                spanned(Statement::ForList {
                     var_type,
                     name,
                     input_type,
@@ -1227,7 +1230,7 @@ where
             } else {
                 expr = None;
             }
-            success(Statement::Spawn {
+            spanned(Statement::Spawn {
                 delay: expr,
                 block: require!(self.block(&LoopContext::None))
             })
@@ -1252,7 +1255,7 @@ where
                 None
             };
             require!(self.exact(Token::Punct(Punctuation::RBrace)));
-            success(Statement::Switch { input: expr, cases, default })
+            spanned(Statement::Switch { input: expr, cases, default })
         } else if let Some(()) = self.exact_ident("try")? {
             let try_block = require!(self.block(loop_ctx));
             self.skip_phantom_semicolons()?;
@@ -1267,7 +1270,7 @@ where
                 catch_params = Vec::new();
             }
             let catch_block = require!(self.block(loop_ctx));
-            success(Statement::TryCatch {
+            spanned(Statement::TryCatch {
                 try_block,
                 catch_params,
                 catch_block,
@@ -1285,19 +1288,19 @@ where
             let value = require!(self.expression());
             require!(self.statement_terminator());
             // TODO: warn on weird values for these
-            success(Statement::Setting { name, mode, value })
+            spanned(Statement::Setting { name, mode, value })
         } else if let Some(()) = self.exact_ident("break")? {
             let label = self.ident()?;
             require!(self.statement_terminator());
-            success(Statement::Break(label))
+            spanned(Statement::Break(label))
         } else if let Some(()) = self.exact_ident("continue")? {
             let label = self.ident()?;
             require!(self.statement_terminator());
-            success(Statement::Continue(label))
+            spanned(Statement::Continue(label))
         } else if let Some(()) = self.exact_ident("del")? {
             let expr = require!(self.expression());
             require!(self.statement_terminator());
-            success(Statement::Del(expr))
+            spanned(Statement::Del(expr))
         } else {
             let result = leading!(self.simple_statement(false, vars));
 
@@ -1306,7 +1309,7 @@ where
                 if let Some(Term::Ident(ref name)) = expr.as_term() {
                     if let Some(()) = self.exact(Token::Punct(Punctuation::Colon))? {
                         // it's a label! check for a block
-                        return success(Statement::Label {
+                        return spanned(Statement::Label {
                             name: name.to_owned(),
                             block: require!(self.block(loop_ctx)),
                         });
@@ -1315,7 +1318,7 @@ where
             }
 
             require!(self.statement_terminator());
-            success(result)
+            spanned(result)
         }
     }
 

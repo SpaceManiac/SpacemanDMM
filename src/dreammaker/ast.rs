@@ -8,6 +8,19 @@ use linked_hash_map::LinkedHashMap;
 
 use error::Location;
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub struct Spanned<T> {
+    // TODO: add a Span type and use it here
+    pub location: Location,
+    pub elem: T,
+}
+
+impl<T> Spanned<T> {
+    pub fn new(location: Location, elem: T) -> Spanned<T> {
+        Spanned { location, elem }
+    }
+}
+
 /// The unary operators, both prefix and postfix.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum UnaryOp {
@@ -725,6 +738,9 @@ impl VarSuffix {
     }
 }
 
+/// A block of statements.
+pub type Block = Vec<Spanned<Statement>>;
+
 /// A statement in a proc body.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
@@ -733,21 +749,21 @@ pub enum Statement {
     Throw(Expression),
     While {
         condition: Expression,
-        block: Vec<Statement>,
+        block: Block,
     },
     DoWhile {
-        block: Vec<Statement>,
+        block: Block,
         condition: Expression,
     },
     If {
-        arms: Vec<(Expression, Vec<Statement>)>,
-        else_arm: Option<Vec<Statement>>
+        arms: Vec<(Expression, Block)>,
+        else_arm: Option<Block>
     },
     ForLoop {
         init: Option<Box<Statement>>,
         test: Option<Expression>,
         inc: Option<Box<Statement>>,
-        block: Vec<Statement>,
+        block: Block,
     },
     ForList {
         var_type: Option<VarType>,
@@ -756,7 +772,7 @@ pub enum Statement {
         input_type: InputType,
         /// Defaults to 'world'.
         in_list: Option<Expression>,
-        block: Vec<Statement>,
+        block: Block,
     },
     ForRange {
         var_type: Option<VarType>,
@@ -764,7 +780,7 @@ pub enum Statement {
         start: Expression,
         end: Expression,
         step: Option<Expression>,
-        block: Vec<Statement>,
+        block: Block,
     },
     Var(VarStatement),
     Vars(Vec<VarStatement>),
@@ -775,23 +791,23 @@ pub enum Statement {
     },
     Spawn {
         delay: Option<Expression>,
-        block: Vec<Statement>,
+        block: Block,
     },
     Switch {
         input: Expression,
-        cases: Vec<(Vec<Case>, Vec<Statement>)>,
-        default: Option<Vec<Statement>>,
+        cases: Vec<(Vec<Case>, Block)>,
+        default: Option<Block>,
     },
     TryCatch {
-        try_block: Vec<Statement>,
+        try_block: Block,
         catch_params: Vec<TreePath>,
-        catch_block: Vec<Statement>,
+        catch_block: Block,
     },
     Continue(Option<String>),
     Break(Option<String>),
     Label {
         name: String,
-        block: Vec<Statement>,
+        block: Block,
     },
     Del(Expression),
 }

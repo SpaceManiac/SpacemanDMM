@@ -9,7 +9,7 @@ use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 use linked_hash_map::LinkedHashMap;
 
-use super::ast::{Expression, VarType, VarSuffix, PathOp, Parameter, Statement, ProcDeclKind};
+use super::ast::{Expression, VarType, VarSuffix, PathOp, Parameter, Block, ProcDeclKind};
 use super::constants::{Constant, Pop};
 use super::docs::DocCollection;
 use super::{DMError, Location, Context};
@@ -58,7 +58,7 @@ pub struct ProcValue {
 
 #[derive(Debug, Clone)]
 pub enum Code {
-    Present(Vec<Statement>),
+    Present(Block),
     Invalid(DMError),
     Builtin,
     Disabled,

@@ -224,7 +224,7 @@ impl<'o> ProcAnalyzer<'o> {
         }
     }
 
-    fn run(&mut self, block: &'o [Statement]) {
+    fn run(&mut self, block: &'o [Spanned<Statement>]) {
         for param in self.proc_ref.get().parameters.iter() {
             let analysis = self.static_type(&param.var_type.type_path);
             self.local_vars.insert(param.name.to_owned(), analysis);
@@ -246,9 +246,9 @@ impl<'o> ProcAnalyzer<'o> {
         self.messages.push(message.into())
     }
 
-    fn visit_block(&mut self, block: &'o [Statement]) {
+    fn visit_block(&mut self, block: &'o [Spanned<Statement>]) {
         for stmt in block.iter() {
-            self.visit_statement(stmt);
+            self.visit_statement(&stmt.elem);
         }
     }
 
