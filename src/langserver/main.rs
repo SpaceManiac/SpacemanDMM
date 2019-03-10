@@ -542,6 +542,7 @@ handle_method_call! {
                 definition_provider: Some(true),
                 workspace_symbol_provider: Some(true),
                 hover_provider: Some(true),
+                document_symbol_provider: Some(true),
                 text_document_sync: Some(TextDocumentSyncCapability::Options(TextDocumentSyncOptions {
                     open_close: Some(true),
                     change: Some(TextDocumentSyncKind::Incremental),
@@ -1041,6 +1042,109 @@ handle_method_call! {
 
         result
     }
+
+    on DocumentSymbolRequest(&mut self, params) {
+        fn name_and_detail(path: &[String]) -> (String, Option<String>) {
+            let (name, rest) = path.split_last().unwrap();
+            (name.to_owned(), rest.last().map(ToOwned::to_owned))
+        }
+
+        // recursive traversal
+        fn find_document_symbols(
+            iter: &mut std::iter::Peekable<dm::annotation::Iter>,
+            section_end: dm::Location,
+        ) -> Vec<DocumentSymbol> {
+            let mut result = Vec::new();
+
+            loop {
+                if let Some((range, _)) = iter.peek() {
+                    if range.start >= section_end {
+                        break;
+                    }
+                }
+
+                let (child_range, annotation) = if let Some(x) = iter.next() {
+                    x
+                } else {
+                    break;
+                };
+
+                let interval_tree::RangeInclusive { start, end } = child_range;
+                let range = span_to_range(start..end);
+                let selection_range = location_to_range(start);
+                match annotation {
+                    Annotation::TreeBlock(ref path) => {
+                        let (name, detail) = name_and_detail(path);
+                        result.push(DocumentSymbol {
+                            name,
+                            detail,
+                            kind: SymbolKind::Class,
+                            deprecated: None,
+                            range,
+                            selection_range,
+                            children: Some(find_document_symbols(iter, end)),
+                        });
+                    },
+                    Annotation::Variable(ref path) => {
+                        result.push(DocumentSymbol {
+                            name: path.last().unwrap().to_owned(),
+                            detail: None,
+                            kind: SymbolKind::Field,
+                            deprecated: None,
+                            range,
+                            selection_range,
+                            children: None,
+                        });
+                    },
+                    Annotation::ProcBody(ref path, _) => {
+                        let (name, detail) = name_and_detail(path);
+                        let kind = if path.len() == 1 || (path.len() == 2 && path[0] == "proc") {
+                            SymbolKind::Function
+                        } else if is_constructor_name(&name) {
+                            SymbolKind::Constructor
+                        } else {
+                            SymbolKind::Method
+                        };
+                        result.push(DocumentSymbol {
+                            name,
+                            detail,
+                            kind,
+                            deprecated: None,
+                            range,
+                            selection_range,
+                            children: Some(find_document_symbols(iter, end)),
+                        });
+                    },
+                    Annotation::LocalVarScope(_, ref name) => {
+                        result.push(DocumentSymbol {
+                            name: name.to_owned(),
+                            detail: None,
+                            kind: SymbolKind::Variable,
+                            deprecated: None,
+                            range,
+                            selection_range,
+                            children: None,
+                        });
+                    },
+                    _ => {}
+                }
+            }
+
+            result
+        }
+
+        // root
+        let path = url_to_path(params.text_document.uri)?;
+        let (_, file_id, annotations) = self.get_annotations(&path)?;
+        if annotations.is_empty() {
+            None
+        } else {
+            let start = dm::Location { file: file_id, line: 0, column: 0 };
+            let end = dm::Location { file: file_id, line: !0, column: !0 };
+            let mut iter = annotations.get_range(start..end).peekable();
+            Some(DocumentSymbolResponse::Nested(find_document_symbols(&mut iter, end)))
+        }
+    }
 }
 
 handle_notification! {
@@ -1169,4 +1273,8 @@ fn location_to_position(loc: dm::Location) -> langserver::Position  {
 fn location_to_range(loc: dm::Location) -> langserver::Range {
     let pos = location_to_position(loc);
     langserver::Range::new(pos, pos)
+}
+
+fn span_to_range(range: ::std::ops::Range<dm::Location>) -> langserver::Range {
+    langserver::Range::new(location_to_position(range.start), location_to_position(range.end))
 }
