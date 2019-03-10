@@ -495,7 +495,7 @@ impl<'ctx> Preprocessor<'ctx> {
         if let Some(annotations) = self.annotations.as_mut() {
             annotations.insert(
                 self.last_input_loc .. self.last_input_loc.add_columns(ident.len() as u16),
-                Annotation::Macro(ident.to_owned(), def_loc));
+                Annotation::MacroUse(ident.to_owned(), def_loc));
         }
     }
 
@@ -773,7 +773,11 @@ impl<'ctx> Preprocessor<'ctx> {
 
                         expect_token!((define_name, ws) = Token::Ident(define_name, ws));
                         let define_name_loc = _last_expected_loc;
-                        self.annotate_macro(&define_name, define_name_loc);
+                        if let Some(annotations) = self.annotations.as_mut() {
+                            annotations.insert(
+                                define_name_loc .. define_name_loc.add_columns(define_name.len() as u16),
+                                Annotation::MacroDefinition(define_name.to_owned()));
+                        }
                         self.check_danger_ident(&define_name, "defined");
                         let mut params = Vec::new();
                         let mut subst = Vec::new();

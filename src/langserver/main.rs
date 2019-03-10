@@ -881,7 +881,7 @@ handle_method_call! {
                 }
             }
         },
-        Annotation::Macro(name, location) => {
+        Annotation::MacroUse(name, location) => {
             results.push(self.convert_location(*location, "/DM", "/preprocessor/", name)?);
         },
         }
@@ -1125,6 +1125,17 @@ handle_method_call! {
                             selection_range,
                             children: None,
                         });
+                    },
+                    Annotation::MacroDefinition(ref name) => {
+                        result.push(DocumentSymbol {
+                            name: name.to_owned(),
+                            detail: None,
+                            kind: SymbolKind::Constant,
+                            deprecated: None,
+                            range,
+                            selection_range,
+                            children: None,
+                        })
                     },
                     _ => {}
                 }

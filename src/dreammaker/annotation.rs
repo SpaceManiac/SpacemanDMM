@@ -28,7 +28,8 @@ pub enum Annotation {
     InSequence(usize),  // where in TreePath or TypePath is this ident
 
     // a macro is called here, which is defined at this location
-    Macro(String, Location),
+    MacroDefinition(String),
+    MacroUse(String, Location),
 
     // error annotations, mostly for autocompletion
     ScopedMissingIdent(Vec<String>),  // when a . is followed by a non-ident
