@@ -248,32 +248,32 @@ impl<'o> ProcAnalyzer<'o> {
 
     fn visit_block(&mut self, block: &'o [Spanned<Statement>]) {
         for stmt in block.iter() {
-            self.visit_statement(&stmt.elem);
+            self.visit_statement(stmt.location, &stmt.elem);
         }
     }
 
-    fn visit_statement(&mut self, statement: &'o Statement) {
+    fn visit_statement(&mut self, location: Location, statement: &'o Statement) {
         match statement {
-            Statement::Expr(expr) => { self.visit_expression(expr, None); },
+            Statement::Expr(expr) => { self.visit_expression(location, expr, None); },
             Statement::Return(Some(expr)) => {
                 // TODO: factor in the previous return type if there was one
-                let return_type = self.visit_expression(expr, None);
+                let return_type = self.visit_expression(location, expr, None);
                 self.local_vars.insert(".".to_owned(), return_type);
                 // TODO: break out of the analysis for this branch?
             },
             Statement::Return(None) => {},
-            Statement::Throw(expr) => { self.visit_expression(expr, None); },
+            Statement::Throw(expr) => { self.visit_expression(location, expr, None); },
             Statement::While { condition, block } => {
-                self.visit_expression(condition, None);
+                self.visit_expression(location, condition, None);
                 self.visit_block(block);
             },
             Statement::DoWhile { block, condition } => {
                 self.visit_block(block);
-                self.visit_expression(condition, None);
+                self.visit_expression(location, condition, None);
             },
             Statement::If { arms, else_arm } => {
                 for &(ref condition, ref block) in arms.iter() {
-                    self.visit_expression(condition, None);
+                    self.visit_expression(location, condition, None);
                     self.visit_block(block);
                 }
                 if let Some(else_arm) = else_arm {
@@ -282,57 +282,57 @@ impl<'o> ProcAnalyzer<'o> {
             },
             Statement::ForLoop { init, test, inc, block } => {
                 if let Some(init) = init {
-                    self.visit_statement(init);
+                    self.visit_statement(location, init);
                 }
                 if let Some(test) = test {
-                    self.visit_expression(test, None);
+                    self.visit_expression(location, test, None);
                 }
                 if let Some(inc) = inc {
-                    self.visit_statement(inc);
+                    self.visit_statement(location, inc);
                 }
                 self.visit_block(block);
             },
             Statement::ForList { in_list, block, var_type, name, .. } => {
                 if let Some(in_list) = in_list {
-                    self.visit_expression(in_list, None);
+                    self.visit_expression(location, in_list, None);
                 }
                 if let Some(var_type) = var_type {
-                    self.visit_var(var_type, name, None);
+                    self.visit_var(location, var_type, name, None);
                 }
                 self.visit_block(block);
             },
             Statement::ForRange { var_type, name, start, end, step, block } => {
-                self.visit_expression(end, None);
+                self.visit_expression(location, end, None);
                 if let Some(step) = step {
-                    self.visit_expression(step, None);
+                    self.visit_expression(location, step, None);
                 }
                 if let Some(var_type) = var_type {
-                    self.visit_var(var_type, name, Some(start));
+                    self.visit_var(location, var_type, name, Some(start));
                 }
                 self.visit_block(block);
             },
-            Statement::Var(var) => self.visit_var_stmt(var),
+            Statement::Var(var) => self.visit_var_stmt(location, var),
             Statement::Vars(vars) => {
                 for each in vars.iter() {
-                    self.visit_var_stmt(each);
+                    self.visit_var_stmt(location, each);
                 }
             },
             Statement::Setting { .. } => {},
             Statement::Spawn { delay, block } => {
                 if let Some(delay) = delay {
-                    self.visit_expression(delay, None);
+                    self.visit_expression(location, delay, None);
                 }
                 self.visit_block(block);
             },
             Statement::Switch { input, cases, default } => {
-                self.visit_expression(input, None);
+                self.visit_expression(location, input, None);
                 for &(ref case, ref block) in cases.iter() {
                     for case_part in case.iter() {
                         match case_part {
-                            dm::ast::Case::Exact(expr) => { self.visit_expression(expr, None); },
+                            dm::ast::Case::Exact(expr) => { self.visit_expression(location, expr, None); },
                             dm::ast::Case::Range(start, end) => {
-                                self.visit_expression(start, None);
-                                self.visit_expression(end, None);
+                                self.visit_expression(location, start, None);
+                                self.visit_expression(location, end, None);
                             }
                         }
                     }
@@ -349,15 +349,15 @@ impl<'o> ProcAnalyzer<'o> {
             Statement::Continue(_) => {},
             Statement::Break(_) => {},
             Statement::Label { name: _, block } => self.visit_block(block),
-            Statement::Del(expr) => { self.visit_expression(expr, None); },
+            Statement::Del(expr) => { self.visit_expression(location, expr, None); },
         }
     }
 
-    fn visit_var_stmt(&mut self, var: &'o VarStatement) {
-        self.visit_var(&var.var_type, &var.name, var.value.as_ref())
+    fn visit_var_stmt(&mut self, location: Location, var: &'o VarStatement) {
+        self.visit_var(location, &var.var_type, &var.name, var.value.as_ref())
     }
 
-    fn visit_var(&mut self, var_type: &VarType, name: &str, value: Option<&'o Expression>) {
+    fn visit_var(&mut self, location: Location, var_type: &VarType, name: &str, value: Option<&'o Expression>) {
         // Calculate type hint
         let type_hint;
         if var_type.type_path.is_empty() {
@@ -371,7 +371,7 @@ impl<'o> ProcAnalyzer<'o> {
 
         // Visit the expression if it's there
         let mut analysis = match value {
-            Some(ref expr) => self.visit_expression(expr, type_hint),
+            Some(ref expr) => self.visit_expression(location, expr, type_hint),
             None => Analysis::null(),
         };
         analysis.static_ty = type_hint;
@@ -380,7 +380,7 @@ impl<'o> ProcAnalyzer<'o> {
         self.local_vars.insert(name.to_owned(), analysis);
     }
 
-    fn visit_expression(&mut self, expression: &'o Expression, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
+    fn visit_expression(&mut self, location: Location, expression: &'o Expression, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
         match expression {
             Expression::Base { unary, term, follow } => {
                 let base_type_hint = if follow.is_empty() && unary.is_empty() {
@@ -388,9 +388,9 @@ impl<'o> ProcAnalyzer<'o> {
                 } else {
                     None
                 };
-                let mut ty = self.visit_term(term, base_type_hint);
+                let mut ty = self.visit_term(location, term, base_type_hint);
                 for each in follow.iter() {
-                    ty = self.visit_follow(ty, each);
+                    ty = self.visit_follow(location, ty, each);
                 }
                 for each in unary.iter().rev() {
                     ty = self.visit_unary(ty, each);
@@ -401,30 +401,30 @@ impl<'o> ProcAnalyzer<'o> {
                 // It appears that DM does this in more cases than this, but
                 // this is the only case I've seen it used in the wild.
                 // ex: var/datum/cache_entry/E = cache[key] || new
-                let lty = self.visit_expression(lhs, type_hint);
-                let rty = self.visit_expression(rhs, type_hint);
+                let lty = self.visit_expression(location, lhs, type_hint);
+                let rty = self.visit_expression(location, rhs, type_hint);
                 self.visit_binary(lty, rty, BinaryOp::Or)
             },
             Expression::BinaryOp { op, lhs, rhs } => {
-                let lty = self.visit_expression(lhs, None);
-                let rty = self.visit_expression(rhs, None);
+                let lty = self.visit_expression(location, lhs, None);
+                let rty = self.visit_expression(location, rhs, None);
                 self.visit_binary(lty, rty, *op)
             },
             Expression::AssignOp { lhs, rhs, .. } => {
-                let lhs = self.visit_expression(lhs, None);
-                self.visit_expression(rhs, lhs.static_ty)
+                let lhs = self.visit_expression(location, lhs, None);
+                self.visit_expression(location, rhs, lhs.static_ty)
             },
             Expression::TernaryOp { cond, if_, else_ } => {
                 // TODO: be sensible
-                self.visit_expression(cond, None);
-                let ty = self.visit_expression(if_, type_hint);
-                self.visit_expression(else_, type_hint);
+                self.visit_expression(location, cond, None);
+                let ty = self.visit_expression(location, if_, type_hint);
+                self.visit_expression(location, else_, type_hint);
                 ty
             }
         }
     }
 
-    fn visit_term(&mut self, term: &'o Term, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
+    fn visit_term(&mut self, location: Location, term: &'o Term, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
         match term {
             Term::Null => Analysis::null(),
             Term::New { type_, args } => {
@@ -451,6 +451,7 @@ impl<'o> ProcAnalyzer<'o> {
                 // call to the New() method
                 if let Some(typepath) = typepath {
                     self.visit_call(
+                        location,
                         typepath,
                         typepath.get_proc("New").expect("couldn't find New proc"),
                         args.as_ref().map_or(&[], |v| &v[..]),
@@ -476,12 +477,12 @@ impl<'o> ProcAnalyzer<'o> {
             Term::Resource(text) => Analysis::from_value(self.objtree, Constant::Resource(text.to_owned())),
             Term::Int(number) => Analysis::from_value(self.objtree, Constant::from(*number)),
             Term::Float(number) => Analysis::from_value(self.objtree, Constant::from(*number)),
-            Term::Expr(expr) => self.visit_expression(expr, type_hint),
+            Term::Expr(expr) => self.visit_expression(location, expr, type_hint),
             Term::InterpString(..) => Type::String.into(),
             Term::Call(unscoped_name, args) => {
                 let src = self.ty;
                 if let Some(proc) = self.ty.get_proc(unscoped_name) {
-                    self.visit_call(src, proc, args, false)
+                    self.visit_call(location, src, proc, args, false)
                 } else {
                     let msg = format!("undefined proc: {:?} on {}", unscoped_name, self.ty);
                     self.error(msg);
@@ -504,7 +505,7 @@ impl<'o> ProcAnalyzer<'o> {
                     // TODO: if args are empty, call w/ same args
                     let src = self.ty;
                     // Parent calls are exact, and won't ever call an override.
-                    self.visit_call(src, proc, args, true)
+                    self.visit_call(location, src, proc, args, true)
                 } else {
                     let msg = format!("proc has no parent: {:?}", self.proc_ref);
                     self.error(msg);
@@ -515,7 +516,7 @@ impl<'o> ProcAnalyzer<'o> {
                 let src = self.ty;
                 let proc = self.proc_ref;
                 // Self calls are exact, and won't ever call an override.
-                self.visit_call(src, proc, args, true)
+                self.visit_call(location, src, proc, args, true)
             },
             Term::Locate { args, .. } => {
                 // TODO: deal with in_list
@@ -559,7 +560,7 @@ impl<'o> ProcAnalyzer<'o> {
             },
             Term::Pick(choices) => {
                 if choices.len() == 1 {
-                    match self.visit_expression(&choices[0].1, None).ty {
+                    match self.visit_expression(location, &choices[0].1, None).ty {
                         Type::List(Some(inst)) => Type::Instance(inst).into(),
                         _ => Analysis::empty(),
                     }
@@ -571,7 +572,7 @@ impl<'o> ProcAnalyzer<'o> {
         }
     }
 
-    fn visit_follow(&mut self, lhs: Analysis<'o>, rhs: &'o Follow) -> Analysis<'o> {
+    fn visit_follow(&mut self, location: Location, lhs: Analysis<'o>, rhs: &'o Follow) -> Analysis<'o> {
         match rhs {
             Follow::Field(IndexKind::Colon, _) => Analysis::empty(),
             Follow::Field(IndexKind::SafeColon, _) => Analysis::empty(),
@@ -580,7 +581,7 @@ impl<'o> ProcAnalyzer<'o> {
 
             Follow::Index(expr) => {
                 if let Type::List(lty) = lhs.ty {
-                    self.visit_expression(expr, None);
+                    self.visit_expression(location, expr, None);
                     if let Some(ty) = lty {
                         Type::Instance(ty).into()
                     } else {
@@ -611,7 +612,7 @@ impl<'o> ProcAnalyzer<'o> {
             Follow::Call(kind, name, arguments) => {
                 if let Some(ty) = lhs.static_ty {
                     if let Some(proc) = ty.get_proc(name) {
-                        self.visit_call(ty, proc, arguments, false)
+                        self.visit_call(location, ty, proc, arguments, false)
                     } else {
                         self.error(format!("undefined proc: {:?} on {}", name, ty));
                         Analysis::empty()
@@ -647,7 +648,7 @@ impl<'o> ProcAnalyzer<'o> {
         Analysis::empty()
     }
 
-    fn visit_call(&mut self, src: TypeRef<'o>, proc: ProcRef, args: &'o [Expression], is_exact: bool) -> Analysis<'o> {
+    fn visit_call(&mut self, location: Location, src: TypeRef<'o>, proc: ProcRef, args: &'o [Expression], is_exact: bool) -> Analysis<'o> {
         // identify and register kwargs used
         let mut any_kwargs_yet = false;
         for arg in args {
@@ -704,7 +705,7 @@ impl<'o> ProcAnalyzer<'o> {
                 self.error(format!("proc called with non-kwargs after kwargs: {}()", proc.name()));
             }
 
-            self.visit_expression(argument_value, None);
+            self.visit_expression(location, argument_value, None);
         }
 
         Analysis::empty()
