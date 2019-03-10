@@ -3,6 +3,10 @@ name = "dreamchecker"
 version = "0.1.0"
 authors = ["Tad Hardesty <tad@platymuus.com>"]
 
+[lib]
+name = "dreamchecker"
+path = "lib.rs"
+
 [[bin]]
 name = "dreamchecker"
 path = "main.rs"
