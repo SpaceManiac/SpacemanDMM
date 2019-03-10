@@ -839,7 +839,7 @@ impl ObjectTree {
         if let Some(kind) = declaration {
             if let Some(ref decl) = proc.declaration {
                 DMError::new(location, format!("duplicate definition of {}/{}", kind, name))
-                    .add_note(decl.location, "previous definition")
+                    .with_note(decl.location, "previous definition")
                     .register(context);
                 declaration = None;  // suppress the later check
             } else {
@@ -862,7 +862,7 @@ impl ObjectTree {
             // Show the error now, make up for it by putting the original
             // at the beginning of the list (so `..()` finds it).
             DMError::new(proc.value[0].location, format!("procedure override precedes definition"))
-                .add_note(location, "definition is here")
+                .with_note(location, "definition is here")
                 .register(context);
             proc.value.insert(0, value);
         } else {

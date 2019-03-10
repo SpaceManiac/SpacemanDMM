@@ -598,7 +598,7 @@ impl<'ctx> Preprocessor<'ctx> {
         if let Some(&loc) = self.include_locations.get(&file_id) {
             Err(DMError::new(self.last_input_loc, format!("duplicate #include {:?}", path))
                 .set_severity(Severity::Warning)
-                .add_note(loc, "previously included here"))
+                .with_note(loc, "previously included here"))
         } else {
             self.include_locations.insert(file_id, self.last_input_loc);
             Ok(Include::File {
@@ -833,7 +833,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                 if define_name != "FILE_DIR" {
                                     DMError::new(define_name_loc, format!("macro redefined: {}", define_name))
                                         .set_severity(Severity::Warning)
-                                        .add_note(previous_loc, format!("previous definition of {}", define_name))
+                                        .with_note(previous_loc, format!("previous definition of {}", define_name))
                                         .register(self.context);
                                 }
                             }

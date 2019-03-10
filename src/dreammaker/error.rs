@@ -324,11 +324,15 @@ impl DMError {
         self
     }
 
-    pub fn add_note<S: Into<String>>(mut self, location: Location, desc: S) -> DMError {
+    pub fn add_note<S: Into<String>>(&mut self, location: Location, desc: S) {
         self.notes.push(DiagnosticNote {
             location,
             description: desc.into(),
         });
+    }
+
+    pub fn with_note<S: Into<String>>(mut self, location: Location, desc: S) -> DMError {
+        self.add_note(location, desc);
         self
     }
 

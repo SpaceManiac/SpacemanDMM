@@ -157,7 +157,7 @@ impl Env {
             let mut error = DMError::new(kwarg_info.location, format!("overrides of {} are missing keyword args", base_procname));
             let mut missing = HashSet::new();
             for (child_procname, bad_override) in kwarg_info.bad_overrides_at.iter() {
-                error = error.add_note(bad_override.location, format!("{} is missing \"{}\"",
+                error.add_note(bad_override.location, format!("{} is missing \"{}\"",
                     child_procname,
                     bad_override.missing.join("\", \"")));
                 missing.extend(bad_override.missing.iter());
@@ -171,10 +171,10 @@ impl Env {
                 }
 
                 if called_at.others > 0 {
-                    error = error.add_note(called_at.location, format!("called with {:?} here, and {} others",
+                    error.add_note(called_at.location, format!("called with {:?} here, and {} other places",
                         arg_name, called_at.others));
                 } else {
-                    error = error.add_note(called_at.location, format!("called with {:?} here", arg_name));
+                    error.add_note(called_at.location, format!("called with {:?} here", arg_name));
                 }
             }
 
@@ -235,7 +235,7 @@ impl<'o> ProcAnalyzer<'o> {
         // the locations here can be more precise.
         let mut error = DMError::new(self.proc_ref.location, format!("problems in {}", self.proc_ref));
         for message in self.messages.drain(..) {
-            error = error.add_note(self.proc_ref.location, message);
+            error.add_note(self.proc_ref.location, message);
         }
         if !error.notes().is_empty() {
             error.register(self.context);
