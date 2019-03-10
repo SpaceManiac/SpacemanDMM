@@ -773,6 +773,7 @@ impl<'ctx> Preprocessor<'ctx> {
 
                         expect_token!((define_name, ws) = Token::Ident(define_name, ws));
                         let define_name_loc = _last_expected_loc;
+                        self.annotate_macro(&define_name, define_name_loc);
                         self.check_danger_ident(&define_name, "defined");
                         let mut params = Vec::new();
                         let mut subst = Vec::new();
