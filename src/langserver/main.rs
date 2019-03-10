@@ -126,7 +126,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
         let request = Request::Single(Call::Notification(jsonrpc::Notification {
             jsonrpc: VERSION,
             method: T::METHOD.to_owned(),
-            params: Some(value_to_params(params)),
+            params: value_to_params(params),
         }));
         self.write.write(serde_json::to_string(&request).expect("notification bad to_string"))
     }
@@ -471,7 +471,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
 
     fn handle_call(&mut self, call: Call) -> Option<Output> {
         match call {
-            Call::Invalid(id) => Some(Output::invalid_request(id, VERSION)),
+            Call::Invalid { id } => Some(Output::invalid_request(id, VERSION)),
             Call::MethodCall(method_call) => {
                 let id = method_call.id.clone();
                 Some(Output::from(self.handle_method_call(method_call), id, VERSION))
@@ -1048,12 +1048,11 @@ handle_notification! {
 // ----------------------------------------------------------------------------
 // Helper functions
 
-fn params_to_value(params: Option<jsonrpc::Params>) -> serde_json::Value {
+fn params_to_value(params: jsonrpc::Params) -> serde_json::Value {
     match params {
-        None => serde_json::Value::Null,
-        Some(jsonrpc::Params::None) => serde_json::Value::Object(Default::default()),
-        Some(jsonrpc::Params::Array(x)) => serde_json::Value::Array(x),
-        Some(jsonrpc::Params::Map(x)) => serde_json::Value::Object(x),
+        jsonrpc::Params::None => serde_json::Value::Null,
+        jsonrpc::Params::Array(x) => serde_json::Value::Array(x),
+        jsonrpc::Params::Map(x) => serde_json::Value::Object(x),
     }
 }
 
