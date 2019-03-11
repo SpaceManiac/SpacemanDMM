@@ -13,6 +13,26 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 // ----------------------------------------------------------------------------
 // Helper structures
 
+#[derive(Debug, Clone)]
+pub enum StaticType<'o> {
+    None,
+    Type(TypeRef<'o>),
+    List {
+        list: TypeRef<'o>,
+        keys: Box<StaticType<'o>>,
+    },
+}
+
+impl<'o> StaticType<'o> {
+    fn basic_type(&self) -> Option<TypeRef<'o>> {
+        match *self {
+            StaticType::None => None,
+            StaticType::Type(t) => Some(t),
+            StaticType::List { list, .. } => Some(list),
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug)]
 pub enum Type<'o> {
     Any,
@@ -51,14 +71,14 @@ impl<'o> Type<'o> {
 /// known constant value if available.
 #[derive(Debug, Clone)]
 pub struct Analysis<'o> {
-    static_ty: Option<TypeRef<'o>>,
+    static_ty: StaticType<'o>,
     ty: Type<'o>,
     value: Option<Constant>,
 }
 
 impl<'o> From<Type<'o>> for Analysis<'o> {
     fn from(ty: Type<'o>) -> Analysis<'o> {
-        Analysis { static_ty: None, ty, value: None }
+        Analysis { static_ty: StaticType::None, ty, value: None }
     }
 }
 
@@ -69,25 +89,31 @@ impl<'o> Analysis<'o> {
 
     fn null() -> Analysis<'o> {
         Analysis {
-            static_ty: None,
+            static_ty: StaticType::None,
             ty: Type::Null,
             value: Some(Constant::Null(None)),
         }
     }
 
     fn from_static_type(ty: TypeRef<'o>) -> Analysis<'o> {
-        Analysis {
-            static_ty: Some(ty),
-            ty: Type::Instance(ty),
-            value: None,
-        }
+        Analysis::from(StaticType::Type(ty))
     }
 
     fn from_value(objtree: &'o ObjectTree, value: Constant) -> Analysis<'o> {
         Analysis {
-            static_ty: None,
+            static_ty: StaticType::None,
             ty: Type::from_constant(objtree, &value),
             value: Some(value),
+        }
+    }
+}
+
+impl<'o> From<StaticType<'o>> for Analysis<'o> {
+    fn from(static_ty: StaticType<'o>) -> Analysis<'o> {
+        Analysis {
+            static_ty: static_ty,
+            ty: Type::Any,
+            value: None,
         }
     }
 }
@@ -207,7 +233,7 @@ impl<'o> AnalyzeProc<'o> {
             local_vars.insert("src".to_owned(), Analysis::from_static_type(ty));
         }
         local_vars.insert("global".to_owned(), Analysis {
-            static_ty: Some(objtree.root()),
+            static_ty: StaticType::Type(objtree.root()),
             ty: Type::Global,
             value: None,
         });
@@ -343,23 +369,14 @@ impl<'o> AnalyzeProc<'o> {
 
     fn visit_var(&mut self, location: Location, var_type: &VarType, name: &str, value: Option<&'o Expression>) {
         // Calculate type hint
-        let type_hint;
-        if var_type.type_path.is_empty() {
-            type_hint = None;
-        } else {
-            type_hint = self.objtree.type_by_path(&var_type.type_path);
-            if type_hint.is_none() {
-                DMError::new(location, format!("undefined type: {}", FormatTreePath(&var_type.type_path)))
-                    .register(self.context);
-            }
-        };
+        let static_type = self.static_type_inner(location, &var_type.type_path);
 
         // Visit the expression if it's there
         let mut analysis = match value {
-            Some(ref expr) => self.visit_expression(location, expr, type_hint),
+            Some(ref expr) => self.visit_expression(location, expr, static_type.basic_type()),
             None => Analysis::null(),
         };
-        analysis.static_ty = type_hint;
+        analysis.static_ty = static_type;
 
         // Save var to locals
         self.local_vars.insert(name.to_owned(), analysis);
@@ -397,7 +414,7 @@ impl<'o> AnalyzeProc<'o> {
             },
             Expression::AssignOp { lhs, rhs, .. } => {
                 let lhs = self.visit_expression(location, lhs, None);
-                self.visit_expression(location, rhs, lhs.static_ty)
+                self.visit_expression(location, rhs, lhs.static_ty.basic_type())
             },
             Expression::TernaryOp { cond, if_, else_ } => {
                 // TODO: be sensible
@@ -569,6 +586,7 @@ impl<'o> AnalyzeProc<'o> {
             Follow::Call(IndexKind::SafeColon, _, _) => Analysis::empty(),
 
             Follow::Index(expr) => {
+                // TODO: differentiate between L[1] and L[non_numeric_key]
                 if let Type::List(lty) = lhs.ty {
                     self.visit_expression(location, expr, None);
                     if let Some(ty) = lty {
@@ -576,17 +594,15 @@ impl<'o> AnalyzeProc<'o> {
                     } else {
                         Analysis::empty()
                     }
-                } else if lhs.static_ty == Some(self.objtree.expect("/list")) {
-                    // TODO: keep track of what /list was declared
-                    Analysis::empty()
                 } else {
-                    //self.show_header();
-                    //println!("visit_follow: can't index {:?}", lhs);
-                    Analysis::empty()
+                    match lhs.static_ty {
+                        StaticType::List { keys, .. } => Analysis::from(*keys),
+                        _ => Analysis::empty(),
+                    }
                 }
             },
             Follow::Field(kind, name) => {
-                if let Some(ty) = lhs.static_ty {
+                if let Some(ty) = lhs.static_ty.basic_type() {
                     if let Some(decl) = ty.get_var_declaration(name) {
                         self.static_type(location, &decl.var_type.type_path)
                     } else {
@@ -601,7 +617,7 @@ impl<'o> AnalyzeProc<'o> {
                 }
             },
             Follow::Call(kind, name, arguments) => {
-                if let Some(ty) = lhs.static_ty {
+                if let Some(ty) = lhs.static_ty.basic_type() {
                     if let Some(proc) = ty.get_proc(name) {
                         self.visit_call(location, ty, proc, arguments, false)
                     } else {
@@ -705,19 +721,29 @@ impl<'o> AnalyzeProc<'o> {
         Analysis::empty()
     }
 
-    fn static_type(&mut self, location: Location, of: &Vec<String>) -> Analysis<'o> {
+    fn static_type(&mut self, location: Location, of: &[String]) -> Analysis<'o> {
+        Analysis::from(self.static_type_inner(location, of))
+    }
+
+    fn static_type_inner(&mut self, location: Location, mut of: &[String]) -> StaticType<'o> {
+        while !of.is_empty() && ["static", "global", "const", "tmp"].contains(&&*of[0]) {
+            of = &of[1..];
+        }
+
         if of.is_empty() {
-            Analysis::empty()
+            StaticType::None
         } else if of[0] == "list" {
-            let mut analysis = Analysis::from_static_type(self.objtree.expect("/list"));
-            analysis.ty = Type::List(self.objtree.type_by_path(&of[1..]));
-            analysis
+            let keys = self.static_type_inner(location, &of[1..]);
+            StaticType::List {
+                list: self.objtree.expect("/list"),
+                keys: Box::new(keys),
+            }
         } else if let Some(ty) = self.objtree.type_by_path(of) {
-            Analysis::from_static_type(ty)
+            StaticType::Type(ty)
         } else {
             DMError::new(location, format!("undefined type: {}", FormatTreePath(of)))
                 .register(self.context);
-            Analysis::empty()
+            StaticType::None
         }
     }
 }
