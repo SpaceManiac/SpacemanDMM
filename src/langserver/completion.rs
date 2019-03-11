@@ -91,9 +91,12 @@ pub fn combine_tree_path<'a, I>(iter: &I, mut absolute: bool, mut parts: &'a [St
         absolute = true;
     }
     // if we're on the right side of a 'list/', start the lookup there
-    match parts.split_first() {
-        Some((kwd, rest)) if kwd == "list" && !rest.is_empty() => parts = rest,
-        _ => {}
+    while let Some((first, rest)) = parts.split_first() {
+        if first == "list" {
+            parts = rest;
+        } else {
+            break;
+        }
     }
 
     let mut prefix_parts = &[][..];
