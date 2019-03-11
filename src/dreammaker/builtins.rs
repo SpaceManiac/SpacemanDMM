@@ -331,7 +331,8 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
             color,  // outline, drop_shadow
             x, y,  // drop_shadow, motion_blur, wave
             offset,  // drop_shadow, wave
-            flags  // wave
+            flags,  // wave
+            border  // drop_shadow, possibly bugged
         );
         proc/findlasttext(Haystack,Needle,Start=0,End=1);
         proc/findlasttextEx(Haystack,Needle,Start=0,End=1);
