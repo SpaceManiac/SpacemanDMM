@@ -284,12 +284,44 @@ impl fmt::Display for Severity {
     }
 }
 
+/// A component which generated a diagnostic, when separation is desired.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum Component {
+    Unspecified,
+    DreamChecker,
+}
+
+impl Component {
+    pub fn name(self) -> Option<&'static str> {
+        match self {
+            Component::Unspecified => None,
+            Component::DreamChecker => Some("dreamchecker"),
+        }
+    }
+}
+
+impl Default for Component {
+    fn default() -> Component {
+        Component::Unspecified
+    }
+}
+
+impl fmt::Display for Component {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.name() {
+            Some(name) => f.write_str(name),
+            None => Ok(()),
+        }
+    }
+}
+
 /// An error produced during DM parsing, with location information.
 #[derive(Debug)]
 #[must_use]
 pub struct DMError {
     location: Location,
     severity: Severity,
+    component: Component,
     description: String,
     notes: Vec<DiagnosticNote>,
     cause: Option<Box<error::Error + Send + Sync>>,
@@ -308,6 +340,7 @@ impl DMError {
         DMError {
             location,
             severity: Default::default(),
+            component: Default::default(),
             description: desc.into(),
             notes: Vec::new(),
             cause: None,
@@ -336,6 +369,11 @@ impl DMError {
         self
     }
 
+    pub fn with_component(mut self, component: Component) -> DMError {
+        self.component = component;
+        self
+    }
+
     #[inline]
     pub fn register(self, context: &Context) {
         context.register_error(self)
@@ -349,6 +387,11 @@ impl DMError {
     /// Get the severity of this diagnostic.
     pub fn severity(&self) -> Severity {
         self.severity
+    }
+
+    /// Get the component which generated this diagnostic.
+    pub fn component(&self) -> Component {
+        self.component
     }
 
     /// Get the description associated with this error.
@@ -388,6 +431,7 @@ impl Clone for DMError {
         DMError {
             location: self.location,
             severity: self.severity,
+            component: self.component,
             description: self.description.clone(),
             notes: self.notes.clone(),
             cause: None,  // not trivially cloneable

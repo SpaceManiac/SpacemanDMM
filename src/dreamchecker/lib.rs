@@ -221,7 +221,7 @@ impl<'o> AnalyzeObjectTree<'o> {
             }
 
             // List out the child procs that are missing overrides.
-            let mut error = DMError::new(kwarg_info.location, format!("overrides of {} are missing keyword args", base_procname));
+            let mut error = error(kwarg_info.location, format!("overrides of {} are missing keyword args", base_procname));
             let mut missing = HashSet::new();
             for (child_procname, bad_override) in kwarg_info.bad_overrides_at.iter() {
                 error.add_note(bad_override.location, format!("{} is missing \"{}\"",
@@ -248,6 +248,10 @@ impl<'o> AnalyzeObjectTree<'o> {
             error.register(self.context);
         }
     }
+}
+
+fn error<S: Into<String>>(location: Location, desc: S) -> DMError {
+    DMError::new(location, desc).with_component(dm::Component::DreamChecker)
 }
 
 // ----------------------------------------------------------------------------
@@ -476,7 +480,7 @@ impl<'o> AnalyzeProc<'o> {
                     NewType::Implicit => if let Some(hint) = type_hint {
                         Some(hint)
                     } else {
-                        DMError::new(location, "no type hint available on implicit new()")
+                        error(location, "no type hint available on implicit new()")
                             .register(self.context);
                         None
                     },
@@ -485,7 +489,7 @@ impl<'o> AnalyzeProc<'o> {
                             // TODO: handle proc/verb paths here
                             Some(nav.ty())
                         } else {
-                            DMError::new(location, format!("failed to resolve path {}", FormatTypePath(&prefab.path)))
+                            error(location, format!("failed to resolve path {}", FormatTypePath(&prefab.path)))
                                 .register(self.context);
                             None
                         }
@@ -514,7 +518,7 @@ impl<'o> AnalyzeProc<'o> {
                     // TODO: handle proc/verb paths here
                     Type::Typepath(nav.ty()).into()
                 } else {
-                    DMError::new(location, format!("failed to resolve path {}", FormatTypePath(&prefab.path)))
+                    error(location, format!("failed to resolve path {}", FormatTypePath(&prefab.path)))
                         .register(self.context);
                     Analysis::empty()
                 }
@@ -530,7 +534,7 @@ impl<'o> AnalyzeProc<'o> {
                 if let Some(proc) = self.ty.get_proc(unscoped_name) {
                     self.visit_call(location, src, proc, args, false)
                 } else {
-                    DMError::new(location, format!("undefined proc: {:?} on {}", unscoped_name, self.ty))
+                    error(location, format!("undefined proc: {:?} on {}", unscoped_name, self.ty))
                         .register(self.context);
                     Analysis::empty()
                 }
@@ -542,7 +546,7 @@ impl<'o> AnalyzeProc<'o> {
                 if let Some(decl) = self.ty.get_var_declaration(unscoped_name) {
                     self.static_type(location, &decl.var_type.type_path)
                 } else {
-                    DMError::new(location, format!("undefined var: {:?}", unscoped_name))
+                    error(location, format!("undefined var: {:?}", unscoped_name))
                         .register(self.context);
                     Analysis::empty()
                 }
@@ -554,7 +558,7 @@ impl<'o> AnalyzeProc<'o> {
                     // Parent calls are exact, and won't ever call an override.
                     self.visit_call(location, src, proc, args, true)
                 } else {
-                    DMError::new(location, format!("proc has no parent: {}", self.proc_ref))
+                    error(location, format!("proc has no parent: {}", self.proc_ref))
                         .register(self.context);
                     Analysis::empty()
                 }
@@ -648,12 +652,12 @@ impl<'o> AnalyzeProc<'o> {
                     if let Some(decl) = ty.get_var_declaration(name) {
                         self.static_type(location, &decl.var_type.type_path)
                     } else {
-                        DMError::new(location, format!("undefined field: {:?} on {}", name, ty))
+                        error(location, format!("undefined field: {:?} on {}", name, ty))
                             .register(self.context);
                         Analysis::empty()
                     }
                 } else {
-                    DMError::new(location, format!("field access requires static type: {:?}", name))
+                    error(location, format!("field access requires static type: {:?}", name))
                         .register(self.context);
                     Analysis::empty()
                 }
@@ -663,12 +667,12 @@ impl<'o> AnalyzeProc<'o> {
                     if let Some(proc) = ty.get_proc(name) {
                         self.visit_call(location, ty, proc, arguments, false)
                     } else {
-                        DMError::new(location, format!("undefined proc: {:?} on {}", name, ty))
+                        error(location, format!("undefined proc: {:?} on {}", name, ty))
                             .register(self.context);
                         Analysis::empty()
                     }
                 } else {
-                    DMError::new(location, format!("proc call require static type: {:?} on {:?}", name, lhs))
+                    error(location, format!("proc call require static type: {:?} on {:?}", name, lhs))
                         .register(self.context);
                     Analysis::empty()
                 }
@@ -717,7 +721,7 @@ impl<'o> AnalyzeProc<'o> {
                         // Check that that kwarg actually exists.
                         if !proc.parameters.iter().any(|p| p.name == *name) {
                             // Search for a child proc that does have this keyword argument.
-                            let mut error = DMError::new(location,
+                            let mut error = error(location,
                                 format!("bad keyword argument {:?} to {}", name, proc));
                             proc.recurse_children(&mut |child_proc| {
                                 if child_proc.ty() == proc.ty() { return }
@@ -753,7 +757,7 @@ impl<'o> AnalyzeProc<'o> {
 
             if any_kwargs_yet && !this_kwarg && !(proc.ty().is_root() && proc.name() == "animate") {
                 // TODO: don't hardcode the animate() exception
-                DMError::new(location, format!("proc called with non-kwargs after kwargs: {}()", proc.name()))
+                error(location, format!("proc called with non-kwargs after kwargs: {}()", proc.name()))
                     .register(self.context);
             }
 
@@ -783,7 +787,7 @@ impl<'o> AnalyzeProc<'o> {
         } else if let Some(ty) = self.objtree.type_by_path(of) {
             StaticType::Type(ty)
         } else {
-            DMError::new(location, format!("undefined type: {}", FormatTreePath(of)))
+            error(location, format!("undefined type: {}", FormatTreePath(of)))
                 .register(self.context);
             StaticType::None
         }
