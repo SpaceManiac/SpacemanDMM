@@ -513,7 +513,7 @@ impl<'o> AnalyzeProc<'o> {
                     // Parent calls are exact, and won't ever call an override.
                     self.visit_call(location, src, proc, args, true)
                 } else {
-                    DMError::new(location, format!("proc has no parent: {:?}", self.proc_ref))
+                    DMError::new(location, format!("proc has no parent: {}", self.proc_ref))
                         .register(self.context);
                     Analysis::empty()
                 }
@@ -575,6 +575,7 @@ impl<'o> AnalyzeProc<'o> {
                     Analysis::empty()
                 }
             },
+            Term::As(_) => Type::Number.into(),
         }
     }
 

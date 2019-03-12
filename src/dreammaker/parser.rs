@@ -1822,6 +1822,14 @@ where
 
             Token::Ident(ref i, _) if i == "null" => Term::Null,
 
+            // term :: 'as' '(' input_type ')'
+            Token::Ident(ref i, _) if i == "as" => {
+                require!(self.exact(Token::Punct(Punctuation::LParen)));
+                let input_type = self.input_type()?.unwrap_or(InputType::default());
+                require!(self.exact(Token::Punct(Punctuation::RParen)));
+                Term::As(input_type)
+            },
+
             // term :: ident arglist | ident
             Token::Ident(i, _) => {
                 let first_token = self.updated_location();

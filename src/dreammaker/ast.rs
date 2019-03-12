@@ -430,6 +430,8 @@ pub enum Term {
     DynamicCall(Vec<Expression>, Vec<Expression>),
     /// An interpolated string, alternating string/expr/string/expr.
     InterpString(String, Vec<(Option<Expression>, String)>),
+    /// An `as()` call, with an input type. Undocumented.
+    As(InputType),
 }
 
 impl From<Expression> for Term {
