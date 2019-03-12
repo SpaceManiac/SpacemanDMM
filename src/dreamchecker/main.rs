@@ -34,7 +34,7 @@ fn main() {
     let mut invalid = 0;
     let mut builtin = 0;
 
-    let mut env = AnalyzeObjectTree::default();
+    let mut analyzer = AnalyzeObjectTree::new(&context, &tree);
 
     // First pass: analyze all proc bodies
     println!("============================================================");
@@ -44,7 +44,7 @@ fn main() {
             match proc.code {
                 Code::Present(ref code) => {
                     present += 1;
-                    AnalyzeProc::new(&mut env, &context, &tree, proc).run(code);
+                    analyzer.check_proc(proc, code);
                 }
                 Code::Invalid(_) => invalid += 1,
                 Code::Builtin => builtin += 1,
@@ -60,10 +60,10 @@ fn main() {
     println!("Analyzing proc override validity...\n");
     tree.root().recurse(&mut |ty| {
         for proc in ty.iter_self_procs() {
-            env.check_kwargs(&context, proc);
+            analyzer.check_kwargs(proc);
         }
     });
-    env.finish_check_kwargs(&context);
+    analyzer.finish_check_kwargs();
 
     println!("============================================================");
     let errors = context.errors().iter().filter(|each| each.severity() <= PRINT_SEVERITY).count();

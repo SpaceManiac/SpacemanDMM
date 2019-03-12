@@ -14,7 +14,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 // Helper structures
 
 #[derive(Debug, Clone)]
-pub enum StaticType<'o> {
+enum StaticType<'o> {
     None,
     Type(TypeRef<'o>),
     List {
@@ -34,7 +34,7 @@ impl<'o> StaticType<'o> {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub enum Type<'o> {
+enum Type<'o> {
     Any,
     Null,
     String,
@@ -70,7 +70,7 @@ impl<'o> Type<'o> {
 /// An 'atom' in the type analysis. A type/set of possible types, as well as a
 /// known constant value if available.
 #[derive(Debug, Clone)]
-pub struct Analysis<'o> {
+struct Analysis<'o> {
     static_ty: StaticType<'o>,
     ty: Type<'o>,
     value: Option<Constant>,
@@ -119,6 +119,29 @@ impl<'o> From<StaticType<'o>> for Analysis<'o> {
 }
 
 // ----------------------------------------------------------------------------
+// Shortcut entry point
+
+pub fn run(context: &Context, objtree: &ObjectTree) {
+    let mut analyzer = AnalyzeObjectTree::new(context, objtree);
+
+    objtree.root().recurse(&mut |ty| {
+        for proc in ty.iter_self_procs() {
+            if let dm::objtree::Code::Present(ref code) = proc.code {
+                analyzer.check_proc(proc, code);
+            }
+        }
+    });
+
+    objtree.root().recurse(&mut |ty| {
+        for proc in ty.iter_self_procs() {
+            analyzer.check_kwargs(proc);
+        }
+    });
+
+    analyzer.finish_check_kwargs();
+}
+
+// ----------------------------------------------------------------------------
 // Analysis environment
 
 struct BadOverride {
@@ -141,20 +164,38 @@ struct KwargInfo {
 }
 
 #[derive(Default)]
-pub struct AnalyzeObjectTree {
+struct SharedState {
     // Debug(ProcRef) -> KwargInfo
     used_kwargs: BTreeMap<String, KwargInfo>,
 }
 
-impl AnalyzeObjectTree {
-    pub fn check_kwargs(&mut self, context: &Context, proc: ProcRef) {
+pub struct AnalyzeObjectTree<'o> {
+    context: &'o Context,
+    objtree: &'o ObjectTree,
+    shared: SharedState,
+}
+
+impl<'o> AnalyzeObjectTree<'o> {
+    pub fn new(context: &'o Context, objtree: &'o ObjectTree) -> Self {
+        AnalyzeObjectTree {
+            context,
+            objtree,
+            shared: Default::default(),
+        }
+    }
+
+    pub fn check_proc(&mut self, proc: ProcRef, code: &[Spanned<Statement>]) {
+        AnalyzeProc::new(&mut self.shared, self.context, self.objtree, proc).run(code)
+    }
+
+    pub fn check_kwargs(&mut self, proc: ProcRef) {
         let param_names: HashSet<&String> = proc.parameters.iter().map(|p| &p.name).collect();
 
         // Start at the parent - calls which immediately resolve to bad kwargs
         // error earlier in the process.
         let mut next = proc.parent_proc();
         while let Some(current) = next {
-            if let Some(kwargs) = self.used_kwargs.get_mut(&current.to_string()) {
+            if let Some(kwargs) = self.shared.used_kwargs.get_mut(&current.to_string()) {
                 let mut missing = Vec::new();
 
                 for (keyword, location) in kwargs.called_at.iter() {
@@ -173,8 +214,8 @@ impl AnalyzeObjectTree {
         }
     }
 
-    pub fn finish_check_kwargs(&self, context: &Context) {
-        for (base_procname, kwarg_info) in self.used_kwargs.iter() {
+    pub fn finish_check_kwargs(&self) {
+        for (base_procname, kwarg_info) in self.shared.used_kwargs.iter() {
             if kwarg_info.bad_overrides_at.is_empty() {
                 continue
             }
@@ -204,7 +245,7 @@ impl AnalyzeObjectTree {
                 }
             }
 
-            error.register(context);
+            error.register(self.context);
         }
     }
 }
@@ -212,8 +253,8 @@ impl AnalyzeObjectTree {
 // ----------------------------------------------------------------------------
 // Procedure analyzer
 
-pub struct AnalyzeProc<'o> {
-    env: &'o mut AnalyzeObjectTree,
+struct AnalyzeProc<'o> {
+    env: &'o mut SharedState,
     context: &'o Context,
     objtree: &'o ObjectTree,
     ty: TypeRef<'o>,
@@ -222,7 +263,7 @@ pub struct AnalyzeProc<'o> {
 }
 
 impl<'o> AnalyzeProc<'o> {
-    pub fn new(env: &'o mut AnalyzeObjectTree, context: &'o Context, objtree: &'o ObjectTree, proc_ref: ProcRef<'o>) -> Self {
+    fn new(env: &'o mut SharedState, context: &'o Context, objtree: &'o ObjectTree, proc_ref: ProcRef<'o>) -> Self {
         let ty = proc_ref.ty();
 
         let mut local_vars = HashMap::new();
