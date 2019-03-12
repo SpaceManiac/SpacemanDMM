@@ -221,7 +221,11 @@ impl<'o> AnalyzeObjectTree<'o> {
             }
 
             // List out the child procs that are missing overrides.
-            let mut error = error(kwarg_info.location, format!("overrides of {} are missing keyword args", base_procname));
+            let msg = match kwarg_info.bad_overrides_at.len() {
+                1 => format!("an override of {} is missing keyword args", base_procname),
+                len => format!("{} overrides of {} are missing keyword args", len, base_procname),
+            };
+            let mut error = error(kwarg_info.location, msg);
             let mut missing = HashSet::new();
             for (child_procname, bad_override) in kwarg_info.bad_overrides_at.iter() {
                 error.add_note(bad_override.location, format!("{} is missing \"{}\"",
