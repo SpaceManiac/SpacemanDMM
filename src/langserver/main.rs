@@ -249,6 +249,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                 message: error.description().to_owned(),
                 severity: Some(convert_severity(error.severity())),
                 range: location_to_range(loc),
+                source: error.component().name().map(ToOwned::to_owned),
                 related_information,
                 .. Default::default()
             };
@@ -263,6 +264,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
                         message: note.description().to_owned(),
                         severity: Some(langserver::DiagnosticSeverity::Information),
                         range: location_to_range(note.location()),
+                        source: error.component().name().map(ToOwned::to_owned),
                         .. Default::default()
                     };
                     map.entry(self.context.file_path(note.location().file))

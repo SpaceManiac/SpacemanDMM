@@ -748,18 +748,28 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                 }
                 Some(b'#') if !integer => {
                     buf.push('#');  // Keep pushing to `buf` in case of error.
-                    for &expect in b"INF" {
+                    let start = buf.len();
+                    for _ in 0..3 {
                         match self.next() {
-                            Some(ch) if ch == expect => continue,
-                            Some(ch) => buf.push(ch as char),
+                            Some(ch) => {
+                                buf.push(ch as char);
+                                if ["I", "IN", "INF", "IND"].contains(&&buf[start..]) {
+                                    continue;
+                                }
+                            }
                             None => {}
                         }
                         // Not what we expected, throw it up the line so that
                         // f32::from_str will error.
                         return (false, 10, buf.into());
                     }
-                    // Got "1.#INF", change it to "inf" for read_number.
-                    return (false, 10, "inf".into());
+                    if &buf[start..] == "INF" {
+                        // Got "1.#INF", change it to "inf" for read_number.
+                        return (false, 10, "inf".into());
+                    } else {
+                        // Got "1.#IND", change it to "NaN" for read_number.
+                        return (false, 10, "NaN".into());
+                    }
                 }
                 Some(ch) if (ch as char).is_digit(::std::cmp::max(radix, 10)) => {
                     exponent = false;
