@@ -532,7 +532,14 @@ impl<'o> AnalyzeProc<'o> {
             Term::Int(number) => Analysis::from_value(self.objtree, Constant::from(*number)),
             Term::Float(number) => Analysis::from_value(self.objtree, Constant::from(*number)),
             Term::Expr(expr) => self.visit_expression(location, expr, type_hint),
-            Term::InterpString(..) => Type::String.into(),
+            Term::InterpString(_, parts) => {
+                for (ref expr, _) in parts.iter() {
+                    if let Some(expr) = expr {
+                        self.visit_expression(location, expr, None);
+                    }
+                }
+                Type::String.into()
+            },
             Term::Call(unscoped_name, args) => {
                 let src = self.ty;
                 if let Some(proc) = self.ty.get_proc(unscoped_name) {
