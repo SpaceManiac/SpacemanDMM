@@ -360,14 +360,7 @@ impl<'o> WalkProc<'o> {
                     } else {
                         None
                     },
-                    NewType::Prefab(prefab) => {
-                        if let Some(nav) = self.ty.navigate_path(&prefab.path) {
-                            // TODO: handle proc/verb paths here
-                            Some(nav.ty())
-                        } else {
-                            None
-                        }
-                    },
+                    NewType::Prefab(prefab) => self.visit_prefab(location, prefab),
                     NewType::MiniExpr { .. } => None,  // TODO: evaluate
                 };
 
@@ -391,16 +384,7 @@ impl<'o> WalkProc<'o> {
                 keys: Box::new(StaticType::None),
             },
             Term::Prefab(prefab) => {
-                if let Some(nav) = self.ty.navigate_path(&prefab.path) {
-                    // Use the type
-                    self.tab.use_symbol(nav.ty().id, location);
-                    // Use the prefab's vars
-                    for key in prefab.vars.keys() {
-                        if let Some(decl) = nav.ty().get_var_declaration(key) {
-                            self.tab.use_symbol(decl.id, location);
-                        }
-                    }
-                }
+                self.visit_prefab(location, prefab);
                 StaticType::None
             },
             Term::Call(unscoped_name, args) => {
@@ -451,6 +435,29 @@ impl<'o> WalkProc<'o> {
                 StaticType::None
             },
             _ => StaticType::None,
+        }
+    }
+
+    fn visit_prefab(&mut self, location: Location, prefab: &'o Prefab) -> Option<TypeRef<'o>> {
+        if let Some(nav) = self.ty.navigate_path(&prefab.path) {
+            // Use the proc if there was one of those
+            if let NavigatePathResult::ProcPath(proc, _) = nav {
+                if let Some(decl) = nav.ty().get_proc_declaration(proc.name()) {
+                    self.tab.use_symbol(decl.id, location);
+                }
+            } else {
+                // Use the type
+                self.tab.use_symbol(nav.ty().id, location);
+                // Use the prefab's vars
+                for key in prefab.vars.keys() {
+                    if let Some(decl) = nav.ty().get_var_declaration(key) {
+                        self.tab.use_symbol(decl.id, location);
+                    }
+                }
+            }
+            Some(nav.ty())
+        } else {
+            None
         }
     }
 
