@@ -19,14 +19,30 @@ impl Notification for ObjectTree {
     const METHOD: &'static str = "experimental/dreammaker/objectTree";
     type Params = ObjectTreeParams;
 }
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Serialize)]
 pub struct ObjectTreeParams {
-    pub roots: Vec<ObjectTreeEntry>,
+    pub root: ObjectTreeType,
 }
 #[derive(Debug, Serialize)]
-pub struct ObjectTreeEntry {
+pub struct ObjectTreeType {
     pub name: String,
     pub kind: SymbolKind,
     pub location: Option<langserver::Location>,
-    pub children: Vec<ObjectTreeEntry>,
+    pub vars: Vec<ObjectTreeVar>,
+    pub procs: Vec<ObjectTreeProc>,
+    pub children: Vec<ObjectTreeType>,
+}
+#[derive(Debug, Serialize)]
+pub struct ObjectTreeVar {
+    pub name: String,
+    pub kind: SymbolKind,
+    pub location: Option<langserver::Location>,
+    pub is_declaration: bool,
+}
+#[derive(Debug, Serialize)]
+pub struct ObjectTreeProc {
+    pub name: String,
+    pub kind: SymbolKind,
+    pub location: Option<langserver::Location>,
+    pub is_verb: Option<bool>,
 }

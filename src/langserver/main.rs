@@ -222,25 +222,57 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
 
     fn update_objtree(&mut self) {
         if self.client_caps.object_tree {
-            let roots = self.recurse_objtree(self.objtree.root());
+            let root = self.recurse_objtree(self.objtree.root());
             self.issue_notification::<extras::ObjectTree>(extras::ObjectTreeParams {
-                roots,
+                root,
             });
         }
     }
 
-    fn recurse_objtree(&self, base: TypeRef) -> Vec<extras::ObjectTreeEntry> {
-        let mut output = Vec::new();
-        for ty in base.children() {
-            output.push(extras::ObjectTreeEntry {
-                name: ty.name.to_owned(),
-                kind: langserver::SymbolKind::Class,
-                location: self.convert_location(ty.location, &[&ty.path]).ok(),
-                children: self.recurse_objtree(ty),
+    fn recurse_objtree(&self, ty: TypeRef) -> extras::ObjectTreeType {
+        let mut entry = extras::ObjectTreeType {
+            name: ty.name.to_owned(),
+            kind: langserver::SymbolKind::Class,
+            location: self.convert_location(ty.location, &[&ty.path]).ok(),
+            vars: Vec::new(),
+            procs: Vec::new(),
+            children: Vec::new(),
+        };
+
+        // vars
+        for (name, var) in ty.vars.iter() {
+            let is_declaration = var.declaration.is_some();
+            entry.vars.push(extras::ObjectTreeVar {
+                name: name.to_owned(),
+                kind: langserver::SymbolKind::Field,
+                location: self.convert_location(var.value.location, &[&ty.path, "/var/", name]).ok(),
+                is_declaration,
             });
         }
-        output.sort_by(|a, b| a.name.cmp(&b.name));
-        output
+        entry.vars.sort_by(|a, b| a.name.cmp(&b.name));
+
+        // procs
+        for (name, proc) in ty.procs.iter() {
+            let mut is_verb = proc.declaration.as_ref().map(|d| d.kind.is_verb());
+            for value in proc.value.iter() {
+                entry.procs.push(extras::ObjectTreeProc {
+                    name: name.to_owned(),
+                    kind: langserver::SymbolKind::Method,
+                    location: self.convert_location(value.location, &[&ty.path, "/proc/", name]).ok(),
+                    is_verb,
+                });
+                is_verb = None;
+            }
+        }
+        entry.procs.sort_by(|a, b| a.name.cmp(&b.name));
+
+        // child types
+        for child in ty.children() {
+            entry.children.push(self.recurse_objtree(child));
+        }
+        entry.children.sort_by(|a, b| a.name.cmp(&b.name));
+
+        entry
     }
 
     // ------------------------------------------------------------------------
