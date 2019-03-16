@@ -13,7 +13,7 @@ extern crate serde_json;
 #[macro_use] extern crate serde_derive;
 extern crate petgraph;
 extern crate interval_tree;
-extern crate languageserver_types as langserver;
+extern crate lsp_types as langserver;
 extern crate jsonrpc_core as jsonrpc;
 extern crate dreammaker as dm;
 
@@ -1274,7 +1274,7 @@ handle_method_call! {
 
                     result = Some(SignatureHelp {
                         active_signature: Some(0),
-                        active_parameter: Some(idx as u64),
+                        active_parameter: Some(idx as i64),
                         signatures: vec![SignatureInformation {
                             label: label,
                             parameters: Some(params),
