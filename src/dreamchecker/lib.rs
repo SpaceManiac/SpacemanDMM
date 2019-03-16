@@ -639,8 +639,25 @@ impl<'o> AnalyzeProc<'o> {
         match rhs {
             Follow::Field(IndexKind::Colon, _) => Analysis::empty(),
             Follow::Field(IndexKind::SafeColon, _) => Analysis::empty(),
-            Follow::Call(IndexKind::Colon, _, _) => Analysis::empty(),
-            Follow::Call(IndexKind::SafeColon, _, _) => Analysis::empty(),
+            Follow::Call(IndexKind::Colon, _, args) |
+            Follow::Call(IndexKind::SafeColon, _, args) => {
+                // No analysis yet, but be sure to visit the arguments
+                for arg in args {
+                    let mut argument_value = arg;
+                    if let Expression::AssignOp { op: AssignOp::Assign, lhs, rhs } = arg {
+                        match lhs.as_term() {
+                            Some(Term::Ident(name)) |
+                            Some(Term::String(name)) => {
+                                // Don't visit_expression the kwarg key.
+                                argument_value = rhs;
+                            },
+                            _ => {},
+                        }
+                    }
+                    self.visit_expression(location, argument_value, None);
+                }
+                Analysis::empty()
+            },
 
             Follow::Index(expr) => {
                 self.visit_expression(location, expr, None);
