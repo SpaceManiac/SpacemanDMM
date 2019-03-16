@@ -80,6 +80,40 @@ type Span = interval_tree::RangeInclusive<dm::Location>;
 struct ClientCaps {
     related_info: bool,
     label_offset_support: bool,
+    object_tree: bool,
+}
+
+impl ClientCaps {
+    fn parse(caps: &langserver::ClientCapabilities) -> ClientCaps {
+        let mut this = ClientCaps::default();
+        if let Some(ref text_document) = caps.text_document {
+            if let Some(ref signature_help) = text_document.signature_help {
+                if let Some(ref signature_information) = signature_help.signature_information {
+                    if let Some(ref parameter_information) = signature_information.parameter_information {
+                        if let Some(label_offset_support) = parameter_information.label_offset_support {
+                            this.label_offset_support = label_offset_support;
+                        }
+                    }
+                }
+            }
+
+            if let Some(ref publish_diagnostics) = text_document.publish_diagnostics {
+                if let Some(related_info) = publish_diagnostics.related_information {
+                    this.related_info = related_info;
+                }
+            }
+        }
+        if let Some(ref experimental) = caps.experimental {
+            if let Some(ref dreammaker) = experimental.get("dreammaker") {
+                if let Some(ref object_tree) = dreammaker.get("objectTree") {
+                    if let Some(value) = object_tree.as_bool() {
+                        this.object_tree = value;
+                    }
+                }
+            }
+        }
+        this
+    }
 }
 
 struct Engine<'a, R: 'a, W: 'a> {
@@ -184,6 +218,32 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
     }
 
     // ------------------------------------------------------------------------
+    // Object tree explorer
+
+    fn update_objtree(&mut self) {
+        if self.client_caps.object_tree {
+            let roots = self.recurse_objtree(self.objtree.root());
+            self.issue_notification::<extras::ObjectTree>(extras::ObjectTreeParams {
+                roots,
+            });
+        }
+    }
+
+    fn recurse_objtree(&self, base: TypeRef) -> Vec<extras::ObjectTreeEntry> {
+        let mut output = Vec::new();
+        for ty in base.children() {
+            output.push(extras::ObjectTreeEntry {
+                name: ty.name.to_owned(),
+                kind: langserver::SymbolKind::Class,
+                location: self.convert_location(ty.location, &[&ty.path]).ok(),
+                children: self.recurse_objtree(ty),
+            });
+        }
+        output.sort_by(|a, b| a.name.cmp(&b.name));
+        output
+    }
+
+    // ------------------------------------------------------------------------
     // Environment tracking
 
     fn parse_environment(&mut self, environment: PathBuf) -> Result<(), jsonrpc::Error> {
@@ -223,6 +283,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             parser.enable_procs();
             self.objtree = parser.parse_object_tree();
         }
+        self.update_objtree();
         self.references_table = Some(find_references::ReferencesTable::new(&self.objtree));
         pp.finalize();
         self.preprocessor = Some(pp);
@@ -523,23 +584,7 @@ handle_method_call! {
         self.status = InitStatus::Running;
 
         // Extract relevant client capabilities.
-        if let Some(ref text_document) = init.capabilities.text_document {
-            if let Some(ref signature_help) = text_document.signature_help {
-                if let Some(ref signature_information) = signature_help.signature_information {
-                    if let Some(ref parameter_information) = signature_information.parameter_information {
-                        if let Some(label_offset_support) = parameter_information.label_offset_support {
-                            self.client_caps.label_offset_support = label_offset_support;
-                        }
-                    }
-                }
-            }
-
-            if let Some(ref publish_diagnostics) = text_document.publish_diagnostics {
-                if let Some(related_info) = publish_diagnostics.related_information {
-                    self.client_caps.related_info = related_info;
-                }
-            }
-        }
+        self.client_caps = ClientCaps::parse(&init.capabilities);
         let debug = format!("{:?}", self.client_caps);
         if let (Some(start), Some(end)) = (debug.find('{'), debug.rfind('}')) {
             eprintln!("client capabilities: {}", &debug[start + 2..end - 1]);
