@@ -816,18 +816,18 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         database/proc/Open(filename);
         database/proc/New(filename);
 
-        database_query/proc/Add(text, item1, item2 /*...*/);
-        database_query/proc/Close();
-        database_query/proc/Columns(column);
-        database_query/proc/Error();
-        database_query/proc/ErrorMsg();
-        database_query/proc/Execute(database);
-        database_query/proc/GetColumn(column);
-        database_query/proc/GetRowData();
-        database_query/proc/New(text, item1, item2 /*...*/);
-        database_query/proc/NextRow();
-        database_query/proc/Reset();
-        database_query/proc/RowsAffected();
+        database/query/proc/Add(text, item1, item2 /*...*/);
+        database/query/proc/Close();
+        database/query/proc/Columns(column);
+        database/query/proc/Error();
+        database/query/proc/ErrorMsg();
+        database/query/proc/Execute(database);
+        database/query/proc/GetColumn(column);
+        database/query/proc/GetRowData();
+        database/query/proc/New(text, item1, item2 /*...*/);
+        database/query/proc/NextRow();
+        database/query/proc/Reset();
+        database/query/proc/RowsAffected();
 
         image;
         image/var/alpha;
