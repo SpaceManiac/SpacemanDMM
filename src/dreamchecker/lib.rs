@@ -643,9 +643,9 @@ impl<'o> AnalyzeProc<'o> {
             Follow::Call(IndexKind::SafeColon, _, _) => Analysis::empty(),
 
             Follow::Index(expr) => {
+                self.visit_expression(location, expr, None);
                 // TODO: differentiate between L[1] and L[non_numeric_key]
                 if let Type::List(lty) = lhs.ty {
-                    self.visit_expression(location, expr, None);
                     if let Some(ty) = lty {
                         Type::Instance(ty).into()
                     } else {
