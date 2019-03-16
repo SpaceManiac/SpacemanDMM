@@ -15,6 +15,37 @@ use super::docs::DocCollection;
 use super::{DMError, Location, Context};
 
 // ----------------------------------------------------------------------------
+// Symbol IDs
+
+/// An identifier referring to a symbol in the object tree.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct SymbolId(u32);
+
+#[derive(Debug)]
+pub struct SymbolIdSource(SymbolId);
+
+#[derive(Copy, Clone, Debug)]
+pub enum SymbolIdCategory {
+    ObjectTree,
+    Preprocessor,
+    LocalVars,
+}
+
+const SYMBOL_ID_BITS: u32 = 32 - 2;
+
+impl SymbolIdSource {
+    pub fn new(category: SymbolIdCategory) -> SymbolIdSource {
+        SymbolIdSource(SymbolId((category as u32) << SYMBOL_ID_BITS))
+    }
+
+    pub fn allocate(&mut self) -> SymbolId {
+        let prev = self.0;
+        (self.0).0 += 1;
+        prev
+    }
+}
+
+// ----------------------------------------------------------------------------
 // Variables
 
 pub type Vars = LinkedHashMap<String, Constant>;
@@ -23,6 +54,7 @@ pub type Vars = LinkedHashMap<String, Constant>;
 pub struct VarDeclaration {
     pub var_type: VarType,
     pub location: Location,
+    pub id: SymbolId,
 }
 
 #[derive(Debug, Clone)]
@@ -46,6 +78,7 @@ pub struct TypeVar {
 pub struct ProcDeclaration {
     pub location: Location,
     pub kind: ProcDeclKind,
+    pub id: SymbolId,
 }
 
 #[derive(Debug, Clone)]
@@ -85,6 +118,7 @@ pub struct Type {
     pub procs: LinkedHashMap<String, TypeProc>,
     parent_type: NodeIndex,
     pub docs: DocCollection,
+    pub id: SymbolId,
 }
 
 impl Type {
@@ -530,6 +564,7 @@ impl<'a> std::cmp::Eq for ProcRef<'a> {}
 pub struct ObjectTree {
     pub graph: Graph<Type, ()>,
     pub types: BTreeMap<String, NodeIndex>,
+    pub symbols: SymbolIdSource,
 }
 
 impl Default for ObjectTree {
@@ -537,6 +572,7 @@ impl Default for ObjectTree {
         let mut tree = ObjectTree {
             graph: Default::default(),
             types: Default::default(),
+            symbols: SymbolIdSource::new(SymbolIdCategory::ObjectTree),
         };
         tree.graph.add_node(Type {
             name: String::new(),
@@ -547,6 +583,7 @@ impl Default for ObjectTree {
             procs: Default::default(),
             parent_type: NodeIndex::new(BAD_NODE_INDEX),
             docs: Default::default(),
+            id: tree.symbols.allocate(),
         });
         tree
     }
@@ -725,6 +762,7 @@ impl ObjectTree {
             location_specificity: len,
             parent_type: NodeIndex::new(BAD_NODE_INDEX),
             docs: Default::default(),
+            id: self.symbols.allocate(),
         });
         self.graph.add_edge(parent, node, ());
         self.types.insert(path, node);
@@ -803,6 +841,7 @@ impl ObjectTree {
         };
         var_type.suffix(&suffix);
 
+        let symbols = &mut self.symbols;
         let node = self.graph.node_weight_mut(parent).unwrap();
         // TODO: warn and merge docs for repeats
         Ok(Some(node.vars.entry(prev.to_owned()).or_insert_with(|| TypeVar {
@@ -817,6 +856,7 @@ impl ObjectTree {
                 Some(VarDeclaration {
                     var_type,
                     location,
+                    id: symbols.allocate(),
                 })
             } else {
                 None
@@ -846,6 +886,7 @@ impl ObjectTree {
                 proc.declaration = Some(ProcDeclaration {
                     location,
                     kind,
+                    id: self.symbols.allocate(),
                 });
             }
         }
