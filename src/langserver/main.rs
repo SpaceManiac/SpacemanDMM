@@ -21,6 +21,7 @@ extern crate dreammaker as dm;
 mod io;
 mod document;
 mod symbol_search;
+mod find_references;
 mod extras;
 mod completion;
 
@@ -93,6 +94,7 @@ struct Engine<'a, R: 'a, W: 'a> {
     context: &'a dm::Context,
     preprocessor: Option<dm::preprocessor::Preprocessor<'a>>,
     objtree: dm::objtree::ObjectTree,
+    references_table: Option<find_references::ReferencesTable>,
 
     annotations: HashMap<PathBuf, (FileId, FileId, Rc<AnnotationTree>)>,
 
@@ -113,6 +115,7 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             context,
             preprocessor: None,
             objtree: Default::default(),
+            references_table: None,
 
             annotations: Default::default(),
 
@@ -215,7 +218,12 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
             }
         };
 
-        self.objtree = dm::parser::parse(ctx, dm::indents::IndentProcessor::new(ctx, &mut pp));
+        {
+            let mut parser = dm::parser::Parser::new(ctx, dm::indents::IndentProcessor::new(ctx, &mut pp));
+            parser.enable_procs();
+            self.objtree = parser.parse_object_tree();
+        }
+        self.references_table = Some(find_references::ReferencesTable::new(&self.objtree));
         pp.finalize();
         self.preprocessor = Some(pp);
         self.issue_notification::<extras::WindowStatus>(Default::default());
@@ -545,6 +553,7 @@ handle_method_call! {
                 workspace_symbol_provider: Some(true),
                 hover_provider: Some(true),
                 document_symbol_provider: Some(true),
+                references_provider: Some(true),
                 type_definition_provider: Some(TypeDefinitionProviderCapability::Simple(true)),
                 text_document_sync: Some(TextDocumentSyncCapability::Options(TextDocumentSyncOptions {
                     open_close: Some(true),
@@ -948,6 +957,146 @@ handle_method_call! {
             Some(GotoDefinitionResponse::Scalar(ty_loc))
         } else {
             None
+        }
+    }
+
+    on References(&mut self, params) {
+        // Like GotoDefinition, but looks up references instead
+        let path = url_to_path(params.text_document.uri)?;
+        let (_, file_id, annotations) = self.get_annotations(&path)?;
+        let location = dm::Location {
+            file: file_id,
+            line: params.position.line as u32 + 1,
+            column: params.position.character as u16 + 1,
+        };
+
+        let mut symbol_id = None;
+
+        let iter = annotations.get_location(location);
+        match_annotation! { iter;
+        Annotation::Variable(path) => {
+            let mut current = self.objtree.root();
+            let (var_name, most) = path.split_last().unwrap();
+            for part in most {
+                if part == "var" { break }
+                if let Some(child) = current.child(part) {
+                    current = child;
+                } else {
+                    break;
+                }
+            }
+
+            if let Some(decl) = current.get_var_declaration(var_name) {
+                symbol_id = Some(decl.id);
+            }
+        },
+        Annotation::ProcHeader(parts, _) => {
+            let mut current = self.objtree.root();
+            let (proc_name, most) = parts.split_last().unwrap();
+            for part in most {
+                if part == "proc" || part == "verb" { break }
+                if let Some(child) = current.child(part) {
+                    current = child;
+                } else {
+                    break;
+                }
+            }
+
+            if let Some(decl) = current.get_proc_declaration(proc_name) {
+                symbol_id = Some(decl.id);
+            }
+        },
+        Annotation::TreePath(absolute, parts) => {
+            if let Some(ty) = self.objtree.type_by_path(completion::combine_tree_path(&iter, *absolute, parts)) {
+                symbol_id = Some(ty.id);
+            }
+        },
+        Annotation::TypePath(parts) => {
+            match self.follow_type_path(&iter, parts) {
+                // '/datum/proc/foo'
+                Some(completion::TypePathResult { ty, decl: _, proc: Some((proc_name, _)) }) => {
+                    if let Some(decl) = ty.get_proc_declaration(proc_name) {
+                        symbol_id = Some(decl.id);
+                    }
+                },
+                // 'datum/bar'
+                Some(completion::TypePathResult { ty, decl: None, proc: None }) => {
+                    symbol_id = Some(ty.id);
+                },
+                _ => {}
+            }
+        },
+        Annotation::UnscopedCall(proc_name) => {
+            let (ty, _) = self.find_type_context(&iter);
+            let mut next = ty.or(Some(self.objtree.root()));
+            while let Some(ty) = next {
+                if let Some(proc) = ty.procs.get(proc_name) {
+                    if let Some(ref decl) = proc.declaration {
+                        symbol_id = Some(decl.id);
+                        break;
+                    }
+                }
+                next = ty.parent_type();
+            }
+        },
+        Annotation::UnscopedVar(var_name) => {
+            let (ty, proc_name) = self.find_type_context(&iter);
+            match self.find_unscoped_var(&iter, ty, proc_name, var_name) {
+                UnscopedVar::Parameter { .. } => {
+                    // TODO
+                },
+                UnscopedVar::Variable { ty, .. } => {
+                    if let Some(decl) = ty.get_var_declaration(var_name) {
+                        symbol_id = Some(decl.id);
+                    }
+                },
+                UnscopedVar::Local { .. } => {
+                    // TODO
+                },
+                UnscopedVar::None => {}
+            }
+        },
+        Annotation::ScopedCall(priors, proc_name) => {
+            let mut next = self.find_scoped_type(&iter, priors);
+            while let Some(ty) = next {
+                if let Some(proc) = ty.procs.get(proc_name) {
+                    if let Some(ref decl) = proc.declaration {
+                        symbol_id = Some(decl.id);
+                        break;
+                    }
+                }
+                next = ignore_root(ty.parent_type());
+            }
+        },
+        Annotation::ScopedVar(priors, var_name) => {
+            let mut next = self.find_scoped_type(&iter, priors);
+            while let Some(ty) = next {
+                if let Some(var) = ty.vars.get(var_name) {
+                    if let Some(ref decl) = var.declaration {
+                        symbol_id = Some(decl.id);
+                        break;
+                    }
+                }
+                next = ignore_root(ty.parent_type());
+            }
+        },
+        // TODO: macros
+        }
+
+        let mut result = &[][..];
+        if let Some(id) = symbol_id {
+            if let Some(ref table) = self.references_table {
+                result = table.find_references(id, params.context.include_declaration);
+            }
+        }
+        if result.is_empty() {
+            None
+        } else {
+            let mut output = Vec::new();
+            for each in result {
+                output.push(self.convert_location(*each, &[])?);
+            }
+            Some(output)
         }
     }
 
