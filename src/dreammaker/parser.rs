@@ -1887,9 +1887,16 @@ where
 
             // term :: '(' expression ')'
             Token::Punct(LParen) => {
-                let expr = require!(self.expression());
-                require!(self.exact(Token::Punct(Punctuation::RParen)));
-                Term::Expr(Box::new(expr))
+                if let Some(()) = self.exact(Token::Punct(Punctuation::RParen))? {
+                    self.error("'()' should be replaced with 'null'")
+                        .set_severity(Severity::Warning)
+                        .register(self.context);
+                    Term::Null
+                } else {
+                    let expr = require!(self.expression());
+                    require!(self.exact(Token::Punct(Punctuation::RParen)));
+                    Term::Expr(Box::new(expr))
+                }
             },
 
             Token::InterpStringBegin(begin) => {
