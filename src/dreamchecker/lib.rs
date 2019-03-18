@@ -3,7 +3,7 @@
 #![allow(dead_code, unused_variables)]
 
 extern crate dreammaker as dm;
-use dm::{Context, DMError, Location};
+use dm::{Context, DMError, Location, Severity};
 use dm::objtree::{ObjectTree, TypeRef, ProcRef};
 use dm::constants::{Constant, ConstFn};
 use dm::ast::*;
@@ -401,8 +401,25 @@ impl<'o> AnalyzeProc<'o> {
                     self.visit_block(default);
                 }
             },
-            Statement::TryCatch { try_block, catch_block, .. } => {
+            Statement::TryCatch { try_block, catch_params, catch_block } => {
                 self.visit_block(try_block);
+                if catch_params.len() > 1 {
+                    error(location, format!("Expected 0 or 1 catch parameters, got {}", catch_params.len()))
+                        .set_severity(Severity::Warning)
+                        .register(self.context);
+                }
+                for caught in catch_params.iter() {
+                    let (var_name, mut type_path) = match caught.split_last() {
+                        Some(x) => x,
+                        None => continue
+                    };
+                    match type_path.split_first() {
+                        Some((first, rest)) if first == "var" => type_path = rest,
+                        _ => {}
+                    }
+                    let var_type: VarType = type_path.iter().map(ToOwned::to_owned).collect();
+                    self.visit_var(location, &var_type, var_name, None);
+                }
                 self.visit_block(catch_block);
             },
             Statement::Continue(_) => {},
