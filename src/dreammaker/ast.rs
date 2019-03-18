@@ -821,10 +821,28 @@ pub struct VarStatement {
     pub value: Option<Expression>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SettingMode {
+    /// As in `set name = "Use"`.
     Assign,
+    /// As in `set src in usr`.
     In,
+}
+
+impl SettingMode {
+    /// Return the string representation of this setting mode.
+    pub fn name(self) -> &'static str {
+        match self {
+            SettingMode::Assign => "=",
+            SettingMode::In => "in",
+        }
+    }
+}
+
+impl fmt::Display for SettingMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(self.name())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
