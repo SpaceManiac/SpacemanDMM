@@ -267,8 +267,20 @@ impl<'o> WalkProc<'o> {
                     self.visit_block(default);
                 }
             },
-            Statement::TryCatch { try_block, catch_block, catch_params: _ } => {
+            Statement::TryCatch { try_block, catch_params, catch_block } => {
                 self.visit_block(try_block);
+                for caught in catch_params.iter() {
+                    let (var_name, mut type_path) = match caught.split_last() {
+                        Some(x) => x,
+                        None => continue
+                    };
+                    match type_path.split_first() {
+                        Some((first, rest)) if first == "var" => type_path = rest,
+                        _ => {}
+                    }
+                    let var_type: VarType = type_path.iter().map(ToOwned::to_owned).collect();
+                    self.visit_var(location, &var_type, var_name, None);
+                }
                 self.visit_block(catch_block);
             },
             Statement::Continue(_) => {},
