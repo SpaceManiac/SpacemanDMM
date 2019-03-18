@@ -717,7 +717,7 @@ impl<'o> AnalyzeProc<'o> {
                         Analysis::empty()
                     }
                 } else {
-                    error(location, format!("proc call require static type: {:?} on {:?}", name, lhs))
+                    error(location, format!("proc call require static type: {:?}", name))
                         .register(self.context);
                     Analysis::empty()
                 }
