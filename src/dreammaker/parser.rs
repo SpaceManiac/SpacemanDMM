@@ -1419,6 +1419,10 @@ where
             // statement :: 'throw' expression ';'
             let expression = require!(self.expression());
             success(Statement::Throw(expression))
+        } else if let Some(()) = self.exact_ident("goto")? {
+            // statement :: 'goto' ident ';'
+            let label_name = require!(self.ident());
+            success(Statement::Goto(label_name))
         // EXPRESSION STATEMENTS
         } else {
             // statement :: expression ';'

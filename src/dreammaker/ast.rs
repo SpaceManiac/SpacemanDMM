@@ -807,6 +807,7 @@ pub enum Statement {
     },
     Continue(Option<String>),
     Break(Option<String>),
+    Goto(String),
     Label {
         name: String,
         block: Block,

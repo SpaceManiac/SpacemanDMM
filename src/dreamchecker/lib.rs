@@ -470,6 +470,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Statement::Continue(_) => {},
             Statement::Break(_) => {},
+            Statement::Goto(_) => {},
             Statement::Label { name: _, block } => self.visit_block(block),
             Statement::Del(expr) => { self.visit_expression(location, expr, None); },
         }
