@@ -1630,7 +1630,15 @@ where
                     _ => return self.parse_error(),
                 }
                 // Read the else branch.
-                let else_ = require!(self.expression());
+                let else_ = match self.expression()? {
+                    Some(else_) => else_,
+                    None => {
+                        self.error("missing else arm of conditional operator should be replaced with 'null'")
+                            .set_severity(Severity::Warning)
+                            .register(self.context);
+                        Expression::from(Term::Null)
+                    }
+                };
                 // Compose the result.
                 result = Expression::TernaryOp {
                     cond: Box::new(lhs),
