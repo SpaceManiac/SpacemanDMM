@@ -424,6 +424,12 @@ impl<'a> ::std::cmp::PartialEq for TypeRef<'a> {
 
 impl<'a> ::std::cmp::Eq for TypeRef<'a> {}
 
+impl<'a> ::std::hash::Hash for TypeRef<'a> {
+    fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+        self.idx.hash(state);
+    }
+}
+
 #[derive(Debug, Copy, Clone)]
 pub enum NavigatePathResult<'o> {
     Type(TypeRef<'o>),
@@ -556,6 +562,14 @@ impl<'a> ::std::cmp::PartialEq for ProcRef<'a> {
 }
 
 impl<'a> std::cmp::Eq for ProcRef<'a> {}
+
+impl<'a> ::std::hash::Hash for ProcRef<'a> {
+    fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+        self.ty.hash(state);
+        self.name.hash(state);
+        self.idx.hash(state);
+    }
+}
 
 // ----------------------------------------------------------------------------
 // The object tree itself

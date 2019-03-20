@@ -126,7 +126,15 @@ pub fn run(context: &Context, objtree: &ObjectTree) {
 
     objtree.root().recurse(&mut |ty| {
         for proc in ty.iter_self_procs() {
-            if let dm::objtree::Code::Present(ref code) = proc.code {
+            if let dm::objtree::Code::Present(ref code) = proc.get().code {
+                analyzer.gather_settings(proc, code);
+            }
+        }
+    });
+
+    objtree.root().recurse(&mut |ty| {
+        for proc in ty.iter_self_procs() {
+            if let dm::objtree::Code::Present(ref code) = proc.get().code {
                 analyzer.check_proc(proc, code);
             }
         }
@@ -163,16 +171,13 @@ struct KwargInfo {
     bad_overrides_at: BTreeMap<String, BadOverride>,
 }
 
-#[derive(Default)]
-struct SharedState {
-    // Debug(ProcRef) -> KwargInfo
-    used_kwargs: BTreeMap<String, KwargInfo>,
-}
-
 pub struct AnalyzeObjectTree<'o> {
     context: &'o Context,
     objtree: &'o ObjectTree,
-    shared: SharedState,
+
+    return_type: HashMap<ProcRef<'o>, StaticType<'o>>,
+    // Debug(ProcRef) -> KwargInfo
+    used_kwargs: BTreeMap<String, KwargInfo>,
 }
 
 impl<'o> AnalyzeObjectTree<'o> {
@@ -180,12 +185,29 @@ impl<'o> AnalyzeObjectTree<'o> {
         AnalyzeObjectTree {
             context,
             objtree,
-            shared: Default::default(),
+            return_type: Default::default(),
+            used_kwargs: Default::default(),
         }
     }
 
-    pub fn check_proc(&mut self, proc: ProcRef, code: &[Spanned<Statement>]) {
-        AnalyzeProc::new(&mut self.shared, self.context, self.objtree, proc).run(code)
+    pub fn check_proc(&mut self, proc: ProcRef<'o>, code: &'o [Spanned<Statement>]) {
+        AnalyzeProc::new(self, self.context, self.objtree, proc).run(code)
+    }
+
+    pub fn gather_settings(&mut self, proc: ProcRef<'o>, code: &'o [Spanned<Statement>]) {
+        for statement in code.iter() {
+            if let Statement::Setting { ref name, ref value, .. } = statement.elem {
+                if name == "spacemandmm_return_type" {
+                    if let Some(Term::Prefab(fab)) = value.as_term() {
+                        let bits: Vec<_> = fab.path.iter().map(|(_, name)| name.to_owned()).collect();
+                        let ty = self.static_type(statement.location, &bits);
+                        self.return_type.insert(proc, ty);
+                    }
+                }
+            } else {
+                break;
+            }
+        }
     }
 
     pub fn check_kwargs(&mut self, proc: ProcRef) {
@@ -195,7 +217,7 @@ impl<'o> AnalyzeObjectTree<'o> {
         // error earlier in the process.
         let mut next = proc.parent_proc();
         while let Some(current) = next {
-            if let Some(kwargs) = self.shared.used_kwargs.get_mut(&current.to_string()) {
+            if let Some(kwargs) = self.used_kwargs.get_mut(&current.to_string()) {
                 let mut missing = Vec::new();
 
                 for (keyword, location) in kwargs.called_at.iter() {
@@ -215,7 +237,7 @@ impl<'o> AnalyzeObjectTree<'o> {
     }
 
     pub fn finish_check_kwargs(&self) {
-        for (base_procname, kwarg_info) in self.shared.used_kwargs.iter() {
+        for (base_procname, kwarg_info) in self.used_kwargs.iter() {
             if kwarg_info.bad_overrides_at.is_empty() {
                 continue
             }
@@ -252,6 +274,28 @@ impl<'o> AnalyzeObjectTree<'o> {
             error.register(self.context);
         }
     }
+
+    fn static_type(&mut self, location: Location, mut of: &[String]) -> StaticType<'o> {
+        while !of.is_empty() && ["static", "global", "const", "tmp"].contains(&&*of[0]) {
+            of = &of[1..];
+        }
+
+        if of.is_empty() {
+            StaticType::None
+        } else if of[0] == "list" {
+            let keys = self.static_type(location, &of[1..]);
+            StaticType::List {
+                list: self.objtree.expect("/list"),
+                keys: Box::new(keys),
+            }
+        } else if let Some(ty) = self.objtree.type_by_path(of) {
+            StaticType::Type(ty)
+        } else {
+            error(location, format!("undefined type: {}", FormatTreePath(of)))
+                .register(self.context);
+            StaticType::None
+        }
+    }
 }
 
 fn error<S: Into<String>>(location: Location, desc: S) -> DMError {
@@ -261,8 +305,8 @@ fn error<S: Into<String>>(location: Location, desc: S) -> DMError {
 // ----------------------------------------------------------------------------
 // Procedure analyzer
 
-struct AnalyzeProc<'o> {
-    env: &'o mut SharedState,
+struct AnalyzeProc<'o, 's> {
+    env: &'s mut AnalyzeObjectTree<'o>,
     context: &'o Context,
     objtree: &'o ObjectTree,
     ty: TypeRef<'o>,
@@ -270,8 +314,8 @@ struct AnalyzeProc<'o> {
     local_vars: HashMap<String, Analysis<'o>>,
 }
 
-impl<'o> AnalyzeProc<'o> {
-    fn new(env: &'o mut SharedState, context: &'o Context, objtree: &'o ObjectTree, proc_ref: ProcRef<'o>) -> Self {
+impl<'o, 's> AnalyzeProc<'o, 's> {
+    fn new(env: &'s mut AnalyzeObjectTree<'o>, context: &'o Context, objtree: &'o ObjectTree, proc_ref: ProcRef<'o>) -> Self {
         let ty = proc_ref.ty();
 
         let mut local_vars = HashMap::new();
@@ -435,7 +479,7 @@ impl<'o> AnalyzeProc<'o> {
 
     fn visit_var(&mut self, location: Location, var_type: &VarType, name: &str, value: Option<&'o Expression>) {
         // Calculate type hint
-        let static_type = self.static_type_inner(location, &var_type.type_path);
+        let static_type = self.env.static_type(location, &var_type.type_path);
 
         // Visit the expression if it's there
         let mut analysis = match value {
@@ -809,32 +853,14 @@ impl<'o> AnalyzeProc<'o> {
             self.visit_expression(location, argument_value, None);
         }
 
-        Analysis::empty()
+        if let Some(return_type) = self.env.return_type.get(&proc) {
+            Analysis::from(return_type.clone())
+        } else {
+            Analysis::empty()
+        }
     }
 
     fn static_type(&mut self, location: Location, of: &[String]) -> Analysis<'o> {
-        Analysis::from(self.static_type_inner(location, of))
-    }
-
-    fn static_type_inner(&mut self, location: Location, mut of: &[String]) -> StaticType<'o> {
-        while !of.is_empty() && ["static", "global", "const", "tmp"].contains(&&*of[0]) {
-            of = &of[1..];
-        }
-
-        if of.is_empty() {
-            StaticType::None
-        } else if of[0] == "list" {
-            let keys = self.static_type_inner(location, &of[1..]);
-            StaticType::List {
-                list: self.objtree.expect("/list"),
-                keys: Box::new(keys),
-            }
-        } else if let Some(ty) = self.objtree.type_by_path(of) {
-            StaticType::Type(ty)
-        } else {
-            error(location, format!("undefined type: {}", FormatTreePath(of)))
-                .register(self.context);
-            StaticType::None
-        }
+        Analysis::from(self.env.static_type(location, of))
     }
 }

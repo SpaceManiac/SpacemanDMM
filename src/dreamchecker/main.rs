@@ -36,12 +36,21 @@ fn main() {
 
     let mut analyzer = AnalyzeObjectTree::new(&context, &tree);
 
-    // First pass: analyze all proc bodies
+    println!("============================================================");
+    println!("Gathering proc settings...\n");
+    tree.root().recurse(&mut |ty| {
+        for proc in ty.iter_self_procs() {
+            if let Code::Present(ref code) = proc.get().code {
+                analyzer.gather_settings(proc, code);
+            }
+        }
+    });
+
     println!("============================================================");
     println!("Analyzing proc bodies...\n");
     tree.root().recurse(&mut |ty| {
         for proc in ty.iter_self_procs() {
-            match proc.code {
+            match proc.get().code {
                 Code::Present(ref code) => {
                     present += 1;
                     analyzer.check_proc(proc, code);
@@ -55,7 +64,6 @@ fn main() {
 
     println!("Procs analyzed: {}. Errored: {}. Builtins: {}.\n", present, invalid, builtin);
 
-    // Second pass: warn about procs which are missing kwargs their parents have
     println!("============================================================");
     println!("Analyzing proc override validity...\n");
     tree.root().recurse(&mut |ty| {
