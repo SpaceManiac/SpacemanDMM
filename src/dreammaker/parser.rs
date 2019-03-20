@@ -995,11 +995,19 @@ where
             InputType::default()
         };
         // `in view(7)` or `in list("a", "b")` or ...
-        let in_list = if let Some(()) = self.exact(Token::Punct(Punctuation::In))? {
-            Some(require!(self.expression()))
+        let in_list;
+        if let Some(()) = self.exact(Token::Punct(Punctuation::In))? {
+            in_list = Some(require!(self.expression()));
+            // in case it is out of order
+            if let Some(()) = self.exact_ident("as")? {
+                self.error("'as' clause should precede 'in' clause, and is being ignored")
+                    .set_severity(Severity::Warning)
+                    .register(self.context);
+                let _ = require!(self.input_type());
+            }
         } else {
-            None
-        };
+            in_list = None;
+        }
         success((input_type, in_list))
     }
 
@@ -1388,7 +1396,7 @@ where
                     (InputType::default(), None)
                 };
                 if !input_types.is_empty() || in_list.is_some() {
-                    self.error("input specifier has no effect here")
+                    self.error("'as' clause has no effect on local variables")
                         .set_severity(Severity::Warning)
                         .register(self.context);
                 }
@@ -1801,7 +1809,7 @@ where
                 Some(args) => {
                     // warn against this mistake
                     if let Some(&Expression::BinaryOp { op: BinaryOp::In, .. } ) = args.get(0) {
-                        self.error("bad 'locate(in)', should be 'locate() in'")
+                        self.error("bad `locate(X in Y)`, should be `locate(X) in Y`")
                             .set_severity(Severity::Warning)
                             .register(self.context);
                     }
