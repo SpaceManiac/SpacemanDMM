@@ -71,6 +71,7 @@ pub fn default_defines(defines: &mut DefineMap) {
     c! {
         DM_VERSION = Int(DM_VERSION);
         DM_BUILD = Int(DM_BUILD);
+        SPACEMAN_DMM = Int(1);
 
         // eye and sight
         SEEINVIS = Int(2);
