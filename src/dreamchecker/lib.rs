@@ -44,6 +44,7 @@ enum Type<'o> {
     Instance(TypeRef<'o>),
     Typepath(TypeRef<'o>),
     Global,
+    AbstractFilter,
 }
 
 impl<'o> Type<'o> {
@@ -60,6 +61,7 @@ impl<'o> Type<'o> {
                 ConstFn::Matrix => Type::Instance(objtree.expect("/matrix")),
                 ConstFn::Newlist => Type::List(None),
                 ConstFn::Sound => Type::Instance(objtree.expect("/sound")),
+                ConstFn::Filter => Type::AbstractFilter,
             },
             // TODO: New => Instance, Prefab => Typepath
             _ => Type::Any,

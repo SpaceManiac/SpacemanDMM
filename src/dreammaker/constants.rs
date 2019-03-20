@@ -77,6 +77,8 @@ pub enum ConstFn {
     Newlist,
     /// The `sound()` type constructor.
     Sound,
+    /// The `filter()` type constructor.
+    Filter,
 }
 
 /// A constant-evaluation error (usually type mismatch).
@@ -338,6 +340,7 @@ impl fmt::Display for ConstFn {
             ConstFn::Matrix => "matrix",
             ConstFn::Newlist => "newlist",
             ConstFn::Sound => "sound",
+            ConstFn::Filter => "filter",
         })
     }
 }
