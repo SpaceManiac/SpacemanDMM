@@ -322,6 +322,14 @@ impl Token {
             _ => false
         }
     }
+
+    /// Check whether this token matches a given identifier.
+    pub fn is_ident(&self, ident: &str) -> bool {
+        match *self {
+            Token::Ident(ref i, _) => i == ident,
+            _ => false,
+        }
+    }
 }
 
 impl fmt::Display for Token {
