@@ -752,7 +752,16 @@ impl<'ctx> Preprocessor<'ctx> {
                         return Ok(());
                     }
                     // both constant and function defines
-                    "define" if disabled => {}
+                    "define" if disabled => {
+                        // Skip to the end of the line, or else we'll catch
+                        // stringify operators `#X` as unknown directives.
+                        loop {
+                            match next!() {
+                                Token::Punct(Punctuation::Newline) => break,
+                                _ => {}
+                            }
+                        }
+                    }
                     "define" => {
                         // accumulate just-seen Following doc comments
                         let mut our_docs = Vec::new();
