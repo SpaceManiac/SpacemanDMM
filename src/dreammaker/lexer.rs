@@ -654,9 +654,8 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
             _ => {},
         }
 
-        match firstchar {
-            Some(ch) => buffer[1] = ch,
-            None => {},
+        if let Some(ch) = firstchar {
+            buffer[1] = ch;
         }
 
         loop {
@@ -758,14 +757,11 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                     buf.push('#');  // Keep pushing to `buf` in case of error.
                     let start = buf.len();
                     for _ in 0..3 {
-                        match self.next() {
-                            Some(ch) => {
-                                buf.push(ch as char);
-                                if ["I", "IN", "INF", "IND"].contains(&&buf[start..]) {
-                                    continue;
-                                }
+                        if let Some(ch) = self.next() {
+                            buf.push(ch as char);
+                            if ["I", "IN", "INF", "IND"].contains(&&buf[start..]) {
+                                continue;
                             }
-                            None => {}
                         }
                         // Not what we expected, throw it up the line so that
                         // f32::from_str will error.

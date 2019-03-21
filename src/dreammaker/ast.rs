@@ -464,24 +464,19 @@ pub enum IndexKind {
 }
 
 impl IndexKind {
-    pub fn len(self) -> usize {
+    pub fn name(self) -> &'static str {
         match self {
-            IndexKind::Dot |
-            IndexKind::Colon => 1,
-            IndexKind::SafeDot |
-            IndexKind::SafeColon => 2,
+            IndexKind::Dot => ".",
+            IndexKind::Colon => ":",
+            IndexKind::SafeDot => "?.",
+            IndexKind::SafeColon => "?:",
         }
     }
 }
 
 impl fmt::Display for IndexKind {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.write_str(match *self {
-            IndexKind::Dot => ".",
-            IndexKind::Colon => ":",
-            IndexKind::SafeDot => "?.",
-            IndexKind::SafeColon => "?:",
-        })
+        fmt.write_str(self.name())
     }
 }
 
@@ -660,7 +655,7 @@ impl VarType {
     }
 
     pub fn suffix(&mut self, suffix: &VarSuffix) {
-        if suffix.list.len() > 0 {
+        if !suffix.list.is_empty() {
             self.type_path.insert(0, "list".to_owned());
         }
     }

@@ -143,7 +143,7 @@ struct OpInfo {
 }
 
 impl OpInfo {
-    fn matches(&self, token: &Token) -> bool {
+    fn matches(self, token: &Token) -> bool {
         match *token {
             Token::Punct(p) => self.token == p,
             _ => false,
@@ -1845,7 +1845,7 @@ where
             // term :: 'as' '(' input_type ')'
             Token::Ident(ref i, _) if i == "as" => {
                 require!(self.exact(Token::Punct(Punctuation::LParen)));
-                let input_type = self.input_type()?.unwrap_or(InputType::default());
+                let input_type = self.input_type()?.unwrap_or_default();
                 require!(self.exact(Token::Punct(Punctuation::RParen)));
                 Term::As(input_type)
             },
@@ -1966,7 +1966,7 @@ where
         let ident = match self.ident()? {
             Some(ident) => ident,
             None => {
-                index_op_loc.column += kind.len() as u16;
+                index_op_loc.column += kind.name().len() as u16;
                 self.annotate_precise(index_op_loc..index_op_loc, || {
                     Annotation::ScopedMissingIdent(belongs_to.clone())
                 });
@@ -2022,7 +2022,7 @@ where
         let ident = match self.ident()? {
             Some(ident) => ident,
             None => {
-                index_op_loc.column += kind.len() as u16;
+                index_op_loc.column += kind.name().len() as u16;
                 self.annotate_precise(index_op_loc..index_op_loc, || {
                     Annotation::ScopedMissingIdent(belongs_to.clone())
                 });

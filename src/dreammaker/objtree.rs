@@ -447,7 +447,7 @@ impl<'o> NavigatePathResult<'o> {
     }
 
     pub fn to_path(self) -> Vec<String> {
-        let mut path: Vec<String> = self.ty().path.split("/").skip(1).map(ToOwned::to_owned).collect();
+        let mut path: Vec<String> = self.ty().path.split('/').skip(1).map(ToOwned::to_owned).collect();
         match self {
             NavigatePathResult::Type(_) => {},
             NavigatePathResult::ProcGroup(_, kind) => path.push(kind.to_string()),
@@ -916,7 +916,7 @@ impl ObjectTree {
         if declaration.is_some() && !proc.value.is_empty() {
             // Show the error now, make up for it by putting the original
             // at the beginning of the list (so `..()` finds it).
-            DMError::new(proc.value[0].location, format!("procedure override precedes definition"))
+            DMError::new(proc.value[0].location, "procedure override precedes definition")
                 .set_severity(Severity::Warning)
                 .with_note(location, "definition is here")
                 .register(context);
