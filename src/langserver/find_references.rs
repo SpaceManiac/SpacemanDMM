@@ -365,7 +365,16 @@ impl<'o> WalkProc<'o> {
     fn visit_term(&mut self, location: Location, term: &'o Term, type_hint: Option<TypeRef<'o>>) -> StaticType<'o> {
         match term {
             Term::Expr(expr) => self.visit_expression(location, expr, type_hint),
+
+            Term::Null => StaticType::None,
+            Term::String(_) => StaticType::None,
+            Term::Resource(_) => StaticType::None,
+            Term::Int(_) => StaticType::None,
+            Term::Float(_) => StaticType::None,
+            Term::As(_) => StaticType::None,
+
             Term::New { type_, args } => {
+                // TODO: use /proc/new
                 // determine the type being new'd
                 let typepath = match type_ {
                     NewType::Implicit => if let Some(hint) = type_hint {
@@ -391,10 +400,6 @@ impl<'o> WalkProc<'o> {
                 } else {
                     StaticType::None
                 }
-            },
-            Term::List(_) => StaticType::List {
-                list: self.objtree.expect("/list"),
-                keys: Box::new(StaticType::None),
             },
             Term::Prefab(prefab) => {
                 self.visit_prefab(location, prefab);
@@ -447,7 +452,46 @@ impl<'o> WalkProc<'o> {
                 }
                 StaticType::None
             },
-            _ => StaticType::None,
+            Term::List(args) => {
+                // TODO: use /proc/list
+                self.visit_arguments(location, args);
+                StaticType::List {
+                    list: self.objtree.expect("/list"),
+                    keys: Box::new(StaticType::None),
+                }
+            },
+            Term::Locate { args, in_list } => {
+                // TODO: use /proc/locate
+                self.visit_arguments(location, args);
+                if let Some(ref expr) = in_list {
+                    self.visit_expression(location, expr, None);
+                }
+                StaticType::None
+            },
+            Term::Input { args, input_type: _, in_list } => {
+                // TODO: use /proc/input
+                self.visit_arguments(location, args);
+                if let Some(ref expr) = in_list {
+                    self.visit_expression(location, expr, None);
+                }
+                StaticType::None
+            },
+            Term::Pick(args) => {
+                // TODO: use /proc/pick
+                for (weight, value) in args.iter() {
+                    if let Some(ref weight) = weight {
+                        self.visit_expression(location, weight, None);
+                    }
+                    self.visit_expression(location, value, None);
+                }
+                StaticType::None
+            },
+            Term::DynamicCall(args_1, args_2) => {
+                // TODO: use /proc/call
+                self.visit_arguments(location, args_1);
+                self.visit_arguments(location, args_2);
+                StaticType::None
+            },
         }
     }
 
