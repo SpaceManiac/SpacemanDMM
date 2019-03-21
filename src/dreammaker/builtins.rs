@@ -539,6 +539,8 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         atom/var/tmp/z;  // not editable
         atom/var/list/filters;
         atom/proc/Click(location, control, params);
+        atom/proc/Cross(/*atom/movable*/O);
+        atom/proc/Crossed(/*atom/movable*/O);
         atom/proc/DblClick(location, control, params);
         atom/proc/Enter(/*atom/movable*/O, /*atom*/oldloc);
         atom/proc/Entered(/*atom/movable*/Obj, /*atom*/OldLoc);
@@ -554,6 +556,8 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         atom/proc/MouseWheel(delta_x, delta_y, location, control, params);
         atom/New(loc);
         atom/proc/Stat();
+        atom/proc/Uncross(/*atom/movable*/O);
+        atom/proc/Uncrossed(/*atom/movable*/O);
 
         atom/movable;
         atom/movable/var/animate_movement;
@@ -570,11 +574,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         atom/movable/var/list/vis_contents;
         atom/movable/var/tmp/list/vis_locs;
         atom/movable/proc/Bump(/*atom*/Obstacle);
-        atom/movable/proc/Cross(/*atom/movable*/O);
-        atom/movable/proc/Crossed(/*atom/movable*/O);
         atom/movable/proc/Move(NewLoc, Dir/*=0*/, step_x/*=0*/, step_y/*=0*/);
-        atom/movable/proc/Uncross(/*atom/movable*/O);
-        atom/movable/proc/Uncrossed(/*atom/movable*/O);
 
         area/parent_type = path!(/atom);
         area/layer = int!(1);
