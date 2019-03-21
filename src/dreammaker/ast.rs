@@ -75,13 +75,19 @@ pub enum PathOp {
     Colon,
 }
 
+impl PathOp {
+    pub fn name(self) -> &'static str {
+        match self {
+            PathOp::Slash => "/",
+            PathOp::Dot => ".",
+            PathOp::Colon => ":",
+        }
+    }
+}
+
 impl fmt::Display for PathOp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            PathOp::Slash => f.write_str("/"),
-            PathOp::Dot => f.write_str("."),
-            PathOp::Colon => f.write_str(":"),
-        }
+        f.write_str(self.name())
     }
 }
 
