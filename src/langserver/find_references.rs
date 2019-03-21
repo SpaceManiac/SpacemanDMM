@@ -364,14 +364,66 @@ impl<'o> WalkProc<'o> {
 
     fn visit_term(&mut self, location: Location, term: &'o Term, type_hint: Option<TypeRef<'o>>) -> StaticType<'o> {
         match term {
-            Term::Expr(expr) => self.visit_expression(location, expr, type_hint),
-
             Term::Null => StaticType::None,
-            Term::String(_) => StaticType::None,
-            Term::Resource(_) => StaticType::None,
             Term::Int(_) => StaticType::None,
             Term::Float(_) => StaticType::None,
+            Term::String(_) => StaticType::None,
+            Term::Resource(_) => StaticType::None,
             Term::As(_) => StaticType::None,
+
+            Term::Expr(expr) => self.visit_expression(location, expr, type_hint),
+            Term::Prefab(prefab) => {
+                self.visit_prefab(location, prefab);
+                StaticType::None
+            },
+            Term::InterpString(_, parts) => {
+                for (ref expr, _) in parts.iter() {
+                    if let Some(expr) = expr {
+                        self.visit_expression(location, expr, None);
+                    }
+                }
+                StaticType::None
+            },
+
+            Term::Ident(unscoped_name) => {
+                if let Some(var) = self.local_vars.get(unscoped_name) {
+                    self.tab.use_symbol(var.symbol, location);
+                    return var.ty.clone();
+                }
+                if let Some(decl) = self.ty.get_var_declaration(unscoped_name) {
+                    self.tab.use_symbol(decl.id, location);
+                    self.static_type(location, &decl.var_type.type_path)
+                } else {
+                    StaticType::None
+                }
+            },
+            Term::Call(unscoped_name, args) => {
+                let src = self.ty;
+                if let Some(proc) = self.ty.get_proc(unscoped_name) {
+                    self.visit_call(location, src, proc, args, false)
+                } else {
+                    StaticType::None
+                }
+            },
+            Term::SelfCall(args) => {
+                if let Some(proc) = self.proc {
+                    let src = self.ty;
+                    // Self calls are exact, and won't ever call an override.
+                    self.visit_call(location, src, proc, args, true)
+                } else {
+                    StaticType::None
+                }
+            },
+            Term::ParentCall(args) => {
+                if let Some(proc) = self.proc.and_then(ProcRef::parent_proc) {
+                    // TODO: if args are empty, call w/ same args
+                    let src = self.ty;
+                    // Parent calls are exact, and won't ever call an override.
+                    self.visit_call(location, src, proc, args, true)
+                } else {
+                    StaticType::None
+                }
+            },
 
             Term::New { type_, args } => {
                 // TODO: use /proc/new
@@ -400,57 +452,6 @@ impl<'o> WalkProc<'o> {
                 } else {
                     StaticType::None
                 }
-            },
-            Term::Prefab(prefab) => {
-                self.visit_prefab(location, prefab);
-                StaticType::None
-            },
-            Term::Call(unscoped_name, args) => {
-                let src = self.ty;
-                if let Some(proc) = self.ty.get_proc(unscoped_name) {
-                    self.visit_call(location, src, proc, args, false)
-                } else {
-                    StaticType::None
-                }
-            },
-            Term::Ident(unscoped_name) => {
-                if let Some(var) = self.local_vars.get(unscoped_name) {
-                    self.tab.use_symbol(var.symbol, location);
-                    return var.ty.clone();
-                }
-                if let Some(decl) = self.ty.get_var_declaration(unscoped_name) {
-                    self.tab.use_symbol(decl.id, location);
-                    self.static_type(location, &decl.var_type.type_path)
-                } else {
-                    StaticType::None
-                }
-            },
-            Term::ParentCall(args) => {
-                if let Some(proc) = self.proc.and_then(ProcRef::parent_proc) {
-                    // TODO: if args are empty, call w/ same args
-                    let src = self.ty;
-                    // Parent calls are exact, and won't ever call an override.
-                    self.visit_call(location, src, proc, args, true)
-                } else {
-                    StaticType::None
-                }
-            },
-            Term::SelfCall(args) => {
-                if let Some(proc) = self.proc {
-                    let src = self.ty;
-                    // Self calls are exact, and won't ever call an override.
-                    self.visit_call(location, src, proc, args, true)
-                } else {
-                    StaticType::None
-                }
-            },
-            Term::InterpString(_, parts) => {
-                for (ref expr, _) in parts.iter() {
-                    if let Some(expr) = expr {
-                        self.visit_expression(location, expr, None);
-                    }
-                }
-                StaticType::None
             },
             Term::List(args) => {
                 // TODO: use /proc/list

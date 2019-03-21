@@ -388,8 +388,37 @@ impl From<Term> for Expression {
 /// The structure of a term, the basic building block of the AST.
 #[derive(Clone, PartialEq, Debug)]
 pub enum Term {
+    // Terms with no recursive contents ---------------------------------------
     /// The literal `null`.
     Null,
+    /// An integer literal.
+    Int(i32),
+    /// A floating-point literal.
+    Float(f32),
+    /// An identifier.
+    Ident(String),
+    /// A string literal.
+    String(String),
+    /// A resource literal.
+    Resource(String),
+    /// An `as()` call, with an input type. Undocumented.
+    As(InputType),
+
+    // Non-function calls with recursive contents -----------------------------
+    /// An expression contained in a term.
+    Expr(Box<Expression>),
+    /// A prefab literal (path + vars).
+    Prefab(Prefab),
+    /// An interpolated string, alternating string/expr/string/expr.
+    InterpString(String, Vec<(Option<Expression>, String)>),
+
+    // Function calls with recursive contents ---------------------------------
+    /// An unscoped function call.
+    Call(String, Vec<Expression>),
+    /// A `.()` call.
+    SelfCall(Vec<Expression>),
+    /// A `..()` call. If arguments is empty, the proc's arguments are passed.
+    ParentCall(Vec<Expression>),
     /// A `new` call.
     New {
         /// The type to be instantiated.
@@ -412,32 +441,8 @@ pub enum Term {
     },
     /// A `pick` call, possibly with weights.
     Pick(Vec<(Option<Expression>, Expression)>),
-    /// An unscoped function call.
-    Call(String, Vec<Expression>),
-    /// A `..()` call. If arguments is empty, the proc's arguments are passed.
-    ParentCall(Vec<Expression>),
-    /// A `.()` call.
-    SelfCall(Vec<Expression>),
-    /// A prefab literal (path + vars).
-    Prefab(Prefab),
-    /// An identifier.
-    Ident(String),
-    /// A string literal.
-    String(String),
-    /// A resource literal.
-    Resource(String),
-    /// An integer literal.
-    Int(i32),
-    /// A floating-point literal.
-    Float(f32),
-    /// An expression contained in a term.
-    Expr(Box<Expression>),
     /// A use of the `call()()` primitive.
     DynamicCall(Vec<Expression>, Vec<Expression>),
-    /// An interpolated string, alternating string/expr/string/expr.
-    InterpString(String, Vec<(Option<Expression>, String)>),
-    /// An `as()` call, with an input type. Undocumented.
-    As(InputType),
 }
 
 impl From<Expression> for Term {
