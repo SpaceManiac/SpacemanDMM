@@ -507,10 +507,13 @@ impl<'o> WalkProc<'o> {
                 // Use the type
                 self.tab.use_symbol(nav.ty().id, location);
                 // Use the prefab's vars
-                for key in prefab.vars.keys() {
+                for (key, expr) in prefab.vars.iter() {
+                    let mut type_hint = None;
                     if let Some(decl) = nav.ty().get_var_declaration(key) {
                         self.tab.use_symbol(decl.id, location);
+                        type_hint = self.static_type(location, &decl.var_type.type_path).basic_type();
                     }
+                    self.visit_expression(location, expr, type_hint);
                 }
             }
             Some(nav.ty())
