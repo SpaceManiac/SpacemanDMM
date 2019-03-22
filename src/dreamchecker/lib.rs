@@ -648,9 +648,17 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     Analysis::empty()
                 }
             },
-            Term::List(_) => Type::List(None).into(),
-            Term::Input { args, input_type, .. } => {
+            Term::List(args) => {
+                self.visit_arguments(location, args);
+                Type::List(None).into()
+            },
+            Term::Input { args, input_type, in_list } => {
                 // TODO: deal with in_list
+                self.visit_arguments(location, args);
+                if let Some(ref expr) = in_list {
+                    self.visit_expression(location, expr, None);
+                }
+
                 let without_null = *input_type - InputType::NULL;
                 if input_type.contains(InputType::ANYTHING) {
                     Analysis::empty()
@@ -678,8 +686,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     Analysis::empty()
                 }
             },
-            Term::Locate { args, .. } => {
-                // TODO: deal with in_list
+            Term::Locate { args, in_list } => {
+                self.visit_arguments(location, args);
+                if let Some(ref expr) = in_list {
+                    self.visit_expression(location, expr, None);
+                }
+
                 if args.len() == 3 {  // X,Y,Z - it's gotta be a turf
                     Type::Instance(self.objtree.expect("/turf")).into()
                 } else {
@@ -687,8 +699,16 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
             },
             Term::Pick(choices) => {
+                let mut last = Analysis::empty();
+                for (weight, choice) in choices.iter() {
+                    if let Some(ref weight) = weight {
+                        self.visit_expression(location, weight, None);
+                    }
+                    last = self.visit_expression(location, choice, None);
+                }
+
                 if choices.len() == 1 {
-                    match self.visit_expression(location, &choices[0].1, None).ty {
+                    match last.ty {
                         Type::List(Some(inst)) => Type::Instance(inst).into(),
                         _ => Analysis::empty(),
                     }
@@ -698,6 +718,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
             },
             Term::DynamicCall(lhs_args, rhs_args) => {
+                self.visit_arguments(location, lhs_args);
+                self.visit_arguments(location, rhs_args);
                 Analysis::empty()  // TODO
             },
         }
@@ -864,6 +886,24 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Analysis::from(return_type.clone())
         } else {
             Analysis::empty()
+        }
+    }
+
+    fn visit_arguments(&mut self, location: Location, args: &'o [Expression]) {
+        for arg in args {
+            let mut argument_value = arg;
+            if let Expression::AssignOp { op: AssignOp::Assign, lhs, rhs } = arg {
+                match lhs.as_term() {
+                    Some(Term::Ident(_name)) |
+                    Some(Term::String(_name)) => {
+                        // Don't visit_expression the kwarg key.
+                        argument_value = rhs;
+                    }
+                    _ => {}
+                }
+            }
+
+            self.visit_expression(location, argument_value, None);
         }
     }
 
