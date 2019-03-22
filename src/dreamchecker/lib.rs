@@ -542,6 +542,74 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     fn visit_term(&mut self, location: Location, term: &'o Term, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
         match term {
             Term::Null => Analysis::null(),
+            Term::Int(number) => Analysis::from_value(self.objtree, Constant::from(*number)),
+            Term::Float(number) => Analysis::from_value(self.objtree, Constant::from(*number)),
+            Term::String(text) => Analysis::from_value(self.objtree, Constant::String(text.to_owned())),
+            Term::Resource(text) => Analysis::from_value(self.objtree, Constant::Resource(text.to_owned())),
+            Term::As(_) => Type::Number.into(),
+
+            Term::Ident(unscoped_name) => {
+                if let Some(var) = self.local_vars.get(unscoped_name) {
+                    return var.clone()
+                }
+                if let Some(decl) = self.ty.get_var_declaration(unscoped_name) {
+                    self.static_type(location, &decl.var_type.type_path)
+                } else {
+                    error(location, format!("undefined var: {:?}", unscoped_name))
+                        .register(self.context);
+                    Analysis::empty()
+                }
+            },
+
+            Term::Expr(expr) => self.visit_expression(location, expr, type_hint),
+            Term::Prefab(prefab) => {
+                if let Some(nav) = self.ty.navigate_path(&prefab.path) {
+                    // TODO: handle proc/verb paths here
+                    Type::Typepath(nav.ty()).into()
+                } else {
+                    error(location, format!("failed to resolve path {}", FormatTypePath(&prefab.path)))
+                        .register(self.context);
+                    Analysis::empty()
+                }
+            },
+            Term::InterpString(_, parts) => {
+                for (ref expr, _) in parts.iter() {
+                    if let Some(expr) = expr {
+                        self.visit_expression(location, expr, None);
+                    }
+                }
+                Type::String.into()
+            },
+
+            Term::Call(unscoped_name, args) => {
+                let src = self.ty;
+                if let Some(proc) = self.ty.get_proc(unscoped_name) {
+                    self.visit_call(location, src, proc, args, false)
+                } else {
+                    error(location, format!("undefined proc: {:?} on {}", unscoped_name, self.ty))
+                        .register(self.context);
+                    Analysis::empty()
+                }
+            },
+            Term::SelfCall(args) => {
+                let src = self.ty;
+                let proc = self.proc_ref;
+                // Self calls are exact, and won't ever call an override.
+                self.visit_call(location, src, proc, args, true)
+            },
+            Term::ParentCall(args) => {
+                if let Some(proc) = self.proc_ref.parent_proc() {
+                    // TODO: if args are empty, call w/ same args
+                    let src = self.ty;
+                    // Parent calls are exact, and won't ever call an override.
+                    self.visit_call(location, src, proc, args, true)
+                } else {
+                    error(location, format!("proc has no parent: {}", self.proc_ref))
+                        .register(self.context);
+                    Analysis::empty()
+                }
+            },
+
             Term::New { type_, args } => {
                 // determine the type being new'd
                 let typepath = match type_ {
@@ -581,77 +649,6 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
             },
             Term::List(_) => Type::List(None).into(),
-            Term::Prefab(prefab) => {
-                if let Some(nav) = self.ty.navigate_path(&prefab.path) {
-                    // TODO: handle proc/verb paths here
-                    Type::Typepath(nav.ty()).into()
-                } else {
-                    error(location, format!("failed to resolve path {}", FormatTypePath(&prefab.path)))
-                        .register(self.context);
-                    Analysis::empty()
-                }
-            },
-            Term::String(text) => Analysis::from_value(self.objtree, Constant::String(text.to_owned())),
-            Term::Resource(text) => Analysis::from_value(self.objtree, Constant::Resource(text.to_owned())),
-            Term::Int(number) => Analysis::from_value(self.objtree, Constant::from(*number)),
-            Term::Float(number) => Analysis::from_value(self.objtree, Constant::from(*number)),
-            Term::Expr(expr) => self.visit_expression(location, expr, type_hint),
-            Term::InterpString(_, parts) => {
-                for (ref expr, _) in parts.iter() {
-                    if let Some(expr) = expr {
-                        self.visit_expression(location, expr, None);
-                    }
-                }
-                Type::String.into()
-            },
-            Term::Call(unscoped_name, args) => {
-                let src = self.ty;
-                if let Some(proc) = self.ty.get_proc(unscoped_name) {
-                    self.visit_call(location, src, proc, args, false)
-                } else {
-                    error(location, format!("undefined proc: {:?} on {}", unscoped_name, self.ty))
-                        .register(self.context);
-                    Analysis::empty()
-                }
-            },
-            Term::Ident(unscoped_name) => {
-                if let Some(var) = self.local_vars.get(unscoped_name) {
-                    return var.clone()
-                }
-                if let Some(decl) = self.ty.get_var_declaration(unscoped_name) {
-                    self.static_type(location, &decl.var_type.type_path)
-                } else {
-                    error(location, format!("undefined var: {:?}", unscoped_name))
-                        .register(self.context);
-                    Analysis::empty()
-                }
-            },
-            Term::ParentCall(args) => {
-                if let Some(proc) = self.proc_ref.parent_proc() {
-                    // TODO: if args are empty, call w/ same args
-                    let src = self.ty;
-                    // Parent calls are exact, and won't ever call an override.
-                    self.visit_call(location, src, proc, args, true)
-                } else {
-                    error(location, format!("proc has no parent: {}", self.proc_ref))
-                        .register(self.context);
-                    Analysis::empty()
-                }
-            },
-            Term::SelfCall(args) => {
-                let src = self.ty;
-                let proc = self.proc_ref;
-                // Self calls are exact, and won't ever call an override.
-                self.visit_call(location, src, proc, args, true)
-            },
-            Term::Locate { args, .. } => {
-                // TODO: deal with in_list
-                if args.len() == 3 {  // X,Y,Z - it's gotta be a turf
-                    Type::Instance(self.objtree.expect("/turf")).into()
-                } else {
-                    Analysis::empty()
-                }
-            },
             Term::Input { args, input_type, .. } => {
                 // TODO: deal with in_list
                 let without_null = *input_type - InputType::NULL;
@@ -681,8 +678,13 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     Analysis::empty()
                 }
             },
-            Term::DynamicCall(lhs_args, rhs_args) => {
-                Analysis::empty()  // TODO
+            Term::Locate { args, .. } => {
+                // TODO: deal with in_list
+                if args.len() == 3 {  // X,Y,Z - it's gotta be a turf
+                    Type::Instance(self.objtree.expect("/turf")).into()
+                } else {
+                    Analysis::empty()
+                }
             },
             Term::Pick(choices) => {
                 if choices.len() == 1 {
@@ -695,7 +697,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     Analysis::empty()
                 }
             },
-            Term::As(_) => Type::Number.into(),
+            Term::DynamicCall(lhs_args, rhs_args) => {
+                Analysis::empty()  // TODO
+            },
         }
     }
 
