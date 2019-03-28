@@ -12,7 +12,7 @@ use linked_hash_map::LinkedHashMap;
 use super::ast::{Expression, VarType, VarSuffix, PathOp, Parameter, Block, ProcDeclKind};
 use super::constants::{Constant, Pop};
 use super::docs::DocCollection;
-use super::{DMError, Location, Context, Severity};
+use super::{DMError, Location, Context};
 
 // ----------------------------------------------------------------------------
 // Symbol IDs
@@ -884,7 +884,7 @@ impl ObjectTree {
         location: Location,
         parent: NodeIndex,
         name: &str,
-        mut declaration: Option<ProcDeclKind>,
+        declaration: Option<ProcDeclKind>,
         parameters: Vec<Parameter>,
         code: Code,
     ) -> Result<(usize, &mut ProcValue), DMError> {
@@ -895,7 +895,6 @@ impl ObjectTree {
                 DMError::new(location, format!("duplicate definition of {}/{}", kind, name))
                     .with_note(decl.location, "previous definition")
                     .register(context);
-                declaration = None;  // suppress the later check
             } else {
                 proc.declaration = Some(ProcDeclaration {
                     location,
