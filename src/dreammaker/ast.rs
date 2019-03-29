@@ -8,11 +8,18 @@ use linked_hash_map::LinkedHashMap;
 
 use error::Location;
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, Eq, Debug)]
 pub struct Spanned<T> {
     // TODO: add a Span type and use it here
     pub location: Location,
     pub elem: T,
+}
+
+impl<T: PartialEq> PartialEq for Spanned<T> {
+    fn eq(&self, other: &Self) -> bool {
+        // Skips the location: allows easy recursive Eq checks
+        self.elem == other.elem
+    }
 }
 
 impl<T> Spanned<T> {
