@@ -530,7 +530,7 @@ impl<'a> ConstantFolder<'a> {
                 };
                 let mut term = self.term(term.elem, base_type_hint)?;
                 for each in follow {
-                    term = self.follow(term, each)?;
+                    term = self.follow(term, each.elem)?;
                 }
                 for each in unary.into_iter().rev() {
                     term = self.unary(term, each)?;

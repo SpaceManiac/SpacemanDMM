@@ -1942,14 +1942,15 @@ where
         success(Spanned::new(start, term))
     }
 
-    fn follow(&mut self, belongs_to: &mut Vec<String>, in_ternary: bool) -> Status<Follow> {
+    fn follow(&mut self, belongs_to: &mut Vec<String>, in_ternary: bool) -> Status<Spanned<Follow>> {
+        let first_location = self.updated_location();
         let kind = match self.next("field access")? {
             // follow :: '[' expression ']'
             Token::Punct(Punctuation::LBracket) => {
                 belongs_to.clear();
                 let expr = require!(self.expression());
                 require!(self.exact(Token::Punct(Punctuation::RBracket)));
-                return success(Follow::Index(Box::new(expr)))
+                return success(Spanned::new(first_location, Follow::Index(Box::new(expr))))
             }
 
             // follow :: '.' ident arglist?
@@ -1978,7 +1979,7 @@ where
         };
         let end = self.updated_location();
 
-        success(match self.arguments(belongs_to, &ident)? {
+        let follow = match self.arguments(belongs_to, &ident)? {
             Some(args) => {
                 if !belongs_to.is_empty() {
                     let past = ::std::mem::replace(belongs_to, Vec::new());
@@ -1993,7 +1994,8 @@ where
                 }
                 Follow::Field(kind, ident)
             },
-        })
+        };
+        success(Spanned::new(first_location, follow))
     }
 
     // TODO: somehow fix the fact that this is basically copy-pasted from

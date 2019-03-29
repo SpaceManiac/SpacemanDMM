@@ -505,7 +505,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 };
                 let mut ty = self.visit_term(term.location, &term.elem, base_type_hint);
                 for each in follow.iter() {
-                    ty = self.visit_follow(location, ty, each);
+                    ty = self.visit_follow(each.location, ty, &each.elem);
                 }
                 for each in unary.iter().rev() {
                     ty = self.visit_unary(ty, each);

@@ -316,7 +316,7 @@ pub enum Expression {
         /// The term of the expression.
         term: Spanned<Term>,
         /// The follow operations applied to this value.
-        follow: Vec<Follow>,
+        follow: Vec<Spanned<Follow>>,
     },
     /// A binary operation.
     BinaryOp {
