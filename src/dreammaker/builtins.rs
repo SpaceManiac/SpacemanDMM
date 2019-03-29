@@ -531,7 +531,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         atom/var/plane;
         atom/var/suffix;
         atom/var/text;
-        atom/var/transform;
+        atom/var/matrix/transform;
         atom/var/tmp/list/underlays;  // not editable
         atom/var/tmp/list/verbs;  // not editable
         atom/var/tmp/x;  // not editable
@@ -858,7 +858,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         image/var/y;
         image/var/z;
         image/var/override;
-        image/var/transform;
+        image/var/matrix/transform;
         image/var/list/vis_contents;
         image/var/list/filters;
         image/var/name;  // undocumented
