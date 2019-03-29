@@ -528,7 +528,7 @@ impl<'a> ConstantFolder<'a> {
                 } else {
                     None
                 };
-                let mut term = self.term(term, base_type_hint)?;
+                let mut term = self.term(term.elem, base_type_hint)?;
                 for each in follow {
                     term = self.follow(term, each)?;
                 }
@@ -732,11 +732,13 @@ impl<'a> ConstantFolder<'a> {
                         return Err(self.error("malformed defined() call"));
                     }
                     match args[0] {
-                        Expression::Base { ref unary, term: Term::Ident(ref ident), ref follow }
-                            if unary.is_empty() && follow.is_empty()
-                        => {
+                        Expression::Base {
+                            ref unary,
+                            term: Spanned { elem: Term::Ident(ref ident), .. },
+                            ref follow
+                        } if unary.is_empty() && follow.is_empty() => {
                             Constant::Int(if defines.contains_key(ident) { 1 } else { 0 })
-                        }
+                        },
                         _ => return Err(self.error("malformed defined() call")),
                     }
                 }

@@ -326,7 +326,7 @@ impl<'o> WalkProc<'o> {
                 } else {
                     None
                 };
-                let mut ty = self.visit_term(location, term, base_type_hint);
+                let mut ty = self.visit_term(term.location, &term.elem, base_type_hint);
                 for each in follow.iter() {
                     ty = self.visit_follow(location, ty, each);
                 }

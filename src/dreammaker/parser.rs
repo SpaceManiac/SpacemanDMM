@@ -1723,7 +1723,7 @@ where
         // This has the effect of stripping unnecessary parentheses, which
         // simplifies later logic.
         if unary_ops.is_empty() && follow.is_empty() {
-            if let Term::Expr(expr) = term {
+            if let Term::Expr(expr) = term.elem {
                 return success(*expr);
             }
         }
@@ -1735,11 +1735,11 @@ where
         })
     }
 
-    fn term(&mut self, belongs_to: &mut Vec<String>) -> Status<Term> {
+    fn term(&mut self, belongs_to: &mut Vec<String>) -> Status<Spanned<Term>> {
         use super::lexer::Punctuation::*;
 
         let start = self.updated_location();
-        success(match self.next("term")? {
+        let term = match self.next("term")? {
             // term :: 'new' (prefab | (ident (index | field)*))? arglist?
             Token::Ident(ref i, _) if i == "new" => {
                 // It's not entirely clear what is supposed to be valid here.
@@ -1938,7 +1938,8 @@ where
             },
 
             other => return self.try_another(other),
-        })
+        };
+        success(Spanned::new(start, term))
     }
 
     fn follow(&mut self, belongs_to: &mut Vec<String>, in_ternary: bool) -> Status<Follow> {

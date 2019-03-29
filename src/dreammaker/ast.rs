@@ -314,7 +314,7 @@ pub enum Expression {
         /// The unary operations applied to this value, in reverse order.
         unary: Vec<UnaryOp>,
         /// The term of the expression.
-        term: Term,
+        term: Spanned<Term>,
         /// The follow operations applied to this value.
         follow: Vec<Follow>,
     },
@@ -352,7 +352,7 @@ impl Expression {
     pub fn as_term(&self) -> Option<&Term> {
         match *self {
             Expression::Base { ref unary, ref follow, ref term }
-                if unary.is_empty() && follow.is_empty() => Some(term),
+                if unary.is_empty() && follow.is_empty() => Some(&term.elem),
             _ => None,
         }
     }
@@ -362,7 +362,7 @@ impl Expression {
         match self {
             Expression::Base { unary, follow, term } => {
                 if unary.is_empty() && follow.is_empty() {
-                    Some(term)
+                    Some(term.elem)
                 } else {
                     None
                 }
@@ -379,7 +379,7 @@ impl From<Term> for Expression {
             term => Expression::Base {
                 unary: vec![],
                 follow: vec![],
-                term,
+                term: Spanned::new(Default::default(), term),
             },
         }
     }
@@ -449,7 +449,7 @@ impl From<Expression> for Term {
     fn from(expr: Expression) -> Term {
         match expr {
             Expression::Base { term, unary, follow } => if unary.is_empty() && follow.is_empty() {
-                match term {
+                match term.elem {
                     Term::Expr(expr) => Term::from(*expr),
                     other => other,
                 }
