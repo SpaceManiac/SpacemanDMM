@@ -113,7 +113,7 @@ pub fn combine_tree_path<'a, I>(iter: &I, mut absolute: bool, mut parts: &'a [St
     prefix_parts.iter().chain(parts).map(|x| &**x)
 }
 
-impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
+impl<'a, W: io::ResponseWrite> Engine<'a, W> {
     pub fn follow_type_path<'b, I>(&'b self, iter: &I, mut parts: &'b [(PathOp, String)]) -> Option<TypePathResult<'b>>
     where
         I: Iterator<Item = (Span, &'a Annotation)> + Clone,

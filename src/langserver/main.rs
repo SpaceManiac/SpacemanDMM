@@ -62,7 +62,12 @@ fn main() {
 
     let stdio = io::StdIo;
     let context = Default::default();
-    Engine::new(&stdio, &stdio, &context).run()
+    let mut engine = Engine::new(&stdio, &context);
+    loop {
+        use io::RequestRead;
+        let message = stdio.read().expect("request bad read");
+        engine.handle_input(message);
+    }
 }
 
 const VERSION: Option<jsonrpc::Version> = Some(jsonrpc::Version::V2);
@@ -116,8 +121,7 @@ impl ClientCaps {
     }
 }
 
-struct Engine<'a, R: 'a, W: 'a> {
-    read: &'a R,
+struct Engine<'a, W: 'a> {
     write: &'a W,
     docs: document::DocumentStore,
 
@@ -135,10 +139,9 @@ struct Engine<'a, R: 'a, W: 'a> {
     client_caps: ClientCaps,
 }
 
-impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
-    fn new(read: &'a R, write: &'a W, context: &'a dm::Context) -> Self {
+impl<'a, W: io::ResponseWrite> Engine<'a, W> {
+    fn new(write: &'a W, context: &'a dm::Context) -> Self {
         Engine {
-            read,
             write,
             docs: Default::default(),
 
@@ -550,32 +553,28 @@ impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
     // ------------------------------------------------------------------------
     // Driver
 
-    fn run(mut self) {
-        loop {
-            let message = self.read.read().expect("request bad read");
+    fn handle_input(&mut self, message: String) {
+        let mut outputs: Vec<Output> = match serde_json::from_str(&message) {
+            Ok(Request::Single(call)) => self.handle_call(call).into_iter().collect(),
+            Ok(Request::Batch(calls)) => calls.into_iter().flat_map(|call| self.handle_call(call)).collect(),
+            Err(decode_error) => vec![Output::Failure(jsonrpc::Failure {
+                jsonrpc: VERSION,
+                error: jsonrpc::Error {
+                    code: jsonrpc::ErrorCode::ParseError,
+                    message: decode_error.to_string(),
+                    data: None,
+                },
+                id: jsonrpc::Id::Null,
+            })],
+        };
 
-            let mut outputs: Vec<Output> = match serde_json::from_str(&message) {
-                Ok(Request::Single(call)) => self.handle_call(call).into_iter().collect(),
-                Ok(Request::Batch(calls)) => calls.into_iter().flat_map(|call| self.handle_call(call)).collect(),
-                Err(decode_error) => vec![Output::Failure(jsonrpc::Failure {
-                    jsonrpc: VERSION,
-                    error: jsonrpc::Error {
-                        code: jsonrpc::ErrorCode::ParseError,
-                        message: decode_error.to_string(),
-                        data: None,
-                    },
-                    id: jsonrpc::Id::Null,
-                })],
-            };
+        let response = match outputs.len() {
+            0 => return,  // wait for another input
+            1 => Response::Single(outputs.remove(0)),
+            _ => Response::Batch(outputs),
+        };
 
-            let response = match outputs.len() {
-                0 => continue,  // wait for another input
-                1 => Response::Single(outputs.remove(0)),
-                _ => Response::Batch(outputs),
-            };
-
-            self.write.write(serde_json::to_string(&response).expect("response bad to_string"));
-        }
+        self.write.write(serde_json::to_string(&response).expect("response bad to_string"));
     }
 
     fn handle_call(&mut self, call: Call) -> Option<Output> {

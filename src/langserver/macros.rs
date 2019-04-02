@@ -2,7 +2,7 @@
 
 macro_rules! handle_method_call {
     ($(on $what:ident(&mut $self:ident, $p:pat) $b:block)*) => {
-        impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
+        impl<'a, W: io::ResponseWrite> Engine<'a, W> {
             fn handle_method_call(&mut self, call: jsonrpc::MethodCall) -> Result<serde_json::Value, jsonrpc::Error> {
                 use langserver::request::*;
 
@@ -52,7 +52,7 @@ macro_rules! handle_method_call {
 
 macro_rules! handle_notification {
     ($(on $what:ident(&mut $self:ident, $p:pat) $b:block)*) => {
-        impl<'a, R: io::RequestRead, W: io::ResponseWrite> Engine<'a, R, W> {
+        impl<'a, W: io::ResponseWrite> Engine<'a, W> {
             fn handle_notification(&mut self, notification: jsonrpc::Notification) -> Result<(), jsonrpc::Error> {
                 use langserver::notification::*;
 
