@@ -436,7 +436,10 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                         let indent = dm::indents::IndentProcessor::new(&self.context, &mut pp);
                         let mut parser = dm::parser::Parser::new(&self.context, indent);
                         parser.annotate_to(&mut annotations);
-                        parser.run();
+                        // Every time anyone types anything the object tree is replaced.
+                        // This is probably really inefficient, but it will do until
+                        // selective definition deletion/reintroduction is implemented.
+                        self.objtree = parser.parse_object_tree();
                     }
                     pp.finalize();
 
