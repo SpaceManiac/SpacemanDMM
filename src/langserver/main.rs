@@ -26,7 +26,7 @@ mod find_references;
 mod extras;
 mod completion;
 
-use std::path::{PathBuf, Path};
+use std::path::PathBuf;
 use std::collections::{HashMap, VecDeque};
 use std::collections::hash_map::Entry;
 use std::rc::Rc;
@@ -121,14 +121,14 @@ struct Engine<'a, W: 'a> {
 
     status: InitStatus,
     parent_pid: u64,
-    root: PathBuf,
+    root: Option<Url>,
 
     context: &'a dm::Context,
     preprocessor: Option<dm::preprocessor::Preprocessor<'a>>,
     objtree: dm::objtree::ObjectTree,
     references_table: Option<find_references::ReferencesTable>,
 
-    annotations: HashMap<PathBuf, (FileId, FileId, Rc<AnnotationTree>)>,
+    annotations: HashMap<Url, (FileId, FileId, Rc<AnnotationTree>)>,
 
     client_caps: ClientCaps,
 }
@@ -141,7 +141,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
 
             status: InitStatus::Starting,
             parent_pid: 0,
-            root: Default::default(),
+            root: None,
 
             context,
             preprocessor: None,
@@ -191,14 +191,21 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
     }
 
     fn file_url(&self, file: dm::FileId) -> Result<Url, jsonrpc::Error> {
-        path_to_url(self.root.join(self.context.file_path(file)))
+        if let Some(ref root) = self.root {
+            root.join(&self.context.file_path(file).display().to_string())
+                .map_err(|e| invalid_request(format!("error in file_url: {}", e)))
+        } else {
+            Err(invalid_request("cannot file_url without a root"))
+        }
     }
 
-    fn location_link(&self, loc: dm::Location) -> String {
+    fn location_link(&self, loc: dm::Location) -> Result<String, jsonrpc::Error> {
         if loc.file == dm::FileId::builtins() {
-            String::new()
+            Ok(String::new())
         } else {
-            format!("file:{}#{}", self.root.join(self.context.file_path(loc.file)).display().to_string().replace("\\", "/"), loc.line)
+            let mut url = self.file_url(loc.file)?;
+            url.set_fragment(Some(&loc.line.to_string()));
+            Ok(url.to_string())
         }
     }
 
@@ -351,7 +358,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                 related_information,
                 .. Default::default()
             };
-            map.entry(self.context.file_path(loc.file))
+            map.entry(self.file_url(loc.file)?)
                 .or_insert_with(Default::default)
                 .push(diag);
 
@@ -365,18 +372,17 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                         source: error.component().name().map(ToOwned::to_owned),
                         .. Default::default()
                     };
-                    map.entry(self.context.file_path(note.location().file))
+                    map.entry(self.file_url(note.location().file)?)
                         .or_insert_with(Default::default)
                         .push(diag);
                 }
             }
         }
 
-        for (path, diagnostics) in map {
-            let joined_path = self.root.join(path);
+        for (url, diagnostics) in map {
             self.issue_notification::<langserver::notification::PublishDiagnostics>(
                 langserver::PublishDiagnosticsParams {
-                    uri: path_to_url(joined_path)?,
+                    uri: url,
                     diagnostics,
                 },
             );
@@ -385,14 +391,21 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
         Ok(())
     }
 
-    fn get_annotations(&mut self, path: &Path) -> Result<(FileId, FileId, Rc<AnnotationTree>), jsonrpc::Error> {
-        Ok(match self.annotations.entry(path.to_owned()) {
+    fn get_annotations(&mut self, url: &Url) -> Result<(FileId, FileId, Rc<AnnotationTree>), jsonrpc::Error> {
+        Ok(match self.annotations.entry(url.to_owned()) {
             Entry::Occupied(o) => o.get().clone(),
             Entry::Vacant(v) => {
-                let stripped = match path.strip_prefix(&self.root) {
+                let path = url_to_path(url)?;
+                let root = match self.root {
+                    Some(ref root) => url_to_path(root)?,
+                    None => return Err(invalid_request(format!("no root"))),
+                };
+
+                let stripped = match path.strip_prefix(&root) {
                     Ok(path) => path,
                     Err(_) => return Err(invalid_request(format!("outside workspace: {}", path.display()))),
                 };
+
                 let preprocessor = match self.preprocessor {
                     Some(ref pp) => pp,
                     None => return Err(invalid_request("no preprocessor")),
@@ -401,7 +414,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                     Some(id) => (id, preprocessor.branch_at_file(id, &self.context)),
                     None => (FileId::default(), preprocessor.branch(&self.context)),
                 };
-                let contents = self.docs.read(path).map_err(invalid_request)?;
+                let contents = self.docs.read(url).map_err(invalid_request)?;
                 let file_id = preprocessor.push_file(stripped.to_owned(), contents);
                 preprocessor.enable_annotations();
                 let mut annotations = AnnotationTree::default();
@@ -599,10 +612,17 @@ handle_method_call! {
         if let Some(id) = init.process_id {
             self.parent_pid = id;
         }
-        if let Some(url) = init.root_uri {
-            self.root = url_to_path(url)?;
+        if let Some(mut url) = init.root_uri {
+            if !url.path().ends_with("/") {
+                let path = format!("{}/", url.path());
+                url.set_path(&path);
+            }
+            self.root = Some(url);
         } else if let Some(path) = init.root_path {
-            self.root = PathBuf::from(path);
+            match Url::from_directory_path(path) {
+                Ok(url) => self.root = Some(url),
+                Err(()) => return Err(invalid_request("Root path does not correspond to a valid URL")),
+            }
         } else {
             return Err(invalid_request("No root directory was specified. Use 'Open Folder' or equivalent to open your DM environment."))
         }
@@ -727,8 +747,7 @@ handle_method_call! {
     }
 
     on HoverRequest(&mut self, params) {
-        let path = url_to_path(params.text_document.uri)?;
-        let (_, file_id, annotations) = self.get_annotations(&path)?;
+        let (_, file_id, annotations) = self.get_annotations(&params.text_document.uri)?;
         let location = dm::Location {
             file: file_id,
             line: params.position.line as u32 + 1,
@@ -768,7 +787,7 @@ handle_method_call! {
                             } else {
                                 &current.path
                             };
-                            infos.push_front(format!("[{}]({}){}", path, self.location_link(var.value.location), constant));
+                            infos.push_front(format!("[{}]({}){}", path, self.location_link(var.value.location)?, constant));
                             if let Some(ref decl) = var.declaration {
                                 let mut declaration = String::new();
                                 declaration.push_str("var");
@@ -822,7 +841,7 @@ handle_method_call! {
                                 &current.path
                             };
                             let proc_value = proc.value.last().unwrap();
-                            let mut message = format!("[{}]({})  \n{}(", path, self.location_link(proc_value.location), last);
+                            let mut message = format!("[{}]({})  \n{}(", path, self.location_link(proc_value.location)?, last);
                             let mut first = true;
                             for each in proc_value.parameters.iter() {
                                 use std::fmt::Write;
@@ -864,8 +883,7 @@ handle_method_call! {
     }
 
     on GotoDefinition(&mut self, params) {
-        let path = url_to_path(params.text_document.uri)?;
-        let (real_file_id, file_id, annotations) = self.get_annotations(&path)?;
+        let (real_file_id, file_id, annotations) = self.get_annotations(&params.text_document.uri)?;
         let location = dm::Location {
             file: file_id,
             line: params.position.line as u32 + 1,
@@ -977,8 +995,7 @@ handle_method_call! {
 
     on GotoTypeDefinition(&mut self, params) {
         // Like GotoDefinition, but only supports vars, then finds their types
-        let path = url_to_path(params.text_document.uri)?;
-        let (_, file_id, annotations) = self.get_annotations(&path)?;
+        let (_, file_id, annotations) = self.get_annotations(&params.text_document.uri)?;
         let location = dm::Location {
             file: file_id,
             line: params.position.line as u32 + 1,
@@ -1032,8 +1049,7 @@ handle_method_call! {
 
     on References(&mut self, params) {
         // Like GotoDefinition, but looks up references instead
-        let path = url_to_path(params.text_document.uri)?;
-        let (_, file_id, annotations) = self.get_annotations(&path)?;
+        let (_, file_id, annotations) = self.get_annotations(&params.text_document.uri)?;
         let location = dm::Location {
             file: file_id,
             line: params.position.line as u32 + 1,
@@ -1171,8 +1187,7 @@ handle_method_call! {
     }
 
     on Completion(&mut self, params) {
-        let path = url_to_path(params.text_document.uri)?;
-        let (_, file_id, annotations) = self.get_annotations(&path)?;
+        let (_, file_id, annotations) = self.get_annotations(&params.text_document.uri)?;
         let location = dm::Location {
             file: file_id,
             line: params.position.line as u32 + 1,
@@ -1248,8 +1263,7 @@ handle_method_call! {
     }
 
     on SignatureHelpRequest(&mut self, params) {
-        let path = url_to_path(params.text_document.uri)?;
-        let (_, file_id, annotations) = self.get_annotations(&path)?;
+        let (_, file_id, annotations) = self.get_annotations(&params.text_document.uri)?;
         let location = dm::Location {
             file: file_id,
             line: params.position.line as u32 + 1,
@@ -1422,8 +1436,7 @@ handle_method_call! {
         }
 
         // root
-        let path = url_to_path(params.text_document.uri)?;
-        let (_, file_id, annotations) = self.get_annotations(&path)?;
+        let (_, file_id, annotations) = self.get_annotations(&params.text_document.uri)?;
         if annotations.is_empty() {
             None
         } else {
@@ -1443,9 +1456,16 @@ handle_notification! {
     }
 
     on Initialized(&mut self, _) {
-        eprintln!("workspace root: {}", self.root.display());
-        let environment = dm::detect_environment(&self.root, dm::DEFAULT_ENV)
-            .map_err(invalid_request)?;
+        eprintln!("workspace root: {:?}", self.root);
+
+        let mut environment = None;
+        if let Some(ref root) = self.root {
+            // TODO: support non-files here
+            if let Ok(root_path) = url_to_path(root) {
+                environment = dm::detect_environment(&root_path, dm::DEFAULT_ENV).map_err(invalid_request)?;
+            }
+        }
+
         if let Some(environment) = environment {
             self.parse_environment(environment)?;
         } else {
@@ -1460,13 +1480,13 @@ handle_notification! {
     }
 
     on DidCloseTextDocument(&mut self, params) {
-        let path = self.docs.close(params.text_document)?;
-        self.annotations.remove(&path);
+        let url = self.docs.close(params.text_document)?;
+        self.annotations.remove(&url);
     }
 
     on DidChangeTextDocument(&mut self, params) {
-        let path = self.docs.change(params.text_document, params.content_changes)?;
-        self.annotations.remove(&path);
+        let url = self.docs.change(params.text_document, params.content_changes)?;
+        self.annotations.remove(&url);
     }
 
     on DidChangeConfiguration(&mut self, _) {}
@@ -1500,7 +1520,7 @@ fn invalid_request<S: ToString>(message: S) -> jsonrpc::Error {
     }
 }
 
-fn url_to_path(url: Url) -> Result<PathBuf, jsonrpc::Error> {
+fn url_to_path(url: &Url) -> Result<PathBuf, jsonrpc::Error> {
     if url.scheme() != "file" {
         return Err(invalid_request("URI must have 'file' scheme"));
     }

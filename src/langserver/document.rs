@@ -4,36 +4,34 @@
 
 use std::io::{self, Read, BufRead};
 use std::borrow::Cow;
-use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use std::rc::Rc;
+use url::Url;
 
 use jsonrpc;
 use langserver::{TextDocumentItem, TextDocumentIdentifier,
     VersionedTextDocumentIdentifier, TextDocumentContentChangeEvent};
 
-use super::{url_to_path, invalid_request};
+use super::{invalid_request};
 
 /// A store for the contents of currently-open documents, with appropriate
 /// fallback for documents which are not currently open.
 #[derive(Default)]
 pub struct DocumentStore {
-    map: HashMap<PathBuf, Document>,
+    map: HashMap<Url, Document>,
 }
 
 impl DocumentStore {
     pub fn open(&mut self, doc: TextDocumentItem) -> Result<(), jsonrpc::Error> {
-        let path = url_to_path(doc.uri)?;
-        match self.map.insert(path, Document::new(doc.version, doc.text)) {
+        match self.map.insert(doc.uri, Document::new(doc.version, doc.text)) {
             None => Ok(()),
             Some(_) => Err(invalid_request("opened a document a second time")),
         }
     }
 
-    pub fn close(&mut self, id: TextDocumentIdentifier) -> Result<PathBuf, jsonrpc::Error> {
-        let path = url_to_path(id.uri)?;
-        match self.map.remove(&path) {
-            Some(_) => Ok(path),
+    pub fn close(&mut self, id: TextDocumentIdentifier) -> Result<Url, jsonrpc::Error> {
+        match self.map.remove(&id.uri) {
+            Some(_) => Ok(id.uri),
             None => Err(invalid_request("cannot close non-opened document")),
         }
     }
@@ -42,9 +40,7 @@ impl DocumentStore {
         &mut self,
         doc_id: VersionedTextDocumentIdentifier,
         changes: Vec<TextDocumentContentChangeEvent>,
-    ) -> Result<PathBuf, jsonrpc::Error> {
-        let path = url_to_path(doc_id.uri)?;
-
+    ) -> Result<Url, jsonrpc::Error> {
         // "If a versioned text document identifier is sent from the server to
         // the client and the file is not open in the editor (the server has
         // not received an open notification before) the server can send `null`
@@ -55,7 +51,7 @@ impl DocumentStore {
             None => return Err(invalid_request("don't know how to deal with this")),
         };
 
-        let document = match self.map.get_mut(&path) {
+        let document = match self.map.get_mut(&doc_id.uri) {
             Some(doc) => doc,
             None => return Err(invalid_request("that document isn't opened")),
         };
@@ -67,7 +63,7 @@ impl DocumentStore {
         document.version = new_version;
 
         // Make an effort to apply all changes, even if one failed.
-        let mut result = Ok(path);
+        let mut result = Ok(doc_id.uri);
         for change in changes {
             if let Err(e) = document.change(change) {
                 result = Err(e);
@@ -76,23 +72,34 @@ impl DocumentStore {
         result
     }
 
-    pub fn get_contents<'a>(&'a self, path: &Path) -> io::Result<Cow<'a, str>> {
-        match self.map.get(path) {
-            Some(document) => Ok(Cow::Borrowed(&document.text)),
-            None => {
-                let mut text = String::new();
-                let mut file = ::std::fs::File::open(path)?;
-                file.read_to_string(&mut text)?;
-                Ok(Cow::Owned(text))
-            }
+    pub fn get_contents<'a>(&'a self, url: &Url) -> io::Result<Cow<'a, str>> {
+        if let Some(document) = self.map.get(url) {
+            return Ok(Cow::Borrowed(&document.text));
         }
+
+        if let Ok(path) = ::url_to_path(url) {
+            let mut text = String::new();
+            let mut file = ::std::fs::File::open(path)?;
+            file.read_to_string(&mut text)?;
+            return Ok(Cow::Owned(text));
+        }
+
+        return Err(io::Error::new(io::ErrorKind::NotFound,
+            format!("URL not opened and schema is not 'file': {}", url)));
     }
 
-    pub fn read(&self, path: &Path) -> io::Result<Box<io::Read>> {
-        match self.map.get(path) {
-            Some(document) => Ok(Box::new(Cursor::new(document.text.clone())) as Box<io::Read>),
-            None => ::std::fs::File::open(path).map(|f| Box::new(f) as Box<io::Read>),
+    pub fn read(&self, url: &Url) -> io::Result<Box<io::Read>> {
+        if let Some(document) = self.map.get(url) {
+            return Ok(Box::new(Cursor::new(document.text.clone())) as Box<io::Read>);
         }
+
+        if let Ok(path) = ::url_to_path(url) {
+            let file = ::std::fs::File::open(path)?;
+            return Ok(Box::new(file) as Box<io::Read>);
+        }
+
+        return Err(io::Error::new(io::ErrorKind::NotFound,
+            format!("URL not opened and schema is not 'file': {}", url)));
     }
 }
 
