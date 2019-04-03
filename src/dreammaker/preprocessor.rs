@@ -3,6 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use std::{io, fmt};
 use std::fs::File;
 use std::path::{Path, PathBuf};
+use std::borrow::Cow;
 
 use interval_tree::{IntervalTree, range};
 
@@ -343,8 +344,12 @@ impl<'ctx> Preprocessor<'ctx> {
         })
     }
 
-    pub fn from_buffer(context: &'ctx Context, env_file: PathBuf, buffer: &'static str) -> Self {
-        let include = Include::from_read(context, env_file.clone(), Box::new(io::Cursor::new(buffer)));
+    pub fn from_buffer<S: Into<Cow<'static, str>>>(context: &'ctx Context, env_file: PathBuf, buffer: S) -> Self {
+        let cow_u8 = match buffer.into() {
+            Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
+            Cow::Owned(s) => Cow::Owned(s.into_bytes()),
+        };
+        let include = Include::from_read(context, env_file.clone(), Box::new(io::Cursor::new(cow_u8)));
         Preprocessor {
             context,
             env_file,

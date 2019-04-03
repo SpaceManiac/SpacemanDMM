@@ -157,18 +157,12 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
     // ------------------------------------------------------------------------
     // General input and output utilities
 
-    fn issue_notification<T>(&mut self, params: T::Params)
+    fn issue_notification<T>(&self, params: T::Params)
     where
         T: langserver::notification::Notification,
         T::Params: serde::Serialize,
     {
-        let params = serde_json::to_value(params).expect("notification bad to_value");
-        let request = Request::Single(Call::Notification(jsonrpc::Notification {
-            jsonrpc: VERSION,
-            method: T::METHOD.to_owned(),
-            params: value_to_params(params),
-        }));
-        self.write.write(serde_json::to_string(&request).expect("notification bad to_string"))
+        issue_notification::<_, T>(self.write, params)
     }
 
     fn show_message<S>(&mut self, typ: MessageType, message: S) where
@@ -394,38 +388,108 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
     fn get_annotations(&mut self, url: &Url) -> Result<(FileId, FileId, Rc<AnnotationTree>), jsonrpc::Error> {
         Ok(match self.annotations.entry(url.to_owned()) {
             Entry::Occupied(o) => o.get().clone(),
-            Entry::Vacant(v) => {
-                let path = url_to_path(url)?;
-                let root = match self.root {
-                    Some(ref root) => url_to_path(root)?,
-                    None => return Err(invalid_request(format!("no root"))),
-                };
+            Entry::Vacant(v) => match self.root {
+                Some(ref root) => {
+                    // normal path, when we have a workspace root & an environment loaded
+                    let path = url_to_path(url)?;
+                    let root = url_to_path(root)?;
+                    let stripped = match path.strip_prefix(&root) {
+                        Ok(path) => path,
+                        Err(_) => return Err(invalid_request(format!("outside workspace: {}", url))),
+                    };
 
-                let stripped = match path.strip_prefix(&root) {
-                    Ok(path) => path,
-                    Err(_) => return Err(invalid_request(format!("outside workspace: {}", path.display()))),
-                };
+                    let preprocessor = match self.preprocessor {
+                        Some(ref pp) => pp,
+                        None => return Err(invalid_request("no preprocessor")),
+                    };
+                    let (real_file_id, mut preprocessor) = match self.context.get_file(&stripped) {
+                        Some(id) => (id, preprocessor.branch_at_file(id, &self.context)),
+                        None => (FileId::default(), preprocessor.branch(&self.context)),
+                    };
+                    let contents = self.docs.read(url).map_err(invalid_request)?;
+                    let file_id = preprocessor.push_file(stripped.to_owned(), contents);
+                    preprocessor.enable_annotations();
+                    let mut annotations = AnnotationTree::default();
+                    {
+                        let indent = dm::indents::IndentProcessor::new(&self.context, &mut preprocessor);
+                        let mut parser = dm::parser::Parser::new(&self.context, indent);
+                        parser.annotate_to(&mut annotations);
+                        parser.run();
+                    }
+                    annotations.merge(preprocessor.take_annotations().unwrap());
+                    v.insert((real_file_id, file_id, Rc::new(annotations))).clone()
+                },
+                None => {
+                    // single-file mode
+                    let context = dm::Context::default();
+                    let contents = self.docs.get_contents(url).map_err(invalid_request)?.into_owned();
+                    let mut pp = dm::preprocessor::Preprocessor::from_buffer(&context, "file.dm".into(), contents);
+                    pp.enable_annotations();
+                    let mut annotations = AnnotationTree::default();
+                    {
+                        let indent = dm::indents::IndentProcessor::new(&self.context, &mut pp);
+                        let mut parser = dm::parser::Parser::new(&self.context, indent);
+                        parser.annotate_to(&mut annotations);
+                        parser.run();
+                    }
+                    pp.finalize();
 
-                let preprocessor = match self.preprocessor {
-                    Some(ref pp) => pp,
-                    None => return Err(invalid_request("no preprocessor")),
-                };
-                let (real_file_id, mut preprocessor) = match self.context.get_file(&stripped) {
-                    Some(id) => (id, preprocessor.branch_at_file(id, &self.context)),
-                    None => (FileId::default(), preprocessor.branch(&self.context)),
-                };
-                let contents = self.docs.read(url).map_err(invalid_request)?;
-                let file_id = preprocessor.push_file(stripped.to_owned(), contents);
-                preprocessor.enable_annotations();
-                let mut annotations = AnnotationTree::default();
-                {
-                    let indent = dm::indents::IndentProcessor::new(&self.context, &mut preprocessor);
-                    let mut parser = dm::parser::Parser::new(&self.context, indent);
-                    parser.annotate_to(&mut annotations);
-                    parser.run();
+                    // Perform a diagnostics pump on this file only.
+                    // Assume all errors are in this file.
+                    let mut diagnostics = Vec::new();
+                    for error in context.errors().iter() {
+                        let loc = error.location();
+                        let related_information = if !self.client_caps.related_info || error.notes().is_empty() {
+                            None
+                        } else {
+                            let mut notes = Vec::with_capacity(error.notes().len());
+                            for note in error.notes().iter() {
+                                notes.push(langserver::DiagnosticRelatedInformation {
+                                    location: langserver::Location {
+                                        uri: url.to_owned(),
+                                        range: location_to_range(note.location()),
+                                    },
+                                    message: note.description().to_owned(),
+                                });
+                            }
+                            Some(notes)
+                        };
+                        let diag = langserver::Diagnostic {
+                            message: error.description().to_owned(),
+                            severity: Some(convert_severity(error.severity())),
+                            range: location_to_range(loc),
+                            source: error.component().name().map(ToOwned::to_owned),
+                            related_information,
+                            .. Default::default()
+                        };
+                        diagnostics.push(diag);
+
+                        if !self.client_caps.related_info {
+                            // Fallback in case the client does not support related info
+                            for note in error.notes().iter() {
+                                let diag = langserver::Diagnostic {
+                                    message: note.description().to_owned(),
+                                    severity: Some(langserver::DiagnosticSeverity::Information),
+                                    range: location_to_range(note.location()),
+                                    source: error.component().name().map(ToOwned::to_owned),
+                                    .. Default::default()
+                                };
+                                diagnostics.push(diag);
+                            }
+                        }
+                    }
+
+                    issue_notification::<_, langserver::notification::PublishDiagnostics>(
+                        self.write,
+                        langserver::PublishDiagnosticsParams {
+                            uri: url.to_owned(),
+                            diagnostics,
+                        },
+                    );
+
+                    let file_id = context.get_file("file.dm".as_ref()).expect("file didn't exist?");
+                    (file_id, file_id, Rc::new(annotations))
                 }
-                annotations.merge(preprocessor.take_annotations().unwrap());
-                v.insert((real_file_id, file_id, Rc::new(annotations))).clone()
             }
         })
     }
@@ -625,7 +689,7 @@ handle_method_call! {
                 Err(()) => return Err(invalid_request("Root path does not correspond to a valid URL")),
             }
         } else {
-            return Err(invalid_request("No root directory was specified. Use 'Open Folder' or equivalent to open your DM environment."))
+            eprintln!("preparing single file mode");
         }
 
         // Extract relevant client capabilities.
@@ -1456,7 +1520,9 @@ handle_notification! {
     }
 
     on Initialized(&mut self, _) {
-        eprintln!("workspace root: {:?}", self.root);
+        if let Some(ref root) = self.root {
+            eprintln!("workspace root: {}", root);
+        }
 
         let mut environment = None;
         if let Some(ref root) = self.root {
@@ -1468,8 +1534,10 @@ handle_notification! {
 
         if let Some(environment) = environment {
             self.parse_environment(environment)?;
-        } else {
+        } else if self.root.is_some() {
             self.show_status("no .dme file");
+        } else {
+            self.show_status("single file mode");
         }
     }
 
@@ -1585,4 +1653,18 @@ fn location_to_range(loc: dm::Location) -> langserver::Range {
 
 fn span_to_range(range: ::std::ops::Range<dm::Location>) -> langserver::Range {
     langserver::Range::new(location_to_position(range.start), location_to_position(range.end))
+}
+
+fn issue_notification<W: io::ResponseWrite, T>(write: &W, params: T::Params)
+where
+    T: langserver::notification::Notification,
+    T::Params: serde::Serialize,
+{
+    let params = serde_json::to_value(params).expect("notification bad to_value");
+    let request = Request::Single(Call::Notification(jsonrpc::Notification {
+        jsonrpc: VERSION,
+        method: T::METHOD.to_owned(),
+        params: value_to_params(params),
+    }));
+    write.write(serde_json::to_string(&request).expect("notification bad to_string"))
 }
