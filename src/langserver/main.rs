@@ -189,7 +189,8 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
             root.join(&self.context.file_path(file).display().to_string())
                 .map_err(|e| invalid_request(format!("error in file_url: {}", e)))
         } else {
-            Err(invalid_request("cannot file_url without a root"))
+            Url::parse(&self.context.file_path(file).display().to_string())
+                .map_err(|e| invalid_request(format!("error in rootless file_url {}", e)))
         }
     }
 
@@ -421,9 +422,14 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                 },
                 None => {
                     // single-file mode
-                    let context = dm::Context::default();
+                    let filename = url.to_string();
+
                     let contents = self.docs.get_contents(url).map_err(invalid_request)?.into_owned();
-                    let mut pp = dm::preprocessor::Preprocessor::from_buffer(&context, "file.dm".into(), contents);
+                    let mut pp = dm::preprocessor::Preprocessor::from_buffer(&self.context, filename.clone().into(), contents);
+                    let file_id = self.context.get_file(filename.as_ref()).expect("file didn't exist?");
+                    // Clear old errors for this file. Hacky, but it will work for now.
+                    self.context.errors_mut().retain(|error| error.location().file != file_id);
+
                     pp.enable_annotations();
                     let mut annotations = AnnotationTree::default();
                     {
@@ -437,8 +443,12 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                     // Perform a diagnostics pump on this file only.
                     // Assume all errors are in this file.
                     let mut diagnostics = Vec::new();
-                    for error in context.errors().iter() {
+                    for error in self.context.errors().iter() {
                         let loc = error.location();
+                        if loc.file != file_id {
+                            continue;
+                        }
+
                         let related_information = if !self.client_caps.related_info || error.notes().is_empty() {
                             None
                         } else {
@@ -487,7 +497,6 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                         },
                     );
 
-                    let file_id = context.get_file("file.dm".as_ref()).expect("file didn't exist?");
                     (file_id, file_id, Rc::new(annotations))
                 }
             }

@@ -2,7 +2,7 @@
 
 use std::{fmt, error, io};
 use std::path::{PathBuf, Path};
-use std::cell::{RefCell, Ref};
+use std::cell::{RefCell, Ref, RefMut};
 use std::collections::HashMap;
 
 use termcolor::{ColorSpec, Color};
@@ -93,6 +93,11 @@ impl Context {
     /// Access the list of diagnostics generated so far.
     pub fn errors(&self) -> Ref<[DMError]> {
         Ref::map(self.errors.borrow(), |x| &**x)
+    }
+
+    /// Mutably access the diagnostics list. Dangerous.
+    pub fn errors_mut(&self) -> RefMut<Vec<DMError>> {
+        self.errors.borrow_mut()
     }
 
     /// Set a severity at and above which errors will be printed immediately.
