@@ -13,6 +13,7 @@ pub fn io_main() {
     let engine = Box::new(Engine::new(wasmio, context));
     unsafe {
         ENGINE_PTR = Box::into_raw(engine);
+        return_into_js();
     }
 }
 
@@ -39,4 +40,5 @@ impl ResponseWrite for WasmIo {
 
 extern {
     fn handle_output(ptr: *const u8, len: usize);
+    fn return_into_js() -> !;
 }
