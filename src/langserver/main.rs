@@ -608,6 +608,7 @@ handle_method_call! {
         if self.status != InitStatus::Starting {
             return Err(invalid_request(""))
         }
+        self.status = InitStatus::Running;
 
         if let Some(id) = init.process_id {
             self.parent_pid = id;
@@ -626,7 +627,6 @@ handle_method_call! {
         } else {
             return Err(invalid_request("No root directory was specified. Use 'Open Folder' or equivalent to open your DM environment."))
         }
-        self.status = InitStatus::Running;
 
         // Extract relevant client capabilities.
         self.client_caps = ClientCaps::parse(&init.capabilities);
