@@ -6,6 +6,7 @@
 //! * https://microsoft.github.io/language-server-protocol/specification
 //! * https://github.com/rust-lang-nursery/rls
 #![deny(unsafe_code)]
+#![cfg_attr(not(target_arch="wasm32"), forbid(unsafe_code))]
 
 extern crate url;
 extern crate serde;
@@ -60,22 +61,7 @@ fn main() {
         Err(e) => eprintln!("dir check failure: {}", e),
     }
 
-    #[cfg(not(target_arch="wasm32"))]
-    {
-        let stdio = io::StdIo;
-        let context = Default::default();
-        let mut engine = Engine::new(&stdio, &context);
-        loop {
-            use io::RequestRead;
-            let message = stdio.read().expect("request bad read");
-            engine.handle_input(&message);
-        }
-    }
-
-    #[cfg(target_arch="wasm32")]
-    {
-        io::wasm::main();
-    }
+    io::io_main();
 }
 
 const VERSION: Option<jsonrpc::Version> = Some(jsonrpc::Version::V2);
