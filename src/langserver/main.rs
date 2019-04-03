@@ -5,7 +5,7 @@
 //! * https://langserver.org/
 //! * https://microsoft.github.io/language-server-protocol/specification
 //! * https://github.com/rust-lang-nursery/rls
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 extern crate url;
 extern crate serde;
@@ -60,13 +60,21 @@ fn main() {
         Err(e) => eprintln!("dir check failure: {}", e),
     }
 
-    let stdio = io::StdIo;
-    let context = Default::default();
-    let mut engine = Engine::new(&stdio, &context);
-    loop {
-        use io::RequestRead;
-        let message = stdio.read().expect("request bad read");
-        engine.handle_input(message);
+    #[cfg(not(target_arch="wasm32"))]
+    {
+        let stdio = io::StdIo;
+        let context = Default::default();
+        let mut engine = Engine::new(&stdio, &context);
+        loop {
+            use io::RequestRead;
+            let message = stdio.read().expect("request bad read");
+            engine.handle_input(&message);
+        }
+    }
+
+    #[cfg(target_arch="wasm32")]
+    {
+        io::wasm::main();
     }
 }
 
@@ -553,8 +561,8 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
     // ------------------------------------------------------------------------
     // Driver
 
-    fn handle_input(&mut self, message: String) {
-        let mut outputs: Vec<Output> = match serde_json::from_str(&message) {
+    fn handle_input(&mut self, message: &str) {
+        let mut outputs: Vec<Output> = match serde_json::from_str(message) {
             Ok(Request::Single(call)) => self.handle_call(call).into_iter().collect(),
             Ok(Request::Batch(calls)) => calls.into_iter().flat_map(|call| self.handle_call(call)).collect(),
             Err(decode_error) => vec![Output::Failure(jsonrpc::Failure {
