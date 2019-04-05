@@ -204,6 +204,10 @@ impl<'a> TypeRef<'a> {
         self.tree.graph.node_weight(self.idx).unwrap()
     }
 
+    pub fn tree(self) -> &'a ObjectTree {
+        self.tree
+    }
+
     /// Find the parent **path**, without taking `parent_type` into account.
     pub fn parent_path(&self) -> Option<TypeRef<'a>> {
         self.tree

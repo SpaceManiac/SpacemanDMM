@@ -36,7 +36,7 @@ impl<'o> StaticType<'o> {
 /// Single atomic type.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 enum Type<'o> {
-    Any,
+    Any,  // TODO: this doesn't belong here?
 
     // Primitives -------------------------------------------------------------
     Null,  // Only thing that isnull().
@@ -73,6 +73,101 @@ impl<'o> Type<'o> {
             },
             // TODO: New => Instance, Prefab => Typepath
             _ => Type::Any,
+        }
+    }
+
+    fn isnull(&self) -> bool {
+        match self {
+            Type::Null => true,
+            _ => false,
+        }
+    }
+
+    fn istext(&self) -> bool {
+        match self {
+            Type::String => true,
+            _ => false,
+        }
+    }
+
+    fn isnum(&self) -> bool {
+        match self {
+            Type::Number => true,
+            _ => false,
+        }
+    }
+
+    fn isfile(&self) -> bool {
+        match self {
+            Type::Resource => true,
+            _ => false,
+        }
+    }
+
+    fn isloc(&self) -> bool {
+        match self {
+            Type::Instance(ty) => ty.is_subtype_of(&ty.tree().expect("/atom")),
+            _ => false,
+        }
+    }
+
+    fn isarea(&self) -> bool {
+        match self {
+            Type::Instance(ty) => ty.is_subtype_of(&ty.tree().expect("/area")),
+            _ => false,
+        }
+    }
+
+    fn ismob(&self) -> bool {
+        match self {
+            Type::Instance(ty) => ty.is_subtype_of(&ty.tree().expect("/mob")),
+            _ => false,
+        }
+    }
+
+    fn isobj(&self) -> bool {
+        // Tricky: actually any /atom/movable which is not /mob.
+        match self {
+            Type::Instance(ty) => {
+                ty.is_subtype_of(&ty.tree().expect("/atom/movable"))
+                    && !ty.is_subtype_of(&ty.tree().expect("/mob"))
+            },
+            _ => false,
+        }
+    }
+
+    fn isturf(&self) -> bool {
+        // Tricky: actually any /atom which is not /area or /atom/movable.
+        match self {
+            Type::Instance(ty) => {
+                ty.is_subtype_of(&ty.tree().expect("/atom"))
+                    && !ty.is_subtype_of(&ty.tree().expect("/area"))
+                    && !ty.is_subtype_of(&ty.tree().expect("/atom/movable"))
+            },
+            _ => false,
+        }
+    }
+
+    fn isicon(&self) -> Option<bool> {
+        match self {
+            Type::Instance(ty) => Some(ty.is_subtype_of(&ty.tree().expect("/icon"))),
+            Type::Resource => None,  // Don't know whether file is ".dmi".
+            _ => Some(false),
+        }
+    }
+
+    fn istype(&self, other: TypeRef<'o>) -> bool {
+        // The "tricky" bits above do not apply here.
+        match self {
+            Type::Instance(ty) => ty.is_subtype_of(&other),
+            _ => false,
+        }
+    }
+
+    fn ispath(&self, other: TypeRef<'o>) -> bool {
+        match self {
+            Type::Typepath(ty) => ty.is_subtype_of(&other),
+            _ => false,
         }
     }
 }
