@@ -33,16 +33,24 @@ impl<'o> StaticType<'o> {
     }
 }
 
+/// Single atomic type.
 #[derive(Copy, Clone, Debug)]
 enum Type<'o> {
     Any,
-    Null,
-    String,
-    Resource,
-    Number,
-    List(Option<TypeRef<'o>>),
-    Instance(TypeRef<'o>),
-    Typepath(TypeRef<'o>),
+
+    // Primitives -------------------------------------------------------------
+    Null,  // Only thing that isnull().
+    String,  // Only thing that istext().
+    Number,  // Only thing that isnum().
+    Resource,  // Only thing that isfile(), file() returns this.
+
+    // Types ------------------------------------------------------------------
+    Instance(TypeRef<'o>),  // Only thing that istype() what it is;
+                            // isloc/isarea/ismob/isobj/isturf are this.
+    Typepath(TypeRef<'o>),  // Only thing that ispath() what it is.
+
+    // Special Types ----------------------------------------------------------
+    // These are not nameable and have no isX() proc, but are "something".
     Global,
     AbstractFilter,
 }
@@ -55,11 +63,11 @@ impl<'o> Type<'o> {
             Constant::Resource(_) => Type::Resource,
             Constant::Int(_) => Type::Number,
             Constant::Float(_) => Type::Number,
-            Constant::List(_) => Type::List(None),
+            Constant::List(_) => Type::Instance(objtree.expect("/list")),
             Constant::Call(func, _) => match func {
                 ConstFn::Icon => Type::Instance(objtree.expect("/icon")),
                 ConstFn::Matrix => Type::Instance(objtree.expect("/matrix")),
-                ConstFn::Newlist => Type::List(None),
+                ConstFn::Newlist => Type::Instance(objtree.expect("/list")),
                 ConstFn::Sound => Type::Instance(objtree.expect("/sound")),
                 ConstFn::Filter => Type::AbstractFilter,
             },
@@ -650,7 +658,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Term::List(args) => {
                 self.visit_arguments(location, args);
-                Type::List(None).into()
+                Type::Instance(self.objtree.expect("/list")).into()
             },
             Term::Input { args, input_type, in_list } => {
                 // TODO: deal with in_list
@@ -707,15 +715,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     last = self.visit_expression(location, choice, None);
                 }
 
-                if choices.len() == 1 {
-                    match last.ty {
-                        Type::List(Some(inst)) => Type::Instance(inst).into(),
-                        _ => Analysis::empty(),
-                    }
-                } else {
-                    // TODO: common superset of all choices
-                    Analysis::empty()
-                }
+                // TODO: common superset of all choices
+                Analysis::empty()
             },
             Term::DynamicCall(lhs_args, rhs_args) => {
                 self.visit_arguments(location, lhs_args);
@@ -752,17 +753,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Follow::Index(expr) => {
                 self.visit_expression(location, expr, None);
                 // TODO: differentiate between L[1] and L[non_numeric_key]
-                if let Type::List(lty) = lhs.ty {
-                    if let Some(ty) = lty {
-                        Type::Instance(ty).into()
-                    } else {
-                        Analysis::empty()
-                    }
-                } else {
-                    match lhs.static_ty {
-                        StaticType::List { keys, .. } => Analysis::from(*keys),
-                        _ => Analysis::empty(),
-                    }
+                match lhs.static_ty {
+                    StaticType::List { keys, .. } => Analysis::from(*keys),
+                    _ => Analysis::empty(),
                 }
             },
             Follow::Field(kind, name) => {
