@@ -34,7 +34,7 @@ impl<'o> StaticType<'o> {
 }
 
 /// Single atomic type.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 enum Type<'o> {
     Any,
 
@@ -82,14 +82,8 @@ impl<'o> Type<'o> {
 #[derive(Debug, Clone)]
 struct Analysis<'o> {
     static_ty: StaticType<'o>,
-    ty: Type<'o>,
+    ty: HashSet<Type<'o>>,
     value: Option<Constant>,
-}
-
-impl<'o> From<Type<'o>> for Analysis<'o> {
-    fn from(ty: Type<'o>) -> Analysis<'o> {
-        Analysis { static_ty: StaticType::None, ty, value: None }
-    }
 }
 
 impl<'o> Analysis<'o> {
@@ -100,7 +94,7 @@ impl<'o> Analysis<'o> {
     fn null() -> Analysis<'o> {
         Analysis {
             static_ty: StaticType::None,
-            ty: Type::Null,
+            ty: Some(Type::Null).into_iter().collect(),
             value: Some(Constant::Null(None)),
         }
     }
@@ -112,17 +106,29 @@ impl<'o> Analysis<'o> {
     fn from_value(objtree: &'o ObjectTree, value: Constant) -> Analysis<'o> {
         Analysis {
             static_ty: StaticType::None,
-            ty: Type::from_constant(objtree, &value),
+            ty: Some(Type::from_constant(objtree, &value)).into_iter().collect(),
             value: Some(value),
         }
     }
 }
 
+/// Build an analysis with a single type as its element.
+impl<'o> From<Type<'o>> for Analysis<'o> {
+    fn from(ty: Type<'o>) -> Analysis<'o> {
+        Analysis {
+            static_ty: StaticType::None,
+            ty: Some(ty).into_iter().collect(),
+            value: None,
+        }
+    }
+}
+
+/// Optimistic: assumes static type is true and non-null.
 impl<'o> From<StaticType<'o>> for Analysis<'o> {
     fn from(static_ty: StaticType<'o>) -> Analysis<'o> {
         Analysis {
+            ty: static_ty.basic_type().into_iter().map(Type::Instance).collect(),
             static_ty: static_ty,
-            ty: Type::Any,
             value: None,
         }
     }
@@ -337,7 +343,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
         local_vars.insert("global".to_owned(), Analysis {
             static_ty: StaticType::Type(objtree.root()),
-            ty: Type::Global,
+            ty: Some(Type::Global).into_iter().collect(),
             value: None,
         });
 
@@ -707,12 +713,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
             },
             Term::Pick(choices) => {
-                let mut last = Analysis::empty();
                 for (weight, choice) in choices.iter() {
                     if let Some(ref weight) = weight {
                         self.visit_expression(location, weight, None);
                     }
-                    last = self.visit_expression(location, choice, None);
+                    self.visit_expression(location, choice, None);
                 }
 
                 // TODO: common superset of all choices
@@ -795,17 +800,15 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         match (op, rhs.ty) {
             // !x just evaluates the "truthiness" of x and negates it, returning 1 or 0
             (UnaryOp::Not, _) => Type::Number.into(),
+            /*
             (UnaryOp::Neg, Type::Number) => Type::Number.into(),
             (UnaryOp::BitNot, Type::Number) => Type::Number.into(),
             (UnaryOp::PreIncr, Type::Number) => Type::Number.into(),
             (UnaryOp::PostIncr, Type::Number) => Type::Number.into(),
             (UnaryOp::PreDecr, Type::Number) => Type::Number.into(),
             (UnaryOp::PostDecr, Type::Number) => Type::Number.into(),
-            (_, Type::Any) => Analysis::empty(),
-            _ => {
-                //self.error(format!("visit_unary: don't know how to {:?} {:?}", op, rhs.ty));
-                Analysis::empty()
-            }
+            */
+            _ => Analysis::empty(),
         }
     }
 
