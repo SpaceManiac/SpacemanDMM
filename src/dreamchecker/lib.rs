@@ -40,8 +40,10 @@ enum Type<'o> {
 
     // Primitives -------------------------------------------------------------
     Null,  // Only thing that isnull().
-    String,  // Only thing that istext().
-    Number,  // Only thing that isnum().
+    EmptyString,
+    String,
+    Zero,
+    Number,
     Resource,  // Only thing that isfile(), file() returns this.
 
     // Types ------------------------------------------------------------------
@@ -53,6 +55,7 @@ enum Type<'o> {
     // These are not nameable and have no isX() proc, but are "something".
     Global,
     AbstractFilter,
+    ProcPath,
 }
 
 impl<'o> Type<'o> {
@@ -71,8 +74,34 @@ impl<'o> Type<'o> {
                 ConstFn::Sound => Type::Instance(objtree.expect("/sound")),
                 ConstFn::Filter => Type::AbstractFilter,
             },
-            // TODO: New => Instance, Prefab => Typepath
-            _ => Type::Any,
+            Constant::New { type_, args: _ } => {
+                if let Some(pop) = type_.as_ref() {
+                    if let Some(ty) = objtree.type_by_path(&pop.path) {
+                        Type::Instance(ty)
+                    } else {
+                        Type::Any
+                    }
+                } else {
+                    // TODO: receive type hint here
+                    Type::Any
+                }
+            },
+            Constant::Prefab(pop) => {
+                if let Some(ty) = objtree.type_by_path(&pop.path) {
+                    Type::Instance(ty)
+                } else {
+                    Type::Any
+                }
+            },
+        }
+    }
+
+    fn is_truthy(&self) -> bool {
+        match self {
+            Type::Null => false,
+            Type::EmptyString => false,
+            Type::Zero => false,
+            _ => true,
         }
     }
 
@@ -86,6 +115,7 @@ impl<'o> Type<'o> {
     fn istext(&self) -> bool {
         match self {
             Type::String => true,
+            Type::EmptyString => true,
             _ => false,
         }
     }
@@ -93,6 +123,7 @@ impl<'o> Type<'o> {
     fn isnum(&self) -> bool {
         match self {
             Type::Number => true,
+            Type::Zero => true,
             _ => false,
         }
     }
@@ -145,14 +176,6 @@ impl<'o> Type<'o> {
                     && !ty.is_subtype_of(&ty.tree().expect("/atom/movable"))
             },
             _ => false,
-        }
-    }
-
-    fn isicon(&self) -> Option<bool> {
-        match self {
-            Type::Instance(ty) => Some(ty.is_subtype_of(&ty.tree().expect("/icon"))),
-            Type::Resource => None,  // Don't know whether file is ".dmi".
-            _ => Some(false),
         }
     }
 
