@@ -90,6 +90,20 @@ type. The CLI binary is known as `dmm-tools`.
 [rust]: https://www.rust-lang.org/en-US/install.html
 [source readme]: ./src/README.md
 
+## Docker
+
+For convenience, a `dockerfile` is included.
+
+To build the docker image, switch to the directory where you cloned spacemandmm and run:  
+```shell
+docker build -t spacemandmm .
+```
+
+This will locally build an image for spacemandmm. To use the image, switch to the codebase you want to generate maps for (tg is used in the example here, you will need to update this command to fit your codebase):  
+```shell
+docker run -v "$PWD":/usr/src/codebase --rm -it spacemandmm -e /usr/src/codebase/tgstation.dme minimap /usr/src/codebase/_maps/map_files/BoxStation/BoxStation.dmm
+```
+
 ## License
 
 SpacemanDMM is free software: you can redistribute it and/or modify
