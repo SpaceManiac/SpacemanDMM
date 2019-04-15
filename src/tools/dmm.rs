@@ -404,7 +404,7 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
     let (mut curr_x, mut curr_y, mut curr_z) = (0, 0, 0);
     let (mut max_x, mut max_y, mut max_z) = (0, 0, 0);
     let mut curr_num = 0;
-    let mut iter_x = 0;
+    let mut base_x = 0;
 
     let mut in_coord_block = true;
     let mut in_map_string = false;
@@ -417,14 +417,14 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
                 if reading_coord == Coord::X {
                     curr_x = take(&mut curr_num);
                     max_x = max(max_x, curr_x);
-                    iter_x = 0;
+                    base_x = curr_x;
                     reading_coord = Coord::Y;
                 } else if reading_coord == Coord::Y {
                     curr_y = take(&mut curr_num);
                     max_y = max(max_y, curr_y);
                     reading_coord = Coord::Z;
                 } else {
-                    return Err(DMError::new(Location::default(), "Incorrect number of coordinates"));
+                    return Err(DMError::new(chars.location(), "Incorrect number of coordinates"));
                 }
             } else if ch == b')' {
                 assert_eq!(reading_coord, Coord::Z);
@@ -435,7 +435,7 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
             } else {
                 match (ch as char).to_digit(10) {
                     Some(x) => curr_num = 10 * curr_num + x as usize,
-                    None => return Err(DMError::new(Location::default(), "bad digit in map coordinate")),
+                    None => return Err(DMError::new(chars.location(), format!("bad digit {:?} in map coordinate", ch))),
                 }
             }
         } else if in_map_string {
@@ -451,22 +451,20 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
                 } else {
                     curr_y += 1;
                 }
-                max_x = max(max_x, curr_x);
-                if iter_x > 1 {
-                    curr_x = 1;
-                }
-                iter_x = 0;
+                curr_x = base_x;
             } else {
                 curr_key = advance_key(curr_key, base_52_reverse(ch)?)?;
                 curr_key_length += 1;
                 if curr_key_length == map.key_length {
-                    iter_x += 1;
-                    if iter_x > 1 {
-                        curr_x += 1;
-                    }
                     let key = take(&mut curr_key);
                     curr_key_length = 0;
-                    grid.insert((curr_x, curr_y, curr_z), Key(key));
+                    if grid.insert((curr_x, curr_y, curr_z), Key(key)).is_some() {
+                        return Err(DMError::new(chars.location(), format!(
+                            "multiple entries for ({}, {}, {})",
+                            curr_x, curr_y, curr_z)))
+                    }
+                    max_x = max(max_x, curr_x);
+                    curr_x += 1;
                 }
             }
         } else if ch == b'(' {
@@ -477,11 +475,19 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
     }
     max_y = max(max_y, curr_y);
 
+    let mut result = Ok(());
     map.grid = Array3::from_shape_fn((max_z, max_y, max_x), |(z, y, x)| {
-        grid[&(x + 1, y + 1, z + 1)]
+        if let Some(&tile) = grid.get(&(x + 1, y + 1, z + 1)) {
+            tile
+        } else {
+            result = Err(DMError::new(chars.location(), format!(
+                "no value for tile ({}, {}, {})",
+                x + 1, y + 1, z + 1)));
+            Key(0)
+        }
     });
 
-    Ok(())
+    result
 }
 
 fn base_52_reverse(ch: u8) -> Result<KeyType, DMError> {
