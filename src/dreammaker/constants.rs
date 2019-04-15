@@ -349,7 +349,6 @@ impl fmt::Display for ConstFn {
 // The constant evaluator
 
 pub fn evaluate_str(location: Location, input: &[u8]) -> Result<Constant, DMError> {
-    use super::Context;
     use super::lexer::{Lexer, from_latin1_borrowed};
     use super::parser::Parser;
 
