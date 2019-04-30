@@ -33,6 +33,53 @@ impl<'o> StaticType<'o> {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+enum Assumption<'o> {
+    Truthy(bool),
+    IsNull(bool),
+    IsText(bool),
+    IsNum(bool),
+    IsType(bool, TypeRef<'o>),
+    IsPath(bool, TypeRef<'o>),
+}
+
+impl<'o> Assumption<'o> {
+    fn oneway_conflict(&self, other: &Assumption) -> bool {
+        use Assumption::*;
+        match (self, other) {
+            // trivial conflicts
+            (Truthy(a), Truthy(b)) |
+            (IsNull(a), IsNull(b)) |
+            (IsText(a), IsText(b)) |
+            (IsNum(a), IsNum(b)) => a != b,
+            // null is always false
+            (Truthy(true), IsNull(true)) => true,
+            // can only be one of null, text, num
+            (IsNum(true), IsText(true)) => true,
+            (IsNum(true), IsNull(true)) => true,
+            (IsText(true), IsNull(true)) => true,
+            // no conflict after all
+            _ => false
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct AssumptionSet<'o> {
+    set: HashSet<Assumption<'o>>,
+}
+
+impl<'o> AssumptionSet<'o> {
+    fn conflicts_with(&self, new: &Assumption) -> Option<&Assumption> {
+        for each in self.set.iter() {
+            if each.oneway_conflict(new) || new.oneway_conflict(each) {
+                return Some(each);
+            }
+        }
+        None
+    }
+}
+
 /// Single atomic type.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 enum Type<'o> {
