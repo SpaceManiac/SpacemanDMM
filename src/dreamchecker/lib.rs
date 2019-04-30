@@ -64,12 +64,62 @@ impl<'o> Assumption<'o> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 struct AssumptionSet<'o> {
     set: HashSet<Assumption<'o>>,
 }
 
+macro_rules! assumption_set {
+    ($($v:expr),* $(,)*) => {
+        AssumptionSet {
+            set: vec![$($v),*].into_iter().collect(),
+        }
+    }
+}
+
 impl<'o> AssumptionSet<'o> {
+    fn from_constant(objtree: &'o ObjectTree, constant: &Constant, type_hint: Option<TypeRef<'o>>) -> AssumptionSet<'o> {
+        match constant {
+            Constant::Null(_) => assumption_set![Assumption::IsNull(true), Assumption::Truthy(false)],
+            Constant::String(val) => assumption_set![Assumption::IsText(true), Assumption::Truthy(!val.is_empty())],
+            Constant::Resource(_) => assumption_set![Assumption::Truthy(true)],
+            Constant::Int(val) => assumption_set![Assumption::IsNum(true), Assumption::Truthy(*val != 0)],
+            Constant::Float(val) => assumption_set![Assumption::IsNum(true), Assumption::Truthy(*val != 0.0)],
+            Constant::List(_) => AssumptionSet::from_valid_instance(objtree.expect("/list")),
+            Constant::Call(func, _) => match func {
+                ConstFn::Icon => AssumptionSet::from_valid_instance(objtree.expect("/icon")),
+                ConstFn::Matrix => AssumptionSet::from_valid_instance(objtree.expect("/matrix")),
+                ConstFn::Newlist => AssumptionSet::from_valid_instance(objtree.expect("/list")),
+                ConstFn::Sound => AssumptionSet::from_valid_instance(objtree.expect("/sound")),
+                ConstFn::Filter => AssumptionSet::default(),
+            },
+            Constant::New { type_, args: _ } => {
+                if let Some(pop) = type_.as_ref() {
+                    if let Some(ty) = objtree.type_by_path(&pop.path) {
+                        AssumptionSet::from_valid_instance(ty)
+                    } else {
+                        AssumptionSet::default()
+                    }
+                } else if let Some(hint) = type_hint {
+                    AssumptionSet::from_valid_instance(hint)
+                } else {
+                    AssumptionSet::default()
+                }
+            },
+            Constant::Prefab(pop) => {
+                if let Some(ty) = objtree.type_by_path(&pop.path) {
+                    assumption_set![Assumption::Truthy(false), Assumption::IsPath(true, ty)]
+                } else {
+                    AssumptionSet::default()
+                }
+            },
+        }
+    }
+
+    fn from_valid_instance(ty: TypeRef<'o>) -> AssumptionSet<'o> {
+        assumption_set![Assumption::Truthy(true), Assumption::IsNull(false), Assumption::IsType(true, ty)]
+    }
+
     fn conflicts_with(&self, new: &Assumption) -> Option<&Assumption> {
         for each in self.set.iter() {
             if each.oneway_conflict(new) || new.oneway_conflict(each) {
