@@ -290,6 +290,7 @@ name = "dm-langserver"
 version = "0.0.1"
 dependencies = [
  "chrono 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dreamchecker 0.1.0",
  "dreammaker 0.1.0",
  "git2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "interval-tree 0.8.0",

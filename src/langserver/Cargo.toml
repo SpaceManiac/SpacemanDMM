@@ -15,6 +15,7 @@ serde_derive = "1.0.27"
 jsonrpc-core = "10.0.1"
 lsp-types = "0.56"
 dreammaker = { path = "../dreammaker" }
+dreamchecker = { path = "../dreamchecker" }
 interval-tree = { path = "../interval-tree" }
 petgraph = { version = "0.4.9", default-features = false }
 

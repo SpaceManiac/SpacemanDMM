@@ -17,6 +17,7 @@ extern crate interval_tree;
 extern crate lsp_types as langserver;
 extern crate jsonrpc_core as jsonrpc;
 extern crate dreammaker as dm;
+extern crate dreamchecker;
 
 #[macro_use] mod macros;
 mod io;
@@ -316,6 +317,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
         }
         self.update_objtree();
         self.references_table = Some(find_references::ReferencesTable::new(&self.objtree));
+        // TODO: run dreamchecker here if enabled
         pp.finalize();
         self.preprocessor = Some(pp);
         self.issue_notification::<extras::WindowStatus>(Default::default());
@@ -442,6 +444,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                         self.objtree = parser.parse_object_tree();
                     }
                     pp.finalize();
+                    dreamchecker::run(&self.context, &self.objtree);
 
                     // Perform a diagnostics pump on this file only.
                     // Assume all errors are in this file.
