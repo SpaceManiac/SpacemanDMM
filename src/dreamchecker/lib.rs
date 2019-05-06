@@ -58,6 +58,11 @@ impl<'o> Assumption<'o> {
             (IsNum(true), IsText(true)) => true,
             (IsNum(true), IsNull(true)) => true,
             (IsText(true), IsNull(true)) => true,
+            // types and paths are truthy
+            (IsType(true, _), Truthy(false)) |
+            (IsType(true, _), IsNull(true)) |
+            (IsPath(true, _), Truthy(false)) |
+            (IsPath(true, _), Truthy(true)) => true,
             // no conflict after all
             _ => false
         }
