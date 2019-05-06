@@ -308,7 +308,11 @@ struct Analysis<'o> {
 
 impl<'o> Analysis<'o> {
     fn empty() -> Analysis<'o> {
-        Type::Any.into()
+        Analysis {
+            static_ty: StaticType::None,
+            aset: AssumptionSet::default(),
+            value: None,
+        }
     }
 
     fn null() -> Analysis<'o> {
@@ -332,15 +336,14 @@ impl<'o> Analysis<'o> {
     }
 }
 
-/// Build an analysis with a single type as its element.
-impl<'o> From<Type<'o>> for Analysis<'o> {
-    fn from(ty: Type<'o>) -> Analysis<'o> {
-        unimplemented!()
-        /*Analysis {
+/// Build an analysis from an assumption set.
+impl<'o> From<AssumptionSet<'o>> for Analysis<'o> {
+    fn from(aset: AssumptionSet<'o>) -> Analysis<'o> {
+        Analysis {
             static_ty: StaticType::None,
-            ty: Some(ty).into_iter().collect(),
+            aset,
             value: None,
-        }*/
+        }
     }
 }
 
@@ -786,7 +789,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Term::Float(number) => Analysis::from_value(self.objtree, Constant::from(*number), type_hint),
             Term::String(text) => Analysis::from_value(self.objtree, Constant::String(text.to_owned()), type_hint),
             Term::Resource(text) => Analysis::from_value(self.objtree, Constant::Resource(text.to_owned()), type_hint),
-            Term::As(_) => Type::Number.into(),
+            Term::As(_) => assumption_set![Assumption::IsNum(true)].into(),
 
             Term::Ident(unscoped_name) => {
                 if let Some(var) = self.local_vars.get(unscoped_name) {
@@ -805,7 +808,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Term::Prefab(prefab) => {
                 if let Some(nav) = self.ty.navigate_path(&prefab.path) {
                     // TODO: handle proc/verb paths here
-                    Type::Typepath(nav.ty()).into()
+                    assumption_set![Assumption::IsType(true, nav.ty())].into()
                 } else {
                     error(location, format!("failed to resolve path {}", FormatTypePath(&prefab.path)))
                         .register(self.context);
@@ -818,7 +821,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         self.visit_expression(location, expr, None);
                     }
                 }
-                Type::String.into()
+                assumption_set![Assumption::IsText(true)].into()
             },
 
             Term::Call(unscoped_name, args) => {
@@ -883,14 +886,14 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         // New calls are exact: `new /datum()` will always call
                         // `/datum/New()` and never an override.
                         true);
-                    Type::Instance(typepath).into()
+                    assumption_set![Assumption::IsType(true, typepath)].into()
                 } else {
                     Analysis::empty()
                 }
             },
             Term::List(args) => {
                 self.visit_arguments(location, args);
-                Type::Instance(self.objtree.expect("/list")).into()
+                assumption_set![Assumption::IsType(true, self.objtree.expect("/list"))].into()
             },
             Term::Input { args, input_type, in_list } => {
                 // TODO: deal with in_list
@@ -903,24 +906,21 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 if input_type.contains(InputType::ANYTHING) {
                     Analysis::empty()
                 } else if without_null == InputType::MOB {
-                    Type::Instance(self.objtree.expect("/mob")).into()
+                    assumption_set![Assumption::IsType(true, self.objtree.expect("/mob"))].into()
                 } else if without_null == InputType::OBJ {
-                    Type::Instance(self.objtree.expect("/obj")).into()
+                    assumption_set![Assumption::IsType(true, self.objtree.expect("/obj"))].into()
                 } else if without_null == InputType::AREA {
-                    Type::Instance(self.objtree.expect("/area")).into()
+                    assumption_set![Assumption::IsType(true, self.objtree.expect("/area"))].into()
                 } else if without_null == InputType::TURF {
-                    Type::Instance(self.objtree.expect("/turf")).into()
+                    assumption_set![Assumption::IsType(true, self.objtree.expect("/turf"))].into()
                 } else if without_null == InputType::TEXT || without_null == InputType::MESSAGE || without_null == InputType::KEY || without_null == InputType::PASSWORD || without_null == InputType::COLOR || without_null.is_empty() {
-                    Type::String.into()
+                    assumption_set![Assumption::IsText(true)].into()
                 } else if without_null == InputType::NUM {
-                    Type::Number.into()
+                    assumption_set![Assumption::IsNum(true)].into()
                 } else if without_null == InputType::ICON {
-                    Type::Instance(self.objtree.expect("/icon")).into()
+                    assumption_set![Assumption::IsType(true, self.objtree.expect("/icon"))].into()
                 } else if without_null == InputType::SOUND {
-                    Type::Instance(self.objtree.expect("/sound")).into()
-                } else if without_null == InputType::FILE {
-                    // TODO: it's not clear that this is correct
-                    Type::Resource.into()
+                    assumption_set![Assumption::IsType(true, self.objtree.expect("/sound"))].into()
                 } else {
                     //self.error(format!("visit_term: weird input() type: {:?}", input_type));
                     Analysis::empty()
@@ -933,7 +933,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
 
                 if args.len() == 3 {  // X,Y,Z - it's gotta be a turf
-                    Type::Instance(self.objtree.expect("/turf")).into()
+                    assumption_set![Assumption::IsType(true, self.objtree.expect("/turf"))].into()
                 } else {
                     Analysis::empty()
                 }
@@ -1025,7 +1025,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     fn visit_unary(&mut self, rhs: Analysis<'o>, op: &UnaryOp) -> Analysis<'o> {
         match op {
             // !x just evaluates the "truthiness" of x and negates it, returning 1 or 0
-            UnaryOp::Not => Type::Number.into(),
+            UnaryOp::Not => Analysis::from(assumption_set![Assumption::IsNum(true)]),
             /*
             (UnaryOp::Neg, Type::Number) => Type::Number.into(),
             (UnaryOp::BitNot, Type::Number) => Type::Number.into(),
