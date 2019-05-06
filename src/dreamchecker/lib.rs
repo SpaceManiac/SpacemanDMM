@@ -297,7 +297,7 @@ impl<'o> Type<'o> {
 #[derive(Debug, Clone)]
 struct Analysis<'o> {
     static_ty: StaticType<'o>,
-    ty: HashSet<Type<'o>>,
+    aset: AssumptionSet<'o>,
     value: Option<Constant>,
 }
 
@@ -309,7 +309,7 @@ impl<'o> Analysis<'o> {
     fn null() -> Analysis<'o> {
         Analysis {
             static_ty: StaticType::None,
-            ty: Some(Type::Null).into_iter().collect(),
+            aset: assumption_set![Assumption::IsNull(true)],
             value: Some(Constant::Null(None)),
         }
     }
@@ -318,10 +318,10 @@ impl<'o> Analysis<'o> {
         Analysis::from(StaticType::Type(ty))
     }
 
-    fn from_value(objtree: &'o ObjectTree, value: Constant) -> Analysis<'o> {
+    fn from_value(objtree: &'o ObjectTree, value: Constant, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
         Analysis {
             static_ty: StaticType::None,
-            ty: Some(Type::from_constant(objtree, &value)).into_iter().collect(),
+            aset: AssumptionSet::from_constant(objtree, &value, type_hint),
             value: Some(value),
         }
     }
@@ -330,19 +330,25 @@ impl<'o> Analysis<'o> {
 /// Build an analysis with a single type as its element.
 impl<'o> From<Type<'o>> for Analysis<'o> {
     fn from(ty: Type<'o>) -> Analysis<'o> {
-        Analysis {
+        unimplemented!()
+        /*Analysis {
             static_ty: StaticType::None,
             ty: Some(ty).into_iter().collect(),
             value: None,
-        }
+        }*/
     }
 }
 
 /// Optimistic: assumes static type is true and non-null.
 impl<'o> From<StaticType<'o>> for Analysis<'o> {
     fn from(static_ty: StaticType<'o>) -> Analysis<'o> {
+        let mut aset = AssumptionSet::default();
+        if let Some(ty) = static_ty.basic_type() {
+            aset.set.insert(Assumption::IsType(true, ty));
+        }
+
         Analysis {
-            ty: static_ty.basic_type().into_iter().map(Type::Instance).collect(),
+            aset,
             static_ty: static_ty,
             value: None,
         }
@@ -558,7 +564,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
         local_vars.insert("global".to_owned(), Analysis {
             static_ty: StaticType::Type(objtree.root()),
-            ty: Some(Type::Global).into_iter().collect(),
+            aset: assumption_set![Assumption::IsNull(false)],
             value: None,
         });
 
@@ -771,10 +777,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     fn visit_term(&mut self, location: Location, term: &'o Term, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
         match term {
             Term::Null => Analysis::null(),
-            Term::Int(number) => Analysis::from_value(self.objtree, Constant::from(*number)),
-            Term::Float(number) => Analysis::from_value(self.objtree, Constant::from(*number)),
-            Term::String(text) => Analysis::from_value(self.objtree, Constant::String(text.to_owned())),
-            Term::Resource(text) => Analysis::from_value(self.objtree, Constant::Resource(text.to_owned())),
+            Term::Int(number) => Analysis::from_value(self.objtree, Constant::from(*number), type_hint),
+            Term::Float(number) => Analysis::from_value(self.objtree, Constant::from(*number), type_hint),
+            Term::String(text) => Analysis::from_value(self.objtree, Constant::String(text.to_owned()), type_hint),
+            Term::Resource(text) => Analysis::from_value(self.objtree, Constant::Resource(text.to_owned()), type_hint),
             Term::As(_) => Type::Number.into(),
 
             Term::Ident(unscoped_name) => {
@@ -1012,9 +1018,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     }
 
     fn visit_unary(&mut self, rhs: Analysis<'o>, op: &UnaryOp) -> Analysis<'o> {
-        match (op, rhs.ty) {
+        match op {
             // !x just evaluates the "truthiness" of x and negates it, returning 1 or 0
-            (UnaryOp::Not, _) => Type::Number.into(),
+            UnaryOp::Not => Type::Number.into(),
             /*
             (UnaryOp::Neg, Type::Number) => Type::Number.into(),
             (UnaryOp::BitNot, Type::Number) => Type::Number.into(),
