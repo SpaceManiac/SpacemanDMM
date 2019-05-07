@@ -265,10 +265,13 @@ pub struct AnalyzeObjectTree<'o> {
 
 impl<'o> AnalyzeObjectTree<'o> {
     pub fn new(context: &'o Context, objtree: &'o ObjectTree) -> Self {
+        let mut return_type = HashMap::default();
+        return_type.insert(objtree.root().get_proc("get_step").unwrap(), StaticType::Type(objtree.expect("/turf")));
+
         AnalyzeObjectTree {
             context,
             objtree,
-            return_type: Default::default(),
+            return_type,
             used_kwargs: Default::default(),
         }
     }
