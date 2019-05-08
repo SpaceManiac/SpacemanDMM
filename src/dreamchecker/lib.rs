@@ -259,6 +259,7 @@ pub struct AnalyzeObjectTree<'o> {
     objtree: &'o ObjectTree,
 
     return_type: HashMap<ProcRef<'o>, StaticType<'o>>,
+    must_call_parent: HashMap<ProcRef<'o>, bool>,
     // Debug(ProcRef) -> KwargInfo
     used_kwargs: BTreeMap<String, KwargInfo>,
 }
@@ -272,6 +273,7 @@ impl<'o> AnalyzeObjectTree<'o> {
             context,
             objtree,
             return_type,
+            must_call_parent: Default::default(),
             used_kwargs: Default::default(),
         }
     }
@@ -283,11 +285,16 @@ impl<'o> AnalyzeObjectTree<'o> {
     pub fn gather_settings(&mut self, proc: ProcRef<'o>, code: &'o [Spanned<Statement>]) {
         for statement in code.iter() {
             if let Statement::Setting { ref name, ref value, .. } = statement.elem {
-                if name == "spacemandmm_return_type" {
+                if name == "spacemandmm_return_type" || name == "return_type" {
                     if let Some(Term::Prefab(fab)) = value.as_term() {
                         let bits: Vec<_> = fab.path.iter().map(|(_, name)| name.to_owned()).collect();
                         let ty = self.static_type(statement.location, &bits);
                         self.return_type.insert(proc, ty);
+                    }
+                } else if name == "must_call_parent" {
+                    //eprintln!("{}: must_call_parent = {:?}", proc, value);
+                    if let Some(Term::Int(i)) = value.as_term() {
+                        self.must_call_parent.insert(proc, *i != 0);
                     }
                 }
             } else {
@@ -398,6 +405,7 @@ struct AnalyzeProc<'o, 's> {
     ty: TypeRef<'o>,
     proc_ref: ProcRef<'o>,
     local_vars: HashMap<String, Analysis<'o>>,
+    calls_parent: bool,
 }
 
 impl<'o, 's> AnalyzeProc<'o, 's> {
@@ -424,6 +432,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             ty,
             proc_ref,
             local_vars,
+            calls_parent: false,
         }
     }
 
@@ -433,6 +442,21 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             self.local_vars.insert(param.name.to_owned(), analysis);
         }
         self.visit_block(block);
+
+        if !self.calls_parent && self.proc_ref.parent_proc().is_some() {
+            //eprintln!("{:?}", self.env.must_call_parent);
+            let mut next = Some(self.proc_ref);
+            while let Some(current) = next {
+                if let Some(&must) = self.env.must_call_parent.get(&current) {
+                    if must {
+                        DMError::new(self.proc_ref.location, format!("proc never calls parent, required by {}", current))
+                            .register(self.context);;
+                    }
+                    break;
+                }
+                next = current.parent_proc();
+            }
+        }
     }
 
     fn visit_block(&mut self, block: &'o [Spanned<Statement>]) {
@@ -682,6 +706,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 self.visit_call(location, src, proc, args, true)
             },
             Term::ParentCall(args) => {
+                self.calls_parent = true;
                 if let Some(proc) = self.proc_ref.parent_proc() {
                     // TODO: if args are empty, call w/ same args
                     let src = self.ty;
