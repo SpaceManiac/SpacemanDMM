@@ -14,8 +14,10 @@ fn lex(f: &str) -> Vec<Token> {
 }
 
 #[test]
-fn floats() {
+fn number_literals() {
     assert_eq!(lex("0.08"), vec![Float(0.08), Punct(Newline)]);
+    assert_eq!(lex("0xABCDE"), vec![Int(703710), Punct(Newline)]);
+    assert_eq!(lex("1e4"), vec![Float(10000.0), Punct(Newline)]);
 }
 
 #[test]
