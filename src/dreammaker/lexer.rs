@@ -746,8 +746,12 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
             match self.next() {
                 Some(b'_') => {},
                 Some(ch) if ch == b'.' || ch == b'e' || ch == b'E' => {
-                    integer = false;
-                    exponent |= ch == b'e' || ch == b'E';
+                    // E is used for scientific notation
+                    // UNLESS we're parsing a hexadecimal literal
+                    if radix != 16 {
+                        integer = false;
+                        exponent |= ch == b'e' || ch == b'E';   
+                    }
                     buf.push(ch as char);
                 }
                 Some(ch) if (ch == b'+' || ch == b'-') && exponent => {
