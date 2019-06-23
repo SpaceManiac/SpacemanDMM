@@ -23,16 +23,16 @@ pub struct DocumentStore {
 
 impl DocumentStore {
     pub fn open(&mut self, doc: TextDocumentItem) -> Result<(), jsonrpc::Error> {
-        match self.map.insert(doc.uri, Document::new(doc.version, doc.text)) {
+        match self.map.insert(doc.uri.clone(), Document::new(doc.version, doc.text)) {
             None => Ok(()),
-            Some(_) => Err(invalid_request("opened a document a second time")),
+            Some(_) => Err(invalid_request(format!("opened twice: {}", doc.uri))),
         }
     }
 
     pub fn close(&mut self, id: TextDocumentIdentifier) -> Result<Url, jsonrpc::Error> {
         match self.map.remove(&id.uri) {
             Some(_) => Ok(id.uri),
-            None => Err(invalid_request("cannot close non-opened document")),
+            None => Err(invalid_request(format!("cannot close non-opened: {}", id.uri))),
         }
     }
 
@@ -48,17 +48,17 @@ impl DocumentStore {
         // truth (as speced with document content ownership)."
         let new_version = match doc_id.version {
             Some(version) => version,
-            None => return Err(invalid_request("don't know how to deal with this")),
+            None => return Err(invalid_request("document version is missing")),
         };
 
         let document = match self.map.get_mut(&doc_id.uri) {
             Some(doc) => doc,
-            None => return Err(invalid_request("that document isn't opened")),
+            None => return Err(invalid_request(format!("cannot change non-opened: {}", doc_id.uri))),
         };
 
         if new_version < document.version {
             eprintln!("new_version: {} < document_version: {}", new_version, document.version);
-            return Err(invalid_request("version numbers shouldn't go backwards"));
+            return Err(invalid_request("document version numbers shouldn't go backwards"));
         }
         document.version = new_version;
 
