@@ -57,7 +57,10 @@ macro_rules! handle_notification {
                 use langserver::notification::*;
 
                 // "Notifications should be dropped, except for the exit notification"
-                if notification.method != <Exit>::METHOD && self.status != InitStatus::Running {
+                if notification.method == <Exit>::METHOD {
+                    std::process::exit(if self.status == InitStatus::ShuttingDown { 0 } else { 1 });
+                }
+                if self.status != InitStatus::Running {
                     return Ok(())
                 }
 

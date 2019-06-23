@@ -1530,10 +1530,6 @@ handle_method_call! {
 handle_notification! {
     // ------------------------------------------------------------------------
     // basic setup
-    on Exit(&mut self, ()) {
-        std::process::exit(if self.status == InitStatus::ShuttingDown { 0 } else { 1 });
-    }
-
     on Initialized(&mut self, _) {
         if let Some(ref root) = self.root {
             eprintln!("workspace root: {}", root);
