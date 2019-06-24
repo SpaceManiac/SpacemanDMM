@@ -988,8 +988,26 @@ handle_method_call! {
         let iter = annotations.get_location(location);
         match_annotation! { iter;
         Annotation::TreePath(absolute, parts) => {
-            if let Some(ty) = self.objtree.type_by_path(completion::combine_tree_path(&iter, *absolute, parts)) {
+            let full_path: Vec<&str> = completion::combine_tree_path(&iter, *absolute, parts).collect();
+
+            if let Some(ty) = self.objtree.type_by_path(full_path.iter().cloned()) {
                 results.push(self.convert_location(ty.location, &[&ty.path])?);
+            } else if let Some((&proc_name, prefix)) = full_path.split_last() {
+                // If it's not a type, try to find the proc equivalent. Start
+                // at the parent type so that this is a decent shortcut for
+                // going to the parent proc.
+                // TODO: only do this if we're in a ProcHeader.
+                let mut next = self.objtree.type_by_path(prefix);
+                if let Some(ty) = next {
+                    next = ty.parent_type();
+                }
+                while let Some(ty) = next {
+                    if let Some(proc) = ty.procs.get(proc_name) {
+                        results.push(self.convert_location(proc.value.last().unwrap().location, &[&ty.path, "/proc/", proc_name])?);
+                        break;
+                    }
+                    next = ty.parent_type();
+                }
             }
         },
         Annotation::TypePath(parts) => {
