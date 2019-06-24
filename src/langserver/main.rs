@@ -1552,6 +1552,12 @@ handle_notification! {
         }
     }
 
+    on Reparse(&mut self, _p) {
+        eprintln!("reparsing by request...");
+        self.context.errors_mut().clear();
+        return self.Initialized(_p);
+    }
+
     // ------------------------------------------------------------------------
     // document content management
     on DidOpenTextDocument(&mut self, params) {

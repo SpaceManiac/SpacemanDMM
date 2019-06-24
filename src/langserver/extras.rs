@@ -46,3 +46,9 @@ pub struct ObjectTreeProc {
     pub location: Option<langserver::Location>,
     pub is_verb: Option<bool>,
 }
+
+pub enum Reparse {}
+impl Notification for Reparse {
+    const METHOD: &'static str = "experimental/dreammaker/reparse";
+    type Params = ::langserver::InitializedParams;
+}

@@ -1,5 +1,10 @@
 //! Utility macros.
 
+pub mod all_notifications {
+    pub use langserver::notification::*;
+    pub use extras::*;
+}
+
 macro_rules! handle_method_call {
     ($(on $what:ident(&mut $self:ident, $p:pat) $b:block)*) => {
         impl<'a, W: io::ResponseWrite> Engine<'a, W> {
@@ -54,7 +59,7 @@ macro_rules! handle_notification {
     ($(on $what:ident(&mut $self:ident, $p:pat) $b:block)*) => {
         impl<'a, W: io::ResponseWrite> Engine<'a, W> {
             fn handle_notification(&mut self, notification: jsonrpc::Notification) -> Result<(), jsonrpc::Error> {
-                use langserver::notification::*;
+                use macros::all_notifications::*;
 
                 // "Notifications should be dropped, except for the exit notification"
                 if notification.method == <Exit>::METHOD {
@@ -78,7 +83,7 @@ macro_rules! handle_notification {
 
             $(
                 #[allow(non_snake_case)]
-                fn $what(&mut $self, $p: <langserver::notification::$what as langserver::notification::Notification>::Params)
+                fn $what(&mut $self, $p: <macros::all_notifications::$what as langserver::notification::Notification>::Params)
                 -> Result<(), jsonrpc::Error>
                 {
                     #[allow(unused_imports)]
