@@ -52,6 +52,11 @@ impl ReferencesTable {
             }
         });
 
+        // Sublime Text client does not sort these itself, so sort them here.
+        for value in tab.uses.values_mut() {
+            value.sort();
+        }
+
         tab
     }
 
