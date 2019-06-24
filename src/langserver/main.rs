@@ -28,7 +28,7 @@ mod extras;
 mod completion;
 
 use std::path::PathBuf;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::collections::hash_map::Entry;
 use std::rc::Rc;
 
@@ -130,6 +130,7 @@ struct Engine<'a, W: 'a> {
     references_table: Option<find_references::ReferencesTable>,
 
     annotations: HashMap<Url, (FileId, FileId, Rc<AnnotationTree>)>,
+    diagnostics_set: HashSet<Url>,
 
     client_caps: ClientCaps,
 }
@@ -150,6 +151,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
             references_table: None,
 
             annotations: Default::default(),
+            diagnostics_set: Default::default(),
 
             client_caps: Default::default(),
         }
@@ -376,11 +378,24 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
             }
         }
 
+        let mut new_diagnostics_set = HashSet::new();
         for (url, diagnostics) in map {
+            self.diagnostics_set.remove(&url);  // don't erase below
+            new_diagnostics_set.insert(url.clone());
             self.issue_notification::<langserver::notification::PublishDiagnostics>(
                 langserver::PublishDiagnosticsParams {
                     uri: url,
                     diagnostics,
+                },
+            );
+        }
+
+        // erase diagnostics for files which no longer have any
+        for url in std::mem::replace(&mut self.diagnostics_set, new_diagnostics_set) {
+            self.issue_notification::<langserver::notification::PublishDiagnostics>(
+                langserver::PublishDiagnosticsParams {
+                    uri: url.clone(),
+                    diagnostics: Vec::new(),
                 },
             );
         }
