@@ -1,9 +1,15 @@
 # DreamMaker Language Server
 
 This package is a [language server] implementation for DreamMaker, the
-scripting language of the [BYOND] game engine.
+scripting language of the [BYOND] game engine. All features are dependent on
+client support.
 
-* [VS Code extension](https://marketplace.visualstudio.com/items?itemName=platymuus.dm-langclient)
+* [Visual Studio Code extension](https://marketplace.visualstudio.com/items?itemName=platymuus.dm-langclient)
+  ([code](https://github.com/SpaceManiac/vscode-dm-langclient)).
+* [Sublime Text 3 package](https://packagecontrol.io/packages/DreamMaker%20Language%20Client)
+  ([code](https://github.com/SpaceManiac/sublime-dm-langclient)).
+* Other editors may have generic language client packages which will be
+  compatible.
 
 [language server]: https://langserver.org/
 [BYOND]: https://secure.byond.com/
