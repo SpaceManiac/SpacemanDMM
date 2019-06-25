@@ -290,12 +290,19 @@ impl<'o> AnalyzeObjectTree<'o> {
                         let bits: Vec<_> = fab.path.iter().map(|(_, name)| name.to_owned()).collect();
                         let ty = self.static_type(statement.location, &bits);
                         self.return_type.insert(proc, ty);
+                    } else {
+                        error(statement.location, "non-calculable return type annotation")
+                            .set_severity(Severity::Warning)
+                            .register(self.context);
                     }
-                } else if name == "must_call_parent" {
-                    //eprintln!("{}: must_call_parent = {:?}", proc, value);
+                } else if name == "spacemandmm_should_call_parent" {
                     if let Some(Term::Int(i)) = value.as_term() {
                         self.must_call_parent.insert(proc, *i != 0);
                     }
+                } else if name.starts_with("spacemandmm_") {
+                    error(statement.location, format!("unknown linter setting {:?}", name))
+                        .set_severity(Severity::Warning)
+                        .register(self.context);
                 }
             } else {
                 break;
