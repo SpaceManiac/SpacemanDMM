@@ -285,7 +285,7 @@ impl<'o> AnalyzeObjectTree<'o> {
     pub fn gather_settings(&mut self, proc: ProcRef<'o>, code: &'o [Spanned<Statement>]) {
         for statement in code.iter() {
             if let Statement::Setting { ref name, ref value, .. } = statement.elem {
-                if name == "spacemandmm_return_type" || name == "return_type" {
+                if name == "SpacemanDMM_return_type" {
                     if let Some(Term::Prefab(fab)) = value.as_term() {
                         let bits: Vec<_> = fab.path.iter().map(|(_, name)| name.to_owned()).collect();
                         let ty = self.static_type(statement.location, &bits);
@@ -295,12 +295,16 @@ impl<'o> AnalyzeObjectTree<'o> {
                             .set_severity(Severity::Warning)
                             .register(self.context);
                     }
-                } else if name == "spacemandmm_should_call_parent" {
+                } else if name == "SpacemanDMM_should_call_parent" {
                     if let Some(Term::Int(i)) = value.as_term() {
                         self.must_call_parent.insert(proc, *i != 0);
                     }
-                } else if name.starts_with("spacemandmm_") {
+                } else if name.starts_with("SpacemanDMM_") {
                     error(statement.location, format!("unknown linter setting {:?}", name))
+                        .set_severity(Severity::Warning)
+                        .register(self.context);
+                } else if !KNOWN_SETTING_NAMES.contains(&name.as_str()) {
+                    error(statement.location, format!("unknown setting {:?}", name))
                         .set_severity(Severity::Warning)
                         .register(self.context);
                 }
@@ -700,7 +704,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 let src = self.ty;
                 if let Some(proc) = self.ty.get_proc(unscoped_name) {
                     self.visit_call(location, src, proc, args, false)
-                } else if unscoped_name == "spacemandmm_unlint" {
+                } else if unscoped_name == "SpacemanDMM_unlint" {
                     // Escape hatch for cases like `src` in macros used in
                     // global procs.
                     Analysis::empty()

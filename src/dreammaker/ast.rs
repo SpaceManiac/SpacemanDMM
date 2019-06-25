@@ -864,3 +864,17 @@ pub enum Case {
     Exact(Expression),
     Range(Expression, Expression),
 }
+
+pub const KNOWN_SETTING_NAMES: &[&str] = &[
+    "name",
+    "desc",
+    "category",
+    "hidden",
+    "popup_menu",
+    "instant",
+    "invisibility",
+    "src",
+    "background",
+    // undocumented
+    "waitfor",
+];
