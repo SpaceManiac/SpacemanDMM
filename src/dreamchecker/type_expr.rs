@@ -13,7 +13,16 @@ pub enum TypeExpr<'o> {
     Static(StaticType<'o>),
 
     // The value of a parameter, if it is a typepath.
-    ParameterValue(String),
+    ParamTypepath {
+        name: String,
+        index_ct: usize,
+    },
+
+    // The static type of a parameter.
+    ParamStaticType {
+        name: String,
+        index_ct: usize,
+    },
 
     // from `&&`, `||`, and `?:`
     Condition {
@@ -108,7 +117,7 @@ impl<'o> TypeExprCompiler<'o> {
 
             Term::Ident(unscoped_name) => {
                 // TODO: validate parameter name here
-                Ok(TypeExpr::ParameterValue(unscoped_name.to_owned()))
+                Ok(TypeExpr::ParamTypepath { name: unscoped_name.to_owned(), index_ct: 0 })
             },
 
             Term::Expr(expr) => self.visit_expression(location, expr),
@@ -123,7 +132,26 @@ impl<'o> TypeExprCompiler<'o> {
         }
     }
 
-    fn visit_follow(&mut self, location: Location, lhs: TypeExpr<'o>, follow: &Follow) -> Result<TypeExpr<'o>, DMError> {
-        Err(DMError::new(location, "not yet implemented: follow"))
+    fn visit_follow(&mut self, location: Location, lhs: TypeExpr<'o>, rhs: &Follow) -> Result<TypeExpr<'o>, DMError> {
+        match rhs {
+            // X[_] => static type of argument X with one /list stripped
+            Follow::Index(expr) => match expr.as_term() {
+                Some(Term::Ident(name)) if name == "_" => match lhs {
+                    TypeExpr::ParamTypepath { name, index_ct } =>
+                        Ok(TypeExpr::ParamTypepath { name, index_ct: index_ct + 1 }),
+                    _ => Err(DMError::new(location, "type expr: cannot index non-parameters")),
+                },
+                _ => Err(DMError::new(location, "type expr: cannot index by anything but `_`")),
+            },
+
+            // X.type => static type of argument X
+            Follow::Field(_, name) if name == "type" => match lhs {
+                TypeExpr::ParamTypepath { name, index_ct } =>
+                    Ok(TypeExpr::ParamStaticType { name, index_ct }),
+                _ => Err(DMError::new(location, "type expr: cannot take .type of non-parameters")),
+            },
+
+            _ => Err(DMError::new(location, "type expr: bad follow")),
+        }
     }
 }
