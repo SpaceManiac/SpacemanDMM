@@ -700,6 +700,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 let src = self.ty;
                 if let Some(proc) = self.ty.get_proc(unscoped_name) {
                     self.visit_call(location, src, proc, args, false)
+                } else if unscoped_name == "spacemandmm_unlint" {
+                    // Escape hatch for cases like `src` in macros used in
+                    // global procs.
+                    Analysis::empty()
                 } else {
                     error(location, format!("undefined proc: {:?} on {}", unscoped_name, self.ty))
                         .register(self.context);
