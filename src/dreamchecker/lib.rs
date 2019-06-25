@@ -41,6 +41,21 @@ impl<'o> StaticType<'o> {
             StaticType::List { list, .. } => Some(list),
         }
     }
+
+    fn strip_list(self) -> StaticType<'o> {
+        if let StaticType::List { keys, .. } = self {
+            *keys
+        } else {
+            StaticType::None
+        }
+    }
+
+    fn strip_lists(mut self, n: usize) -> StaticType<'o> {
+        for _ in 0..n {
+            self = self.strip_list();
+        }
+        self
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -1012,7 +1027,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
             let analysis = self.visit_expression(location, argument_value, None);
             if let Some(kw) = this_kwarg {
-                param_name_map.insert(kw, analysis);
+                param_name_map.insert(kw.as_str(), analysis);
             } else {
                 param_idx_map.insert(param_idx, analysis);
                 param_idx += 1;
@@ -1020,7 +1035,19 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
 
         if let Some(return_type) = self.env.return_type.get(&proc) {
-            Analysis::from(return_type.evaluate(&param_name_map, &param_idx_map))
+            let ec = type_expr::TypeExprContext {
+                objtree: self.objtree,
+                param_name_map,
+                param_idx_map,
+            };
+            match return_type.evaluate(location, &ec) {
+                Ok(st) => Analysis::from(st),
+                Err(err) => {
+                    err.with_component(dm::Component::DreamChecker)
+                        .register(self.context);
+                    Analysis::empty()
+                }
+            }
         } else {
             Analysis::empty()
         }

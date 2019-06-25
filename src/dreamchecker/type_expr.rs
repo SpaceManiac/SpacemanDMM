@@ -5,9 +5,28 @@ use std::collections::HashMap;
 
 use dm::{Location, DMError};
 use dm::objtree::{ObjectTree, ProcRef};
+use dm::constants::Constant;
 use dm::ast::*;
 
 use {StaticType, Analysis};
+
+pub struct TypeExprContext<'o, 't> {
+    pub objtree: &'o ObjectTree,
+    pub param_name_map: HashMap<&'t str, Analysis<'o>>,
+    pub param_idx_map: HashMap<usize, Analysis<'o>>
+}
+
+impl<'o, 't> TypeExprContext<'o, 't> {
+    fn get(&self, name: &str, idx: usize) -> Option<&Analysis<'o>> {
+        if let Some(a) = self.param_name_map.get(name) {
+            Some(a)
+        } else if let Some(a) = self.param_idx_map.get(&idx) {
+            Some(a)
+        } else {
+            None
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum TypeExpr<'o> {
@@ -43,23 +62,43 @@ impl<'o> TypeExpr<'o> {
         TypeExprCompiler { objtree: proc.tree(), proc }.visit_expression(location, expression)
     }
 
-    pub fn evaluate(&self,
-        param_name_map: &HashMap<&String, Analysis<'o>>,
-        param_idx_map: &HashMap<usize, Analysis<'o>>
-    ) -> StaticType<'o> {
+    pub fn evaluate(&self, location: Location, ec: &TypeExprContext<'o, '_>) -> Result<StaticType<'o>, DMError> {
+        eprintln!("evaluate {:?}", self);
         match self {
-            TypeExpr::Static(st) => st.clone(),
+            TypeExpr::Static(st) => Ok(st.clone()),
 
             TypeExpr::Condition { cond, if_, else_ } => {
-                if cond.evaluate(param_name_map, param_idx_map).is_truthy() {
-                    if_.evaluate(param_name_map, param_idx_map)
+                if cond.evaluate(location, ec)?.is_truthy() {
+                    if_.evaluate(location, ec)
                 } else {
-                    else_.evaluate(param_name_map, param_idx_map)
+                    else_.evaluate(location, ec)
                 }
             },
-            _ => {
-                eprintln!("Unimplemented: {:?}", self);
-                StaticType::None
+
+            TypeExpr::ParamTypepath { name, p_idx, index_ct: _ } => {
+                if let Some(analysis) = ec.get(name, *p_idx) {
+                    eprintln!("  1good analysis {:?}", analysis);
+                    if let Some(Constant::Prefab(ref pop)) = analysis.value {
+                        eprintln!("  1prefab {:?}", pop);
+                        Ok(::static_type(ec.objtree, location, &pop.path)?.into())
+                    } else {
+                        eprintln!("  1not prefab");
+                        Ok(StaticType::None)
+                    }
+                } else {
+                    eprintln!("  1bad analysis");
+                    Ok(StaticType::None)
+                }
+            },
+
+            TypeExpr::ParamStaticType { name, p_idx, index_ct } => {
+                if let Some(analysis) = ec.get(name, *p_idx) {
+                    eprintln!("  2good analysis {:?}", analysis);
+                    Ok(analysis.static_ty.clone().strip_lists(*index_ct))
+                } else {
+                    eprintln!("  2bad analysis");
+                    Ok(StaticType::None)
+                }
             },
         }
     }
