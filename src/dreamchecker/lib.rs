@@ -10,11 +10,14 @@ use dm::ast::*;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
+mod type_expr;
+use type_expr::TypeExpr;
+
 // ----------------------------------------------------------------------------
 // Helper structures
 
 #[derive(Debug, Clone)]
-enum StaticType<'o> {
+pub enum StaticType<'o> {
     None,
     Type(TypeRef<'o>),
     List {
@@ -258,7 +261,7 @@ pub struct AnalyzeObjectTree<'o> {
     context: &'o Context,
     objtree: &'o ObjectTree,
 
-    return_type: HashMap<ProcRef<'o>, StaticType<'o>>,
+    return_type: HashMap<ProcRef<'o>, TypeExpr<'o>>,
     must_call_parent: HashMap<ProcRef<'o>, bool>,
     // Debug(ProcRef) -> KwargInfo
     used_kwargs: BTreeMap<String, KwargInfo>,
@@ -267,7 +270,7 @@ pub struct AnalyzeObjectTree<'o> {
 impl<'o> AnalyzeObjectTree<'o> {
     pub fn new(context: &'o Context, objtree: &'o ObjectTree) -> Self {
         let mut return_type = HashMap::default();
-        return_type.insert(objtree.root().get_proc("get_step").unwrap(), StaticType::Type(objtree.expect("/turf")));
+        return_type.insert(objtree.root().get_proc("get_step").unwrap(), StaticType::Type(objtree.expect("/turf")).into());
 
         AnalyzeObjectTree {
             context,
@@ -289,11 +292,14 @@ impl<'o> AnalyzeObjectTree<'o> {
                     if let Some(Term::Prefab(fab)) = value.as_term() {
                         let bits: Vec<_> = fab.path.iter().map(|(_, name)| name.to_owned()).collect();
                         let ty = self.static_type(statement.location, &bits);
-                        self.return_type.insert(proc, ty);
+                        self.return_type.insert(proc, TypeExpr::from(ty));
                     } else {
-                        error(statement.location, "non-calculable return type annotation")
-                            .set_severity(Severity::Warning)
-                            .register(self.context);
+                        match TypeExpr::compile(statement.location, value) {
+                            Ok(expr) => { self.return_type.insert(proc, expr); },
+                            Err(error) => error
+                                .with_component(dm::Component::DreamChecker)
+                                .register(self.context),
+                        }
                     }
                 } else if name == "SpacemanDMM_should_call_parent" {
                     if let Some(Term::Int(i)) = value.as_term() {
@@ -986,7 +992,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
 
         if let Some(return_type) = self.env.return_type.get(&proc) {
-            Analysis::from(return_type.clone())
+            Analysis::from(return_type.evaluate())
         } else {
             Analysis::empty()
         }
