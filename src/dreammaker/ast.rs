@@ -46,6 +46,18 @@ impl UnaryOp {
     pub fn around<'a, T: fmt::Display>(self, expr: &'a T) -> impl fmt::Display + 'a {
         Around { op: self, expr }
     }
+
+    /// Get a human-readable name for this unary operator. May be ambiguous.
+    pub fn name(self) -> &'static str {
+        use self::UnaryOp::*;
+        match self {
+            Neg => "-",
+            Not => "!",
+            BitNot => "~",
+            PreIncr | PostIncr => "++",
+            PreDecr | PostDecr => "--",
+        }
+    }
 }
 
 /// A formatting wrapper created by `UnaryOp::around`.

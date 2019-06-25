@@ -492,6 +492,10 @@ impl<'a> ProcRef<'a> {
         self.idx
     }
 
+    pub fn tree(self) -> &'a ObjectTree {
+        self.ty.tree()
+    }
+
     /// Look up the immediate parent, `..()`.
     pub fn parent_proc(self) -> Option<ProcRef<'a>> {
         if let Some(idx) = self.idx.checked_sub(1) {

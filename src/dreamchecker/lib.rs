@@ -27,6 +27,13 @@ pub enum StaticType<'o> {
 }
 
 impl<'o> StaticType<'o> {
+    fn is_truthy(&self) -> bool {
+        match *self {
+            StaticType::None => false,
+            _ => true,
+        }
+    }
+
     fn basic_type(&self) -> Option<TypeRef<'o>> {
         match *self {
             StaticType::None => None,
@@ -294,7 +301,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                         let ty = self.static_type(statement.location, &bits);
                         self.return_type.insert(proc, TypeExpr::from(ty));
                     } else {
-                        match TypeExpr::compile(statement.location, value) {
+                        match TypeExpr::compile(proc, statement.location, value) {
                             Ok(expr) => { self.return_type.insert(proc, expr); },
                             Err(error) => error
                                 .with_component(dm::Component::DreamChecker)
@@ -385,26 +392,34 @@ impl<'o> AnalyzeObjectTree<'o> {
         }
     }
 
-    fn static_type(&mut self, location: Location, mut of: &[String]) -> StaticType<'o> {
-        while !of.is_empty() && ["static", "global", "const", "tmp"].contains(&&*of[0]) {
-            of = &of[1..];
-        }
-
-        if of.is_empty() {
-            StaticType::None
-        } else if of[0] == "list" {
-            let keys = self.static_type(location, &of[1..]);
-            StaticType::List {
-                list: self.objtree.expect("/list"),
-                keys: Box::new(keys),
+    fn static_type(&mut self, location: Location, of: &[String]) -> StaticType<'o> {
+        match static_type(self.objtree, location, of) {
+            Ok(s) => s,
+            Err(e) => {
+                e.register(self.context);
+                StaticType::None
             }
-        } else if let Some(ty) = self.objtree.type_by_path(of) {
-            StaticType::Type(ty)
-        } else {
-            error(location, format!("undefined type: {}", FormatTreePath(of)))
-                .register(self.context);
-            StaticType::None
         }
+    }
+}
+
+fn static_type<'o>(objtree: &'o ObjectTree, location: Location, mut of: &[String]) -> Result<StaticType<'o>, DMError> {
+    while !of.is_empty() && ["static", "global", "const", "tmp"].contains(&&*of[0]) {
+        of = &of[1..];
+    }
+
+    if of.is_empty() {
+        Ok(StaticType::None)
+    } else if of[0] == "list" {
+        let keys = static_type(objtree, location, &of[1..])?;
+        Ok(StaticType::List {
+            list: objtree.expect("/list"),
+            keys: Box::new(keys),
+        })
+    } else if let Some(ty) = objtree.type_by_path(of) {
+        Ok(StaticType::Type(ty))
+    } else {
+        Err(error(location, format!("undefined type: {}", FormatTreePath(of))))
     }
 }
 
