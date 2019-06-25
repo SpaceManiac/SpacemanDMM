@@ -148,7 +148,7 @@ impl<'o> AssumptionSet<'o> {
 /// An 'atom' in the type analysis. A type/set of possible types, as well as a
 /// known constant value if available.
 #[derive(Debug, Clone)]
-struct Analysis<'o> {
+pub struct Analysis<'o> {
     static_ty: StaticType<'o>,
     aset: AssumptionSet<'o>,
     value: Option<Constant>,
@@ -902,6 +902,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     }
                 } else {
                     error(location, format!("field access requires static type: {:?}", name))
+                        .set_severity(Severity::Warning)
                         .register(self.context);
                     Analysis::empty()
                 }
@@ -917,6 +918,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     }
                 } else {
                     error(location, format!("proc call require static type: {:?}", name))
+                        .set_severity(Severity::Warning)
                         .register(self.context);
                     Analysis::empty()
                 }
@@ -948,16 +950,21 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     fn visit_call(&mut self, location: Location, src: TypeRef<'o>, proc: ProcRef, args: &'o [Expression], is_exact: bool) -> Analysis<'o> {
         // identify and register kwargs used
         let mut any_kwargs_yet = false;
+
+        let mut param_name_map = HashMap::new();
+        let mut param_idx_map = HashMap::new();
+        let mut param_idx = 0;
+
         for arg in args {
             let mut argument_value = arg;
-            let mut this_kwarg = false;
+            let mut this_kwarg = None;
             if let Expression::AssignOp { op: AssignOp::Assign, lhs, rhs } = arg {
                 match lhs.as_term() {
                     Some(Term::Ident(name)) |
                     Some(Term::String(name)) => {
                         // Don't visit_expression the kwarg key.
                         any_kwargs_yet = true;
-                        this_kwarg = true;
+                        this_kwarg = Some(name);
                         argument_value = rhs;
 
                         // Check that that kwarg actually exists.
@@ -997,17 +1004,23 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
             }
 
-            if any_kwargs_yet && !this_kwarg && !(proc.ty().is_root() && proc.name() == "animate") {
+            if any_kwargs_yet && this_kwarg.is_none() && !(proc.ty().is_root() && proc.name() == "animate") {
                 // TODO: don't hardcode the animate() exception
                 error(location, format!("proc called with non-kwargs after kwargs: {}()", proc.name()))
                     .register(self.context);
             }
 
-            self.visit_expression(location, argument_value, None);
+            let analysis = self.visit_expression(location, argument_value, None);
+            if let Some(kw) = this_kwarg {
+                param_name_map.insert(kw, analysis);
+            } else {
+                param_idx_map.insert(param_idx, analysis);
+                param_idx += 1;
+            }
         }
 
         if let Some(return_type) = self.env.return_type.get(&proc) {
-            Analysis::from(return_type.evaluate())
+            Analysis::from(return_type.evaluate(&param_name_map, &param_idx_map))
         } else {
             Analysis::empty()
         }

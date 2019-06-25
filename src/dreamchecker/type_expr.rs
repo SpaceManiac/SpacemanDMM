@@ -1,11 +1,13 @@
 //! Support for "type expressions", used in evaluating dynamic/generic return
 //! types.
 
+use std::collections::HashMap;
+
 use dm::{Location, DMError};
 use dm::objtree::{ObjectTree, ProcRef};
 use dm::ast::*;
 
-use StaticType;
+use {StaticType, Analysis};
 
 #[derive(Debug, Clone)]
 pub enum TypeExpr<'o> {
@@ -15,12 +17,16 @@ pub enum TypeExpr<'o> {
     // The value of a parameter, if it is a typepath.
     ParamTypepath {
         name: String,
+        p_idx: usize,
+        // Number of /list to strip.
         index_ct: usize,
     },
 
     // The static type of a parameter.
     ParamStaticType {
         name: String,
+        p_idx: usize,
+        // Number of /list to strip.
         index_ct: usize,
     },
 
@@ -37,14 +43,18 @@ impl<'o> TypeExpr<'o> {
         TypeExprCompiler { objtree: proc.tree(), proc }.visit_expression(location, expression)
     }
 
-    pub fn evaluate(&self) -> StaticType<'o> {
+    pub fn evaluate(&self,
+        param_name_map: &HashMap<&String, Analysis<'o>>,
+        param_idx_map: &HashMap<usize, Analysis<'o>>
+    ) -> StaticType<'o> {
         match self {
             TypeExpr::Static(st) => st.clone(),
+
             TypeExpr::Condition { cond, if_, else_ } => {
-                if cond.evaluate().is_truthy() {
-                    if_.evaluate()
+                if cond.evaluate(param_name_map, param_idx_map).is_truthy() {
+                    if_.evaluate(param_name_map, param_idx_map)
                 } else {
-                    else_.evaluate()
+                    else_.evaluate(param_name_map, param_idx_map)
                 }
             },
             _ => {
@@ -116,8 +126,12 @@ impl<'o> TypeExprCompiler<'o> {
             Term::Null => Ok(TypeExpr::from(StaticType::None)),
 
             Term::Ident(unscoped_name) => {
-                // TODO: validate parameter name here
-                Ok(TypeExpr::ParamTypepath { name: unscoped_name.to_owned(), index_ct: 0 })
+                for (i, param) in self.proc.parameters.iter().enumerate() {
+                    if *unscoped_name == param.name {
+                        return Ok(TypeExpr::ParamTypepath { name: unscoped_name.to_owned(), p_idx: i, index_ct: 0 });
+                    }
+                }
+                Err(DMError::new(location, format!("type expr: no such parameter {:?}", unscoped_name)))
             },
 
             Term::Expr(expr) => self.visit_expression(location, expr),
@@ -137,8 +151,8 @@ impl<'o> TypeExprCompiler<'o> {
             // X[_] => static type of argument X with one /list stripped
             Follow::Index(expr) => match expr.as_term() {
                 Some(Term::Ident(name)) if name == "_" => match lhs {
-                    TypeExpr::ParamTypepath { name, index_ct } =>
-                        Ok(TypeExpr::ParamTypepath { name, index_ct: index_ct + 1 }),
+                    TypeExpr::ParamTypepath { name, p_idx, index_ct } =>
+                        Ok(TypeExpr::ParamTypepath { name, p_idx, index_ct: index_ct + 1 }),
                     _ => Err(DMError::new(location, "type expr: cannot index non-parameters")),
                 },
                 _ => Err(DMError::new(location, "type expr: cannot index by anything but `_`")),
@@ -146,8 +160,8 @@ impl<'o> TypeExprCompiler<'o> {
 
             // X.type => static type of argument X
             Follow::Field(_, name) if name == "type" => match lhs {
-                TypeExpr::ParamTypepath { name, index_ct } =>
-                    Ok(TypeExpr::ParamStaticType { name, index_ct }),
+                TypeExpr::ParamTypepath { name, p_idx, index_ct } =>
+                    Ok(TypeExpr::ParamStaticType { name, p_idx, index_ct }),
                 _ => Err(DMError::new(location, "type expr: cannot take .type of non-parameters")),
             },
 
