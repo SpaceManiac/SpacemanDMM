@@ -995,8 +995,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         Analysis::empty()
                     }
                 } else {
-                    error(location, format!("proc call require static type: {:?}", name))
+                    error(location, format!("proc call requires static type: {:?}", name))
                         .set_severity(Severity::Warning)
+                        .with_fix_hint(&lhs)
                         .register(self.context);
                     Analysis::empty()
                 }
@@ -1104,7 +1105,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 param_idx_map,
             };
             match return_type.evaluate(location, &ec) {
-                Ok(st) => Analysis::from(st),
+                Ok(st) => {
+                    let hint = format!("return type evaluated to {:?}", st);
+                    Analysis::from(st).with_fix_hint(location, hint)
+                },
                 Err(err) => {
                     err.with_component(dm::Component::DreamChecker)
                         .register(self.context);
@@ -1113,6 +1117,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             }
         } else {
             Analysis::empty()
+                .with_fix_hint(proc.location, format!("add a return type annotation to {}", proc))
         }
     }
 
