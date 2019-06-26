@@ -719,8 +719,13 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Term::Expr(expr) => self.visit_expression(location, expr, type_hint),
             Term::Prefab(prefab) => {
                 if let Some(nav) = self.ty.navigate_path(&prefab.path) {
-                    // TODO: handle proc/verb paths here
-                    assumption_set![Assumption::IsType(true, nav.ty())].into()
+                    let ty = nav.ty();  // TODO: handle proc/verb paths here
+                    let pop = dm::constants::Pop::from(ty.path.split("/").skip(1).map(ToOwned::to_owned).collect::<Vec<_>>());
+                    Analysis {
+                        static_ty: StaticType::None,
+                        aset: assumption_set![Assumption::IsPath(true, nav.ty())].into(),
+                        value: Some(Constant::Prefab(pop)),
+                    }
                 } else {
                     error(location, format!("failed to resolve path {}", FormatTypePath(&prefab.path)))
                         .register(self.context);
