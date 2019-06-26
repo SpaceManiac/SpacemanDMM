@@ -167,6 +167,7 @@ pub struct Analysis<'o> {
     static_ty: StaticType<'o>,
     aset: AssumptionSet<'o>,
     value: Option<Constant>,
+    fix_hint: Option<(Location, String)>,
 }
 
 impl<'o> Analysis<'o> {
@@ -175,6 +176,7 @@ impl<'o> Analysis<'o> {
             static_ty: StaticType::None,
             aset: AssumptionSet::default(),
             value: None,
+            fix_hint: None,
         }
     }
 
@@ -183,6 +185,7 @@ impl<'o> Analysis<'o> {
             static_ty: StaticType::None,
             aset: assumption_set![Assumption::IsNull(true)],
             value: Some(Constant::Null(None)),
+            fix_hint: None,
         }
     }
 
@@ -195,7 +198,28 @@ impl<'o> Analysis<'o> {
             static_ty: StaticType::None,
             aset: AssumptionSet::from_constant(objtree, &value, type_hint),
             value: Some(value),
+            fix_hint: None,
         }
+    }
+
+    fn with_fix_hint<S: Into<String>>(mut self, location: Location, desc: S) -> Self {
+        if location != Location::default() {
+            self.fix_hint = Some((location, desc.into()));
+        }
+        self
+    }
+}
+
+trait WithFixHint {
+    fn with_fix_hint(self, analysis: &Analysis) -> Self;
+}
+
+impl WithFixHint for DMError {
+    fn with_fix_hint(mut self, analysis: &Analysis) -> Self {
+        if let Some((loc, desc)) = analysis.fix_hint.clone() {
+            self.add_note(loc, desc);
+        }
+        self
     }
 }
 
@@ -206,6 +230,7 @@ impl<'o> From<AssumptionSet<'o>> for Analysis<'o> {
             static_ty: StaticType::None,
             aset,
             value: None,
+            fix_hint: None,
         }
     }
 }
@@ -221,6 +246,7 @@ impl<'o> From<StaticType<'o>> for Analysis<'o> {
         Analysis {
             aset,
             static_ty: static_ty,
+            fix_hint: None,
             value: None,
         }
     }
@@ -445,13 +471,24 @@ fn error<S: Into<String>>(location: Location, desc: S) -> DMError {
 // ----------------------------------------------------------------------------
 // Procedure analyzer
 
+struct LocalVar<'o> {
+    location: Location,
+    analysis: Analysis<'o>,
+}
+
+impl<'o> From<Analysis<'o>> for LocalVar<'o> {
+    fn from(analysis: Analysis<'o>) -> Self {
+        LocalVar { location: Location::default(), analysis }
+    }
+}
+
 struct AnalyzeProc<'o, 's> {
     env: &'s mut AnalyzeObjectTree<'o>,
     context: &'o Context,
     objtree: &'o ObjectTree,
     ty: TypeRef<'o>,
     proc_ref: ProcRef<'o>,
-    local_vars: HashMap<String, Analysis<'o>>,
+    local_vars: HashMap<String, LocalVar<'o>>,
     calls_parent: bool,
 }
 
@@ -459,18 +496,19 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     fn new(env: &'s mut AnalyzeObjectTree<'o>, context: &'o Context, objtree: &'o ObjectTree, proc_ref: ProcRef<'o>) -> Self {
         let ty = proc_ref.ty();
 
-        let mut local_vars = HashMap::new();
-        local_vars.insert(".".to_owned(), Analysis::empty());
-        local_vars.insert("args".to_owned(), Analysis::from_static_type(objtree.expect("/list")));
-        local_vars.insert("usr".to_owned(), Analysis::from_static_type(objtree.expect("/mob")));
+        let mut local_vars = HashMap::<String, LocalVar>::new();
+        local_vars.insert(".".to_owned(), Analysis::empty().into());
+        local_vars.insert("args".to_owned(), Analysis::from_static_type(objtree.expect("/list")).into());
+        local_vars.insert("usr".to_owned(), Analysis::from_static_type(objtree.expect("/mob")).into());
         if !ty.is_root() {
-            local_vars.insert("src".to_owned(), Analysis::from_static_type(ty));
+            local_vars.insert("src".to_owned(), Analysis::from_static_type(ty).into());
         }
         local_vars.insert("global".to_owned(), Analysis {
             static_ty: StaticType::Type(objtree.root()),
             aset: assumption_set![Assumption::IsNull(false)],
             value: None,
-        });
+            fix_hint: None,
+        }.into());
 
         AnalyzeProc {
             env,
@@ -486,7 +524,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     pub fn run(&mut self, block: &'o [Spanned<Statement>]) {
         for param in self.proc_ref.get().parameters.iter() {
             let analysis = self.static_type(param.location, &param.var_type.type_path);
-            self.local_vars.insert(param.name.to_owned(), analysis);
+            self.local_vars.insert(param.name.to_owned(), LocalVar {
+                location: self.proc_ref.location,
+                analysis,
+            });
         }
         self.visit_block(block);
 
@@ -518,7 +559,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Statement::Return(Some(expr)) => {
                 // TODO: factor in the previous return type if there was one
                 let return_type = self.visit_expression(location, expr, None);
-                self.local_vars.insert(".".to_owned(), return_type);
+                self.local_vars.get_mut(".").unwrap().analysis = return_type;
                 // TODO: break out of the analysis for this branch?
             },
             Statement::Return(None) => {},
@@ -647,7 +688,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         analysis.static_ty = static_type;
 
         // Save var to locals
-        self.local_vars.insert(name.to_owned(), analysis);
+        self.local_vars.insert(name.to_owned(), LocalVar { location, analysis });
     }
 
     fn visit_expression(&mut self, location: Location, expression: &'o Expression, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
@@ -705,10 +746,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
             Term::Ident(unscoped_name) => {
                 if let Some(var) = self.local_vars.get(unscoped_name) {
-                    return var.clone()
+                    return var.analysis.clone()
+                        .with_fix_hint(var.location, "add additional type info here")
                 }
                 if let Some(decl) = self.ty.get_var_declaration(unscoped_name) {
                     self.static_type(location, &decl.var_type.type_path)
+                        .with_fix_hint(decl.location, "add additional type info here")
                 } else {
                     error(location, format!("undefined var: {:?}", unscoped_name))
                         .register(self.context);
@@ -725,6 +768,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         static_ty: StaticType::None,
                         aset: assumption_set![Assumption::IsPath(true, nav.ty())].into(),
                         value: Some(Constant::Prefab(pop)),
+                        fix_hint: None,
                     }
                 } else {
                     error(location, format!("failed to resolve path {}", FormatTypePath(&prefab.path)))
@@ -748,6 +792,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 } else if unscoped_name == "SpacemanDMM_unlint" {
                     // Escape hatch for cases like `src` in macros used in
                     // global procs.
+                    Analysis::empty()
+                } else if unscoped_name == "SpacemanDMM_debug" {
+                    eprintln!("SpacemanDMM_debug:");
+                    for arg in args {
+                        eprintln!("    {:?}", self.visit_expression(location, arg, None));
+                    }
                     Analysis::empty()
                 } else {
                     error(location, format!("undefined proc: {:?} on {}", unscoped_name, self.ty))
@@ -907,14 +957,21 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 self.visit_expression(location, expr, None);
                 // TODO: differentiate between L[1] and L[non_numeric_key]
                 match lhs.static_ty {
-                    StaticType::List { keys, .. } => Analysis::from(*keys),
-                    _ => Analysis::empty(),
+                    StaticType::List { keys, .. } => {
+                        let mut res = Analysis::from(*keys);
+                        if let Some((loc, _)) = lhs.fix_hint {
+                            res.fix_hint = Some((loc, "add a type annotation after /list here".to_owned()))
+                        }
+                        res
+                    },
+                    _ => lhs.clone()  // carry through fix_hint
                 }
             },
             Follow::Field(kind, name) => {
                 if let Some(ty) = lhs.static_ty.basic_type() {
                     if let Some(decl) = ty.get_var_declaration(name) {
                         self.static_type(location, &decl.var_type.type_path)
+                            .with_fix_hint(decl.location, "add additional type info here")
                     } else {
                         error(location, format!("undefined field: {:?} on {}", name, ty))
                             .register(self.context);
@@ -923,6 +980,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 } else {
                     error(location, format!("field access requires static type: {:?}", name))
                         .set_severity(Severity::Warning)
+                        .with_fix_hint(&lhs)
                         .register(self.context);
                     Analysis::empty()
                 }
