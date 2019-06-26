@@ -63,7 +63,6 @@ impl<'o> TypeExpr<'o> {
     }
 
     pub fn evaluate(&self, location: Location, ec: &TypeExprContext<'o, '_>) -> Result<StaticType<'o>, DMError> {
-        eprintln!("evaluate {:?}", self);
         match self {
             TypeExpr::Static(st) => Ok(st.clone()),
 
@@ -77,26 +76,20 @@ impl<'o> TypeExpr<'o> {
 
             TypeExpr::ParamTypepath { name, p_idx, index_ct: _ } => {
                 if let Some(analysis) = ec.get(name, *p_idx) {
-                    eprintln!("  1good analysis {:?}", analysis);
                     if let Some(Constant::Prefab(ref pop)) = analysis.value {
-                        eprintln!("  1prefab {:?}", pop);
                         Ok(::static_type(ec.objtree, location, &pop.path)?.into())
                     } else {
-                        eprintln!("  1not prefab");
                         Ok(StaticType::None)
                     }
                 } else {
-                    eprintln!("  1bad analysis");
                     Ok(StaticType::None)
                 }
             },
 
             TypeExpr::ParamStaticType { name, p_idx, index_ct } => {
                 if let Some(analysis) = ec.get(name, *p_idx) {
-                    eprintln!("  2good analysis {:?}", analysis);
                     Ok(analysis.static_ty.clone().strip_lists(*index_ct))
                 } else {
-                    eprintln!("  2bad analysis");
                     Ok(StaticType::None)
                 }
             },
@@ -120,7 +113,7 @@ impl<'o> TypeExprCompiler<'o> {
         match expr {
             Expression::Base { unary, term, follow } => {
                 if let Some(op) = unary.first() {
-                    return Err(DMError::new(location, format!("invalid type expression: unary {}", op.name())));
+                    return Err(DMError::new(location, format!("type expr: bad unary {}", op.name())));
                 }
 
                 let mut ty = self.visit_term(term.location, &term.elem)?;
@@ -156,7 +149,7 @@ impl<'o> TypeExprCompiler<'o> {
                     else_: Box::new(self.visit_expression(location, else_)?),
                 })
             },
-            _ => Err(DMError::new(location, "invalid type expression: bad expr")),
+            _ => Err(DMError::new(location, "type expr: bad expression node")),
         }
     }
 
@@ -181,7 +174,7 @@ impl<'o> TypeExprCompiler<'o> {
                 Ok(TypeExpr::from(ty))
             },
 
-            _ => Err(DMError::new(location, "invalid type expression: bad term")),
+            _ => Err(DMError::new(location, "type expr: bad term node")),
         }
     }
 
@@ -204,7 +197,7 @@ impl<'o> TypeExprCompiler<'o> {
                 _ => Err(DMError::new(location, "type expr: cannot take .type of non-parameters")),
             },
 
-            _ => Err(DMError::new(location, "type expr: bad follow")),
+            _ => Err(DMError::new(location, "type expr: bad follow node")),
         }
     }
 }
