@@ -4,7 +4,7 @@ members = [
     "src/dmdoc",
     "src/dreamchecker",
     "src/dreammaker",
-    "src/editor",
+    #"src/editor",
     "src/interval-tree",
     "src/langserver",
     "src/tools",
