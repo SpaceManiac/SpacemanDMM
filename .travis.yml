@@ -5,8 +5,8 @@ branches:
   only:
     - master
 env:
-  - BUILD_POSTFIX: "--all"
-  - BUILD_POSTFIX: "--all --release"
+  - BUILD_POSTFIX=
+  - BUILD_POSTFIX=--release
 cache: cargo
 addons:
   apt:
@@ -16,5 +16,5 @@ install:
   - rustc -Vv
   - cargo -V
 script:
-  - cargo build --verbose $BUILD_POSTFIX
-  - cargo test --verbose $BUILD_POSTFIX
+  - cargo build --verbose --all $BUILD_POSTFIX
+  - cargo test --verbose --all $BUILD_POSTFIX
