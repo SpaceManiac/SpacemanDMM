@@ -4,7 +4,6 @@ use std::ops;
 use std::path::Path;
 
 use linked_hash_map::LinkedHashMap;
-use noisy_float::prelude::*;
 
 use super::{DMError, Location, HasLocation, Context};
 use super::objtree::*;
@@ -14,7 +13,7 @@ use super::preprocessor::DefineMap;
 /// An absolute typepath and optional variables.
 ///
 /// The path may involve `/proc` or `/verb` references.
-#[derive(Clone, Hash, Eq, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Pop {
     pub path: TreePath,
     pub vars: LinkedHashMap<String, Constant>,
@@ -39,7 +38,7 @@ impl fmt::Display for Pop {
 ///
 /// This is intended to represent the degree to which constants are evaluated
 /// before being displayed in DreamMaker.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Constant {
     /// The literal `null`.
     Null(Option<TreePath>),
@@ -63,7 +62,7 @@ pub enum Constant {
     /// An integer literal.
     Int(i32),
     /// A floating-point literal.
-    Float(N32),
+    Float(f32),
 }
 
 /// The constant functions which are represented as-is.
@@ -121,7 +120,7 @@ impl Constant {
     pub fn to_float(&self) -> Option<f32> {
         match *self {
             Constant::Int(i) => Some(i as f32),
-            Constant::Float(f) => Some(f.raw()),
+            Constant::Float(f) => Some(f),
             _ => None,
         }
     }
@@ -129,7 +128,7 @@ impl Constant {
     pub fn to_int(&self) -> Option<i32> {
         match *self {
             Constant::Int(i) => Some(i),
-            Constant::Float(f) => Some(f.raw() as i32),
+            Constant::Float(f) => Some(f as i32),
             _ => None,
         }
     }
@@ -217,12 +216,6 @@ impl From<i32> for Constant {
 
 impl From<f32> for Constant {
     fn from(value: f32) -> Constant {
-        Constant::Float(N32::new(value))
-    }
-}
-
-impl From<N32> for Constant {
-    fn from(value: N32) -> Constant {
         Constant::Float(value)
     }
 }
@@ -328,7 +321,7 @@ impl fmt::Display for Constant {
             Constant::String(ref val) => ::lexer::Quote(val).fmt(f),
             Constant::Resource(ref val) => write!(f, "'{}'", val),
             Constant::Int(val) => ::lexer::FormatFloat(val as f32).fmt(f),
-            Constant::Float(val) => ::lexer::FormatFloat(val.raw()).fmt(f),
+            Constant::Float(val) => ::lexer::FormatFloat(val).fmt(f),
         }
     }
 }
@@ -629,8 +622,8 @@ impl<'a> ConstantFolder<'a> {
             ($name:ident $oper:tt) => {
                 match (op, lhs, rhs) {
                     (BinaryOp::$name, Int(lhs), Int(rhs)) => return Ok(Constant::from(lhs $oper rhs)),
-                    (BinaryOp::$name, Int(lhs), Float(rhs)) => return Ok(Constant::from((lhs as f32) $oper rhs.raw())),
-                    (BinaryOp::$name, Float(lhs), Int(rhs)) => return Ok(Constant::from(lhs.raw() $oper (rhs as f32))),
+                    (BinaryOp::$name, Int(lhs), Float(rhs)) => return Ok(Constant::from((lhs as f32) $oper rhs)),
+                    (BinaryOp::$name, Float(lhs), Int(rhs)) => return Ok(Constant::from(lhs $oper (rhs as f32))),
                     (BinaryOp::$name, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs $oper rhs)),
                     (_, lhs_, rhs_) => { lhs = lhs_; rhs = rhs_; }
                 }
@@ -653,7 +646,7 @@ impl<'a> ConstantFolder<'a> {
                 }
                 return Ok(Constant::from(lhs.pow(rhs as u32)));
             }
-            (BinaryOp::Pow, Int(lhs), Float(rhs)) => return Ok(Constant::from((lhs as f32).powf(rhs.raw()))),
+            (BinaryOp::Pow, Int(lhs), Float(rhs)) => return Ok(Constant::from((lhs as f32).powf(rhs))),
             (BinaryOp::Pow, Float(lhs), Int(rhs)) => return Ok(Constant::from(lhs.powi(rhs))),
             (BinaryOp::Pow, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs.powf(rhs))),
             (_, lhs_, rhs_) => {

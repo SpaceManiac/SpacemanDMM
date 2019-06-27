@@ -6,7 +6,6 @@ extern crate linked_hash_map;
 extern crate interval_tree;
 extern crate lodepng;
 #[macro_use] extern crate bitflags;
-extern crate noisy_float;
 extern crate termcolor;
 
 use std::io;
