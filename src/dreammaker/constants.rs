@@ -709,16 +709,11 @@ impl<'a> ConstantFolder<'a> {
                     let mut result = String::with_capacity(7);
                     result.push_str("#");
                     for each in args {
-                        match self.expr(each, None)? {
-                            Constant::Int(i) => {
-                                let clamped = ::std::cmp::max(::std::cmp::min(i, 255), 0);
-                                let _ = write!(result, "{:02x}", clamped);
-                            },
-                            Constant::Float(f) => {
-                                let clamped = ::std::cmp::max(::std::cmp::min(f.raw() as i32, 255), 0);
-                                let _ = write!(result, "{:02x}", clamped);
-                            },
-                            _ => return Err(self.error("malformed rgb() call")),
+                        if let Some(i) = self.expr(each, None)?.to_int() {
+                            let clamped = ::std::cmp::max(::std::cmp::min(i, 255), 0);
+                            let _ = write!(result, "{:02x}", clamped);
+                        } else {
+                            return Err(self.error("malformed rgb() call"));
                         }
                     }
                     Constant::String(result)
