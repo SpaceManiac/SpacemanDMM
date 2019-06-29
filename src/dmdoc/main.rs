@@ -332,18 +332,22 @@ fn main() -> Result<(), Box<std::error::Error>> {
     }
 
     drop(progress);
-    print!("documenting {} modules, {} macros, ", modules.len(), macro_count);
+
+    let mut coverage = format!("{} modules, {} macros, ", modules.len(), macro_count);
     if count == 0 {
-        println!("0 types");
+        use std::fmt::Write;
+        let _ = write!(coverage, "0 types");
     } else {
-        println!(
+        use std::fmt::Write;
+        let _ = write!(coverage,
             "{}/{}/{} types ({}%)",
             substance_count,
             types_with_docs.len(),
             count,
-            (types_with_docs.len() * 100 / count)
+            (types_with_docs.len() * 1000 / count) as f32 / 10.
         );
     }
+    println!("documenting {}", coverage);
 
     ALL_TYPE_NAMES.with(|all| {
         all.borrow_mut().extend(types_with_docs.iter()
@@ -375,6 +379,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
         filename: &env_filename,
         world_name,
         title,
+        coverage: &coverage,
         git: Default::default(),
     };
     if let Err(e) = git_info(&mut env.git) {
@@ -767,6 +772,7 @@ struct Environment<'a> {
     filename: &'a str,
     world_name: &'a str,
     title: &'a str,
+    coverage: &'a str,
     git: Git,
 }
 
