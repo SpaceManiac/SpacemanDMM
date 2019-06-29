@@ -13,11 +13,30 @@ fn lex(f: &str) -> Vec<Token> {
     result
 }
 
+fn one_token(f: &str) -> Token {
+    let mut v = lex(f);
+    assert_eq!(v.len(), 2, "not one token: {:?} -> {:?}", f, v);
+    assert_eq!(v[1], Punct(Newline));
+    v.remove(0)
+}
+
+fn float(f: &str) -> f32 {
+    match one_token(f) {
+        Token::Float(f) => f,
+        other => panic!("{:?}: expected float, got {:?}", f, other),
+    }
+}
+
 #[test]
 fn number_literals() {
     assert_eq!(lex("0.08"), vec![Float(0.08), Punct(Newline)]);
     assert_eq!(lex("0xABCDE"), vec![Int(703710), Punct(Newline)]);
     assert_eq!(lex("1e4"), vec![Float(10000.0), Punct(Newline)]);
+
+    let f = float("1.#INF"); assert!(f.is_infinite() && f > 0.);
+    let f = float("1.#IND"); assert!(f.is_nan());
+    let f = float("1#INF"); assert!(f.is_infinite() && f > 0.);
+    let f = float("1#IND"); assert!(f.is_nan());
 }
 
 #[test]

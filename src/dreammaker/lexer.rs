@@ -750,14 +750,14 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                     // UNLESS we're parsing a hexadecimal literal
                     if radix != 16 {
                         integer = false;
-                        exponent |= ch == b'e' || ch == b'E';   
+                        exponent |= ch == b'e' || ch == b'E';
                     }
                     buf.push(ch as char);
                 }
                 Some(ch) if (ch == b'+' || ch == b'-') && exponent => {
                     buf.push(ch as char);
                 }
-                Some(b'#') if !integer => {
+                Some(b'#') => {
                     buf.push('#');  // Keep pushing to `buf` in case of error.
                     let start = buf.len();
                     for _ in 0..3 {
