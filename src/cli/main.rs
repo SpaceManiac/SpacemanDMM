@@ -94,7 +94,7 @@ impl Context {
 
 #[derive(StructOpt, Debug)]
 #[structopt(name="dmm-tools",
-author="Copyright (C) 2017-2018  Tad Hardesty",
+author="Copyright (C) 2017-2019  Tad Hardesty",
 about="This program comes with ABSOLUTELY NO WARRANTY. This is free software,
 and you are welcome to redistribute it under the conditions of the GNU
 General Public License version 3.")]
