@@ -78,6 +78,8 @@ pub enum ConstFn {
     Sound,
     /// The `filter()` type constructor.
     Filter,
+    /// The `file()` annotator (marks a string as `isfile`).
+    File,
 }
 
 /// A constant-evaluation error (usually type mismatch).
@@ -334,6 +336,7 @@ impl fmt::Display for ConstFn {
             ConstFn::Newlist => "newlist",
             ConstFn::Sound => "sound",
             ConstFn::Filter => "filter",
+            ConstFn::File => "file",
         })
     }
 }
@@ -700,6 +703,7 @@ impl<'a> ConstantFolder<'a> {
                 "newlist" => Constant::Call(ConstFn::Newlist, self.arguments(args)?),
                 "icon" => Constant::Call(ConstFn::Icon, self.arguments(args)?),
                 "sound" => Constant::Call(ConstFn::Sound, self.arguments(args)?),
+                "file" => Constant::Call(ConstFn::File, self.arguments(args)?),
                 // constant-evaluatable functions
                 "rgb" => {
                     use std::fmt::Write;
