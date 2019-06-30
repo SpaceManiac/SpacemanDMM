@@ -44,6 +44,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
     // TODO: command-line args
     let output_path: &Path = "docs".as_ref();
+    let modules_path: &Path = "code".as_ref();
 
     // load tera templates
     println!("loading templates");
@@ -166,9 +167,8 @@ fn main() -> Result<(), Box<std::error::Error>> {
     }
 
     // search the code tree for Markdown files
-    // TODO: don't hardcode this?
     let mut index_docs = None;
-    for entry in walkdir::WalkDir::new("code").into_iter().filter_entry(is_visible) {
+    for entry in walkdir::WalkDir::new(modules_path).into_iter().filter_entry(is_visible) {
         use std::io::Read;
 
         let entry = entry?;
@@ -180,7 +180,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
         let mut buf = String::new();
         File::open(path)?.read_to_string(&mut buf)?;
-        if path == Path::new("code/README.md") {
+        if path == modules_path.join("README.md") {
             index_docs = Some(DocBlock::parse_with_title(&buf));
         } else {
             let module = module_entry(&mut modules, &path);
