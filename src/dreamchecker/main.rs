@@ -14,6 +14,20 @@ use dreamchecker::*;
 // Command-line interface
 
 fn main() {
+    for arg in std::env::args() {
+        if arg == "-V" || arg == "--version" {
+            println!(
+                "dreamchecker {}  Copyright (C) 2017-2019  Tad Hardesty",
+                env!("CARGO_PKG_VERSION")
+            );
+            println!("{}", include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")));
+            println!("This program comes with ABSOLUTELY NO WARRANTY. This is free software,");
+            println!("and you are welcome to redistribute it under the conditions of the GNU");
+            println!("General Public License version 3.");
+            return;
+        }
+    }
+
     const PRINT_SEVERITY: dm::Severity = dm::Severity::Info;
 
     let mut context = Context::default();
