@@ -28,6 +28,20 @@ thread_local! {
 }
 
 fn main() -> Result<(), Box<std::error::Error>> {
+    for arg in std::env::args() {
+        if arg == "-V" || arg == "--version" {
+            println!(
+                "dmdoc {}  Copyright (C) 2017-2019  Tad Hardesty",
+                env!("CARGO_PKG_VERSION")
+            );
+            println!("{}", include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")));
+            println!("This program comes with ABSOLUTELY NO WARRANTY. This is free software,");
+            println!("and you are welcome to redistribute it under the conditions of the GNU");
+            println!("General Public License version 3.");
+            return Ok(());
+        }
+    }
+
     // TODO: command-line args
     let output_path: &Path = "docs".as_ref();
 

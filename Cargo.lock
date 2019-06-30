@@ -228,6 +228,7 @@ dependencies = [
 name = "dmdoc"
 version = "0.1.0"
 dependencies = [
+ "chrono 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "dreammaker 0.1.0",
  "git2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pulldown-cmark 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
