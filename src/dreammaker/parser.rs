@@ -410,7 +410,10 @@ where
     pub fn run(&mut self) {
         self.tree.register_builtins();
         let root = self.root();
-        if let Err(e) = self.require(root) {
+        if let Err(mut e) = self.require(root) {
+            let loc = e.location();
+            e = e.set_severity(Severity::Error);
+            e.add_note(loc, "fatal error: the parser cannot continue");
             self.context.register_error(e);
         }
     }
