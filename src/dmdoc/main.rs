@@ -389,6 +389,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
     let mut env = Environment {
         dmdoc: DmDoc {
             version: env!("CARGO_PKG_VERSION"),
+            url: env!("CARGO_PKG_HOMEPAGE"),
         },
         filename: &env_filename,
         world_name,
@@ -793,6 +794,7 @@ struct Environment<'a> {
 #[derive(Serialize)]
 struct DmDoc {
     version: &'static str,
+    url: &'static str,
 }
 
 #[derive(Serialize, Default)]

@@ -27,7 +27,11 @@
                 &rightarrow; {{ env.git.remote_branch }}
             {%- endif -%}
         ){% endif %}
-    {%- endif %} &mdash; dmdoc {{ env.dmdoc.version }}
+    {%- endif %} &mdash; {% if env.dmdoc.url -%}
+        <a href="{{ env.dmdoc.url }}">dmdoc {{ env.dmdoc.version }}</a>
+    {%- else -%}
+        dmdoc {{ env.dmdoc.version }}
+    {%- endif -%}
 {% endblock footer %}</footer>
 </body>
 </html>

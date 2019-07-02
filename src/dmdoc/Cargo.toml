@@ -2,6 +2,7 @@
 name = "dmdoc"
 version = "0.1.0"
 authors = ["Tad Hardesty <tad@platymuus.com>"]
+homepage = "https://github.com/SpaceManiac/SpacemanDMM/tree/master/src/dmdoc"
 
 [[bin]]
 name = "dmdoc"
