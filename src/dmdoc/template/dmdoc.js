@@ -3,7 +3,8 @@
 
 document.addEventListener("DOMContentLoaded", function() {
     var items = document.getElementsByClassName("index-tree");
-    console.log(items.length);
+    var nodes = [];
+
     for (var i = 0; i < items.length; ++i) {
         var node = items[i];
         var parent = node.parentElement;
@@ -27,5 +28,25 @@ document.addEventListener("DOMContentLoaded", function() {
             };
         }(node));
         parent.insertBefore(expander, parent.firstChild);
+        nodes.push([node, expander]);
+    }
+
+    if (nodes.length) {
+        var toggle = document.createElement("a");
+        toggle.href = "#";
+        toggle.appendChild(document.createTextNode("Toggle All"));
+        toggle.addEventListener("click", function(event) {
+            event.preventDefault();
+
+            var hidden = !nodes[0][0].hidden;
+            for (var i = 0; i < nodes.length; ++i) {
+                nodes[i][0].hidden = hidden;
+                nodes[i][1].textContent = hidden ? "\u2795" : "\u2796";
+            }
+        });
+
+        var header = document.getElementsByTagName("header")[0];
+        header.appendChild(document.createTextNode(" - "));
+        header.appendChild(toggle);
     }
 });
