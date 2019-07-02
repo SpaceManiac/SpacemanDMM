@@ -45,3 +45,9 @@
         </li>
     {%- endif -%}
 {%- endmacro %}
+
+{% macro percentage(amt, total) -%}
+    {%- if total -%}
+        , {{ amt * 1000 / total | round / 10 }}%
+    {%- endif -%}
+{%- endmacro %}

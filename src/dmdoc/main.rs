@@ -109,6 +109,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
     // collate modules which have docs
     let mut modules = BTreeMap::new();
     let mut macro_count = 0;
+    let mut macros_all = 0;
     for (file, comment_vec) in module_docs {
         let file_path = context.file_path(file);
         progress.update(&file_path.display().to_string());
@@ -142,6 +143,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
                 is_variadic = *variadic;
             }
         }
+        macros_all += 1;
         if docs.is_empty() {
             continue;
         }
@@ -348,13 +350,21 @@ fn main() -> Result<(), Box<std::error::Error>> {
 
     drop(progress);
 
-    let mut coverage = format!("{} modules, {} macros, ", modules.len(), macro_count);
-    if count == 0 {
-        use std::fmt::Write;
-        let _ = write!(coverage, "0 types");
+    print!("documenting {} modules, ", modules.len());
+    if macros_all == 0 {
+        print!("0 macros, ");
     } else {
-        use std::fmt::Write;
-        let _ = write!(coverage,
+        print!(
+            "{}/{} macros ({}%), ",
+            macro_count,
+            macros_all,
+            (macro_count * 1000 / macros_all) as f32 / 10.
+        );
+    }
+    if count == 0 {
+        println!("0 types");
+    } else {
+        println!(
             "{}/{}/{} types ({}%)",
             substance_count,
             types_with_docs.len(),
@@ -362,7 +372,6 @@ fn main() -> Result<(), Box<std::error::Error>> {
             (types_with_docs.len() * 1000 / count) as f32 / 10.
         );
     }
-    println!("documenting {}", coverage);
 
     ALL_TYPE_NAMES.with(|all| {
         all.borrow_mut().extend(types_with_docs.iter()
@@ -387,7 +396,11 @@ fn main() -> Result<(), Box<std::error::Error>> {
         .and_then(|(title, _)| title.as_ref())
         .map(|s| &s[..])
         .unwrap_or(world_name);
-    let mut env = Environment {
+    let mut git = Default::default();
+    if let Err(e) = git_info(&mut git) {
+        println!("incomplete git info: {}", e);
+    }
+    let env = &Environment {
         dmdoc: DmDoc {
             version: env!("CARGO_PKG_VERSION"),
             url: env!("CARGO_PKG_HOMEPAGE"),
@@ -396,13 +409,16 @@ fn main() -> Result<(), Box<std::error::Error>> {
         filename: &env_filename,
         world_name,
         title,
-        coverage: &coverage,
-        git: Default::default(),
+        coverage: Coverage {
+            modules: modules.len(),
+            macros_documented: macro_count,
+            macros_all,
+            types_detailed: substance_count,
+            types_documented: types_with_docs.len(),
+            types_all: count,
+        },
+        git,
     };
-    if let Err(e) = git_info(&mut env.git) {
-        println!("incomplete git info: {}", e);
-    }
-    let env = &env;
 
     progress = Progress::default();
     progress.println("rendering html");
@@ -789,7 +805,7 @@ struct Environment<'a> {
     filename: &'a str,
     world_name: &'a str,
     title: &'a str,
-    coverage: &'a str,
+    coverage: Coverage,
     git: Git,
 }
 
@@ -798,6 +814,16 @@ struct DmDoc {
     version: &'static str,
     url: &'static str,
     build_info: &'static str,
+}
+
+#[derive(Serialize)]
+struct Coverage {
+    modules: usize,
+    macros_documented: usize,
+    macros_all: usize,
+    types_detailed: usize,
+    types_documented: usize,
+    types_all: usize,
 }
 
 #[derive(Serialize, Default)]
