@@ -20,4 +20,4 @@ dmm-tools = { path = "../tools", features = ["png"] }
 
 [build-dependencies]
 chrono = "0.4.0"
-git2 = { version = "0.8", default-features = false }
+git2 = { version = "0.9", default-features = false }

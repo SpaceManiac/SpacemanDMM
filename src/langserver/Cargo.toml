@@ -12,8 +12,8 @@ url = "1.6.0"
 serde = "1.0.27"
 serde_json = "1.0.10"
 serde_derive = "1.0.27"
-jsonrpc-core = "10.0.1"
-lsp-types = "0.56"
+jsonrpc-core = "12.0.0"
+lsp-types = "0.58"
 dreammaker = { path = "../dreammaker" }
 dreamchecker = { path = "../dreamchecker" }
 interval-tree = { path = "../interval-tree" }
@@ -21,4 +21,4 @@ petgraph = { version = "0.4.9", default-features = false }
 
 [build-dependencies]
 chrono = "0.4.0"
-git2 = { version = "0.8", default-features = false }
+git2 = { version = "0.9", default-features = false }
