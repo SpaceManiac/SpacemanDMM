@@ -20,6 +20,14 @@ use dm::docs::*;
 
 use markdown::DocBlock;
 
+const BUILD_INFO: &str = concat!(
+    "dmdoc ", env!("CARGO_PKG_VERSION"), "  Copyright (C) 2017-2019  Tad Hardesty\n",
+    include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")), "\n",
+    "This program comes with ABSOLUTELY NO WARRANTY. This is free software,\n",
+    "and you are welcome to redistribute it under the conditions of the GNU\n",
+    "General Public License version 3.",
+);
+
 // ----------------------------------------------------------------------------
 // Driver
 
@@ -30,14 +38,7 @@ thread_local! {
 fn main() -> Result<(), Box<std::error::Error>> {
     for arg in std::env::args() {
         if arg == "-V" || arg == "--version" {
-            println!(
-                "dmdoc {}  Copyright (C) 2017-2019  Tad Hardesty",
-                env!("CARGO_PKG_VERSION")
-            );
-            println!("{}", include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")));
-            println!("This program comes with ABSOLUTELY NO WARRANTY. This is free software,");
-            println!("and you are welcome to redistribute it under the conditions of the GNU");
-            println!("General Public License version 3.");
+            println!("{}", BUILD_INFO);
             return Ok(());
         }
     }
@@ -390,6 +391,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
         dmdoc: DmDoc {
             version: env!("CARGO_PKG_VERSION"),
             url: env!("CARGO_PKG_HOMEPAGE"),
+            build_info: BUILD_INFO,
         },
         filename: &env_filename,
         world_name,
@@ -795,6 +797,7 @@ struct Environment<'a> {
 struct DmDoc {
     version: &'static str,
     url: &'static str,
+    build_info: &'static str,
 }
 
 #[derive(Serialize, Default)]
