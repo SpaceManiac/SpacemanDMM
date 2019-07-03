@@ -70,6 +70,13 @@ If run in a Git repository, web links to source code are placed next to item
 headings in the generated output; otherwise, file and line numbers are shown
 but are not linked.
 
+## [Static Analysis](src/dreamchecker/)
+
+DreamChecker is SpacemanDMM's static analysis tool. It can generate several
+type-safety diagnostics which DreamMaker does not, and extends the langauge
+with return-type annotations, described in its documentation. It is suitable
+for running in continuous integration environments.
+
 ## Building
 
 To build locally, begin by [installing Rust][rust] or updating your existing
@@ -94,12 +101,17 @@ type. The CLI binary is known as `dmm-tools`.
 
 For convenience, a `dockerfile` is included.
 
-To build the docker image, switch to the directory where you cloned spacemandmm and run:  
+To build the docker image, switch to the directory where you cloned SpacemanDMM
+and run:
+
 ```shell
 docker build -t spacemandmm .
 ```
 
-This will locally build an image for spacemandmm. To use the image, switch to the codebase you want to generate maps for (tg is used in the example here, you will need to update this command to fit your codebase):  
+This will locally build an image for SpacemanDMM. To use the image, switch to
+the codebase you want to generate maps for (/tg/ is used in the example here,
+you will need to update this command to fit your codebase):
+
 ```shell
 docker run -v "$PWD":/usr/src/codebase --rm -it spacemandmm -e /usr/src/codebase/tgstation.dme minimap /usr/src/codebase/_maps/map_files/BoxStation/BoxStation.dmm
 ```
