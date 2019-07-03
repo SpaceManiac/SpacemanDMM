@@ -44,7 +44,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
     }
 
     // TODO: command-line args
-    let output_path: &Path = "docs".as_ref();
+    let output_path: &Path = "dmdoc".as_ref();
     let modules_path: &Path = "code".as_ref();
 
     // load tera templates
