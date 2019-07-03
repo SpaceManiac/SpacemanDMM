@@ -538,7 +538,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             while let Some(current) = next {
                 if let Some(&must) = self.env.must_call_parent.get(&current) {
                     if must {
-                        DMError::new(self.proc_ref.location, format!("proc never calls parent, required by {}", current))
+                        error(self.proc_ref.location, format!("proc never calls parent, required by {}", current))
                             .register(self.context);;
                     }
                     break;
