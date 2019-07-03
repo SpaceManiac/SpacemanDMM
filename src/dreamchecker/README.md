@@ -22,7 +22,7 @@ diagnostics, making it suitable for use in continuous integration environments.
 In addition to the simple inline diagnostics discovered by the [parsing suite],
 DreamCheckers's whole-program analysis can find problems such as:
 
-[parsing suite]: ../dreammaker/
+[parsing suite]: ../dreammaker/#diagnostics
 
 * Unknown `set` setting names.
 * Undefined types on unused variables.

@@ -47,17 +47,11 @@ client support.
 
 ## Diagnostics
 
-* Preprocessor:
-  * Redefining a macro which is already defined.
-  * Undefining a macro which is not defined.
-  * Unterminated conditional blocks (`#if`/`#ifdef`).
-  * Using a define in a [buggy context][2072419].
-* Language:
-  * Incorrect or correct-but-strange syntax.
-  * Non-constant initial values for object variables.
-  * Integer constants which are outside of range.
+* All [parsing suite] diagnostics.
+* Optional [DreamChecker] diagnostics.
 
-[2072419]: https://secure.byond.com/forum/?post=2072419
+[parsing suite]: ../dreammaker/#diagnostics
+[DreamChecker]: ../dreamchecker/#diagnostics
 
 ## Signature help
 
