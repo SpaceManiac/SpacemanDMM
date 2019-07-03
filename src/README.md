@@ -14,6 +14,9 @@ optimization flags, taking longer to compile but producing faster executables.
 
 * [dmdoc](dmdoc/) - a doxygen-esque documentation generator for DreamMaker codebases.
 
+* [dreamchecker](dreamchecker/) - extended whole-program analysis and type
+  checking tools for DM codebases.
+
 * [dmm-tools](tools/) - additional libraries for working with DreamMaker icon
   and map files, including a renderer.
 
