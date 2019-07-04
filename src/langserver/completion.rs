@@ -303,7 +303,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                             continue;
                         }
                         // declarations only
-                        let mut proc_decl = match proc.declaration.as_ref() {
+                        let proc_decl = match proc.declaration.as_ref() {
                             Some(decl) => decl,
                             None => continue,
                         };

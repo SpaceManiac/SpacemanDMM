@@ -454,7 +454,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             let mut report = HashMap::new();
             for path in files.iter() {
                 let path: &std::path::Path = path.as_ref();
-                let mut map = dmm::Map::from_file(path).unwrap();
+                let map = dmm::Map::from_file(path).unwrap();
 
                 let dim = map.grid.dim();
                 report.insert(path, Map {
