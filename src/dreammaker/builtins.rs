@@ -493,42 +493,42 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         datum/proc/Write(/*savefile*/F);
 
         atom/parent_type = path!(/datum);
-        atom/var/alpha;
+        atom/var/alpha = int!(255);
         atom/var/tmp/appearance;  // not editable
-        atom/var/appearance_flags;
-        atom/var/blend_mode;
+        atom/var/appearance_flags = int!(0);
+        atom/var/blend_mode = int!(0);
         atom/var/color;
         atom/var/list/atom/contents;  // TODO: editable on movables only
-        atom/var/density;
+        atom/var/density = int!(0);
         atom/var/desc;
-        atom/var/dir;
-        atom/var/gender;
+        atom/var/dir = int!(2);
+        atom/var/gender = string!("neuter");
         atom/var/icon/icon;
         atom/var/icon_state;
-        atom/var/invisibility;
-        atom/var/infra_luminosity;
+        atom/var/invisibility = int!(0);
+        atom/var/infra_luminosity = int!(0);
         atom/var/tmp/atom/loc;  // not editable
-        atom/var/layer;
-        atom/var/luminosity;
+        atom/var/layer = int!(1);
+        atom/var/luminosity = int!(0);
         atom/var/maptext;  // all maptext vars not editable, but it's not obvious why
-        atom/var/maptext_width;
-        atom/var/maptext_height;
-        atom/var/maptext_x;
-        atom/var/maptext_y;
-        atom/var/mouse_over_pointer;
-        atom/var/mouse_drag_pointer;
-        atom/var/mouse_drop_pointer;
-        atom/var/mouse_drop_zone;
-        atom/var/mouse_opacity;
+        atom/var/maptext_width = int!(32);
+        atom/var/maptext_height = int!(32);
+        atom/var/maptext_x = int!(0);
+        atom/var/maptext_y = int!(0);
+        atom/var/mouse_over_pointer = int!(0);
+        atom/var/mouse_drag_pointer = int!(0);
+        atom/var/mouse_drop_pointer = int!(1);
+        atom/var/mouse_drop_zone = int!(0);
+        atom/var/mouse_opacity = int!(1);
         atom/var/name;
-        atom/var/opacity;
+        atom/var/opacity = int!(0);
         atom/var/tmp/list/overlays;  // not editable
         //atom/var/override;  // listed under /atom but docs say /image only
-        atom/var/pixel_x;
-        atom/var/pixel_y;
-        atom/var/pixel_w;
-        atom/var/pixel_z;
-        atom/var/plane;
+        atom/var/pixel_x = int!(0);
+        atom/var/pixel_y = int!(0);
+        atom/var/pixel_w = int!(0);
+        atom/var/pixel_z = int!(0);
+        atom/var/plane = int!(0);
         atom/var/suffix;
         atom/var/text;
         atom/var/matrix/transform;
@@ -560,17 +560,17 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         atom/proc/Uncrossed(/*atom/movable*/O);
 
         atom/movable;
-        atom/movable/var/animate_movement;
-        atom/movable/var/bound_x;
-        atom/movable/var/bound_y;
-        atom/movable/var/bound_width;
-        atom/movable/var/bound_height;
+        atom/movable/var/animate_movement = int!(1);
+        atom/movable/var/bound_x = int!(0);
+        atom/movable/var/bound_y = int!(0);
+        atom/movable/var/bound_width = int!(32);
+        atom/movable/var/bound_height = int!(32);
         atom/movable/var/tmp/list/locs;  // not editable
         atom/movable/var/screen_loc;
-        atom/movable/var/glide_size;
-        atom/movable/var/step_size;
-        atom/movable/var/step_x;
-        atom/movable/var/step_y;
+        atom/movable/var/glide_size = int!(0);
+        atom/movable/var/step_size = int!(32);
+        atom/movable/var/step_x = int!(0);
+        atom/movable/var/step_y = int!(0);
         atom/movable/var/list/vis_contents;
         atom/movable/var/tmp/list/vis_locs;
         atom/movable/proc/Bump(/*atom*/Obstacle);
@@ -578,6 +578,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
 
         area/parent_type = path!(/atom);
         area/layer = int!(1);
+        area/luminosity = int!(1);
 
         turf/parent_type = path!(/atom);
         turf/layer = int!(2);
