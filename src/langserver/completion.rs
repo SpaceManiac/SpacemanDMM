@@ -227,7 +227,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
 
                     let mut completion = format!("{}(", name);
                     let mut sep = "";
-                    for param in proc.value.last().unwrap().parameters.iter() {
+                    for param in proc.main_value().parameters.iter() {
                         for each in param.var_type.type_path.iter() {
                             let _ = write!(completion, "{}{}", sep, each);
                             sep = "/";

@@ -255,7 +255,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
         }
 
         for (name, proc) in ty.get().procs.iter() {
-            let proc_value = proc.value.last().unwrap();
+            let proc_value = proc.main_value();
             if !proc_value.docs.is_empty() {
                 let block = DocBlock::parse(&proc_value.docs.text());
                 parsed_type.procs.insert(name, Proc {

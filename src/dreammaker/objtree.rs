@@ -103,6 +103,13 @@ pub struct TypeProc {
     pub declaration: Option<ProcDeclaration>,
 }
 
+impl TypeProc {
+    #[inline]
+    pub fn main_value(&self) -> &ProcValue {
+        self.value.last().expect("TypeProc::value is empty")
+    }
+}
+
 // ----------------------------------------------------------------------------
 // Types
 

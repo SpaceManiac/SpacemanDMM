@@ -934,7 +934,7 @@ handle_method_call! {
                             } else {
                                 &current.path
                             };
-                            let proc_value = proc.value.last().unwrap();
+                            let proc_value = proc.main_value();
                             let mut message = format!("[{}]({})  \n{}(", path, self.location_link(proc_value.location)?, last);
                             let mut first = true;
                             for each in proc_value.parameters.iter() {
@@ -1003,7 +1003,7 @@ handle_method_call! {
                 }
                 while let Some(ty) = next {
                     if let Some(proc) = ty.procs.get(proc_name) {
-                        results.push(self.convert_location(proc.value.last().unwrap().location, &[&ty.path, "/proc/", proc_name])?);
+                        results.push(self.convert_location(proc.main_value().location, &[&ty.path, "/proc/", proc_name])?);
                         break;
                     }
                     next = ty.parent_type();
@@ -1028,7 +1028,7 @@ handle_method_call! {
             let mut next = ty.or(Some(self.objtree.root()));
             while let Some(ty) = next {
                 if let Some(proc) = ty.procs.get(proc_name) {
-                    results.push(self.convert_location(proc.value.last().unwrap().location, &[&ty.path, "/proc/", proc_name])?);
+                    results.push(self.convert_location(proc.main_value().location, &[&ty.path, "/proc/", proc_name])?);
                     break;
                 }
                 next = ty.parent_type();
@@ -1053,7 +1053,7 @@ handle_method_call! {
             let mut next = self.find_scoped_type(&iter, priors);
             while let Some(ty) = next {
                 if let Some(proc) = ty.procs.get(proc_name) {
-                    results.push(self.convert_location(proc.value.last().unwrap().location, &[&ty.path, "/proc/", proc_name])?);
+                    results.push(self.convert_location(proc.main_value().location, &[&ty.path, "/proc/", proc_name])?);
                     break;
                 }
                 next = ignore_root(ty.parent_type());
@@ -1080,7 +1080,7 @@ handle_method_call! {
                     let mut next = ty.parent_type();
                     while let Some(ty) = next {
                         if let Some(proc) = ty.procs.get(proc_name) {
-                            results.push(self.convert_location(proc.value.last().unwrap().location, &[&ty.path, "/proc/", proc_name])?);
+                            results.push(self.convert_location(proc.main_value().location, &[&ty.path, "/proc/", proc_name])?);
                             break;
                         }
                         next = ty.parent_type();
@@ -1398,7 +1398,7 @@ handle_method_call! {
                     let mut params = Vec::new();
                     let mut label = format!("{}/{}(", ty.path, proc_name);
                     let mut sep = "";
-                    for param in proc.value.last().unwrap().parameters.iter() {
+                    for param in proc.main_value().parameters.iter() {
                         for each in param.var_type.type_path.iter() {
                             let _ = write!(label, "{}{}", sep, each);
                             sep = "/";
