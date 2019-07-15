@@ -32,6 +32,15 @@ pub enum Define {
     },
 }
 
+impl Define {
+    pub fn docs(&self) -> &DocCollection {
+        match self {
+            Define::Constant { docs, .. } => docs,
+            Define::Function { docs, .. } => docs,
+        }
+    }
+}
+
 impl fmt::Display for Define {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let subst = match self {

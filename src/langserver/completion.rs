@@ -29,11 +29,12 @@ pub fn item_var(ty: TypeRef, name: &str, var: &TypeVar) -> CompletionItem {
         label: name.to_owned(),
         kind: Some(CompletionItemKind::Field),
         detail: Some(detail),
+        documentation: item_documentation(&var.value.docs),
         .. Default::default()
     }
 }
 
-pub fn item_proc(ty: TypeRef, name: &str, _proc: &TypeProc) -> CompletionItem {
+pub fn item_proc(ty: TypeRef, name: &str, proc: &TypeProc) -> CompletionItem {
     CompletionItem {
         label: name.to_owned(),
         kind: Some(if ty.is_root() {
@@ -44,8 +45,20 @@ pub fn item_proc(ty: TypeRef, name: &str, _proc: &TypeProc) -> CompletionItem {
             CompletionItemKind::Method
         }),
         detail: Some(ty.pretty_path().to_owned()),
+        documentation: item_documentation(&proc.main_value().docs),
         ..Default::default()
     }
+}
+
+pub fn item_documentation(docs: &dm::docs::DocCollection) -> Option<Documentation> {
+    if docs.is_empty() {
+        return None;
+    }
+
+    Some(Documentation::MarkupContent(MarkupContent {
+        kind: MarkupKind::Markdown,
+        value: docs.text(),
+    }))
 }
 
 pub fn items_ty<'a>(
@@ -195,6 +208,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                     results.push(CompletionItem {
                         label: child.name.to_owned(),
                         kind: Some(CompletionItemKind::Class),
+                        documentation: item_documentation(&child.docs),
                         .. Default::default()
                     });
                 }
@@ -282,6 +296,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                         results.push(CompletionItem {
                             label: child.name.to_owned(),
                             kind: Some(CompletionItemKind::Class),
+                            documentation: item_documentation(&child.docs),
                             .. Default::default()
                         });
                     }
@@ -382,6 +397,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                         label: name.to_owned(),
                         kind: Some(CompletionItemKind::Constant),
                         detail: Some(format!("{}", define)),
+                        documentation: item_documentation(define.docs()),
                         .. Default::default()
                     });
                 }
