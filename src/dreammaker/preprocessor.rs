@@ -732,6 +732,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                 Some("dmf") => FileType::DMF,
                                 Some("dms") => FileType::DMS,
                                 Some("dm") => FileType::DM,
+                                Some("dme") => FileType::DM,
                                 Some(ext) => {
                                     self.context.register_error(DMError::new(
                                         self.last_input_loc,
@@ -747,8 +748,6 @@ impl<'ctx> Preprocessor<'ctx> {
                                 FileType::DMM => self.maps.push(candidate),
                                 FileType::DMF => self.skins.push(candidate),
                                 FileType::DMS => self.scripts.push(candidate),
-                                // TODO: warn if a file is double-included, and
-                                // don't include it a second time
                                 FileType::DM => match self.prepare_include_file(candidate) {
                                     Ok(include) => {
                                         // A phantom newline keeps the include
