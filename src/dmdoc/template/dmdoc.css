@@ -71,3 +71,25 @@ img[src="git.png"] {
     margin-right: -50px;
     right: 53px;
 }
+
+@media (prefers-color-scheme: dark) {
+    body {
+        background-color: #151520;
+        color: #e0e0e0;
+    }
+    a {
+        color: #e0e0e0;
+    }
+    header, footer {
+        border-color: #d0d0d0;
+    }
+    .no-substance {
+        color: #bbbbbb;
+    }
+    pre, code {
+        background-color: #252530;
+    }
+    img[src="git.png"] {
+        filter: invert(1);
+    }
+}
