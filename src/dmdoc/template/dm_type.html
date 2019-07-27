@@ -8,7 +8,7 @@
     <a href="{{ details.htmlname | safe }}.html#proc">Proc Details</a>{% endif %}
 {%- endblock %}
 {% block content %}
-<h1>{% if path == "(global)" -%}
+<h1 class="path">{% if path == "(global)" -%}
     (global)
 {%- elif details.name -%}
     {{ details.name }} <aside>{{ path | safe | linkify_type }}</aside>
@@ -25,14 +25,14 @@
     {%- if details.vars -%}
         <tr><td colspan="2"><h2>Vars</h2></td></tr>
         {%- for name, var in details.vars %}
-            <tr><th><a href="{{details.htmlname|safe}}.html#var/{{name}}">{{ name }}</a></th><td>{{ macros::teaser(block=var.docs) }}</td></tr>
+            <tr><th><a href="{{details.htmlname|safe}}.html#var/{{name}}" class="var-link">{{ name }}</a></th><td>{{ macros::teaser(block=var.docs) }}</td></tr>
         {%- endfor %}
     {%- endif -%}
 
     {%- if details.procs -%}
         <tr><td colspan="2"><h2>Procs</h2></td></tr>
         {%- for name, proc in details.procs %}
-            <tr><th><a href="{{details.htmlname|safe}}.html#proc/{{name}}">{{ name }}</a></th><td>{{ macros::teaser(block=proc.docs) }}</td></tr>
+            <tr><th><a href="{{details.htmlname|safe}}.html#proc/{{name}}" class="proc-link">{{ name }}</a></th><td>{{ macros::teaser(block=proc.docs) }}</td></tr>
         {%- endfor %}
     {%- endif -%}
     </table>
@@ -41,7 +41,7 @@
 {% if details.vars %}
     <h2><a name="var">Var Details</a></h2>
     {%- for name, var in details.vars -%}
-        <h3>
+        <h3 class="mono">
         {%- if var.decl -%}
             <aside class="declaration">{{ var.decl }} </aside>
         {%- endif -%}
@@ -60,7 +60,7 @@
 {%- if details.procs -%}
     <h2><a name="proc">Proc Details</a></h2>
     {%- for name, proc in details.procs -%}
-        <h3>
+        <h3 class="mono">
             {%- if proc.decl -%}
                 <aside class="declaration">{{ proc.decl }} </aside>
             {%- endif -%}

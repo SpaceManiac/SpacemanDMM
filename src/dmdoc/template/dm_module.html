@@ -31,7 +31,7 @@
 {%- if details.defines -%}
 <h2><a name="define">Define Details</a></h2>
 {% for name, define in details.defines -%}
-    <h3><aside class="declaration">#define </aside><a name="define/{{ name }}">{{ name }}</a>
+    <h3 class="mono"><aside class="declaration">#define </aside><a name="define/{{ name }}" class="define-name">{{ name }}</a>
         {%- if define.has_params %}
             <aside>(
             {%- for param in define.params -%}

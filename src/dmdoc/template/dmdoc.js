@@ -15,7 +15,7 @@ document.addEventListener("DOMContentLoaded", function() {
         parent.style.listStyle = "none";
         var expander = document.createElement("span");
         expander.className = "expander";
-        expander.textContent = "\u2795";
+        expander.textContent = "\u25B6";
         expander.addEventListener("click", function(node) {
             return function(event) {
                 if (event.target.tagName.toLowerCase() == "a") {
@@ -24,7 +24,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 event.preventDefault();
                 event.stopPropagation(true);
                 node.hidden = !node.hidden;
-                this.textContent = node.hidden ? "\u2795" : "\u2796";
+                this.textContent = node.hidden ? "\u25B6" : "\u25BC";
             };
         }(node));
         parent.insertBefore(expander, parent.firstChild);
@@ -41,7 +41,7 @@ document.addEventListener("DOMContentLoaded", function() {
             var hidden = !nodes[0][0].hidden;
             for (var i = 0; i < nodes.length; ++i) {
                 nodes[i][0].hidden = hidden;
-                nodes[i][1].textContent = hidden ? "\u2795" : "\u2796";
+                nodes[i][1].textContent = hidden ? "\u25B6" : "\u25BC";
             }
         });
 
