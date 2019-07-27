@@ -48,8 +48,7 @@ pub fn save_resources(output_path: &Path) -> ::std::io::Result<()> {
 
     resources! {
         "dmdoc.css",
-        "dmdoc.js",
-        "git.png",
+        "dmdoc.js"
     }
 
     Ok(())

@@ -69,10 +69,6 @@ a:target {
     color: var(--color-blue);
 }
 
-img[src="git.png"] {
-    opacity: 0.8;
-}
-
 .expander {
     cursor: pointer;
     display: inline-block;
