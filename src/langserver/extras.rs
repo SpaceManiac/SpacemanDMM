@@ -1,7 +1,7 @@
 //! Extensions to the language server protocol.
 
-use langserver::SymbolKind;
 use langserver::notification::*;
+use langserver::SymbolKind;
 
 pub enum WindowStatus {}
 impl Notification for WindowStatus {
@@ -51,4 +51,11 @@ pub enum Reparse {}
 impl Notification for Reparse {
     const METHOD: &'static str = "experimental/dreammaker/reparse";
     type Params = ::langserver::InitializedParams;
+}
+
+pub enum Recompile {}
+impl Notification for Recompile {
+    const METHOD: &'static str = "experimental/dreammaker/recompile";
+    type Params = ::langserver::ExecuteCommandParams;
+    //type Params = ::langserver::InitializedParams;
 }

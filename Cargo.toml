@@ -3,6 +3,7 @@ members = [
     "src/cli",
     "src/dmdoc",
     "src/dreamchecker",
+	"src/dreamcompiler",
     "src/dreammaker",
     #"src/editor",
     "src/interval-tree",

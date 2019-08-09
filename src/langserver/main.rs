@@ -6,40 +6,48 @@
 //! * https://microsoft.github.io/language-server-protocol/specification
 //! * https://github.com/rust-lang-nursery/rls
 #![deny(unsafe_code)]
-#![cfg_attr(not(target_arch="wasm32"), forbid(unsafe_code))]
+#![cfg_attr(not(target_arch = "wasm32"), forbid(unsafe_code))]
 
-extern crate url;
 extern crate serde;
 extern crate serde_json;
-#[macro_use] extern crate serde_derive;
-extern crate petgraph;
-extern crate interval_tree;
-extern crate lsp_types as langserver;
-extern crate jsonrpc_core as jsonrpc;
-extern crate dreammaker as dm;
+extern crate url;
+#[macro_use]
+extern crate serde_derive;
 extern crate dreamchecker;
+extern crate dreamcompiler;
+extern crate dreammaker as dm;
+extern crate interval_tree;
+extern crate jsonrpc_core as jsonrpc;
+extern crate lsp_types as langserver;
+extern crate petgraph;
+extern crate windows_named_pipe;
 
-#[macro_use] mod macros;
-mod io;
-mod document;
-mod symbol_search;
-mod find_references;
-mod extras;
+use std::io::prelude::*;
+use std::path::Path;
+use windows_named_pipe as Pipe;
+
+#[macro_use]
+mod macros;
 mod completion;
+mod document;
+mod extras;
+mod find_references;
+mod io;
+mod symbol_search;
 
-use std::path::PathBuf;
-use std::collections::{HashMap, HashSet, VecDeque};
 use std::collections::hash_map::Entry;
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::path::PathBuf;
 use std::rc::Rc;
 
-use url::Url;
-use jsonrpc::{Request, Call, Response, Output};
+use jsonrpc::{Call, Output, Request, Response};
 use langserver::MessageType;
 use petgraph::visit::IntoNodeReferences;
+use url::Url;
 
-use dm::FileId;
 use dm::annotation::{Annotation, AnnotationTree};
 use dm::objtree::TypeRef;
+use dm::FileId;
 
 fn main() {
     std::env::set_var("RUST_BACKTRACE", "1");
@@ -56,7 +64,10 @@ fn main() {
         Ok(path) => eprintln!("executable: {}", path.display()),
         Err(e) => eprintln!("exe check failure: {}", e),
     }
-    eprint!("{}", include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")));
+    eprint!(
+        "{}",
+        include_str!(concat!(env!("OUT_DIR"), "/build-info.txt"))
+    );
     match std::env::current_dir() {
         Ok(path) => eprintln!("directory: {}", path.display()),
         Err(e) => eprintln!("dir check failure: {}", e),
@@ -89,8 +100,12 @@ impl ClientCaps {
         if let Some(ref text_document) = caps.text_document {
             if let Some(ref signature_help) = text_document.signature_help {
                 if let Some(ref signature_information) = signature_help.signature_information {
-                    if let Some(ref parameter_information) = signature_information.parameter_information {
-                        if let Some(label_offset_support) = parameter_information.label_offset_support {
+                    if let Some(ref parameter_information) =
+                        signature_information.parameter_information
+                    {
+                        if let Some(label_offset_support) =
+                            parameter_information.label_offset_support
+                        {
                             this.label_offset_support = label_offset_support;
                         }
                     }
@@ -168,18 +183,20 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
         issue_notification::<_, T>(self.write, params)
     }
 
-    fn show_message<S>(&mut self, typ: MessageType, message: S) where
-        S: Into<String>
+    fn show_message<S>(&mut self, typ: MessageType, message: S)
+    where
+        S: Into<String>,
     {
         let message = message.into();
         eprintln!("{:?}: {}", typ, message);
         self.issue_notification::<langserver::notification::ShowMessage>(
-            langserver::ShowMessageParams { typ, message }
+            langserver::ShowMessageParams { typ, message },
         )
     }
 
-    fn show_status<S>(&mut self, message: S) where
-        S: Into<String>
+    fn show_status<S>(&mut self, message: S)
+    where
+        S: Into<String>,
     {
         self.issue_notification::<extras::WindowStatus>(extras::WindowStatusParams {
             environment: None,
@@ -207,7 +224,11 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
         }
     }
 
-    fn convert_location(&self, loc: dm::Location, if_builtin: &[&str]) -> Result<langserver::Location, jsonrpc::Error> {
+    fn convert_location(
+        &self,
+        loc: dm::Location,
+        if_builtin: &[&str],
+    ) -> Result<langserver::Location, jsonrpc::Error> {
         Ok(langserver::Location {
             uri: if loc.file == dm::FileId::builtins() {
                 Url::parse(&format!("dm://docs/reference.dm#{}", if_builtin.join("")))
@@ -225,9 +246,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
     fn update_objtree(&mut self) {
         if self.client_caps.object_tree {
             let root = self.recurse_objtree(self.objtree.root());
-            self.issue_notification::<extras::ObjectTree>(extras::ObjectTreeParams {
-                root,
-            });
+            self.issue_notification::<extras::ObjectTree>(extras::ObjectTreeParams { root });
         }
     }
 
@@ -247,7 +266,9 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
             entry.vars.push(extras::ObjectTreeVar {
                 name: name.to_owned(),
                 kind: langserver::SymbolKind::Field,
-                location: self.convert_location(var.value.location, &[&ty.path, "/var/", name]).ok(),
+                location: self
+                    .convert_location(var.value.location, &[&ty.path, "/var/", name])
+                    .ok(),
                 is_declaration,
             });
         }
@@ -260,7 +281,9 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                 entry.procs.push(extras::ObjectTreeProc {
                     name: name.to_owned(),
                     kind: langserver::SymbolKind::Method,
-                    location: self.convert_location(value.location, &[&ty.path, "/proc/", name]).ok(),
+                    location: self
+                        .convert_location(value.location, &[&ty.path, "/proc/", name])
+                        .ok(),
                     is_verb,
                 });
                 is_verb = None;
@@ -303,7 +326,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                         uri: path_to_url(environment)?,
                         diagnostics: vec![langserver::Diagnostic {
                             message: err.description().to_owned(),
-                            .. Default::default()
+                            ..Default::default()
                         }],
                     },
                 );
@@ -313,7 +336,8 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
         };
 
         {
-            let mut parser = dm::parser::Parser::new(ctx, dm::indents::IndentProcessor::new(ctx, &mut pp));
+            let mut parser =
+                dm::parser::Parser::new(ctx, dm::indents::IndentProcessor::new(ctx, &mut pp));
             parser.enable_procs();
             self.objtree = parser.parse_object_tree();
         }
@@ -334,7 +358,8 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
         let mut map: HashMap<_, Vec<_>> = HashMap::new();
         for error in self.context.errors().iter() {
             let loc = error.location();
-            let related_information = if !self.client_caps.related_info || error.notes().is_empty() {
+            let related_information = if !self.client_caps.related_info || error.notes().is_empty()
+            {
                 None
             } else {
                 let mut notes = Vec::with_capacity(error.notes().len());
@@ -355,7 +380,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                 range: location_to_range(loc),
                 source: error.component().name().map(ToOwned::to_owned),
                 related_information,
-                .. Default::default()
+                ..Default::default()
             };
             map.entry(self.file_url(loc.file)?)
                 .or_insert_with(Default::default)
@@ -369,7 +394,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                         severity: Some(langserver::DiagnosticSeverity::Information),
                         range: location_to_range(note.location()),
                         source: error.component().name().map(ToOwned::to_owned),
-                        .. Default::default()
+                        ..Default::default()
                     };
                     map.entry(self.file_url(note.location().file)?)
                         .or_insert_with(Default::default)
@@ -380,7 +405,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
 
         let mut new_diagnostics_set = HashSet::new();
         for (url, diagnostics) in map {
-            self.diagnostics_set.remove(&url);  // don't erase below
+            self.diagnostics_set.remove(&url); // don't erase below
             new_diagnostics_set.insert(url.clone());
             self.issue_notification::<langserver::notification::PublishDiagnostics>(
                 langserver::PublishDiagnosticsParams {
@@ -403,7 +428,10 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
         Ok(())
     }
 
-    fn get_annotations(&mut self, url: &Url) -> Result<(FileId, FileId, Rc<AnnotationTree>), jsonrpc::Error> {
+    fn get_annotations(
+        &mut self,
+        url: &Url,
+    ) -> Result<(FileId, FileId, Rc<AnnotationTree>), jsonrpc::Error> {
         Ok(match self.annotations.entry(url.to_owned()) {
             Entry::Occupied(o) => o.get().clone(),
             Entry::Vacant(v) => match self.root {
@@ -413,7 +441,9 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                     let root = url_to_path(root)?;
                     let stripped = match path.strip_prefix(&root) {
                         Ok(path) => path,
-                        Err(_) => return Err(invalid_request(format!("outside workspace: {}", url))),
+                        Err(_) => {
+                            return Err(invalid_request(format!("outside workspace: {}", url)))
+                        }
                     };
 
                     let preprocessor = match self.preprocessor {
@@ -429,23 +459,38 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                     preprocessor.enable_annotations();
                     let mut annotations = AnnotationTree::default();
                     {
-                        let indent = dm::indents::IndentProcessor::new(&self.context, &mut preprocessor);
+                        let indent =
+                            dm::indents::IndentProcessor::new(&self.context, &mut preprocessor);
                         let mut parser = dm::parser::Parser::new(&self.context, indent);
                         parser.annotate_to(&mut annotations);
                         parser.run();
                     }
                     annotations.merge(preprocessor.take_annotations().unwrap());
-                    v.insert((real_file_id, file_id, Rc::new(annotations))).clone()
-                },
+                    v.insert((real_file_id, file_id, Rc::new(annotations)))
+                        .clone()
+                }
                 None => {
                     // single-file mode
                     let filename = url.to_string();
 
-                    let contents = self.docs.get_contents(url).map_err(invalid_request)?.into_owned();
-                    let mut pp = dm::preprocessor::Preprocessor::from_buffer(&self.context, filename.clone().into(), contents);
-                    let file_id = self.context.get_file(filename.as_ref()).expect("file didn't exist?");
+                    let contents = self
+                        .docs
+                        .get_contents(url)
+                        .map_err(invalid_request)?
+                        .into_owned();
+                    let mut pp = dm::preprocessor::Preprocessor::from_buffer(
+                        &self.context,
+                        filename.clone().into(),
+                        contents,
+                    );
+                    let file_id = self
+                        .context
+                        .get_file(filename.as_ref())
+                        .expect("file didn't exist?");
                     // Clear old errors for this file. Hacky, but it will work for now.
-                    self.context.errors_mut().retain(|error| error.location().file != file_id);
+                    self.context
+                        .errors_mut()
+                        .retain(|error| error.location().file != file_id);
 
                     pp.enable_annotations();
                     let mut annotations = AnnotationTree::default();
@@ -470,28 +515,29 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                             continue;
                         }
 
-                        let related_information = if !self.client_caps.related_info || error.notes().is_empty() {
-                            None
-                        } else {
-                            let mut notes = Vec::with_capacity(error.notes().len());
-                            for note in error.notes().iter() {
-                                notes.push(langserver::DiagnosticRelatedInformation {
-                                    location: langserver::Location {
-                                        uri: url.to_owned(),
-                                        range: location_to_range(note.location()),
-                                    },
-                                    message: note.description().to_owned(),
-                                });
-                            }
-                            Some(notes)
-                        };
+                        let related_information =
+                            if !self.client_caps.related_info || error.notes().is_empty() {
+                                None
+                            } else {
+                                let mut notes = Vec::with_capacity(error.notes().len());
+                                for note in error.notes().iter() {
+                                    notes.push(langserver::DiagnosticRelatedInformation {
+                                        location: langserver::Location {
+                                            uri: url.to_owned(),
+                                            range: location_to_range(note.location()),
+                                        },
+                                        message: note.description().to_owned(),
+                                    });
+                                }
+                                Some(notes)
+                            };
                         let diag = langserver::Diagnostic {
                             message: error.description().to_owned(),
                             severity: Some(convert_severity(error.severity())),
                             range: location_to_range(loc),
                             source: error.component().name().map(ToOwned::to_owned),
                             related_information,
-                            .. Default::default()
+                            ..Default::default()
                         };
                         diagnostics.push(diag);
 
@@ -503,7 +549,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                                     severity: Some(langserver::DiagnosticSeverity::Information),
                                     range: location_to_range(note.location()),
                                     source: error.component().name().map(ToOwned::to_owned),
-                                    .. Default::default()
+                                    ..Default::default()
                                 };
                                 diagnostics.push(diag);
                             }
@@ -520,7 +566,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
 
                     (file_id, file_id, Rc::new(annotations))
                 }
-            }
+            },
         })
     }
 
@@ -590,7 +636,11 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                 if let Some(value) = proc.value.get(idx) {
                     for param in value.parameters.iter() {
                         if &param.name == var_name {
-                            return UnscopedVar::Parameter { ty, proc: proc_name, param };
+                            return UnscopedVar::Parameter {
+                                ty,
+                                proc: proc_name,
+                                param,
+                            };
                         }
                     }
                 }
@@ -609,14 +659,15 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
     }
 
     fn find_scoped_type<'b, I>(&'b self, iter: &I, priors: &[String]) -> Option<TypeRef<'b>>
-        where I: Iterator<Item=(Span, &'b Annotation)> + Clone
+    where
+        I: Iterator<Item = (Span, &'b Annotation)> + Clone,
     {
         let (mut next, proc_name) = self.find_type_context(iter);
         // find the first; check the global scope, parameters, and "src"
         let mut priors = priors.iter();
         let first = match priors.next() {
             Some(i) => i,
-            None => return next,  // empty priors acts like unscoped
+            None => return next, // empty priors acts like unscoped
         };
         if first == "args" {
             next = self.objtree.find("/list");
@@ -628,12 +679,16 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
             next = self.objtree.find("/mob");
         } else {
             next = match self.find_unscoped_var(iter, next, proc_name, first) {
-                UnscopedVar::Parameter { param, .. } => self.objtree.type_by_path(&param.var_type.type_path),
+                UnscopedVar::Parameter { param, .. } => {
+                    self.objtree.type_by_path(&param.var_type.type_path)
+                }
                 UnscopedVar::Variable { ty, .. } => match ty.get_var_declaration(first) {
                     Some(decl) => self.objtree.type_by_path(&decl.var_type.type_path),
                     None => None,
                 },
-                UnscopedVar::Local { var_type, .. } => self.objtree.type_by_path(&var_type.type_path),
+                UnscopedVar::Local { var_type, .. } => {
+                    self.objtree.type_by_path(&var_type.type_path)
+                }
                 UnscopedVar::None => None,
             };
         }
@@ -657,7 +712,10 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
     fn handle_input(&mut self, message: &str) {
         let mut outputs: Vec<Output> = match serde_json::from_str(message) {
             Ok(Request::Single(call)) => self.handle_call(call).into_iter().collect(),
-            Ok(Request::Batch(calls)) => calls.into_iter().flat_map(|call| self.handle_call(call)).collect(),
+            Ok(Request::Batch(calls)) => calls
+                .into_iter()
+                .flat_map(|call| self.handle_call(call))
+                .collect(),
             Err(decode_error) => vec![Output::Failure(jsonrpc::Failure {
                 jsonrpc: VERSION,
                 error: jsonrpc::Error {
@@ -670,12 +728,13 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
         };
 
         let response = match outputs.len() {
-            0 => return,  // wait for another input
+            0 => return, // wait for another input
             1 => Response::Single(outputs.remove(0)),
             _ => Response::Batch(outputs),
         };
 
-        self.write.write(serde_json::to_string(&response).expect("response bad to_string"));
+        self.write
+            .write(serde_json::to_string(&response).expect("response bad to_string"));
     }
 
     fn handle_call(&mut self, call: Call) -> Option<Output> {
@@ -683,14 +742,18 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
             Call::Invalid { id } => Some(Output::invalid_request(id, VERSION)),
             Call::MethodCall(method_call) => {
                 let id = method_call.id.clone();
-                Some(Output::from(self.handle_method_call(method_call), id, VERSION))
-            },
+                Some(Output::from(
+                    self.handle_method_call(method_call),
+                    id,
+                    VERSION,
+                ))
+            }
             Call::Notification(notification) => {
                 if let Err(e) = self.handle_notification(notification) {
                     self.show_message(MessageType::Error, e.message);
                 }
                 None
-            },
+            }
         }
     }
 }
@@ -1591,6 +1654,32 @@ handle_notification! {
         return self.Initialized(_p);
     }
 
+    on Recompile(&mut self, params) {
+        let proc_name = params.arguments[0].as_str().unwrap().split("(").collect::<Vec<&str>>()[0];
+        self.show_message(MessageType::Info, format!("Compiling {}", proc_name));
+
+	    let dme = dm::detect_environment_default()
+		.expect("oh shit")
+		.expect("oh fuck");
+        let pp = dm::preprocessor::Preprocessor::new(&self.context, dme).expect("Ayy lmao");
+        let indents = dm::indents::IndentProcessor::new(&self.context, pp);
+        let mut parser = dm::parser::Parser::new(&self.context, indents);
+        parser.enable_procs();
+        let tree = parser.parse_object_tree();
+
+        let result = dreamcompiler::compile(&self.context, &tree, proc_name.to_string());
+        let serialized = serde_json::to_string(&result).expect("Somehow unserializable compile result");
+        self.show_message(MessageType::Info, "Compiled, ready to send patch.");
+        let mut pipe = Pipe::PipeStream::connect(Path::new("\\\\.\\pipe\\DMDBGPatch")).unwrap();
+        //let mut pipe = Pipe::PipeListener::bind(Path::new("\\\\.\\pipe\\dmcompiler"))
+        //    .unwrap()
+        //    .accept()
+        //    .unwrap();
+        pipe.write_all(&serialized.as_bytes()).unwrap();
+        pipe.write_all(b"\n").unwrap();
+        pipe.flush().unwrap();
+    }
+
     // ------------------------------------------------------------------------
     // document content management
     on DidOpenTextDocument(&mut self, params) {
@@ -1642,14 +1731,13 @@ fn url_to_path(url: &Url) -> Result<PathBuf, jsonrpc::Error> {
     if url.scheme() != "file" {
         return Err(invalid_request("URI must have 'file' scheme"));
     }
-    url.to_file_path().map_err(|_| invalid_request("URI must be a valid path"))
+    url.to_file_path()
+        .map_err(|_| invalid_request("URI must be a valid path"))
 }
 
 fn path_to_url(path: PathBuf) -> Result<Url, jsonrpc::Error> {
     let formatted = path.display().to_string();
-    Url::from_file_path(path).map_err(|_| invalid_request(format!(
-        "bad file path: {}", formatted,
-    )))
+    Url::from_file_path(path).map_err(|_| invalid_request(format!("bad file path: {}", formatted,)))
 }
 
 fn convert_severity(severity: dm::Severity) -> langserver::DiagnosticSeverity {
@@ -1689,7 +1777,7 @@ fn ignore_root(t: Option<TypeRef>) -> Option<TypeRef> {
     }
 }
 
-fn location_to_position(loc: dm::Location) -> langserver::Position  {
+fn location_to_position(loc: dm::Location) -> langserver::Position {
     langserver::Position {
         line: loc.line.saturating_sub(1) as u64,
         character: loc.column.saturating_sub(1) as u64,
@@ -1702,7 +1790,10 @@ fn location_to_range(loc: dm::Location) -> langserver::Range {
 }
 
 fn span_to_range(range: ::std::ops::Range<dm::Location>) -> langserver::Range {
-    langserver::Range::new(location_to_position(range.start), location_to_position(range.end))
+    langserver::Range::new(
+        location_to_position(range.start),
+        location_to_position(range.end),
+    )
 }
 
 fn issue_notification<W: io::ResponseWrite, T>(write: &W, params: T::Params)
