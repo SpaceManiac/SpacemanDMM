@@ -329,7 +329,7 @@ pub struct DMError {
     component: Component,
     description: String,
     notes: Vec<DiagnosticNote>,
-    cause: Option<Box<error::Error + Send + Sync>>,
+    cause: Option<Box<dyn error::Error + Send + Sync>>,
 }
 
 /// An additional note attached to an error, at some other location.
@@ -426,8 +426,8 @@ impl error::Error for DMError {
         &self.description
     }
 
-    fn cause(&self) -> Option<&error::Error> {
-        self.cause.as_ref().map(|x| &**x as &error::Error)
+    fn cause(&self) -> Option<&dyn error::Error> {
+        self.cause.as_ref().map(|x| &**x as &dyn error::Error)
     }
 }
 

@@ -161,7 +161,7 @@ enum Include<'ctx> {
     File {
         path: PathBuf,
         file: FileId,
-        lexer: Lexer<'ctx, io::Bytes<Box<io::Read>>>,
+        lexer: Lexer<'ctx, io::Bytes<Box<dyn io::Read>>>,
     },
     Expansion {
         name: String,
@@ -171,7 +171,7 @@ enum Include<'ctx> {
 }
 
 impl<'ctx> Include<'ctx> {
-    fn from_read(context: &'ctx Context, path: PathBuf, read: Box<io::Read>) -> Include {
+    fn from_read(context: &'ctx Context, path: PathBuf, read: Box<dyn io::Read>) -> Include {
         let idx = context.register_file(&path);
         Include::File {
             file: idx,

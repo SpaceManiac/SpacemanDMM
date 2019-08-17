@@ -88,14 +88,14 @@ impl DocumentStore {
             format!("URL not opened and schema is not 'file': {}", url)));
     }
 
-    pub fn read(&self, url: &Url) -> io::Result<Box<io::Read>> {
+    pub fn read(&self, url: &Url) -> io::Result<Box<dyn io::Read>> {
         if let Some(document) = self.map.get(url) {
-            return Ok(Box::new(Cursor::new(document.text.clone())) as Box<io::Read>);
+            return Ok(Box::new(Cursor::new(document.text.clone())) as Box<dyn io::Read>);
         }
 
         if let Ok(path) = ::url_to_path(url) {
             let file = ::std::fs::File::open(path)?;
-            return Ok(Box::new(file) as Box<io::Read>);
+            return Ok(Box::new(file) as Box<dyn io::Read>);
         }
 
         return Err(io::Error::new(io::ErrorKind::NotFound,

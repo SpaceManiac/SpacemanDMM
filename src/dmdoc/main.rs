@@ -35,7 +35,7 @@ thread_local! {
     static ALL_TYPE_NAMES: RefCell<BTreeSet<String>> = Default::default();
 }
 
-fn main() -> Result<(), Box<std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     for arg in std::env::args() {
         if arg == "-V" || arg == "--version" {
             println!("{}", BUILD_INFO);

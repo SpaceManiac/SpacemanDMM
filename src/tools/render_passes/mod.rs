@@ -62,7 +62,7 @@ pub struct RenderPassInfo {
     pub name: &'static str,
     pub desc: &'static str,
     pub default: bool,
-    pub new: fn() -> Box<RenderPass>,
+    pub new: fn() -> Box<dyn RenderPass>,
 }
 
 macro_rules! pass {
@@ -88,7 +88,7 @@ pub const RENDER_PASSES: &[RenderPassInfo] = &[
     pass!(Pipes, "only-pipenet", "Render only atmospheric pipes.", false),
 ];
 
-pub fn configure(include: &str, exclude: &str) -> Vec<Box<RenderPass>> {
+pub fn configure(include: &str, exclude: &str) -> Vec<Box<dyn RenderPass>> {
     let include: Vec<&str> = include.split(",").collect();
     let exclude: Vec<&str> = exclude.split(",").collect();
     let include_all = include.iter().any(|&name| name == "all");
