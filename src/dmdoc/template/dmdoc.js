@@ -46,7 +46,7 @@ document.addEventListener("DOMContentLoaded", function() {
         });
 
         var header = document.getElementsByTagName("header")[0];
-        header.appendChild(document.createTextNode(" - "));
+        header.appendChild(document.createTextNode(" \u2014 "));
         header.appendChild(toggle);
     }
 });
