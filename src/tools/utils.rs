@@ -49,7 +49,7 @@ impl<R: Read> Iterator for Chars<R> {
     }
 }
 
-fn read_one_byte(reader: &mut Read) -> Option<io::Result<u8>> {
+fn read_one_byte(reader: &mut dyn Read) -> Option<io::Result<u8>> {
     let mut buf = [0];
     loop {
         return match reader.read(&mut buf) {

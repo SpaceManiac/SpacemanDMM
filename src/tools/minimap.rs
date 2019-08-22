@@ -23,7 +23,7 @@ pub struct Context<'a> {
     pub grid: Grid<'a>,
     pub min: (usize, usize),
     pub max: (usize, usize),
-    pub render_passes: &'a [Box<RenderPass>],
+    pub render_passes: &'a [Box<dyn RenderPass>],
     pub errors: &'a RwLock<HashSet<String>>,
 }
 
@@ -268,7 +268,7 @@ pub fn get_atom_list<'a>(
     objtree: &'a ObjectTree,
     prefabs: &'a [Prefab],
     loc: (u32, u32),
-    render_passes: &[Box<RenderPass>],
+    render_passes: &[Box<dyn RenderPass>],
     errors: Option<&RwLock<HashSet<String>>>,
 ) -> Vec<Atom<'a>> {
     let mut result = Vec::new();

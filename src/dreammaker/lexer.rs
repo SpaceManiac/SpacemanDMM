@@ -1141,8 +1141,8 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
                 }
                 Some(v) => Some(locate(Punct(v))),
                 None => match first {
-                    b'0'...b'9' => Some(locate(self.read_number(first))),
-                    b'_' | b'a'...b'z' | b'A'...b'Z' => {
+                    b'0'..=b'9' => Some(locate(self.read_number(first))),
+                    b'_' | b'a'..=b'z' | b'A'..=b'Z' => {
                         let ident = self.read_ident(first);
                         let next = self.next();
                         self.put_back(next);
