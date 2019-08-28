@@ -56,6 +56,6 @@ impl Notification for Reparse {
 pub enum Recompile {}
 impl Notification for Recompile {
     const METHOD: &'static str = "experimental/dreammaker/recompile";
-    type Params = ::langserver::ExecuteCommandParams;
+    type Params = ::langserver::TextDocumentPositionParams;
     //type Params = ::langserver::InitializedParams;
 }

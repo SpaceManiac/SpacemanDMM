@@ -2,6 +2,7 @@
 
 pub const OP_RETN: i32 = 0x00;
 pub const OP_NEW: i32 = 0x01;
+pub const OP_FORMAT: i32 = 0x02;
 pub const OP_OUTPUT: i32 = 0x03;
 pub const OP_TEST: i32 = 0x0D;
 pub const OP_NOT: i32 = 0x0E;

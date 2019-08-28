@@ -21,7 +21,7 @@ fn main() {
 	parser.enable_procs();
 	let tree = parser.parse_object_tree();
 
-	let result = dreamcompiler::compile(&context, &tree, proc_path.to_owned());
+	let result = dreamcompiler::compile(&context, &tree, proc_path.to_owned()).unwrap();
 	println!("{:#X?}", result.bytecode);
 	//println!("{:?}", result.strings);
 	let serialized = serde_json::to_string(&result).expect("Somehow unserializable compile result");

@@ -32,6 +32,9 @@ use std::path::PathBuf;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::collections::hash_map::Entry;
 use std::rc::Rc;
+
+use std::io::prelude::*;
+use std::path::Path;
 use windows_named_pipe as Pipe;
 
 use url::Url;
@@ -1562,6 +1565,10 @@ handle_method_call! {
     }
 }
 
+fn recompile(path: &Vec<String>) {
+
+}
+
 handle_notification! {
     // ------------------------------------------------------------------------
     // basic setup
@@ -1594,29 +1601,56 @@ handle_notification! {
     }
 
     on Recompile(&mut self, params) {
-        let proc_name = params.arguments[0].as_str().unwrap().split("(").collect::<Vec<&str>>()[0];
-        self.show_message(MessageType::Info, format!("Compiling {}", proc_name));
+        let (_, file_id, annotations) = self.get_annotations(&params.text_document.uri)?;
+        let location = dm::Location {
+            file: file_id,
+            line: params.position.line as u32 + 1,
+            column: params.position.character as u16 + 1,
+        };
+        let iter = annotations.get_location(location);
 
-	    let dme = dm::detect_environment_default()
-		.expect("oh shit")
-		.expect("oh fuck");
-        let pp = dm::preprocessor::Preprocessor::new(&self.context, dme).expect("Ayy lmao");
-        let indents = dm::indents::IndentProcessor::new(&self.context, pp);
-        let mut parser = dm::parser::Parser::new(&self.context, indents);
-        parser.enable_procs();
-        let tree = parser.parse_object_tree();
+        for (_, thing) in iter.clone() {
+            match thing {
+                Annotation::ProcBody(ref proc_path, ref idx) |
+                Annotation::ProcHeader(ref proc_path, ref idx) => {
+                    let mut proc_name = "/".to_owned();
+                    proc_name.push_str(proc_path.join("/").as_str());
 
-        let result = dreamcompiler::compile(&self.context, &tree, proc_name.to_string());
-        let serialized = serde_json::to_string(&result).expect("Somehow unserializable compile result");
-        self.show_message(MessageType::Info, "Compiled, ready to send patch.");
-        let mut pipe = Pipe::PipeStream::connect(Path::new("\\\\.\\pipe\\DMDBGPatch")).unwrap();
-        //let mut pipe = Pipe::PipeListener::bind(Path::new("\\\\.\\pipe\\dmcompiler"))
-        //    .unwrap()
-        //    .accept()
-        //    .unwrap();
-        pipe.write_all(&serialized.as_bytes()).unwrap();
-        pipe.write_all(b"\n").unwrap();
-        pipe.flush().unwrap();
+                    self.show_message(MessageType::Info, format!("Compiling {}", proc_name));
+
+                    let dme = dm::detect_environment_default()
+                    .expect("oh shit")
+                    .expect("oh fuck");
+
+                    let pp = dm::preprocessor::Preprocessor::new(&self.context, dme).expect("Ayy lmao");
+                    let indents = dm::indents::IndentProcessor::new(&self.context, pp);
+                    let mut parser = dm::parser::Parser::new(&self.context, indents);
+                    parser.enable_procs();
+                    let tree = parser.parse_object_tree();
+
+                    match dreamcompiler::compile(&self.context, &tree, proc_name.to_string()) {
+                        Ok(result) => {
+                            let serialized = serde_json::to_string(&result).expect("Somehow unserializable compile result");
+                            self.show_message(MessageType::Info, "Compiled, ready to send patch.");
+
+                            let mut pipe = Pipe::PipeStream::connect(Path::new("\\\\.\\pipe\\DMDBGPatch")).unwrap();
+                            //let mut pipe = Pipe::PipeListener::bind(Path::new("\\\\.\\pipe\\dmcompiler"))
+                            //    .unwrap()
+                            //    .accept()
+                            //    .unwrap();
+                            pipe.write_all(&serialized.as_bytes()).unwrap();
+                            pipe.write_all(b"\n").unwrap();
+                            pipe.flush().unwrap();
+                        },
+                        Err(e) => {
+                            self.show_message(MessageType::Error, e);
+                        },
+                    }
+                }
+                _ => {}
+            }
+        }
+
     }
 
     // ------------------------------------------------------------------------
