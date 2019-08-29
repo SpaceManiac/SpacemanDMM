@@ -240,14 +240,16 @@ impl<'a> Compiler<'a> {
 			self.emit(&[OP_PUSHI, 0]);
 			return Ok(());
 		}
-		if let Follow::Call(_kind, procname, args) = &follows[follows.len()-1].elem {
-			self.bytecode.push(OP_CALL);
-			for arg in args {
-				self.visit_expression(arg)?;
+		if !follows.is_empty() {
+			if let Follow::Call(_kind, procname, args) = &follows[follows.len()-1].elem {
+				self.bytecode.push(OP_CALL);
+				for arg in args {
+					self.visit_expression(arg)?;
+				}
+				self.compile_var_access(name, follows)?;
+				self.bytecode.push(args.len() as i32);
+				return Ok(());
 			}
-			self.compile_var_access(name, follows)?;
-			self.bytecode.push(args.len() as i32);
-			return Ok(());
 		}
 		self.bytecode.push(OP_GETVAR);
 		self.compile_var_access(name, follows)
