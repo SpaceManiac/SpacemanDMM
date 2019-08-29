@@ -23,6 +23,7 @@ fn main() {
 
 	let result = dreamcompiler::compile(&context, &tree, proc_path.to_owned()).unwrap();
 	println!("{:#X?}", result.bytecode);
+	//return;
 	//println!("{:?}", result.strings);
 	let serialized = serde_json::to_string(&result).expect("Somehow unserializable compile result");
 	//println!("{}", serialized);

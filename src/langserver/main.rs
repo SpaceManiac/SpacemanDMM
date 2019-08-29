@@ -1565,10 +1565,6 @@ handle_method_call! {
     }
 }
 
-fn recompile(path: &Vec<String>) {
-
-}
-
 handle_notification! {
     // ------------------------------------------------------------------------
     // basic setup
