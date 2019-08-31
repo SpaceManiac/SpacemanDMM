@@ -1587,6 +1587,8 @@ handle_notification! {
         return self.Initialized(_p);
     }
 
+    on Cancel(&mut self, _) { /* Not implemented, but don't log that. */ }
+
     // ------------------------------------------------------------------------
     // document content management
     on DidOpenTextDocument(&mut self, params) {
