@@ -764,7 +764,6 @@ handle_method_call! {
     // actual stuff provision
     on WorkspaceSymbol(&mut self, params) {
         let query = symbol_search::Query::parse(&params.query);
-        eprintln!("{:?} -> {:?}", params.query, query);
 
         let query = match query {
             Some(query) => query,
@@ -772,7 +771,6 @@ handle_method_call! {
         };
 
         let mut results = Vec::new();
-        let start = std::time::Instant::now();
         if let Some(ref preprocessor) = self.preprocessor {
             for (range, &(ref name, _)) in preprocessor.history().iter() {
                 if query.matches_define(name) {
@@ -835,8 +833,6 @@ handle_method_call! {
                 }
             }
         }
-        let elapsed = start.elapsed();
-        eprintln!("    {} results in {}.{:03}s", results.len(), elapsed.as_secs(), elapsed.subsec_nanos() / 1_000_000);
         Some(results)
     }
 
