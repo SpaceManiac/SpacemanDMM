@@ -14,7 +14,12 @@ use dreamchecker::*;
 // Command-line interface
 
 fn main() {
-    for arg in std::env::args() {
+    // command-line args
+    let mut environment = None;
+
+    let mut args = std::env::args();
+    let _ = args.next();  // skip executable name
+    while let Some(arg) = args.next() {
         if arg == "-V" || arg == "--version" {
             println!(
                 "dreamchecker {}  Copyright (C) 2017-2019  Tad Hardesty",
@@ -25,16 +30,24 @@ fn main() {
             println!("and you are welcome to redistribute it under the conditions of the GNU");
             println!("General Public License version 3.");
             return;
+        } else if arg == "-e" {
+            environment = Some(args.next().expect("must specify a value for -e"));
+        } else {
+            eprintln!("unknown argument: {}", arg);
+            return;
         }
     }
+
+    let dme = environment
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| dm::detect_environment_default()
+            .expect("error detecting .dme")
+            .expect("no .dme found"));
 
     const PRINT_SEVERITY: dm::Severity = dm::Severity::Info;
 
     let mut context = Context::default();
     context.set_print_severity(Some(PRINT_SEVERITY));
-    let dme = dm::detect_environment_default()
-        .expect("error detecting .dme")
-        .expect("no .dme found");
     println!("============================================================");
     println!("Parsing {}...\n", dme.display());
     let pp = dm::preprocessor::Preprocessor::new(&context, dme)
