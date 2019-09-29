@@ -539,7 +539,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 if let Some(&must) = self.env.must_call_parent.get(&current) {
                     if must {
                         error(self.proc_ref.location, format!("proc never calls parent, required by {}", current))
-                            .register(self.context);;
+                            .register(self.context);
                     }
                     break;
                 }

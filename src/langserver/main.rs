@@ -1473,6 +1473,7 @@ handle_method_call! {
                 let selection_range = location_to_range(start);
                 match annotation {
                     Annotation::TreeBlock(ref path) => {
+                        if path.is_empty() { continue }
                         let (name, detail) = name_and_detail(path);
                         result.push(DocumentSymbol {
                             name,
@@ -1496,6 +1497,7 @@ handle_method_call! {
                         });
                     },
                     Annotation::ProcBody(ref path, _) => {
+                        if path.is_empty() { continue }
                         let (name, detail) = name_and_detail(path);
                         let kind = if path.len() == 1 || (path.len() == 2 && path[0] == "proc") {
                             SymbolKind::Function
