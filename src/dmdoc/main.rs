@@ -36,16 +36,30 @@ thread_local! {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    for arg in std::env::args() {
+    // command-line args
+    let mut environment = None;
+    let mut output_path = "dmdoc".to_owned();
+    let mut modules_path = "code".to_owned();
+
+    let mut args = std::env::args();
+    let _ = args.next();  // skip executable name
+    while let Some(arg) = args.next() {
         if arg == "-V" || arg == "--version" {
             println!("{}", BUILD_INFO);
             return Ok(());
+        } else if arg == "-e" {
+            environment = Some(args.next().expect("must specify a value for -e"));
+        } else if arg == "-o" {
+            output_path = args.next().expect("must specify a value for -o");
+        } else if arg == "--modules" {
+            modules_path = args.next().expect("must specify a value for --modules");
+        } else {
+            return Err(format!("unknown argument: {}", arg).into());
         }
     }
 
-    // TODO: command-line args
-    let output_path: &Path = "dmdoc".as_ref();
-    let modules_path: &Path = "code".as_ref();
+    let output_path: &Path = output_path.as_ref();
+    let modules_path: &Path = modules_path.as_ref();
 
     // load tera templates
     println!("loading templates");
@@ -80,11 +94,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // parse environment
-    let environment = match dm::detect_environment_default()? {
-        Some(env) => env,
-        None => {
-            eprintln!("Unable to find a .dme file in this directory");
-            return Ok(());
+    let environment = match environment {
+        Some(e) => e.into(),
+        None => match dm::detect_environment_default()? {
+            Some(env) => env,
+            None => {
+                eprintln!("Unable to find a .dme file in this directory");
+                return Ok(());
+            }
         }
     };
     println!("parsing {}", environment.display());
