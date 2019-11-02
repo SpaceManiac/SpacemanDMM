@@ -8,7 +8,7 @@ use ndarray::{self, Array3, Axis};
 use linked_hash_map::LinkedHashMap;
 
 use dm::{DMError, Location, HasLocation};
-use dm::lexer::{LocationTracker, from_latin1};
+use dm::lexer::{LocationTracker, from_utf8_or_latin1};
 use dm::constants::Constant;
 
 const MAX_KEY_LENGTH: u8 = 3;
@@ -329,14 +329,14 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
                         skip_whitespace = true;
                     } else if ch == b';' {
                         curr_prefab.vars.insert(
-                            from_latin1(take(&mut curr_var)),
+                            from_utf8_or_latin1(take(&mut curr_var)),
                             dm::constants::evaluate_str(chars.location(), &take(&mut curr_datum))?,
                         );
                         skip_whitespace = true;
                     } else if ch == b'}' {
                         if !curr_var.is_empty() {
                             curr_prefab.vars.insert(
-                                from_latin1(take(&mut curr_var)),
+                                from_utf8_or_latin1(take(&mut curr_var)),
                                 dm::constants::evaluate_str(chars.location(), &take(&mut curr_datum))?,
                             );
                         }
@@ -346,16 +346,16 @@ fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
                     }
                 }
             } else if ch == b'{' {
-                curr_prefab.path = from_latin1(take(&mut curr_datum));
+                curr_prefab.path = from_utf8_or_latin1(take(&mut curr_datum));
                 in_varedit_block = true;
             } else if ch == b',' {
                 if curr_prefab.path.is_empty() && !curr_datum.is_empty() {
-                    curr_prefab.path = from_latin1(take(&mut curr_datum));
+                    curr_prefab.path = from_utf8_or_latin1(take(&mut curr_datum));
                 }
                 curr_data.push(take(&mut curr_prefab));
             } else if ch == b')' {
                 if curr_prefab.path.is_empty() && !curr_datum.is_empty() {
-                    curr_prefab.path = from_latin1(take(&mut curr_datum));
+                    curr_prefab.path = from_utf8_or_latin1(take(&mut curr_datum));
                 }
                 curr_data.push(take(&mut curr_prefab));
                 let key = take(&mut curr_key);
