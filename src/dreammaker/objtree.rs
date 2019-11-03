@@ -1008,6 +1008,17 @@ impl ObjectTree {
 
         self.register_proc(context, location, parent, proc_name, declaration, parameters, code)
     }
+
+    /// Drop all code ASTs to attempt to reduce memory usage.
+    pub fn drop_code(&mut self) {
+        for node in self.graph.node_weights_mut() {
+            for (_, typroc) in node.procs.iter_mut() {
+                for proc in typroc.value.iter_mut() {
+                    proc.code = Code::Disabled;
+                }
+            }
+        }
+    }
 }
 
 #[inline]

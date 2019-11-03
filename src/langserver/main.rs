@@ -400,6 +400,8 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
             );
         }
 
+        self.objtree.drop_code();
+
         Ok(())
     }
 
