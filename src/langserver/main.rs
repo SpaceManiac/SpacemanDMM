@@ -314,7 +314,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
 
         {
             let mut parser = dm::parser::Parser::new(ctx, dm::indents::IndentProcessor::new(ctx, &mut pp));
-            parser.enable_procs();
+            parser.enable_procs_verify();
             self.objtree = parser.parse_object_tree();
         }
         self.update_objtree();
@@ -399,8 +399,6 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                 },
             );
         }
-
-        self.objtree.drop_code();
 
         Ok(())
     }

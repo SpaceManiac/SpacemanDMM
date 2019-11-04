@@ -329,6 +329,18 @@ enum LoopContext {
     DoWhile,
 }
 
+#[derive(Eq, PartialEq)]
+enum ProcsMode {
+    /// Proc code will be parsed & stored. 
+    Store,
+
+    /// Proc code will be parsed, but not stored.
+    Parse,
+
+    /// Proc code is not parsed at all.
+    Skip
+}
+
 /// A single-lookahead, recursive-descent DM parser.
 ///
 /// Results are accumulated into an inner `ObjectTree`. To parse an entire
@@ -349,7 +361,7 @@ pub struct Parser<'ctx, 'an, I> {
     module_docs: BTreeMap<FileId, Vec<(u32, DocComment)>>,
     in_docs: usize,
 
-    procs: bool,
+    procs: ProcsMode,
     procs_bad: u64,
     procs_good: u64,
 }
@@ -382,19 +394,23 @@ where
             module_docs: Default::default(),
             in_docs: 0,
 
-            procs: false,
+            procs: ProcsMode::Skip,
             procs_bad: 0,
             procs_good: 0,
         }
     }
 
     pub fn enable_procs(&mut self) {
-        self.procs = true;
+        self.procs = ProcsMode::Store;
+    }
+
+    pub fn enable_procs_verify(&mut self) {
+        self.procs = ProcsMode::Parse;
     }
 
     pub fn annotate_to(&mut self, annotations: &'an mut AnnotationTree) {
         self.annotations = Some(annotations);
-        self.procs = true;
+        self.procs = ProcsMode::Store;
     }
 
     pub fn set_fallback_location(&mut self, fallback: Location) {
@@ -827,7 +843,7 @@ where
                     SUCCESS
                 }));
 
-                let code = if self.procs {
+                let code = if self.procs != ProcsMode::Skip {
                     let result = {
                         let mut subparser: Parser<'ctx, '_, _> = Parser::new(self.context, body_tt.into_iter());
                         if let Some(a) = self.annotations.as_mut() {
@@ -848,7 +864,11 @@ where
                             Code::Invalid(err2)
                         },
                         Ok(code) => {
-                            Code::Present(code)
+                            if self.procs == ProcsMode::Store {
+                                Code::Present(code)
+                            } else {
+                                Code::Disabled
+                            }
                         }
                     }
                 } else {
