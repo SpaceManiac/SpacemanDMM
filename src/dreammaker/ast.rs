@@ -594,7 +594,6 @@ pub struct Parameter {
 impl fmt::Display for Parameter {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write!(fmt, "{}{}", self.var_type, self.name)?;
-        fmt.write_str(&self.name)?;
         if !self.input_type.is_empty() {
             write!(fmt, " as {}", self.input_type)?;
         }
