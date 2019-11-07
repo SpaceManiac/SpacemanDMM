@@ -160,11 +160,10 @@ impl Image {
     #[cfg(feature="png")]
     pub fn to_file(&self, path: &Path) -> io::Result<()> {
         use std::fs::File;
-        use png::{Encoder, HasParameters};
 
-        let mut encoder = Encoder::new(File::create(path)?, self.width, self.height);
-        encoder.set(::png::ColorType::RGBA);
-        encoder.set(::png::BitDepth::Eight);
+        let mut encoder = ::png::Encoder::new(File::create(path)?, self.width, self.height);
+        encoder.set_color(::png::ColorType::RGBA);
+        encoder.set_depth(::png::BitDepth::Eight);
         let mut writer = encoder.write_header()?;
         // TODO: metadata with write_chunk()
 

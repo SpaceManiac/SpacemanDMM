@@ -1159,11 +1159,11 @@ handle_method_call! {
 
     on References(&mut self, params) {
         // Like GotoDefinition, but looks up references instead
-        let (_, file_id, annotations) = self.get_annotations(&params.text_document.uri)?;
+        let (_, file_id, annotations) = self.get_annotations(&params.text_document_position.text_document.uri)?;
         let location = dm::Location {
             file: file_id,
-            line: params.position.line as u32 + 1,
-            column: params.position.character as u16 + 1,
+            line: params.text_document_position.position.line as u32 + 1,
+            column: params.text_document_position.position.character as u16 + 1,
         };
 
         let mut symbol_id = None;
@@ -1297,11 +1297,11 @@ handle_method_call! {
     }
 
     on Completion(&mut self, params) {
-        let (_, file_id, annotations) = self.get_annotations(&params.text_document.uri)?;
+        let (_, file_id, annotations) = self.get_annotations(&params.text_document_position.text_document.uri)?;
         let location = dm::Location {
             file: file_id,
-            line: params.position.line as u32 + 1,
-            column: params.position.character as u16 + 1,
+            line: params.text_document_position.position.line as u32 + 1,
+            column: params.text_document_position.position.character as u16 + 1,
         };
         let iter = annotations.get_location(location);
         let mut results = Vec::new();

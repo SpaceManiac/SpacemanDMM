@@ -105,12 +105,12 @@ impl DocumentStore {
 
 /// The internal representation of document contents received from the client.
 struct Document {
-    version: u64,
+    version: i64,
     text: Rc<String>,
 }
 
 impl Document {
-    fn new(version: u64, text: String) -> Document {
+    fn new(version: i64, text: String) -> Document {
         Document {
             version,
             text: Rc::new(text),

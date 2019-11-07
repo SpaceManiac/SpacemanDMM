@@ -26,12 +26,12 @@ impl DocBlock {
     pub fn parse_with_title(markdown: &str) -> (Option<String>, Self) {
         let mut parser = parser(markdown).peekable();
         (
-            if let Some(&Event::Start(Tag::Header(1))) = parser.peek() {
+            if let Some(&Event::Start(Tag::Heading(1))) = parser.peek() {
                 parser.next();
                 let mut pieces = Vec::new();
                 loop {
                     match parser.next() {
-                        None | Some(Event::End(Tag::Header(1))) => break,
+                        None | Some(Event::End(Tag::Heading(1))) => break,
                         Some(other) => pieces.push(other),
                     }
                 }

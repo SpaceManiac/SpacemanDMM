@@ -16,4 +16,4 @@ dreammaker = { path = "../dreammaker" }
 
 [build-dependencies]
 chrono = "0.4.0"
-git2 = { version = "0.9", default-features = false }
+git2 = { version = "0.10", default-features = false }

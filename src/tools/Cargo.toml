@@ -8,14 +8,14 @@ path = "lib.rs"
 
 [dependencies]
 inflate = "0.4.1"
-ndarray = "0.12.1"
+ndarray = "0.13.0"
 rand = "0.7.0"
 linked-hash-map = "0.5.0"
 dreammaker = { path = "../dreammaker" }
 lodepng = "2.1.5"
 
 [dependencies.png]
-version = "0.14.0"
+version = "0.15.0"
 optional = true
 
 [dev-dependencies]
