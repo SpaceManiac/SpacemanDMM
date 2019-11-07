@@ -696,9 +696,11 @@ impl ObjectTree {
     // ------------------------------------------------------------------------
     // Finalization
 
-    pub(crate) fn finalize(&mut self, context: &Context, sloppy: bool) {
+    pub(crate) fn finalize(&mut self, context: &Context, parser_fatal_errored: bool) {
         self.assign_parent_types(context);
-        super::constants::evaluate_all(context, self, sloppy);
+        if !parser_fatal_errored {
+            super::constants::evaluate_all(context, self);
+        }
     }
 
     fn assign_parent_types(&mut self, context: &Context) {

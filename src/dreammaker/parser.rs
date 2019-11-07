@@ -337,6 +337,7 @@ pub struct Parser<'ctx, 'an, I> {
     context: &'ctx Context,
     annotations: Option<&'an mut AnnotationTree>,
     tree: ObjectTree,
+    fatal_errored: bool,
 
     input: I,
     eof: bool,
@@ -370,6 +371,7 @@ where
             context,
             annotations: None,
             tree: ObjectTree::default(),
+            fatal_errored: false,
 
             input,
             eof: false,
@@ -414,6 +416,8 @@ where
             let loc = e.location();
             e = e.set_severity(Severity::Error);
             e.add_note(loc, "fatal error: the parser cannot continue");
+            e.add_note(loc, "constant evaluation will be skipped");
+            self.fatal_errored = true;
             self.context.register_error(e);
         }
     }
@@ -433,8 +437,7 @@ where
             );
         }
 
-        let sloppy = self.context.errors().iter().any(|p| p.severity() == Severity::Error);
-        self.tree.finalize(self.context, sloppy);
+        self.tree.finalize(self.context, self.fatal_errored);
         self.tree
     }
 

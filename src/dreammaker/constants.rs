@@ -380,9 +380,7 @@ pub fn preprocessor_evaluate(location: Location, expr: Expression, defines: &Def
 }
 
 /// Evaluate all the type-level variables in an object tree into constants.
-pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree, sloppy: bool) {
-    let mut been_sloppy = false;
-
+pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree) {
     for ty in tree.graph.node_indices() {
         let keys: Vec<String> = tree.graph.node_weight(ty).unwrap().vars.keys().cloned().collect();
         for key in keys {
@@ -401,23 +399,12 @@ pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree, sloppy: boo
                 Err(err) => context.register_error(err),
                 Ok(ConstLookup::Found(_, _)) => {}
                 Ok(ConstLookup::Continue(_)) => {
-                    let extra = if sloppy {
-                        if been_sloppy {
-                            continue;
-                        }
-                        been_sloppy = true;
-                        "\nignoring further errors of this type due to earlier parse failures"
-                    } else {
-                        ""
-                    };
-
                     context.register_error(DMError::new(
                         tree.graph.node_weight(ty).unwrap().vars[&key].value.location,
                         format!(
-                            "undefined var '{}' on type '{}'{}",
+                            "undefined var '{}' on type '{}'",
                             key,
                             tree.graph.node_weight(ty).unwrap().path,
-                            extra
                         ),
                     ));
                 }
