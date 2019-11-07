@@ -851,14 +851,19 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
                 // call to the New() method
                 if let Some(typepath) = typepath {
-                    self.visit_call(
-                        location,
-                        typepath,
-                        typepath.get_proc("New").expect("couldn't find New proc"),
-                        args.as_ref().map_or(&[], |v| &v[..]),
-                        // New calls are exact: `new /datum()` will always call
-                        // `/datum/New()` and never an override.
-                        true);
+                    if let Some(new_proc) = typepath.get_proc("New") {
+                        self.visit_call(
+                            location,
+                            typepath,
+                            new_proc,
+                            args.as_ref().map_or(&[], |v| &v[..]),
+                            // New calls are exact: `new /datum()` will always call
+                            // `/datum/New()` and never an override.
+                            true);
+                    } else if typepath.path != "/list" {
+                        error(location, format!("couldn't find {}/proc/New", typepath.path))
+                            .register(self.context);
+                    }
                     assumption_set![Assumption::IsType(true, typepath)].into()
                 } else {
                     Analysis::empty()

@@ -469,18 +469,18 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         proc/_dm_db_quote(db_con, _str);
         proc/_dm_db_is_connected(db_con);
 
-        list;
-        list/proc/Add(Item1, Item2/*,...*/);
-        list/proc/Copy(Start=1, End=0);
-        list/proc/Cut(Start=1, End=0);
-        list/proc/Find(Elem, Start=1, End=0);
-        list/proc/Insert(Index, Item1, Item2/*,...*/);
-        list/proc/Join(Glue, Start=1, End=0);
-        list/proc/Remove(Item1, Item2/*,...*/);
-        list/proc/Swap(Index1, Index2);
-        list/var/len;
+        /*
+        These root types expose a subset of /datum's builtins, but are not
+        parented to it:
 
-        // all types pseudo-inherit vars and procs from /datum
+                    type  parent_type  vars  tag  New  Del  Topic  Read  Write
+        world                          yes        yes  yes  yes
+        list        yes   yes          yes   yes
+        savefile    yes   yes          yes   yes  yes  yes
+        client      yes   yes          yes   yes  yes  yes  yes
+
+        All other root types have an implicit `parent_type = /datum`.
+        */
         datum;
         datum/var/const/type;  // not editable
         datum/var/const/parent_type;  // not editable
@@ -491,6 +491,21 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         datum/proc/Read(/*savefile*/F);
         datum/proc/Topic(href, href_list);
         datum/proc/Write(/*savefile*/F);
+
+        list;
+        list/var/const/type;
+        list/var/const/parent_type;
+        list/var/tag;
+        list/var/const/list/vars;
+        list/proc/Add(Item1, Item2/*,...*/);
+        list/proc/Copy(Start=1, End=0);
+        list/proc/Cut(Start=1, End=0);
+        list/proc/Find(Elem, Start=1, End=0);
+        list/proc/Insert(Index, Item1, Item2/*,...*/);
+        list/proc/Join(Glue, Start=1, End=0);
+        list/proc/Remove(Item1, Item2/*,...*/);
+        list/proc/Swap(Index1, Index2);
+        list/var/len;
 
         atom/parent_type = path!(/datum);
         atom/var/alpha = int!(255);
@@ -602,6 +617,10 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         mob/proc/Logout();
 
         world;
+        world/var/const/list/vars;
+        world/proc/New();
+        world/proc/Del();
+        world/proc/Topic(href, href_list);
         var/static/world/world;
         world/var/address;
         world/var/area/area = path!(/area);
@@ -665,6 +684,13 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         world/proc/Error();
 
         client;
+        client/var/const/type;
+        client/var/const/parent_type;
+        client/var/tag;
+        client/var/const/list/vars;
+        client/proc/New();
+        client/proc/Del();
+        client/proc/Topic(href, href_list);
         client/var/address;
         client/var/authenticate;
         client/var/bounds;
@@ -868,6 +894,12 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         mutable_appearance/parent_type = path!(/image);
 
         savefile;
+        savefile/var/const/type;
+        savefile/var/const/parent_type;
+        savefile/var/tag;
+        savefile/var/const/list/vars;
+        savefile/proc/New();
+        savefile/proc/Del();
         savefile/var/cd;
         savefile/var/list/dir;
         savefile/var/eof;

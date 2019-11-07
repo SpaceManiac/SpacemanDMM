@@ -706,7 +706,23 @@ impl ObjectTree {
     fn assign_parent_types(&mut self, context: &Context) {
         for (path, &type_idx) in self.types.iter() {
             let mut location = self.graph.node_weight(type_idx).unwrap().location;
-            let idx = if path == "/datum" {
+            let idx = if path == "/datum" || path == "/list" || path == "/savefile" || path == "/world" {
+                // These types have no parent and cannot have one added. In the official compiler:
+                // - setting list or savefile/parent_type is denied with the same error as setting something's parent type to them;
+                // - setting datum/parent_type infinite loops the compiler;
+                // - setting world/parent_type compiles but has no runtime effect.
+
+                // Here, let's try to error if anything is set.
+                if let Some(var) = self.graph.node_weight(type_idx).unwrap().vars.get("parent_type") {
+                    // This check won't catch invalid redeclarations like `/datum/var/parent_type`, but that's fine for now.
+                    if var.value.expression.is_some() {
+                        context.register_error(DMError::new(
+                            var.value.location,
+                            format!("not allowed to change {}/parent_type", path),
+                        ));
+                    }
+                }
+
                 NodeIndex::new(0)
             } else {
                 let mut parent_type_buf;
@@ -718,13 +734,14 @@ impl ObjectTree {
                     "/atom/movable"
                 } else {
                     let mut parent_type = match path.rfind('/').unwrap() {
+                        0 if path == "/client" => "",
                         0 => "/datum",
                         idx => &path[..idx],
                     };
-                    if let Some(name) = self.graph.node_weight(type_idx).unwrap().vars.get("parent_type") {
-                        location = name.value.location;
-                        if let Some(expr) = name.value.expression.clone() {
-                            match expr.simple_evaluate(name.value.location) {
+                    if let Some(var) = self.graph.node_weight(type_idx).unwrap().vars.get("parent_type") {
+                        location = var.value.location;
+                        if let Some(expr) = var.value.expression.clone() {
+                            match expr.simple_evaluate(var.value.location) {
                                 Ok(Constant::String(s)) => {
                                     parent_type_buf = s;
                                     parent_type = &parent_type_buf;
@@ -749,7 +766,10 @@ impl ObjectTree {
                     parent_type
                 };
 
-                if let Some(&idx) = self.types.get(parent_type) {
+                if path == "/client" && parent_type == "" {
+                    // client has no parent by default, but can be safely reparented to /datum
+                    NodeIndex::new(0)
+                } else if let Some(&idx) = self.types.get(parent_type) {
                     idx
                 } else {
                     context.register_error(DMError::new(

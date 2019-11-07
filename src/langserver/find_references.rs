@@ -445,14 +445,18 @@ impl<'o> WalkProc<'o> {
 
                 // call to the New() method
                 if let Some(typepath) = typepath {
-                    self.visit_call(
-                        location,
-                        typepath,
-                        typepath.get_proc("New").expect("couldn't find New proc"),
-                        args.as_ref().map_or(&[], |v| &v[..]),
-                        // New calls are exact: `new /datum()` will always call
-                        // `/datum/New()` and never an override.
-                        true);
+                    if let Some(new_proc) = typepath.get_proc("New") {
+                        self.visit_call(
+                            location,
+                            typepath,
+                            new_proc,
+                            args.as_ref().map_or(&[], |v| &v[..]),
+                            // New calls are exact: `new /datum()` will always call
+                            // `/datum/New()` and never an override.
+                            true);
+                    }
+                    // If we had a diagnostic context here, we'd error for
+                    // types other than `/list`, which has no `New()`.
                     StaticType::Type(typepath)
                 } else {
                     StaticType::None
