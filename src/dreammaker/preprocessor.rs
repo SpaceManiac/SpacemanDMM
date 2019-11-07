@@ -1025,16 +1025,22 @@ impl<'ctx> Preprocessor<'ctx> {
                                 // token paste = concat two idents together, if at all possible
                                 Token::Punct(Punctuation::TokenPaste) => {
                                     match (expansion.pop_back(), input.next()) {
-                                        (Some(Token::Ident(first, ws1)), Some(Token::Ident(second, ws))) => {
-                                            match params.iter().position(|x| *x == second) {
+                                        (Some(Token::Ident(first, ws1)), Some(Token::Ident(param_name, ws))) => {
+                                            match params.iter().position(|x| *x == param_name) {
                                                 Some(i) => {
                                                     let mut arg = args[i].iter().cloned();
                                                     match arg.next() {
-                                                        Some(Token::Ident(second, ws)) => {
+                                                        Some(Token::Ident(param_ident, ws)) => {
                                                             expansion.push_back(Token::Ident(
-                                                                format!("{}{}", first, second),
+                                                                format!("{}{}", first, param_ident),
                                                                 ws,
                                                             ));
+                                                        }
+                                                        Some(Token::Int(param_int)) => {
+                                                            expansion.push_back(Token::Ident(
+                                                                format!("{}{}", first, param_int),
+                                                                ws,
+                                                            ))
                                                         }
                                                         Some(other) => {
                                                             expansion.push_back(Token::Ident(first, ws1));
@@ -1044,7 +1050,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                                     }
                                                     expansion.extend(arg);
                                                 }
-                                                None => expansion.push_back(Token::Ident(format!("{}{}", first, second), ws)),
+                                                None => expansion.push_back(Token::Ident(format!("{}{}", first, param_name), ws)),
                                             }
                                         }
                                         (non_ident_first, Some(Token::Ident(second, ws))) => {
