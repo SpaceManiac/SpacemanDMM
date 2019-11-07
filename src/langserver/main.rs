@@ -353,7 +353,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                 message: error.description().to_owned(),
                 severity: Some(convert_severity(error.severity())),
                 range: location_to_range(loc),
-                source: error.component().name().map(ToOwned::to_owned),
+                source: component_to_source(error.component()),
                 related_information,
                 .. Default::default()
             };
@@ -368,7 +368,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                         message: note.description().to_owned(),
                         severity: Some(langserver::DiagnosticSeverity::Information),
                         range: location_to_range(note.location()),
-                        source: error.component().name().map(ToOwned::to_owned),
+                        source: component_to_source(error.component()),
                         .. Default::default()
                     };
                     map.entry(self.file_url(note.location().file)?)
@@ -491,7 +491,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                             message: error.description().to_owned(),
                             severity: Some(convert_severity(error.severity())),
                             range: location_to_range(loc),
-                            source: error.component().name().map(ToOwned::to_owned),
+                            source: component_to_source(error.component()),
                             related_information,
                             .. Default::default()
                         };
@@ -504,7 +504,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                                     message: note.description().to_owned(),
                                     severity: Some(langserver::DiagnosticSeverity::Information),
                                     range: location_to_range(note.location()),
-                                    source: error.component().name().map(ToOwned::to_owned),
+                                    source: component_to_source(error.component()),
                                     .. Default::default()
                                 };
                                 diagnostics.push(diag);
@@ -1719,4 +1719,8 @@ where
         params: value_to_params(params),
     }));
     write.write(serde_json::to_string(&request).expect("notification bad to_string"))
+}
+
+fn component_to_source(component: dm::Component) -> Option<String> {
+    Some(component.name().unwrap_or("dm-langserver").to_owned())
 }
