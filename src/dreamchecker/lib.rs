@@ -351,8 +351,18 @@ impl<'o> AnalyzeObjectTree<'o> {
                         }
                     }
                 } else if name == "SpacemanDMM_should_call_parent" {
-                    if let Some(Term::Int(i)) = value.as_term() {
-                        self.must_call_parent.insert(proc, *i != 0);
+                    // Maybe this should be using constant evaluation, but for now accept TRUE and FALSE directly.
+                    match match value.as_term() {
+                        Some(Term::Int(0)) => Some(false),
+                        Some(Term::Int(1)) => Some(true),
+                        Some(Term::Ident(i)) if i == "FALSE" => Some(false),
+                        Some(Term::Ident(i)) if i == "TRUE" => Some(true),
+                        _ => None,
+                    } {
+                        Some(value) => { self.must_call_parent.insert(proc, value); },
+                        None => error(statement.location, format!("invalid value for {}: {:?}", name, value))
+                            .set_severity(Severity::Warning)
+                            .register(self.context)
                     }
                 } else if name.starts_with("SpacemanDMM_") {
                     error(statement.location, format!("unknown linter setting {:?}", name))
