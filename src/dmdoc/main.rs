@@ -49,8 +49,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Ok(());
         } else if arg == "-e" {
             environment = Some(args.next().expect("must specify a value for -e"));
-        } else if arg == "-o" {
-            output_path = args.next().expect("must specify a value for -o");
+        } else if arg == "--output" {
+            output_path = args.next().expect("must specify a value for --output");
         } else if arg == "--modules" {
             modules_path = args.next().expect("must specify a value for --modules");
         } else {
