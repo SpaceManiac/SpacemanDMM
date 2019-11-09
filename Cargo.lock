@@ -138,7 +138,7 @@ dependencies = [
 
 [[package]]
 name = "cli"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "dmm-tools 0.1.0",
@@ -233,10 +233,10 @@ dependencies = [
 
 [[package]]
 name = "dm-langserver"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "dreamchecker 1.0.0",
+ "dreamchecker 1.1.0",
  "dreammaker 0.1.0",
  "git2 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "interval-tree 0.8.0",
@@ -251,7 +251,7 @@ dependencies = [
 
 [[package]]
 name = "dmdoc"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "dreammaker 0.1.0",
@@ -279,7 +279,7 @@ dependencies = [
 
 [[package]]
 name = "dreamchecker"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "dreammaker 0.1.0",
