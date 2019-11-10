@@ -712,10 +712,11 @@ impl<'ctx> Preprocessor<'ctx> {
                         let path = PathBuf::from(path.replace("\\", "/"));
 
                         for candidate in vec![
-                            self.env_file.parent().unwrap().join(&path),
+                            // 1. relative to file in which `#include` appears.
                             self.include_stack.top_file_path().parent().unwrap().join(&path),
-                            path.clone(),
-                        ].into_iter().rev() {
+                            // 2. relative to root `.dme` file.
+                            self.env_file.parent().unwrap().join(&path),
+                        ] {
                             if !candidate.exists() {
                                 continue;
                             }
