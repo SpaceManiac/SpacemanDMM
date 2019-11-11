@@ -62,7 +62,9 @@ fn main() {
         Err(e) => eprintln!("dir check failure: {}", e),
     }
 
-    io::io_main();
+    let context = dm::Context::default();
+    let mut engine = Engine::new(&context);
+    io::run_forever(|message| engine.handle_input(message));
 }
 
 const VERSION: Option<jsonrpc::Version> = Some(jsonrpc::Version::V2);
@@ -116,8 +118,7 @@ impl ClientCaps {
     }
 }
 
-struct Engine<'a, W: 'a> {
-    write: &'a W,
+struct Engine<'a> {
     docs: document::DocumentStore,
 
     status: InitStatus,
@@ -135,10 +136,9 @@ struct Engine<'a, W: 'a> {
     client_caps: ClientCaps,
 }
 
-impl<'a, W: io::ResponseWrite> Engine<'a, W> {
-    fn new(write: &'a W, context: &'a dm::Context) -> Self {
+impl<'a> Engine<'a> {
+    fn new(context: &'a dm::Context) -> Self {
         Engine {
-            write,
             docs: Default::default(),
 
             status: InitStatus::Starting,
@@ -165,7 +165,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
         T: langserver::notification::Notification,
         T::Params: serde::Serialize,
     {
-        issue_notification::<_, T>(self.write, params)
+        issue_notification::<T>(params)
     }
 
     fn show_message<S>(&mut self, typ: MessageType, message: S) where
@@ -512,8 +512,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
                         }
                     }
 
-                    issue_notification::<_, langserver::notification::PublishDiagnostics>(
-                        self.write,
+                    issue_notification::<langserver::notification::PublishDiagnostics>(
                         langserver::PublishDiagnosticsParams {
                             uri: url.to_owned(),
                             diagnostics,
@@ -677,7 +676,7 @@ impl<'a, W: io::ResponseWrite> Engine<'a, W> {
             _ => Response::Batch(outputs),
         };
 
-        self.write.write(serde_json::to_string(&response).expect("response bad to_string"));
+        io::write(serde_json::to_string(&response).expect("response bad to_string"));
     }
 
     fn handle_call(&mut self, call: Call) -> Option<Output> {
@@ -1707,7 +1706,7 @@ fn span_to_range(range: ::std::ops::Range<dm::Location>) -> langserver::Range {
     langserver::Range::new(location_to_position(range.start), location_to_position(range.end))
 }
 
-fn issue_notification<W: io::ResponseWrite, T>(write: &W, params: T::Params)
+fn issue_notification<T>(params: T::Params)
 where
     T: langserver::notification::Notification,
     T::Params: serde::Serialize,
@@ -1718,7 +1717,7 @@ where
         method: T::METHOD.to_owned(),
         params: value_to_params(params),
     }));
-    write.write(serde_json::to_string(&request).expect("notification bad to_string"))
+    io::write(serde_json::to_string(&request).expect("notification bad to_string"))
 }
 
 fn component_to_source(component: dm::Component) -> Option<String> {

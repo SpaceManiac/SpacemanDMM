@@ -8,7 +8,7 @@ use dm::ast::PathOp;
 use dm::annotation::Annotation;
 use dm::objtree::{TypeRef, TypeVar, TypeProc, ProcValue};
 
-use {Engine, Span, io, is_constructor_name, ignore_root};
+use {Engine, Span, is_constructor_name, ignore_root};
 use symbol_search::contains;
 
 pub fn item_var(ty: TypeRef, name: &str, var: &TypeVar) -> CompletionItem {
@@ -126,7 +126,7 @@ pub fn combine_tree_path<'a, I>(iter: &I, mut absolute: bool, mut parts: &'a [St
     prefix_parts.iter().chain(parts).map(|x| &**x)
 }
 
-impl<'a, W: io::ResponseWrite> Engine<'a, W> {
+impl<'a> Engine<'a> {
     pub fn follow_type_path<'b, I>(&'b self, iter: &I, mut parts: &'b [(PathOp, String)]) -> Option<TypePathResult<'b>>
     where
         I: Iterator<Item = (Span, &'a Annotation)> + Clone,
