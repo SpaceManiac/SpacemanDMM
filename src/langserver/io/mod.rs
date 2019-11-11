@@ -5,10 +5,10 @@
 use std::io::{self, Read, Write};
 
 pub fn run_forever<F: FnMut(&str)>(mut f: F) -> ! {
-    loop {
-        let message = read().expect("request bad read");
+    while let Some(message) = read() {
         f(&message);
     }
+    std::process::exit(0);
 }
 
 fn read() -> Option<String> {
