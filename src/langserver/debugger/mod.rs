@@ -31,7 +31,8 @@ pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
 
 struct Debugger {
     dreamseeker_exe: String,
-    debuggee: Option<Debuggee>,
+    child: Option<Child>,
+    // TODO: separate field from `child` for attached debugger.
 
     seq: i64,
     client_caps: ClientCaps,
@@ -41,7 +42,7 @@ impl Debugger {
     fn new(dreamseeker_exe: String) -> Self {
         Debugger {
             dreamseeker_exe,
-            debuggee: None,
+            child: None,
 
             seq: 0,
             client_caps: Default::default(),
@@ -124,7 +125,15 @@ handle_request! {
 
     on LaunchVsc(&mut self, params) {
         let _debug = !params.base.noDebug.unwrap_or(false);
-        self.debuggee = Some(Debuggee::spawn(&self.dreamseeker_exe, &params.dmb)?);
+
+        let child = Command::new(&self.dreamseeker_exe)
+            .arg(&params.dmb)
+            .arg("-trusted")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()?;
+        self.child = Some(child);
     }
 
     on Disconnect(&mut self, params) {
@@ -132,11 +141,22 @@ handle_request! {
         let default_terminate = true;
         let terminate = params.terminateDebuggee.unwrap_or(default_terminate);
 
-        if let Some(debuggee) = self.debuggee.take() {
+        if let Some(mut child) = self.child.take() {
             if terminate {
-                debuggee.terminate()?;
+                child.kill()?;
+                let status = child.wait()?;
+                let code = status.code().unwrap_or(-1);
+                self.issue_event(ExitedEvent {
+                    exitCode: code as i64,
+                });
             } else {
-                debuggee.detach()?;
+                // On some OSes, a wait() is necessary to free resources.
+                std::thread::Builder::new()
+                    .name("detached debuggee wait() thread".to_owned())
+                    .spawn(move || {
+                        let _ = child.wait();
+                    })?;
+                self.issue_event(TerminatedEvent::default());
             }
         }
     }
@@ -163,41 +183,6 @@ impl ClientCaps {
             run_in_terminal: params.supportsRunInTerminalRequest.unwrap_or(false),
             memory_references: params.supportsMemoryReferences.unwrap_or(false),
         }
-    }
-}
-
-// ----------------------------------------------------------------------------
-// Generic handler for target being debugged.
-
-struct Debuggee {
-    child: Child,
-}
-
-impl Debuggee {
-    fn spawn(dreamseeker_exe: &str, dmb: &str) -> ::std::io::Result<Debuggee> {
-        let child = Command::new(dreamseeker_exe)
-            .arg(dmb)
-            .arg("-trusted")
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()?;
-        Ok(Debuggee {
-            child,
-        })
-    }
-
-    fn terminate(mut self) -> ::std::io::Result<()> {
-        self.child.kill()?;
-        self.child.wait()?;
-        Ok(())
-    }
-
-    fn detach(mut self) -> ::std::io::Result<()> {
-        ::std::thread::Builder::new()
-            .name("detached debuggee wait() thread".to_owned())
-            .spawn(move || { let _ = self.child.wait(); })?;
-        Ok(())
     }
 }
 
