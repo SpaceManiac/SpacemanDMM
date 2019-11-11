@@ -309,12 +309,11 @@ impl<'a> Engine<'a> {
         let mut pp = match dm::preprocessor::Preprocessor::new(ctx, environment.clone()) {
             Ok(pp) => pp,
             Err(err) => {
-                use std::error::Error;
                 self.issue_notification::<langserver::notification::PublishDiagnostics>(
                     langserver::PublishDiagnosticsParams {
                         uri: path_to_url(environment)?,
                         diagnostics: vec![langserver::Diagnostic {
-                            message: err.description().to_owned(),
+                            message: err.to_string(),
                             .. Default::default()
                         }],
                     },

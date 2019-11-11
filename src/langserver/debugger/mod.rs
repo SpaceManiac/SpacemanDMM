@@ -76,7 +76,7 @@ impl Debugger {
                     request_seq,
                     command,
                     success: handled.is_ok(),
-                    message: handled.as_ref().err().map(|err| err.description().to_owned()),
+                    message: handled.as_ref().err().map(|err| err.to_string()),
                     body: match handled {
                         Ok(result) => Some(result),
                         Err(_) => None,
