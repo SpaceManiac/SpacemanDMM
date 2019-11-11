@@ -27,16 +27,6 @@ pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
     io::run_forever(|message| debugger.handle_input(message));
 }
 
-#[derive(Default, Debug)]
-struct ClientCaps {
-    lines_start_at_1: bool,
-    columns_start_at_1: bool,
-    variable_type: bool,
-    variable_paging: bool,
-    run_in_terminal: bool,
-    memory_references: bool,
-}
-
 struct Debugger {
     dreamseeker_exe: String,
     seq: i64,
@@ -98,15 +88,7 @@ impl Debugger {
 handle_request! {
     on Initialize(&mut self, params) {
         // Initialize client caps from request
-        self.client_caps.lines_start_at_1 = params.linesStartAt1.unwrap_or(true);
-        self.client_caps.columns_start_at_1 = params.columnsStartAt1.unwrap_or(true);
-
-        self.client_caps.variable_type = params.supportsVariableType.unwrap_or(false);
-        self.client_caps.variable_paging = params.supportsVariablePaging.unwrap_or(false);
-        self.client_caps.run_in_terminal = params.supportsRunInTerminalRequest.unwrap_or(false);
-        self.client_caps.memory_references = params.supportsMemoryReferences.unwrap_or(false);
-        // ... clientID, clientName, adapterID, locale, pathFormat
-
+        self.client_caps = ClientCaps::parse(&params);
         let debug = format!("{:?}", self.client_caps);
         if let (Some(start), Some(end)) = (debug.find('{'), debug.rfind('}')) {
             eprintln!("client capabilities: {}", &debug[start + 2..end - 1]);
@@ -114,8 +96,9 @@ handle_request! {
             eprintln!("client capabilities: {}", debug);
         }
 
+        // ... clientID, clientName, adapterID, locale, pathFormat
+
         // Tell the client our caps
-        eprintln!("initialized");
         None
     }
 
@@ -126,6 +109,30 @@ handle_request! {
 
     on Disconnect(&mut self, _) {
         // TODO
+    }
+}
+
+#[derive(Default, Debug)]
+struct ClientCaps {
+    lines_start_at_1: bool,
+    columns_start_at_1: bool,
+    variable_type: bool,
+    variable_paging: bool,
+    run_in_terminal: bool,
+    memory_references: bool,
+}
+
+impl ClientCaps {
+    fn parse(params: &InitializeRequestArguments) -> ClientCaps {
+        ClientCaps {
+            lines_start_at_1: params.linesStartAt1.unwrap_or(true),
+            columns_start_at_1: params.columnsStartAt1.unwrap_or(true),
+
+            variable_type: params.supportsVariableType.unwrap_or(false),
+            variable_paging: params.supportsVariablePaging.unwrap_or(false),
+            run_in_terminal: params.supportsRunInTerminalRequest.unwrap_or(false),
+            memory_references: params.supportsMemoryReferences.unwrap_or(false),
+        }
     }
 }
 
