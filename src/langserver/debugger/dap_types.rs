@@ -12,7 +12,7 @@ pub trait Request {
     const COMMAND: &'static str;
 }
 
-pub trait Event {
+pub trait Event: serde::Serialize {
     const EVENT: &'static str;
 }
 
@@ -41,6 +41,10 @@ pub struct RequestMessage {
     pub arguments: Option<Value>,
 }
 
+impl RequestMessage {
+    pub const TYPE: &'static str = "request";
+}
+
 /// A debug adapter initiated event.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct EventMessage {
@@ -52,9 +56,13 @@ pub struct EventMessage {
     pub body: Option<Value>,
 }
 
+impl EventMessage {
+    pub const TYPE: &'static str = "event";
+}
+
 /// Response for a request.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Response {
+pub struct ResponseMessage {
     #[serde(flatten)]
     pub protocol_message: ProtocolMessage,
 
@@ -91,6 +99,10 @@ pub struct Response {
     pub body: Option<Value>,
 }
 
+impl ResponseMessage {
+    pub const TYPE: &'static str = "response";
+}
+
 /// On error (whenever ‘success’ is false), the body can provide more details.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ErrorResponseBody {
@@ -100,6 +112,19 @@ pub struct ErrorResponseBody {
 
 // ----------------------------------------------------------------------------
 // Events
+
+/// The event indicates that the debuggee has exited and returns its exit code.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ExitedEvent {
+    /**
+     * The exit code returned from the debuggee.
+     */
+    pub exitCode: i64,
+}
+
+impl Event for ExitedEvent {
+    const EVENT: &'static str = "exited";
+}
 
 /// The event indicates that debugging of the debuggee has terminated. This
 /// does not mean that the debuggee itself has exited.

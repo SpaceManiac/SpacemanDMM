@@ -56,16 +56,16 @@ impl Debugger {
     fn handle_input_inner(&mut self, message: &str) -> Result<(), Box<dyn Error>> {
         let protocol_message = serde_json::from_str::<ProtocolMessage>(message)?;
         match protocol_message.type_.as_str() {
-            "request" => {
+            RequestMessage::TYPE => {
                 let request = serde_json::from_str::<RequestMessage>(message)?;
                 let request_seq = request.protocol_message.seq;
                 let command = request.command.clone();
 
                 let handled = self.handle_request(request);
-                let response = Response {
+                let response = ResponseMessage {
                     protocol_message: ProtocolMessage {
                         seq: self.next_seq(),
-                        type_: "response".to_owned(),
+                        type_: ResponseMessage::TYPE.to_owned(),
                     },
                     request_seq,
                     command,
@@ -76,11 +76,24 @@ impl Debugger {
                         Err(_) => None,
                     }
                 };
-                io::write(serde_json::to_string(&response).expect("encode error"))
+                io::write(serde_json::to_string(&response).expect("response encode error"))
             }
             other => return Err(format!("unknown `type` field {:?}", other).into())
         }
         Ok(())
+    }
+
+    fn issue_event<E: Event>(&mut self, event: E) {
+        let body = serde_json::to_value(event).expect("event body encode error");
+        let message = EventMessage {
+            protocol_message: ProtocolMessage {
+                seq: self.next_seq(),
+                type_: EventMessage::TYPE.to_owned(),
+            },
+            event: E::EVENT.to_owned(),
+            body: Some(body),
+        };
+        io::write(serde_json::to_string(&message).expect("event encode error"))
     }
 
     fn next_seq(&mut self) -> i64 {
