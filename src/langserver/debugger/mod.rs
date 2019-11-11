@@ -5,6 +5,8 @@
 mod dap_types;
 
 use std::error::Error;
+use std::process::{Command, Stdio, Child};
+
 use io;
 use self::dap_types::*;
 
@@ -29,8 +31,9 @@ pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
 
 struct Debugger {
     dreamseeker_exe: String,
-    seq: i64,
+    debuggee: Option<Debuggee>,
 
+    seq: i64,
     client_caps: ClientCaps,
 }
 
@@ -38,8 +41,9 @@ impl Debugger {
     fn new(dreamseeker_exe: String) -> Self {
         Debugger {
             dreamseeker_exe,
-            seq: 0,
+            debuggee: None,
 
+            seq: 0,
             client_caps: Default::default(),
         }
     }
@@ -104,11 +108,13 @@ handle_request! {
 
     on LaunchVsc(&mut self, params) {
         let _debug = !params.base.noDebug.unwrap_or(false);
-        // TODO
+        self.debuggee = Some(Debuggee::spawn(&self.dreamseeker_exe, &params.dmb)?);
     }
 
     on Disconnect(&mut self, _) {
-        // TODO
+        if let Some(debuggee) = self.debuggee.take() {
+            debuggee.stop()?;
+        }
     }
 }
 
@@ -133,6 +139,34 @@ impl ClientCaps {
             run_in_terminal: params.supportsRunInTerminalRequest.unwrap_or(false),
             memory_references: params.supportsMemoryReferences.unwrap_or(false),
         }
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Generic handler for target being debugged.
+
+struct Debuggee {
+    child: Child,
+}
+
+impl Debuggee {
+    fn spawn(dreamseeker_exe: &str, dmb: &str) -> ::std::io::Result<Debuggee> {
+        let child = Command::new(dreamseeker_exe)
+            .arg(dmb)
+            .arg("-trusted")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()?;
+        Ok(Debuggee {
+            child,
+        })
+    }
+
+    fn stop(mut self) -> ::std::io::Result<()> {
+        self.child.kill()?;
+        self.child.wait()?;
+        Ok(())
     }
 }
 
