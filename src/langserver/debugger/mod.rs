@@ -103,7 +103,10 @@ handle_request! {
         // ... clientID, clientName, adapterID, locale, pathFormat
 
         // Tell the client our caps
-        None
+        Some(Capabilities {
+            supportTerminateDebuggee: Some(true),
+            .. Default::default()
+        })
     }
 
     on LaunchVsc(&mut self, params) {
@@ -111,9 +114,17 @@ handle_request! {
         self.debuggee = Some(Debuggee::spawn(&self.dreamseeker_exe, &params.dmb)?);
     }
 
-    on Disconnect(&mut self, _) {
+    on Disconnect(&mut self, params) {
+        // TODO: `false` if `attach` was used instead of `launch`.
+        let default_terminate = true;
+        let terminate = params.terminateDebuggee.unwrap_or(default_terminate);
+
         if let Some(debuggee) = self.debuggee.take() {
-            debuggee.stop()?;
+            if terminate {
+                debuggee.terminate()?;
+            } else {
+                debuggee.detach()?;
+            }
         }
     }
 }
@@ -163,9 +174,16 @@ impl Debuggee {
         })
     }
 
-    fn stop(mut self) -> ::std::io::Result<()> {
+    fn terminate(mut self) -> ::std::io::Result<()> {
         self.child.kill()?;
         self.child.wait()?;
+        Ok(())
+    }
+
+    fn detach(mut self) -> ::std::io::Result<()> {
+        ::std::thread::Builder::new()
+            .name("detached debuggee wait() thread".to_owned())
+            .spawn(move || { let _ = self.child.wait(); })?;
         Ok(())
     }
 }

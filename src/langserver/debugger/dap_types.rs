@@ -12,6 +12,10 @@ pub trait Request {
     const COMMAND: &'static str;
 }
 
+pub trait Event {
+    const EVENT: &'static str;
+}
+
 // ----------------------------------------------------------------------------
 // Base Protocol
 
@@ -39,7 +43,7 @@ pub struct RequestMessage {
 
 /// A debug adapter initiated event.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Event {
+pub struct EventMessage {
     #[serde(flatten)]
     pub protocol_message: ProtocolMessage,
     /// Type of event.
@@ -92,6 +96,24 @@ pub struct Response {
 pub struct ErrorResponseBody {
     /// An optional, structured error message.
     pub error: Option<Message>,
+}
+
+// ----------------------------------------------------------------------------
+// Events
+
+/// The event indicates that debugging of the debuggee has terminated. This
+/// does not mean that the debuggee itself has exited.
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct TerminatedEvent {
+    /**
+     * A debug adapter may set 'restart' to true (or to an arbitrary object) to request that the front end restarts the session.
+     * The value is not interpreted by the client and passed unmodified as an attribute '__restart' to the 'launch' and 'attach' requests.
+     */
+    pub restart: Option<Value>,
+}
+
+impl Event for TerminatedEvent {
+    const EVENT: &'static str = "terminated";
 }
 
 // ----------------------------------------------------------------------------
