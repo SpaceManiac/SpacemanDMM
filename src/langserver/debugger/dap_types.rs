@@ -168,6 +168,54 @@ pub struct InitializeRequestArguments {
 /// Response to ‘initialize’ request.
 pub type InitializeResponseBody = Option<Capabilities>;
 
+pub enum Launch {}
+
+impl Request for Launch {
+    type Params = LaunchRequestArguments;
+    type Result = ();
+    const COMMAND: &'static str = "launch";
+}
+
+/// Arguments for ‘launch’ request. Additional attributes are implementation specific.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct LaunchRequestArguments {
+    /**
+     * If noDebug is true the launch request should launch the program without enabling debugging.
+     */
+    pub noDebug: Option<bool>,
+
+    /**
+     * Optional data from the previous, restarted session.
+     * The data is sent as the 'restart' attribute of the 'terminated' event.
+     * The client should leave the data intact.
+     */
+    pub __restart: Option<Value>,
+}
+
+pub enum Disconnect {}
+
+impl Request for Disconnect {
+    type Params = DisconnectArguments;
+    type Result = ();
+    const COMMAND: &'static str = "disconnect";
+}
+
+/// Arguments for ‘disconnect’ request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DisconnectArguments {
+    /**
+     * A value of true indicates that this 'disconnect' request is part of a restart sequence.
+     */
+    pub restart: Option<bool>,
+
+    /**
+     * Indicates whether the debuggee should be terminated when the debugger is disconnected.
+     * If unspecified, the debug adapter is free to do whatever it thinks is best.
+     * A client can only rely on this attribute being properly honored if a debug adapter returns true for the 'supportTerminateDebuggee' capability.
+     */
+    pub terminateDebuggee: Option<bool>,
+}
+
 // ----------------------------------------------------------------------------
 // Types
 

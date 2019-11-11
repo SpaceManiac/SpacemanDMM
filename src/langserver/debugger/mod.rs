@@ -9,7 +9,7 @@ use io;
 use self::dap_types::*;
 
 pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
-    eprintln!("entering debugger mode...");
+    eprintln!("acting as debug adapter");
     let mut dreamseeker_exe = None;
 
     while let Some(arg) = args.next() {
@@ -27,7 +27,7 @@ pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
     io::run_forever(|message| debugger.handle_input(message));
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct ClientCaps {
     lines_start_at_1: bool,
     columns_start_at_1: bool,
@@ -107,7 +107,46 @@ handle_request! {
         self.client_caps.memory_references = params.supportsMemoryReferences.unwrap_or(false);
         // ... clientID, clientName, adapterID, locale, pathFormat
 
+        let debug = format!("{:?}", self.client_caps);
+        if let (Some(start), Some(end)) = (debug.find('{'), debug.rfind('}')) {
+            eprintln!("client capabilities: {}", &debug[start + 2..end - 1]);
+        } else {
+            eprintln!("client capabilities: {}", debug);
+        }
+
         // Tell the client our caps
+        eprintln!("initialized");
         None
     }
+
+    on LaunchVsc(&mut self, params) {
+        let _debug = !params.base.noDebug.unwrap_or(false);
+        // TODO
+    }
+
+    on Disconnect(&mut self, _) {
+        // TODO
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Implementation-specific DAP extensions.
+
+enum LaunchVsc {}
+
+impl Request for LaunchVsc {
+    type Params = LaunchRequestArgumentsVsc;
+    type Result = ();
+    const COMMAND: &'static str = Launch::COMMAND;
+}
+
+#[derive(Deserialize)]
+pub struct LaunchRequestArgumentsVsc {
+    #[serde(flatten)]
+    base: LaunchRequestArguments,
+
+    // provided by vscode
+    dmb: String,
+
+    // other keys: __sessionId, name, preLaunchTask, request, type
 }
