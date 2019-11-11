@@ -111,58 +111,58 @@ pub struct InitializeRequestArguments {
     /**
      * The ID of the (frontend) client using this adapter.
      */
-    clientID: Option<String>,
+    pub clientID: Option<String>,
 
     /**
      * The human readable name of the (frontend) client using this adapter.
      */
-    clientName: Option<String>,
+    pub clientName: Option<String>,
 
     /**
      * The ID of the debug adapter.
      */
-    adapterID: Option<String>,
+    pub adapterID: Option<String>,
 
     /**
      * The ISO-639 locale of the (frontend) client using this adapter, e.g. en-US or de-CH.
      */
-    locale: Option<String>,
+    pub locale: Option<String>,
 
     /**
      * If true all line numbers are 1-based (default).
      */
-    linesStartAt1: Option<bool>,
+    pub linesStartAt1: Option<bool>,
 
     /**
      * If true all column numbers are 1-based (default).
      */
-    columnsStartAt1: Option<bool>,
+    pub columnsStartAt1: Option<bool>,
 
     /**
      * Determines in what format paths are specified. The default is 'path', which is the native format.
      * Values: 'path', 'uri', etc.
      */
-    pathFormat: Option<String>,
+    pub pathFormat: Option<String>,
 
     /**
      * Client supports the optional type attribute for variables.
      */
-    supportsVariableType: Option<bool>,
+    pub supportsVariableType: Option<bool>,
 
     /**
      * Client supports the paging of variables.
      */
-    supportsVariablePaging: Option<bool>,
+    pub supportsVariablePaging: Option<bool>,
 
     /**
      * Client supports the runInTerminal request.
      */
-    supportsRunInTerminalRequest: Option<bool>,
+    pub supportsRunInTerminalRequest: Option<bool>,
 
     /**
      * Client supports memory references.
      */
-    supportsMemoryReferences: Option<bool>,
+    pub supportsMemoryReferences: Option<bool>,
 }
 
 /// Response to ‘initialize’ request.
@@ -172,32 +172,32 @@ pub type InitializeResponseBody = Option<Capabilities>;
 // Types
 
 /// Information about the capabilities of a debug adapter.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Capabilities {
     /**
      * The debug adapter supports the 'configurationDone' request.
      */
-    supportsConfigurationDoneRequest: Option<bool>,
+    pub supportsConfigurationDoneRequest: Option<bool>,
 
     /**
      * The debug adapter supports function breakpoints.
      */
-    supportsFunctionBreakpoints: Option<bool>,
+    pub supportsFunctionBreakpoints: Option<bool>,
 
     /**
      * The debug adapter supports conditional breakpoints.
      */
-    supportsConditionalBreakpoints: Option<bool>,
+    pub supportsConditionalBreakpoints: Option<bool>,
 
     /**
      * The debug adapter supports breakpoints that break execution after a specified number of hits.
      */
-    supportsHitConditionalBreakpoints: Option<bool>,
+    pub supportsHitConditionalBreakpoints: Option<bool>,
 
     /**
      * The debug adapter supports a (side effect free) evaluate request for data hovers.
      */
-    supportsEvaluateForHovers: Option<bool>,
+    pub supportsEvaluateForHovers: Option<bool>,
 
     /**
      * Available filters or options for the setExceptionBreakpoints request.
@@ -207,42 +207,42 @@ pub struct Capabilities {
     /**
      * The debug adapter supports stepping back via the 'stepBack' and 'reverseContinue' requests.
      */
-    supportsStepBack: Option<bool>,
+    pub supportsStepBack: Option<bool>,
 
     /**
      * The debug adapter supports setting a variable to a value.
      */
-    supportsSetVariable: Option<bool>,
+    pub supportsSetVariable: Option<bool>,
 
     /**
      * The debug adapter supports restarting a frame.
      */
-    supportsRestartFrame: Option<bool>,
+    pub supportsRestartFrame: Option<bool>,
 
     /**
      * The debug adapter supports the 'gotoTargets' request.
      */
-    supportsGotoTargetsRequest: Option<bool>,
+    pub supportsGotoTargetsRequest: Option<bool>,
 
     /**
      * The debug adapter supports the 'stepInTargets' request.
      */
-    supportsStepInTargetsRequest: Option<bool>,
+    pub supportsStepInTargetsRequest: Option<bool>,
 
     /**
      * The debug adapter supports the 'completions' request.
      */
-    supportsCompletionsRequest: Option<bool>,
+    pub supportsCompletionsRequest: Option<bool>,
 
     /**
      * The set of characters that should trigger completion in a REPL. If not specified, the UI should assume the '.' character.
      */
-    completionTriggerCharacters: Option<Vec<String>>,
+    pub completionTriggerCharacters: Option<Vec<String>>,
 
     /**
      * The debug adapter supports the 'modules' request.
      */
-    supportsModulesRequest: Option<bool>,
+    pub supportsModulesRequest: Option<bool>,
 
     /**
      * The set of additional module information exposed by the debug adapter.
@@ -257,82 +257,82 @@ pub struct Capabilities {
     /**
      * The debug adapter supports the 'restart' request. In this case a client should not implement 'restart' by terminating and relaunching the adapter but by calling the RestartRequest.
      */
-    supportsRestartRequest: Option<bool>,
+    pub supportsRestartRequest: Option<bool>,
 
     /**
      * The debug adapter supports 'exceptionOptions' on the setExceptionBreakpoints request.
      */
-    supportsExceptionOptions: Option<bool>,
+    pub supportsExceptionOptions: Option<bool>,
 
     /**
      * The debug adapter supports a 'format' attribute on the stackTraceRequest, variablesRequest, and evaluateRequest.
      */
-    supportsValueFormattingOptions: Option<bool>,
+    pub supportsValueFormattingOptions: Option<bool>,
 
     /**
      * The debug adapter supports the 'exceptionInfo' request.
      */
-    supportsExceptionInfoRequest: Option<bool>,
+    pub supportsExceptionInfoRequest: Option<bool>,
 
     /**
      * The debug adapter supports the 'terminateDebuggee' attribute on the 'disconnect' request.
      */
-    supportTerminateDebuggee: Option<bool>,
+    pub supportTerminateDebuggee: Option<bool>,
 
     /**
      * The debug adapter supports the delayed loading of parts of the stack, which requires that both the 'startFrame' and 'levels' arguments and the 'totalFrames' result of the 'StackTrace' request are supported.
      */
-    supportsDelayedStackTraceLoading: Option<bool>,
+    pub supportsDelayedStackTraceLoading: Option<bool>,
 
     /**
      * The debug adapter supports the 'loadedSources' request.
      */
-    supportsLoadedSourcesRequest: Option<bool>,
+    pub supportsLoadedSourcesRequest: Option<bool>,
 
     /**
      * The debug adapter supports logpoints by interpreting the 'logMessage' attribute of the SourceBreakpoint.
      */
-    supportsLogPoints: Option<bool>,
+    pub supportsLogPoints: Option<bool>,
 
     /**
      * The debug adapter supports the 'terminateThreads' request.
      */
-    supportsTerminateThreadsRequest: Option<bool>,
+    pub supportsTerminateThreadsRequest: Option<bool>,
 
     /**
      * The debug adapter supports the 'setExpression' request.
      */
-    supportsSetExpression: Option<bool>,
+    pub supportsSetExpression: Option<bool>,
 
     /**
      * The debug adapter supports the 'terminate' request.
      */
-    supportsTerminateRequest: Option<bool>,
+    pub supportsTerminateRequest: Option<bool>,
 
     /**
      * The debug adapter supports data breakpoints.
      */
-    supportsDataBreakpoints: Option<bool>,
+    pub supportsDataBreakpoints: Option<bool>,
 
     /**
      * The debug adapter supports the 'readMemory' request.
      */
-    supportsReadMemoryRequest: Option<bool>,
+    pub supportsReadMemoryRequest: Option<bool>,
 
     /**
      * The debug adapter supports the 'disassemble' request.
      */
-    supportsDisassembleRequest: Option<bool>,
+    pub supportsDisassembleRequest: Option<bool>,
 
     /**
      * The debug adapter supports the 'cancel' request.
      */
-    supportsCancelRequest: Option<bool>,
+    pub supportsCancelRequest: Option<bool>,
 
     /**
      * The debug adapter supports the 'breakpointLocations' request.
      */
-    supportsBreakpointLocationsRequest: Option<bool>,
+    pub supportsBreakpointLocationsRequest: Option<bool>,
 }
 
 /// A structured message object. Used to return errors from requests.
