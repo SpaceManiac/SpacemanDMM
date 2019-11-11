@@ -98,6 +98,36 @@ macro_rules! handle_notification {
     }
 }
 
+macro_rules! handle_request {
+    ($(on $what:ident(&mut $self:ident, $p:pat) $b:block)*) => {
+        impl Debugger {
+            fn handle_request(&mut self, request: RequestMessage) -> Result<serde_json::Value, Box<dyn Error>> {
+                use debugger::dap_types::*;
+
+                $(if request.command == <$what>::COMMAND {
+                    let arguments = request.arguments.unwrap_or(serde_json::Value::Null);
+                    let params: <$what as Request>::Params = serde_json::from_value(arguments)?;
+                    let result: <$what as Request>::Result = self.$what(params)?;
+                    Ok(serde_json::to_value(result).expect("encode problem"))
+                } else)* {
+                    eprintln!("Request NYI: {} -> {:?}", request.command, request.arguments);
+                    Err(format!("Request NYI: {}", request.command).into())
+                }
+            }
+
+            $(
+                #[allow(non_snake_case)]
+                fn $what(&mut $self, $p: <$what as ::debugger::dap_types::Request>::Params)
+                -> Result<<$what as ::debugger::dap_types::Request>::Result, jsonrpc::Error>
+                {
+                    let _v = $b;
+                    #[allow(unreachable_code)] { Ok(_v) }
+                }
+            )*
+        }
+    }
+}
+
 macro_rules! if_annotation {
     ($p:pat in $a:expr; $b:block) => {
         for (_, thing) in $a.clone() {
