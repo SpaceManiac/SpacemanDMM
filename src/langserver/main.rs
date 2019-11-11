@@ -27,6 +27,8 @@ mod find_references;
 mod extras;
 mod completion;
 
+mod debugger;
+
 use std::path::PathBuf;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::collections::hash_map::Entry;
@@ -60,6 +62,16 @@ fn main() {
     match std::env::current_dir() {
         Ok(path) => eprintln!("directory: {}", path.display()),
         Err(e) => eprintln!("dir check failure: {}", e),
+    }
+
+    let mut args = std::env::args();
+    let _ = args.next();  // skip executable name
+    if let Some(arg) = args.next() {
+        if arg == "--debugger" {
+            return debugger::debugger_main(args);
+        } else {
+            panic!("unknown argument {:?}", arg);
+        }
     }
 
     let context = dm::Context::default();
