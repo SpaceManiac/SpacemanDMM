@@ -6,6 +6,7 @@ mod dap_types;
 
 use std::error::Error;
 use std::process::{Command, Stdio, Child};
+use std::sync::{atomic, Arc};
 
 use io;
 use self::dap_types::*;
@@ -34,7 +35,7 @@ struct Debugger {
     child: Option<Child>,
     // TODO: separate field from `child` for attached debugger.
 
-    seq: i64,
+    seq: Arc<SequenceNumber>,
     client_caps: ClientCaps,
 }
 
@@ -44,7 +45,7 @@ impl Debugger {
             dreamseeker_exe,
             child: None,
 
-            seq: 0,
+            seq: Default::default(),
             client_caps: Default::default(),
         }
     }
@@ -65,7 +66,7 @@ impl Debugger {
                 let handled = self.handle_request(request);
                 let response = ResponseMessage {
                     protocol_message: ProtocolMessage {
-                        seq: self.next_seq(),
+                        seq: self.seq.next(),
                         type_: ResponseMessage::TYPE.to_owned(),
                     },
                     request_seq,
@@ -84,22 +85,9 @@ impl Debugger {
         Ok(())
     }
 
+    #[inline]
     fn issue_event<E: Event>(&mut self, event: E) {
-        let body = serde_json::to_value(event).expect("event body encode error");
-        let message = EventMessage {
-            protocol_message: ProtocolMessage {
-                seq: self.next_seq(),
-                type_: EventMessage::TYPE.to_owned(),
-            },
-            event: E::EVENT.to_owned(),
-            body: Some(body),
-        };
-        io::write(serde_json::to_string(&message).expect("event encode error"))
-    }
-
-    fn next_seq(&mut self) -> i64 {
-        self.seq = self.seq.wrapping_add(1);
-        self.seq
+        self.seq.issue_event(event);
     }
 }
 
@@ -183,6 +171,28 @@ impl ClientCaps {
             run_in_terminal: params.supportsRunInTerminalRequest.unwrap_or(false),
             memory_references: params.supportsMemoryReferences.unwrap_or(false),
         }
+    }
+}
+
+#[derive(Default)]
+struct SequenceNumber(atomic::AtomicI64);
+
+impl SequenceNumber {
+    fn next(&self) -> i64 {
+        self.0.fetch_add(1, atomic::Ordering::Relaxed)
+    }
+
+    fn issue_event<E: Event>(&self, event: E) {
+        let body = serde_json::to_value(event).expect("event body encode error");
+        let message = EventMessage {
+            protocol_message: ProtocolMessage {
+                seq: self.next(),
+                type_: EventMessage::TYPE.to_owned(),
+            },
+            event: E::EVENT.to_owned(),
+            body: Some(body),
+        };
+        io::write(serde_json::to_string(&message).expect("event encode error"))
     }
 }
 
