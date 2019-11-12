@@ -11,7 +11,6 @@ extern crate inflate;
 extern crate linked_hash_map;
 extern crate rand;
 
-#[macro_use] mod utils;
 pub mod dmm;
 pub mod icon_cache;
 pub mod minimap;
