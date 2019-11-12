@@ -1,6 +1,7 @@
 //! Debug adapter protocol implementation for DreamSeeker.
 //!
 //! * https://microsoft.github.io/debug-adapter-protocol/
+#![allow(dead_code)]
 
 mod dap_types;
 mod launched;
