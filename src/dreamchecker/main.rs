@@ -1,6 +1,5 @@
 //! DreamChecker, a robust static analysis and typechecking engine for
 //! DreamMaker.
-#![allow(dead_code, unused_variables)]
 
 extern crate dreammaker as dm;
 extern crate dreamchecker;

@@ -22,7 +22,6 @@ macro_rules! table {
         }
 
         impl $enum_ {
-            #[allow(dead_code)]
             fn value(self) -> $repr {
                 match self {
                     $(
