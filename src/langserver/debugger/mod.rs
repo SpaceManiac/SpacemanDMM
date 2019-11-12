@@ -3,13 +3,15 @@
 //! * https://microsoft.github.io/debug-adapter-protocol/
 
 mod dap_types;
+mod launched;
 
 use std::error::Error;
-use std::process::{Command, Stdio, Child};
+use std::process::{Command, Stdio};
 use std::sync::{atomic, Arc};
 
 use io;
 use self::dap_types::*;
+use self::launched::Launched;
 
 pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
     eprintln!("acting as debug adapter");
@@ -32,7 +34,7 @@ pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
 
 struct Debugger {
     dreamseeker_exe: String,
-    child: Option<Child>,
+    launched: Option<Launched>,
     // TODO: separate field from `child` for attached debugger.
 
     seq: Arc<SequenceNumber>,
@@ -43,7 +45,7 @@ impl Debugger {
     fn new(dreamseeker_exe: String) -> Self {
         Debugger {
             dreamseeker_exe,
-            child: None,
+            launched: None,
 
             seq: Default::default(),
             client_caps: Default::default(),
@@ -121,7 +123,7 @@ handle_request! {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()?;
-        self.child = Some(child);
+        self.launched = Some(Launched::new(self.seq.clone(), child)?);
     }
 
     on Disconnect(&mut self, params) {
@@ -129,22 +131,11 @@ handle_request! {
         let default_terminate = true;
         let terminate = params.terminateDebuggee.unwrap_or(default_terminate);
 
-        if let Some(mut child) = self.child.take() {
+        if let Some(launched) = self.launched.take() {
             if terminate {
-                child.kill()?;
-                let status = child.wait()?;
-                let code = status.code().unwrap_or(-1);
-                self.issue_event(ExitedEvent {
-                    exitCode: code as i64,
-                });
+                launched.kill()?;
             } else {
-                // On some OSes, a wait() is necessary to free resources.
-                std::thread::Builder::new()
-                    .name("detached debuggee wait() thread".to_owned())
-                    .spawn(move || {
-                        let _ = child.wait();
-                    })?;
-                self.issue_event(TerminatedEvent::default());
+                launched.detach();
             }
         }
     }
@@ -175,7 +166,7 @@ impl ClientCaps {
 }
 
 #[derive(Default)]
-struct SequenceNumber(atomic::AtomicI64);
+pub struct SequenceNumber(atomic::AtomicI64);
 
 impl SequenceNumber {
     fn next(&self) -> i64 {

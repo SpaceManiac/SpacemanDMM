@@ -6,7 +6,6 @@
 //! * https://microsoft.github.io/language-server-protocol/specification
 //! * https://github.com/rust-lang-nursery/rls
 #![deny(unsafe_code)]
-#![cfg_attr(not(target_arch="wasm32"), forbid(unsafe_code))]
 
 extern crate url;
 extern crate serde;
@@ -18,6 +17,7 @@ extern crate lsp_types as langserver;
 extern crate jsonrpc_core as jsonrpc;
 extern crate dreammaker as dm;
 extern crate dreamchecker;
+extern crate libc;
 
 #[macro_use] mod macros;
 mod io;

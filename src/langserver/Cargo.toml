@@ -18,6 +18,7 @@ dreammaker = { path = "../dreammaker" }
 dreamchecker = { path = "../dreamchecker" }
 interval-tree = { path = "../interval-tree" }
 petgraph = { version = "0.4.9", default-features = false }
+libc = "0.2.65"
 
 [build-dependencies]
 chrono = "0.4.0"
