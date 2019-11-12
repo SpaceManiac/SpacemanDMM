@@ -69,6 +69,8 @@ fn main() {
     if let Some(arg) = args.next() {
         if arg == "--debugger" {
             return debugger::debugger_main(args);
+        } else if arg == "--version" {
+            return;
         } else {
             panic!("unknown argument {:?}", arg);
         }
