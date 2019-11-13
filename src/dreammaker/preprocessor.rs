@@ -606,9 +606,12 @@ impl<'ctx> Preprocessor<'ctx> {
             DMError::new(self.last_input_loc, format!("failed to open file: #include {:?}", path))
                 .set_cause(e))?);
 
+        // Get the path relative to the environment root, for easy lookup later.
+        let register = path.strip_prefix(self.env_file.parent().unwrap()).unwrap_or(&path);
+
         // Make sure the file hasn't already been included.
         // All DM source is effectively `#pragma once`.
-        let file_id = self.context.register_file(&path);
+        let file_id = self.context.register_file(&register);
         if let Some(&loc) = self.include_locations.get(&file_id) {
             Err(DMError::new(self.last_input_loc, format!("duplicate #include {:?}", path))
                 .set_severity(Severity::Warning)
