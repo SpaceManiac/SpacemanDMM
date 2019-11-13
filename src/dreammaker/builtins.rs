@@ -620,7 +620,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         world/var/const/list/vars;
         world/proc/New();
         world/proc/Del();
-        world/proc/Topic(href, href_list);
+        world/proc/Topic(T, Addr, Master, Keys);
         var/static/world/world;
         world/var/address;
         world/var/area/area = path!(/area);
@@ -663,7 +663,6 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         world/var/visibility = int!(1);
         world/proc/AddCredits();
         world/proc/ClearMedal();
-        world/Del();
         world/proc/Export();
         world/proc/GetConfig();
         world/proc/GetCredits();
@@ -672,7 +671,6 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         world/proc/Import();
         world/proc/IsBanned();
         world/proc/IsSubscribed();
-        world/proc/New();
         world/proc/OpenPort();
         world/proc/PayCredits();
         world/proc/Reboot();
@@ -680,7 +678,6 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         world/proc/SetConfig();
         world/proc/SetMedal();
         world/proc/SetScores();
-        world/proc/Topic();
         world/proc/Error();
 
         client;
@@ -690,7 +687,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         client/var/const/list/vars;
         client/proc/New();
         client/proc/Del();
-        client/proc/Topic(href, href_list);
+        client/proc/Topic(href, href_list, hsrc);
         client/var/address;
         client/var/authenticate;
         client/var/bounds;
@@ -739,7 +736,6 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         client/proc/Click(object, location, control, params);
         client/proc/Command(command);
         client/proc/DblClick(object, location, control, params);
-        client/Del();
         client/proc/East();
         client/proc/Export(file);
         client/proc/Import(Query);
@@ -753,7 +749,6 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         client/proc/MouseUp(object, location, control, params);
         client/proc/MouseWheel(object, delta_x, delta_y, location, control, params);
         client/proc/Move(loc, dir);
-        client/New();
         client/proc/North();
         client/proc/Northeast();
         client/proc/Northwest();
@@ -762,7 +757,6 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         client/proc/Southeast();
         client/proc/Southwest();
         client/proc/Stat();
-        client/Topic(href, href_list, hsrc);
         client/proc/West();
 
         sound;
@@ -898,7 +892,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         savefile/var/const/parent_type;
         savefile/var/tag;
         savefile/var/const/list/vars;
-        savefile/proc/New();
+        savefile/proc/New(filename, timeout);
         savefile/proc/Del();
         savefile/var/cd;
         savefile/var/list/dir;
@@ -909,7 +903,6 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         savefile/proc/ImportText(/* path=cd, file */);
         savefile/proc/Lock(timeout);
         savefile/proc/Unlock();
-        savefile/proc/New(filename, timeout);
     };
 
     Ok(())
