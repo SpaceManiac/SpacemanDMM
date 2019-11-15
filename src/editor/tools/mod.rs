@@ -19,7 +19,7 @@ pub struct Tool {
     pub help: &'static str,
     pub objtree: bool,
     pub icon: ToolIcon,
-    pub behavior: Box<ToolBehavior>,
+    pub behavior: Box<dyn ToolBehavior>,
 }
 
 pub enum ToolIcon {

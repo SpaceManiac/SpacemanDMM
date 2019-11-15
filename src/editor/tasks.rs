@@ -3,7 +3,7 @@
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
 use std::thread;
 
-pub type Err = Box<::std::error::Error + Send + Sync>;
+pub type Err = Box<dyn std::error::Error + Send + Sync>;
 
 pub struct Task<R> {
     name: String,

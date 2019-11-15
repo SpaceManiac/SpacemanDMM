@@ -18,8 +18,8 @@ struct Entry {
 }
 
 struct Edit<T, E> {
-    redo: Box<Fn(&E, &mut T) -> Box<Fn(&E, &mut T)>>,
-    undo: Box<Fn(&E, &mut T)>,
+    redo: Box<dyn Fn(&E, &mut T) -> Box<dyn Fn(&E, &mut T)>>,
+    undo: Box<dyn Fn(&E, &mut T)>,
 }
 
 impl<T, E> History<T, E> {
@@ -52,7 +52,7 @@ impl<T, E> History<T, E> {
         self.clean_idx.set(self.idx);
     }
 
-    pub fn edit<F: 'static + Fn(&E, &mut T) -> Box<Fn(&E, &mut T)>>(&mut self, env: &E, desc: String, f: F) {
+    pub fn edit<F: 'static + Fn(&E, &mut T) -> Box<dyn Fn(&E, &mut T)>>(&mut self, env: &E, desc: String, f: F) {
         // perform the edit immediately
         let undo = f(env, &mut self.current);
 
