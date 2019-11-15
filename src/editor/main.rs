@@ -1,7 +1,6 @@
 //! The map editor proper, with a GUI and everything.
 #![cfg_attr(not(debug_assertions), windows_subsystem="windows")]
 #![allow(dead_code)]  // TODO: remove when this is not a huge WIP
-#![allow(deprecated)]
 
 extern crate glutin;
 #[macro_use] extern crate gfx;
@@ -416,13 +415,13 @@ impl EditorScene {
         ui.main_menu_bar(|| {
             ui.menu(im_str!("File"), true, || {
                 let some_map = self.maps.get(self.map_current).is_some();
-                if ui.menu_item(im_str!("Open environment"))
+                if MenuItem::new(im_str!("Open environment"))
                     .shortcut(ctrl_shortcut!("Shift+O"))
                     .build(ui) { self.open_environment(); }
                 ui.menu(im_str!("Recent environments"), !self.config.recent.is_empty(), || {
                     let mut clicked = None;
                     for (i, path) in self.config.recent.iter().enumerate() {
-                        if ui.menu_item(&im_str!("{}", path.display()))
+                        if MenuItem::new(&im_str!("{}", path.display()))
                             .shortcut(&im_str!("{}", i + 1))
                             .build(ui)
                         {
@@ -433,38 +432,38 @@ impl EditorScene {
                         self.load_environment(clicked);
                     }
                 });
-                if ui.menu_item(im_str!("Update environment"))
+                if MenuItem::new(im_str!("Update environment"))
                     .shortcut(ctrl_shortcut!("U"))
                     .enabled(self.environment.is_some())
                     .build(ui) { self.reload_objtree(); }
                 ui.separator();
-                if ui.menu_item(im_str!("New"))
+                if MenuItem::new(im_str!("New"))
                     .shortcut(ctrl_shortcut!("N"))
                     .build(ui) { self.new_map(); }
-                if ui.menu_item(im_str!("Open"))
+                if MenuItem::new(im_str!("Open"))
                     .shortcut(ctrl_shortcut!("O"))
                     .build(ui) { self.open_map(); }
-                if ui.menu_item(im_str!("Close"))
+                if MenuItem::new(im_str!("Close"))
                     .shortcut(ctrl_shortcut!("W"))
                     .enabled(some_map)
                     .build(ui) { self.close_map(); }
                 ui.separator();
-                if ui.menu_item(im_str!("Save"))
+                if MenuItem::new(im_str!("Save"))
                     .shortcut(ctrl_shortcut!("S"))
                     .enabled(some_map)
                     .build(ui) { self.save_map(); }
-                if ui.menu_item(im_str!("Save As"))
+                if MenuItem::new(im_str!("Save As"))
                     .shortcut(ctrl_shortcut!("Shift+S"))
                     .enabled(some_map)
                     .build(ui) { self.save_map_as(false); }
-                if ui.menu_item(im_str!("Save Copy As"))
+                if MenuItem::new(im_str!("Save Copy As"))
                     .enabled(some_map)
                     .build(ui) { self.save_map_as(true); }
-                if ui.menu_item(im_str!("Save All"))
+                if MenuItem::new(im_str!("Save All"))
                     .enabled(!self.maps.is_empty())
                     .build(ui) { self.save_all(); }
                 ui.separator();
-                if ui.menu_item(im_str!("Exit"))
+                if MenuItem::new(im_str!("Exit"))
                     .shortcut(im_str!("Alt+F4"))
                     .build(ui)
                 {
@@ -479,102 +478,102 @@ impl EditorScene {
                 }
             }
             ui.menu(im_str!("Edit"), true, || {
-                if ui.menu_item(im_str!("Undo"))
+                if MenuItem::new(im_str!("Undo"))
                     .shortcut(ctrl_shortcut!("Z"))
                     .enabled(can_undo)
                     .build(ui) { self.undo(); }
-                if ui.menu_item(im_str!("Redo"))
+                if MenuItem::new(im_str!("Redo"))
                     .shortcut(ctrl_shortcut!("Shift+Z"))
                     .enabled(can_redo)
                     .build(ui) { self.redo(); }
                 ui.separator();
-                ui.menu_item(im_str!("Cut"))
+                MenuItem::new(im_str!("Cut"))
                     .shortcut(ctrl_shortcut!("X"))
                     .enabled(false)
                     .build(ui);
-                ui.menu_item(im_str!("Copy"))
+                MenuItem::new(im_str!("Copy"))
                     .shortcut(ctrl_shortcut!("C"))
                     .enabled(false)
                     .build(ui);
-                ui.menu_item(im_str!("Paste"))
+                MenuItem::new(im_str!("Paste"))
                     .shortcut(ctrl_shortcut!("V"))
                     .enabled(false)
                     .build(ui);
-                ui.menu_item(im_str!("Delete"))
+                MenuItem::new(im_str!("Delete"))
                     .shortcut(im_str!("Del"))
                     .enabled(false)
                     .build(ui);
                 ui.separator();
-                ui.menu_item(im_str!("Select All"))
+                MenuItem::new(im_str!("Select All"))
                     .shortcut(ctrl_shortcut!("A"))
                     .enabled(false)
                     .build(ui);
-                ui.menu_item(im_str!("Select None"))
+                MenuItem::new(im_str!("Select None"))
                     .shortcut(ctrl_shortcut!("Shift+A"))
                     .enabled(false)
                     .build(ui);
             });
             ui.menu(im_str!("Options"), true, || {
-                ui.menu_item(im_str!("Frame areas"))
+                MenuItem::new(im_str!("Frame areas"))
                     .enabled(false)
                     .build(ui);
-                ui.menu_item(im_str!("Show extra variables"))
+                MenuItem::new(im_str!("Show extra variables"))
                     .build_with_ref(ui, &mut self.ui_extra_vars);
                 ui.separator();
-                ui.menu_item(im_str!("Stacked rendering"))
+                MenuItem::new(im_str!("Stacked rendering"))
                     .build_with_ref(ui, &mut self.stacked_rendering);
-                ui.menu_item(im_str!("Invert order"))
+                MenuItem::new(im_str!("Invert order"))
                     .build_with_ref(ui, &mut self.stacked_inverted);
                 ui.separator();
                 for &zoom in [0.5, 1.0, 2.0, 4.0].iter() {
-                    if ui.menu_item(&im_str!("{}%", 100.0 * zoom)).selected(self.map_renderer.zoom == zoom).build(ui) {
+                    if MenuItem::new(&im_str!("{}%", 100.0 * zoom)).selected(self.map_renderer.zoom == zoom).build(ui) {
                         self.map_renderer.zoom = zoom;
                     }
                 }
             });
             ui.menu(im_str!("Layers"), true, || {
-                ui.menu_item(im_str!("Customize filters..."))
+                MenuItem::new(im_str!("Customize filters..."))
                     .enabled(false)
                     .build(ui);
                 ui.separator();
-                ui.menu_item(im_str!("Area"))
+                MenuItem::new(im_str!("Area"))
                     .shortcut(ctrl_shortcut!("1"))
                     .build_with_ref(ui, &mut self.map_renderer.layers[1]);
-                ui.menu_item(im_str!("Turf"))
+                MenuItem::new(im_str!("Turf"))
                     .shortcut(ctrl_shortcut!("2"))
                     .build_with_ref(ui, &mut self.map_renderer.layers[2]);
-                ui.menu_item(im_str!("Obj"))
+                MenuItem::new(im_str!("Obj"))
                     .shortcut(ctrl_shortcut!("3"))
                     .build_with_ref(ui, &mut self.map_renderer.layers[3]);
-                ui.menu_item(im_str!("Mob"))
+                MenuItem::new(im_str!("Mob"))
                     .shortcut(ctrl_shortcut!("4"))
                     .build_with_ref(ui, &mut self.map_renderer.layers[4]);
             });
             ui.menu(im_str!("Window"), true, || {
-                ui.menu_item(im_str!("Lock positions"))
+                MenuItem::new(im_str!("Lock positions"))
                     .build_with_ref(ui, &mut self.ui_lock_windows);
-                if ui.menu_item(im_str!("Reset positions")).enabled(!self.ui_lock_windows).build(ui) {
+                if MenuItem::new(im_str!("Reset positions")).enabled(!self.ui_lock_windows).build(ui) {
                     window_positions_cond = Condition::Always;
                 }
                 ui.separator();
-                ui.menu_item(im_str!("Errors"))
+                MenuItem::new(im_str!("Errors"))
                     .build_with_ref(ui, &mut self.ui_errors);
             });
             if self.ui_debug_mode {
                 ui.menu(im_str!("Debug"), true, || {
-                    ui.menu_item(im_str!("Debug Window"))
+                    MenuItem::new(im_str!("Debug Window"))
                         .build_with_ref(ui, &mut self.ui_debug_window);
-                    ui.menu_item(im_str!("Style Editor"))
+                    MenuItem::new(im_str!("Style Editor"))
                         .build_with_ref(ui, &mut self.ui_style_editor);
-                    ui.menu_item(im_str!("ImGui Metrics"))
+                    MenuItem::new(im_str!("ImGui Metrics"))
                         .build_with_ref(ui, &mut self.ui_imgui_metrics);
                 });
             }
             ui.menu(im_str!("Help"), true, || {
-                ui.menu_item(im_str!("About SpacemanDMM"))
+                MenuItem::new(im_str!("About SpacemanDMM"))
                     .enabled(false)
                     .build(ui);
-                ui.menu_item(im_str!("Open-source licenses"))
+                MenuItem::new(im_str!("Open-source licenses"))
                     .enabled(false)
                     .build(ui);
                 ui.menu(im_str!("ImGui help"), true, || {
@@ -617,13 +616,13 @@ impl EditorScene {
 
             if self.errors.len() > self.last_errors {
                 ui.separator();
-                if ui.menu_item(&im_str!("{} errors", self.errors.len() - self.last_errors)).build(ui) {
+                if MenuItem::new(&im_str!("{} errors", self.errors.len() - self.last_errors)).build(ui) {
                     self.ui_errors = true;
                 }
             }
         });
 
-        ui.window(im_str!("Tools"))
+        Window::new(im_str!("Tools"))
             .position([10.0, 30.0], window_positions_cond)
             .movable(!self.ui_lock_windows)
             .size([300.0, 300.0], Condition::FirstUseEver)
@@ -660,7 +659,7 @@ impl EditorScene {
                 }
             });
 
-        ui.window(im_str!("Object Tree"))
+        Window::new(im_str!("Object Tree"))
             .position([10.0, 340.0], window_positions_cond)
             .movable(!self.ui_lock_windows)
             .size([300.0, 400.0], Condition::FirstUseEver)
@@ -677,7 +676,7 @@ impl EditorScene {
             });
 
         let logical_size = ui.io().display_size;
-        ui.window(im_str!("Maps"))
+        Window::new(im_str!("Maps"))
             .position([logical_size[0] as f32 - 230.0, 30.0], window_positions_cond)
             .movable(!self.ui_lock_windows)
             .size([THUMBNAIL_SIZE as f32 + 34.0, logical_size[1] as f32 - 40.0], window_positions_cond)
@@ -716,9 +715,9 @@ impl EditorScene {
                                     let tex = *thumbnail_id.fulfill(|| {
                                         renderer.textures().insert((thumbnail.clone(), map_renderer.sampler.clone()))
                                     });
-                                    let start = ui.get_cursor_screen_pos();
+                                    let start = ui.cursor_screen_pos();
                                     let is_current = self.map_current == map_idx && map.z_current == z as usize;
-                                    ui.image(tex, [THUMBNAIL_SIZE as f32, THUMBNAIL_SIZE as f32])
+                                    Image::new(tex, [THUMBNAIL_SIZE as f32, THUMBNAIL_SIZE as f32])
                                         .border_col(ui.frame_color(is_current))
                                         .build(ui);
                                     clicked = ui.is_item_hovered() && ui.io()[MouseButton::Left];
@@ -803,7 +802,7 @@ impl EditorScene {
 
                             {
                                 let style = ui.push_style_colors(color_vars);
-                                if ui.menu_item(&im_str!("{}", fab.path)).build(ui) {
+                                if MenuItem::new(&im_str!("{}", fab.path)).build(ui) {
                                     edit_atoms.push(EditInstance {
                                         inst,
                                         base: EditPrefab::new(fab.clone()),
@@ -824,7 +823,7 @@ impl EditorScene {
             let mut opened = true;
             let mut closed = false;
 
-            ui.window(im_str!("New Map"))
+            Window::new(im_str!("New Map"))
                 .opened(&mut opened)
                 .resizable(false)
                 .build(ui, || {
@@ -902,7 +901,7 @@ impl EditorScene {
                     ref mut inst,
                     ref mut base,
                 } = edit;
-                ui.window(&im_str!("{}##{}/{:?}", base.fab.path, uid, inst))
+                Window::new(&im_str!("{}##{}/{:?}", base.fab.path, uid, inst))
                     .opened(&mut keep)
                     .position(ui.io().mouse_pos, Condition::Appearing)
                     .size([350.0, 500.0], Condition::FirstUseEver)
@@ -910,17 +909,17 @@ impl EditorScene {
                     .menu_bar(true)
                     .build(ui, || {
                         ui.menu_bar(|| {
-                            if ui.menu_item(im_str!("Apply")).build(ui) {
+                            if MenuItem::new(im_str!("Apply")).build(ui) {
                                 // TODO: actually apply
                                 keep2 = false;
                             }
                             ui.separator();
-                            if ui.menu_item(im_str!("Delete")).build(ui) {
+                            if MenuItem::new(im_str!("Delete")).build(ui) {
                                 keep2 = false;
                                 delete.push(inst.clone());
                             }
                             ui.separator();
-                            if ui.menu_item(im_str!("Pick")).build(ui) {
+                            if MenuItem::new(im_str!("Pick")).build(ui) {
                                 if let Some(tool) = tools.get_mut(tool_current) {
                                     if let Some(env) = env {
                                         tool.behavior.pick(&env, &base.fab);
@@ -959,7 +958,7 @@ impl EditorScene {
         if self.ui_debug_mode {
             if self.ui_debug_window {
                 let mut opened = self.ui_debug_window;
-                ui.window(im_str!("Debug"))
+                Window::new(im_str!("Debug"))
                     .position([320.0, 30.0], Condition::FirstUseEver)
                     .always_auto_resize(true)
                     .opened(&mut opened)
@@ -1003,7 +1002,7 @@ impl EditorScene {
                 self.ui_debug_window = opened;
             }
             if self.ui_style_editor {
-                ui.window(im_str!("Style Editor"))
+                Window::new(im_str!("Style Editor"))
                     .opened(&mut self.ui_style_editor)
                     .build(ui, || ui.show_default_style_editor());
             }
@@ -1015,7 +1014,7 @@ impl EditorScene {
         if self.ui_errors {
             self.last_errors = self.errors.len();
             let mut ui_errors = self.ui_errors;
-            ui.window(im_str!("Errors"))
+            Window::new(im_str!("Errors"))
                 .position([320.0, 140.0], Condition::FirstUseEver)
                 .size([300.0, 400.0], Condition::FirstUseEver)
                 .horizontal_scrollbar(true)
@@ -1382,7 +1381,7 @@ impl EditPrefab {
     fn menu(&mut self, ui: &Ui) {
         ui.menu(im_str!("Filter..."), true, || {
             ui.input_text(im_str!(""), &mut self.filter).build();
-            if ui.menu_item(im_str!("Clear")).build(ui) {
+            if MenuItem::new(im_str!("Clear")).build(ui) {
                 self.filter.clear();
             }
         });
@@ -1640,7 +1639,7 @@ trait UiExt {
 
 impl<'a> UiExt for Ui<'a> {
     fn fits_width(&self, element_width: f32) -> usize {
-        let [width, _] = self.get_window_size();
+        let [width, _] = self.window_size();
         std::cmp::max(((width - 20.0) / (element_width + 8.0)) as usize, 1)
     }
 
@@ -1654,7 +1653,7 @@ impl<'a> UiExt for Ui<'a> {
 
     fn tool_icon(&self, active: bool, icon: &tools::ToolIcon, fallback: &ImStr) -> bool {
         if let &tools::ToolIcon::Loaded { tex, uv0, uv1, tint } = icon {
-            self.image(tex, [32.0, 32.0])
+            Image::new(tex, [32.0, 32.0])
                 .uv0(uv0)
                 .uv1(uv1)
                 .border_col(self.frame_color(active))
@@ -1684,13 +1683,13 @@ fn objtree_menu_root<'e>(ui: &Ui, ty: TypeRef<'e>, name: &str, selection: &mut O
 fn objtree_menu_node<'e>(ui: &Ui, ty: TypeRef<'e>, selection: &mut Option<TypeRef<'e>>) {
     let mut children: Vec<_> = ty.children().collect();
     if children.is_empty() {
-        if ui.menu_item(&im_str!("{}", ty.name)).build(ui) {
+        if MenuItem::new(&im_str!("{}", ty.name)).build(ui) {
             *selection = Some(ty);
         }
     } else {
         children.sort_by_key(|t| &t.get().name);
         ui.menu(&im_str!("{}", ty.name), true, || {
-            if ui.menu_item(&im_str!("{}", ty.name)).build(ui) {
+            if MenuItem::new(&im_str!("{}", ty.name)).build(ui) {
                 *selection = Some(ty);
             }
             ui.separator();

@@ -55,7 +55,7 @@ impl ToolBehavior for Place {
             let mut keep_editor = true;
             if let Some(ref mut edit) = pal.edit {
                 let fab = &mut pal.fab;
-                ui.window(&im_str!("Palette: {}##place/{}", edit.fab.path, i))
+                Window::new(&im_str!("Palette: {}##place/{}", edit.fab.path, i))
                     .opened(&mut keep_editor)
                     .position(ui.io().mouse_pos, Condition::Appearing)
                     .size([350.0, 500.0], Condition::FirstUseEver)
@@ -63,11 +63,11 @@ impl ToolBehavior for Place {
                     .menu_bar(true)
                     .build(ui, || {
                         ui.menu_bar(|| {
-                            if ui.menu_item(im_str!("Apply")).build(ui) {
+                            if MenuItem::new(im_str!("Apply")).build(ui) {
                                 fab.clone_from(&edit.fab);
                             }
                             ui.separator();
-                            if ui.menu_item(im_str!("Remove")).build(ui) {
+                            if MenuItem::new(im_str!("Remove")).build(ui) {
                                 keep = false;
                             }
                             ui.separator();
