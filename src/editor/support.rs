@@ -244,10 +244,10 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
         if logical_size.width > 0.0 && logical_size.height > 0.0 {
             imgui.io_mut().display_size = [logical_size.width as f32, logical_size.height as f32];
             imgui.io_mut().display_framebuffer_scale = [hidpi_factor as f32, hidpi_factor as f32];
+            imgui.io_mut().font_global_scale = 1.0 / hidpi_factor as f32;
             imgui.io_mut().delta_time = delta_s;
 
             let ui = imgui.frame();
-            ui.set_window_font_scale(1.0 / hidpi_factor as f32);
             if !scene.run_ui(&ui, &mut renderer) {
                 break;
             }
