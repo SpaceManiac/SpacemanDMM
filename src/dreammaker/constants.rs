@@ -4,6 +4,7 @@ use std::ops;
 use std::path::Path;
 
 use linked_hash_map::LinkedHashMap;
+use ordered_float::OrderedFloat;
 
 use super::{DMError, Location, HasLocation, Context};
 use super::objtree::*;
@@ -13,7 +14,7 @@ use super::preprocessor::DefineMap;
 /// An absolute typepath and optional variables.
 ///
 /// The path may involve `/proc` or `/verb` references.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Hash, Eq, PartialEq, Debug)]
 pub struct Pop {
     pub path: TreePath,
     pub vars: LinkedHashMap<String, Constant>,
@@ -38,7 +39,7 @@ impl fmt::Display for Pop {
 ///
 /// This is intended to represent the degree to which constants are evaluated
 /// before being displayed in DreamMaker.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum Constant {
     /// The literal `null`.
     Null(Option<TreePath>),
@@ -64,6 +65,44 @@ pub enum Constant {
     /// A floating-point literal.
     Float(f32),
 }
+
+// Manual Hash and Eq impls using OrderedFloat, so that we get the desired
+// upstream properties without having to wrap/unwrap at all hours of the day.
+impl std::hash::Hash for Constant {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(&self).hash(state);
+        match self {
+            Constant::Null(p) => p.hash(state),
+            Constant::New { type_, args } => (type_, args).hash(state),
+            Constant::List(list) => list.hash(state),
+            Constant::Call(f, args) => (f, args).hash(state),
+            Constant::Prefab(pop) => pop.hash(state),
+            Constant::String(s) => s.hash(state),
+            Constant::Resource(s) => s.hash(state),
+            Constant::Int(i) => i.hash(state),
+            Constant::Float(f) => OrderedFloat(*f).hash(state),
+        }
+    }
+}
+
+impl std::cmp::PartialEq for Constant {
+    fn eq(&self, other: &Constant) -> bool {
+        match (self, other) {
+            (Constant::Null(p1), Constant::Null(p2)) => p1 == p2,
+            (Constant::New { type_: type1, args: args1 }, Constant::New { type_: type2, args: args2 }) => (type1, args1) == (type2, args2),
+            (Constant::List(l1), Constant::List(l2)) => l1 == l2,
+            (Constant::Call(f1, args1), Constant::Call(f2, args2)) => (f1, args1) == (f2, args2),
+            (Constant::Prefab(pop1), Constant::Prefab(pop2)) => pop1 == pop2,
+            (Constant::String(s1), Constant::String(s2)) => s1 == s2,
+            (Constant::Resource(s1), Constant::Resource(s2)) => s1 == s2,
+            (Constant::Int(i1), Constant::Int(i2)) => i1 == i2,
+            (Constant::Float(f1), Constant::Float(f2)) => OrderedFloat(*f1) == OrderedFloat(*f2),
+            _ => false,
+        }
+    }
+}
+
+impl std::cmp::Eq for Constant {}
 
 /// The constant functions which are represented as-is.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]

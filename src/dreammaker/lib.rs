@@ -7,6 +7,7 @@ extern crate interval_tree;
 extern crate lodepng;
 #[macro_use] extern crate bitflags;
 extern crate termcolor;
+extern crate ordered_float;
 
 use std::io;
 use std::path::Path;
