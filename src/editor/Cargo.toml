@@ -19,7 +19,6 @@ imgui = "0.0.21"
 imgui-gfx-renderer = "0.0.21"
 lodepng = "2.1.5"
 ndarray = "0.12.1"
-nfd = "0.0.4"
 divrem = "0.1.0"
 serde = "1.0.76"
 serde_derive = "1.0.76"
@@ -27,3 +26,7 @@ toml = "0.4.6"
 petgraph = { version = "0.4.9", default-features = false }
 weak-table = "0.2.3"
 slice-of-array = "0.2.0"
+
+[dependencies.nfd]
+git = "https://github.com/SpaceManiac/nfd-rs"
+branch = "zenity"
