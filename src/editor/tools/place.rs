@@ -39,13 +39,13 @@ impl ToolBehavior for Place {
             ui.tool_icon(
                 i == *pal_current,
                 pal.icon.prepare(Some(env), ctx),
-                im_str!("{}", pal.fab.path),
+                &im_str!("{}", pal.fab.path),
             );
             if ui.is_item_hovered() {
                 ui.tooltip_text(im_str!("{:#}", pal.fab));
-                if ui.imgui().is_mouse_clicked(ImMouseButton::Left) {
+                if ui.io()[MouseButton::Left] {
                     *pal_current = i;
-                } else if ui.imgui().is_mouse_clicked(ImMouseButton::Right) {
+                } else if ui.io()[MouseButton::Right] {
                     if pal.edit.is_none() {
                         pal.edit = Some(EditPrefab::new(pal.fab.clone()));
                     }
@@ -55,19 +55,19 @@ impl ToolBehavior for Place {
             let mut keep_editor = true;
             if let Some(ref mut edit) = pal.edit {
                 let fab = &mut pal.fab;
-                ui.window(im_str!("Palette: {}##place/{}", edit.fab.path, i))
+                ui.window(&im_str!("Palette: {}##place/{}", edit.fab.path, i))
                     .opened(&mut keep_editor)
-                    .position(ui.imgui().mouse_pos(), ImGuiCond::Appearing)
-                    .size((350.0, 500.0), ImGuiCond::FirstUseEver)
+                    .position(ui.io().mouse_pos, Condition::Appearing)
+                    .size([350.0, 500.0], Condition::FirstUseEver)
                     .horizontal_scrollbar(true)
                     .menu_bar(true)
-                    .build(|| {
+                    .build(ui, || {
                         ui.menu_bar(|| {
-                            if ui.menu_item(im_str!("Apply")).build() {
+                            if ui.menu_item(im_str!("Apply")).build(ui) {
                                 fab.clone_from(&edit.fab);
                             }
                             ui.separator();
-                            if ui.menu_item(im_str!("Remove")).build() {
+                            if ui.menu_item(im_str!("Remove")).build(ui) {
                                 keep = false;
                             }
                             ui.separator();
@@ -91,7 +91,7 @@ impl ToolBehavior for Place {
         if i % count != 0 {
             ui.same_line(0.0);
         }
-        if ui.button(im_str!("+"), (34.0, 34.0)) {
+        if ui.button(im_str!("+"), [34.0, 34.0]) {
             ui.open_popup(im_str!("place_tool_add"));
         }
         if ui.is_item_hovered() {
@@ -104,7 +104,7 @@ impl ToolBehavior for Place {
             if let Some(sel) = selection {
                 let fab = Prefab::from_path(sel.path.to_owned());
                 let mut entry = PaletteEntry::new(env, fab);
-                if ui.imgui().key_shift() {
+                if ui.io().key_shift {
                     entry.edit = Some(EditPrefab::new(entry.fab.clone()));
                 }
 

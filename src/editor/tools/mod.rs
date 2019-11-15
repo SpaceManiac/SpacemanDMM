@@ -12,7 +12,7 @@ use {History, Environment};
 
 mod place;
 
-pub const NO_TINT: ImVec4 = ImVec4 { x: 1.0, y: 1.0, z: 1.0, w: 1.0 };
+pub const NO_TINT: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
 pub struct Tool {
     pub name: &'static str,
@@ -27,17 +27,17 @@ pub enum ToolIcon {
     Dmi {
         icon: PathBuf,
         icon_state: String,
-        tint: ImVec4,
+        tint: [f32; 4],
         dir: i32,
     },
     EmbeddedPng {
         data: &'static [u8],
     },
     Loaded {
-        tex: ImTexture,
-        uv0: ImVec2,
-        uv1: ImVec2,
-        tint: Option<ImVec4>,
+        tex: TextureId,
+        uv0: [f32; 2],
+        uv1: [f32; 2],
+        tint: Option<[f32; 4]>,
     },
 }
 

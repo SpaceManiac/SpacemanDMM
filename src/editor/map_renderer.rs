@@ -15,7 +15,7 @@ use dmm_tools::minimap::{self, GetVar};
 
 use dmi::*;
 use map_repr::AtomMap;
-use imgui::ImTexture;
+use imgui::TextureId;
 
 const TILE_SIZE: u32 = 32;
 
@@ -71,7 +71,7 @@ pub struct RenderedMap {
     pub duration: [f32; 2],
     pub thumbnail: Texture,
     pub thumbnail_target: RenderTargetView,
-    pub thumbnail_id: Option<ImTexture>,
+    pub thumbnail_id: Option<TextureId>,
 
     vbuf: gfx::handle::Buffer<Resources, Vertex>,
     ibuf: gfx::handle::Buffer<Resources, u32>,
