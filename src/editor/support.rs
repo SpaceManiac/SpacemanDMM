@@ -12,9 +12,8 @@ struct MouseState {
 }
 
 pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
-    use gfx::{self, Device};
-    use gfx_window_glutin;
-    use glutin::{self, GlContext};
+    use gfx::Device;
+    use glutin::GlContext;
 
     let mut events_loop = glutin::EventsLoop::new();
     let context = glutin::ContextBuilder::new().with_vsync(true);
