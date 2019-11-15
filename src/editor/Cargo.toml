@@ -22,7 +22,7 @@ ndarray = "0.13.0"
 divrem = "0.1.0"
 serde = "1.0.76"
 serde_derive = "1.0.76"
-toml = "0.4.6"
+toml = "0.5.5"
 petgraph = { version = "0.4.9", default-features = false }
 weak-table = "0.2.3"
 slice-of-array = "0.2.0"
