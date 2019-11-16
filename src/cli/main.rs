@@ -51,7 +51,7 @@ fn main() {
 struct Context {
     dm_context: dm::Context,
     objtree: ObjectTree,
-    icon_cache: icon_cache::IconCache,
+    icon_cache: IconCache,
     exit_status: AtomicIsize,
     parallel: bool,
     procs: bool,
