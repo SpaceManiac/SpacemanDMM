@@ -462,6 +462,62 @@ fn fancy_layer_of<T: GetVar + ?Sized>(objtree: &ObjectTree, atom: &T) -> i32 {
     }
 }
 
+pub struct Sprite<'s> {
+    // filtering
+    pub category: u32,  // type
+
+    // visual appearance
+    pub icon: &'s str,
+    pub icon_state: &'s str,
+    pub dir: i32,
+    pub color: [u8; 4],  // [r, g, b, a]
+
+    // position
+    pub ofs_x: i32,  // pixel_x + pixel_w + step_x
+    pub ofs_y: i32,  // pixel_y + pixel_z + step_y
+
+    // sorting
+    pub plane: i32,
+    pub layer: i32,
+}
+
+impl<'s> Sprite<'s> {
+    pub fn from_vars<V: GetVar + ?Sized>(objtree: &'s ObjectTree, vars: &'s V) -> Sprite<'s> {
+        let pixel_x = vars.get_var("pixel_x", objtree).to_int().unwrap_or(0);
+        let pixel_y = vars.get_var("pixel_y", objtree).to_int().unwrap_or(0);
+        let pixel_w = vars.get_var("pixel_w", objtree).to_int().unwrap_or(0);
+        let pixel_z = vars.get_var("pixel_z", objtree).to_int().unwrap_or(0);
+        let step_x = vars.get_var("step_x", objtree).to_int().unwrap_or(0);
+        let step_y = vars.get_var("step_y", objtree).to_int().unwrap_or(0);
+
+        Sprite {
+            category: category_of(vars.get_path()),
+            icon: vars.get_var("icon", objtree).as_path_str().unwrap_or(""),
+            icon_state: vars.get_var("icon_state", objtree).as_str().unwrap_or(""),
+            dir: vars.get_var("dir", objtree).to_int().unwrap_or(::dmi::SOUTH),
+            color: color_of(objtree, vars),
+            ofs_x: pixel_x + pixel_w + step_x,
+            ofs_y: pixel_y + pixel_z + step_y,
+            plane: plane_of(objtree, vars),
+            layer: layer_of(objtree, vars),
+        }
+    }
+}
+
+fn category_of(path: &str) -> u32 {
+    if path.starts_with("/area") {
+        1
+    } else if path.starts_with("/turf") {
+        2
+    } else if path.starts_with("/obj") {
+        3
+    } else if path.starts_with("/mob") {
+        4
+    } else {
+        0
+    }
+}
+
 pub fn plane_of<T: GetVar + ?Sized>(objtree: &ObjectTree, atom: &T) -> i32 {
     match atom.get_var("plane", objtree) {
         &Constant::Int(i) => i,

@@ -9,9 +9,8 @@ use {Resources, Factory, Encoder, ColorFormat, RenderTargetView, Texture};
 use slice_of_array::prelude::*;
 
 use dm::objtree::ObjectTree;
-use dm::constants::Constant;
 use dmm_tools::dmm::Prefab;
-use dmm_tools::minimap::{self, GetVar};
+use dmm_tools::minimap::Sprite;
 
 use dmi::*;
 use map_repr::AtomMap;
@@ -300,56 +299,43 @@ impl ::std::hash::Hash for RenderPop {
 
 impl RenderPop {
     pub fn from_prefab(icons: &IconCache, objtree: &ObjectTree, fab: &Prefab) -> Option<RenderPop> {
-        let icon = match fab.get_var("icon", objtree) {
-            &Constant::Resource(ref path) | &Constant::String(ref path) => path,
-            _ => return None,
-        };
-        let icon_state = match fab.get_var("icon_state", objtree) {
-            &Constant::String(ref string) => string,
-            _ => "",
-        };
-        let dir = fab.get_var("dir", objtree).to_int().unwrap_or(::dmi::SOUTH);
+        RenderPop::from_sprite(icons, &Sprite::from_vars(objtree, fab))
+    }
 
-        let (width, height, uv);
-        let texture_id = match icons.get_index(icon.as_ref()) {
+    pub fn from_sprite(icons: &IconCache, sprite: &Sprite) -> Option<RenderPop> {
+        if sprite.icon.is_empty() {
+            return None;
+        }
+
+        let texture_id = match icons.get_index(sprite.icon.as_ref()) {
             Some(id) => id,
             None => return None,  // couldn't load
         };
-        {
-            let icon_file = icons.get_icon(texture_id);
-            width = icon_file.metadata.width as f32;
-            height = icon_file.metadata.height as f32;
-            uv = match icon_file.uv_of(&icon_state, dir) {
-                Some(rect) => rect,
-                None => return None,
-            };
-        }
+        let icon_file = icons.get_icon(texture_id);
+        let width = icon_file.metadata.width as f32;
+        let height = icon_file.metadata.height as f32;
+        let uv = match icon_file.uv_of(sprite.icon_state, sprite.dir) {
+            Some(rect) => rect,
+            None => return None,
+        };
 
-        let color = minimap::color_of(objtree, fab);
         let color = [
-            color[0] as f32 / 255.0,
-            color[1] as f32 / 255.0,
-            color[2] as f32 / 255.0,
-            color[3] as f32 / 255.0,
+            sprite.color[0] as f32 / 255.0,
+            sprite.color[1] as f32 / 255.0,
+            sprite.color[2] as f32 / 255.0,
+            sprite.color[3] as f32 / 255.0,
         ];
 
-        let pixel_x = fab.get_var("pixel_x", objtree).to_int().unwrap_or(0);
-        let pixel_y = fab.get_var("pixel_y", objtree).to_int().unwrap_or(0);
-        let pixel_w = fab.get_var("pixel_w", objtree).to_int().unwrap_or(0);
-        let pixel_z = fab.get_var("pixel_z", objtree).to_int().unwrap_or(0);
-        let step_x = fab.get_var("step_x", objtree).to_int().unwrap_or(0);
-        let step_y = fab.get_var("step_y", objtree).to_int().unwrap_or(0);
-
         Some(RenderPop {
-            category: category_of(&fab.path) as u32,
+            category: sprite.category,
             texture: texture_id as u32,
             uv,
             color,
             size: [width, height],
-            ofs_x: pixel_x + pixel_w + step_x,
-            ofs_y: pixel_y + pixel_z + step_y,
-            plane: minimap::plane_of(objtree, fab),
-            layer: minimap::layer_of(objtree, fab),
+            ofs_x: sprite.ofs_x,
+            ofs_y: sprite.ofs_y,
+            plane: sprite.plane,
+            layer: sprite.layer,
         })
     }
 
@@ -383,18 +369,4 @@ impl DrawCall {
 
 fn to_seconds(duration: ::std::time::Duration) -> f32 {
     duration.as_secs() as f32 + duration.subsec_nanos() as f32 / 1_000_000_000.0
-}
-
-fn category_of(path: &str) -> u32 {
-    if path.starts_with("/area") {
-        1
-    } else if path.starts_with("/turf") {
-        2
-    } else if path.starts_with("/obj") {
-        3
-    } else if path.starts_with("/mob") {
-        4
-    } else {
-        0
-    }
 }
