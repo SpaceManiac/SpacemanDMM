@@ -440,6 +440,40 @@ impl GetVar for Prefab {
     }
 }
 
+impl GetVar for Type {
+    fn get_path(&self) -> &str {
+        &self.path
+    }
+
+    fn get_var_inner<'b>(&'b self, key: &str, objtree: &'b ObjectTree) -> Option<&'b Constant> {
+        let mut current = Some(self);
+        while let Some(t) = current.take() {
+            if let Some(v) = t.vars.get(key) {
+                return Some(v.value.constant.as_ref().unwrap_or(Constant::null()));
+            }
+            current = objtree.parent_of(t);
+        }
+        None
+    }
+}
+
+impl<'a> GetVar for TypeRef<'a> {
+    fn get_path(&self) -> &str {
+        &self.path
+    }
+
+    fn get_var_inner<'b>(&'b self, key: &str, _: &'b ObjectTree) -> Option<&'b Constant> {
+        let mut current = Some(*self);
+        while let Some(t) = current.take() {
+            if let Some(v) = t.get().vars.get(key) {
+                return Some(v.value.constant.as_ref().unwrap_or(Constant::null()));
+            }
+            current = t.parent_type();
+        }
+        None
+    }
+}
+
 // ----------------------------------------------------------------------------
 // Renderer-agnostic sprite structure
 
