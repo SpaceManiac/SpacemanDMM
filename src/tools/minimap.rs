@@ -493,7 +493,7 @@ pub fn color_of<T: GetVar + ?Sized>(objtree: &ObjectTree, atom: &T) -> [u8; 4] {
         &Constant::String(ref color) if color.starts_with("#") => {
             let mut sum = 0;
             for ch in color[1..color.len()].chars() {
-                sum = 16 * sum + ch.to_digit(16).unwrap();
+                sum = 16 * sum + ch.to_digit(16).unwrap_or(0);
             }
             if color.len() == 7 {  // #rrggbb
                 [(sum >> 16) as u8, (sum >> 8) as u8, sum as u8, alpha]
@@ -508,6 +508,15 @@ pub fn color_of<T: GetVar + ?Sized>(objtree: &ObjectTree, atom: &T) -> [u8; 4] {
                 [255, 255, 255, alpha]  // invalid
             }
         }
+        &Constant::String(ref color) if color == "red" => [255, 0, 0, alpha],
+        &Constant::String(ref color) if color == "green" => [0, 255, 0, alpha],
+        &Constant::String(ref color) if color == "blue" => [0, 0, 255, alpha],
+        &Constant::String(ref color) if color == "black" => [0, 0, 0, alpha],
+        &Constant::String(ref color) if color == "white" => [255, 255, 255, alpha],
+        &Constant::String(ref color) if color == "yellow" => [255, 255, 0, alpha],
+        &Constant::String(ref color) if color == "cyan" => [0, 255, 255, alpha],
+        &Constant::String(ref color) if color == "magenta" => [255, 0, 255, alpha],
+        // TODO: color matrix support?
         _ => [255, 255, 255, alpha],
     }
 }
