@@ -762,6 +762,7 @@ impl EditorScene {
                 }
             });
 
+        let context_popup_id = im_str!("context");
         if !ui.io().want_capture_mouse {
             if ui.is_mouse_clicked(MouseButton::Left) {
                 if let Some(env) = self.environment.as_ref() {
@@ -780,7 +781,7 @@ impl EditorScene {
             if ui.is_mouse_clicked(MouseButton::Right) {
                 if let Some(tile) = self.target_tile {
                     self.context_tile = Some(tile);
-                    ui.open_popup(im_str!("context"));
+                    ui.open_popup(context_popup_id);
                 }
             }
 
@@ -795,7 +796,7 @@ impl EditorScene {
 
         if let Some((x, y)) = self.context_tile {
             let mut open = false;
-            ui.popup(im_str!("context"), || {
+            ui.popup(context_popup_id, || {
                 open = true;
 
                 if let Some(map) = self.maps.get_mut(self.map_current) {

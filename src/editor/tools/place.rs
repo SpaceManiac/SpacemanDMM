@@ -29,6 +29,8 @@ impl ToolBehavior for Place {
         let mut i = 0;
         let Place { palette, pal_current } = self;
 
+        let add_popup_id = im_str!("place_tool_add");
+
         let count = ui.fits_width(34.0);
         palette.retain_mut(|pal| {
             if i % count != 0 {
@@ -92,13 +94,13 @@ impl ToolBehavior for Place {
             ui.same_line(0.0);
         }
         if ui.button(im_str!("+"), [34.0, 34.0]) {
-            ui.open_popup(im_str!("place_tool_add"));
+            ui.open_popup(add_popup_id);
         }
         if ui.is_item_hovered() {
             ui.tooltip_text(im_str!("Add"));
         }
 
-        ui.popup(im_str!("place_tool_add"), || {
+        ui.popup(add_popup_id, || {
             let mut selection = None;
             ui.objtree_menu(env, &mut selection);
             if let Some(sel) = selection {
