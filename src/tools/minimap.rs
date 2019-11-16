@@ -309,7 +309,7 @@ pub fn get_atom_list<'a>(
 }
 
 // ----------------------------------------------------------------------------
-// Atoms and related utilities
+// Atoms
 
 #[derive(Debug, Clone)]
 pub struct Atom<'a> {
@@ -365,6 +365,9 @@ impl<'a> Atom<'a> {
         self.vars.insert(key.into(), value);
     }
 }
+
+// ----------------------------------------------------------------------------
+// Vars abstraction
 
 pub trait GetVar {
     fn get_path(&self) -> &str;
@@ -428,35 +431,13 @@ impl GetVar for Prefab {
     }
 }
 
-fn fancy_layer_of<T: GetVar + ?Sized>(objtree: &ObjectTree, atom: &T) -> i32 {
-    let p = atom.get_path();
-    if subtype(p, "/turf/open/floor/plating/") || subtype(p, "/turf/open/space/") {
-        -10_000  // under everything
-    } else if subtype(p, "/turf/closed/mineral/") {
-        -3_000   // above hidden stuff and plating but below walls
-    } else if subtype(p, "/turf/open/floor/") || subtype(p, "/turf/closed/") {
-        -2_000   // above hidden pipes and wires
-    } else if subtype(p, "/turf/") {
-        -10_000  // under everything
-    } else if subtype(p, "/obj/effect/turf_decal/") {
-        -1_000   // above turfs
-    } else if subtype(p, "/obj/structure/disposalpipe/") {
-        -6_000
-    } else if subtype(p, "/obj/machinery/atmospherics/pipe/") && !p.contains("visible") {
-        -5_000
-    } else if subtype(p, "/obj/structure/cable/") {
-        -4_000
-    } else if subtype(p, "/obj/machinery/power/terminal/") {
-        -3_500
-    } else if subtype(p, "/obj/structure/lattice/") {
-        -8_000
-    } else if subtype(p, "/obj/machinery/navbeacon/") {
-        -3_000
-    } else {
-        layer_of(objtree, atom)
-    }
-}
+// ----------------------------------------------------------------------------
+// Renderer-agnostic sprite structure
 
+/// A Sprite is a fragment of an atom's appearance.
+///
+/// Every atom has a default sprite, which may be disabled, and a list of
+/// overlays.
 pub struct Sprite<'s> {
     // filtering
     pub category: u32,  // type
@@ -513,7 +494,7 @@ fn category_of(path: &str) -> u32 {
     }
 }
 
-pub fn plane_of<T: GetVar + ?Sized>(objtree: &ObjectTree, atom: &T) -> i32 {
+fn plane_of<T: GetVar + ?Sized>(objtree: &ObjectTree, atom: &T) -> i32 {
     match atom.get_var("plane", objtree) {
         &Constant::Int(i) => i,
         other => {
@@ -523,7 +504,7 @@ pub fn plane_of<T: GetVar + ?Sized>(objtree: &ObjectTree, atom: &T) -> i32 {
     }
 }
 
-pub fn layer_of<T: GetVar + ?Sized>(objtree: &ObjectTree, atom: &T) -> i32 {
+fn layer_of<T: GetVar + ?Sized>(objtree: &ObjectTree, atom: &T) -> i32 {
     match atom.get_var("layer", objtree) {
         &Constant::Int(i) => (i % 1000) * 1000,
         &Constant::Float(f) => ((f % 1000.) * 1000.) as i32,
@@ -569,6 +550,35 @@ pub fn color_of<T: GetVar + ?Sized>(objtree: &ObjectTree, atom: &T) -> [u8; 4] {
         &Constant::String(ref color) if color == "magenta" => [255, 0, 255, alpha],
         // TODO: color matrix support?
         _ => [255, 255, 255, alpha],
+    }
+}
+
+fn fancy_layer_of<T: GetVar + ?Sized>(objtree: &ObjectTree, atom: &T) -> i32 {
+    let p = atom.get_path();
+    if subtype(p, "/turf/open/floor/plating/") || subtype(p, "/turf/open/space/") {
+        -10_000  // under everything
+    } else if subtype(p, "/turf/closed/mineral/") {
+        -3_000   // above hidden stuff and plating but below walls
+    } else if subtype(p, "/turf/open/floor/") || subtype(p, "/turf/closed/") {
+        -2_000   // above hidden pipes and wires
+    } else if subtype(p, "/turf/") {
+        -10_000  // under everything
+    } else if subtype(p, "/obj/effect/turf_decal/") {
+        -1_000   // above turfs
+    } else if subtype(p, "/obj/structure/disposalpipe/") {
+        -6_000
+    } else if subtype(p, "/obj/machinery/atmospherics/pipe/") && !p.contains("visible") {
+        -5_000
+    } else if subtype(p, "/obj/structure/cable/") {
+        -4_000
+    } else if subtype(p, "/obj/machinery/power/terminal/") {
+        -3_500
+    } else if subtype(p, "/obj/structure/lattice/") {
+        -8_000
+    } else if subtype(p, "/obj/machinery/navbeacon/") {
+        -3_000
+    } else {
+        layer_of(objtree, atom)
     }
 }
 
