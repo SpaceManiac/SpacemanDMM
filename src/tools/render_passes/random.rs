@@ -1,5 +1,6 @@
 use super::*;
 
+use rand::Rng;
 use rand::seq::SliceRandom;
 
 #[derive(Default)]
@@ -59,7 +60,6 @@ impl RenderPass for Random {
         atom: &mut Atom<'a>,
         objtree: &'a ObjectTree,
     ) {
-        use rand::Rng;
         let mut rng = ::rand::thread_rng();
 
         const CONTRABAND_POSTERS: u32 = 44;
@@ -103,12 +103,27 @@ impl RenderPass for Random {
                     atom.set_var("icon_state", c.clone());
                 }
             }
-        } else if atom.istype("/obj/item/lipstick/random/") {
-            atom.set_var("icon_state", Constant::string("lipstick"));
+        }
+    }
+
+    fn adjust_sprite<'a>(&self,
+        atom: &Atom<'a>,
+        sprite: &mut Sprite<'a>,
+        _: &'a ObjectTree,
+    ) {
+        let mut rng = ::rand::thread_rng();
+
+        if atom.istype("/obj/item/lipstick/random/") {
+            sprite.icon_state = "lipstick";
             // random color is not outwardly visible
         } else if atom.istype("/obj/item/device/tape/random/") {
-            let icon = format!("tape_{}", ["white", "blue", "red", "yellow", "purple"].choose(&mut rng).unwrap());
-            atom.set_var("icon_state", Constant::string(icon));
+            sprite.icon_state = [
+                "tape_white",
+                "tape_blue",
+                "tape_red",
+                "tape_yellow",
+                "tape_purple",
+            ].choose(&mut rng).unwrap();
         }
     }
 }

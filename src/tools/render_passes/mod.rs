@@ -202,12 +202,13 @@ impl RenderPass for FakeGlass {
 #[derive(Default)]
 pub struct Pretty;
 impl RenderPass for Pretty {
-    fn adjust_vars<'a>(&self,
-        atom: &mut Atom<'a>,
+    fn adjust_sprite<'a>(&self,
+        atom: &Atom<'a>,
+        sprite: &mut Sprite<'a>,
         _: &'a ObjectTree,
     ) {
         if atom.istype("/obj/structure/bookcase/") {
-            atom.set_var("icon_state", Constant::string("book-0"));
+            sprite.icon_state = "book-0";
         }
     }
 
