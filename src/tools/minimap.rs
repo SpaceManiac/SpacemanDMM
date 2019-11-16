@@ -554,8 +554,14 @@ pub fn color_of<T: GetVar + ?Sized>(objtree: &ObjectTree, atom: &T) -> [u8; 4] {
 }
 
 fn fancy_layer_of<T: GetVar + ?Sized>(objtree: &ObjectTree, atom: &T) -> i32 {
-    let p = atom.get_path();
-    if subtype(p, "/turf/open/floor/plating/") || subtype(p, "/turf/open/space/") {
+    match fancy_layer_for_path(atom.get_path()) {
+        Some(layer) => layer,
+        None => layer_of(objtree, atom),
+    }
+}
+
+pub fn fancy_layer_for_path(p: &str) -> Option<i32> {
+    Some(if subtype(p, "/turf/open/floor/plating/") || subtype(p, "/turf/open/space/") {
         -10_000  // under everything
     } else if subtype(p, "/turf/closed/mineral/") {
         -3_000   // above hidden stuff and plating but below walls
@@ -578,8 +584,8 @@ fn fancy_layer_of<T: GetVar + ?Sized>(objtree: &ObjectTree, atom: &T) -> i32 {
     } else if subtype(p, "/obj/machinery/navbeacon/") {
         -3_000
     } else {
-        layer_of(objtree, atom)
-    }
+        return None
+    })
 }
 
 // ----------------------------------------------------------------------------
