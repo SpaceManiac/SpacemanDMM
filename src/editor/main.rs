@@ -518,12 +518,12 @@ impl EditorScene {
                     .enabled(false)
                     .build(ui);
                 MenuItem::new(im_str!("Show extra variables"))
-                    .build_with_ref(ui, &mut self.ui_extra_vars);
+                    .build_checkbox(ui, &mut self.ui_extra_vars);
                 ui.separator();
                 MenuItem::new(im_str!("Stacked rendering"))
-                    .build_with_ref(ui, &mut self.stacked_rendering);
+                    .build_checkbox(ui, &mut self.stacked_rendering);
                 MenuItem::new(im_str!("Invert order"))
-                    .build_with_ref(ui, &mut self.stacked_inverted);
+                    .build_checkbox(ui, &mut self.stacked_inverted);
                 ui.separator();
                 for &zoom in [0.5, 1.0, 2.0, 4.0].iter() {
                     if MenuItem::new(&im_str!("{}%", 100.0 * zoom)).selected(self.map_renderer.zoom == zoom).build(ui) {
@@ -538,35 +538,35 @@ impl EditorScene {
                 ui.separator();
                 MenuItem::new(im_str!("Area"))
                     .shortcut(ctrl_shortcut!("1"))
-                    .build_with_ref(ui, &mut self.map_renderer.layers[1]);
+                    .build_checkbox(ui, &mut self.map_renderer.layers[1]);
                 MenuItem::new(im_str!("Turf"))
                     .shortcut(ctrl_shortcut!("2"))
-                    .build_with_ref(ui, &mut self.map_renderer.layers[2]);
+                    .build_checkbox(ui, &mut self.map_renderer.layers[2]);
                 MenuItem::new(im_str!("Obj"))
                     .shortcut(ctrl_shortcut!("3"))
-                    .build_with_ref(ui, &mut self.map_renderer.layers[3]);
+                    .build_checkbox(ui, &mut self.map_renderer.layers[3]);
                 MenuItem::new(im_str!("Mob"))
                     .shortcut(ctrl_shortcut!("4"))
-                    .build_with_ref(ui, &mut self.map_renderer.layers[4]);
+                    .build_checkbox(ui, &mut self.map_renderer.layers[4]);
             });
             ui.menu(im_str!("Window"), true, || {
                 MenuItem::new(im_str!("Lock positions"))
-                    .build_with_ref(ui, &mut self.ui_lock_windows);
+                    .build_checkbox(ui, &mut self.ui_lock_windows);
                 if MenuItem::new(im_str!("Reset positions")).enabled(!self.ui_lock_windows).build(ui) {
                     window_positions_cond = Condition::Always;
                 }
                 ui.separator();
                 MenuItem::new(im_str!("Errors"))
-                    .build_with_ref(ui, &mut self.ui_errors);
+                    .build_checkbox(ui, &mut self.ui_errors);
             });
             if self.ui_debug_mode {
                 ui.menu(im_str!("Debug"), true, || {
                     MenuItem::new(im_str!("Debug Window"))
-                        .build_with_ref(ui, &mut self.ui_debug_window);
+                        .build_checkbox(ui, &mut self.ui_debug_window);
                     MenuItem::new(im_str!("Style Editor"))
-                        .build_with_ref(ui, &mut self.ui_style_editor);
+                        .build_checkbox(ui, &mut self.ui_style_editor);
                     MenuItem::new(im_str!("ImGui Metrics"))
-                        .build_with_ref(ui, &mut self.ui_imgui_metrics);
+                        .build_checkbox(ui, &mut self.ui_imgui_metrics);
                 });
             }
             ui.menu(im_str!("Help"), true, || {
@@ -1678,6 +1678,18 @@ impl<'a> UiExt for Ui<'a> {
             self.style_color(StyleColor::FrameBgActive)
         } else {
             self.style_color(StyleColor::FrameBg)
+        }
+    }
+}
+
+trait MenuItemExt {
+    fn build_checkbox(self, ui: &Ui, selected: &mut bool);
+}
+
+impl<'a> MenuItemExt for MenuItem<'a> {
+    fn build_checkbox(self, ui: &Ui, selected: &mut bool) {
+        if self.selected(*selected).build(ui) {
+            *selected = !*selected;
         }
     }
 }
