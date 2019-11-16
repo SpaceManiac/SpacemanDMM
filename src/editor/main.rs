@@ -570,9 +570,17 @@ impl EditorScene {
                 });
             }
             ui.menu(im_str!("Help"), true, || {
-                MenuItem::new(im_str!("About SpacemanDMM"))
-                    .enabled(false)
-                    .build(ui);
+                ui.menu(im_str!("About SpacemanDMM"), true, || {
+                    ui.bullet_text(&im_str!(
+                        "{} {}  Copyright (C) 2017-2019  Tad Hardesty",
+                        env!("CARGO_PKG_NAME"),
+                        env!("CARGO_PKG_VERSION"),
+                    ));
+                    ui.bullet_text(&im_str!("{}", include_str!(concat!(env!("OUT_DIR"), "/build-info.txt"))));
+                    ui.bullet_text(im_str!("This program comes with ABSOLUTELY NO WARRANTY. This is free software,\n\
+                        and you are welcome to redistribute it under the conditions of the GNU\n\
+                        General Public License version 3."));
+                });
                 MenuItem::new(im_str!("Open-source licenses"))
                     .enabled(false)
                     .build(ui);

@@ -31,3 +31,7 @@ slice-of-array = "0.2.0"
 [dependencies.nfd]
 git = "https://github.com/SpaceManiac/nfd-rs"
 branch = "zenity"
+
+[build-dependencies]
+chrono = "0.4.0"
+git2 = { version = "0.10", default-features = false }
