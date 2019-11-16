@@ -141,6 +141,7 @@ impl Constant {
     // ------------------------------------------------------------------------
     // Conversions
 
+    #[inline]
     pub fn is_null(&self) -> bool {
         match *self {
             Constant::Null(_) => true,
@@ -181,12 +182,17 @@ impl Constant {
         }
     }
 
-    pub fn as_path(&self) -> Option<&Path> {
+    pub fn as_path_str(&self) -> Option<&str> {
         match *self {
             Constant::String(ref s) |
-            Constant::Resource(ref s) => Some(s.as_ref()),
+            Constant::Resource(ref s) => Some(s),
             _ => None,
         }
+    }
+
+    #[inline]
+    pub fn as_path(&self) -> Option<&Path> {
+        self.as_path_str().map(Path::new)
     }
 
     // ------------------------------------------------------------------------
