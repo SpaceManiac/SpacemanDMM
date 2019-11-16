@@ -181,10 +181,9 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
         }
     }
 
-    // sorts the atom list and renders them onto the output image
-    atoms.sort_by_key(|a| fancy_layer_of(objtree, a));
-    let mut map_image = Image::new_rgba(len_x as u32 * TILE_SIZE, len_y as u32 * TILE_SIZE);
-    'atom: for atom in atoms {
+    // turn the atom list into a sprite list
+    let mut sprites = Vec::with_capacity(atoms.len());
+    'atom: for atom in atoms.iter() {
         // At this time, space is invisible. Earlier steps need to process it.
         for pass in render_passes.iter() {
             if !pass.late_filter(&atom, objtree) {
@@ -192,23 +191,33 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
             }
         }
 
-        let sprite = Sprite::from_vars(objtree, &atom);
+        let mut sprite = Sprite::from_vars(objtree, atom);
+        for pass in render_passes {
+            pass.adjust_sprite(&atom, &mut sprite, objtree);
+        }
         if sprite.icon.is_empty() {
             println!("no icon: {}", atom.type_.path);
             continue;
         }
+        sprites.push((atom.loc, sprite));
+    }
 
+    // sorts the atom list and renders them onto the output image
+    sprites.sort_by_key(|(_, s)| s.layer);
+
+    let mut map_image = Image::new_rgba(len_x as u32 * TILE_SIZE, len_y as u32 * TILE_SIZE);
+    for (loc, sprite) in sprites {
         let icon_file = match icon_cache.retrieve_shared(sprite.icon.as_ref()) {
             Some(icon_file) => icon_file,
-            None => continue 'atom,
+            None => continue,
         };
 
         if let Some(rect) = icon_file.rect_of(sprite.icon_state, sprite.dir) {
             let pixel_x = sprite.ofs_x;
             let pixel_y = sprite.ofs_y + icon_file.metadata.height as i32;
             let loc = (
-                ((atom.loc.0 - ctx.min.0 as u32) * TILE_SIZE) as i32 + pixel_x,
-                ((atom.loc.1 + 1 - min_y as u32) * TILE_SIZE) as i32 - pixel_y,
+                ((loc.0 - ctx.min.0 as u32) * TILE_SIZE) as i32 + pixel_x,
+                ((loc.1 + 1 - min_y as u32) * TILE_SIZE) as i32 - pixel_y,
             );
 
             if let Some((loc, rect)) = clip((map_image.width, map_image.height), loc, rect) {
@@ -551,41 +560,6 @@ pub fn color_of<T: GetVar + ?Sized>(objtree: &ObjectTree, atom: &T) -> [u8; 4] {
         // TODO: color matrix support?
         _ => [255, 255, 255, alpha],
     }
-}
-
-fn fancy_layer_of<T: GetVar + ?Sized>(objtree: &ObjectTree, atom: &T) -> i32 {
-    match fancy_layer_for_path(atom.get_path()) {
-        Some(layer) => layer,
-        None => layer_of(objtree, atom),
-    }
-}
-
-pub fn fancy_layer_for_path(p: &str) -> Option<i32> {
-    Some(if subtype(p, "/turf/open/floor/plating/") || subtype(p, "/turf/open/space/") {
-        -10_000  // under everything
-    } else if subtype(p, "/turf/closed/mineral/") {
-        -3_000   // above hidden stuff and plating but below walls
-    } else if subtype(p, "/turf/open/floor/") || subtype(p, "/turf/closed/") {
-        -2_000   // above hidden pipes and wires
-    } else if subtype(p, "/turf/") {
-        -10_000  // under everything
-    } else if subtype(p, "/obj/effect/turf_decal/") {
-        -1_000   // above turfs
-    } else if subtype(p, "/obj/structure/disposalpipe/") {
-        -6_000
-    } else if subtype(p, "/obj/machinery/atmospherics/pipe/") && !p.contains("visible") {
-        -5_000
-    } else if subtype(p, "/obj/structure/cable/") {
-        -4_000
-    } else if subtype(p, "/obj/machinery/power/terminal/") {
-        -3_500
-    } else if subtype(p, "/obj/structure/lattice/") {
-        -8_000
-    } else if subtype(p, "/obj/machinery/navbeacon/") {
-        -3_000
-    } else {
-        return None
-    })
 }
 
 // ----------------------------------------------------------------------------

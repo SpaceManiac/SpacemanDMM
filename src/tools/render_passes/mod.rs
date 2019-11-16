@@ -1,6 +1,6 @@
 use dm::objtree::*;
 use dm::constants::Constant;
-use minimap::{Atom, GetVar};
+use minimap::{Atom, GetVar, Sprite};
 
 pub mod transit_tube;
 pub mod random;
@@ -37,6 +37,12 @@ pub trait RenderPass: Sync {
     /// Adjust the variables of an atom.
     fn adjust_vars<'a>(&self,
         atom: &mut Atom<'a>,
+        objtree: &'a ObjectTree,
+    ) {}
+
+    fn adjust_sprite<'a>(&self,
+        atom: &Atom<'a>,
+        sprite: &mut Sprite<'a>,
         objtree: &'a ObjectTree,
     ) {}
 
@@ -86,6 +92,7 @@ pub const RENDER_PASSES: &[RenderPassInfo] = &[
     pass!(structures::GravityGen, "gravity-gen", "Expand the gravity generator to the full structure.", true),
     pass!(Wires, "only-powernet", "Render only power cables.", false),
     pass!(Pipes, "only-pipenet", "Render only atmospheric pipes.", false),
+    pass!(FancyLayers, "fancy-layers", "Layer atoms according to in-game rules.", true),
 ];
 
 pub fn configure(include: &str, exclude: &str) -> Vec<Box<dyn RenderPass>> {
@@ -251,4 +258,48 @@ impl RenderPass for Pipes {
     fn late_filter(&self, atom: &Atom, _: &ObjectTree) -> bool {
         atom.istype("/obj/machinery/atmospherics/pipe/")
     }
+}
+
+#[derive(Default)]
+pub struct FancyLayers;
+impl RenderPass for FancyLayers {
+    fn adjust_sprite<'a>(&self,
+        atom: &Atom<'a>,
+        sprite: &mut Sprite<'a>,
+        _: &'a ObjectTree,
+    ) {
+        sprite.plane = 0;
+        if let Some(layer) = fancy_layer_for_path(atom.get_path()) {
+            sprite.layer = layer;
+        }
+    }
+}
+
+fn fancy_layer_for_path(p: &str) -> Option<i32> {
+    use dm::objtree::subpath as subtype;
+    Some(if subtype(p, "/turf/open/floor/plating/") || subtype(p, "/turf/open/space/") {
+        -10_000  // under everything
+    } else if subtype(p, "/turf/closed/mineral/") {
+        -3_000   // above hidden stuff and plating but below walls
+    } else if subtype(p, "/turf/open/floor/") || subtype(p, "/turf/closed/") {
+        -2_000   // above hidden pipes and wires
+    } else if subtype(p, "/turf/") {
+        -10_000  // under everything
+    } else if subtype(p, "/obj/effect/turf_decal/") {
+        -1_000   // above turfs
+    } else if subtype(p, "/obj/structure/disposalpipe/") {
+        -6_000
+    } else if subtype(p, "/obj/machinery/atmospherics/pipe/") && !p.contains("visible") {
+        -5_000
+    } else if subtype(p, "/obj/structure/cable/") {
+        -4_000
+    } else if subtype(p, "/obj/machinery/power/terminal/") {
+        -3_500
+    } else if subtype(p, "/obj/structure/lattice/") {
+        -8_000
+    } else if subtype(p, "/obj/machinery/navbeacon/") {
+        -3_000
+    } else {
+        return None
+    })
 }
