@@ -731,8 +731,8 @@ impl EditorScene {
                                     Image::new(tex, [THUMBNAIL_SIZE as f32, THUMBNAIL_SIZE as f32])
                                         .border_col(ui.frame_color(is_current))
                                         .build(ui);
-                                    clicked = ui.is_item_hovered() && ui.io()[MouseButton::Left];
-                                    if clicked || (is_current && ui.is_item_hovered() && ui.io()[MouseButton::Left]) {
+                                    clicked = ui.is_item_hovered() && ui.is_mouse_clicked(MouseButton::Left);
+                                    if clicked || (is_current && ui.is_item_hovered() && ui.is_mouse_down(MouseButton::Left)) {
                                         let pos = ui.io().mouse_pos;
                                         map.center = [
                                             (pos[0] - start[0] - 1.0) * 32.0 * dims.0 as f32 / THUMBNAIL_SIZE as f32,
@@ -763,7 +763,7 @@ impl EditorScene {
             });
 
         if !ui.io().want_capture_mouse {
-            if ui.io()[MouseButton::Left] {
+            if ui.is_mouse_clicked(MouseButton::Left) {
                 if let Some(env) = self.environment.as_ref() {
                     if let Some(map) = self.maps.get_mut(self.map_current) {
                         let z = map.z_current as u32;
@@ -777,19 +777,19 @@ impl EditorScene {
                     }
                 }
             }
-            if ui.io()[MouseButton::Right] {
+            if ui.is_mouse_clicked(MouseButton::Right) {
                 if let Some(tile) = self.target_tile {
                     self.context_tile = Some(tile);
                     ui.open_popup(im_str!("context"));
                 }
             }
 
-            if ui.io()[MouseButton::Middle] && self.mouse_drag_pos.is_none() {
+            if ui.is_mouse_down(MouseButton::Middle) && self.mouse_drag_pos.is_none() {
                 self.mouse_drag_pos = Some(self.last_mouse_pos);
             }
         }
 
-        if !ui.io()[MouseButton::Middle] && self.mouse_drag_pos.is_some() {
+        if !ui.is_mouse_down(MouseButton::Middle) && self.mouse_drag_pos.is_some() {
             self.mouse_drag_pos = None;
         }
 
@@ -1670,7 +1670,7 @@ impl<'a> UiExt for Ui<'a> {
                 .border_col(self.frame_color(active))
                 .tint_col(tint.unwrap_or(self.style_color(StyleColor::Text)))
                 .build(self);
-            self.is_item_hovered() && self.io()[MouseButton::Left]
+            self.is_item_hovered() && self.is_mouse_clicked(MouseButton::Left)
         } else {
             self.button(fallback, [34.0, 34.0])
         }

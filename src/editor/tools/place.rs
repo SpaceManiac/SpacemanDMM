@@ -43,9 +43,9 @@ impl ToolBehavior for Place {
             );
             if ui.is_item_hovered() {
                 ui.tooltip_text(im_str!("{:#}", pal.fab));
-                if ui.io()[MouseButton::Left] {
+                if ui.is_mouse_clicked(MouseButton::Left) {
                     *pal_current = i;
-                } else if ui.io()[MouseButton::Right] {
+                } else if ui.is_mouse_clicked(MouseButton::Right) {
                     if pal.edit.is_none() {
                         pal.edit = Some(EditPrefab::new(pal.fab.clone()));
                     }
