@@ -4,10 +4,6 @@ version: '{build}'
 branches:
   only:
   - master
-environment:
-  matrix:
-    - BUILD_POSTFIX: ""
-    - BUILD_POSTFIX: "--release"
 shallow_clone: true
 image: Visual Studio 2017
 cache:
@@ -20,5 +16,5 @@ install:
   - rustc -Vv
   - cargo -V
 build_script:
-  - cargo build --verbose --all %BUILD_POSTFIX%
-  - cargo test --verbose --all %BUILD_POSTFIX%
+  - cargo build --verbose --all
+  - cargo test --verbose --all

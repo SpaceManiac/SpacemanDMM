@@ -4,13 +4,10 @@ rust:
 branches:
   only:
     - master
-env:
-  - BUILD_POSTFIX=
-  - BUILD_POSTFIX=--release
 cache: cargo
 install:
   - rustc -Vv
   - cargo -V
 script:
-  - cargo build --verbose --all $BUILD_POSTFIX
-  - cargo test --verbose --all $BUILD_POSTFIX
+  - cargo build --verbose --all
+  - cargo test --verbose --all
