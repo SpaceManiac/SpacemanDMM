@@ -567,6 +567,9 @@ impl EditorScene {
                         .build_checkbox(ui, &mut self.ui_style_editor);
                     MenuItem::new(im_str!("ImGui Metrics"))
                         .build_checkbox(ui, &mut self.ui_imgui_metrics);
+                    if MenuItem::new(im_str!("Disable"))
+                        .shortcut(im_str!("F3"))
+                        .build(ui) { self.ui_debug_mode = false; }
                 });
             }
             ui.menu(im_str!("Help"), true, || {
