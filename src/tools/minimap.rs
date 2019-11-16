@@ -192,68 +192,30 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
             }
         }
 
-        let icon = match atom.get_var("icon", objtree).as_path() {
-            Some(path) => path,
-            None => {
-                println!("no icon: {}", atom.type_.path);
-                continue;
-            }
-        };
-        let icon_state = atom.get_var("icon_state", objtree).as_str().unwrap_or("");
-        let dir = atom.get_var("dir", objtree).to_int().unwrap_or(::dmi::SOUTH);
+        let sprite = Sprite::from_vars(objtree, &atom);
+        if sprite.icon.is_empty() {
+            println!("no icon: {}", atom.type_.path);
+            continue;
+        }
 
-        let icon_file = match icon_cache.retrieve_shared(icon) {
+        let icon_file = match icon_cache.retrieve_shared(sprite.icon.as_ref()) {
             Some(icon_file) => icon_file,
             None => continue 'atom,
         };
 
-        if let Some(mut rect) = icon_file.rect_of(&icon_state, dir) {
-            let pixel_x = atom.get_var("pixel_x", ctx.objtree).to_int().unwrap_or(0);
-            let pixel_y = atom.get_var("pixel_y", ctx.objtree).to_int().unwrap_or(0) +
-                icon_file.metadata.height as i32;
-            let mut loc = (
+        if let Some(rect) = icon_file.rect_of(sprite.icon_state, sprite.dir) {
+            let pixel_x = sprite.ofs_x;
+            let pixel_y = sprite.ofs_y + icon_file.metadata.height as i32;
+            let loc = (
                 ((atom.loc.0 - ctx.min.0 as u32) * TILE_SIZE) as i32 + pixel_x,
                 ((atom.loc.1 + 1 - min_y as u32) * TILE_SIZE) as i32 - pixel_y,
             );
 
-            // OOB handling
-            if loc.0 < 0 {
-                rect.0 += (-loc.0) as u32;
-                match rect.2.checked_sub((-loc.0) as u32) {
-                    Some(s) => rect.2 = s,
-                    None => continue 'atom, // out of the viewport
-                }
-                loc.0 = 0;
+            if let Some((loc, rect)) = clip((map_image.width, map_image.height), loc, rect) {
+                map_image.composite(&icon_file.image, loc, rect, sprite.color);
             }
-            while loc.0 + rect.2 as i32 > map_image.width as i32 {
-                rect.2 -= 1;
-                if rect.2 == 0 {
-                    continue 'atom;
-                }
-            }
-            if loc.1 < 0 {
-                rect.1 += (-loc.1) as u32;
-                match rect.3.checked_sub((-loc.1) as u32) {
-                    Some(s) => rect.3 = s,
-                    None => continue 'atom, // out of the viewport
-                }
-                loc.1 = 0;
-            }
-            while loc.1 + rect.3 as i32 > map_image.height as i32 {
-                rect.3 -= 1;
-                if rect.3 == 0 {
-                    continue 'atom;
-                }
-            }
-            let loc = (loc.0 as u32, loc.1 as u32);
-
-            // HTML color parsing
-            let color = color_of(objtree, &atom);
-
-            // the real business
-            map_image.composite(&icon_file.image, loc, rect, color);
         } else {
-            let key = format!("bad icon: {}, state: {}", icon.display(), icon_state);
+            let key = format!("bad icon: {:?}, state: {:?}", sprite.icon, sprite.icon_state);
             if !ctx.errors.read().unwrap().contains(&key) {
                 println!("{}", key);
                 ctx.errors.write().unwrap().insert(key);
@@ -262,6 +224,39 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
     }
 
     Ok(map_image)
+}
+
+// OOB handling
+fn clip(bounds: (u32, u32), mut loc: (i32, i32), mut rect: (u32, u32, u32, u32)) -> Option<((u32, u32), (u32, u32, u32, u32))> {
+    if loc.0 < 0 {
+        rect.0 += (-loc.0) as u32;
+        match rect.2.checked_sub((-loc.0) as u32) {
+            Some(s) => rect.2 = s,
+            None => return None,  // out of the viewport
+        }
+        loc.0 = 0;
+    }
+    while loc.0 + rect.2 as i32 > bounds.0 as i32 {
+        rect.2 -= 1;
+        if rect.2 == 0 {
+            return None;
+        }
+    }
+    if loc.1 < 0 {
+        rect.1 += (-loc.1) as u32;
+        match rect.3.checked_sub((-loc.1) as u32) {
+            Some(s) => rect.3 = s,
+            None => return None,  // out of the viewport
+        }
+        loc.1 = 0;
+    }
+    while loc.1 + rect.3 as i32 > bounds.1 as i32 {
+        rect.3 -= 1;
+        if rect.3 == 0 {
+            return None;
+        }
+    }
+    Some(((loc.0 as u32, loc.1 as u32), rect))
 }
 
 pub fn get_atom_list<'a>(
