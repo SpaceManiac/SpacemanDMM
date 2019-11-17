@@ -83,10 +83,10 @@ impl AtomMap {
         for z in 0..dim_z {
             atom_map.levels.push(AtomZ::default());
             atom_map.defer_sort(z as u32, |defer| {
-                for ((y, x), key) in map.z_level(z).indexed_iter() {
-                    for fab in map.dictionary[key].iter() {
+                for (coord, key) in map.z_level(z).iter_top_down() {
+                    for fab in map.dictionary[&key].iter() {
                         let pop = defer.add_pop(fab, icons, objtree);
-                        defer.add_instance((x as u32, (dim_y - 1 - y) as u32), pop);
+                        defer.add_instance((coord.x as u32 - 1, coord.y as u32 - 1), pop);
                     }
                 }
             });

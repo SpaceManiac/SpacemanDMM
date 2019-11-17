@@ -98,9 +98,9 @@ pub struct Map {
     pub grid: Array3<Key>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct ZLevel<'a> {
-    grid: Grid<'a>,
+    pub grid: Grid<'a>,
 }
 
 pub type Grid<'a> = ndarray::ArrayView<'a, Key, ndarray::Dim<[usize; 2]>>;
@@ -114,18 +114,6 @@ pub struct Prefab {
 }
 
 impl Map {
-    pub fn from_file(path: &Path) -> Result<Map, DMError> {
-        let mut map = Map {
-            key_length: 0,
-            dictionary: Default::default(),
-            grid: Array3::default((1, 1, 1)),
-        };
-        read::parse_map(&mut map, File::open(path).map_err(|e| {
-            DMError::new(Location::default(), "i/o error").set_cause(e)
-        })?)?;
-        Ok(map)
-    }
-
     pub fn new(x: usize, y: usize, z: usize, turf: String, area: String) -> Map {
         assert!(x > 0 && y > 0 && z > 0, "({}, {}, {})", x, y, z);
 
@@ -150,6 +138,18 @@ impl Map {
             dictionary: BTreeMap::new(),
             grid: Array3::default((z, y, x)),
         }
+    }
+
+    pub fn from_file(path: &Path) -> Result<Map, DMError> {
+        let mut map = Map {
+            key_length: 0,
+            dictionary: Default::default(),
+            grid: Array3::default((1, 1, 1)),
+        };
+        read::parse_map(&mut map, File::open(path).map_err(|e| {
+            DMError::new(Location::default(), "i/o error").set_cause(e)
+        })?)?;
+        Ok(map)
     }
 
     pub fn to_file(&self, path: &Path) -> io::Result<()> {
@@ -183,21 +183,17 @@ impl Map {
     }
 
     #[inline]
-    pub fn z_level(&self, z: usize) -> Grid {
-        self.grid.index_axis(Axis(0), z)
+    pub fn z_level(&self, z: usize) -> ZLevel {
+        ZLevel { grid: self.grid.index_axis(Axis(0), z) }
     }
 
-    pub fn iter_levels<'a>(&'a self) -> impl Iterator<Item=ZLevel<'a>> + 'a {
-        self.grid.axis_iter(Axis(0)).map(|grid| ZLevel { grid })
+    pub fn iter_levels<'a>(&'a self) -> impl Iterator<Item=(i32, ZLevel<'a>)> + 'a {
+        self.grid.axis_iter(Axis(0)).enumerate().map(|(i, grid)| (i as i32 + 1, ZLevel { grid }))
     }
 
     #[inline]
     pub fn format_key(&self, key: Key) -> impl std::fmt::Display {
         FormatKey(self.key_length, key)
-    }
-
-    pub fn zero_to_one(&self, (x, y, z): (usize, usize, usize)) -> (usize, usize, usize) {
-        (x + 1, self.grid.dim().1 - y, z + 1)
     }
 }
 
@@ -212,7 +208,7 @@ impl std::ops::Index<Coord3> for Map {
 
 impl<'a> ZLevel<'a> {
     /// Iterate over the z-level in row-major order starting at the top-left.
-    pub fn iter<'b>(&'b self) -> impl Iterator<Item=(Coord2, Key)> + 'b {
+    pub fn iter_top_down<'b>(&'b self) -> impl Iterator<Item=(Coord2, Key)> + 'b {
         let dim = self.grid.dim();
         self.grid.indexed_iter().map(move |(c, k)| (Coord2::from_raw(c, dim), *k))
     }
@@ -258,6 +254,18 @@ impl fmt::Display for Prefab {
             write!(f, "}}")?;
         }
         Ok(())
+    }
+}
+
+impl fmt::Display for Coord2 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "({}, {})", self.x, self.y)
+    }
+}
+
+impl fmt::Display for Coord3 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "({}, {}, {})", self.x, self.y, self.z)
     }
 }
 

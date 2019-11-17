@@ -5,7 +5,7 @@ use ndarray::Axis;
 
 use dm::objtree::*;
 use dm::constants::Constant;
-use dmm::{Map, Grid, Prefab};
+use dmm::{Map, ZLevel, Prefab};
 use dmi::Image;
 use render_passes::{RenderPass, icon_smoothing};
 use icon_cache::IconCache;
@@ -19,7 +19,7 @@ const TILE_SIZE: u32 = 32;
 pub struct Context<'a> {
     pub objtree: &'a ObjectTree,
     pub map: &'a Map,
-    pub grid: Grid<'a>,
+    pub level: ZLevel<'a>,
     pub min: (usize, usize),
     pub max: (usize, usize),
     pub render_passes: &'a [Box<dyn RenderPass>],
@@ -31,7 +31,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
     let Context {
         objtree,
         map,
-        grid,
+        level,
         render_passes,
         bump,
         ..
@@ -39,7 +39,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
 
     // transform min/max from bottom-left-based to top-left-based
     // probably doesn't belong here
-    let (len_y, _) = ctx.grid.dim();
+    let (len_y, _) = level.grid.dim();
     let (min_y, max_y) = (len_y - ctx.max.1 - 1, len_y - ctx.min.1 - 1);
     let (len_x, len_y) = (ctx.max.0 - ctx.min.0 + 1, ctx.max.1 - ctx.min.1 + 1);
 
@@ -48,7 +48,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
     let mut underlays = Vec::new();
     let mut overlays = Vec::new();
 
-    for (y, row) in grid.axis_iter(Axis(0)).enumerate() {
+    for (y, row) in level.grid.axis_iter(Axis(0)).enumerate() {
         if y < min_y || y > max_y {
             continue;
         }

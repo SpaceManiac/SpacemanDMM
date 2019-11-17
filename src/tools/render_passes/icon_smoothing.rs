@@ -74,7 +74,7 @@ fn find_type_in_direction<'a>(ctx: Context, source: &Atom, direction: i32, flags
 
     let (dx, dy) = offset(direction);
     let new_loc = (source.loc.0 as i32 + dx, source.loc.1 as i32 + dy);
-    let (dim_y, dim_x) = ctx.grid.dim();
+    let (dim_y, dim_x) = ctx.level.grid.dim();
     if new_loc.0 < 0 || new_loc.1 < 0 || new_loc.0 >= dim_x as i32 || new_loc.1 >= dim_y as i32 {
         return flags & SMOOTH_BORDER != 0;
     }
@@ -83,7 +83,7 @@ fn find_type_in_direction<'a>(ctx: Context, source: &Atom, direction: i32, flags
     // TODO: make this not call get_atom_list way too many times
     let atom_list = get_atom_list(
         ctx.objtree,
-        &ctx.map.dictionary[&ctx.grid[ndarray::Dim([new_loc.1 as usize, new_loc.0 as usize])]],
+        &ctx.map.dictionary[&ctx.level.grid[ndarray::Dim([new_loc.1 as usize, new_loc.0 as usize])]],
         new_loc,
         ctx.render_passes,
         None,
@@ -199,13 +199,13 @@ fn diagonal_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, source: &
             'dirs: for &each in &[dir, left_45(dir), right_45(dir)] {
                 let (dx, dy) = offset(each);
                 let new_loc = (source.loc.0 as i32 + dx, source.loc.1 as i32 + dy);
-                let (dim_y, dim_x) = ctx.grid.dim();
+                let (dim_y, dim_x) = ctx.level.grid.dim();
                 if !(new_loc.0 < 0 || new_loc.1 < 0 || new_loc.0 >= dim_x as i32 || new_loc.1 >= dim_y as i32) {
                     let new_loc = (new_loc.0 as u32, new_loc.1 as u32);
                     // TODO: make this not call get_atom_list way too many times
                     let atom_list = get_atom_list(
                         ctx.objtree,
-                        &ctx.map.dictionary[&ctx.grid[ndarray::Dim([new_loc.1 as usize, new_loc.0 as usize])]],
+                        &ctx.map.dictionary[&ctx.level.grid[ndarray::Dim([new_loc.1 as usize, new_loc.0 as usize])]],
                         new_loc,
                         ctx.render_passes,
                         None,

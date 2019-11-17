@@ -327,7 +327,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                     let minimap_context = minimap::Context {
                         objtree: &objtree,
                         map: &map,
-                        grid: map.z_level(z),
+                        level: map.z_level(z),
                         min: (min.x - 1, min.y - 1),
                         max: (max.x - 1, max.y - 1),
                         render_passes: &render_passes,
