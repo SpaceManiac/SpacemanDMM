@@ -41,12 +41,12 @@ pub fn handle_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, loc: (u
     }
 }
 
-fn calculate_adjacencies(ctx: Context, loc: (u32, u32), atom: &Atom, flags: i32) -> i32 {
+fn calculate_adjacencies(ctx: Context, loc: (u32, u32), atom: &Atom, smooth_flags: i32) -> i32 {
     // TODO: anchored check
 
     let mut adjacencies = 0;
     let check_one = |direction, flag| {
-        if find_type_in_direction(ctx, loc, atom, direction, flags) {
+        if find_type_in_direction(ctx, loc, atom, direction, smooth_flags) {
             flag
         } else {
             0
@@ -77,14 +77,14 @@ fn calculate_adjacencies(ctx: Context, loc: (u32, u32), atom: &Atom, flags: i32)
     adjacencies
 }
 
-fn find_type_in_direction<'a>(ctx: Context, loc: (u32, u32), source: &Atom, direction: i32, flags: i32) -> bool {
+fn find_type_in_direction<'a>(ctx: Context, loc: (u32, u32), source: &Atom, direction: i32, smooth_flags: i32) -> bool {
     use std::ptr::eq;
 
     let (dx, dy) = offset(direction);
     let new_loc = (loc.0 as i32 + dx, loc.1 as i32 + dy);
     let (dim_y, dim_x) = ctx.level.grid.dim();
     if new_loc.0 < 0 || new_loc.1 < 0 || new_loc.0 >= dim_x as i32 || new_loc.1 >= dim_y as i32 {
-        return flags & SMOOTH_BORDER != 0;
+        return smooth_flags & SMOOTH_BORDER != 0;
     }
     let new_loc = (new_loc.0 as u32, new_loc.1 as u32);
 
@@ -96,7 +96,7 @@ fn find_type_in_direction<'a>(ctx: Context, loc: (u32, u32), source: &Atom, dire
         None,
     );
     match source.get_var("canSmoothWith", ctx.objtree) {
-        &Constant::List(ref elements) => if flags & SMOOTH_MORE != 0 {
+        &Constant::List(ref elements) => if smooth_flags & SMOOTH_MORE != 0 {
             // smooth with canSmoothWith + subtypes
             for atom in atom_list {
                 let mut path = &atom.type_.path[..];
