@@ -5,6 +5,7 @@ use minimap::{Atom, GetVar, Sprite, Layer};
 pub mod transit_tube;
 pub mod random;
 pub mod structures;
+pub mod icon_smoothing;
 
 /// A map rendering pass.
 ///
