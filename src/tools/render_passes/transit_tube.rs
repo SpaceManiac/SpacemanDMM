@@ -8,6 +8,7 @@ impl RenderPass for TransitTube {
         objtree: &'a ObjectTree,
         _: &mut Vec<Sprite<'a>>,
         overlays: &mut Vec<Sprite<'a>>,
+        _: &bumpalo::Bump,
     ) {
         use dmi::*;
 

@@ -85,103 +85,8 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
                     atom.sprite.ofs_y -= 4;
                 }
 
-                // overlays and underlays
-                macro_rules! add_overlay {
-                    ($icon:expr) => {{
-                        overlays.push(Sprite {
-                            icon_state: $icon,
-                            .. atom.sprite
-                        });
-                    }};
-                }
-                if subtype(p, "/obj/structure/closet/") {
-                    // closet doors
-                    if atom.get_var("opened", objtree).to_bool() {
-                        let var = if atom.get_var("icon_door_override", objtree).to_bool() {
-                            "icon_door"
-                        } else {
-                            "icon_state"
-                        };
-                        if let &Constant::String(ref door) = atom.get_var(var, objtree) {
-                            add_overlay!(bump.alloc(format!("{}_open", door)));
-                        }
-                    } else {
-                        if let &Constant::String(ref door) = atom
-                            .get_var_notnull("icon_door", objtree)
-                            .unwrap_or_else(|| atom.get_var("icon_state", objtree))
-                        {
-                            add_overlay!(bump.alloc(format!("{}_door", door)));
-                        }
-                        if atom.get_var("welded", objtree).to_bool() {
-                            add_overlay!("welded");
-                        }
-                        if atom.get_var("secure", objtree).to_bool() && !atom.get_var("broken", objtree).to_bool() {
-                            if atom.get_var("locked", objtree).to_bool() {
-                                add_overlay!("locked");
-                            } else {
-                                add_overlay!("unlocked");
-                            }
-                        }
-                    }
-                } else if subtype(p, "/obj/machinery/computer/") || subtype(p, "/obj/machinery/power/solar_control/") {
-                    // computer screens and keyboards
-                    if let Some(screen) = atom.get_var("icon_screen", objtree).as_str() {
-                        add_overlay!(screen);
-                    }
-                    if let Some(keyboard) = atom.get_var("icon_keyboard", objtree).as_str() {
-                        add_overlay!(keyboard);
-                    }
-                } else if subtype(p, "/obj/machinery/door/airlock/") {
-                    if atom.get_var("glass", objtree).to_bool() {
-                        overlays.push(Sprite {
-                            icon: atom.get_var("overlays_file", objtree).as_path_str().unwrap_or(""),
-                            icon_state: "glass_closed",
-                            .. atom.sprite
-                        })
-                    } else {
-                        add_overlay!("fill_closed");
-                    }
-                } else if subtype(p, "/obj/machinery/atmospherics/components/unary/") {
-                    let aboveground = match atom.get_var("icon_state", objtree) {
-                        &Constant::String(ref text) => match &**text {
-                            "vent_map-1" | "vent_map-2" | "vent_map-3" => "vent_off",
-                            "vent_map_on-1" | "vent_map_on-2" | "vent_map_on-3" => "vent_out",
-                            "vent_map_siphon_on-1" | "vent_map_siphon_on-2" | "vent_map_siphon_on-3" => "vent_in",
-                            "scrub_map-1" | "scrub_map-2" | "scrub_map-3" => "scrub_off",
-                            "scrub_map_on-1" | "scrub_map_on-2" | "scrub_map_on-3" => "scrub_on",
-                            _ => "",
-                        },
-                        _ => "",
-                    };
-                    if !aboveground.is_empty() {
-                        add_overlay!(aboveground);
-                        atom.sprite.layer = Layer::from(-5);
-                    }
-                } else if subtype(p, "/obj/machinery/power/apc/") {
-                    use dmi::*;
-                    // auto-set pixel location
-                    match atom.get_var("dir", objtree) {
-                        &Constant::Int(NORTH) => atom.sprite.ofs_y = 23,
-                        &Constant::Int(SOUTH) => atom.sprite.ofs_y = -23,
-                        &Constant::Int(EAST) => atom.sprite.ofs_x = 24,
-                        &Constant::Int(WEST) => atom.sprite.ofs_x = -25,
-                        _ => {}
-                    }
-                    // status overlays
-                    for &each in ["apcox-1", "apco3-2", "apco0-3", "apco1-3", "apco2-3"].iter() {
-                        add_overlay!(each);
-                    }
-
-                    // APC terminals
-                    let mut terminal = Sprite::from_vars(objtree, &objtree.expect("/obj/machinery/power/terminal"));
-                    terminal.dir = atom.sprite.dir;
-                    // TODO: un-hack this
-                    ::render_passes::apply_fancy_layer("/obj/machinery/power/terminal", &mut terminal);
-                    underlays.push(terminal);
-                }
-
                 for pass in render_passes {
-                    pass.overlays(&mut atom, objtree, &mut underlays, &mut overlays);
+                    pass.overlays(&mut atom, objtree, &mut underlays, &mut overlays, bump);
                 }
 
                 // smoothing time
@@ -596,7 +501,7 @@ fn plane_of<'s, T: GetVar<'s> + ?Sized>(objtree: &'s ObjectTree, atom: &T) -> i3
     }
 }
 
-fn layer_of<'s, T: GetVar<'s> + ?Sized>(objtree: &'s ObjectTree, atom: &T) -> Layer {
+pub(crate) fn layer_of<'s, T: GetVar<'s> + ?Sized>(objtree: &'s ObjectTree, atom: &T) -> Layer {
     match atom.get_var("layer", objtree) {
         &Constant::Int(i) => Layer::from(i),
         &Constant::Float(f) => Layer::from(f),

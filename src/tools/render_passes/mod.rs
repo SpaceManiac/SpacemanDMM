@@ -48,6 +48,7 @@ pub trait RenderPass: Sync {
         objtree: &'a ObjectTree,
         underlays: &mut Vec<Sprite<'a>>,
         overlays: &mut Vec<Sprite<'a>>,
+        bump: &'a bumpalo::Bump,  // TODO: kind of a hacky way to pass this
     ) {}
 
     /// Filter atoms at the end of the process, after they have been taken into
@@ -81,7 +82,7 @@ pub const RENDER_PASSES: &[RenderPassInfo] = &[
     pass!(random::Random, "random", "Replace random spawners with one of their possibilities.", true),
     pass!(Pretty, "pretty", "Add the minor cosmetic overlays for various objects.", true),
     pass!(structures::Spawners, "spawners", "Replace object spawners with their spawned objects.", true),
-    pass!(FakeGlass, "fake-glass", "Add underlays to fake glass turfs.", true),
+    pass!(Overlays, "overlays", "Add overlays and underlays to atoms which usually have them.", true),
     pass!(transit_tube::TransitTube, "transit-tube", "Add overlays to connect transit tubes together.", true),
     pass!(structures::GravityGen, "gravity-gen", "Expand the gravity generator to the full structure.", true),
     pass!(Wires, "only-powernet", "Render only power cables.", false),
@@ -172,15 +173,35 @@ impl RenderPass for HideInvisible {
 }
 
 #[derive(Default)]
-pub struct FakeGlass;
-impl RenderPass for FakeGlass {
+pub struct Overlays;
+impl RenderPass for Overlays {
+    fn adjust_sprite<'a>(&self,
+        atom: &Atom<'a>,
+        sprite: &mut Sprite<'a>,
+        objtree: &'a ObjectTree,
+        _: &'a bumpalo::Bump,
+    ) {
+        if atom.istype("/obj/machinery/power/apc/") {
+            // auto-set pixel location
+            match atom.get_var("dir", objtree) {
+                &Constant::Int(::dmi::NORTH) => sprite.ofs_y = 23,
+                &Constant::Int(::dmi::SOUTH) => sprite.ofs_y = -23,
+                &Constant::Int(::dmi::EAST) => sprite.ofs_x = 24,
+                &Constant::Int(::dmi::WEST) => sprite.ofs_x = -25,
+                _ => {}
+            }
+        }
+    }
+
     fn overlays<'a>(
         &self,
         atom: &Atom<'a>,
-        _objtree: &'a ObjectTree,
+        objtree: &'a ObjectTree,
         underlays: &mut Vec<Sprite<'a>>,
-        _overlays: &mut Vec<Sprite<'a>>,
+        overlays: &mut Vec<Sprite<'a>>,
+        bump: &'a bumpalo::Bump,
     ) {
+        // overlays and underlays
         if atom.istype("/turf/closed/indestructible/fakeglass/") {
             underlays.push(Sprite {
                 icon: "icons/turf/floors.dmi",
@@ -192,6 +213,65 @@ impl RenderPass for FakeGlass {
                 icon_state: "grille",
                 .. atom.sprite
             });
+        } else if atom.istype("/obj/structure/closet/") {
+            // closet doors
+            if atom.get_var("opened", objtree).to_bool() {
+                let var = if atom.get_var("icon_door_override", objtree).to_bool() {
+                    "icon_door"
+                } else {
+                    "icon_state"
+                };
+                if let &Constant::String(ref door) = atom.get_var(var, objtree) {
+                    add_to(overlays, atom, bump.alloc(format!("{}_open", door)));
+                }
+            } else {
+                if let &Constant::String(ref door) = atom
+                    .get_var_notnull("icon_door", objtree)
+                    .unwrap_or_else(|| atom.get_var("icon_state", objtree))
+                {
+                    add_to(overlays, atom, bump.alloc(format!("{}_door", door)));
+                }
+                if atom.get_var("welded", objtree).to_bool() {
+                    add_to(overlays, atom, "welded");
+                }
+                if atom.get_var("secure", objtree).to_bool() && !atom.get_var("broken", objtree).to_bool() {
+                    if atom.get_var("locked", objtree).to_bool() {
+                        add_to(overlays, atom, "locked");
+                    } else {
+                        add_to(overlays, atom, "unlocked");
+                    }
+                }
+            }
+        } else if atom.istype("/obj/machinery/computer/") || atom.istype("/obj/machinery/power/solar_control/") {
+            // computer screens and keyboards
+            if let Some(screen) = atom.get_var("icon_screen", objtree).as_str() {
+                add_to(overlays, atom, screen);
+            }
+            if let Some(keyboard) = atom.get_var("icon_keyboard", objtree).as_str() {
+                add_to(overlays, atom, keyboard);
+            }
+        } else if atom.istype("/obj/machinery/door/airlock/") {
+            if atom.get_var("glass", objtree).to_bool() {
+                overlays.push(Sprite {
+                    icon: atom.get_var("overlays_file", objtree).as_path_str().unwrap_or(""),
+                    icon_state: "glass_closed",
+                    .. atom.sprite
+                })
+            } else {
+                add_to(overlays, atom, "fill_closed");
+            }
+        } else if atom.istype("/obj/machinery/power/apc/") {
+            // status overlays
+            for &each in ["apcox-1", "apco3-2", "apco0-3", "apco1-3", "apco2-3"].iter() {
+                add_to(overlays, atom, each);
+            }
+
+            // APC terminals
+            let mut terminal = Sprite::from_vars(objtree, &objtree.expect("/obj/machinery/power/terminal"));
+            terminal.dir = atom.sprite.dir;
+            // TODO: un-hack this
+            apply_fancy_layer("/obj/machinery/power/terminal", &mut terminal);
+            underlays.push(terminal);
         }
     }
 }
@@ -215,6 +295,7 @@ impl RenderPass for Pretty {
         objtree: &'a ObjectTree,
         _: &mut Vec<Sprite<'a>>,
         overlays: &mut Vec<Sprite<'a>>,
+        _: &bumpalo::Bump,
     ) {
         if atom.istype("/obj/item/storage/box/") && !atom.istype("/obj/item/storage/box/papersack/") {
             if let Some(icon_state) = atom.get_var("illustration", objtree).as_str() {
@@ -273,11 +354,52 @@ impl RenderPass for FancyLayers {
     fn adjust_sprite<'a>(&self,
         atom: &Atom<'a>,
         sprite: &mut Sprite<'a>,
-        _: &'a ObjectTree,
+        objtree: &'a ObjectTree,
         _: &'a bumpalo::Bump,
     ) {
-        apply_fancy_layer(atom.get_path(), sprite)
+        apply_fancy_layer(atom.get_path(), sprite);
+
+        // dual layering of vents 1: hide original sprite underfloor
+        if atom.istype("/obj/machinery/atmospherics/components/unary/") {
+            if unary_aboveground(atom, objtree).is_some() {
+                sprite.layer = Layer::from(-5);
+            }
+        }
     }
+
+    fn overlays<'a>(&self,
+        atom: &Atom<'a>,
+        objtree: &'a ObjectTree,
+        _underlays: &mut Vec<Sprite<'a>>,
+        overlays: &mut Vec<Sprite<'a>>,
+        _bump: &'a bumpalo::Bump,
+    ) {
+        // dual layering of vents 2: add abovefloor overlay
+        if atom.istype("/obj/machinery/atmospherics/components/unary/") {
+            if let Some(aboveground) = unary_aboveground(atom, objtree) {
+                overlays.push(Sprite {
+                    icon_state: aboveground,
+                    // use original layer, not modified layer above
+                    layer: ::minimap::layer_of(objtree, atom),
+                    .. atom.sprite
+                });
+            }
+        }
+    }
+}
+
+fn unary_aboveground(atom: &Atom, objtree: &ObjectTree) -> Option<&'static str> {
+    Some(match atom.get_var("icon_state", objtree) {
+        &Constant::String(ref text) => match &**text {
+            "vent_map-1" | "vent_map-2" | "vent_map-3" => "vent_off",
+            "vent_map_on-1" | "vent_map_on-2" | "vent_map_on-3" => "vent_out",
+            "vent_map_siphon_on-1" | "vent_map_siphon_on-2" | "vent_map_siphon_on-3" => "vent_in",
+            "scrub_map-1" | "scrub_map-2" | "scrub_map-3" => "scrub_off",
+            "scrub_map_on-1" | "scrub_map_on-2" | "scrub_map_on-3" => "scrub_on",
+            _ => return None,
+        },
+        _ => return None,
+    })
 }
 
 fn fancy_layer_for_path(p: &str) -> Option<Layer> {
@@ -309,7 +431,7 @@ fn fancy_layer_for_path(p: &str) -> Option<Layer> {
     })
 }
 
-pub fn apply_fancy_layer(path: &str, sprite: &mut Sprite) {
+fn apply_fancy_layer(path: &str, sprite: &mut Sprite) {
     sprite.plane = 0;
     if let Some(layer) = fancy_layer_for_path(path) {
         sprite.layer = layer;
