@@ -280,10 +280,7 @@ impl RenderPass for FancyLayers {
         sprite: &mut Sprite<'a>,
         _: &'a ObjectTree,
     ) {
-        sprite.plane = 0;
-        if let Some(layer) = fancy_layer_for_path(atom.get_path()) {
-            sprite.layer = layer;
-        }
+        apply_fancy_layer(atom.get_path(), sprite)
     }
 }
 
@@ -314,4 +311,11 @@ fn fancy_layer_for_path(p: &str) -> Option<i32> {
     } else {
         return None
     })
+}
+
+pub fn apply_fancy_layer(path: &str, sprite: &mut Sprite) {
+    sprite.plane = 0;
+    if let Some(layer) = fancy_layer_for_path(path) {
+        sprite.layer = layer;
+    }
 }

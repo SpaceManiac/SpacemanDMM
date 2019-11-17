@@ -176,11 +176,11 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
                     }
 
                     // APC terminals
-                    if atom.istype("/obj/machinery/power/apc/") {
-                        let mut terminal = Sprite::from_vars(objtree, &objtree.expect("/obj/machinery/power/terminal"));
-                        terminal.dir = atom.sprite.dir;
-                        underlays.push(terminal);
-                    }
+                    let mut terminal = Sprite::from_vars(objtree, &objtree.expect("/obj/machinery/power/terminal"));
+                    terminal.dir = atom.sprite.dir;
+                    // TODO: un-hack this
+                    ::render_passes::apply_fancy_layer("/obj/machinery/power/terminal", &mut terminal);
+                    underlays.push(terminal);
                 }
 
                 for pass in render_passes {
