@@ -28,12 +28,12 @@ pub trait RenderPass: Sync {
 
     /// Expand atoms, such as spawners into the atoms they spawn.
     ///
-    /// Return `true` to consume the original atom.
+    /// Return `false` to discard the original atom.
     fn expand<'a>(&self,
         atom: &Atom<'a>,
         objtree: &'a ObjectTree,
         output: &mut Vec<Atom<'a>>,
-    ) -> bool { false }
+    ) -> bool { true }
 
     fn adjust_sprite<'a>(&self,
         atom: &Atom<'a>,
@@ -132,9 +132,9 @@ impl RenderPass for HideSpace {
     ) -> bool {
         if atom.istype("/turf/template_noop/") {
             output.push(Atom::from_type(objtree, "/turf/open/space", atom.loc).unwrap());
-            true
-        } else {
             false
+        } else {
+            true
         }
     }
 

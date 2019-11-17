@@ -300,7 +300,7 @@ pub fn get_atom_list<'a>(
 
         // convert structure spanwers to their structures
         for pass in render_passes {
-            if pass.expand(&atom, objtree, &mut result) {
+            if !pass.expand(&atom, objtree, &mut result) {
                 continue 'fab;
             }
         }

@@ -23,7 +23,7 @@ impl RenderPass for Random {
                 }
                 if let Some(replacement) = machines.choose(&mut rng) {
                     output.push(Atom::from_type_ref(replacement, atom.loc));
-                    return true;  // consumed
+                    return false;  // consumed
                 }
             }
         } else if atom.istype("/obj/machinery/vending/cola/random/") {
@@ -36,7 +36,7 @@ impl RenderPass for Random {
                 }
                 if let Some(replacement) = machines.choose(&mut rng) {
                     output.push(Atom::from_type_ref(replacement, atom.loc));
-                    return true;  // consumed
+                    return false;  // consumed
                 }
             }
         } else if atom.istype("/obj/item/bedsheet/random/") {
@@ -49,11 +49,11 @@ impl RenderPass for Random {
                 }
                 if let Some(replacement) = sheets.choose(&mut rng) {
                     output.push(Atom::from_type_ref(replacement, atom.loc));
-                    return true;  // consumed
+                    return false;  // consumed
                 }
             }
         }
-        false
+        true
     }
 
     fn adjust_sprite<'a>(&self,

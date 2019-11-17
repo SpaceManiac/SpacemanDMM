@@ -13,7 +13,7 @@ impl RenderPass for Spawners {
         output: &mut Vec<Atom<'a>>,
     ) -> bool {
         if !atom.istype("/obj/effect/spawner/structure/") {
-            return false;
+            return true;
         }
         match atom.get_var("spawn_list", objtree) {
             &Constant::List(ref elements) => {
@@ -30,9 +30,9 @@ impl RenderPass for Spawners {
                     };
                     output.push(Atom::from_type(objtree, reference, atom.loc).unwrap());
                 }
-                true  // don't include the original atom
+                false  // don't include the original atom
             }
-            _ => { false }  // TODO: complain?
+            _ => { true }  // TODO: complain?
         }
     }
 }
