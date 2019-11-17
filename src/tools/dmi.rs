@@ -52,7 +52,7 @@ impl IconFile {
         })
     }
 
-    pub fn rect_of(&self, icon_state: &str, dir: i32) -> Option<Rect> {
+    pub fn rect_of(&self, icon_state: &str, dir: Dir) -> Option<Rect> {
         if self.metadata.states.is_empty() {
             return Some((0, 0, self.image.width, self.image.height))
         }
@@ -65,16 +65,16 @@ impl IconFile {
         Some(self.rect_of_index(index))
     }
 
-    pub fn index_of_state(&self, state: &State, dir: i32, frame: u32) -> u32 {
+    pub fn index_of_state(&self, state: &State, dir: Dir, frame: u32) -> u32 {
         let dir_idx = match (state.dirs, dir) {
             (Dirs::One, _) => 0,
-            (Dirs::Eight, NORTHWEST) => 7,
-            (Dirs::Eight, NORTHEAST) => 6,
-            (Dirs::Eight, SOUTHWEST) => 5,
-            (Dirs::Eight, SOUTHEAST) => 4,
-            (_, WEST) => 3,
-            (_, EAST) => 2,
-            (_, NORTH) => 1,
+            (Dirs::Eight, Dir::Northwest) => 7,
+            (Dirs::Eight, Dir::Northeast) => 6,
+            (Dirs::Eight, Dir::Southwest) => 5,
+            (Dirs::Eight, Dir::Southeast) => 4,
+            (_, Dir::West) => 3,
+            (_, Dir::East) => 2,
+            (_, Dir::North) => 1,
             (_, _) => 0,
         };
 

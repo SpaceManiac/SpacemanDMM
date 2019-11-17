@@ -1,4 +1,5 @@
 use super::*;
+use dmi::Dir;
 
 #[derive(Default)]
 pub struct TransitTube;
@@ -10,86 +11,86 @@ impl RenderPass for TransitTube {
         overlays: &mut Vec<Sprite<'a>>,
         _: &bumpalo::Bump,
     ) {
-        use dmi::*;
+        use dmi::Dir::*;
 
         if !atom.istype("/obj/structure/transit_tube/") {
             return;
         }
 
-        let dir = atom.get_var("dir", objtree).to_int().unwrap_or(::dmi::SOUTH);
-        let mut fulfill = |items: &[i32]| {
+        let mut fulfill = |items: &[Dir]| {
             for &dir in items {
-                if dir == NORTHEAST || dir == NORTHWEST || dir == SOUTHEAST || dir == SOUTHWEST {
-                    if dir & NORTH != 0 {
-                        create_tube_overlay(overlays, objtree, atom, dir ^ 3, NORTH);
-                        if dir & EAST != 0 {
-                            create_tube_overlay(overlays, objtree, atom, dir ^ 12, EAST);
+                if dir.is_diagonal() {
+                    if dir.contains(North) {
+                        create_tube_overlay(overlays, objtree, atom, dir.flip_ns(), Some(North));
+                        if dir.contains(East) {
+                            create_tube_overlay(overlays, objtree, atom, dir.flip_ew(), Some(East));
                         } else {
-                            create_tube_overlay(overlays, objtree, atom, dir ^ 12, WEST);
+                            create_tube_overlay(overlays, objtree, atom, dir.flip_ew(), Some(West));
                         }
                     }
                 } else {
-                    create_tube_overlay(overlays, objtree, atom, dir, 0);
+                    create_tube_overlay(overlays, objtree, atom, dir, None);
                 }
             }
         };
 
+        let dir = atom.get_var("dir", objtree).to_int().and_then(Dir::from_int).unwrap_or(Dir::default());
         if atom.istype("/obj/structure/transit_tube/station/reverse/") {
             fulfill(&match dir {
-                NORTH => [EAST],
-                SOUTH => [WEST],
-                EAST => [SOUTH],
-                WEST => [NORTH],
+                North => [East],
+                South => [West],
+                East => [South],
+                West => [North],
                 _ => return,
             })
         } else if atom.istype("/obj/structure/transit_tube/station/") {
             fulfill(&match dir {
-                NORTH | SOUTH => [EAST, WEST],
-                EAST | WEST => [NORTH, SOUTH],
+                North | South => [East, West],
+                East | West => [North, South],
                 _ => return,
             })
         } else if atom.istype("/obj/structure/transit_tube/junction/flipped/") {
             fulfill(&match dir {
-                NORTH => [NORTH, SOUTHWEST, SOUTHEAST],
-                SOUTH => [SOUTH, NORTHEAST, NORTHWEST],
-                EAST => [EAST, NORTHWEST, SOUTHWEST],
-                WEST => [WEST, SOUTHEAST, NORTHEAST],
+                North => [North, Southwest, Southeast],
+                South => [South, Northeast, Northwest],
+                East => [East, Northwest, Southwest],
+                West => [West, Southeast, Northeast],
                 _ => return,
             })
         } else if atom.istype("/obj/structure/transit_tube/junction/") {
             fulfill(&match dir {
-                NORTH => [NORTH, SOUTHEAST, SOUTHWEST],
-                SOUTH => [SOUTH, NORTHWEST, NORTHEAST],
-                EAST => [EAST, SOUTHWEST, NORTHWEST],
-                WEST => [WEST, NORTHEAST, SOUTHEAST],
+                North => [North, Southeast, Southwest],
+                South => [South, Northwest, Northeast],
+                East => [East, Southwest, Northwest],
+                West => [West, Northeast, Southeast],
                 _ => return,
             })
         } else if atom.istype("/obj/structure/transit_tube/curved/flipped/") {
             fulfill(&match dir {
-                NORTH => [NORTH, SOUTHEAST],
-                SOUTH => [SOUTH, NORTHWEST],
-                EAST => [EAST, SOUTHWEST],
-                WEST => [NORTHEAST, WEST],
+                North => [North, Southeast],
+                South => [South, Northwest],
+                East => [East, Southwest],
+                West => [Northeast, West],
                 _ => return,
             })
         } else if atom.istype("/obj/structure/transit_tube/curved/") {
             fulfill(&match dir {
-                NORTH => [NORTH, SOUTHWEST],
-                SOUTH => [SOUTH, NORTHEAST],
-                EAST => [EAST, NORTHWEST],
-                WEST => [SOUTHEAST, WEST],
+                North => [North, Southwest],
+                South => [South, Northeast],
+                East => [East, Northwest],
+                West => [Southeast, West],
                 _ => return,
             })
         } else if atom.istype("/obj/structure/transit_tube/diagonal/") {
             fulfill(&match dir {
-                NORTH | SOUTH => [NORTHEAST, SOUTHWEST],
-                EAST | WEST => [NORTHWEST, SOUTHEAST],
+                North | South => [Northeast, Southwest],
+                East | West => [Northwest, Southeast],
                 _ => return,
             })
         } else {
             fulfill(&match dir {
-                NORTH | SOUTH => [NORTH, SOUTH],
-                EAST | WEST => [EAST, WEST],
+                North | South => [North, South],
+                East | West => [East, West],
                 _ => return,
             })
         }
@@ -100,11 +101,9 @@ fn create_tube_overlay<'a>(
     output: &mut Vec<Sprite<'a>>,
     _objtree: &'a ObjectTree,
     source: &Atom<'a>,
-    dir: i32,
-    shift: i32,
+    dir: Dir,
+    shift: Option<Dir>,
 ) {
-    use dmi::*;
-
     let mut sprite = Sprite {
         dir,
         icon: source.sprite.icon,
@@ -112,13 +111,13 @@ fn create_tube_overlay<'a>(
         icon_state: "decorative",
         .. Default::default()
     };
-    if shift != 0 {
+    if let Some(shift) = shift {
         sprite.icon_state = "decorative_diag";
         match shift {
-            NORTH => sprite.ofs_y += 32,
-            SOUTH => sprite.ofs_y -= 32,
-            EAST => sprite.ofs_x += 32,
-            WEST => sprite.ofs_x -= 32,
+            Dir::North => sprite.ofs_y += 32,
+            Dir::South => sprite.ofs_y -= 32,
+            Dir::East => sprite.ofs_x += 32,
+            Dir::West => sprite.ofs_x -= 32,
             _ => {}
         }
     }

@@ -6,7 +6,7 @@ use ndarray::Axis;
 use dm::objtree::*;
 use dm::constants::Constant;
 use dmm::{Map, ZLevel, Prefab};
-use dmi::Image;
+use dmi::{Dir, Image};
 use render_passes::{RenderPass, icon_smoothing};
 use icon_cache::IconCache;
 
@@ -428,7 +428,7 @@ pub struct Sprite<'s> {
     // visual appearance
     pub icon: &'s str,
     pub icon_state: &'s str,
-    pub dir: i32,
+    pub dir: Dir,
     pub color: [u8; 4],  // [r, g, b, a]
 
     // position
@@ -453,7 +453,7 @@ impl<'s> Sprite<'s> {
             category: Category::from_path(vars.get_path()),
             icon: vars.get_var("icon", objtree).as_path_str().unwrap_or(""),
             icon_state: vars.get_var("icon_state", objtree).as_str().unwrap_or(""),
-            dir: vars.get_var("dir", objtree).to_int().unwrap_or(::dmi::SOUTH),
+            dir: vars.get_var("dir", objtree).to_int().and_then(Dir::from_int).unwrap_or(Dir::default()),
             color: color_of(objtree, vars),
             ofs_x: pixel_x + pixel_w + step_x,
             ofs_y: pixel_y + pixel_z + step_y,
@@ -469,7 +469,7 @@ impl<'s> Default for Sprite<'s> {
             category: Category::default(),
             icon: "",
             icon_state: "",
-            dir: 0,
+            dir: Dir::default(),
             color: [255, 255, 255, 255],
             ofs_x: 0,
             ofs_y: 0,

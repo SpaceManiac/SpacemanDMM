@@ -165,7 +165,7 @@ impl IconFile {
         })
     }
 
-    pub fn uv_of(&self, icon_state: &str, dir: i32) -> Option<[f32; 4]> {
+    pub fn uv_of(&self, icon_state: &str, dir: Dir) -> Option<[f32; 4]> {
         self.rect_of(icon_state, dir).map(|(x1, y1, w, h)| [
             x1 as f32 / self.width as f32,
             y1 as f32 / self.height as f32,
@@ -174,7 +174,7 @@ impl IconFile {
         ])
     }
 
-    pub fn rect_of(&self, icon_state: &str, dir: i32) -> Option<Rect> {
+    pub fn rect_of(&self, icon_state: &str, dir: Dir) -> Option<Rect> {
         if self.metadata.states.is_empty() {
             return Some((0, 0, self.metadata.width, self.metadata.height));
         }
@@ -186,13 +186,13 @@ impl IconFile {
 
         let dir_idx = match (state.dirs, dir) {
             (Dirs::One, _) => 0,
-            (Dirs::Eight, NORTHWEST) => 7,
-            (Dirs::Eight, NORTHEAST) => 6,
-            (Dirs::Eight, SOUTHWEST) => 5,
-            (Dirs::Eight, SOUTHEAST) => 4,
-            (_, WEST) => 3,
-            (_, EAST) => 2,
-            (_, NORTH) => 1,
+            (Dirs::Eight, Dir::Northwest) => 7,
+            (Dirs::Eight, Dir::Northeast) => 6,
+            (Dirs::Eight, Dir::Southwest) => 5,
+            (Dirs::Eight, Dir::Southeast) => 4,
+            (_, Dir::West) => 3,
+            (_, Dir::East) => 2,
+            (_, Dir::North) => 1,
             (_, _) => 0,
         };
 

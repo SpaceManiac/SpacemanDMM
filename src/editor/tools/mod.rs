@@ -28,7 +28,7 @@ pub enum ToolIcon {
         icon: PathBuf,
         icon_state: String,
         tint: [f32; 4],
-        dir: i32,
+        dir: dmi::Dir,
     },
     EmbeddedPng {
         data: &'static [u8],
@@ -75,7 +75,7 @@ impl Tool {
                 icon,
                 icon_state,
                 tint: NO_TINT,
-                dir: dmi::SOUTH,
+                dir: dmi::Dir::South,
             },
             ..self
         }
@@ -111,7 +111,8 @@ impl ToolIcon {
             .or_else(|| ty.get_value("dir")
                 .and_then(|v| v.constant.as_ref()))
             .and_then(|v| v.to_int())
-            .unwrap_or(dmi::SOUTH);
+            .and_then(dmi::Dir::from_int)
+            .unwrap_or(dmi::Dir::default());
         let color = ::dmm_tools::minimap::color_of(&env.objtree, &prefab);
         let tint = [
             color[0] as f32 / 255.0, color[1] as f32 / 255.0,

@@ -15,6 +15,89 @@ pub const NORTHWEST: i32 = 9;
 pub const SOUTHEAST: i32 = 6;
 pub const SOUTHWEST: i32 = 10;
 
+/// The two-dimensional facing subset of BYOND's direction type.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum Dir {
+    North = 1,
+    South = 2,
+    East = 4,
+    West = 8,
+    Northeast = 5,
+    Northwest = 9,
+    Southeast = 6,
+    Southwest = 10,
+}
+
+impl Dir {
+    /// Attempt to build a direction from its integer representation.
+    pub fn from_int(int: i32) -> Option<Dir> {
+        Some(match int {
+            1 => Dir::North,
+            2 => Dir::South,
+            4 => Dir::East,
+            8 => Dir::West,
+            5 => Dir::Northeast,
+            9 => Dir::Northwest,
+            6 => Dir::Southeast,
+            10 => Dir::Southwest,
+            _ => return None,
+        })
+    }
+
+    /// Get this direction's integer representation.
+    pub fn to_int(self) -> i32 {
+        self as i32
+    }
+
+    pub fn contains(self, other: Dir) -> bool {
+        self.to_int() & other.to_int() != 0
+    }
+
+    pub fn is_diagonal(self) -> bool {
+        match self {
+            Dir::North |
+            Dir::South |
+            Dir::East |
+            Dir::West => false,
+            _ => true
+        }
+    }
+
+    pub fn flip_ns(self) -> Dir {
+        // approximately `x ^ 3`
+        match self {
+            Dir::North => Dir::South,
+            Dir::South => Dir::North,
+            Dir::East => Dir::East,
+            Dir::West => Dir::West,
+            Dir::Northeast => Dir::Southeast,
+            Dir::Northwest => Dir::Southwest,
+            Dir::Southeast => Dir::Northeast,
+            Dir::Southwest => Dir::Northwest,
+        }
+    }
+
+    pub fn flip_ew(self) -> Dir {
+        // approximately `x ^ 12`
+        match self {
+            Dir::North => Dir::North,
+            Dir::South => Dir::South,
+            Dir::East => Dir::West,
+            Dir::West => Dir::East,
+            Dir::Northeast => Dir::Northwest,
+            Dir::Northwest => Dir::Northeast,
+            Dir::Southeast => Dir::Southwest,
+            Dir::Southwest => Dir::Southeast,
+        }
+    }
+}
+
+impl Default for Dir {
+    fn default() -> Self {
+        Dir::South
+    }
+}
+
 #[derive(Debug)]
 pub struct Metadata {
     pub width: u32,
