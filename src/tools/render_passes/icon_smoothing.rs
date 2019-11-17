@@ -1,6 +1,7 @@
 //! Port of icon smoothing subsystem.
 
 use dm::constants::Constant;
+use dmi::{NORTH, SOUTH, EAST, WEST, NORTHEAST, NORTHWEST, SOUTHEAST, SOUTHWEST};
 use minimap::{Sprite, Context, Atom, GetVar, get_atom_list};
 
 // (1 << N) where N is the usual value
@@ -33,7 +34,6 @@ pub fn handle_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, loc: (u
 }
 
 fn calculate_adjacencies(ctx: Context, loc: (u32, u32), atom: &Atom, flags: i32) -> i32 {
-    use dmi::*;
     // TODO: anchored check
 
     let mut adjacencies = 0;
@@ -237,7 +237,6 @@ fn diagonal_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, loc: (u32
 }
 
 fn offset(direction: i32) -> (i32, i32) {
-    use dmi::*;
     match direction {
         0 => (0, 0),
         SOUTH => (0, 1),
@@ -253,7 +252,6 @@ fn offset(direction: i32) -> (i32, i32) {
 }
 
 fn flip(direction: i32) -> i32 {
-    use dmi::*;
     match direction {
         0 => 0,
         SOUTH => NORTH,
@@ -269,7 +267,6 @@ fn flip(direction: i32) -> i32 {
 }
 
 fn reverse_ndir(ndir: i32) -> i32 {
-    use dmi::*;
     const NW1: i32 = N_NORTH | N_WEST;
     const NW2: i32 = NW1 | N_NORTHWEST;
     const NE1: i32 = N_NORTH | N_EAST;
@@ -293,7 +290,6 @@ fn reverse_ndir(ndir: i32) -> i32 {
 }
 
 fn left_45(dir: i32) -> i32 {
-    use dmi::*;
     match dir {
         NORTH => NORTHWEST,
         NORTHEAST => NORTH,
@@ -308,7 +304,6 @@ fn left_45(dir: i32) -> i32 {
 }
 
 fn right_45(dir: i32) -> i32 {
-    use dmi::*;
     match dir {
         NORTH => NORTHEAST,
         NORTHEAST => EAST,

@@ -181,13 +181,15 @@ impl RenderPass for Overlays {
         objtree: &'a ObjectTree,
         _: &'a bumpalo::Bump,
     ) {
+        use dmi::Dir;
+
         if atom.istype("/obj/machinery/power/apc/") {
             // auto-set pixel location
-            match atom.get_var("dir", objtree) {
-                &Constant::Int(::dmi::NORTH) => sprite.ofs_y = 23,
-                &Constant::Int(::dmi::SOUTH) => sprite.ofs_y = -23,
-                &Constant::Int(::dmi::EAST) => sprite.ofs_x = 24,
-                &Constant::Int(::dmi::WEST) => sprite.ofs_x = -25,
+            match atom.get_var("dir", objtree).to_int().and_then(Dir::from_int) {
+                Some(Dir::North) => sprite.ofs_y = 23,
+                Some(Dir::South) => sprite.ofs_y = -23,
+                Some(Dir::East) => sprite.ofs_x = 24,
+                Some(Dir::West) => sprite.ofs_x = -25,
                 _ => {}
             }
         }
