@@ -76,11 +76,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
 
                 // icons which differ from their map states
                 let p = &atom.type_.path;
-                if p == "/obj/structure/table/wood/fancy/black" {
-                    atom.sprite.icon = "icons/obj/smooth_structures/fancy_table_black.dmi";
-                } else if p == "/obj/structure/table/wood/fancy" {
-                    atom.sprite.icon = "icons/obj/smooth_structures/fancy_table.dmi";
-                } else if subtype(p, "/turf/closed/mineral/") {
+                if subtype(p, "/turf/closed/mineral/") {
                     atom.sprite.ofs_x -= 4;
                     atom.sprite.ofs_y -= 4;
                 }
