@@ -112,11 +112,7 @@ impl AtomMap {
 
         let mut base_dictionary;
         let mut reverse_dictionary = HashMap::<&[&Prefab], Key>::new();
-        let mut map = Map {
-            key_length: 1,
-            dictionary: Default::default(),
-            grid: ::ndarray::Array3::default((self.levels.len(), self.size.1 as usize, self.size.0 as usize)),
-        };
+        let mut map = Map::with_empty_dictionary(self.size.0 as usize, self.size.1 as usize, self.levels.len());
 
         // If we have a "base" map we want to stay close to, prepopulate the
         // output map's dictionary with any shared tiles.

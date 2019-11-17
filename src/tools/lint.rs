@@ -41,7 +41,7 @@ pub fn check(
     map: &mut Map,
 ) -> Lints {
     let mut lints = Lints::default();
-    let key_length = map.key_length;
+    let key_length = map.key_length();
 
     for z in 0..map.dim_z() {
         let grid = map.z_level(z);

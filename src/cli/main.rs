@@ -455,13 +455,11 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
 
             let mut report = HashMap::new();
             for path in files.iter() {
-                let path: &std::path::Path = path.as_ref();
+                let path = std::path::Path::new(path);
                 let map = dmm::Map::from_file(path).unwrap();
-
-                let dim = map.grid.dim();
                 report.insert(path, Map {
-                    size: (dim.2, dim.1, dim.0),  // zyx -> xyz
-                    key_length: map.key_length,
+                    size: map.dim_xyz(),
+                    key_length: map.key_length(),
                     num_keys: map.dictionary.len(),
                 });
             }

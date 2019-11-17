@@ -712,7 +712,7 @@ impl EditorScene {
                                 ui.text(im_str!(
                                     "{:?}; {}-keys: {}",
                                     dims,
-                                    dmm.key_length,
+                                    dmm.key_length(),
                                     dmm.dictionary.len()
                                 ));
                             } else {
@@ -754,7 +754,7 @@ impl EditorScene {
                             ui.text(im_str!(
                                 "{:?}; {}-keys: {}",
                                 dmm.dim_xyz(),
-                                dmm.key_length,
+                                dmm.key_length(),
                                 dmm.dictionary.len()
                             ));
                         }

@@ -57,12 +57,13 @@ impl Coord3 {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Map {
-    pub key_length: u8,
-    // sorted order
+    key_length: u8,
+    /// The map's dictionary keys in sorted order.
     pub dictionary: BTreeMap<Key, Vec<Prefab>>,
-    pub grid: Array3<Key>, // Z/Y/X order
+    /// The map's grid of keys in Z/Y/X order.
+    pub grid: Array3<Key>,
 }
 
 pub type Grid<'a> = ndarray::ArrayBase<ndarray::ViewRepr<&'a Key>, ndarray::Dim<[usize; 2]>>;
@@ -106,9 +107,21 @@ impl Map {
         }
     }
 
+    pub fn with_empty_dictionary(x: usize, y: usize, z: usize) -> Map {
+        Map {
+            key_length: 1,
+            dictionary: BTreeMap::new(),
+            grid: Array3::default((z, y, x)),
+        }
+    }
+
     pub fn to_file(&self, path: &Path) -> io::Result<()> {
         // DMM saver later
         save_tgm::save_tgm(self, File::create(path)?)
+    }
+
+    pub fn key_length(&self) -> u8 {
+        self.key_length
     }
 
     pub fn adjust_key_length(&mut self) {
