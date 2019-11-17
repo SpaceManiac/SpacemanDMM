@@ -251,6 +251,36 @@ impl<'a> From<TypeRef<'a>> for Atom<'a> {
     }
 }
 
+pub struct Adjacency<'a, 'b> {
+    // 0 1 2
+    // 3 4 5
+    // 6 7 8
+    inner: [&'b [Atom<'a>]; 9],
+}
+
+impl<'a, 'b> Adjacency<'a, 'b> {
+    pub fn new(inner: [&'b [Atom<'a>]; 9]) -> Self {
+        Adjacency { inner }
+    }
+
+    pub fn center(&self) -> &'b [Atom<'a>] {
+        self.inner[4]
+    }
+
+    pub fn offset(&self, dir: Dir) -> &'b [Atom<'a>] {
+        self.inner[match dir {
+            Dir::North => 1,
+            Dir::South => 7,
+            Dir::East => 5,
+            Dir::West => 3,
+            Dir::Northeast => 2,
+            Dir::Northwest => 0,
+            Dir::Southeast => 8,
+            Dir::Southwest => 6,
+        }]
+    }
+}
+
 // ----------------------------------------------------------------------------
 // Vars abstraction
 
