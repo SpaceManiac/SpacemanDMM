@@ -359,10 +359,6 @@ impl<'a> Atom<'a> {
     pub fn istype(&self, parent: &str) -> bool {
         subpath(&self.type_.path, parent)
     }
-
-    pub fn set_var<K: Into<String>>(&mut self, _: K, _: Constant) {
-        // TODO: remove all references
-    }
 }
 
 // ----------------------------------------------------------------------------
