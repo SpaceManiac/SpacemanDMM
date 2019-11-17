@@ -1,8 +1,16 @@
 //! Port of icon smoothing subsystem.
 
 use dm::constants::Constant;
-use dmi::{NORTH, SOUTH, EAST, WEST, NORTHEAST, NORTHWEST, SOUTHEAST, SOUTHWEST};
 use minimap::{Sprite, Context, Atom, GetVar, get_atom_list};
+
+const NORTH: i32 = 1;
+const SOUTH: i32 = 2;
+const EAST: i32 = 4;
+const WEST: i32 = 8;
+const NORTHEAST: i32 = 5;
+const NORTHWEST: i32 = 9;
+const SOUTHEAST: i32 = 6;
+const SOUTHWEST: i32 = 10;
 
 // (1 << N) where N is the usual value
 const N_NORTH: i32 = 2;

@@ -6,15 +6,6 @@ use lodepng::ffi::{State as PngState};
 
 const VERSION: &str = "4.0";
 
-pub const NORTH: i32 = 1;
-pub const SOUTH: i32 = 2;
-pub const EAST: i32 = 4;
-pub const WEST: i32 = 8;
-pub const NORTHEAST: i32 = 5;
-pub const NORTHWEST: i32 = 9;
-pub const SOUTHEAST: i32 = 6;
-pub const SOUTHWEST: i32 = 10;
-
 /// The two-dimensional facing subset of BYOND's direction type.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum Dir {
