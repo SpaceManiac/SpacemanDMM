@@ -48,7 +48,7 @@ pub trait RenderPass: Sync {
 
     /// Apply overlays and underlays to an atom, in the form of pseudo-atoms.
     fn overlays<'a>(&self,
-        atom: &mut Atom<'a>,
+        atom: &Atom<'a>,
         objtree: &'a ObjectTree,
         underlays: &mut Vec<Atom<'a>>,
         overlays: &mut Vec<Atom<'a>>,
@@ -181,7 +181,7 @@ pub struct FakeGlass;
 impl RenderPass for FakeGlass {
     fn overlays<'a>(
         &self,
-        atom: &mut Atom<'a>,
+        atom: &Atom<'a>,
         _objtree: &'a ObjectTree,
         underlays: &mut Vec<Atom<'a>>,
         _overlays: &mut Vec<Atom<'a>>,
@@ -213,7 +213,7 @@ impl RenderPass for Pretty {
     }
 
     fn overlays<'a>(&self,
-        atom: &mut Atom<'a>,
+        atom: &Atom<'a>,
         objtree: &'a ObjectTree,
         _: &mut Vec<Atom<'a>>,
         overlays: &mut Vec<Atom<'a>>,

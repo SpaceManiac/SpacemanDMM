@@ -73,7 +73,7 @@ impl RenderPass for GravityGen {
 
     /// Apply overlays and underlays to an atom, in the form of pseudo-atoms.
     fn overlays<'a>(&self,
-        atom: &mut Atom<'a>,
+        atom: &Atom<'a>,
         objtree: &'a ObjectTree,
         _underlays: &mut Vec<Atom<'a>>,
         overlays: &mut Vec<Atom<'a>>,

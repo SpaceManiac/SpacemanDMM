@@ -4,7 +4,7 @@ use super::*;
 pub struct TransitTube;
 impl RenderPass for TransitTube {
     fn overlays<'a>(&self,
-        atom: &mut Atom<'a>,
+        atom: &Atom<'a>,
         objtree: &'a ObjectTree,
         _: &mut Vec<Atom<'a>>,
         overlays: &mut Vec<Atom<'a>>,
