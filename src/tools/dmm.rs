@@ -19,7 +19,41 @@ type KeyType = u16;
 
 /// An opaque map key.
 #[derive(Copy, Clone, Debug, Hash, Ord, Eq, PartialOrd, PartialEq, Default)]
-pub struct Key(u16);
+pub struct Key(KeyType);
+
+/// An XY coordinate pair in the BYOND coordinate system.
+///
+/// The lower-left corner is `{ x: 1, y: 1 }`.
+pub struct Coord2 {
+    pub x: i32,
+    pub y: i32,
+}
+
+impl Coord2 {
+    #[inline]
+    pub fn new(x: i32, y: i32) -> Coord2 {
+        Coord2 { x, y }
+    }
+}
+
+/// An XYZ coordinate triple in the BYOND coordinate system.
+///
+/// The lower-left corner of the first level is `{ x: 1, y: 1, z: 1 }`.
+///
+/// Note that BYOND by default considers "UP" to be Z+1, but this does not
+/// necessarily apply to a given game's logic.
+pub struct Coord3 {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+}
+
+impl Coord3 {
+    #[inline]
+    pub fn new(x: i32, y: i32, z: i32) -> Coord3 {
+        Coord3 { x, y, z }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Map {
