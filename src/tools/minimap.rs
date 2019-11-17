@@ -57,7 +57,10 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
             if x < ctx.min.0 || x > ctx.max.0 {
                 continue;
             }
-            'atom: for mut atom in get_atom_list(objtree, &map.dictionary[e], (x as u32, y as u32), render_passes, Some(ctx.errors)) {
+
+            let loc = (x as u32, y as u32);
+
+            'atom: for mut atom in get_atom_list(objtree, &map.dictionary[e], loc, render_passes, Some(ctx.errors)) {
                 for pass in render_passes.iter() {
                     // Note that late_filter is NOT called during smoothing lookups.
                     if !pass.late_filter(&atom, objtree) {
@@ -86,7 +89,6 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
                 }
 
                 // smoothing time
-                let loc = atom.loc;
                 icon_smoothing::handle_smooth(&mut underlays, ctx, atom, !0);
                 sprites.extend(underlays.drain(..).map(|o| (loc, o)));
                 sprites.extend(overlays.drain(..).map(|o| (loc, o)));
