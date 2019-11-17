@@ -753,8 +753,7 @@ fn cardinal_smooth<'a>(output: &mut Vec<((u32, u32), Sprite<'a>)>, ctx: Context<
             .. source.sprite
         };
         if let Some(icon) = source.get_var("smooth_icon", ctx.objtree).as_path_str() {
-            // TODO: fix leak
-            sprite.icon = Box::leak(icon.to_owned().into_boxed_str());
+            sprite.icon = icon;
         }
         output.push((source.loc, sprite));
     }
@@ -836,8 +835,7 @@ fn diagonal_smooth<'a>(output: &mut Vec<((u32, u32), Sprite<'a>)>, ctx: Context<
             .. source.sprite
         };
         if let Some(icon) = source.get_var("smooth_icon", ctx.objtree).as_path_str() {
-            // TODO: fix leak
-            copy.icon = Box::leak(icon.to_owned().into_boxed_str());
+            copy.icon = icon;
         }
         output.push((source.loc, copy));
     }
