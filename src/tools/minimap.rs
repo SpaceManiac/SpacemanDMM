@@ -158,7 +158,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
                     };
                     if !aboveground.is_empty() {
                         add_overlay!(aboveground);
-                        atom.sprite.layer = -5_000;
+                        atom.sprite.layer = Layer::from(-5);
                     }
                 } else if subtype(p, "/obj/machinery/power/apc/") {
                     use dmi::*;
@@ -460,6 +460,39 @@ impl<'a> GetVar<'a> for TypeRef<'a> {
 // ----------------------------------------------------------------------------
 // Renderer-agnostic sprite structure
 
+/// A guaranteed sortable representation of a `layer` float.
+#[derive(Default, Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub struct Layer {
+    whole: i16,
+    frac: u16,
+}
+
+impl Layer {
+    /// Encode this layer as an `i32` for FFI representation.
+    pub fn encode(self) -> i32 {
+        ((self.whole as i32) << 16) | (self.frac as i32)
+    }
+}
+
+impl From<i16> for Layer {
+    fn from(whole: i16) -> Layer {
+        Layer { whole, frac: 0 }
+    }
+}
+
+impl From<i32> for Layer {
+    fn from(whole: i32) -> Layer {
+        use std::convert::TryFrom;
+        Layer { whole: i16::try_from(whole).expect("layer out of range"), frac: 0 }
+    }
+}
+
+impl From<f32> for Layer {
+    fn from(f: f32) -> Layer {
+        Layer { whole: f as i16, frac: ((f.fract() + 1.).fract() * 65536.) as u16 }
+    }
+}
+
 /// A Sprite is a fragment of an atom's appearance.
 ///
 /// Every atom has a default sprite, which may be disabled, and a list of
@@ -481,7 +514,7 @@ pub struct Sprite<'s> {
 
     // sorting
     pub plane: i32,
-    pub layer: i32,
+    pub layer: Layer,
 }
 
 impl<'s> Sprite<'s> {
@@ -518,7 +551,7 @@ impl<'s> Default for Sprite<'s> {
             ofs_x: 0,
             ofs_y: 0,
             plane: 0,
-            layer: 0,
+            layer: Layer::default(),
         }
     }
 }
@@ -547,13 +580,13 @@ fn plane_of<'s, T: GetVar<'s> + ?Sized>(objtree: &'s ObjectTree, atom: &T) -> i3
     }
 }
 
-fn layer_of<'s, T: GetVar<'s> + ?Sized>(objtree: &'s ObjectTree, atom: &T) -> i32 {
+fn layer_of<'s, T: GetVar<'s> + ?Sized>(objtree: &'s ObjectTree, atom: &T) -> Layer {
     match atom.get_var("layer", objtree) {
-        &Constant::Int(i) => (i % 1000) * 1000,
-        &Constant::Float(f) => ((f % 1000.) * 1000.) as i32,
+        &Constant::Int(i) => Layer::from(i),
+        &Constant::Float(f) => Layer::from(f),
         other => {
             eprintln!("not a layer: {:?} on {:?}", other, atom.get_path());
-            2_000
+            Layer::from(2)
         }
     }
 }

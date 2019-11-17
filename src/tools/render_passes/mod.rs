@@ -1,6 +1,6 @@
 use dm::objtree::*;
 use dm::constants::Constant;
-use minimap::{Atom, GetVar, Sprite};
+use minimap::{Atom, GetVar, Sprite, Layer};
 
 pub mod transit_tube;
 pub mod random;
@@ -287,30 +287,30 @@ impl RenderPass for FancyLayers {
     }
 }
 
-fn fancy_layer_for_path(p: &str) -> Option<i32> {
+fn fancy_layer_for_path(p: &str) -> Option<Layer> {
     use dm::objtree::subpath as subtype;
     Some(if subtype(p, "/turf/open/floor/plating/") || subtype(p, "/turf/open/space/") {
-        -10_000  // under everything
+        Layer::from(-10)  // under everything
     } else if subtype(p, "/turf/closed/mineral/") {
-        -3_000   // above hidden stuff and plating but below walls
+        Layer::from(-3)   // above hidden stuff and plating but below walls
     } else if subtype(p, "/turf/open/floor/") || subtype(p, "/turf/closed/") {
-        -2_000   // above hidden pipes and wires
+        Layer::from(-2)   // above hidden pipes and wires
     } else if subtype(p, "/turf/") {
-        -10_000  // under everything
+        Layer::from(-10)  // under everything
     } else if subtype(p, "/obj/effect/turf_decal/") {
-        -1_000   // above turfs
+        Layer::from(-1)   // above turfs
     } else if subtype(p, "/obj/structure/disposalpipe/") {
-        -6_000
+        Layer::from(-6)
     } else if subtype(p, "/obj/machinery/atmospherics/pipe/") && !p.contains("visible") {
-        -5_000
+        Layer::from(-5)
     } else if subtype(p, "/obj/structure/cable/") {
-        -4_000
+        Layer::from(-4)
     } else if subtype(p, "/obj/machinery/power/terminal/") {
-        -3_500
+        Layer::from(-3.5)
     } else if subtype(p, "/obj/structure/lattice/") {
-        -8_000
+        Layer::from(-8)
     } else if subtype(p, "/obj/machinery/navbeacon/") {
-        -3_000
+        Layer::from(-3)
     } else {
         return None
     })

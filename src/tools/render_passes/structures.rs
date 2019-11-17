@@ -66,7 +66,7 @@ impl RenderPass for GravityGen {
             sprite.icon_state = icon_state;
             sprite.plane = 0;  // TODO: figure out plane handling for real
             if count <= 3 {
-                sprite.layer = 4_250;  // WALL_OBJ_LAYER
+                sprite.layer = Layer::from(4.25);  // WALL_OBJ_LAYER
             }
             if count == 5 {
                 // energy overlay goes above the middle part

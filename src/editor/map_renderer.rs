@@ -335,7 +335,7 @@ impl RenderPop {
             ofs_x: sprite.ofs_x,
             ofs_y: sprite.ofs_y,
             plane: sprite.plane,
-            layer: sprite.layer,
+            layer: sprite.layer.encode(),
         })
     }
 
