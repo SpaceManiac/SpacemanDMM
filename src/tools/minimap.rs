@@ -460,6 +460,39 @@ impl<'a> GetVar<'a> for TypeRef<'a> {
 // ----------------------------------------------------------------------------
 // Renderer-agnostic sprite structure
 
+/// Information about when a sprite should be shown or hidden.
+#[derive(Default, Debug, Clone, Copy, Eq, PartialEq)]
+pub struct Category {
+    raw: u32,
+}
+
+impl Category {
+    const AREA: Category = Category { raw: 1 };
+    const TURF: Category = Category { raw: 2 };
+    const OBJ: Category = Category { raw: 3 };
+    const MOB: Category = Category { raw: 4 };
+
+    ///
+    pub fn from_path(path: &str) -> Category {
+        if path.starts_with("/area") {
+            Category::AREA
+        } else if path.starts_with("/turf") {
+            Category::TURF
+        } else if path.starts_with("/obj") {
+            Category::OBJ
+        } else if path.starts_with("/mob") {
+            Category::MOB
+        } else {
+            Category { raw: 0 }
+        }
+    }
+
+    /// Encode this category for FFI representation.
+    pub fn encode(self) -> u32 {
+        self.raw
+    }
+}
+
 /// A guaranteed sortable representation of a `layer` float.
 #[derive(Default, Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Layer {
@@ -500,7 +533,7 @@ impl From<f32> for Layer {
 #[derive(Debug, Clone)]
 pub struct Sprite<'s> {
     // filtering
-    pub category: u32,  // type
+    pub category: Category,
 
     // visual appearance
     pub icon: &'s str,
@@ -527,7 +560,7 @@ impl<'s> Sprite<'s> {
         let step_y = vars.get_var("step_y", objtree).to_int().unwrap_or(0);
 
         Sprite {
-            category: category_of(vars.get_path()),
+            category: Category::from_path(vars.get_path()),
             icon: vars.get_var("icon", objtree).as_path_str().unwrap_or(""),
             icon_state: vars.get_var("icon_state", objtree).as_str().unwrap_or(""),
             dir: vars.get_var("dir", objtree).to_int().unwrap_or(::dmi::SOUTH),
@@ -543,7 +576,7 @@ impl<'s> Sprite<'s> {
 impl<'s> Default for Sprite<'s> {
     fn default() -> Self {
         Sprite {
-            category: 0,
+            category: Category::default(),
             icon: "",
             icon_state: "",
             dir: 0,
@@ -553,20 +586,6 @@ impl<'s> Default for Sprite<'s> {
             plane: 0,
             layer: Layer::default(),
         }
-    }
-}
-
-fn category_of(path: &str) -> u32 {
-    if path.starts_with("/area") {
-        1
-    } else if path.starts_with("/turf") {
-        2
-    } else if path.starts_with("/obj") {
-        3
-    } else if path.starts_with("/mob") {
-        4
-    } else {
-        0
     }
 }
 

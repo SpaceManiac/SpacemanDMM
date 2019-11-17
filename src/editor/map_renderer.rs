@@ -327,7 +327,7 @@ impl RenderPop {
         ];
 
         Some(RenderPop {
-            category: sprite.category,
+            category: sprite.category.encode(),
             texture: texture_id as u32,
             uv,
             color,
