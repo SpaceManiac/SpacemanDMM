@@ -58,9 +58,6 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
                 continue;
             }
             'atom: for mut atom in get_atom_list(objtree, &map.dictionary[e], (x as u32, y as u32), render_passes, Some(ctx.errors)) {
-                for pass in render_passes {
-                    pass.adjust_vars(&mut atom, &objtree);
-                }
                 for pass in render_passes.iter() {
                     // Note that late_filter is NOT called during smoothing lookups.
                     if !pass.late_filter(&atom, objtree) {

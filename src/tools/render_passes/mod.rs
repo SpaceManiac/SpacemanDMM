@@ -35,12 +35,6 @@ pub trait RenderPass: Sync {
         output: &mut Vec<Atom<'a>>,
     ) -> bool { false }
 
-    /// Adjust the variables of an atom.
-    fn adjust_vars<'a>(&self,
-        atom: &mut Atom<'a>,
-        objtree: &'a ObjectTree,
-    ) {}
-
     fn adjust_sprite<'a>(&self,
         atom: &Atom<'a>,
         sprite: &mut Sprite<'a>,
@@ -56,10 +50,8 @@ pub trait RenderPass: Sync {
         overlays: &mut Vec<Sprite<'a>>,
     ) {}
 
-    /// Filter atoms at the end of the process.
-    ///
-    /// Will act on adjusted atoms and pseudo-atoms from `adjust_vars` and
-    /// `overlays`. Return `true` to keep and `false` to discard.
+    /// Filter atoms at the end of the process, after they have been taken into
+    /// account by their neighbors.
     fn late_filter(&self,
         atom: &Atom,
         objtree: &ObjectTree,
