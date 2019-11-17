@@ -1,15 +1,17 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::fs::File;
-use std::io::{self, BufReader, BufWriter};
+use std::io;
 use std::fmt;
 
 use ndarray::{self, Array3, Axis};
 use linked_hash_map::LinkedHashMap;
 
-use dm::{DMError, Location, HasLocation};
-use dm::lexer::{LocationTracker, from_utf8_or_latin1};
+use dm::{DMError, Location};
 use dm::constants::Constant;
+
+mod read;
+mod save_tgm;
 
 const MAX_KEY_LENGTH: u8 = 3;
 
@@ -80,7 +82,7 @@ impl Map {
             dictionary: Default::default(),
             grid: Array3::default((1, 1, 1)),
         };
-        parse_map(&mut map, File::open(path).map_err(|e| {
+        read::parse_map(&mut map, File::open(path).map_err(|e| {
             DMError::new(Location::default(), "i/o error").set_cause(e)
         })?)?;
         Ok(map)
@@ -106,7 +108,7 @@ impl Map {
 
     pub fn to_file(&self, path: &Path) -> io::Result<()> {
         // DMM saver later
-        save_tgm(self, File::create(path)?)
+        save_tgm::save_tgm(self, File::create(path)?)
     }
 
     pub fn adjust_key_length(&mut self) {
@@ -136,7 +138,7 @@ impl Map {
     }
 
     #[inline]
-    pub fn format_key(&self, key: Key) -> FormatKey {
+    pub fn format_key(&self, key: Key) -> impl std::fmt::Display {
         FormatKey(self.key_length, key)
     }
 
@@ -193,18 +195,8 @@ impl Key {
     }
 }
 
-// ----------------------------------------------------------------------------
-// Map Writer
-
 #[derive(Copy, Clone)]
-pub struct FormatKey(u8, Key);
-
-impl FormatKey {
-    #[inline]
-    pub fn new(key_length: u8, key: Key) -> FormatKey {
-        FormatKey(key_length, key)
-    }
-}
+struct FormatKey(u8, Key);
 
 impl fmt::Display for FormatKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -227,316 +219,19 @@ impl fmt::Display for FormatKey {
 
 const BASE_52: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-const TGM_HEADER: &str = "//MAP CONVERTED BY dmm2tgm.py THIS HEADER COMMENT PREVENTS RECONVERSION, DO NOT REMOVE";
-
-fn save_tgm(map: &Map, f: File) -> io::Result<()> {
-    use std::io::Write;
-
-    let mut f = BufWriter::new(f);
-    write!(f, "{}\n", TGM_HEADER)?;
-
-    // dictionary
-    for (&key, prefabs) in map.dictionary.iter() {
-        write!(f, "\"{}\" = (\n", map.format_key(key))?;
-        for (i, fab) in prefabs.iter().enumerate() {
-            write!(f, "{}", fab.path)?;
-            if !fab.vars.is_empty() {
-                write!(f, "{{")?;
-                for (i, (var, value)) in fab.vars.iter().enumerate() {
-                    write!(f, "\n\t{} = {}", var, value)?;
-                    if i + 1 != fab.vars.len() {
-                        write!(f, ";")?;
-                    }
-                }
-                write!(f, "\n\t}}")?;
-            }
-            if i + 1 != prefabs.len() {
-                write!(f, ",\n")?;
-            }
-        }
-        write!(f, ")\n")?;
-    }
-
-    // grid in Y-major
-    for (z, z_grid) in map.grid.axis_iter(Axis(0)).enumerate() {
-        write!(f, "\n")?;
-        for (x, x_col) in z_grid.axis_iter(Axis(1)).enumerate() {
-            write!(f, "({},1,{}) = {{\"\n", x + 1, z + 1)?;
-            for &elem in x_col.iter() {
-                write!(f, "{}\n", map.format_key(elem))?;
-            }
-            write!(f, "\"}}\n")?;
-        }
-    }
-
-    Ok(())
-}
-
-// ----------------------------------------------------------------------------
-// Map Parser
-
-#[inline]
-fn take<T: Default>(t: &mut T) -> T {
-    ::std::mem::replace(t, T::default())
-}
-
-fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
-    use std::io::Read;
-    use std::cmp::max;
-
-    let mut chars = LocationTracker::new(Default::default(), BufReader::new(f).bytes());
-
-    let mut in_comment_line = false;
-    let mut comment_trigger = false;
-
-    // dictionary
-    let mut curr_data = Vec::new();
-    let mut curr_prefab = Prefab::default();
-    let mut curr_var = Vec::new();
-    let mut curr_datum = Vec::new();
-    let mut curr_key = 0;
-    let mut curr_key_length = 0;
-
-    let mut in_quote_block = false;
-    let mut in_key_block = false;
-    let mut in_data_block = false;
-    let mut in_varedit_block = false;
-    let mut after_data_block = false;
-    let mut escaping = false;
-    let mut skip_whitespace = false;
-
-    while let Some(ch) = chars.next() {
-        let ch = ch?;
-        if ch == b'\n' || ch == b'\r' {
-            in_comment_line = false;
-            comment_trigger = false;
-            continue;
-        } else if in_comment_line {
-            continue;
-        } else if ch == b'\t' {
-            continue;
-        }
-
-        if ch == b'/' && !in_quote_block {
-            if comment_trigger {
-                in_comment_line = true;
-                continue;
-            } else {
-                comment_trigger = true;
-            }
-        } else {
-            comment_trigger = false;
-        }
-
-        if in_data_block {
-            if in_varedit_block {
-                if in_quote_block {
-                    if ch == b'\\' {
-                        curr_datum.push(ch);
-                        escaping = true;
-                    } else if escaping {
-                        curr_datum.push(ch);
-                        escaping = false;
-                    } else if ch == b'"' {
-                        curr_datum.push(ch);
-                        in_quote_block = false;
-                    } else {
-                        curr_datum.push(ch);
-                    }
-                } else { // in_quote_block
-                    if skip_whitespace && ch == b' ' {
-                        skip_whitespace = false;
-                        continue;
-                    }
-                    skip_whitespace = false;
-
-                    if ch == b'"' {
-                        curr_datum.push(ch);
-                        in_quote_block = true;
-                    } else if ch == b'=' && curr_var.is_empty() {
-                        curr_var = take(&mut curr_datum);
-                        let mut length = curr_var.len();
-                        while length > 0 && (curr_var[length - 1] as char).is_whitespace() {
-                            length -= 1;
-                        }
-                        curr_var.truncate(length);
-                        skip_whitespace = true;
-                    } else if ch == b';' {
-                        curr_prefab.vars.insert(
-                            from_utf8_or_latin1(take(&mut curr_var)),
-                            dm::constants::evaluate_str(chars.location(), &take(&mut curr_datum))?,
-                        );
-                        skip_whitespace = true;
-                    } else if ch == b'}' {
-                        if !curr_var.is_empty() {
-                            curr_prefab.vars.insert(
-                                from_utf8_or_latin1(take(&mut curr_var)),
-                                dm::constants::evaluate_str(chars.location(), &take(&mut curr_datum))?,
-                            );
-                        }
-                        in_varedit_block = false;
-                    } else {
-                        curr_datum.push(ch);
-                    }
-                }
-            } else if ch == b'{' {
-                curr_prefab.path = from_utf8_or_latin1(take(&mut curr_datum));
-                in_varedit_block = true;
-            } else if ch == b',' {
-                if curr_prefab.path.is_empty() && !curr_datum.is_empty() {
-                    curr_prefab.path = from_utf8_or_latin1(take(&mut curr_datum));
-                }
-                curr_data.push(take(&mut curr_prefab));
-            } else if ch == b')' {
-                if curr_prefab.path.is_empty() && !curr_datum.is_empty() {
-                    curr_prefab.path = from_utf8_or_latin1(take(&mut curr_datum));
-                }
-                curr_data.push(take(&mut curr_prefab));
-                let key = take(&mut curr_key);
-                let data = take(&mut curr_data);
-                curr_key_length = 0;
-                map.dictionary.insert(Key(key), data);
-                in_data_block = false;
-                after_data_block = true;
-            } else {
-                curr_datum.push(ch);
-            }
-        } else if in_key_block {
-            if ch == b'"' {
-                in_key_block = false;
-                assert!(map.key_length == 0 || map.key_length == curr_key_length);
-                map.key_length = curr_key_length;
-            } else {
-                curr_key = advance_key(curr_key, base_52_reverse(ch)?)?;
-                curr_key_length += 1;
-            }
-        } else if ch == b'"' {
-            in_key_block = true;
-            after_data_block = false;
-        } else if ch == b'(' {
-            if after_data_block {
-                curr_key = 0;
-                curr_key_length = 0;
-                break; // go to grid parsing
-            } else {
-                in_data_block = true;
-                after_data_block = false;
-            }
-        }
-    }
-
-    // grid
-    #[derive(PartialEq, Debug)]
-    enum Coord {
-        X,
-        Y,
-        Z,
-    }
-
-    let mut grid = BTreeMap::new();
-    let mut reading_coord = Coord::X;
-    let (mut curr_x, mut curr_y, mut curr_z) = (0, 0, 0);
-    let (mut max_x, mut max_y, mut max_z) = (0, 0, 0);
-    let mut curr_num = 0;
-    let mut base_x = 0;
-
-    let mut in_coord_block = true;
-    let mut in_map_string = false;
-    let mut adjust_y = true;
-
-    while let Some(ch) = chars.next() {
-        let ch = ch?;
-        if in_coord_block {
-            if ch == b',' {
-                if reading_coord == Coord::X {
-                    curr_x = take(&mut curr_num);
-                    max_x = max(max_x, curr_x);
-                    base_x = curr_x;
-                    reading_coord = Coord::Y;
-                } else if reading_coord == Coord::Y {
-                    curr_y = take(&mut curr_num);
-                    max_y = max(max_y, curr_y);
-                    reading_coord = Coord::Z;
-                } else {
-                    return Err(DMError::new(chars.location(), "Incorrect number of coordinates"));
-                }
-            } else if ch == b')' {
-                assert_eq!(reading_coord, Coord::Z);
-                curr_z = take(&mut curr_num);
-                max_z = max(max_z, curr_z);
-                in_coord_block = false;
-                reading_coord = Coord::X;
-            } else {
-                match (ch as char).to_digit(10) {
-                    Some(x) => curr_num = 10 * curr_num + x as usize,
-                    None => return Err(DMError::new(chars.location(), format!("bad digit {:?} in map coordinate", ch))),
-                }
-            }
-        } else if in_map_string {
-            if ch == b'"' {
-                in_map_string = false;
-                adjust_y = true;
-                curr_y -= 1;
-            } else if ch == b'\r' {
-                // nothing
-            } else if ch == b'\n' {
-                if adjust_y {
-                    adjust_y = false;
-                } else {
-                    curr_y += 1;
-                }
-                curr_x = base_x;
-            } else {
-                curr_key = advance_key(curr_key, base_52_reverse(ch)?)?;
-                curr_key_length += 1;
-                if curr_key_length == map.key_length {
-                    let key = take(&mut curr_key);
-                    curr_key_length = 0;
-                    if grid.insert((curr_x, curr_y, curr_z), Key(key)).is_some() {
-                        return Err(DMError::new(chars.location(), format!(
-                            "multiple entries for ({}, {}, {})",
-                            curr_x, curr_y, curr_z)))
-                    }
-                    max_x = max(max_x, curr_x);
-                    curr_x += 1;
-                }
-            }
-        } else if ch == b'(' {
-            in_coord_block = true;
-        } else if ch == b'"' {
-            in_map_string = true;
-        }
-    }
-    max_y = max(max_y, curr_y);
-
-    let mut result = Ok(());
-    map.grid = Array3::from_shape_fn((max_z, max_y, max_x), |(z, y, x)| {
-        if let Some(&tile) = grid.get(&(x + 1, y + 1, z + 1)) {
-            tile
-        } else {
-            result = Err(DMError::new(chars.location(), format!(
-                "no value for tile ({}, {}, {})",
-                x + 1, y + 1, z + 1)));
-            Key(0)
-        }
-    });
-
-    result
-}
-
-fn base_52_reverse(ch: u8) -> Result<KeyType, DMError> {
+fn base_52_reverse(ch: u8) -> Result<KeyType, String> {
     if ch >= b'a' && ch <= b'z' {
         Ok(ch as KeyType - b'a' as KeyType)
     } else if ch >= b'A' && ch <= b'Z' {
         Ok(26 + ch as KeyType - b'A' as KeyType)
     } else {
-        Err(DMError::new(Location::default(), format!("Not a base-52 character: {:?}", ch as char)))
+        Err(format!("Not a base-52 character: {:?}", ch as char))
     }
 }
 
-fn advance_key(current: KeyType, next_digit: KeyType) -> Result<KeyType, DMError> {
+fn advance_key(current: KeyType, next_digit: KeyType) -> Result<KeyType, &'static str> {
     current.checked_mul(52).and_then(|b| b.checked_add(next_digit)).ok_or_else(|| {
         // https://secure.byond.com/forum/?post=2340796#comment23770802
-        DMError::new(Location::default(), "Key overflow, max is 'ymo'")
+        "Key overflow, max is 'ymo'"
     })
 }
