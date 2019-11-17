@@ -59,7 +59,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
 
             let loc = (x as u32, y as u32);
 
-            'atom: for mut atom in get_atom_list(objtree, &map.dictionary[e], loc, render_passes, Some(ctx.errors)) {
+            'atom: for mut atom in get_atom_list(objtree, &map.dictionary[e], render_passes, Some(ctx.errors)) {
                 for pass in render_passes.iter() {
                     // Note that late_filter is NOT called during smoothing lookups.
                     if !pass.late_filter(&atom, objtree) {
@@ -88,7 +88,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
                 }
 
                 // smoothing time
-                icon_smoothing::handle_smooth(&mut underlays, ctx, atom, !0);
+                icon_smoothing::handle_smooth(&mut underlays, ctx, loc, atom, !0);
                 sprites.extend(underlays.drain(..).map(|o| (loc, o)));
                 sprites.extend(overlays.drain(..).map(|o| (loc, o)));
             }
@@ -166,7 +166,6 @@ fn clip(bounds: (u32, u32), mut loc: (i32, i32), mut rect: (u32, u32, u32, u32))
 pub fn get_atom_list<'a>(
     objtree: &'a ObjectTree,
     prefabs: &'a [Prefab],
-    loc: (u32, u32),
     render_passes: &[Box<dyn RenderPass>],
     errors: Option<&RwLock<HashSet<String>>>,
 ) -> Vec<Atom<'a>> {
@@ -209,10 +208,6 @@ pub fn get_atom_list<'a>(
         result.push(atom);
     }
 
-    for atom in result.iter_mut() {
-        atom.loc = loc;
-    }
-
     result
 }
 
@@ -224,7 +219,6 @@ pub struct Atom<'a> {
     pub(crate) type_: &'a Type,
     prefab: Option<&'a Vars>,
     pub sprite: Sprite<'a>,
-    pub loc: (u32, u32),
 }
 
 impl<'a> Atom<'a> {
@@ -233,7 +227,6 @@ impl<'a> Atom<'a> {
             type_: type_.get(),
             prefab: Some(&fab.vars),
             sprite: Sprite::default(),
-            loc: (0, 0),
         })
     }
 
@@ -248,7 +241,6 @@ impl<'a> From<&'a Type> for Atom<'a> {
             type_: type_,
             prefab: None,
             sprite: Sprite::default(),
-            loc: (0, 0),
         }
     }
 }

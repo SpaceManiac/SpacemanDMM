@@ -18,12 +18,12 @@ const SMOOTH_MORE: i32 = 2;  // smooth with all subtypes thereof
 const SMOOTH_DIAGONAL: i32 = 4;  // smooth diagonally
 const SMOOTH_BORDER: i32 = 8;  // smooth with the borders of the map
 
-pub fn handle_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, atom: Atom<'a>, mask: i32) {
+pub fn handle_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, loc: (u32, u32), atom: Atom<'a>, mask: i32) {
     let smooth_flags = mask & atom.get_var("smooth", ctx.objtree).to_int().unwrap_or(0);
     if smooth_flags & (SMOOTH_TRUE | SMOOTH_MORE) != 0 {
-        let adjacencies = calculate_adjacencies(ctx, &atom, smooth_flags);
+        let adjacencies = calculate_adjacencies(ctx, loc, &atom, smooth_flags);
         if smooth_flags & SMOOTH_DIAGONAL != 0 {
-            diagonal_smooth(output, ctx, &atom, adjacencies);
+            diagonal_smooth(output, ctx, loc, &atom, adjacencies);
         } else {
             cardinal_smooth(output, ctx, &atom, adjacencies);
         }
@@ -32,13 +32,13 @@ pub fn handle_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, atom: A
     }
 }
 
-fn calculate_adjacencies(ctx: Context, atom: &Atom, flags: i32) -> i32 {
+fn calculate_adjacencies(ctx: Context, loc: (u32, u32), atom: &Atom, flags: i32) -> i32 {
     use dmi::*;
     // TODO: anchored check
 
     let mut adjacencies = 0;
     let check_one = |direction, flag| {
-        if find_type_in_direction(ctx, atom, direction, flags) {
+        if find_type_in_direction(ctx, loc, atom, direction, flags) {
             flag
         } else {
             0
@@ -69,11 +69,11 @@ fn calculate_adjacencies(ctx: Context, atom: &Atom, flags: i32) -> i32 {
     adjacencies
 }
 
-fn find_type_in_direction<'a>(ctx: Context, source: &Atom, direction: i32, flags: i32) -> bool {
+fn find_type_in_direction<'a>(ctx: Context, loc: (u32, u32), source: &Atom, direction: i32, flags: i32) -> bool {
     use std::ptr::eq;
 
     let (dx, dy) = offset(direction);
-    let new_loc = (source.loc.0 as i32 + dx, source.loc.1 as i32 + dy);
+    let new_loc = (loc.0 as i32 + dx, loc.1 as i32 + dy);
     let (dim_y, dim_x) = ctx.level.grid.dim();
     if new_loc.0 < 0 || new_loc.1 < 0 || new_loc.0 >= dim_x as i32 || new_loc.1 >= dim_y as i32 {
         return flags & SMOOTH_BORDER != 0;
@@ -84,7 +84,6 @@ fn find_type_in_direction<'a>(ctx: Context, source: &Atom, direction: i32, flags
     let atom_list = get_atom_list(
         ctx.objtree,
         &ctx.map.dictionary[&ctx.level.grid[ndarray::Dim([new_loc.1 as usize, new_loc.0 as usize])]],
-        new_loc,
         ctx.render_passes,
         None,
     );
@@ -162,7 +161,7 @@ fn cardinal_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, source: &
     }
 }
 
-fn diagonal_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, source: &Atom<'a>, adjacencies: i32) {
+fn diagonal_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, loc: (u32, u32), source: &Atom<'a>, adjacencies: i32) {
     let presets = if adjacencies == N_NORTH | N_WEST {
         ["d-se", "d-se-0"]
     } else if adjacencies == N_NORTH | N_EAST {
@@ -198,7 +197,7 @@ fn diagonal_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, source: &
             // check direct, then 45deg left, then 45deg right
             'dirs: for &each in &[dir, left_45(dir), right_45(dir)] {
                 let (dx, dy) = offset(each);
-                let new_loc = (source.loc.0 as i32 + dx, source.loc.1 as i32 + dy);
+                let new_loc = (loc.0 as i32 + dx, loc.1 as i32 + dy);
                 let (dim_y, dim_x) = ctx.level.grid.dim();
                 if !(new_loc.0 < 0 || new_loc.1 < 0 || new_loc.0 >= dim_x as i32 || new_loc.1 >= dim_y as i32) {
                     let new_loc = (new_loc.0 as u32, new_loc.1 as u32);
@@ -206,7 +205,6 @@ fn diagonal_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, source: &
                     let atom_list = get_atom_list(
                         ctx.objtree,
                         &ctx.map.dictionary[&ctx.level.grid[ndarray::Dim([new_loc.1 as usize, new_loc.0 as usize])]],
-                        new_loc,
                         ctx.render_passes,
                         None,
                     );
