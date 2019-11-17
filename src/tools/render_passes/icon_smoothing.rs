@@ -18,7 +18,7 @@ const SMOOTH_MORE: i32 = 2;  // smooth with all subtypes thereof
 const SMOOTH_DIAGONAL: i32 = 4;  // smooth diagonally
 const SMOOTH_BORDER: i32 = 8;  // smooth with the borders of the map
 
-pub fn handle_smooth<'a>(output: &mut Vec<((u32, u32), Sprite<'a>)>, ctx: Context<'a>, atom: Atom<'a>, mask: i32) {
+pub fn handle_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, atom: Atom<'a>, mask: i32) {
     let smooth_flags = mask & atom.get_var("smooth", ctx.objtree).to_int().unwrap_or(0);
     if smooth_flags & (SMOOTH_TRUE | SMOOTH_MORE) != 0 {
         let adjacencies = calculate_adjacencies(ctx, &atom, smooth_flags);
@@ -28,7 +28,7 @@ pub fn handle_smooth<'a>(output: &mut Vec<((u32, u32), Sprite<'a>)>, ctx: Contex
             cardinal_smooth(output, ctx, &atom, adjacencies);
         }
     } else {
-        output.push((atom.loc, atom.sprite));
+        output.push(atom.sprite);
     }
 }
 
@@ -130,7 +130,7 @@ fn smoothlist_contains(list: &[(Constant, Option<Constant>)], desired: &str) -> 
     false
 }
 
-fn cardinal_smooth<'a>(output: &mut Vec<((u32, u32), Sprite<'a>)>, ctx: Context<'a>, source: &Atom<'a>, adjacencies: i32) {
+fn cardinal_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, source: &Atom<'a>, adjacencies: i32) {
     for &(what, f1, n1, f2, n2, f3) in &[
         ("1", N_NORTH, "n", N_WEST, "w", N_NORTHWEST),
         ("2", N_NORTH, "n", N_EAST, "e", N_NORTHEAST),
@@ -158,11 +158,11 @@ fn cardinal_smooth<'a>(output: &mut Vec<((u32, u32), Sprite<'a>)>, ctx: Context<
         if let Some(icon) = source.get_var("smooth_icon", ctx.objtree).as_path_str() {
             sprite.icon = icon;
         }
-        output.push((source.loc, sprite));
+        output.push(sprite);
     }
 }
 
-fn diagonal_smooth<'a>(output: &mut Vec<((u32, u32), Sprite<'a>)>, ctx: Context<'a>, source: &Atom<'a>, adjacencies: i32) {
+fn diagonal_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, source: &Atom<'a>, adjacencies: i32) {
     let presets = if adjacencies == N_NORTH | N_WEST {
         ["d-se", "d-se-0"]
     } else if adjacencies == N_NORTH | N_EAST {
@@ -191,10 +191,7 @@ fn diagonal_smooth<'a>(output: &mut Vec<((u32, u32), Sprite<'a>)>, ctx: Context<
             .index(&Constant::string("space"))
             .is_some()
         {
-            output.push((
-                source.loc,
-                Sprite::from_vars(ctx.objtree, &ctx.objtree.expect("/turf/open/space/basic"))
-            ));
+            output.push(Sprite::from_vars(ctx.objtree, &ctx.objtree.expect("/turf/open/space/basic")));
         } else {
             let dir = flip(reverse_ndir(adjacencies));
             let mut needs_plating = true;
@@ -215,7 +212,7 @@ fn diagonal_smooth<'a>(output: &mut Vec<((u32, u32), Sprite<'a>)>, ctx: Context<
                     );
                     for atom in atom_list {
                         if dm::objtree::subpath(&atom.type_.path, "/turf/open/") {
-                            output.push((source.loc, Sprite::from_vars(ctx.objtree, &atom)));
+                            output.push(Sprite::from_vars(ctx.objtree, &atom));
                             needs_plating = false;
                             break 'dirs;
                         }
@@ -223,10 +220,7 @@ fn diagonal_smooth<'a>(output: &mut Vec<((u32, u32), Sprite<'a>)>, ctx: Context<
                 }
             }
             if needs_plating {
-                output.push((
-                    source.loc,
-                    Sprite::from_vars(ctx.objtree, &ctx.objtree.expect("/turf/open/floor/plating"))
-                ));
+                output.push(Sprite::from_vars(ctx.objtree, &ctx.objtree.expect("/turf/open/floor/plating")));
             }
         }
     }
@@ -240,7 +234,7 @@ fn diagonal_smooth<'a>(output: &mut Vec<((u32, u32), Sprite<'a>)>, ctx: Context<
         if let Some(icon) = source.get_var("smooth_icon", ctx.objtree).as_path_str() {
             copy.icon = icon;
         }
-        output.push((source.loc, copy));
+        output.push(copy);
     }
 }
 

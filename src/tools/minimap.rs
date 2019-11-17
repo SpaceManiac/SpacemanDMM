@@ -87,8 +87,8 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
 
                 // smoothing time
                 let loc = atom.loc;
+                icon_smoothing::handle_smooth(&mut underlays, ctx, atom, !0);
                 sprites.extend(underlays.drain(..).map(|o| (loc, o)));
-                icon_smoothing::handle_smooth(&mut sprites, ctx, atom, !0);
                 sprites.extend(overlays.drain(..).map(|o| (loc, o)));
             }
         }
