@@ -147,11 +147,11 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
                 } else if subtype(p, "/obj/machinery/atmospherics/components/unary/") {
                     let aboveground = match atom.get_var("icon_state", objtree) {
                         &Constant::String(ref text) => match &**text {
-                            "vent_map" => "vent_off",
-                            "vent_map_on" => "vent_out",
-                            "vent_map_siphon_on" => "vent_in",
-                            "scrub_map" => "scrub_off",
-                            "scrub_map_on" => "scrub_on",
+                            "vent_map-1" | "vent_map-2" | "vent_map-3" => "vent_off",
+                            "vent_map_on-1" | "vent_map_on-2" | "vent_map_on-3" => "vent_out",
+                            "vent_map_siphon_on-1" | "vent_map_siphon_on-2" | "vent_map_siphon_on-3" => "vent_in",
+                            "scrub_map-1" | "scrub_map-2" | "scrub_map-3" => "scrub_off",
+                            "scrub_map_on-1" | "scrub_map_on-2" | "scrub_map_on-3" => "scrub_on",
                             _ => "",
                         },
                         _ => "",
