@@ -9,6 +9,7 @@ use linked_hash_map::LinkedHashMap;
 
 use dm::{DMError, Location};
 use dm::constants::Constant;
+use dmi::Dir;
 
 mod read;
 mod save_tgm;
@@ -38,6 +39,7 @@ impl Coord2 {
         Coord2 { x, y }
     }
 
+    #[inline]
     pub fn z(self, z: i32) -> Coord3 {
         Coord3 { x: self.x, y: self.y, z }
     }
@@ -50,6 +52,15 @@ impl Coord2 {
 
     fn from_raw((y, x): (usize, usize), (dim_y, _dim_x): (usize, usize)) -> Coord2 {
         Coord2 { x: x as i32 + 1, y: (dim_y - y) as i32 }
+    }
+}
+
+impl std::ops::Add<Dir> for Coord2 {
+    type Output = Coord2;
+
+    fn add(self, rhs: Dir) -> Coord2 {
+        let (x, y) = rhs.offset();
+        Coord2 { x: self.x + x, y: self.y + y }
     }
 }
 
@@ -72,6 +83,7 @@ impl Coord3 {
         Coord3 { x, y, z }
     }
 
+    #[inline]
     pub fn xy(self) -> Coord2 {
         Coord2 { x: self.x, y: self.y }
     }

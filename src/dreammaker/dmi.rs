@@ -63,8 +63,20 @@ impl Dir {
         }
     }
 
+    pub fn flip(self) -> Dir {
+        match self {
+            Dir::North => Dir::South,
+            Dir::South => Dir::North,
+            Dir::East => Dir::West,
+            Dir::West => Dir::East,
+            Dir::Northeast => Dir::Southwest,
+            Dir::Northwest => Dir::Southeast,
+            Dir::Southeast => Dir::Northwest,
+            Dir::Southwest => Dir::Northeast,
+        }
+    }
+
     pub fn flip_ns(self) -> Dir {
-        // approximately `x ^ 3`
         match self {
             Dir::North => Dir::South,
             Dir::South => Dir::North,
@@ -78,7 +90,6 @@ impl Dir {
     }
 
     pub fn flip_ew(self) -> Dir {
-        // approximately `x ^ 12`
         match self {
             Dir::North => Dir::North,
             Dir::South => Dir::South,
@@ -88,6 +99,72 @@ impl Dir {
             Dir::Northwest => Dir::Northeast,
             Dir::Southeast => Dir::Southwest,
             Dir::Southwest => Dir::Southeast,
+        }
+    }
+
+    pub fn clockwise_45(self) -> Dir {
+        match self {
+            Dir::North => Dir::Northeast,
+            Dir::Northeast => Dir::East,
+            Dir::East => Dir::Southeast,
+            Dir::Southeast => Dir::South,
+            Dir::South => Dir::Southwest,
+            Dir::Southwest => Dir::West,
+            Dir::West => Dir::Northwest,
+            Dir::Northwest => Dir::North,
+        }
+    }
+
+    pub fn counterclockwise_45(self) -> Dir {
+        match self {
+            Dir::North => Dir::Northwest,
+            Dir::Northeast => Dir::North,
+            Dir::East => Dir::Northeast,
+            Dir::Southeast => Dir::East,
+            Dir::South => Dir::Southeast,
+            Dir::Southwest => Dir::South,
+            Dir::West => Dir::Southwest,
+            Dir::Northwest => Dir::West,
+        }
+    }
+
+    pub fn clockwise_90(self) -> Dir {
+        match self {
+            Dir::North => Dir::East,
+            Dir::South => Dir::West,
+            Dir::East => Dir::South,
+            Dir::West => Dir::North,
+            Dir::Northeast => Dir::Southeast,
+            Dir::Northwest => Dir::Northeast,
+            Dir::Southeast => Dir::Southwest,
+            Dir::Southwest => Dir::Northeast,
+        }
+    }
+
+    pub fn counterclockwise_90(self) -> Dir {
+        match self {
+            Dir::North => Dir::West,
+            Dir::South => Dir::East,
+            Dir::East => Dir::North,
+            Dir::West => Dir::South,
+            Dir::Southeast => Dir::Northeast,
+            Dir::Northeast => Dir::Northwest,
+            Dir::Southwest => Dir::Southeast,
+            Dir::Northwest => Dir::Southwest,
+        }
+    }
+
+    /// Get this direction's offset in BYOND's coordinate system.
+    pub fn offset(self) -> (i32, i32) {
+        match self {
+            Dir::North => (0, 1),
+            Dir::South => (0, -1),
+            Dir::East => (1, 0),
+            Dir::West => (-1, 0),
+            Dir::Northeast => (1, 1),
+            Dir::Northwest => (-1, 1),
+            Dir::Southeast => (1, -1),
+            Dir::Southwest => (-1, -1),
         }
     }
 }
