@@ -21,8 +21,8 @@ impl RenderPass for Random {
                         machines.push(child.get());
                     }
                 }
-                if let Some(replacement) = machines.choose(&mut rng) {
-                    output.push(Atom::from_type_ref(replacement, atom.loc));
+                if let Some(&replacement) = machines.choose(&mut rng) {
+                    output.push(Atom::from(replacement));
                     return false;  // consumed
                 }
             }
@@ -34,8 +34,8 @@ impl RenderPass for Random {
                         machines.push(child.get());
                     }
                 }
-                if let Some(replacement) = machines.choose(&mut rng) {
-                    output.push(Atom::from_type_ref(replacement, atom.loc));
+                if let Some(&replacement) = machines.choose(&mut rng) {
+                    output.push(Atom::from(replacement));
                     return false;  // consumed
                 }
             }
@@ -47,8 +47,8 @@ impl RenderPass for Random {
                         sheets.push(child.get());
                     }
                 }
-                if let Some(replacement) = sheets.choose(&mut rng) {
-                    output.push(Atom::from_type_ref(replacement, atom.loc));
+                if let Some(&replacement) = sheets.choose(&mut rng) {
+                    output.push(Atom::from(replacement));
                     return false;  // consumed
                 }
             }

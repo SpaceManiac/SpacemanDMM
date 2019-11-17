@@ -132,7 +132,7 @@ impl RenderPass for HideSpace {
         output: &mut Vec<Atom<'a>>,
     ) -> bool {
         if atom.istype("/turf/template_noop/") {
-            output.push(Atom::from_type(objtree, "/turf/open/space", atom.loc).unwrap());
+            output.push(Atom::from(objtree.expect("/turf/open/space")));
             false
         } else {
             true

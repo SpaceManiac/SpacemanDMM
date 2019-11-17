@@ -181,7 +181,7 @@ pub fn get_atom_list<'a>(
         }
 
         // look up the type
-        let atom = match Atom::from_prefab(objtree, fab, loc) {
+        let atom = match Atom::from_prefab(objtree, fab) {
             Some(x) => x,
             None => {
                 if let Some(errors) = errors {
@@ -210,6 +210,10 @@ pub fn get_atom_list<'a>(
         result.push(atom);
     }
 
+    for atom in result.iter_mut() {
+        atom.loc = loc;
+    }
+
     result
 }
 
@@ -225,31 +229,13 @@ pub struct Atom<'a> {
 }
 
 impl<'a> Atom<'a> {
-    pub fn from_prefab(objtree: &'a ObjectTree, fab: &'a Prefab, loc: (u32, u32)) -> Option<Self> {
+    pub fn from_prefab(objtree: &'a ObjectTree, fab: &'a Prefab) -> Option<Self> {
         objtree.find(&fab.path).map(|type_| Atom {
             type_: type_.get(),
             prefab: Some(&fab.vars),
             sprite: Sprite::default(),
-            loc,
+            loc: (0, 0),
         })
-    }
-
-    pub fn from_type(objtree: &'a ObjectTree, path: &str, loc: (u32, u32)) -> Option<Self> {
-        objtree.find(path).map(|type_| Atom {
-            type_: type_.get(),
-            prefab: None,
-            sprite: Sprite::default(),
-            loc,
-        })
-    }
-
-    pub fn from_type_ref(type_: &'a Type, loc: (u32, u32)) -> Self {
-        Atom {
-            type_: type_,
-            prefab: None,
-            sprite: Sprite::default(),
-            loc,
-        }
     }
 
     pub fn path(&self) -> &str {
@@ -258,6 +244,23 @@ impl<'a> Atom<'a> {
 
     pub fn istype(&self, parent: &str) -> bool {
         subpath(&self.type_.path, parent)
+    }
+}
+
+impl<'a> From<&'a Type> for Atom<'a> {
+    fn from(type_: &'a Type) -> Self {
+        Atom {
+            type_: type_,
+            prefab: None,
+            sprite: Sprite::default(),
+            loc: (0, 0),
+        }
+    }
+}
+
+impl<'a> From<TypeRef<'a>> for Atom<'a> {
+    fn from(type_ref: TypeRef<'a>) -> Self {
+        Atom::from(type_ref.get())
     }
 }
 

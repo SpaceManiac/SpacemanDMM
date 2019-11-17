@@ -28,7 +28,7 @@ impl RenderPass for Spawners {
                         },
                         _ => continue,
                     };
-                    output.push(Atom::from_type(objtree, reference, atom.loc).unwrap());
+                    output.push(Atom::from(objtree.expect(reference)));
                 }
                 false  // don't include the original atom
             }
