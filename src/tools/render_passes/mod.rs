@@ -50,8 +50,8 @@ pub trait RenderPass: Sync {
     fn overlays<'a>(&self,
         atom: &Atom<'a>,
         objtree: &'a ObjectTree,
-        underlays: &mut Vec<Atom<'a>>,
-        overlays: &mut Vec<Atom<'a>>,
+        underlays: &mut Vec<Sprite<'a>>,
+        overlays: &mut Vec<Sprite<'a>>,
     ) {}
 
     /// Filter atoms at the end of the process.
@@ -121,10 +121,11 @@ pub fn configure(include: &str, exclude: &str) -> Vec<Box<dyn RenderPass>> {
     output
 }
 
-fn add_to<'a, S: Into<String>>(target: &mut Vec<Atom<'a>>, atom: &Atom<'a>, icon: S) {
-    let mut copy = atom.clone();
-    copy.set_var("icon_state", Constant::string(icon));
-    target.push(copy);
+fn add_to<'a>(target: &mut Vec<Sprite<'a>>, atom: &Atom<'a>, icon_state: &'a str) {
+    target.push(Sprite {
+        icon_state,
+        .. atom.sprite
+    });
 }
 
 #[derive(Default)]
@@ -183,18 +184,20 @@ impl RenderPass for FakeGlass {
         &self,
         atom: &Atom<'a>,
         _objtree: &'a ObjectTree,
-        underlays: &mut Vec<Atom<'a>>,
-        _overlays: &mut Vec<Atom<'a>>,
+        underlays: &mut Vec<Sprite<'a>>,
+        _overlays: &mut Vec<Sprite<'a>>,
     ) {
         if atom.istype("/turf/closed/indestructible/fakeglass/") {
-            let mut copy = atom.clone();
-            copy.set_var("icon", Constant::string("icons/turf/floors.dmi"));
-            copy.set_var("icon_state", Constant::string("plating"));
-            underlays.push(copy);
-            copy = atom.clone();
-            copy.set_var("icon", Constant::string("icons/obj/structures.dmi"));
-            copy.set_var("icon_state", Constant::string("grille"));
-            underlays.push(copy);
+            underlays.push(Sprite {
+                icon: "icons/turf/floors.dmi",
+                icon_state: "plating",
+                .. atom.sprite
+            });
+            underlays.push(Sprite {
+                icon: "icons/obj/structures.dmi",
+                icon_state: "grille",
+                .. atom.sprite
+            });
         }
     }
 }
@@ -215,30 +218,38 @@ impl RenderPass for Pretty {
     fn overlays<'a>(&self,
         atom: &Atom<'a>,
         objtree: &'a ObjectTree,
-        _: &mut Vec<Atom<'a>>,
-        overlays: &mut Vec<Atom<'a>>,
+        _: &mut Vec<Sprite<'a>>,
+        overlays: &mut Vec<Sprite<'a>>,
     ) {
         if atom.istype("/obj/item/storage/box/") && !atom.istype("/obj/item/storage/box/papersack/") {
-            let mut copy = atom.clone();
-            copy.set_var("icon_state", atom.get_var("illustration", objtree).clone());
-            overlays.push(copy);
+            if let Some(icon_state) = atom.get_var("illustration", objtree).as_str() {
+                overlays.push(Sprite {
+                    icon_state,
+                    .. atom.sprite
+                });
+            }
         } else if atom.istype("/obj/machinery/firealarm/") {
             add_to(overlays, atom, "fire_overlay");
             add_to(overlays, atom, "fire_0");
             add_to(overlays, atom, "fire_off");
         } else if atom.istype("/obj/structure/tank_dispenser/") {
             if let &Constant::Int(oxygen) = atom.get_var("oxygentanks", objtree) {
-                if oxygen >= 4 {
-                    add_to(overlays, atom, "oxygen-4");
-                } else if oxygen > 0 {
-                    add_to(overlays, atom, format!("oxygen-{}", oxygen));
+                match oxygen {
+                    4..=std::i32::MAX => add_to(overlays, atom, "oxygen-4"),
+                    3 => add_to(overlays, atom, "oxygen-3"),
+                    2 => add_to(overlays, atom, "oxygen-2"),
+                    1 => add_to(overlays, atom, "oxygen-1"),
+                    _ => {}
                 }
             }
             if let &Constant::Int(plasma) = atom.get_var("plasmatanks", objtree) {
-                if plasma >= 5 {
-                    add_to(overlays, atom, "plasma-5");
-                } else if plasma > 0 {
-                    add_to(overlays, atom, format!("plasma-{}", plasma));
+                match plasma {
+                    5..=std::i32::MAX => add_to(overlays, atom, "plasma-5"),
+                    4 => add_to(overlays, atom, "plasma-4"),
+                    3 => add_to(overlays, atom, "plasma-3"),
+                    2 => add_to(overlays, atom, "plasma-2"),
+                    1 => add_to(overlays, atom, "plasma-1"),
+                    _ => {}
                 }
             }
         }

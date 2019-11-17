@@ -63,7 +63,6 @@ impl RenderPass for GravityGen {
             let mut new_atom = Atom::from_type(objtree, "/obj/machinery/gravity_generator/part", new_loc).unwrap();
             new_atom.set_var("icon_state", Constant::string(icon_state));
             if count <= 3 {
-                new_atom.set_var("density", Constant::Int(0));
                 new_atom.set_var("layer", Constant::from(4.25));  // WALL_OBJ_LAYER
             }
             output.push(new_atom);
@@ -75,8 +74,8 @@ impl RenderPass for GravityGen {
     fn overlays<'a>(&self,
         atom: &Atom<'a>,
         objtree: &'a ObjectTree,
-        _underlays: &mut Vec<Atom<'a>>,
-        overlays: &mut Vec<Atom<'a>>,
+        _underlays: &mut Vec<Sprite<'a>>,
+        overlays: &mut Vec<Sprite<'a>>,
     ) {
         // energy overlay goes above the middle part
         if atom.istype("/obj/machinery/gravity_generator/part/") &&

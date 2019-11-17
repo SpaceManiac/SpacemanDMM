@@ -299,7 +299,7 @@ impl ::std::hash::Hash for RenderPop {
 
 impl RenderPop {
     pub fn from_prefab(icons: &IconCache, objtree: &ObjectTree, fab: &Prefab) -> Option<RenderPop> {
-        RenderPop::from_sprite(icons, &Sprite::from_vars(objtree, fab))
+        RenderPop::from_sprite(icons, &Sprite::from_vars(objtree, &fab))
     }
 
     pub fn from_sprite(icons: &IconCache, sprite: &Sprite) -> Option<RenderPop> {

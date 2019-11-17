@@ -112,7 +112,7 @@ impl ToolIcon {
                 .and_then(|v| v.constant.as_ref()))
             .and_then(|v| v.to_int())
             .unwrap_or(dmi::SOUTH);
-        let color = ::dmm_tools::minimap::color_of(&env.objtree, prefab);
+        let color = ::dmm_tools::minimap::color_of(&env.objtree, &prefab);
         let tint = [
             color[0] as f32 / 255.0, color[1] as f32 / 255.0,
             color[2] as f32 / 255.0, color[3] as f32 / 255.0,

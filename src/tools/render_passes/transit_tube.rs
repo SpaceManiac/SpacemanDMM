@@ -6,8 +6,8 @@ impl RenderPass for TransitTube {
     fn overlays<'a>(&self,
         atom: &Atom<'a>,
         objtree: &'a ObjectTree,
-        _: &mut Vec<Atom<'a>>,
-        overlays: &mut Vec<Atom<'a>>,
+        _: &mut Vec<Sprite<'a>>,
+        overlays: &mut Vec<Sprite<'a>>,
     ) {
         use dmi::*;
 
@@ -96,29 +96,30 @@ impl RenderPass for TransitTube {
 }
 
 fn create_tube_overlay<'a>(
-    output: &mut Vec<Atom<'a>>,
-    objtree: &'a ObjectTree,
+    output: &mut Vec<Sprite<'a>>,
+    _objtree: &'a ObjectTree,
     source: &Atom<'a>,
     dir: i32,
     shift: i32,
 ) {
     use dmi::*;
 
-    let mut copy = Atom::from_type(objtree, "/atom", source.loc).unwrap();
-    copy.set_var("dir", Constant::Int(dir));
-    copy.copy_var("layer", source, objtree);
-    copy.copy_var("icon", source, objtree);
+    let mut sprite = Sprite {
+        dir,
+        icon: source.sprite.icon,
+        layer: source.sprite.layer,
+        icon_state: "decorative",
+        .. Default::default()
+    };
     if shift != 0 {
-        copy.set_var("icon_state", Constant::string("decorative_diag"));
+        sprite.icon_state = "decorative_diag";
         match shift {
-            NORTH => copy.set_var("pixel_y", Constant::Int(32)),
-            SOUTH => copy.set_var("pixel_y", Constant::Int(-32)),
-            EAST => copy.set_var("pixel_x", Constant::Int(32)),
-            WEST => copy.set_var("pixel_x", Constant::Int(-32)),
+            NORTH => sprite.ofs_y += 32,
+            SOUTH => sprite.ofs_y -= 32,
+            EAST => sprite.ofs_x += 32,
+            WEST => sprite.ofs_x -= 32,
             _ => {}
         }
-    } else {
-        copy.set_var("icon_state", Constant::string("decorative"));
     }
-    output.push(copy);
+    output.push(sprite);
 }
