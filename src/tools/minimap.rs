@@ -4,7 +4,6 @@ use std::collections::HashSet;
 use ndarray::Axis;
 
 use dm::objtree::*;
-use dm::objtree::subpath as subtype;
 use dm::constants::Constant;
 use dmm::{Map, Grid, Prefab};
 use dmi::Image;
@@ -79,7 +78,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
 
                 // icons which differ from their map states
                 let p = &atom.type_.path;
-                if subtype(p, "/turf/closed/mineral/") {
+                if subpath(p, "/turf/closed/mineral/") {
                     atom.sprite.ofs_x -= 4;
                     atom.sprite.ofs_y -= 4;
                 }

@@ -403,28 +403,27 @@ fn unary_aboveground(atom: &Atom, objtree: &ObjectTree) -> Option<&'static str> 
 }
 
 fn fancy_layer_for_path(p: &str) -> Option<Layer> {
-    use dm::objtree::subpath as subtype;
-    Some(if subtype(p, "/turf/open/floor/plating/") || subtype(p, "/turf/open/space/") {
+    Some(if subpath(p, "/turf/open/floor/plating/") || subpath(p, "/turf/open/space/") {
         Layer::from(-10)  // under everything
-    } else if subtype(p, "/turf/closed/mineral/") {
+    } else if subpath(p, "/turf/closed/mineral/") {
         Layer::from(-3)   // above hidden stuff and plating but below walls
-    } else if subtype(p, "/turf/open/floor/") || subtype(p, "/turf/closed/") {
+    } else if subpath(p, "/turf/open/floor/") || subpath(p, "/turf/closed/") {
         Layer::from(-2)   // above hidden pipes and wires
-    } else if subtype(p, "/turf/") {
+    } else if subpath(p, "/turf/") {
         Layer::from(-10)  // under everything
-    } else if subtype(p, "/obj/effect/turf_decal/") {
+    } else if subpath(p, "/obj/effect/turf_decal/") {
         Layer::from(-1)   // above turfs
-    } else if subtype(p, "/obj/structure/disposalpipe/") {
+    } else if subpath(p, "/obj/structure/disposalpipe/") {
         Layer::from(-6)
-    } else if subtype(p, "/obj/machinery/atmospherics/pipe/") && !p.contains("visible") {
+    } else if subpath(p, "/obj/machinery/atmospherics/pipe/") && !p.contains("visible") {
         Layer::from(-5)
-    } else if subtype(p, "/obj/structure/cable/") {
+    } else if subpath(p, "/obj/structure/cable/") {
         Layer::from(-4)
-    } else if subtype(p, "/obj/machinery/power/terminal/") {
+    } else if subpath(p, "/obj/machinery/power/terminal/") {
         Layer::from(-3.5)
-    } else if subtype(p, "/obj/structure/lattice/") {
+    } else if subpath(p, "/obj/structure/lattice/") {
         Layer::from(-8)
-    } else if subtype(p, "/obj/machinery/navbeacon/") {
+    } else if subpath(p, "/obj/machinery/navbeacon/") {
         Layer::from(-3)
     } else {
         return None
