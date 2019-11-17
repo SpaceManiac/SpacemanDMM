@@ -26,6 +26,7 @@ pub struct Key(KeyType);
 /// An XY coordinate pair in the BYOND coordinate system.
 ///
 /// The lower-left corner is `{ x: 1, y: 1 }`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct Coord2 {
     pub x: i32,
     pub y: i32,
@@ -36,6 +37,20 @@ impl Coord2 {
     pub fn new(x: i32, y: i32) -> Coord2 {
         Coord2 { x, y }
     }
+
+    pub fn z(self, z: i32) -> Coord3 {
+        Coord3 { x: self.x, y: self.y, z }
+    }
+
+    fn to_raw(self, (dim_y, dim_x): (usize, usize)) -> (usize, usize) {
+        assert!(self.x >= 1 && self.x <= dim_x as i32, "x={} not in [1, {}]", self.x, dim_x);
+        assert!(self.y >= 1 && self.y <= dim_y as i32, "y={} not in [1, {}]", self.y, dim_y);
+        (dim_y - self.y as usize, self.x as usize - 1)
+    }
+
+    fn from_raw((y, x): (usize, usize), (dim_y, _dim_x): (usize, usize)) -> Coord2 {
+        Coord2 { x: x as i32 + 1, y: (dim_y - y) as i32 }
+    }
 }
 
 /// An XYZ coordinate triple in the BYOND coordinate system.
@@ -44,6 +59,7 @@ impl Coord2 {
 ///
 /// Note that BYOND by default considers "UP" to be Z+1, but this does not
 /// necessarily apply to a given game's logic.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct Coord3 {
     pub x: i32,
     pub y: i32,
@@ -54,6 +70,22 @@ impl Coord3 {
     #[inline]
     pub fn new(x: i32, y: i32, z: i32) -> Coord3 {
         Coord3 { x, y, z }
+    }
+
+    pub fn xy(self) -> Coord2 {
+        Coord2 { x: self.x, y: self.y }
+    }
+
+    fn to_raw(self, (dim_z, dim_y, dim_x): (usize, usize, usize)) -> (usize, usize, usize) {
+        assert!(self.x >= 1 && self.x <= dim_x as i32, "x={} not in [1, {}]", self.x, dim_x);
+        assert!(self.y >= 1 && self.y <= dim_y as i32, "y={} not in [1, {}]", self.y, dim_y);
+        assert!(self.z >= 1 && self.z <= dim_z as i32, "y={} not in [1, {}]", self.z, dim_z);
+        (self.z as usize - 1, dim_y - self.y as usize, self.x as usize - 1)
+    }
+
+    #[allow(dead_code)]
+    fn from_raw((z, y, x): (usize, usize, usize), (_dim_z, dim_y, _dim_x): (usize, usize, usize)) -> Coord3 {
+        Coord3 { x: x as i32 + 1, y: (dim_y - y) as i32, z: z as i32 + 1 }
     }
 }
 
@@ -66,7 +98,12 @@ pub struct Map {
     pub grid: Array3<Key>,
 }
 
-pub type Grid<'a> = ndarray::ArrayBase<ndarray::ViewRepr<&'a Key>, ndarray::Dim<[usize; 2]>>;
+#[derive(Clone)]
+pub struct ZLevel<'a> {
+    grid: Grid<'a>,
+}
+
+pub type Grid<'a> = ndarray::ArrayView<'a, Key, ndarray::Dim<[usize; 2]>>;
 
 // TODO: port to ast::Prefab<Constant>
 #[derive(Debug, Default, Hash, Eq, PartialEq, Clone)]
@@ -150,6 +187,10 @@ impl Map {
         self.grid.index_axis(Axis(0), z)
     }
 
+    pub fn iter_levels<'a>(&'a self) -> impl Iterator<Item=ZLevel<'a>> + 'a {
+        self.grid.axis_iter(Axis(0)).map(|grid| ZLevel { grid })
+    }
+
     #[inline]
     pub fn format_key(&self, key: Key) -> impl std::fmt::Display {
         FormatKey(self.key_length, key)
@@ -158,9 +199,31 @@ impl Map {
     pub fn zero_to_one(&self, (x, y, z): (usize, usize, usize)) -> (usize, usize, usize) {
         (x + 1, self.grid.dim().1 - y, z + 1)
     }
+}
 
-    pub fn one_to_zero(&self, (x, y, z): (usize, usize, usize)) -> (usize, usize, usize) {
-        (x - 1, self.grid.dim().1 - y, z - 1)
+impl std::ops::Index<Coord3> for Map {
+    type Output = Key;
+
+    #[inline]
+    fn index(&self, coord: Coord3) -> &Key {
+        &self.grid[coord.to_raw(self.grid.dim())]
+    }
+}
+
+impl<'a> ZLevel<'a> {
+    /// Iterate over the z-level in row-major order starting at the top-left.
+    pub fn iter<'b>(&'b self) -> impl Iterator<Item=(Coord2, Key)> + 'b {
+        let dim = self.grid.dim();
+        self.grid.indexed_iter().map(move |(c, k)| (Coord2::from_raw(c, dim), *k))
+    }
+}
+
+impl<'a> std::ops::Index<Coord2> for ZLevel<'a> {
+    type Output = Key;
+
+    #[inline]
+    fn index(&self, coord: Coord2) -> &Key {
+        &self.grid[coord.to_raw(self.grid.dim())]
     }
 }
 
