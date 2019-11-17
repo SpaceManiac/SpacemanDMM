@@ -468,7 +468,7 @@ impl<'a> GetVar<'a> for TypeRef<'a> {
 ///
 /// Every atom has a default sprite, which may be disabled, and a list of
 /// overlays.
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct Sprite<'s> {
     // filtering
     pub category: u32,  // type
@@ -507,6 +507,22 @@ impl<'s> Sprite<'s> {
             ofs_y: pixel_y + pixel_z + step_y,
             plane: plane_of(objtree, vars),
             layer: layer_of(objtree, vars),
+        }
+    }
+}
+
+impl<'s> Default for Sprite<'s> {
+    fn default() -> Self {
+        Sprite {
+            category: 0,
+            icon: "",
+            icon_state: "",
+            dir: 0,
+            color: [255, 255, 255, 255],
+            ofs_x: 0,
+            ofs_y: 0,
+            plane: 0,
+            layer: 0,
         }
     }
 }
