@@ -10,6 +10,7 @@ extern crate inflate;
 #[macro_use] extern crate ndarray;
 extern crate linked_hash_map;
 extern crate rand;
+extern crate bumpalo;
 
 pub mod dmm;
 mod icon_cache;

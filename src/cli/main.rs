@@ -323,6 +323,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
 
                 let do_z_level = |z| {
                     println!("{}generating z={}", prefix, 1 + z);
+                    let bump = Default::default();
                     let minimap_context = minimap::Context {
                         objtree: &objtree,
                         map: &map,
@@ -331,6 +332,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                         max: (max.x - 1, max.y - 1),
                         render_passes: &render_passes,
                         errors: &errors,
+                        bump: &bump,
                     };
                     let image = minimap::generate(minimap_context, icon_cache).unwrap();
                     if let Err(e) = std::fs::create_dir_all(output) {

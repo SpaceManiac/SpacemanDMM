@@ -44,6 +44,7 @@ pub trait RenderPass: Sync {
         atom: &Atom<'a>,
         sprite: &mut Sprite<'a>,
         objtree: &'a ObjectTree,
+        bump: &'a bumpalo::Bump,  // TODO: kind of a hacky way to pass this
     ) {}
 
     /// Apply overlays and underlays to an atom, in the form of pseudo-atoms.
@@ -209,6 +210,7 @@ impl RenderPass for Pretty {
         atom: &Atom<'a>,
         sprite: &mut Sprite<'a>,
         _: &'a ObjectTree,
+        _: &'a bumpalo::Bump,
     ) {
         if atom.istype("/obj/structure/bookcase/") {
             sprite.icon_state = "book-0";
@@ -279,6 +281,7 @@ impl RenderPass for FancyLayers {
         atom: &Atom<'a>,
         sprite: &mut Sprite<'a>,
         _: &'a ObjectTree,
+        _: &'a bumpalo::Bump,
     ) {
         apply_fancy_layer(atom.get_path(), sprite)
     }

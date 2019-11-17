@@ -25,6 +25,7 @@ pub struct Context<'a> {
     pub max: (usize, usize),
     pub render_passes: &'a [Box<dyn RenderPass>],
     pub errors: &'a RwLock<HashSet<String>>,
+    pub bump: &'a bumpalo::Bump,
 }
 
 pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
@@ -33,6 +34,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
         map,
         grid,
         render_passes,
+        bump,
         ..
     } = ctx;
 
@@ -67,7 +69,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
                 }
                 let mut sprite = Sprite::from_vars(objtree, &atom);
                 for pass in render_passes {
-                    pass.adjust_sprite(&atom, &mut sprite, objtree);
+                    pass.adjust_sprite(&atom, &mut sprite, objtree, bump);
                 }
                 if sprite.icon.is_empty() {
                     println!("no icon: {}", atom.type_.path);
@@ -104,16 +106,14 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
                             "icon_state"
                         };
                         if let &Constant::String(ref door) = atom.get_var(var, objtree) {
-                            // TODO: fix leak
-                            add_overlay!(Box::leak(format!("{}_open", door).into_boxed_str()));
+                            add_overlay!(bump.alloc(format!("{}_open", door)));
                         }
                     } else {
                         if let &Constant::String(ref door) = atom
                             .get_var_notnull("icon_door", objtree)
                             .unwrap_or_else(|| atom.get_var("icon_state", objtree))
                         {
-                            // TODO: fix leak
-                            add_overlay!(Box::leak(format!("{}_door", door).into_boxed_str()));
+                            add_overlay!(bump.alloc(format!("{}_door", door)));
                         }
                         if atom.get_var("welded", objtree).to_bool() {
                             add_overlay!("welded");
@@ -748,8 +748,7 @@ fn cardinal_smooth<'a>(output: &mut Vec<((u32, u32), Sprite<'a>)>, ctx: Context<
         };
 
         let mut sprite = Sprite {
-            // TODO: fix leak
-            icon_state: Box::leak(name.into_boxed_str()),
+            icon_state: ctx.bump.alloc(name),
             .. source.sprite
         };
         if let Some(icon) = source.get_var("smooth_icon", ctx.objtree).as_path_str() {

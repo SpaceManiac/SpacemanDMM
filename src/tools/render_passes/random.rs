@@ -60,23 +60,23 @@ impl RenderPass for Random {
         atom: &Atom<'a>,
         sprite: &mut Sprite<'a>,
         objtree: &'a ObjectTree,
+        bump: &'a bumpalo::Bump,
     ) {
         let mut rng = ::rand::thread_rng();
 
         const CONTRABAND_POSTERS: u32 = 44;
         const LEGIT_POSTERS: u32 = 35;
 
-        // TODO: fix leaks
         if atom.istype("/obj/structure/sign/poster/contraband/random/") {
-            sprite.icon_state = Box::leak(format!("poster{}", rng.gen_range(1, 1 + CONTRABAND_POSTERS)).into_boxed_str());
+            sprite.icon_state = bump.alloc(format!("poster{}", rng.gen_range(1, 1 + CONTRABAND_POSTERS)));
         } else if atom.istype("/obj/structure/sign/poster/official/random/") {
-            sprite.icon_state = Box::leak(format!("poster{}_legit", rng.gen_range(1, 1 + LEGIT_POSTERS)).into_boxed_str());
+            sprite.icon_state = bump.alloc(format!("poster{}_legit", rng.gen_range(1, 1 + LEGIT_POSTERS)));
         } else if atom.istype("/obj/structure/sign/poster/random/") {
             let i = 1 + rng.gen_range(0, CONTRABAND_POSTERS + LEGIT_POSTERS);
             if i <= CONTRABAND_POSTERS {
-                sprite.icon_state = Box::leak(format!("poster{}", i).into_boxed_str());
+                sprite.icon_state = bump.alloc(format!("poster{}", i));
             } else {
-                sprite.icon_state = Box::leak(format!("poster{}_legit", i - CONTRABAND_POSTERS).into_boxed_str());
+                sprite.icon_state = bump.alloc(format!("poster{}_legit", i - CONTRABAND_POSTERS));
             }
         } else if atom.istype("/obj/item/twohanded/required/kirbyplants/random/") {
             sprite.icon = "icons/obj/flora/plants.dmi";
@@ -84,7 +84,7 @@ impl RenderPass for Random {
             if random == 0 {
                 sprite.icon_state = "applebush";
             } else {
-                sprite.icon_state = Box::leak(format!("plant-{:02}", random).into_boxed_str());
+                sprite.icon_state = bump.alloc(format!("plant-{:02}", random));
             }
         } else if atom.istype("/obj/structure/sign/barsign/") {
             if let Some(root) = objtree.find("/datum/barsign") {
