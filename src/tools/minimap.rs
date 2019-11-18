@@ -1,5 +1,5 @@
 use std::sync::RwLock;
-use std::collections::HashSet;
+use std::collections::{HashSet, BTreeMap};
 
 use ndarray::Axis;
 
@@ -43,6 +43,12 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
     let (min_y, max_y) = (len_y - ctx.max.1 - 1, len_y - ctx.min.1 - 1);
     let (len_x, len_y) = (ctx.max.0 - ctx.min.0 + 1, ctx.max.1 - ctx.min.1 + 1);
 
+    // create atom arrays from the map dictionary
+    let mut atoms = BTreeMap::new();
+    for (key, prefabs) in map.dictionary.iter() {
+        atoms.insert(key, get_atom_list(objtree, prefabs, render_passes, Some(ctx.errors)));
+    }
+
     // loads atoms from the prefabs on the map and adds overlays and smoothing
     let mut sprites = Vec::new();
     let mut underlays = Vec::new();
@@ -59,14 +65,14 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
 
             let loc = (x as u32, y as u32);
 
-            'atom: for mut atom in get_atom_list(objtree, &map.dictionary[e], render_passes, Some(ctx.errors)) {
+            'atom: for atom in atoms.get_mut(e).expect("bad key").iter_mut() {
                 for pass in render_passes.iter() {
                     // Note that late_filter is NOT called during smoothing lookups.
                     if !pass.late_filter(&atom, objtree) {
                         continue 'atom;
                     }
                 }
-                let mut sprite = Sprite::from_vars(objtree, &atom);
+                let mut sprite = Sprite::from_vars(objtree, atom);
                 for pass in render_passes {
                     pass.adjust_sprite(&atom, &mut sprite, objtree, bump);
                 }
@@ -77,7 +83,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
                 atom.sprite = sprite;
 
                 for pass in render_passes {
-                    pass.overlays(&mut atom, objtree, &mut underlays, &mut overlays, bump);
+                    pass.overlays(atom, objtree, &mut underlays, &mut overlays, bump);
                 }
 
                 // smoothing time
@@ -112,7 +118,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
                     }
                 }
                 if normal_appearance {
-                    underlays.push(atom.sprite);
+                    underlays.push(atom.sprite.clone());
                 }
 
                 sprites.extend(underlays.drain(..).map(|o| (loc, o)));
@@ -189,7 +195,7 @@ fn clip(bounds: (u32, u32), mut loc: (i32, i32), mut rect: (u32, u32, u32, u32))
     Some(((loc.0 as u32, loc.1 as u32), rect))
 }
 
-pub fn get_atom_list<'a>(
+fn get_atom_list<'a>(
     objtree: &'a ObjectTree,
     prefabs: &'a [Prefab],
     render_passes: &[Box<dyn RenderPass>],
