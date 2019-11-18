@@ -1,3 +1,7 @@
+//! DMI metadata and image composition.
+//!
+//! Includes re-exports from `dreammaker::dmi`.
+
 use std::io;
 use std::path::Path;
 use std::collections::BTreeMap;
@@ -13,8 +17,11 @@ type Rect = (u32, u32, u32, u32);
 // ----------------------------------------------------------------------------
 // Icon file and metadata handling
 
+/// An image with associated DMI metadata.
 pub struct IconFile {
+    /// The icon's metadata.
     pub metadata: Metadata,
+    /// The icon's image.
     pub image: Image,
 }
 
@@ -96,6 +103,7 @@ impl IconFile {
 // ----------------------------------------------------------------------------
 // Image manipulation
 
+/// A two-dimensional RGBA image.
 pub struct Image {
     pub width: u32,
     pub height: u32,

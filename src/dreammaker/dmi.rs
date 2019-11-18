@@ -1,3 +1,5 @@
+//! DMI metadata parsing and representation.
+
 use std::io;
 use std::path::Path;
 use std::collections::BTreeMap;
@@ -170,27 +172,36 @@ impl Default for Dir {
     }
 }
 
+/// Embedded metadata describing a DMI spritesheet's layout.
 #[derive(Debug)]
 pub struct Metadata {
+    /// The width of the icon in pixels.
     pub width: u32,
+    /// The height of the icon in pixels.
     pub height: u32,
+    /// The list of states in the order they appear in the spritesheet.
     pub states: Vec<State>,
+    /// A lookup table from state name to its position in `states`.
     pub state_names: BTreeMap<String, usize>,
 }
 
+/// The metadata belonging to a single icon state.
 #[derive(Debug)]
 pub struct State {
-    /// Frames before this state starts
-    pub offset: usize,
+    /// The state's name, corresponding to the `icon_state` var.
     pub name: String,
-    /// 0 for infinite, 1+ for finite
+    /// Whether this is a movement state (shown during gliding).
+    pub movement: bool,
+    /// The number of frames in the spritesheet before this state's first frame.
+    pub offset: usize,
+    /// 0 for infinite, 1+ for finite.
     pub loop_: u32,
     pub rewind: bool,
-    pub movement: bool,
     pub dirs: Dirs,
     pub frames: Frames,
 }
 
+/// How many directions a state has.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Dirs {
     One,
@@ -198,13 +209,14 @@ pub enum Dirs {
     Eight,
 }
 
+/// How many frames of animation a state has, and their durations.
 #[derive(Debug, PartialEq)]
 pub enum Frames {
-    /// Without an explicit setting, only one frame
+    /// Without an explicit setting, only one frame.
     One,
-    /// There are this many frames lasting one tick each
+    /// There are this many frames lasting one tick each.
     Count(usize),
-    /// Each frame lasts the corresponding number of ticks
+    /// Each frame lasts the corresponding number of ticks.
     Delays(Vec<f32>),
     // TODO: hotspot support here
 }

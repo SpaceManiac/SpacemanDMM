@@ -1,5 +1,6 @@
 //! CLI tools, including a map renderer, using the same backend as the editor.
 #![forbid(unsafe_code)]
+#![doc(hidden)]  // Don't interfere with lib docs.
 
 extern crate rayon;
 extern crate structopt;

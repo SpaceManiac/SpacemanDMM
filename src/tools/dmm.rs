@@ -101,6 +101,7 @@ impl Coord3 {
     }
 }
 
+/// A BYOND map, structured similarly to its serialized form.
 #[derive(Clone)]
 pub struct Map {
     key_length: u8,
@@ -110,12 +111,11 @@ pub struct Map {
     pub grid: Array3<Key>,
 }
 
+/// A slice referencing one z-level of a `Map`.
 #[derive(Clone, Copy)]
 pub struct ZLevel<'a> {
-    pub grid: Grid<'a>,
+    pub grid: ndarray::ArrayView<'a, Key, ndarray::Dim<[usize; 2]>>,
 }
-
-pub type Grid<'a> = ndarray::ArrayView<'a, Key, ndarray::Dim<[usize; 2]>>;
 
 // TODO: port to ast::Prefab<Constant>
 #[derive(Debug, Default, Hash, Eq, PartialEq, Clone)]
