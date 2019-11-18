@@ -1,7 +1,8 @@
 //! Port of icon smoothing subsystem.
 
 use dm::constants::Constant;
-use minimap::{Sprite, Context, Atom, GetVar, get_atom_list};
+use dmi::Dir;
+use minimap::{Sprite, Context, Atom, GetVar, Adjacency, get_atom_list};
 
 const NORTH: i32 = 1;
 const SOUTH: i32 = 2;
@@ -28,9 +29,33 @@ const SMOOTH_DIAGONAL: i32 = 4;  // smooth diagonally
 const SMOOTH_BORDER: i32 = 8;  // smooth with the borders of the map
 
 pub fn handle_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, loc: (u32, u32), atom: Atom<'a>, mask: i32) {
+    use std::convert::TryInto;
+
+    let mut adjacency = [Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()];
+    for (i, (dx, dy)) in [
+        (-1,  1), (0,  1), (1,  1),
+        (-1,  0), (0,  0), (1,  0),
+        (-1, -1), (0, -1), (1, -1),
+    ].iter().enumerate() {
+        let new_loc = (loc.0 as i32 + dx, loc.1 as i32 - dy);
+        let (dim_y, dim_x) = ctx.level.grid.dim();
+        if new_loc.0 < 0 || new_loc.1 < 0 || new_loc.0 >= dim_x as i32 || new_loc.1 >= dim_y as i32 {
+            continue;
+        }
+        // TODO: make this not call get_atom_list way too many times
+        adjacency[i] = get_atom_list(
+            ctx.objtree,
+            &ctx.map.dictionary[&ctx.level.grid[ndarray::Dim([new_loc.1 as usize, new_loc.0 as usize])]],
+            ctx.render_passes,
+            None,
+        );
+    }
+    let adjacency2 = adjacency.iter().map(|v| &v[..]).collect::<Vec<_>>();
+    let adjacency3 = Adjacency::new(adjacency2[..].try_into().unwrap());
+
     let smooth_flags = mask & atom.get_var("smooth", ctx.objtree).to_int().unwrap_or(0);
     if smooth_flags & (SMOOTH_TRUE | SMOOTH_MORE) != 0 {
-        let adjacencies = calculate_adjacencies(ctx, loc, &atom, smooth_flags);
+        let adjacencies = calculate_adjacencies(ctx, &adjacency3, &atom, smooth_flags);
         if smooth_flags & SMOOTH_DIAGONAL != 0 {
             diagonal_smooth(output, ctx, loc, &atom, adjacencies);
         } else {
@@ -41,60 +66,50 @@ pub fn handle_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, loc: (u
     }
 }
 
-fn calculate_adjacencies(ctx: Context, loc: (u32, u32), atom: &Atom, smooth_flags: i32) -> i32 {
+fn calculate_adjacencies(ctx: Context, adjacency: &Adjacency, atom: &Atom, smooth_flags: i32) -> i32 {
     // TODO: anchored check
 
     let mut adjacencies = 0;
     let check_one = |direction, flag| {
-        if find_type_in_direction(ctx, loc, atom, direction, smooth_flags) {
+        if find_type_in_direction(ctx, adjacency, atom, direction, smooth_flags) {
             flag
         } else {
             0
         }
     };
 
-    for &dir in &[SOUTH, NORTH, EAST, WEST] {
-        adjacencies |= check_one(dir, 1 << dir);
+    for &dir in &[Dir::South, Dir::North, Dir::East, Dir::West] {
+        adjacencies |= check_one(dir, 1 << dir.to_int());
     }
 
     if adjacencies & N_NORTH != 0 {
         if adjacencies & N_WEST != 0 {
-            adjacencies |= check_one(NORTHWEST, N_NORTHWEST);
+            adjacencies |= check_one(Dir::Northwest, N_NORTHWEST);
         }
         if adjacencies & N_EAST != 0 {
-            adjacencies |= check_one(NORTHEAST, N_NORTHEAST);
+            adjacencies |= check_one(Dir::Northeast, N_NORTHEAST);
         }
     }
     if adjacencies & N_SOUTH != 0 {
         if adjacencies & N_WEST != 0 {
-            adjacencies |= check_one(SOUTHWEST, N_SOUTHWEST);
+            adjacencies |= check_one(Dir::Southwest, N_SOUTHWEST);
         }
         if adjacencies & N_EAST != 0 {
-            adjacencies |= check_one(SOUTHEAST, N_SOUTHEAST);
+            adjacencies |= check_one(Dir::Southeast, N_SOUTHEAST);
         }
     }
 
     adjacencies
 }
 
-fn find_type_in_direction<'a>(ctx: Context, loc: (u32, u32), source: &Atom, direction: i32, smooth_flags: i32) -> bool {
+fn find_type_in_direction<'a>(ctx: Context, adjacency: &Adjacency, source: &Atom, direction: Dir, smooth_flags: i32) -> bool {
     use std::ptr::eq;
 
-    let (dx, dy) = offset(direction);
-    let new_loc = (loc.0 as i32 + dx, loc.1 as i32 + dy);
-    let (dim_y, dim_x) = ctx.level.grid.dim();
-    if new_loc.0 < 0 || new_loc.1 < 0 || new_loc.0 >= dim_x as i32 || new_loc.1 >= dim_y as i32 {
+    let atom_list = adjacency.offset(direction);
+    if atom_list.is_empty() {
         return smooth_flags & SMOOTH_BORDER != 0;
     }
-    let new_loc = (new_loc.0 as u32, new_loc.1 as u32);
 
-    // TODO: make this not call get_atom_list way too many times
-    let atom_list = get_atom_list(
-        ctx.objtree,
-        &ctx.map.dictionary[&ctx.level.grid[ndarray::Dim([new_loc.1 as usize, new_loc.0 as usize])]],
-        ctx.render_passes,
-        None,
-    );
     match source.get_var("canSmoothWith", ctx.objtree) {
         &Constant::List(ref elements) => if smooth_flags & SMOOTH_MORE != 0 {
             // smooth with canSmoothWith + subtypes
