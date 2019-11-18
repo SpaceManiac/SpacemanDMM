@@ -93,12 +93,13 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
                     (-1,  0), (0,  0), (1,  0),
                     (-1, -1), (0, -1), (1, -1),
                 ].iter().enumerate() {
-                    let new_loc = (loc.0 as i32 + dx, loc.1 as i32 - dy);
+                    let new_x = x as i32 + dx;
+                    let new_y = y as i32 - dy;
                     let (dim_y, dim_x) = ctx.level.grid.dim();
-                    if new_loc.0 < 0 || new_loc.1 < 0 || new_loc.0 >= dim_x as i32 || new_loc.1 >= dim_y as i32 {
+                    if new_x < 0 || new_y < 0 || new_x >= dim_x as i32 || new_y >= dim_y as i32 {
                         continue;
                     }
-                    neighborhood[i] = &atoms[&ctx.level.grid[ndarray::Dim([new_loc.1 as usize, new_loc.0 as usize])]][..];
+                    neighborhood[i] = &atoms[&ctx.level.grid[(new_y as usize, new_x as usize)]][..];
                 }
                 let neighborhood = Neighborhood::new(neighborhood);
 
