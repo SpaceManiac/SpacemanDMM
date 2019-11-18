@@ -46,7 +46,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
     // create atom arrays from the map dictionary
     let mut atoms = BTreeMap::new();
     for (key, prefabs) in map.dictionary.iter() {
-        atoms.insert(key, get_atom_list(objtree, prefabs, render_passes, Some(ctx.errors)));
+        atoms.insert(key, get_atom_list(objtree, prefabs, render_passes, ctx.errors));
     }
 
     // loads atoms from the prefabs on the map and adds overlays and smoothing
@@ -191,7 +191,7 @@ fn get_atom_list<'a>(
     objtree: &'a ObjectTree,
     prefabs: &'a [Prefab],
     render_passes: &[Box<dyn RenderPass>],
-    errors: Option<&RwLock<HashSet<String>>>,
+    errors: &RwLock<HashSet<String>>,
 ) -> Vec<Atom<'a>> {
     let mut result = Vec::new();
 
@@ -206,12 +206,10 @@ fn get_atom_list<'a>(
         let atom = match Atom::from_prefab(objtree, fab) {
             Some(x) => x,
             None => {
-                if let Some(errors) = errors {
-                    let key = format!("bad path: {}", fab.path);
-                    if !errors.read().unwrap().contains(&key) {
-                        println!("{}", key);
-                        errors.write().unwrap().insert(key);
-                    }
+                let key = format!("bad path: {}", fab.path);
+                if !errors.read().unwrap().contains(&key) {
+                    println!("{}", key);
+                    errors.write().unwrap().insert(key);
                 }
                 continue;
             }
