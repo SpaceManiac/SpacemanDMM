@@ -104,8 +104,6 @@ fn calculate_adjacencies(objtree: &ObjectTree, neighborhood: &Neighborhood, atom
 }
 
 fn find_type_in_direction(objtree: &ObjectTree, adjacency: &Neighborhood, source: &Atom, direction: Dir, smooth_flags: i32) -> bool {
-    use std::ptr::eq;
-
     let atom_list = adjacency.offset(direction);
     if atom_list.is_empty() {
         return smooth_flags & SMOOTH_BORDER != 0;
@@ -115,7 +113,7 @@ fn find_type_in_direction(objtree: &ObjectTree, adjacency: &Neighborhood, source
         &Constant::List(ref elements) => if smooth_flags & SMOOTH_MORE != 0 {
             // smooth with canSmoothWith + subtypes
             for atom in atom_list {
-                let mut path = &atom.type_.path[..];
+                let mut path = atom.get_path();
                 while !path.is_empty() {
                     if smoothlist_contains(elements, path) {
                         return true;
@@ -126,7 +124,7 @@ fn find_type_in_direction(objtree: &ObjectTree, adjacency: &Neighborhood, source
         } else {
             // smooth only with exact types in canSmoothWith
             for atom in atom_list {
-                if smoothlist_contains(elements, &atom.type_.path) {
+                if smoothlist_contains(elements, atom.get_path()) {
                     return true;
                 }
             }
@@ -134,7 +132,7 @@ fn find_type_in_direction(objtree: &ObjectTree, adjacency: &Neighborhood, source
         _ => {
             // smooth only with the same type
             for atom in atom_list {
-                if eq(atom.type_, source.type_) {
+                if std::ptr::eq(atom.get_path(), source.get_path()) {
                     return true;
                 }
             }
@@ -207,7 +205,7 @@ fn diagonal_smooth<'a>(output: &mut Vec<Sprite<'a>>, objtree: &'a ObjectTree, bu
     };
 
     // turf underneath
-    if dm::objtree::subpath(&source.type_.path, "/turf/closed/wall/") {
+    if source.istype("/turf/closed/wall/") {
         // BYOND memes
         if source
             .get_var("fixed_underlay", objtree)
@@ -222,7 +220,7 @@ fn diagonal_smooth<'a>(output: &mut Vec<Sprite<'a>>, objtree: &'a ObjectTree, bu
             'dirs: for &each in &[dir, dir.counterclockwise_45(), dir.clockwise_45()] {
                 let atom_list = neighborhood.offset(each);
                 for atom in atom_list {
-                    if dm::objtree::subpath(&atom.type_.path, "/turf/open/") {
+                    if atom.istype("/turf/open/") {
                         output.push(Sprite::from_vars(objtree, atom));
                         needs_plating = false;
                         break 'dirs;

@@ -240,7 +240,7 @@ fn get_atom_list<'a>(
 
 #[derive(Debug, Clone)]
 pub struct Atom<'a> {
-    pub(crate) type_: &'a Type,
+    type_: &'a Type,
     prefab: Option<&'a Vars>,
     pub sprite: Sprite<'a>,
 }
