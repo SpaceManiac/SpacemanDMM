@@ -19,17 +19,34 @@ const SMOOTH_MORE: i32 = 2;  // smooth with all subtypes thereof
 const SMOOTH_DIAGONAL: i32 = 4;  // smooth diagonally
 const SMOOTH_BORDER: i32 = 8;  // smooth with the borders of the map
 
-pub fn handle_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, neighborhood: &Neighborhood<'a, '_>, atom: Atom<'a>, mask: i32) {
-    let smooth_flags = mask & atom.get_var("smooth", ctx.objtree).to_int().unwrap_or(0);
-    if smooth_flags & (SMOOTH_TRUE | SMOOTH_MORE) != 0 {
-        let adjacencies = calculate_adjacencies(ctx, neighborhood, &atom, smooth_flags);
-        if smooth_flags & SMOOTH_DIAGONAL != 0 {
-            diagonal_smooth(output, ctx, neighborhood, &atom, adjacencies);
+pub struct IconSmoothing {
+    pub mask: i32,
+}
+
+impl Default for IconSmoothing {
+    fn default() -> Self {
+        IconSmoothing { mask: !0 }
+    }
+}
+
+impl IconSmoothing {
+    pub fn handle_smooth<'a>(&self,
+        output: &mut Vec<Sprite<'a>>,
+        ctx: Context<'a>,
+        neighborhood: &Neighborhood<'a, '_>,
+        atom: Atom<'a>,
+    ) {
+        let smooth_flags = self.mask & atom.get_var("smooth", ctx.objtree).to_int().unwrap_or(0);
+        if smooth_flags & (SMOOTH_TRUE | SMOOTH_MORE) != 0 {
+            let adjacencies = calculate_adjacencies(ctx, neighborhood, &atom, smooth_flags);
+            if smooth_flags & SMOOTH_DIAGONAL != 0 {
+                diagonal_smooth(output, ctx, neighborhood, &atom, adjacencies);
+            } else {
+                cardinal_smooth(output, ctx, &atom, adjacencies);
+            }
         } else {
-            cardinal_smooth(output, ctx, &atom, adjacencies);
+            output.push(atom.sprite);
         }
-    } else {
-        output.push(atom.sprite);
     }
 }
 
