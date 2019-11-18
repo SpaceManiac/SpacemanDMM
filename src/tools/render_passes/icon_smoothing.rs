@@ -32,22 +32,23 @@ impl Default for IconSmoothing {
 
 impl IconSmoothing {
     pub fn handle_smooth<'a>(&self,
-        output: &mut Vec<Sprite<'a>>,
+        atom: &Atom<'a>,
         objtree: &'a ObjectTree,
-        bump: &'a bumpalo::Bump,
         neighborhood: &Neighborhood<'a, '_>,
-        atom: Atom<'a>,
-    ) {
+        output: &mut Vec<Sprite<'a>>,
+        bump: &'a bumpalo::Bump,
+    ) -> bool {
         let smooth_flags = self.mask & atom.get_var("smooth", objtree).to_int().unwrap_or(0);
         if smooth_flags & (SMOOTH_TRUE | SMOOTH_MORE) != 0 {
-            let adjacencies = calculate_adjacencies(objtree, neighborhood, &atom, smooth_flags);
+            let adjacencies = calculate_adjacencies(objtree, neighborhood, atom, smooth_flags);
             if smooth_flags & SMOOTH_DIAGONAL != 0 {
-                diagonal_smooth(output, objtree, bump, neighborhood, &atom, adjacencies);
+                diagonal_smooth(output, objtree, bump, neighborhood, atom, adjacencies);
             } else {
-                cardinal_smooth(output, objtree, bump, &atom, adjacencies);
+                cardinal_smooth(output, objtree, bump, atom, adjacencies);
             }
+            false
         } else {
-            output.push(atom.sprite);
+            true
         }
     }
 }
