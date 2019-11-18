@@ -6,11 +6,13 @@ mod transit_tube;
 mod random;
 mod structures;
 mod icon_smoothing;
+mod smart_cables;
 
 pub use self::transit_tube::TransitTube;
 pub use self::random::Random;
 pub use self::structures::{GravityGen, Spawners};
 pub use self::icon_smoothing::IconSmoothing;
+pub use self::smart_cables::SmartCables;
 
 /// A map rendering pass.
 ///
@@ -102,6 +104,7 @@ pub const RENDER_PASSES: &[RenderPassInfo] = &[
     pass!(Pipes, "only-pipenet", "Render only atmospheric pipes.", false),
     pass!(FancyLayers, "fancy-layers", "Layer atoms according to in-game rules.", true),
     pass!(IconSmoothing, "icon-smoothing", "Emulate the icon smoothing subsystem.", true),
+    pass!(SmartCables, "smart-cables", "Handle smart cable layout.", true),
 ];
 
 pub fn configure(include: &str, exclude: &str) -> Vec<Box<dyn RenderPass>> {
