@@ -65,7 +65,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
 
             let loc = (x as u32, y as u32);
 
-            'atom: for atom in atoms.get_mut(e).expect("bad key").iter_mut() {
+            'atom: for atom in atoms.get(e).expect("bad key").iter() {
                 for pass in render_passes.iter() {
                     // Note that late_filter is NOT called during smoothing lookups.
                     if !pass.late_filter(&atom, objtree) {
@@ -80,16 +80,14 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
                     println!("no icon: {}", atom.type_.path);
                     continue;
                 }
-                atom.sprite = sprite;
+                let atom = Atom { sprite, .. *atom };
 
                 for pass in render_passes {
-                    pass.overlays(atom, objtree, &mut underlays, &mut overlays, bump);
+                    pass.overlays(&atom, objtree, &mut underlays, &mut overlays, bump);
                 }
 
                 // smoothing time
-                use std::convert::TryInto;
-
-                let mut adjacency = [Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()];
+                let mut neighborhood = [&[][..]; 9];
                 for (i, (dx, dy)) in [
                     (-1,  1), (0,  1), (1,  1),
                     (-1,  0), (0,  0), (1,  0),
@@ -100,16 +98,9 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
                     if new_loc.0 < 0 || new_loc.1 < 0 || new_loc.0 >= dim_x as i32 || new_loc.1 >= dim_y as i32 {
                         continue;
                     }
-                    // TODO: make this not call get_atom_list way too many times
-                    adjacency[i] = get_atom_list(
-                        ctx.objtree,
-                        &ctx.map.dictionary[&ctx.level.grid[ndarray::Dim([new_loc.1 as usize, new_loc.0 as usize])]],
-                        ctx.render_passes,
-                        None,
-                    );
+                    neighborhood[i] = &atoms[&ctx.level.grid[ndarray::Dim([new_loc.1 as usize, new_loc.0 as usize])]][..];
                 }
-                let adjacency2 = adjacency.iter().map(|v| &v[..]).collect::<Vec<_>>();
-                let neighborhood = Neighborhood::new(adjacency2[..].try_into().unwrap());
+                let neighborhood = Neighborhood::new(neighborhood);
 
                 let mut normal_appearance = true;
                 for pass in render_passes {
