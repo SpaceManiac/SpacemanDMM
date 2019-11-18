@@ -79,7 +79,7 @@ fn calculate_adjacencies(objtree: &ObjectTree, neighborhood: &Neighborhood, atom
         }
     };
 
-    for &dir in &[Dir::South, Dir::North, Dir::East, Dir::West] {
+    for &dir in Dir::CARDINALS {
         adjacencies |= check_one(dir, 1 << dir.to_int());
     }
 

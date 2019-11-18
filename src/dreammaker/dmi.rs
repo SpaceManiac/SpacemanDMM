@@ -20,6 +20,10 @@ pub enum Dir {
 }
 
 impl Dir {
+    pub const CARDINALS: &'static [Dir] = &[Dir::North, Dir::South, Dir::East, Dir::West];
+    pub const DIAGONALS: &'static [Dir] = &[Dir::Northeast, Dir::Northwest, Dir::Southeast, Dir::Southwest];
+    pub const ALL: &'static [Dir] = &[Dir::North, Dir::South, Dir::East, Dir::West, Dir::Northeast, Dir::Northwest, Dir::Southeast, Dir::Southwest];
+
     /// Attempt to build a direction from its integer representation.
     pub fn from_int(int: i32) -> Option<Dir> {
         Some(match int {
