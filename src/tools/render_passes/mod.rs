@@ -2,10 +2,15 @@ use dm::objtree::*;
 use dm::constants::Constant;
 use minimap::{Atom, GetVar, Sprite, Layer, Neighborhood};
 
-pub mod transit_tube;
-pub mod random;
-pub mod structures;
-pub mod icon_smoothing;
+mod transit_tube;
+mod random;
+mod structures;
+mod icon_smoothing;
+
+pub use self::transit_tube::TransitTube;
+pub use self::random::Random;
+pub use self::structures::{GravityGen, Spawners};
+pub use self::icon_smoothing::IconSmoothing;
 
 /// A map rendering pass.
 ///
@@ -87,16 +92,16 @@ pub const RENDER_PASSES: &[RenderPassInfo] = &[
     pass!(HideSpace, "hide-space", "Do not render space tiles, instead leaving transparency.", true),
     pass!(HideAreas, "hide-areas", "Do not render area icons.", true),
     pass!(HideInvisible, "hide-invisible", "Do not render invisible or ephemeral objects such as mapping helpers.", true),
-    pass!(random::Random, "random", "Replace random spawners with one of their possibilities.", true),
+    pass!(Random, "random", "Replace random spawners with one of their possibilities.", true),
     pass!(Pretty, "pretty", "Add the minor cosmetic overlays for various objects.", true),
-    pass!(structures::Spawners, "spawners", "Replace object spawners with their spawned objects.", true),
+    pass!(Spawners, "spawners", "Replace object spawners with their spawned objects.", true),
     pass!(Overlays, "overlays", "Add overlays and underlays to atoms which usually have them.", true),
-    pass!(transit_tube::TransitTube, "transit-tube", "Add overlays to connect transit tubes together.", true),
-    pass!(structures::GravityGen, "gravity-gen", "Expand the gravity generator to the full structure.", true),
+    pass!(TransitTube, "transit-tube", "Add overlays to connect transit tubes together.", true),
+    pass!(GravityGen, "gravity-gen", "Expand the gravity generator to the full structure.", true),
     pass!(Wires, "only-powernet", "Render only power cables.", false),
     pass!(Pipes, "only-pipenet", "Render only atmospheric pipes.", false),
     pass!(FancyLayers, "fancy-layers", "Layer atoms according to in-game rules.", true),
-    pass!(icon_smoothing::IconSmoothing, "icon-smoothing", "Emulate the icon smoothing subsystem.", true),
+    pass!(IconSmoothing, "icon-smoothing", "Emulate the icon smoothing subsystem.", true),
 ];
 
 pub fn configure(include: &str, exclude: &str) -> Vec<Box<dyn RenderPass>> {
