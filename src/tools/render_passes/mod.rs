@@ -224,14 +224,14 @@ impl RenderPass for Overlays {
                     "icon_state"
                 };
                 if let &Constant::String(ref door) = atom.get_var(var, objtree) {
-                    add_to(overlays, atom, bump.alloc(format!("{}_open", door)));
+                    add_to(overlays, atom, bumpalo::format!(in bump, "{}_open", door).into_bump_str());
                 }
             } else {
                 if let &Constant::String(ref door) = atom
                     .get_var_notnull("icon_door", objtree)
                     .unwrap_or_else(|| atom.get_var("icon_state", objtree))
                 {
-                    add_to(overlays, atom, bump.alloc(format!("{}_door", door)));
+                    add_to(overlays, atom, bumpalo::format!(in bump, "{}_door", door).into_bump_str());
                 }
                 if atom.get_var("welded", objtree).to_bool() {
                     add_to(overlays, atom, "welded");

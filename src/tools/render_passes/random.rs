@@ -68,15 +68,15 @@ impl RenderPass for Random {
         const LEGIT_POSTERS: u32 = 35;
 
         if atom.istype("/obj/structure/sign/poster/contraband/random/") {
-            sprite.icon_state = bump.alloc(format!("poster{}", rng.gen_range(1, 1 + CONTRABAND_POSTERS)));
+            sprite.icon_state = bumpalo::format!(in bump, "poster{}", rng.gen_range(1, 1 + CONTRABAND_POSTERS)).into_bump_str();
         } else if atom.istype("/obj/structure/sign/poster/official/random/") {
-            sprite.icon_state = bump.alloc(format!("poster{}_legit", rng.gen_range(1, 1 + LEGIT_POSTERS)));
+            sprite.icon_state = bumpalo::format!(in bump, "poster{}_legit", rng.gen_range(1, 1 + LEGIT_POSTERS)).into_bump_str();
         } else if atom.istype("/obj/structure/sign/poster/random/") {
             let i = 1 + rng.gen_range(0, CONTRABAND_POSTERS + LEGIT_POSTERS);
             if i <= CONTRABAND_POSTERS {
-                sprite.icon_state = bump.alloc(format!("poster{}", i));
+                sprite.icon_state = bumpalo::format!(in bump, "poster{}", i).into_bump_str();
             } else {
-                sprite.icon_state = bump.alloc(format!("poster{}_legit", i - CONTRABAND_POSTERS));
+                sprite.icon_state = bumpalo::format!(in bump, "poster{}_legit", i - CONTRABAND_POSTERS).into_bump_str();
             }
         } else if atom.istype("/obj/item/twohanded/required/kirbyplants/random/") {
             sprite.icon = "icons/obj/flora/plants.dmi";
@@ -84,7 +84,7 @@ impl RenderPass for Random {
             if random == 0 {
                 sprite.icon_state = "applebush";
             } else {
-                sprite.icon_state = bump.alloc(format!("plant-{:02}", random));
+                sprite.icon_state = bumpalo::format!(in bump, "plant-{:02}", random).into_bump_str();
             }
         } else if atom.istype("/obj/structure/sign/barsign/") {
             if let Some(root) = objtree.find("/datum/barsign") {

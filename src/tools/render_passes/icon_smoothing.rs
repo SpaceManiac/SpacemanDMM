@@ -147,20 +147,20 @@ fn cardinal_smooth<'a>(output: &mut Vec<Sprite<'a>>, objtree: &'a ObjectTree, bu
     ] {
         let name = if (adjacencies & f1 != 0) && (adjacencies & f2 != 0) {
             if (adjacencies & f3) != 0 {
-                format!("{}-f", what)
+                bumpalo::format!(in bump, "{}-f", what)
             } else {
-                format!("{}-{}{}", what, n1, n2)
+                bumpalo::format!(in bump, "{}-{}{}", what, n1, n2)
             }
         } else if adjacencies & f1 != 0 {
-            format!("{}-{}", what, n1)
+            bumpalo::format!(in bump, "{}-{}", what, n1)
         } else if adjacencies & f2 != 0 {
-            format!("{}-{}", what, n2)
+            bumpalo::format!(in bump, "{}-{}", what, n2)
         } else {
-            format!("{}-i", what)
+            bumpalo::format!(in bump, "{}-i", what)
         };
 
         let mut sprite = Sprite {
-            icon_state: bump.alloc(name),
+            icon_state: name.into_bump_str(),
             .. source.sprite
         };
         if let Some(icon) = source.get_var("smooth_icon", objtree).as_path_str() {
