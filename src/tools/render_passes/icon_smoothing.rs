@@ -2,7 +2,7 @@
 
 use dm::constants::Constant;
 use dmi::Dir;
-use minimap::{Sprite, Context, Atom, GetVar, Adjacency};
+use minimap::{Sprite, Context, Atom, GetVar, Neighborhood};
 
 // (1 << N) where N is the usual value
 const N_NORTH: i32 = 2;
@@ -19,12 +19,12 @@ const SMOOTH_MORE: i32 = 2;  // smooth with all subtypes thereof
 const SMOOTH_DIAGONAL: i32 = 4;  // smooth diagonally
 const SMOOTH_BORDER: i32 = 8;  // smooth with the borders of the map
 
-pub fn handle_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, adjacency: &Adjacency<'a, '_>, atom: Atom<'a>, mask: i32) {
+pub fn handle_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, neighborhood: &Neighborhood<'a, '_>, atom: Atom<'a>, mask: i32) {
     let smooth_flags = mask & atom.get_var("smooth", ctx.objtree).to_int().unwrap_or(0);
     if smooth_flags & (SMOOTH_TRUE | SMOOTH_MORE) != 0 {
-        let adjacencies = calculate_adjacencies(ctx, adjacency, &atom, smooth_flags);
+        let adjacencies = calculate_adjacencies(ctx, neighborhood, &atom, smooth_flags);
         if smooth_flags & SMOOTH_DIAGONAL != 0 {
-            diagonal_smooth(output, ctx, adjacency, &atom, adjacencies);
+            diagonal_smooth(output, ctx, neighborhood, &atom, adjacencies);
         } else {
             cardinal_smooth(output, ctx, &atom, adjacencies);
         }
@@ -33,12 +33,12 @@ pub fn handle_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, adjacen
     }
 }
 
-fn calculate_adjacencies(ctx: Context, adjacency: &Adjacency, atom: &Atom, smooth_flags: i32) -> i32 {
+fn calculate_adjacencies(ctx: Context, neighborhood: &Neighborhood, atom: &Atom, smooth_flags: i32) -> i32 {
     // TODO: anchored check
 
     let mut adjacencies = 0;
     let check_one = |direction, flag| {
-        if find_type_in_direction(ctx, adjacency, atom, direction, smooth_flags) {
+        if find_type_in_direction(ctx, neighborhood, atom, direction, smooth_flags) {
             flag
         } else {
             0
@@ -69,7 +69,7 @@ fn calculate_adjacencies(ctx: Context, adjacency: &Adjacency, atom: &Atom, smoot
     adjacencies
 }
 
-fn find_type_in_direction<'a>(ctx: Context, adjacency: &Adjacency, source: &Atom, direction: Dir, smooth_flags: i32) -> bool {
+fn find_type_in_direction<'a>(ctx: Context, adjacency: &Neighborhood, source: &Atom, direction: Dir, smooth_flags: i32) -> bool {
     use std::ptr::eq;
 
     let atom_list = adjacency.offset(direction);
@@ -151,7 +151,7 @@ fn cardinal_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, source: &
     }
 }
 
-fn diagonal_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, adjacency: &Adjacency<'a, '_>, source: &Atom<'a>, adjacencies: i32) {
+fn diagonal_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, neighborhood: &Neighborhood<'a, '_>, source: &Atom<'a>, adjacencies: i32) {
     let presets = if adjacencies == N_NORTH | N_WEST {
         ["d-se", "d-se-0"]
     } else if adjacencies == N_NORTH | N_EAST {
@@ -186,7 +186,7 @@ fn diagonal_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, adjacency
             let mut needs_plating = true;
             // check direct, then 45deg left, then 45deg right
             'dirs: for &each in &[dir, dir.counterclockwise_45(), dir.clockwise_45()] {
-                let atom_list = adjacency.offset(each);
+                let atom_list = neighborhood.offset(each);
                 for atom in atom_list {
                     if dm::objtree::subpath(&atom.type_.path, "/turf/open/") {
                         output.push(Sprite::from_vars(ctx.objtree, atom));

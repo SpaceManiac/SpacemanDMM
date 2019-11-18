@@ -110,9 +110,9 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
                     );
                 }
                 let adjacency2 = adjacency.iter().map(|v| &v[..]).collect::<Vec<_>>();
-                let adjacency3 = Adjacency::new(adjacency2[..].try_into().unwrap());
+                let neighborhood = Neighborhood::new(adjacency2[..].try_into().unwrap());
 
-                icon_smoothing::handle_smooth(&mut underlays, ctx, &adjacency3, atom, !0);
+                icon_smoothing::handle_smooth(&mut underlays, ctx, &neighborhood, atom, !0);
                 sprites.extend(underlays.drain(..).map(|o| (loc, o)));
                 sprites.extend(overlays.drain(..).map(|o| (loc, o)));
             }
@@ -275,16 +275,16 @@ impl<'a> From<TypeRef<'a>> for Atom<'a> {
     }
 }
 
-pub struct Adjacency<'a, 'b> {
+pub struct Neighborhood<'objtree, 'atoms> {
     // 0 1 2
     // 3 4 5
     // 6 7 8
-    inner: [&'b [Atom<'a>]; 9],
+    inner: [&'atoms [Atom<'objtree>]; 9],
 }
 
-impl<'a, 'b> Adjacency<'a, 'b> {
+impl<'a, 'b> Neighborhood<'a, 'b> {
     pub fn new(inner: [&'b [Atom<'a>]; 9]) -> Self {
-        Adjacency { inner }
+        Neighborhood { inner }
     }
 
     pub fn center(&self) -> &'b [Atom<'a>] {
