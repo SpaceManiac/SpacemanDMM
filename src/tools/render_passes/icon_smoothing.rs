@@ -5,6 +5,8 @@ use dm::constants::Constant;
 use dmi::Dir;
 use minimap::{Sprite, Atom, GetVar, Neighborhood};
 
+use super::RenderPass;
+
 // (1 << N) where N is the usual value
 const N_NORTH: i32 = 2;
 const N_SOUTH: i32 = 4;
@@ -30,8 +32,20 @@ impl Default for IconSmoothing {
     }
 }
 
-impl IconSmoothing {
-    pub fn handle_smooth<'a>(&self,
+impl RenderPass for IconSmoothing {
+    fn adjust_sprite<'a>(&self,
+        atom: &Atom<'a>,
+        sprite: &mut Sprite<'a>,
+        _objtree: &'a ObjectTree,
+        _bump: &'a bumpalo::Bump,
+    ) {
+        if atom.istype("/turf/closed/mineral/") {
+            sprite.ofs_x -= 4;
+            sprite.ofs_y -= 4;
+        }
+    }
+
+    fn neighborhood_appearance<'a>(&self,
         atom: &Atom<'a>,
         objtree: &'a ObjectTree,
         neighborhood: &Neighborhood<'a, '_>,

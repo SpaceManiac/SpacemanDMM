@@ -1,6 +1,6 @@
 use dm::objtree::*;
 use dm::constants::Constant;
-use minimap::{Atom, GetVar, Sprite, Layer};
+use minimap::{Atom, GetVar, Sprite, Layer, Neighborhood};
 
 pub mod transit_tube;
 pub mod random;
@@ -51,6 +51,14 @@ pub trait RenderPass: Sync {
         bump: &'a bumpalo::Bump,  // TODO: kind of a hacky way to pass this
     ) {}
 
+    fn neighborhood_appearance<'a>(&self,
+        atom: &Atom<'a>,
+        objtree: &'a ObjectTree,
+        neighborhood: &Neighborhood<'a, '_>,
+        output: &mut Vec<Sprite<'a>>,
+        bump: &'a bumpalo::Bump,  // TODO: kind of a hacky way to pass this
+    ) -> bool { true }
+
     /// Filter atoms at the end of the process, after they have been taken into
     /// account by their neighbors.
     fn late_filter(&self,
@@ -88,6 +96,7 @@ pub const RENDER_PASSES: &[RenderPassInfo] = &[
     pass!(Wires, "only-powernet", "Render only power cables.", false),
     pass!(Pipes, "only-pipenet", "Render only atmospheric pipes.", false),
     pass!(FancyLayers, "fancy-layers", "Layer atoms according to in-game rules.", true),
+    pass!(icon_smoothing::IconSmoothing, "icon-smoothing", "Emulate the icon smoothing subsystem.", true),
 ];
 
 pub fn configure(include: &str, exclude: &str) -> Vec<Box<dyn RenderPass>> {

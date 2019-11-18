@@ -7,7 +7,7 @@ use dm::objtree::*;
 use dm::constants::Constant;
 use dmm::{Map, ZLevel, Prefab};
 use dmi::{Dir, Image};
-use render_passes::{RenderPass, icon_smoothing};
+use render_passes::RenderPass;
 use icon_cache::IconCache;
 
 const TILE_SIZE: u32 = 32;
@@ -76,13 +76,6 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
                 }
                 atom.sprite = sprite;
 
-                // icons which differ from their map states
-                let p = &atom.type_.path;
-                if subpath(p, "/turf/closed/mineral/") {
-                    atom.sprite.ofs_x -= 4;
-                    atom.sprite.ofs_y -= 4;
-                }
-
                 for pass in render_passes {
                     pass.overlays(&mut atom, objtree, &mut underlays, &mut overlays, bump);
                 }
@@ -112,9 +105,16 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
                 let adjacency2 = adjacency.iter().map(|v| &v[..]).collect::<Vec<_>>();
                 let neighborhood = Neighborhood::new(adjacency2[..].try_into().unwrap());
 
-                if icon_smoothing::IconSmoothing::default().handle_smooth(&atom, objtree, &neighborhood, &mut underlays, bump) {
+                let mut normal_appearance = true;
+                for pass in render_passes {
+                    if !pass.neighborhood_appearance(&atom, objtree, &neighborhood, &mut underlays, bump) {
+                        normal_appearance = false;
+                    }
+                }
+                if normal_appearance {
                     underlays.push(atom.sprite);
                 }
+
                 sprites.extend(underlays.drain(..).map(|o| (loc, o)));
                 sprites.extend(overlays.drain(..).map(|o| (loc, o)));
             }
