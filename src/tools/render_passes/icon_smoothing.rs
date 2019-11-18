@@ -2,16 +2,7 @@
 
 use dm::constants::Constant;
 use dmi::Dir;
-use minimap::{Sprite, Context, Atom, GetVar, Adjacency, get_atom_list};
-
-const NORTH: i32 = 1;
-const SOUTH: i32 = 2;
-const EAST: i32 = 4;
-const WEST: i32 = 8;
-const NORTHEAST: i32 = 5;
-const NORTHWEST: i32 = 9;
-const SOUTHEAST: i32 = 6;
-const SOUTHWEST: i32 = 10;
+use minimap::{Sprite, Context, Atom, GetVar, Adjacency};
 
 // (1 << N) where N is the usual value
 const N_NORTH: i32 = 2;
@@ -28,36 +19,12 @@ const SMOOTH_MORE: i32 = 2;  // smooth with all subtypes thereof
 const SMOOTH_DIAGONAL: i32 = 4;  // smooth diagonally
 const SMOOTH_BORDER: i32 = 8;  // smooth with the borders of the map
 
-pub fn handle_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, loc: (u32, u32), atom: Atom<'a>, mask: i32) {
-    use std::convert::TryInto;
-
-    let mut adjacency = [Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()];
-    for (i, (dx, dy)) in [
-        (-1,  1), (0,  1), (1,  1),
-        (-1,  0), (0,  0), (1,  0),
-        (-1, -1), (0, -1), (1, -1),
-    ].iter().enumerate() {
-        let new_loc = (loc.0 as i32 + dx, loc.1 as i32 - dy);
-        let (dim_y, dim_x) = ctx.level.grid.dim();
-        if new_loc.0 < 0 || new_loc.1 < 0 || new_loc.0 >= dim_x as i32 || new_loc.1 >= dim_y as i32 {
-            continue;
-        }
-        // TODO: make this not call get_atom_list way too many times
-        adjacency[i] = get_atom_list(
-            ctx.objtree,
-            &ctx.map.dictionary[&ctx.level.grid[ndarray::Dim([new_loc.1 as usize, new_loc.0 as usize])]],
-            ctx.render_passes,
-            None,
-        );
-    }
-    let adjacency2 = adjacency.iter().map(|v| &v[..]).collect::<Vec<_>>();
-    let adjacency3 = Adjacency::new(adjacency2[..].try_into().unwrap());
-
+pub fn handle_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, adjacency: &Adjacency<'a, '_>, atom: Atom<'a>, mask: i32) {
     let smooth_flags = mask & atom.get_var("smooth", ctx.objtree).to_int().unwrap_or(0);
     if smooth_flags & (SMOOTH_TRUE | SMOOTH_MORE) != 0 {
-        let adjacencies = calculate_adjacencies(ctx, &adjacency3, &atom, smooth_flags);
+        let adjacencies = calculate_adjacencies(ctx, adjacency, &atom, smooth_flags);
         if smooth_flags & SMOOTH_DIAGONAL != 0 {
-            diagonal_smooth(output, ctx, loc, &atom, adjacencies);
+            diagonal_smooth(output, ctx, adjacency, &atom, adjacencies);
         } else {
             cardinal_smooth(output, ctx, &atom, adjacencies);
         }
@@ -184,7 +151,7 @@ fn cardinal_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, source: &
     }
 }
 
-fn diagonal_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, loc: (u32, u32), source: &Atom<'a>, adjacencies: i32) {
+fn diagonal_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, adjacency: &Adjacency<'a, '_>, source: &Atom<'a>, adjacencies: i32) {
     let presets = if adjacencies == N_NORTH | N_WEST {
         ["d-se", "d-se-0"]
     } else if adjacencies == N_NORTH | N_EAST {
@@ -215,28 +182,16 @@ fn diagonal_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, loc: (u32
         {
             output.push(Sprite::from_vars(ctx.objtree, &ctx.objtree.expect("/turf/open/space/basic")));
         } else {
-            let dir = flip(reverse_ndir(adjacencies));
+            let dir = reverse_ndir(adjacencies).flip();
             let mut needs_plating = true;
             // check direct, then 45deg left, then 45deg right
-            'dirs: for &each in &[dir, left_45(dir), right_45(dir)] {
-                let (dx, dy) = offset(each);
-                let new_loc = (loc.0 as i32 + dx, loc.1 as i32 + dy);
-                let (dim_y, dim_x) = ctx.level.grid.dim();
-                if !(new_loc.0 < 0 || new_loc.1 < 0 || new_loc.0 >= dim_x as i32 || new_loc.1 >= dim_y as i32) {
-                    let new_loc = (new_loc.0 as u32, new_loc.1 as u32);
-                    // TODO: make this not call get_atom_list way too many times
-                    let atom_list = get_atom_list(
-                        ctx.objtree,
-                        &ctx.map.dictionary[&ctx.level.grid[ndarray::Dim([new_loc.1 as usize, new_loc.0 as usize])]],
-                        ctx.render_passes,
-                        None,
-                    );
-                    for atom in atom_list {
-                        if dm::objtree::subpath(&atom.type_.path, "/turf/open/") {
-                            output.push(Sprite::from_vars(ctx.objtree, &atom));
-                            needs_plating = false;
-                            break 'dirs;
-                        }
+            'dirs: for &each in &[dir, dir.counterclockwise_45(), dir.clockwise_45()] {
+                let atom_list = adjacency.offset(each);
+                for atom in atom_list {
+                    if dm::objtree::subpath(&atom.type_.path, "/turf/open/") {
+                        output.push(Sprite::from_vars(ctx.objtree, atom));
+                        needs_plating = false;
+                        break 'dirs;
                     }
                 }
             }
@@ -259,37 +214,7 @@ fn diagonal_smooth<'a>(output: &mut Vec<Sprite<'a>>, ctx: Context<'a>, loc: (u32
     }
 }
 
-fn offset(direction: i32) -> (i32, i32) {
-    match direction {
-        0 => (0, 0),
-        SOUTH => (0, 1),
-        NORTH => (0, -1),
-        EAST => (1, 0),
-        WEST => (-1, 0),
-        SOUTHEAST => (1, 1),
-        SOUTHWEST => (-1, 1),
-        NORTHEAST => (1, -1),
-        NORTHWEST => (-1, -1),
-        _ => panic!(),
-    }
-}
-
-fn flip(direction: i32) -> i32 {
-    match direction {
-        0 => 0,
-        SOUTH => NORTH,
-        NORTH => SOUTH,
-        EAST => WEST,
-        WEST => EAST,
-        SOUTHEAST => NORTHWEST,
-        SOUTHWEST => NORTHEAST,
-        NORTHEAST => SOUTHWEST,
-        NORTHWEST => SOUTHEAST,
-        _ => panic!(),
-    }
-}
-
-fn reverse_ndir(ndir: i32) -> i32 {
+fn reverse_ndir(ndir: i32) -> Dir {
     const NW1: i32 = N_NORTH | N_WEST;
     const NW2: i32 = NW1 | N_NORTHWEST;
     const NE1: i32 = N_NORTH | N_EAST;
@@ -300,42 +225,14 @@ fn reverse_ndir(ndir: i32) -> i32 {
     const SE2: i32 = SE1 | N_SOUTHEAST;
 
     match ndir {
-        N_NORTH => NORTH,
-        N_SOUTH => SOUTH,
-        N_WEST => WEST,
-        N_EAST => EAST,
-        N_SOUTHEAST | SE1 | SE2 => SOUTHEAST,
-        N_SOUTHWEST | SW1 | SW2 => SOUTHWEST,
-        N_NORTHEAST | NE1 | NE2 => NORTHEAST,
-        N_NORTHWEST | NW1 | NW2 => NORTHWEST,
+        N_NORTH => Dir::North,
+        N_SOUTH => Dir::South,
+        N_WEST => Dir::West,
+        N_EAST => Dir::East,
+        N_SOUTHEAST | SE1 | SE2 => Dir::Southeast,
+        N_SOUTHWEST | SW1 | SW2 => Dir::Southwest,
+        N_NORTHEAST | NE1 | NE2 => Dir::Northeast,
+        N_NORTHWEST | NW1 | NW2 => Dir::Northwest,
         _ => panic!(),
-    }
-}
-
-fn left_45(dir: i32) -> i32 {
-    match dir {
-        NORTH => NORTHWEST,
-        NORTHEAST => NORTH,
-        EAST => NORTHEAST,
-        SOUTHEAST => EAST,
-        SOUTH => SOUTHEAST,
-        SOUTHWEST => SOUTH,
-        WEST => SOUTHWEST,
-        NORTHWEST => WEST,
-        e => e,
-    }
-}
-
-fn right_45(dir: i32) -> i32 {
-    match dir {
-        NORTH => NORTHEAST,
-        NORTHEAST => EAST,
-        EAST => SOUTHEAST,
-        SOUTHEAST => SOUTH,
-        SOUTH => SOUTHWEST,
-        SOUTHWEST => WEST,
-        WEST => NORTHWEST,
-        NORTHWEST => NORTH,
-        e => e,
     }
 }

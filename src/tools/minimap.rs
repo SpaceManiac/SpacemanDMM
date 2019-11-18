@@ -88,7 +88,31 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
                 }
 
                 // smoothing time
-                icon_smoothing::handle_smooth(&mut underlays, ctx, loc, atom, !0);
+                use std::convert::TryInto;
+
+                let mut adjacency = [Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()];
+                for (i, (dx, dy)) in [
+                    (-1,  1), (0,  1), (1,  1),
+                    (-1,  0), (0,  0), (1,  0),
+                    (-1, -1), (0, -1), (1, -1),
+                ].iter().enumerate() {
+                    let new_loc = (loc.0 as i32 + dx, loc.1 as i32 - dy);
+                    let (dim_y, dim_x) = ctx.level.grid.dim();
+                    if new_loc.0 < 0 || new_loc.1 < 0 || new_loc.0 >= dim_x as i32 || new_loc.1 >= dim_y as i32 {
+                        continue;
+                    }
+                    // TODO: make this not call get_atom_list way too many times
+                    adjacency[i] = get_atom_list(
+                        ctx.objtree,
+                        &ctx.map.dictionary[&ctx.level.grid[ndarray::Dim([new_loc.1 as usize, new_loc.0 as usize])]],
+                        ctx.render_passes,
+                        None,
+                    );
+                }
+                let adjacency2 = adjacency.iter().map(|v| &v[..]).collect::<Vec<_>>();
+                let adjacency3 = Adjacency::new(adjacency2[..].try_into().unwrap());
+
+                icon_smoothing::handle_smooth(&mut underlays, ctx, &adjacency3, atom, !0);
                 sprites.extend(underlays.drain(..).map(|o| (loc, o)));
                 sprites.extend(overlays.drain(..).map(|o| (loc, o)));
             }
