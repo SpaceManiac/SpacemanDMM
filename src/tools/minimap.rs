@@ -112,7 +112,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
                 let adjacency2 = adjacency.iter().map(|v| &v[..]).collect::<Vec<_>>();
                 let neighborhood = Neighborhood::new(adjacency2[..].try_into().unwrap());
 
-                icon_smoothing::IconSmoothing::default().handle_smooth(&mut underlays, ctx, &neighborhood, atom);
+                icon_smoothing::IconSmoothing::default().handle_smooth(&mut underlays, objtree, bump, &neighborhood, atom);
                 sprites.extend(underlays.drain(..).map(|o| (loc, o)));
                 sprites.extend(overlays.drain(..).map(|o| (loc, o)));
             }
