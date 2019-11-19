@@ -19,5 +19,9 @@ bumpalo = "2.6.0"
 version = "0.15.0"
 optional = true
 
+[dependencies.gfx_core]
+version = "0.9.2"
+optional = true
+
 [dev-dependencies]
 walkdir = "2.0.1"

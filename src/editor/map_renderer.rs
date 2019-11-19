@@ -10,7 +10,7 @@ use slice_of_array::prelude::*;
 
 use dm::objtree::ObjectTree;
 use dmm_tools::dmm::Prefab;
-use dmm_tools::minimap::Sprite;
+use dmm_tools::minimap::{Sprite, Category, Layer};
 
 use dmi::*;
 use map_repr::AtomMap;
@@ -30,9 +30,9 @@ gfx_defines! {
         transform: [[f32; 4]; 4] = "transform",
     }
 
-    #[derive(PartialOrd, Default)]
+    #[derive(Default)]
     constant RenderPop {
-        category: u32 = "category",
+        category: Category = "category",
         texture: u32 = "texture",  // icon
         size: [f32; 2] = "size",  // icon
 
@@ -43,7 +43,7 @@ gfx_defines! {
         ofs_y: i32 = "ofs_y",  // pixel_y + pixel_z + step_y
 
         plane: i32 = "plane",
-        layer: i32 = "layer",
+        layer: Layer = "layer",
     }
 
     pipeline pipe {
@@ -78,7 +78,7 @@ pub struct RenderedMap {
 
 #[derive(Debug, Clone)]
 pub struct DrawCall {
-    pub category: u32,
+    pub category: Category,
     pub texture: u32,
     pub len: u32,
 }
@@ -205,7 +205,7 @@ impl RenderedMap {
 
         let mut start = 0;
         for call in map.levels[z as usize].draw_calls.iter() {
-            if !parent.layers[call.category as usize] {
+            if !call.category.matches_basic_layers(&parent.layers) {
                 start += call.len;
                 continue;
             }
@@ -271,12 +271,6 @@ impl RenderedMap {
 // forgive me
 impl ::std::cmp::Eq for RenderPop {}
 
-impl ::std::cmp::Ord for RenderPop {
-    fn cmp(&self, other: &Self) -> ::std::cmp::Ordering {
-        self.partial_cmp(other).expect("in RenderPop::cmp, a field was NaN")
-    }
-}
-
 impl ::std::hash::Hash for RenderPop {
     fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
         self.category.hash(state);
@@ -327,7 +321,7 @@ impl RenderPop {
         ];
 
         Some(RenderPop {
-            category: sprite.category.encode(),
+            category: sprite.category,
             texture: texture_id as u32,
             uv,
             color,
@@ -335,7 +329,7 @@ impl RenderPop {
             ofs_x: sprite.ofs_x,
             ofs_y: sprite.ofs_y,
             plane: sprite.plane,
-            layer: sprite.layer.encode(),
+            layer: sprite.layer,
         })
     }
 

@@ -12,6 +12,8 @@ extern crate linked_hash_map;
 extern crate rand;
 extern crate bumpalo;
 
+#[cfg(feature="gfx_core")] extern crate gfx_core;
+
 pub mod dmm;
 mod icon_cache;
 pub mod minimap;

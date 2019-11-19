@@ -9,7 +9,7 @@ path = "main.rs"
 
 [dependencies]
 dreammaker = { path = "../dreammaker" }
-dmm-tools = { path = "../tools" }
+dmm-tools = { path = "../tools", features = ["gfx_core"] }
 glutin = "0.21.1"
 gfx_gl = "0.6.0"
 gfx = "0.18"

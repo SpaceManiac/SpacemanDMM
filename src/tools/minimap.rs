@@ -403,7 +403,7 @@ impl<'a> GetVar<'a> for TypeRef<'a> {
 // Renderer-agnostic sprite structure
 
 /// Information about when a sprite should be shown or hidden.
-#[derive(Default, Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct Category {
     raw: u32,
 }
@@ -430,8 +430,15 @@ impl Category {
     }
 
     /// Encode this category for FFI representation.
-    pub fn encode(self) -> u32 {
-        self.raw
+    pub fn matches_basic_layers(self, visible: &[bool]) -> bool {
+        visible.get(self.raw as usize).copied().unwrap_or(false)
+    }
+}
+
+#[cfg(feature="gfx_core")]
+impl gfx_core::shade::BaseTyped for Category {
+    fn get_base_type() -> gfx_core::shade::BaseType {
+        u32::get_base_type()
     }
 }
 
@@ -440,13 +447,6 @@ impl Category {
 pub struct Layer {
     whole: i16,
     frac: u16,
-}
-
-impl Layer {
-    /// Encode this layer as an `i32` for FFI representation.
-    pub fn encode(self) -> i32 {
-        ((self.whole as i32) << 16) | (self.frac as i32)
-    }
 }
 
 impl From<i16> for Layer {
@@ -465,6 +465,13 @@ impl From<i32> for Layer {
 impl From<f32> for Layer {
     fn from(f: f32) -> Layer {
         Layer { whole: f as i16, frac: ((f.fract() + 1.).fract() * 65536.) as u16 }
+    }
+}
+
+#[cfg(feature="gfx_core")]
+impl gfx_core::shade::BaseTyped for Layer {
+    fn get_base_type() -> gfx_core::shade::BaseType {
+        i32::get_base_type()
     }
 }
 

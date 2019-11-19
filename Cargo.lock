@@ -390,6 +390,7 @@ version = "0.1.0"
 dependencies = [
  "bumpalo 2.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "dreammaker 0.1.0",
+ "gfx_core 0.9.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "inflate 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "linked-hash-map 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "lodepng 2.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
