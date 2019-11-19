@@ -145,6 +145,10 @@ impl Context {
         writeln!(w)
     }
 
+    pub fn pretty_print_error_nocolor<W: io::Write>(&self, w: &mut W, error: &DMError) -> io::Result<()> {
+        self.pretty_print_error(&mut termcolor::NoColor::new(w), error)
+    }
+
     /// Pretty-print all registered diagnostics to standard error.
     ///
     /// Returns `true` if no errors were printed, `false` if any were.

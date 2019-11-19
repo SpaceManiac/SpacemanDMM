@@ -106,6 +106,7 @@ pub struct EditorScene {
 
 pub struct Environment {
     path: PathBuf,
+    errors: Vec<String>,
     objtree: Arc<ObjectTree>,
     icons: Arc<IconCache>,
     turf: String,
@@ -246,7 +247,7 @@ impl EditorScene {
         self.depth = depth.clone();
     }
 
-    fn finish_loading_env(&mut self, environment: Environment) {
+    fn finish_loading_env(&mut self, mut environment: Environment) {
         self.config.make_recent(&environment.path);
         self.config.save();
         self.tools = tools::configure(&environment.objtree);
@@ -283,6 +284,10 @@ impl EditorScene {
                 other => other,
             };
         }
+        if environment.errors.len() > 0 {
+            self.ui_errors = true;
+        }
+        self.errors.extend(environment.errors.drain(..));
         self.environment = Some(environment);
     }
 
@@ -1027,12 +1032,20 @@ impl EditorScene {
             self.last_errors = self.errors.len();
             let mut ui_errors = self.ui_errors;
             Window::new(im_str!("Errors"))
-                .position([320.0, 140.0], Condition::FirstUseEver)
-                .size([300.0, 400.0], Condition::FirstUseEver)
+                .position([320.0, 340.0], Condition::FirstUseEver)
+                .size([600.0, 400.0], Condition::FirstUseEver)
                 .horizontal_scrollbar(true)
                 .opened(&mut ui_errors)
+                .menu_bar(true)
                 .build(ui, || {
-                    ui.text(im_str!("{:#?}", self.errors));
+                    ui.menu_bar(|| {
+                        if MenuItem::new(im_str!("Clear")).build(ui) {
+                            self.errors.clear();
+                        }
+                    });
+                    for error in self.errors.iter() {
+                        ui.text(im_str!("{}", error));
+                    }
                 });
             self.ui_errors = ui_errors;
         }
@@ -1178,8 +1191,19 @@ impl EditorScene {
                 }
             }
 
+            let mut errors = Vec::new();
+            for error in context.errors().iter() {
+                let mut buf = Vec::new();
+                if error.severity() <= dm::Severity::Warning {
+                    let _ = context.pretty_print_error_nocolor(&mut buf, error);
+                    errors.push(String::from_utf8_lossy(&buf).into_owned());
+                    buf.clear();
+                }
+            }
+
             Ok(Environment {
                 objtree: Arc::new(objtree),
+                errors,
                 icons: Arc::new(IconCache::new(path.parent().expect("invalid environment file path"))),
                 turf,
                 area,
