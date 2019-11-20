@@ -93,7 +93,7 @@ the individual packages.
 [rust]: https://www.rust-lang.org/en-US/install.html
 [source readme]: ./src/README.md
 
-## Docker
+### Docker
 
 A `dockerfile` is provided for the map generator binary. To build the docker
 image, enter the SpacemanDMM directory and run:
