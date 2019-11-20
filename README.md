@@ -4,55 +4,58 @@
 and map files. It features a full-size fancy map renderer, a [language server],
 and a documentation generator for DM codebases.
 
-Binary releases are posted to the [releases] page.
+Language server updates are released to the editor extensions on a regular
+basis and binaries are occasionally posted to the [releases] page.
+[Building from source](#building) is recommended to get the latest updates to
+the map renderer.
+
+The documentation and static analysis tools can be run as part of a continuous
+integration build; see [/tg/station's `.travis.yml`][ci] for an example.
 
 Support is currently provided in /tg/station13's coderbus (ping `SpaceManiac`)
-and on GitHub's issue tracker. Pull requests are welcome.
+and on the [issue tracker]. Pull requests are welcome.
 
 [DreamMaker]: https://secure.byond.com/
-[/tg/station13]: https://github.com/tgstation/tgstation/
+[language server]: https://langserver.org/
 [releases]: https://github.com/SpaceManiac/SpacemanDMM/releases
+[ci]: https://github.com/tgstation/tgstation/blob/master/.travis.yml
+[issue tracker]: https://github.com/SpaceManiac/SpacemanDMM/issues
 
 ## [Language Server](src/langserver/)
 
-SpacemanDMM includes a [language server] providing autocomplete,
-go-to-definition, and more for the DreamMaker language. The preferred
-installation method is the [Visual Studio Code plugin][vsc], which will update
-with newly-released language server binaries automatically. Details on
-available features are listed in the language server's
-[package readme][ls-readme].
+The language server provides autocomplete, go-to-definition, and
+[other code intelligence][ls-readme] for the DreamMaker language. The preferred
+installation method is the
+[Visual Studio Code extension][vsc] ([source][vsc-src]).
+There is also a [Sublime Text 3 package][st3] ([source][st3-src]), and the
+implementation is compatible with most [language server clients][lsc].
 
-The VS Code plugin is currently hosted in a [separate repository][vsc-src].
-
-Use `cargo build -p dm-langserver` to build a local copy of the language server
-for debugging or development purposes. The plugin can be configured to run a
-locally built language server rather than the binary releases.
-
-[language server]: https://langserver.org/
-[vsc]: https://marketplace.visualstudio.com/items?itemName=platymuus.dm-langclient
 [ls-readme]: ./src/langserver/README.md
+[lsc]: https://langserver.org/#implementations-client
+[vsc]: https://marketplace.visualstudio.com/items?itemName=platymuus.dm-langclient
+[st3]: https://packagecontrol.io/packages/DreamMaker%20Language%20Client
 [vsc-src]: https://github.com/SpaceManiac/vscode-dm-langclient
+[st3-src]: https://github.com/SpaceManiac/sublime-dm-langclient
 
 ## [Map Renderer](src/cli/)
 
-`dmm-tools` is SpacemanDMM's map renderer. It generates full-sized map images
-and emulates many in-game graphical enhancements not usually visible in the map
-editor, including overlays and smoothing. These features currently assume
-[/tg/station13], but are highly likely to work on downstreams or closely
-related codebases.
+The map renderer produces full-scale PNGs of `.dmm` map files, including
+configurable emulation of in-game graphical enhancements not usually visible in
+the editor, specialized for [/tg/station13] but likely to work on similar
+codebases.
 
-Basic usage: `dmm-tools minimap _maps/map_files/BoxStation/BoxStation.dmm`.
-For best results, run from the directory containing your `.dme` file.
+```sh
+$ cd path/to/tgstation/
+$ dmm-tools minimap _maps/map_files/MetaStation/MetaStation.dmm
+```
 
-By default, output is saved to `data/minimaps`, which can be changed with the
-`-o` flag. The `-e` flag, specified before the subcommand, can be used to load
-a different `.dme` file. More detailed usage information is available in the
-`--help` output.
+By default, output is saved to `data/minimaps/`, which can be changed with the
+`-o` flag. More detailed usage information is available in the `--help` output.
 
-The minimap output is a very large PNG (e.g. 9.3 MB for Box). You are strongly
-advised to run the resulting file through image optimization software such as
-`pngcrush`. The `--pngcrush` option to the `minimap` subcommand can do this
-automatically in many cases, but is off by default for speed reasons.
+For examples of the maps produced, visit the [SS13 WebMap][meta].
+
+[/tg/station13]: https://github.com/tgstation/tgstation/
+[meta]: https://affectedarc07.github.io/SS13WebMap/TG/MetaStation/
 
 ## [Documentation Generator](src/dmdoc/)
 
@@ -61,14 +64,14 @@ Files, macros, types, vars, and procs can be documented. Documentation comments
 start with `/**` or `///` when preceding the documented item, or `/*!` or `//!`
 when contained within it.
 
-By default, only documented types are included in the output, and types with
-only a one-line note do not get their own `.html` page. The index shows the
-contents of `code/README.md`, and other Markdown files within the `code`
-directory are shown alongside documented DM files.
+The contents of `code/README.md` are rendered as the index page and other
+Markdown files within the `code/` directory are included in the output. The
+generated documentation also includes GitHub links to item definitions.
 
-If run in a Git repository, web links to source code are placed next to item
-headings in the generated output; otherwise, file and line numbers are shown
-but are not linked.
+For an example of the generated documentation, see
+[/tg/station13's code docs][tgdocs].
+
+[tgdocs]: https://codedocs.tgstation13.org/
 
 ## [Static Analysis](src/dreamchecker/)
 
@@ -82,35 +85,24 @@ for running in continuous integration environments.
 To build locally, begin by [installing Rust][rust] or updating your existing
 installation. SpacemanDMM is tested against stable Rust.
 
-For one-time installation, run
-`cargo install --git https://github.com/SpaceManiac/SpacemanDMM cli`
-to install the `dmm-tools` binary to `~/.cargo/bin`.
-
-For development or easy installation of updates, clone this repository and run
-`cargo build -p cli --release` to create `target/release/dmm-tools`. See the
-[source readme] for a list of the available packages, or omit `--release` for
-a debug build.
-
-Executables are placed in `target/release` or `target/debug` depending on build
-type. The CLI binary is known as `dmm-tools`.
+Clone this repository and run `cargo build --release` to build the full suite
+in `target/release/`. List and build individual binaries with
+`cargo build --release --bin`. See the [source readme] for more information on
+the individual packages.
 
 [rust]: https://www.rust-lang.org/en-US/install.html
 [source readme]: ./src/README.md
 
 ## Docker
 
-For convenience, a `dockerfile` is included.
-
-To build the docker image, switch to the directory where you cloned SpacemanDMM
-and run:
+A `dockerfile` is provided for the map generator binary. To build the docker
+image, enter the SpacemanDMM directory and run:
 
 ```shell
 docker build -t spacemandmm .
 ```
 
-This will locally build an image for SpacemanDMM. To use the image, switch to
-the codebase you want to generate maps for (/tg/ is used in the example here,
-you will need to update this command to fit your codebase):
+To use the image, switch to the codebase you want to generate maps for and invoke the container:
 
 ```shell
 docker run -v "$PWD":/usr/src/codebase --rm -it spacemandmm -e /usr/src/codebase/tgstation.dme minimap /usr/src/codebase/_maps/map_files/BoxStation/BoxStation.dmm
