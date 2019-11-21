@@ -3,6 +3,25 @@
 //! * https://microsoft.github.io/debug-adapter-protocol/
 #![allow(dead_code)]
 
+macro_rules! output {
+    (in $seq:expr, $fmt:expr) => {
+        $seq.println($fmt)
+    };
+    (in $seq:expr, $fmt:expr, $($rest:tt)*) => {
+        $seq.println(format!($fmt, $($rest)*))
+    }
+}
+
+#[cfg(debug_assertions)]
+macro_rules! debug_output {
+    ($($rest:tt)*) => { output!($($rest)*) }
+}
+
+#[cfg(not(debug_assertions))]
+macro_rules! debug_output {
+    ($($rest:tt)*) => { {} }
+}
+
 mod dap_types;
 mod launched;
 mod extools_types;
@@ -105,9 +124,9 @@ handle_request! {
         self.client_caps = ClientCaps::parse(&params);
         let debug = format!("{:?}", self.client_caps);
         if let (Some(start), Some(end)) = (debug.find('{'), debug.rfind('}')) {
-            eprintln!("client capabilities: {}", &debug[start + 2..end - 1]);
+            debug_output!(in self.seq, "[main] client capabilities: {}", &debug[start + 2..end - 1]);
         } else {
-            eprintln!("client capabilities: {}", debug);
+            debug_output!(in self.seq, "[main] client capabilities: {}", debug);
         }
 
         // ... clientID, clientName, adapterID, locale, pathFormat

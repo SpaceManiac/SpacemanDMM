@@ -42,25 +42,23 @@ impl Launched {
         std::thread::Builder::new()
             .name("launched debuggee manager thread".to_owned())
             .spawn(move || {
-                eprintln!("[launched] child started");
-                seq2.println("Child process started.");
+                output!(in seq2, "[launched] Child process started.");
                 let wait = child.wait();
                 // lock as soon as possible to minimize risk of shenanigans
                 let mut state = mutex2.lock().expect("launched mutex poisoned");
                 let code = match wait {
                     Ok(status) => {
                         let code = status.code();
-                        eprintln!("[launched] child exited in state {:?} with code {:?}", *state, code);
-                        seq2.println(match code {
-                            Some(code) => format!("Child exited with code {:x}.", code),
-                            None => "Child exited due to signal.".to_owned(),
-                        });
+                        debug_output!(in seq2, "[launched] child exited in state {:?} with code {:?}", *state, code);
+                        match code {
+                            Some(code) => output!(in seq2, "[launched] Child exited with code {:#x}.", code),
+                            None => output!(in seq2, "Child exited due to signal."),
+                        }
                         code.unwrap_or(-1)
                     }
                     Err(err) => {
-                        seq2.println("Lost track of child process, this may be a SpacemanDMM bug.");
-                        seq2.println(err.to_string());
-                        eprintln!("[launched] wait() errored in state {:?}: {:?}", *state, err);
+                        debug_output!(in seq2, "[launched] wait() errored in state {:?}: {:?}", *state, err);
+                        output!(in seq2, "[launched] Lost track of child process, this may be a SpacemanDMM bug.\n - {}", err);
                         -1
                     }
                 };
@@ -84,8 +82,7 @@ impl Launched {
         let mut state = self.mutex.lock().expect("launched mutex poisoned");
         match *state {
             State::Active => {
-                eprintln!("[launched] killing child process");
-                self.seq.println("Killing child process...");
+                output!(in self.seq, "[launched] Killing child process...");
                 self.seq.issue_event(TerminatedEvent::default());
                 *state = State::Killed;
                 match unsafe { raw::kill(self.handle) } {
@@ -94,7 +91,7 @@ impl Launched {
                 }
             }
             other => {
-                eprintln!("[launched] kill no-op in state {:?}", other);
+                debug_output!(in self.seq, "[launched] kill no-op in state {:?}", other);
                 Ok(())
             }
         }
@@ -104,12 +101,12 @@ impl Launched {
         let mut state = self.mutex.lock().expect("launched mutex poisoned");
         match *state {
             State::Active => {
-                eprintln!("[launched] detaching from child process");
+                output!(in self.seq, "[launched] Detaching from child process...");
                 self.seq.issue_event(TerminatedEvent::default());
                 *state = State::Detached;
             }
             other => {
-                eprintln!("[launched] detach no-op in state {:?}", other);
+                debug_output!(in self.seq, "[launched] detach no-op in state {:?}", other);
             }
         }
     }

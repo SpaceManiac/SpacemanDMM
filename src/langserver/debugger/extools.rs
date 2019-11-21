@@ -19,10 +19,9 @@ impl Extools {
         std::thread::Builder::new()
             .name("extools read thread".to_owned())
             .spawn(move || {
-                seq.println("Connecting to extools...");
+                debug_output!(in seq, "[extools] Connecting...");
                 let mut stream;
                 let mut attempts = 0;
-                std::thread::sleep(std::time::Duration::from_secs(5));
                 loop {
                     let err = match TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(2)) {
                         Ok(s) => {
@@ -34,13 +33,17 @@ impl Extools {
                     std::thread::sleep(std::time::Duration::from_secs(2));
                     attempts += 1;
                     if attempts > 3 {
-                        seq.println(format!("Extools connection failed: {:?}", err));
+                        output!(in seq, "[extools] Connection failed: {}", err);
+                        debug_output!(in seq, " - {:?}", err);
                         return;
                     }
                 }
-                seq.println("[extools] Connected.");
+                output!(in seq, "[extools] Connected.");
 
-                let mut sender = ExtoolsSender { stream: stream.try_clone().expect("try clone bad") };
+                let mut sender = ExtoolsSender {
+                    seq: seq.clone(),
+                    stream: stream.try_clone().expect("try clone bad"),
+                };
                 sender.send(Raw("This is a test.".to_owned()));
 
                 let mut buffer = Vec::new();
@@ -64,7 +67,7 @@ impl Extools {
                     let mut start = 0;
                     while let Some(end) = terminator.take() {
                         let message = &buffer[start..end];
-                        seq.println(format!("[extools] << {} >>", String::from_utf8_lossy(message)));
+                        debug_output!(in seq, "[extools] << {}", String::from_utf8_lossy(message));
 
                         start = end + 1;
                         if let Some(pos) = buffer[start..].iter().position(|&x| x == 0) {
@@ -84,6 +87,7 @@ impl Extools {
 }
 
 struct ExtoolsSender {
+    seq: Arc<SequenceNumber>,
     stream: TcpStream,
 }
 
@@ -94,6 +98,7 @@ impl ExtoolsSender {
             type_: M::TYPE.to_owned(),
             content: Some(content),
         }).expect("extools encode error");
+        debug_output!(in self.seq, "[extools] >> {}", String::from_utf8_lossy(&buffer[..]));
         buffer.push(0);
         // TODO: needs more synchronization
         self.stream.write_all(&buffer[..]).expect("extools write error");
