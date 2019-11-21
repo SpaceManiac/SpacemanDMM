@@ -43,6 +43,7 @@ impl Launched {
             .name("launched debuggee manager thread".to_owned())
             .spawn(move || {
                 eprintln!("[launched] child started");
+                seq2.println("Child process started.");
                 let wait = child.wait();
                 // lock as soon as possible to minimize risk of shenanigans
                 let mut state = mutex2.lock().expect("launched mutex poisoned");
@@ -50,9 +51,15 @@ impl Launched {
                     Ok(status) => {
                         let code = status.code();
                         eprintln!("[launched] child exited in state {:?} with code {:?}", *state, code);
+                        seq2.println(match code {
+                            Some(code) => format!("Child exited with code {:x}.", code),
+                            None => "Child exited due to signal.".to_owned(),
+                        });
                         code.unwrap_or(-1)
                     }
                     Err(err) => {
+                        seq2.println("Lost track of child process, this may be a SpacemanDMM bug.");
+                        seq2.println(err.to_string());
                         eprintln!("[launched] wait() errored in state {:?}: {:?}", *state, err);
                         -1
                     }
@@ -78,6 +85,7 @@ impl Launched {
         match *state {
             State::Active => {
                 eprintln!("[launched] killing child process");
+                self.seq.println("Killing child process...");
                 self.seq.issue_event(TerminatedEvent::default());
                 *state = State::Killed;
                 match unsafe { raw::kill(self.handle) } {

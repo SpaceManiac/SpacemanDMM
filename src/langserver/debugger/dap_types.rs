@@ -141,6 +141,50 @@ impl Event for TerminatedEvent {
     const EVENT: &'static str = "terminated";
 }
 
+/// The event indicates that the target has produced some output.
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct OutputEvent {
+    /**
+     * The output category. If not specified, 'console' is assumed.
+     * Values: 'console', 'stdout', 'stderr', 'telemetry', etc.
+     */
+    pub category: Option<String>,
+
+    /**
+     * The output to report.
+     */
+    pub output: String,
+
+    /**
+     * If an attribute 'variablesReference' exists and its value is > 0, the output contains objects which can be retrieved by passing 'variablesReference' to the 'variables' request. The value should be less than or equal to 2147483647 (2^31 - 1).
+     */
+    pub variablesReference: Option<i64>,
+
+    /**
+     * An optional source location where the output was produced.
+     */
+    pub source: Option<Value>,  // TODO: Value -> Source
+
+    /**
+     * An optional source location line where the output was produced.
+     */
+    pub line: Option<i64>,
+
+    /**
+     * An optional source location column where the output was produced.
+     */
+    pub column: Option<i64>,
+
+    /**
+     * Optional data to report. For the 'telemetry' category the data will be sent to telemetry, for the other categories the data is shown in JSON format.
+     */
+    pub data: Option<Value>,
+}
+
+impl Event for OutputEvent {
+    const EVENT: &'static str = "output";
+}
+
 // ----------------------------------------------------------------------------
 // Request
 

@@ -186,6 +186,15 @@ impl SequenceNumber {
         };
         io::write(serde_json::to_string(&message).expect("event encode error"))
     }
+
+    fn println<S: Into<String>>(&self, output: S) {
+        let mut output = output.into();
+        output.push('\n');
+        self.issue_event(OutputEvent {
+            output,
+            .. Default::default()
+        })
+    }
 }
 
 // ----------------------------------------------------------------------------
