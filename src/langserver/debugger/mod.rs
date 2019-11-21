@@ -5,6 +5,8 @@
 
 mod dap_types;
 mod launched;
+mod extools_types;
+mod extools;
 
 use std::error::Error;
 use std::process::{Command, Stdio};
@@ -13,6 +15,7 @@ use std::sync::{atomic, Arc};
 use io;
 use self::dap_types::*;
 use self::launched::Launched;
+use self::extools::Extools;
 
 pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
     eprintln!("acting as debug adapter");
@@ -36,6 +39,7 @@ pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
 struct Debugger {
     dreamseeker_exe: String,
     launched: Option<Launched>,
+    extools: Option<Extools>,
     // TODO: separate field from `child` for attached debugger.
 
     seq: Arc<SequenceNumber>,
@@ -47,6 +51,7 @@ impl Debugger {
         Debugger {
             dreamseeker_exe,
             launched: None,
+            extools: None,
 
             seq: Default::default(),
             client_caps: Default::default(),
@@ -125,6 +130,7 @@ handle_request! {
             .stderr(Stdio::null())
             .spawn()?;
         self.launched = Some(Launched::new(self.seq.clone(), child)?);
+        self.extools = Some(Extools::connect(self.seq.clone())?);
     }
 
     on Disconnect(&mut self, params) {
