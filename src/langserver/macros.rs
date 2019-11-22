@@ -128,6 +128,31 @@ macro_rules! handle_request {
     }
 }
 
+macro_rules! handle_extools {
+    ($(on $what:ident(&mut $self:ident, $p:pat) $b:block)*) => {
+        impl ExtoolsThread {
+            fn handle_response(&mut self, message: ProtocolMessage) -> Result<(), Box<dyn Error>> {
+                $(if message.type_ == <$what as Response>::TYPE {
+                    let content = message.content.unwrap_or(serde_json::Value::Null);
+                    let deserialized: $what = serde_json::from_value(content)?;
+                    self.$what(deserialized)
+                } else)* {
+                    debug_output!(in self.seq, "[extools] Response NYI: {} -> {:?}", message.type_, message.content);
+                    Ok(())
+                }
+            }
+
+            $(
+                #[allow(non_snake_case)]
+                fn $what(&mut $self, $p: $what) -> Result<(), Box<dyn Error>> {
+                    let _v = $b;
+                    #[allow(unreachable_code)] { Ok(_v) }
+                }
+            )*
+        }
+    }
+}
+
 macro_rules! if_annotation {
     ($p:pat in $a:expr; $b:block) => {
         for (_, thing) in $a.clone() {
