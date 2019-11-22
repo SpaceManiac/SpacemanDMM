@@ -92,7 +92,7 @@ struct ExtoolsSender {
 }
 
 impl ExtoolsSender {
-    pub fn send<M: Message>(&mut self, message: M) {
+    pub fn send<M: Request>(&mut self, message: M) {
         let content = serde_json::to_value(message).expect("extools body encode error");
         let mut buffer = serde_json::to_vec(&ProtocolMessage {
             type_: M::TYPE.to_owned(),
