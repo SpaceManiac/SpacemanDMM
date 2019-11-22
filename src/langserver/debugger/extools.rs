@@ -18,25 +18,25 @@ impl Extools {
 
         std::thread::Builder::new()
             .name("extools read thread".to_owned())
-            .spawn(move || ExtoolsThread { seq }.main())?;
+            .spawn(move || ExtoolsThread::main(seq2))?;
 
         Ok(Extools {
-            seq: seq2,
+            seq,
         })
     }
 }
 
 struct ExtoolsThread {
     seq: Arc<SequenceNumber>,
+    sender: ExtoolsSender,
 }
 
 impl ExtoolsThread {
-    fn main(&mut self) {
-        let seq = self.seq.clone();
+    fn main(seq: Arc<SequenceNumber>) {
         let addr: SocketAddr = (Ipv4Addr::LOCALHOST, 2448).into();
 
         debug_output!(in seq, "[extools] Connecting...");
-        let mut stream;
+        let stream;
         let mut attempts = 0;
         loop {
             let err = match TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(2)) {
@@ -46,9 +46,9 @@ impl ExtoolsThread {
                 }
                 Err(err) => err,
             };
-            std::thread::sleep(std::time::Duration::from_secs(2));
+            std::thread::sleep(std::time::Duration::from_secs(1));
             attempts += 1;
-            if attempts > 3 {
+            if attempts > 5 {
                 output!(in seq, "[extools] Connection failed: {}", err);
                 debug_output!(in seq, " - {:?}", err);
                 return;
@@ -60,7 +60,6 @@ impl ExtoolsThread {
             seq: seq.clone(),
             stream: stream.try_clone().expect("try clone bad"),
         };
-        sender.send(Raw("This is a test.".to_owned()));
         sender.send(ProcListRequest);
         sender.send(ProcDisassemblyRequest("/proc/debugme".to_owned()));
         sender.send(BreakpointSet {
@@ -68,12 +67,19 @@ impl ExtoolsThread {
             offset: 24,
         });
 
+        ExtoolsThread {
+            seq,
+            sender,
+        }.read_loop();
+    }
+
+    fn read_loop(&mut self) {
         let mut buffer = Vec::new();
         let mut read_buf = [0u8; 4096];
         loop {
             // read into the buffer
             let mut terminator = None;
-            match stream.read(&mut read_buf[..]) {
+            match self.sender.stream.read(&mut read_buf[..]) {
                 Ok(0) => panic!("extools eof"),
                 Ok(n) => {
                     let slice = &read_buf[..n];
@@ -88,9 +94,7 @@ impl ExtoolsThread {
             // chop off as many full messages from the buffer as we can
             let mut start = 0;
             while let Some(end) = terminator.take() {
-                let message = &buffer[start..end];
-                debug_output!(in seq, "[extools] << {}", String::from_utf8_lossy(message));
-                self.handle_recv(message);
+                self.handle_response(&buffer[start..end]).expect("error in extools::handle_response");
 
                 start = end + 1;
                 if let Some(pos) = buffer[start..].iter().position(|&x| x == 0) {
@@ -102,19 +106,16 @@ impl ExtoolsThread {
             }
         }
     }
-
-    fn handle_recv(&mut self, message: &[u8]) {
-        // TODO: error handling
-        serde_json::from_slice::<ProtocolMessage>(message)
-            .map_err(|e| Box::new(e) as Box<dyn Error>)
-            .and_then(|m| self.handle_response(m))
-            .expect("error in extools::handle_recv");
-    }
 }
 
 handle_extools! {
     on Raw(&mut self, Raw(message)) {
-        debug_output!(in self.seq, "[extools] raw: {}", message);
+        debug_output!(in self.seq, "[extools] Raw: {}", message);
+    }
+
+    on BreakpointHit(&mut self, hit) {
+        output!(in self.seq, "[extools] Hit breakpoint in {}", hit.proc);
+        self.sender.send(BreakpointResume);
     }
 }
 

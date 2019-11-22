@@ -113,10 +113,21 @@ impl Request for BreakpointResume {
 // ----------------------------------------------------------------------------
 // Spontaneous events
 
+// #define MESSAGE_BREAKPOINT_HIT "breakpoint hit" //Content is BreakpointHit
+#[derive(Serialize, Deserialize, Debug)]
+pub struct BreakpointHit {
+    pub proc: String,
+    pub offset: i64,
+}
+
+impl Response for BreakpointHit {
+    const TYPE: &'static str = "breakpoint hit";
+}
+
 /*
 #define MESSAGE_VALUES_LOCALS "locals" //Content is a vector of ValueTexts
 
-#define MESSAGE_BREAKPOINT_HIT "breakpoint hit" //Content is BreakpointHit
+
 #define MESSAGE_BREAKPOINT_UNSET "breakpoint unset" //Content is BreakpointUnset
 
 #define MESSAGE_VALUES_ARGS "args" //^

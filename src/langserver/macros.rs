@@ -131,13 +131,14 @@ macro_rules! handle_request {
 macro_rules! handle_extools {
     ($(on $what:ident(&mut $self:ident, $p:pat) $b:block)*) => {
         impl ExtoolsThread {
-            fn handle_response(&mut self, message: ProtocolMessage) -> Result<(), Box<dyn Error>> {
+            fn handle_response(&mut self, buffer: &[u8]) -> Result<(), Box<dyn Error>> {
+                let message = serde_json::from_slice::<ProtocolMessage>(buffer)?;
                 $(if message.type_ == <$what as Response>::TYPE {
                     let content = message.content.unwrap_or(serde_json::Value::Null);
                     let deserialized: $what = serde_json::from_value(content)?;
                     self.$what(deserialized)
                 } else)* {
-                    debug_output!(in self.seq, "[extools] Response NYI: {} -> {:?}", message.type_, message.content);
+                    debug_output!(in self.seq, "[extools] NYI: {}", String::from_utf8_lossy(buffer));
                     Ok(())
                 }
             }
