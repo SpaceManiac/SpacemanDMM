@@ -118,8 +118,9 @@ impl Document {
     }
 
     fn change(&mut self, change: TextDocumentContentChangeEvent) -> Result<(), jsonrpc::Error> {
-        let (range, range_length) = match (change.range, change.range_length) {
-            (Some(a), Some(b)) => (a, b),
+        // rangeLength is deprecated: https://github.com/Microsoft/language-server-protocol/issues/9
+        let range = match change.range {
+            Some(range) => range,
             _ => {
                 // "If range and rangeLength are omitted the new text is
                 // considered to be the full content of the document."
@@ -129,14 +130,21 @@ impl Document {
         };
 
         let start_pos = total_offset(&self.text, range.start.line, range.start.character)?;
-        Rc::make_mut(&mut self.text).replace_range(start_pos..start_pos + range_length as usize, &change.text);
+        let end_pos = total_offset(&self.text, range.end.line, range.end.character)?;
+
+        //eprintln!("start_pos = {}, range_length = {}", start_pos, range_length);
+        //eprintln!("-8 to +8 = {:#?}", &bytes[start_pos-8..start_pos+range_length as usize + 8]);
+        //eprintln!("change.text = {:?}", change.text);
+
+        Rc::make_mut(&mut self.text).replace_range(start_pos..end_pos, &change.text);
+        eprintln!("{:?}", self.text);
         Ok(())
     }
 }
 
 /// Find the offset into the given text at which the given zero-indexed line
 /// number begins.
-pub fn line_offset(text: &str, line_number: u64) -> Result<usize, jsonrpc::Error> {
+fn line_offset(text: &str, line_number: u64) -> Result<usize, jsonrpc::Error> {
     // Hopefully this logic isn't too far off.
     let mut start_pos = 0;
     for _ in 0..line_number {
@@ -148,8 +156,19 @@ pub fn line_offset(text: &str, line_number: u64) -> Result<usize, jsonrpc::Error
     Ok(start_pos)
 }
 
-pub fn total_offset(text: &str, line: u64, character: u64) -> Result<usize, jsonrpc::Error> {
-    Ok(line_offset(text, line)? + character as usize)
+fn total_offset(text: &str, line: u64, mut character: u64) -> Result<usize, jsonrpc::Error> {
+    let start = line_offset(text, line)?;
+
+    // column is measured in UTF-16 code units, which is really inconvenient.
+    let mut chars = text[start..].chars();
+    while character > 0 {
+        if let Some(ch) = chars.next() {
+            character = character.saturating_sub(ch.len_utf16() as u64);
+        } else {
+            break
+        }
+    }
+    Ok(text.len() - chars.as_str().len())
 }
 
 pub fn find_word(text: &str, offset: usize) -> &str {
