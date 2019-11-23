@@ -326,6 +326,7 @@ impl<'o> AnalyzeObjectTree<'o> {
             objtree,
             return_type,
             must_call_parent: Default::default(),
+            must_not_override: Default::default(),
             used_kwargs: Default::default(),
         }
     }
@@ -349,6 +350,19 @@ impl<'o> AnalyzeObjectTree<'o> {
                                 .with_component(dm::Component::DreamChecker)
                                 .register(self.context),
                         }
+                    }
+                } else if name == "SpacemanDMM_should_not_override" {
+                    match match value.as_term() {
+                        Some(Term::Int(0)) => Some(false),
+                        Some(Term::Int(1)) => Some(true),
+                        Some(Term::Ident(i)) if i == "FALSE" => Some(false),
+                        Some(Term::Ident(i)) if i == "TRUE" => Some(true),
+                        _ => None,
+                    } {
+                        Some(value) => { self.must_not_override.insert(proc, value); },
+                        None => error(statement.location, format!("invalid value for {}: {:?}", name, value))
+                            .set_severity(Severity::Warning)
+                            .register(self.context)
                     }
                 } else if name == "SpacemanDMM_should_call_parent" {
                     // Maybe this should be using constant evaluation, but for now accept TRUE and FALSE directly.
@@ -542,16 +556,24 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
         self.visit_block(block);
 
-        if !self.calls_parent && self.proc_ref.parent_proc().is_some() {
+        if self.proc_ref.parent_proc().is_some() {
             //eprintln!("{:?}", self.env.must_call_parent);
-            let mut next = Some(self.proc_ref);
+            let mut next = Some(self.proc_ref); 
             while let Some(current) = next {
-                if let Some(&must) = self.env.must_call_parent.get(&current) {
-                    if must {
-                        error(self.proc_ref.location, format!("proc never calls parent, required by {}", current))
+                if let Some(&musnt) = self.env.must_not_override.get(&current) {
+                    if musnt {
+                        error(self.proc_ref.location, format!("proc overrides parent, prohibited by {}", current))
                             .register(self.context);
                     }
-                    break;
+                }
+                if !self.calls_parent {
+                    if let Some(&must) = self.env.must_call_parent.get(&current) {
+                        if must {
+                            error(self.proc_ref.location, format!("proc never calls parent, required by {}", current))
+                                .register(self.context);
+                        }
+                        break;
+                    }
                 }
                 next = current.parent_proc();
             }
