@@ -312,6 +312,7 @@ pub struct AnalyzeObjectTree<'o> {
 
     return_type: HashMap<ProcRef<'o>, TypeExpr<'o>>,
     must_call_parent: HashMap<ProcRef<'o>, bool>,
+    must_not_override: HashMap<ProcRef<'o>, bool>,
     // Debug(ProcRef) -> KwargInfo
     used_kwargs: BTreeMap<String, KwargInfo>,
 }
