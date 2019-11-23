@@ -144,7 +144,7 @@ impl RenderPass for Random {
         if atom.istype("/obj/item/lipstick/random/") {
             sprite.icon_state = "lipstick";
             // random color is not outwardly visible
-        } else if atom.istype("/obj/item/device/tape/random/") {
+        } else if atom.istype("/obj/item/tape/random/") {
             sprite.icon_state = [
                 "tape_white",
                 "tape_blue",
