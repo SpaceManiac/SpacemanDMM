@@ -131,13 +131,7 @@ impl Document {
 
         let start_pos = total_offset(&self.text, range.start.line, range.start.character)?;
         let end_pos = total_offset(&self.text, range.end.line, range.end.character)?;
-
-        //eprintln!("start_pos = {}, range_length = {}", start_pos, range_length);
-        //eprintln!("-8 to +8 = {:#?}", &bytes[start_pos-8..start_pos+range_length as usize + 8]);
-        //eprintln!("change.text = {:?}", change.text);
-
         Rc::make_mut(&mut self.text).replace_range(start_pos..end_pos, &change.text);
-        eprintln!("{:?}", self.text);
         Ok(())
     }
 }
