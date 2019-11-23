@@ -669,6 +669,7 @@ pub struct VarType {
     pub is_static: bool,
     pub is_const: bool,
     pub is_tmp: bool,
+    pub is_final: bool,
     pub type_path: TreePath,
 }
 
@@ -692,12 +693,15 @@ impl VarType {
 
 impl FromIterator<String> for VarType {
     fn from_iter<T: IntoIterator<Item=String>>(iter: T) -> Self {
-        let (mut is_static, mut is_const, mut is_tmp) = (false, false, false);
+        let (mut is_static, mut is_const, mut is_tmp, mut is_final) = (false, false, false, false);
         let type_path = iter
             .into_iter()
             .skip_while(|p| {
                 if p == "global" || p == "static" {
                     is_static = true;
+                    true
+                } else if p == "final" {
+                    is_final = true;
                     true
                 } else if p == "const" {
                     is_const = true;
@@ -713,6 +717,7 @@ impl FromIterator<String> for VarType {
             is_static,
             is_const,
             is_tmp,
+            is_final,
             type_path,
         }
     }
@@ -728,6 +733,9 @@ impl fmt::Display for VarType {
         }
         if self.is_tmp {
             fmt.write_str("tmp/")?;
+        }
+        if self.is_final {
+            fmt.write_str("final/")?;
         }
         for bit in self.type_path.iter() {
             fmt.write_str(bit)?;

@@ -859,7 +859,7 @@ impl ObjectTree {
     where
         I: Iterator<Item=&'a str>,
     {
-        let (mut is_declaration, mut is_static, mut is_const, mut is_tmp) = (false, false, false, false);
+        let (mut is_declaration, mut is_static, mut is_const, mut is_tmp, mut is_final) = (false, false, false, false, false);
 
         if is_var_decl(prev) {
             is_declaration = true;
@@ -872,6 +872,7 @@ impl ObjectTree {
                     is_static |= prev == "global" || prev == "static";
                     is_const |= prev == "const";
                     is_tmp |= prev == "tmp";
+                    is_final |= prev == "final";
                     prev = name;
                 } else {
                     return Ok(None); // var/const{} block, children will be real vars
@@ -890,6 +891,7 @@ impl ObjectTree {
             is_static,
             is_const,
             is_tmp,
+            is_final,
             type_path,
         };
         var_type.suffix(&suffix);
