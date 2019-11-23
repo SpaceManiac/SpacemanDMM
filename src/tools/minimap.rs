@@ -125,7 +125,13 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
     sprites.sort_by_key(|(_, s)| (s.plane, s.layer));
 
     let mut map_image = Image::new_rgba(len_x as u32 * TILE_SIZE, len_y as u32 * TILE_SIZE);
-    for (loc, sprite) in sprites {
+    'sprite: for (loc, sprite) in sprites {
+        for pass in render_passes.iter() {
+            if !pass.sprite_filter(&sprite) {
+                continue 'sprite;
+            }
+        }
+
         let icon_file = match icon_cache.retrieve_shared(sprite.icon.as_ref()) {
             Some(icon_file) => icon_file,
             None => continue,

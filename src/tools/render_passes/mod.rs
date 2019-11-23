@@ -72,6 +72,10 @@ pub trait RenderPass: Sync {
         atom: &Atom,
         objtree: &ObjectTree,
     ) -> bool { true }
+
+    fn sprite_filter(&self,
+        sprite: &Sprite,
+    ) -> bool { true }
 }
 
 pub struct RenderPassInfo {
@@ -158,6 +162,10 @@ impl RenderPass for HideSpace {
 
     fn late_filter(&self, atom: &Atom, _: &ObjectTree) -> bool {
         !atom.istype("/turf/open/space/")
+    }
+
+    fn sprite_filter(&self, sprite: &Sprite) -> bool {
+        sprite.icon != "icons/turf/space.dmi"
     }
 }
 
