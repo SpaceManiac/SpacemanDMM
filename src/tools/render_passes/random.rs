@@ -52,6 +52,38 @@ impl RenderPass for Random {
                     return false;  // consumed
                 }
             }
+        } else if atom.istype("/obj/effect/spawner/lootdrop/") {
+            // Note: does not work with lootdrop/maintenance because its drop
+            // tables are stored in GLOB init proc bodies and are not part of
+            // the object tree proper.
+            if let Constant::List(loot) = atom.get_var("loot", objtree) {
+                let mut loot = loot.iter().collect::<Vec<_>>();
+
+                let lootcount = atom.get_var("lootcount", objtree).to_int().unwrap_or(0);
+                let lootdoubles = atom.get_var("lootdoubles", objtree).to_bool();
+                //let fan_out_items = atom.get_var("fan_out_items", objtree).to_bool();
+                let mut loot_spawned = 0;
+
+                while loot_spawned < lootcount && !loot.is_empty() {
+                    let lootspawn = pickweight(&loot);
+                    /*while let Constant::List(ref list) = lootspawn {
+                        lootspawn = pickweight(list);
+                    }*/
+                    if !lootdoubles {
+                        loot.retain(|(k, _)| k != lootspawn);
+                    }
+
+                    if let Constant::Prefab(pop) = lootspawn {
+                        if let Some(ty) = objtree.type_by_path(&pop.path) {
+                            // Usually pixel offsets would be set here, but
+                            // that's not currently supported.
+                            output.push(Atom::from(ty));
+                        }
+                    }
+                    loot_spawned += 1;
+                }
+            }
+            return false;  // consumed
         }
         true
     }
@@ -122,4 +154,16 @@ impl RenderPass for Random {
             ].choose(&mut rng).unwrap();
         }
     }
+}
+
+fn pickweight<'a>(list: &[&'a (Constant, Option<Constant>)]) -> &'a Constant {
+    let mut total: i32 = list.iter().map(|(_, v)| v.as_ref().unwrap_or(Constant::null()).to_int().unwrap_or(1)).sum();
+    total = ::rand::thread_rng().gen_range(1, total + 1);
+    for (k, v) in list.iter() {
+        total -= v.as_ref().unwrap_or(Constant::null()).to_int().unwrap_or(1);
+        if total <= 0 {
+            return k;
+        }
+    }
+    Constant::null()
 }

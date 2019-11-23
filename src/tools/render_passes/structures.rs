@@ -3,10 +3,6 @@ use super::*;
 #[derive(Default)]
 pub struct Spawners;
 impl RenderPass for Spawners {
-    fn path_filter(&self, path: &str) -> bool {
-        subpath(path, "/obj/effect/spawner/structure/") || !subpath(path, "/obj/effect/spawner/")
-    }
-
     fn expand<'a>(&self,
         atom: &Atom<'a>,
         objtree: &'a ObjectTree,

@@ -172,6 +172,10 @@ impl RenderPass for HideAreas {
 #[derive(Default)]
 pub struct HideInvisible;
 impl RenderPass for HideInvisible {
+    fn path_filter(&self, path: &str) -> bool {
+        !subpath(path, "/obj/effect/spawner/xmastree/")
+    }
+
     fn early_filter(&self, atom: &Atom, objtree: &ObjectTree) -> bool {
         // invisible objects and syndicate balloons are not to show
         if atom.get_var("invisibility", objtree).to_float().unwrap_or(0.) > 60. ||
