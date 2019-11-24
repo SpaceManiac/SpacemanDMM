@@ -185,6 +185,16 @@ impl Type {
         }
         None
     }
+
+    // Checks whether the given var is marked as final
+    pub(crate) fn is_final_var(&'a self, name: &str, objtree: &'a ObjectTree) -> bool {
+        if let Some(decl) = get_var_declaration(&self, name, objtree) {
+            let Some(vartype) = decl.var_type;
+            return vartype.is_final;
+        }
+        return false;
+    }
+
 }
 
 #[inline]
