@@ -354,9 +354,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                     }
                 } else if name == "SpacemanDMM_should_not_override" {
                     match match value.as_term() {
-                        Some(Term::Int(0)) => Some(false),
                         Some(Term::Int(1)) => Some(true),
-                        Some(Term::Ident(i)) if i == "FALSE" => Some(false),
                         Some(Term::Ident(i)) if i == "TRUE" => Some(true),
                         _ => None,
                     } {
