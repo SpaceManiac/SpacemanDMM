@@ -84,6 +84,7 @@ pub struct EditorScene {
 
     last_mouse_pos: (i32, i32),
     target_tile: Option<(u32, u32)>,
+    last_drag_tile: Option<(u32, u32)>,
     context_tile: Option<(u32, u32)>,
 
     errors: Vec<String>,
@@ -185,6 +186,7 @@ impl EditorScene {
 
             last_mouse_pos: (0, 0),
             target_tile: None,
+            last_drag_tile: None,
             context_tile: None,
 
             errors: Vec::new(),
@@ -777,12 +779,33 @@ impl EditorScene {
                             if let Some((x, y)) = self.target_tile {
                                 if let Some(tool) = self.tools.get_mut(self.tool_current) {
                                     tool.behavior.click(hist, env, (x, y, z));
+                                    self.last_drag_tile = Some((x, y));
                                 }
                             }
                         }
                     }
                 }
             }
+            if ui.is_mouse_down(MouseButton::Left) {
+                if let Some(env) = self.environment.as_ref() {
+                    if let Some(map) = self.maps.get_mut(self.map_current) {
+                        let z = map.z_current as u32;
+                        if let Some(hist) = map.state.hist_mut() {
+                            if let Some((x2, y2)) = self.last_drag_tile {
+                                if let Some((x, y)) = self.target_tile {
+                                    if x != x2 || y != y2 {
+                                        if let Some(tool) = self.tools.get_mut(self.tool_current) {
+                                            tool.behavior.drag(hist, env, (x, y, z));
+                                            self.last_drag_tile = Some((x, y));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             if ui.is_mouse_clicked(MouseButton::Right) {
                 if let Some(tile) = self.target_tile {
                     self.context_tile = Some(tile);

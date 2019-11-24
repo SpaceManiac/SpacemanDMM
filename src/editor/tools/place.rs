@@ -129,6 +129,10 @@ impl ToolBehavior for Place {
         }
     }
 
+    fn drag(&mut self, hist: &mut History, env: &Environment, loc: (u32, u32, u32)) {
+        self.click(hist, env, loc)
+    }
+
     fn pick(&mut self, env: &Environment, prefab: &Prefab) {
         for (i, fab) in self.palette.iter().enumerate() {
             if fab.fab == *prefab {

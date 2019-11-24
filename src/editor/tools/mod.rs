@@ -45,7 +45,11 @@ pub enum ToolIcon {
 pub trait ToolBehavior {
     fn settings(&mut self, ui: &Ui, env: &Environment, ctx: &mut IconCtx) {}
 
+    // Called on mouse down.
     fn click(&mut self, hist: &mut History, env: &Environment, loc: (u32, u32, u32)) {}
+
+    // Called when mouse moves over a new tile.
+    fn drag(&mut self, hist: &mut History, env: &Environment, loc: (u32, u32, u32)) {}
 
     fn pick(&mut self, env: &Environment, prefab: &Prefab) {}
 }
