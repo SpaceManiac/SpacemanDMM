@@ -185,16 +185,6 @@ impl Type {
         }
         None
     }
-
-    // Checks whether the given var is marked as final
-    pub(crate) fn is_final_var(&'a self, name: &str, objtree: &'a ObjectTree) -> bool {
-        if let Some(decl) = get_var_declaration(&self, name, objtree) {
-            let Some(vartype) = decl.var_type;
-            return vartype.is_final;
-        }
-        return false;
-    }
-
 }
 
 #[inline]
@@ -871,6 +861,8 @@ impl ObjectTree {
     {
         let (mut is_declaration, mut is_static, mut is_const, mut is_tmp, mut is_final) = (false, false, false, false, false);
 
+        let mut varname = prev;
+
         if is_var_decl(prev) {
             is_declaration = true;
             prev = match rest.next() {
@@ -888,6 +880,7 @@ impl ObjectTree {
                     return Ok(None); // var/const{} block, children will be real vars
                 }
             }
+            varname = prev;
         } else if is_proc_decl(prev) {
             return Err(DMError::new(location, "proc looks like a var"));
         }
@@ -906,8 +899,23 @@ impl ObjectTree {
         };
         var_type.suffix(&suffix);
 
-        let symbols = &mut self.symbols;
+        let symbolid = self.symbols.allocate();
+        {
+            let node = self.graph.node_weight(parent).unwrap();
+            
+            if !is_declaration {
+                if let Some(decl) = node.get_var_declaration(varname, self) {
+                    if decl.var_type.is_final {
+                        return Err(DMError::new(location, format!("override of final var {}", varname))
+                        .with_note(decl.location, "previous definition"))
+                    }
+                }
+            } else {
+                
+            }
+        }
         let node = self.graph.node_weight_mut(parent).unwrap();
+
         // TODO: warn and merge docs for repeats
         Ok(Some(node.vars.entry(prev.to_owned()).or_insert_with(|| TypeVar {
             value: VarValue {
@@ -921,7 +929,7 @@ impl ObjectTree {
                 Some(VarDeclaration {
                     var_type,
                     location,
-                    id: symbols.allocate(),
+                    id: symbolid,
                 })
             } else {
                 None
