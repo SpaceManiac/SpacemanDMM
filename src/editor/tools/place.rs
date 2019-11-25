@@ -1,11 +1,13 @@
 use super::*;
 use {UiExt, EditPrefab, RetainMut};
+use std::collections::HashSet;
 
 /// The standard placement tool.
 #[derive(Default)]
 pub struct Place {
     palette: Vec<PaletteEntry>,
     pal_current: usize,
+    placing_at: HashSet<(u32, u32, u32)>,
 }
 
 struct PaletteEntry {
@@ -27,7 +29,7 @@ impl PaletteEntry {
 impl ToolBehavior for Place {
     fn settings(&mut self, ui: &Ui, env: &Environment, ctx: &mut IconCtx) {
         let mut i = 0;
-        let Place { palette, pal_current } = self;
+        let Place { palette, pal_current, .. } = self;
 
         let add_popup_id = im_str!("place_tool_add");
 
@@ -117,6 +119,17 @@ impl ToolBehavior for Place {
     }
 
     fn click(&mut self, hist: &mut History, env: &Environment, loc: (u32, u32, u32)) {
+        self.placing_at.clear();
+        self.drag(hist, env, loc);
+    }
+
+    fn drag(&mut self, hist: &mut History, env: &Environment, loc: (u32, u32, u32)) {
+        // Imitate DM's "paint" behavior.
+        if self.placing_at.contains(&loc) {
+            return;
+        }
+        self.placing_at.insert(loc);
+
         if let Some(fab) = self.palette.get(self.pal_current) {
             let fab = fab.fab.clone();
             hist.edit(env, "TODO".to_owned(), move |env, world| {
@@ -127,10 +140,6 @@ impl ToolBehavior for Place {
                 })
             });
         }
-    }
-
-    fn drag(&mut self, hist: &mut History, env: &Environment, loc: (u32, u32, u32)) {
-        self.click(hist, env, loc)
     }
 
     fn pick(&mut self, env: &Environment, prefab: &Prefab) {
