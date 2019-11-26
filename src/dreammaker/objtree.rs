@@ -71,6 +71,7 @@ pub struct VarValue {
 #[derive(Debug, Clone)]
 pub struct TypeVar {
     pub value: VarValue,
+    pub location: Location,
     pub declaration: Option<VarDeclaration>,
 }
 
@@ -910,8 +911,17 @@ impl ObjectTree {
                         .with_note(decl.location, "previous definition"))
                     }
                 }
-            } else {
-                
+            } else if is_final {
+                for (_typepath, _nodeindex) in self.types.iter() {
+                    let child = self.graph.node_weight(*_nodeindex).unwrap();
+                    if let Some(varoverride) = child.vars.get(varname) {
+                        return Err(DMError::new(varoverride.location, format!("override of final var {}", varname))
+                        .with_note(location, "previous definition"))
+                    }
+                }
+
+
+
             }
         }
         let node = self.graph.node_weight_mut(parent).unwrap();
@@ -925,6 +935,7 @@ impl ObjectTree {
                 being_evaluated: false,
                 docs: comment,
             },
+            location: location,
             declaration: if is_declaration {
                 Some(VarDeclaration {
                     var_type,
