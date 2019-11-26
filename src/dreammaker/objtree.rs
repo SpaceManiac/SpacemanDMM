@@ -850,6 +850,7 @@ impl ObjectTree {
 
     fn register_var<'a, I>(
         &mut self,
+        context: &Context,
         location: Location,
         parent: NodeIndex,
         mut prev: &'a str,
@@ -870,7 +871,7 @@ impl ObjectTree {
                 Some(name) => name,
                 None => return Ok(None), // var{} block, children will be real vars
             };
-            while prev == "global" || prev == "static" || prev == "tmp" || prev == "const" {
+            while prev == "global" || prev == "static" || prev == "tmp" || prev == "const" || prev == "final" {
                 if let Some(name) = rest.next() {
                     is_static |= prev == "global" || prev == "static";
                     is_const |= prev == "const";
@@ -899,29 +900,52 @@ impl ObjectTree {
             type_path,
         };
         var_type.suffix(&suffix);
-
+/*
+        if varname == "foo" {
+            println!("foo final: {}, decl: {}", is_final, is_declaration);
+        }
+        if varname == "bar" {
+            println!("bar final: {}, decl: {}", is_final, is_declaration);
+        }
+*/
         let symbolid = self.symbols.allocate();
         {
             let node = self.graph.node_weight(parent).unwrap();
             
             if !is_declaration {
-                if let Some(decl) = node.get_var_declaration(varname, self) {
-                    if decl.var_type.is_final {
-                        return Err(DMError::new(location, format!("override of final var {}", varname))
-                        .with_note(decl.location, "previous definition"))
+                println!("not declaration");
+                if let Some(_par) = self.graph.node_weight(node.parent_type) {
+                    println!("has parent: {}", _par.path);
+                }
+                while let Some(_parent) = self.graph.node_weight(node.parent_type) {
+                    println!("checking parent: {}", _parent.path);
+                    if let Some(_typevar) = _parent.vars.get(varname) {
+                        println!("has var: {}", varname);
+                        if let Some(_decl) = &_typevar.declaration {
+                            if _decl.var_type.is_final {
+                                DMError::new(location, format!("{} overrides final var {}", node.path, varname))
+                                .with_note(_decl.location, "var declared here")
+                                .register(context);
+                            }
+                        }
                     }
                 }
-            } else if is_final {
-                for (_typepath, _nodeindex) in self.types.iter() {
-                    let child = self.graph.node_weight(*_nodeindex).unwrap();
-                    if let Some(varoverride) = child.vars.get(varname) {
-                        return Err(DMError::new(varoverride.location, format!("override of final var {}", varname))
-                        .with_note(location, "previous definition"))
+            }
+            else if is_final {
+                //println!("found a final var {}", varname);
+                if let Some(currentpath) = self.find(&node.path) {
+                    for _nodeindex in currentpath.children() {
+                        if let Some(childpath) = self.graph.node_weight(_nodeindex.idx) {
+                            //println!("checking subtype {}", childpath.path);
+                            if let Some(_varoverride) = childpath.vars.get(varname) {
+                                //println!("found a final var override {}, {}", childpath.path, varname);
+                                DMError::new(_varoverride.location, format!("{} overrides final var {}", childpath.path, varname))
+                                .with_note(location, "var declared here")
+                                .register(context);
+                            }
+                        }
                     }
                 }
-
-
-
             }
         }
         let node = self.graph.node_weight_mut(parent).unwrap();
@@ -995,6 +1019,7 @@ impl ObjectTree {
     // an entry which may be anything depending on the path
     pub fn add_entry<'a, I: Iterator<Item = &'a str>>(
         &mut self,
+        context: &Context,
         location: Location,
         mut path: I,
         len: usize,
@@ -1003,7 +1028,7 @@ impl ObjectTree {
     ) -> Result<(), DMError> {
         let (parent, child) = self.get_from_path(location, &mut path, len)?;
         if is_var_decl(child) {
-            self.register_var(location, parent, "var", path, comment, suffix)?;
+            self.register_var(context, location, parent, "var", path, comment, suffix)?;
         } else if is_proc_decl(child) {
             // proc{} block, children will be procs
         } else {
@@ -1016,6 +1041,7 @@ impl ObjectTree {
     // an entry which is definitely a var because a value is specified
     pub fn add_var<'a, I: Iterator<Item = &'a str>>(
         &mut self,
+        context: &Context,
         location: Location,
         mut path: I,
         len: usize,
@@ -1024,7 +1050,7 @@ impl ObjectTree {
         suffix: VarSuffix,
     ) -> Result<(), DMError> {
         let (parent, initial) = self.get_from_path(location, &mut path, len)?;
-        if let Some(type_var) = self.register_var(location, parent, initial, path, comment, suffix)? {
+        if let Some(type_var) = self.register_var(context, location, parent, initial, path, comment, suffix)? {
             type_var.value.location = location;
             type_var.value.expression = Some(expr);
             Ok(())

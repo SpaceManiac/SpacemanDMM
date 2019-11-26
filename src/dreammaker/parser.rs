@@ -771,7 +771,7 @@ where
         match self.next("contents")? {
             t @ Punct(LBrace) => {
                 // `thing{` - block
-                if let Err(e) = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), Default::default(), var_suffix) {
+                if let Err(e) = self.tree.add_entry(self.context, self.location, new_stack.iter(), new_stack.len(), Default::default(), var_suffix) {
                     self.context.register_error(e);
                 }
                 self.put_back(t);
@@ -779,7 +779,7 @@ where
                 let (comment, ()) = require!(self.doc_comment(|this| this.tree_block(new_stack)));
                 // TODO: make this duplicate less work?
                 if !comment.is_empty() {
-                    let _ = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), comment, Default::default());
+                    let _ = self.tree.add_entry(self.context, self.location, new_stack.iter(), new_stack.len(), comment, Default::default());
                 }
                 self.annotate(start, || Annotation::TreeBlock(new_stack.to_vec()));
                 SUCCESS
@@ -794,7 +794,7 @@ where
                     require!(this.statement_terminator());
                     success(expr)
                 }));
-                if let Err(e) = self.tree.add_var(location, new_stack.iter(), new_stack.len(), expr, comment, var_suffix) {
+                if let Err(e) = self.tree.add_var(self.context, location, new_stack.iter(), new_stack.len(), expr, comment, var_suffix) {
                     self.context.register_error(e);
                 }
                 self.annotate(entry_start, || Annotation::Variable(new_stack.to_vec()));
@@ -876,7 +876,7 @@ where
                 // usually `thing;` - a contentless declaration
                 // TODO: allow enclosing-targeting docs here somehow?
                 let comment = ::std::mem::replace(&mut self.docs_following, Default::default());
-                if let Err(e) = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), comment, var_suffix) {
+                if let Err(e) = self.tree.add_entry(self.context, self.location, new_stack.iter(), new_stack.len(), comment, var_suffix) {
                     self.context.register_error(e);
                 }
                 self.put_back(other);
