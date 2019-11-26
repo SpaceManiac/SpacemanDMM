@@ -900,42 +900,35 @@ impl ObjectTree {
             type_path,
         };
         var_type.suffix(&suffix);
-/*
-        if varname == "foo" {
-            println!("foo final: {}, decl: {}", is_final, is_declaration);
-        }
-        if varname == "bar" {
-            println!("bar final: {}, decl: {}", is_final, is_declaration);
-        }
-*/
+
         let symbolid = self.symbols.allocate();
         {
             let node = self.graph.node_weight(parent).unwrap();
             
             if !is_declaration {
-                println!("not declaration");
-                if let Some(_par) = self.graph.node_weight(node.parent_type) {
-                    println!("has parent: {}", _par.path);
-                }
-                while let Some(_parent) = self.graph.node_weight(node.parent_type) {
-                    println!("checking parent: {}", _parent.path);
-                    if let Some(_typevar) = _parent.vars.get(varname) {
-                        println!("has var: {}", varname);
-                        if let Some(_decl) = &_typevar.declaration {
-                            if _decl.var_type.is_final {
-                                DMError::new(location, format!("{} overrides final var {}", node.path, varname))
-                                .with_note(_decl.location, "var declared here")
-                                .register(context);
+                println!("not declaration varname:{}, {}", varname, node.path);
+                if let Some(currentpath) = self.find(&node.path) {
+                    currentpath.visit_parent_types(&mut |ty| {
+                        if let Some(parentpath) = self.graph.node_weight(ty.idx) {
+                            println!("checking parenttype {} of {}", parentpath.path, node.path);
+                            if let Some(_typevar) = parentpath.vars.get(varname) {
+                                println!("found a final var override {}, {}", parentpath.path, varname);
+                                if let Some(_decl) = &_typevar.declaration {
+                                    if _decl.var_type.is_final {
+                                        DMError::new(location, format!("{} overrides final var {}", node.path, varname))
+                                        .with_note(_decl.location, "var declared here")
+                                        .register(context);
+                                    }
+                                }
                             }
                         }
-                    }
+                    });
                 }
-            }
-            else if is_final {
+            } else if is_final {
                 //println!("found a final var {}", varname);
                 if let Some(currentpath) = self.find(&node.path) {
-                    for _nodeindex in currentpath.children() {
-                        if let Some(childpath) = self.graph.node_weight(_nodeindex.idx) {
+                    currentpath.recurse(&mut |ty| {
+                        if let Some(childpath) = self.graph.node_weight(ty.idx) {
                             //println!("checking subtype {}", childpath.path);
                             if let Some(_varoverride) = childpath.vars.get(varname) {
                                 //println!("found a final var override {}, {}", childpath.path, varname);
@@ -944,7 +937,7 @@ impl ObjectTree {
                                 .register(context);
                             }
                         }
-                    }
+                    });
                 }
             }
         }
