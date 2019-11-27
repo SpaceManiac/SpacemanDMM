@@ -121,7 +121,9 @@ pub struct Type {
     pub path: String,
     pub location: Location,
     location_specificity: usize,
+    /// Variables which this type has declarations or overrides for.
     pub vars: LinkedHashMap<String, TypeVar>,
+    /// Procs and verbs which this type has declarations or overrides for.
     pub procs: LinkedHashMap<String, TypeProc>,
     parent_type: NodeIndex,
     pub docs: DocCollection,
