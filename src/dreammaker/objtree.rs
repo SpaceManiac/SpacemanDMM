@@ -266,6 +266,23 @@ impl<'a> TypeRef<'a> {
         }
     }
 
+    pub fn iter_parent_types(&self) -> impl Iterator<Item=TypeRef<'a>> {
+        struct ParentTypeIter<'a>(Option<TypeRef<'a>>);
+        impl<'a> Iterator for ParentTypeIter<'a> {
+            type Item = TypeRef<'a>;
+            fn next(&mut self) -> Option<TypeRef<'a>> {
+                match self.0 {
+                    Some(v) => {
+                        self.0 = v.parent_type();
+                        Some(v)
+                    },
+                    None => None,
+                }
+            }
+        }
+        ParentTypeIter(Some(*self))
+    }
+
     /// Recursively visit this and all parent **paths**.
     pub fn visit_parent_paths<F: FnMut(TypeRef<'a>)>(&self, f: &mut F) {
         let mut next = Some(*self);
@@ -850,7 +867,6 @@ impl ObjectTree {
 
     fn register_var<'a, I>(
         &mut self,
-        context: &Context,
         location: Location,
         parent: NodeIndex,
         mut prev: &'a str,
@@ -862,8 +878,6 @@ impl ObjectTree {
         I: Iterator<Item=&'a str>,
     {
         let (mut is_declaration, mut is_static, mut is_const, mut is_tmp, mut is_final) = (false, false, false, false, false);
-
-        let mut varname = prev;
 
         if is_var_decl(prev) {
             is_declaration = true;
@@ -882,7 +896,6 @@ impl ObjectTree {
                     return Ok(None); // var/const{} block, children will be real vars
                 }
             }
-            varname = prev;
         } else if is_proc_decl(prev) {
             return Err(DMError::new(location, "proc looks like a var"));
         }
@@ -902,45 +915,6 @@ impl ObjectTree {
         var_type.suffix(&suffix);
 
         let symbolid = self.symbols.allocate();
-        {
-            let node = self.graph.node_weight(parent).unwrap();
-            
-            if !is_declaration {
-                println!("not declaration varname:{}, {}", varname, node.path);
-                if let Some(currentpath) = self.find(&node.path) {
-                    currentpath.visit_parent_types(&mut |ty| {
-                        if let Some(parentpath) = self.graph.node_weight(ty.idx) {
-                            println!("checking parenttype {} of {}", parentpath.path, node.path);
-                            if let Some(_typevar) = parentpath.vars.get(varname) {
-                                println!("found a final var override {}, {}", parentpath.path, varname);
-                                if let Some(_decl) = &_typevar.declaration {
-                                    if _decl.var_type.is_final {
-                                        DMError::new(location, format!("{} overrides final var {}", node.path, varname))
-                                        .with_note(_decl.location, "var declared here")
-                                        .register(context);
-                                    }
-                                }
-                            }
-                        }
-                    });
-                }
-            } else if is_final {
-                //println!("found a final var {}", varname);
-                if let Some(currentpath) = self.find(&node.path) {
-                    currentpath.recurse(&mut |ty| {
-                        if let Some(childpath) = self.graph.node_weight(ty.idx) {
-                            //println!("checking subtype {}", childpath.path);
-                            if let Some(_varoverride) = childpath.vars.get(varname) {
-                                //println!("found a final var override {}, {}", childpath.path, varname);
-                                DMError::new(_varoverride.location, format!("{} overrides final var {}", childpath.path, varname))
-                                .with_note(location, "var declared here")
-                                .register(context);
-                            }
-                        }
-                    });
-                }
-            }
-        }
         let node = self.graph.node_weight_mut(parent).unwrap();
 
         // TODO: warn and merge docs for repeats
@@ -1012,7 +986,6 @@ impl ObjectTree {
     // an entry which may be anything depending on the path
     pub fn add_entry<'a, I: Iterator<Item = &'a str>>(
         &mut self,
-        context: &Context,
         location: Location,
         mut path: I,
         len: usize,
@@ -1021,7 +994,7 @@ impl ObjectTree {
     ) -> Result<(), DMError> {
         let (parent, child) = self.get_from_path(location, &mut path, len)?;
         if is_var_decl(child) {
-            self.register_var(context, location, parent, "var", path, comment, suffix)?;
+            self.register_var(location, parent, "var", path, comment, suffix)?;
         } else if is_proc_decl(child) {
             // proc{} block, children will be procs
         } else {
@@ -1034,7 +1007,6 @@ impl ObjectTree {
     // an entry which is definitely a var because a value is specified
     pub fn add_var<'a, I: Iterator<Item = &'a str>>(
         &mut self,
-        context: &Context,
         location: Location,
         mut path: I,
         len: usize,
@@ -1043,7 +1015,7 @@ impl ObjectTree {
         suffix: VarSuffix,
     ) -> Result<(), DMError> {
         let (parent, initial) = self.get_from_path(location, &mut path, len)?;
-        if let Some(type_var) = self.register_var(context, location, parent, initial, path, comment, suffix)? {
+        if let Some(type_var) = self.register_var(location, parent, initial, path, comment, suffix)? {
             type_var.value.location = location;
             type_var.value.expression = Some(expr);
             Ok(())
@@ -1081,6 +1053,55 @@ impl ObjectTree {
         }
 
         self.register_proc(context, location, parent, proc_name, declaration, parameters, code)
+    }
+
+    pub fn check_var_defs(&self, context: &Context) {
+        for (path, nodeindex) in self.types.iter() {
+            guard!(let Some(atype) = self.graph.node_weight(*nodeindex)
+                else { continue });
+
+            guard!(let Some(typeref) = self.find(path)
+                else { continue });
+
+            for parent_typeref in typeref.iter_parent_types() {
+                if parent_typeref.is_root() {
+                    break;
+                }
+                guard!(let Some(parent) = self.graph.node_weight(parent_typeref.idx)
+                    else { break });
+
+                if &parent.path == path {
+                    continue
+                }
+
+                for (varname, typevar) in atype.vars.iter() {
+                    if varname == "vars" {
+                        continue;
+                    }
+                    guard!(let Some(parentvar) = parent.vars.get(varname)
+                        else { continue });
+
+                    guard!(let Some(decl) = &parentvar.declaration
+                        else { continue });
+
+                    if let Some(mydecl) = &typevar.declaration {
+                        if mydecl.location.is_builtins() {
+                            continue;
+                        }
+                        DMError::new(mydecl.location, format!("{} redeclares {}", path, varname))
+                        .with_note(decl.location, "var declared here")
+                        .register(context);
+                    }
+
+                    if decl.var_type.is_final {
+                        DMError::new(typevar.location, format!("{} overrides final var {}", path, varname))
+                        .with_note(decl.location, "var declared here")
+                        .register(context);
+                    }
+
+                }
+            }
+        }
     }
 
     /// Drop all code ASTs to attempt to reduce memory usage.

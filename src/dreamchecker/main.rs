@@ -56,6 +56,8 @@ fn main() {
     parser.enable_procs();
     let tree = parser.parse_object_tree();
 
+    tree.check_var_defs(&context);
+
     let mut present = 0;
     let mut invalid = 0;
     let mut builtin = 0;
