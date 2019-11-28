@@ -311,8 +311,8 @@ pub struct AnalyzeObjectTree<'o> {
     objtree: &'o ObjectTree,
 
     return_type: HashMap<ProcRef<'o>, TypeExpr<'o>>,
-    must_call_parent: HashMap<ProcRef<'o>, bool>,
-    must_not_override: HashMap<ProcRef<'o>, bool>,
+    must_call_parent: HashMap<ProcRef<'o>, (bool, Location)>,
+    must_not_override: HashMap<ProcRef<'o>, (bool, Location)>,
     // Debug(ProcRef) -> KwargInfo
     used_kwargs: BTreeMap<String, KwargInfo>,
 }
@@ -358,7 +358,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                         Some(Term::Ident(i)) if i == "TRUE" => Some(true),
                         _ => None,
                     } {
-                        Some(value) => { self.must_not_override.insert(proc, value); },
+                        Some(value) => { self.must_not_override.insert(proc, (value, statement.location)); },
                         None => error(statement.location, format!("invalid value for {}: {:?}", name, value))
                             .set_severity(Severity::Warning)
                             .register(self.context)
@@ -372,7 +372,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                         Some(Term::Ident(i)) if i == "TRUE" => Some(true),
                         _ => None,
                     } {
-                        Some(value) => { self.must_call_parent.insert(proc, value); },
+                        Some(value) => { self.must_call_parent.insert(proc, (value, statement.location)); },
                         None => error(statement.location, format!("invalid value for {}: {:?}", name, value))
                             .set_severity(Severity::Warning)
                             .register(self.context)
@@ -556,19 +556,20 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         self.visit_block(block);
 
         if self.proc_ref.parent_proc().is_some() {
-            //eprintln!("{:?}", self.env.must_call_parent);
-            let mut next = Some(self.proc_ref); 
+            let mut next = Some(self.proc_ref);
             while let Some(current) = next {
-                if let Some(&musnt) = self.env.must_not_override.get(&current) {
-                    if musnt {
+                if let Some(&(must_not, location)) = self.env.must_not_override.get(&current) {
+                    if must_not {
                         error(self.proc_ref.location, format!("proc overrides parent, prohibited by {}", current))
+                            .with_note(location, "prohibited by this must_not_override annotation")
                             .register(self.context);
                     }
                 }
                 if !self.calls_parent {
-                    if let Some(&must) = self.env.must_call_parent.get(&current) {
+                    if let Some(&(must, location)) = self.env.must_call_parent.get(&current) {
                         if must {
                             error(self.proc_ref.location, format!("proc never calls parent, required by {}", current))
+                                .with_note(location, "required by this must_call_parent annotation")
                                 .register(self.context);
                         }
                         break;
