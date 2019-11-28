@@ -52,9 +52,13 @@ be enabled:
 #ifdef SPACEMAN_DMM
 	#define RETURN_TYPE(X) set SpacemanDMM_return_type = X
 	#define SHOULD_CALL_PARENT(X) set SpacemanDMM_should_call_parent = X
+	#define UNLINT(X) SpacemanDMM_unlint(X)
+	#define SHOULD_NOT_OVERRIDE(X) set SpacemanDMM_should_not_override = X
 #else
 	#define RETURN_TYPE(X)
 	#define SHOULD_CALL_PARENT(X)
+	#define UNLINT(X) X
+	#define SHOULD_NOT_OVERRIDE(X)
 #endif
 ```
 
@@ -79,3 +83,8 @@ of the proc it is set on which do not contain any `..()` parent calls. This can
 help with finding situations where a signal or other important handling in the
 parent proc is being skipped. Child procs may set this setting to `0` instead
 to override the check.
+
+### Should not override
+Use `set SpacemanDMM_should_not_override = 1` to raise a warning for any child
+procs that override this one, regardless of if it calls parent or not.
+This functions in a similar way to the `final` keyword in some languages.
