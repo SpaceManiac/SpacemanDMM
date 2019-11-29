@@ -34,13 +34,14 @@ pub struct Launched {
 
 impl Launched {
     pub fn new(seq: Arc<SequenceNumber>, dreamseeker_exe: &str, dmb: &str) -> std::io::Result<Launched> {
-        let mut child = Command::new(dreamseeker_exe)
+        let mut command = Command::new(dreamseeker_exe);
+        command
             .arg(dmb)
             .arg("-trusted")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()?;
+            .stderr(Stdio::null());
+        let mut child = command.spawn()?;
 
         let mutex = Arc::new(Mutex::new(State::Active));
         let handle = raw::from(&child);
@@ -51,7 +52,7 @@ impl Launched {
         std::thread::Builder::new()
             .name("launched debuggee manager thread".to_owned())
             .spawn(move || {
-                output!(in seq2, "[launched] Child process started.");
+                output!(in seq2, "[launched] Started: {:?}", command);
                 let wait = child.wait();
                 // lock as soon as possible to minimize risk of shenanigans
                 let mut state = mutex2.lock().expect("launched mutex poisoned");
@@ -99,8 +100,8 @@ impl Launched {
                     false => Err(std::io::Error::last_os_error()),
                 }
             }
-            other => {
-                debug_output!(in self.seq, "[launched] kill no-op in state {:?}", other);
+            _other => {
+                debug_output!(in self.seq, "[launched] kill no-op in state {:?}", _other);
                 Ok(())
             }
         }
@@ -114,8 +115,8 @@ impl Launched {
                 self.seq.issue_event(TerminatedEvent::default());
                 *state = State::Detached;
             }
-            other => {
-                debug_output!(in self.seq, "[launched] detach no-op in state {:?}", other);
+            _other => {
+                debug_output!(in self.seq, "[launched] detach no-op in state {:?}", _other);
             }
         }
     }

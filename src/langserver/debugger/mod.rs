@@ -121,11 +121,15 @@ handle_request! {
     on Initialize(&mut self, params) {
         // Initialize client caps from request
         self.client_caps = ClientCaps::parse(&params);
-        let debug = format!("{:?}", self.client_caps);
-        if let (Some(start), Some(end)) = (debug.find('{'), debug.rfind('}')) {
-            debug_output!(in self.seq, "[main] client capabilities: {}", &debug[start + 2..end - 1]);
-        } else {
-            debug_output!(in self.seq, "[main] client capabilities: {}", debug);
+
+        #[cfg(debug_assertions)]
+        {
+            let debug = format!("{:?}", self.client_caps);
+            if let (Some(start), Some(end)) = (debug.find('{'), debug.rfind('}')) {
+                debug_output!(in self.seq, "[main] client capabilities: {}", &debug[start + 2..end - 1]);
+            } else {
+                debug_output!(in self.seq, "[main] client capabilities: {}", debug);
+            }
         }
 
         // ... clientID, clientName, adapterID, locale, pathFormat

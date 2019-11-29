@@ -39,7 +39,7 @@ impl ExtoolsThread {
         let stream;
         let mut attempts = 0;
         loop {
-            let err = match TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(2)) {
+            let _err = match TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(2)) {
                 Ok(s) => {
                     stream = s;
                     break;
@@ -48,24 +48,18 @@ impl ExtoolsThread {
             };
             std::thread::sleep(std::time::Duration::from_secs(1));
             attempts += 1;
-            if attempts > 5 {
-                output!(in seq, "[extools] Connection failed: {}", err);
-                debug_output!(in seq, " - {:?}", err);
+            if attempts >= 5 {
+                output!(in seq, "[extools] Connection failed after {} retries, debugging not available.", attempts);
+                debug_output!(in seq, " - {:?}", _err);
                 return;
             }
         }
         output!(in seq, "[extools] Connected.");
 
-        let mut sender = ExtoolsSender {
+        let sender = ExtoolsSender {
             seq: seq.clone(),
             stream: stream.try_clone().expect("try clone bad"),
         };
-        sender.send(ProcListRequest);
-        sender.send(ProcDisassemblyRequest("/proc/debugme".to_owned()));
-        sender.send(BreakpointSet {
-            proc: "/proc/debugme".to_owned(),
-            offset: 24,
-        });
 
         ExtoolsThread {
             seq,
@@ -109,8 +103,8 @@ impl ExtoolsThread {
 }
 
 handle_extools! {
-    on Raw(&mut self, Raw(message)) {
-        debug_output!(in self.seq, "[extools] Raw: {}", message);
+    on Raw(&mut self, Raw(_message)) {
+        debug_output!(in self.seq, "[extools] Raw: {}", _message);
     }
 
     on BreakpointHit(&mut self, hit) {
