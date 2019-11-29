@@ -28,7 +28,6 @@ mod extools_types;
 mod extools;
 
 use std::error::Error;
-use std::process::{Command, Stdio};
 use std::sync::{atomic, Arc};
 
 use io;
@@ -139,17 +138,11 @@ handle_request! {
     }
 
     on LaunchVsc(&mut self, params) {
-        let _debug = !params.base.noDebug.unwrap_or(false);
+        self.launched = Some(Launched::new(self.seq.clone(), &self.dreamseeker_exe, &params.dmb)?);
 
-        let child = Command::new(&self.dreamseeker_exe)
-            .arg(&params.dmb)
-            .arg("-trusted")
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()?;
-        self.launched = Some(Launched::new(self.seq.clone(), child)?);
-        self.extools = Some(Extools::connect(self.seq.clone())?);
+        if !params.base.noDebug.unwrap_or(false) {
+            self.extools = Some(Extools::connect(self.seq.clone())?);
+        }
     }
 
     on Disconnect(&mut self, params) {

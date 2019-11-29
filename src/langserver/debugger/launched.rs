@@ -2,6 +2,7 @@
 #![allow(unsafe_code)]
 
 use std::sync::{Arc, Mutex};
+use std::process::{Command, Stdio};
 use super::SequenceNumber;
 use super::dap_types::{ExitedEvent, TerminatedEvent};
 
@@ -32,7 +33,15 @@ pub struct Launched {
 }
 
 impl Launched {
-    pub fn new(seq: Arc<SequenceNumber>, mut child: std::process::Child) -> std::io::Result<Launched> {
+    pub fn new(seq: Arc<SequenceNumber>, dreamseeker_exe: &str, dmb: &str) -> std::io::Result<Launched> {
+        let mut child = Command::new(dreamseeker_exe)
+            .arg(dmb)
+            .arg("-trusted")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()?;
+
         let mutex = Arc::new(Mutex::new(State::Active));
         let handle = raw::from(&child);
 
