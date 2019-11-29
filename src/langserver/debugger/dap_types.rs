@@ -185,6 +185,13 @@ impl Event for OutputEvent {
     const EVENT: &'static str = "output";
 }
 
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct InitializedEvent;
+
+impl Event for InitializedEvent {
+    const EVENT: &'static str = "initialized";
+}
+
 // ----------------------------------------------------------------------------
 // Request
 
@@ -307,8 +314,98 @@ pub struct DisconnectArguments {
     pub terminateDebuggee: Option<bool>,
 }
 
+pub enum SetBreakpoints {}
+
+impl Request for SetBreakpoints {
+    type Params = SetBreakpointsArguments;
+    type Result = SetBreakpointsResponse;
+    const COMMAND: &'static str = "setBreakpoints";
+}
+
+/// Arguments for ‘setBreakpoints’ request.
+#[derive(Deserialize, Debug)]
+pub struct SetBreakpointsArguments {
+    /**
+     * The source location of the breakpoints; either 'source.path' or 'source.reference' must be specified.
+     */
+    pub source: Source,
+
+    /**
+     * The code locations of the breakpoints.
+     */
+    pub breakpoints: Option<Vec<SourceBreakpoint>>,
+
+    /**
+     * Deprecated: The code locations of the breakpoints.
+     */
+    pub lines: Option<i64>,
+
+    /**
+     * A value of true indicates that the underlying source has been modified which results in new breakpoint locations.
+     */
+    pub sourceModified: Option<bool>,
+}
+
+/// Response to ‘setBreakpoints’ request.
+///
+/// Returned is information about each breakpoint created by this request.
+/// This includes the actual code location and whether the breakpoint could be verified.
+/// The breakpoints returned are in the same order as the elements of the ‘breakpoints’
+/// (or the deprecated ‘lines’) array in the arguments.
+#[derive(Serialize, Debug)]
+pub struct SetBreakpointsResponse {
+    /**
+     * Information about the breakpoints. The array elements are in the same order as the elements of the 'breakpoints' (or the deprecated 'lines') array in the arguments.
+     */
+    pub breakpoints: Vec<Breakpoint>,
+}
+
 // ----------------------------------------------------------------------------
 // Types
+
+/// Information about a Breakpoint created in setBreakpoints or setFunctionBreakpoints.
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct Breakpoint {
+    /**
+     * An optional identifier for the breakpoint. It is needed if breakpoint events are used to update or remove breakpoints.
+     */
+    pub id: Option<i64>,
+
+    /**
+     * If true breakpoint could be set (but not necessarily at the desired location).
+     */
+    pub verified: bool,
+
+    /**
+     * An optional message about the state of the breakpoint. This is shown to the user and can be used to explain why a breakpoint could not be verified.
+     */
+    pub message: Option<String>,
+
+    /**
+     * The source where the breakpoint is located.
+     */
+    pub source: Option<Source>,
+
+    /**
+     * The start line of the actual range covered by the breakpoint.
+     */
+    pub line: Option<i64>,
+
+    /**
+     * An optional start column of the actual range covered by the breakpoint.
+     */
+    pub column: Option<i64>,
+
+    /**
+     * An optional end line of the actual range covered by the breakpoint.
+     */
+    pub endLine: Option<i64>,
+
+    /**
+     * An optional end column of the actual range covered by the breakpoint. If no end line is given, then the end column is assumed to be in the start line.
+     */
+    pub endColumn: Option<i64>,
+}
 
 /// Information about the capabilities of a debug adapter.
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -515,4 +612,89 @@ pub struct Message {
      */
     #[serde(rename = "urlLabel")]
     pub url_label: Option<String>,
+}
+
+/// A Source is a descriptor for source code.
+///
+/// It is returned from the debug adapter as part of a StackFrame and it is used by clients when specifying breakpoints.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Source {
+    /**
+     * The short name of the source. Every source returned from the debug adapter has a name. When sending a source to the debug adapter this name is optional.
+     */
+    pub name: Option<String>,
+
+    /**
+     * The path of the source to be shown in the UI. It is only used to locate and load the content of the source if no sourceReference is specified (or its value is 0).
+     */
+    pub path: Option<String>,
+
+    /**
+     * If sourceReference > 0 the contents of the source must be retrieved through the SourceRequest (even if a path is specified). A sourceReference is only valid for a session, so it must not be used to persist a source. The value should be less than or equal to 2147483647 (2^31 - 1).
+     */
+    pub sourceReference: Option<i64>,
+
+    /**
+     * An optional hint for how to present the source in the UI. A value of 'deemphasize' can be used to indicate that the source is not available or that it is skipped on stepping.
+     */
+    pub presentationHint: Option<PresentationHint>,
+
+    /**
+     * The (optional) origin of this source: possible values 'internal module', 'inlined content from source map', etc.
+     */
+    pub origin: Option<String>,
+
+    /**
+     * An optional list of sources that are related to this source. These may be the source that generated this source.
+     */
+    pub sources: Option<Vec<Source>>,
+
+    /**
+     * Optional data that a debug adapter might want to loop through the client. The client should leave the data intact and persist it across sessions. The client should not interpret the data.
+     */
+    pub adapterData: Option<Value>,
+
+    /*/**
+     * The checksums associated with this file.
+     */
+    checksums?: Checksum[]; */
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum PresentationHint {
+    #[serde(rename="normal")]
+    Normal,
+    #[serde(rename="emphasize")]
+    Emphasize,
+    #[serde(rename="deemphasize")]
+    Deemphasize,
+}
+
+/// Properties of a breakpoint or logpoint passed to the setBreakpoints request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SourceBreakpoint {
+    /**
+     * The source line of the breakpoint or logpoint.
+     */
+    pub line: i64,
+
+    /**
+     * An optional source column of the breakpoint.
+     */
+    pub column: Option<i64>,
+
+    /**
+     * An optional expression for conditional breakpoints.
+     */
+    pub condition: Option<String>,
+
+    /**
+     * An optional expression that controls how many hits of the breakpoint are ignored. The backend is expected to interpret the expression as needed.
+     */
+    pub hitCondition: Option<String>,
+
+    /**
+     * If this attribute exists and is non-empty, the backend must not 'break' (stop) but log the message instead. Expressions within {} are interpolated.
+     */
+    pub logMessage: Option<String>,
 }
