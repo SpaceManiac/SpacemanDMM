@@ -94,6 +94,13 @@ impl Response for BreakpointSet {
     const TYPE: &'static str = "breakpoint set";
 }
 
+// #define MESSAGE_BREAKPOINT_UNSET "breakpoint unset" //Content is BreakpointUnset
+#[derive(Serialize, Deserialize, Debug)]
+pub struct BreakpointUnset {
+    pub proc: String,
+    pub offset: i64,
+}
+
 // #define MESSAGE_BREAKPOINT_STEP "breakpoint step" //Content is empty
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BreakpointStep;
@@ -124,13 +131,41 @@ impl Response for BreakpointHit {
     const TYPE: &'static str = "breakpoint hit";
 }
 
-/*
-#define MESSAGE_VALUES_LOCALS "locals" //Content is a vector of ValueTexts
+// #define MESSAGE_CALL_STACK "call stack" //Content is a vector of proc paths
+#[derive(Serialize, Deserialize, Debug)]
+pub struct CallStack(pub Vec<String>);
 
+impl Response for CallStack {
+    const TYPE: &'static str = "call stack";
+}
 
-#define MESSAGE_BREAKPOINT_UNSET "breakpoint unset" //Content is BreakpointUnset
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ValueText {
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub value: String,
+}
 
-#define MESSAGE_VALUES_ARGS "args" //^
-#define MESSAGE_VALUES_STACK "stack" //^
-#define MESSAGE_CALL_STACK "call stack" //Content is a vector of proc paths
-*/
+// #define MESSAGE_VALUES_LOCALS "locals" //Content is a vector of ValueTexts
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Locals(pub Vec<ValueText>);
+
+impl Response for Locals {
+    const TYPE: &'static str = "locals";
+}
+
+// #define MESSAGE_VALUES_ARGS "args" //^
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Args(pub Vec<ValueText>);
+
+impl Response for Args {
+    const TYPE: &'static str = "args";
+}
+
+// #define MESSAGE_VALUES_STACK "stack" //^
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Stack(pub Vec<ValueText>);
+
+impl Response for Stack {
+    const TYPE: &'static str = "stack";
+}
