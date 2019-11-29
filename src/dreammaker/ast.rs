@@ -541,7 +541,7 @@ impl From<IndexOrField> for Follow {
 
 /// The proc declaration kind, either `proc` or `verb`.
 ///
-/// DM requires referinging proc paths to include whether the target is
+/// DM requires referencing proc paths to include whether the target is
 /// declared as a proc or verb, even though the two modes are functionally
 /// identical in many other respects.
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
