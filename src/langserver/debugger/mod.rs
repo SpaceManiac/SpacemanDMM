@@ -96,13 +96,17 @@ impl Debugger {
                         type_: ResponseMessage::TYPE.to_owned(),
                     },
                     request_seq,
-                    command,
                     success: handled.is_ok(),
                     message: handled.as_ref().err().map(|err| err.to_string()),
                     body: match handled {
                         Ok(result) => Some(result),
-                        Err(_) => None,
-                    }
+                        Err(err) => {
+                            output!(in self.seq, "[main] Error responding to {:?}: {}", command, err);
+                            debug_output!(in self.seq, " - {}", message);
+                            None
+                        },
+                    },
+                    command,
                 };
                 io::write(serde_json::to_string(&response).expect("response encode error"))
             }
