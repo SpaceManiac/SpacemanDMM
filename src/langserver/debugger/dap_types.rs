@@ -185,11 +185,56 @@ impl Event for OutputEvent {
     const EVENT: &'static str = "output";
 }
 
+/// This event indicates that the debug adapter is ready to accept configuration requests (e.g. SetBreakpointsRequest, SetExceptionBreakpointsRequest).
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct InitializedEvent;
 
 impl Event for InitializedEvent {
     const EVENT: &'static str = "initialized";
+}
+
+/// The event indicates that the execution of the debuggee has stopped due to some condition.
+///
+/// This can be caused by a break point previously set, a stepping action has completed, by executing a debugger statement etc.
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct StoppedEvent {
+    /**
+     * The reason for the event.
+     * For backward compatibility this string is shown in the UI if the 'description' attribute is missing (but it must not be translated).
+     * Values: 'step', 'breakpoint', 'exception', 'pause', 'entry', 'goto', 'function breakpoint', 'data breakpoint', etc.
+     */
+    pub reason: String,
+
+    /**
+     * The full reason for the event, e.g. 'Paused on exception'. This string is shown in the UI as is and must be translated.
+     */
+    pub description: Option<String>,
+
+    /**
+     * The thread which was stopped.
+     */
+    pub threadId: Option<i64>,
+
+    /**
+     * A value of true hints to the frontend that this event should not change the focus.
+     */
+    pub preserveFocusHint: Option<bool>,
+
+    /**
+     * Additional information. E.g. if reason is 'exception', text contains the exception name. This string is shown in the UI.
+     */
+    pub text: Option<String>,
+
+    /**
+     * If 'allThreadsStopped' is true, a debug adapter can announce that all threads have stopped.
+     * - The client should use this information to enable that all threads can be expanded to access their stacktraces.
+     * - If the attribute is missing or false, only the thread with the given threadId can be expanded.
+     */
+    pub allThreadsStopped: Option<bool>,
+}
+
+impl Event for StoppedEvent {
+    const EVENT: &'static str = "stopped";
 }
 
 // ----------------------------------------------------------------------------
@@ -338,7 +383,7 @@ pub struct SetBreakpointsArguments {
     /**
      * Deprecated: The code locations of the breakpoints.
      */
-    pub lines: Option<i64>,
+    pub lines: Option<Vec<i64>>,
 
     /**
      * A value of true indicates that the underlying source has been modified which results in new breakpoint locations.
@@ -358,6 +403,70 @@ pub struct SetBreakpointsResponse {
      * Information about the breakpoints. The array elements are in the same order as the elements of the 'breakpoints' (or the deprecated 'lines') array in the arguments.
      */
     pub breakpoints: Vec<Breakpoint>,
+}
+
+/// The request returns a stacktrace from the current execution state.
+pub enum StackTrace {}
+
+impl Request for StackTrace {
+    type Params = StackTraceArguments;
+    type Result = StackTraceResponse;
+    const COMMAND: &'static str = "stackTrace";
+}
+
+#[derive(Deserialize, Debug)]
+pub struct StackTraceArguments {
+    /**
+     * Retrieve the stacktrace for this thread.
+     */
+    pub threadId: i64,
+
+    /**
+     * The index of the first frame to return; if omitted frames start at 0.
+     */
+    pub startFrame: Option<i64>,
+
+    /**
+     * The maximum number of frames to return. If levels is not specified or 0, all frames are returned.
+     */
+    pub levels: Option<i64>,
+
+    /**
+     * Specifies details on how to format the stack frames.
+     */
+    pub format: Option<StackFrameFormat>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct StackTraceResponse {
+    /**
+     * The frames of the stackframe. If the array has length zero, there are no stackframes available.
+     * This means that there is no location information available.
+     */
+    pub stackFrames: Vec<StackFrame>,
+
+    /**
+     * The total number of frames available.
+     */
+    pub totalFrames: Option<i64>,
+}
+
+/// The request retrieves a list of all threads.
+pub enum Threads {}
+
+impl Request for Threads {
+    type Params = ();
+    type Result = ThreadsResponse;
+    const COMMAND: &'static str = "threads";
+}
+
+/// Response to ‘threads’ request.
+#[derive(Serialize, Debug)]
+pub struct ThreadsResponse {
+    /**
+     * All threads.
+     */
+    pub threads: Vec<Thread>,
 }
 
 // ----------------------------------------------------------------------------
@@ -637,7 +746,7 @@ pub struct Source {
     /**
      * An optional hint for how to present the source in the UI. A value of 'deemphasize' can be used to indicate that the source is not available or that it is skipped on stepping.
      */
-    pub presentationHint: Option<PresentationHint>,
+    pub presentationHint: Option<SourcePresentationHint>,
 
     /**
      * The (optional) origin of this source: possible values 'internal module', 'inlined content from source map', etc.
@@ -661,7 +770,7 @@ pub struct Source {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub enum PresentationHint {
+pub enum SourcePresentationHint {
     #[serde(rename="normal")]
     Normal,
     #[serde(rename="emphasize")]
@@ -697,4 +806,126 @@ pub struct SourceBreakpoint {
      * If this attribute exists and is non-empty, the backend must not 'break' (stop) but log the message instead. Expressions within {} are interpolated.
      */
     pub logMessage: Option<String>,
+}
+
+/// A Stackframe contains the source location.
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct StackFrame {
+    /**
+     * An identifier for the stack frame. It must be unique across all threads. This id can be used to retrieve the scopes of the frame with the 'scopesRequest' or to restart the execution of a stackframe.
+     */
+    pub id: i64,
+
+    /**
+     * The name of the stack frame, typically a method name.
+     */
+    pub name: String,
+
+    /**
+     * The optional source of the frame.
+     */
+    pub source: Option<Source>,
+
+    /**
+     * The line within the file of the frame. If source is null or doesn't exist, line is 0 and must be ignored.
+     */
+    pub line: i64,
+
+    /**
+     * The column within the line. If source is null or doesn't exist, column is 0 and must be ignored.
+     */
+    pub column: i64,
+
+    /**
+     * An optional end line of the range covered by the stack frame.
+     */
+    pub endLine: Option<i64>,
+
+    /**
+     * An optional end column of the range covered by the stack frame.
+     */
+    pub endColumn: Option<i64>,
+
+    /**
+     * Optional memory reference for the current instruction pointer in this frame.
+     */
+    pub instructionPointerReference: Option<String>,
+
+    /*/**
+     * The module associated with this frame, if any.
+     */
+    moduleId?: number | string;*/
+
+    /**
+     * An optional hint for how to present this frame in the UI. A value of 'label' can be used to indicate that the frame is an artificial frame that is used as a visual label or separator. A value of 'subtle' can be used to change the appearance of a frame in a 'subtle' way.
+     */
+    pub presentationHint: Option<StackFramePresentationHint>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum StackFramePresentationHint {
+    #[serde(rename="normal")]
+    Normal,
+    #[serde(rename="label")]
+    Label,
+    #[serde(rename="subtle")]
+    Subtle,
+}
+
+// Provides formatting information for a stack frame.
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct StackFrameFormat {
+    /**
+     * Display the value in hex.
+     */
+    pub hex: Option<bool>,
+
+    /**
+     * Displays parameters for the stack frame.
+     */
+    pub parameters: Option<bool>,
+
+    /**
+     * Displays the types of parameters for the stack frame.
+     */
+    pub parameterTypes: Option<bool>,
+
+    /**
+     * Displays the names of parameters for the stack frame.
+     */
+    pub parameterNames: Option<bool>,
+
+    /**
+     * Displays the values of parameters for the stack frame.
+     */
+    pub parameterValues: Option<bool>,
+
+    /**
+     * Displays the line number of the stack frame.
+     */
+    pub line: Option<bool>,
+
+    /**
+     * Displays the module of the stack frame.
+     */
+    pub module: Option<bool>,
+
+    /**
+     * Includes all stack frames, including those the debug adapter might otherwise hide.
+     */
+    pub includeAll: Option<bool>,
+}
+
+/// A Thread
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct Thread {
+    /**
+     * Unique identifier for the thread.
+     */
+    pub id: i64,
+
+    /**
+     * A name of the thread.
+     */
+    pub name: String,
 }
