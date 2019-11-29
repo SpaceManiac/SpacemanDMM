@@ -1,72 +1,87 @@
 //! Client for the Extools debugger protocol.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::net::{SocketAddr, Ipv4Addr, TcpStream};
+use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::error::Error;
 
 use super::SequenceNumber;
+use super::dap_types;
 use super::extools_types::*;
 
 pub struct Extools {
     seq: Arc<SequenceNumber>,
+    threads: Arc<Mutex<HashMap<i64, ThreadInfo>>>,
+}
+
+#[derive(Clone)]
+pub struct ThreadInfo {
+    pub call_stack: Vec<String>,
 }
 
 impl Extools {
     pub fn connect(seq: Arc<SequenceNumber>) -> std::io::Result<Extools> {
-        let seq2 = seq.clone();
+        let extools = Extools {
+            seq,
+            threads: Arc::new(Mutex::new(HashMap::new())),
+        };
+        let seq = extools.seq.clone();
+        let threads = extools.threads.clone();
 
         std::thread::Builder::new()
             .name("extools read thread".to_owned())
-            .spawn(move || ExtoolsThread::main(seq2))?;
+            .spawn(move || {
+                let addr: SocketAddr = (Ipv4Addr::LOCALHOST, 2448).into();
 
-        Ok(Extools {
-            seq,
-        })
+                debug_output!(in seq, "[extools] Connecting...");
+                let stream;
+                let mut attempts = 0;
+                loop {
+                    let _err = match TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(2)) {
+                        Ok(s) => {
+                            stream = s;
+                            break;
+                        }
+                        Err(err) => err,
+                    };
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                    attempts += 1;
+                    if attempts >= 5 {
+                        output!(in seq, "[extools] Connection failed after {} retries, debugging not available.", attempts);
+                        debug_output!(in seq, " - {:?}", _err);
+                        return;
+                    }
+                }
+                output!(in seq, "[extools] Connected.");
+
+                let sender = ExtoolsSender {
+                    seq: seq.clone(),
+                    stream: stream.try_clone().expect("try clone bad"),
+                };
+
+                ExtoolsThread {
+                    seq,
+                    sender,
+                    threads,
+                }.read_loop();
+            })?;
+
+        Ok(extools)
+    }
+
+    pub fn get_thread(&self, thread_id: i64) -> Option<ThreadInfo> {
+        self.threads.lock().unwrap().get(&thread_id).cloned()
     }
 }
 
 struct ExtoolsThread {
     seq: Arc<SequenceNumber>,
     sender: ExtoolsSender,
+    threads: Arc<Mutex<HashMap<i64, ThreadInfo>>>,
 }
 
 impl ExtoolsThread {
-    fn main(seq: Arc<SequenceNumber>) {
-        let addr: SocketAddr = (Ipv4Addr::LOCALHOST, 2448).into();
-
-        debug_output!(in seq, "[extools] Connecting...");
-        let stream;
-        let mut attempts = 0;
-        loop {
-            let _err = match TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(2)) {
-                Ok(s) => {
-                    stream = s;
-                    break;
-                }
-                Err(err) => err,
-            };
-            std::thread::sleep(std::time::Duration::from_secs(1));
-            attempts += 1;
-            if attempts >= 5 {
-                output!(in seq, "[extools] Connection failed after {} retries, debugging not available.", attempts);
-                debug_output!(in seq, " - {:?}", _err);
-                return;
-            }
-        }
-        output!(in seq, "[extools] Connected.");
-
-        let sender = ExtoolsSender {
-            seq: seq.clone(),
-            stream: stream.try_clone().expect("try clone bad"),
-        };
-
-        ExtoolsThread {
-            seq,
-            sender,
-        }.read_loop();
-    }
-
     fn read_loop(&mut self) {
         let mut buffer = Vec::new();
         let mut read_buf = [0u8; 4096];
@@ -108,8 +123,17 @@ handle_extools! {
     }
 
     on BreakpointHit(&mut self, hit) {
-        output!(in self.seq, "[extools] Hit breakpoint in {}", hit.proc);
-        self.sender.send(BreakpointResume);
+        debug_output!(in self.seq, "[extools] Hit breakpoint in {}", hit.proc);
+        self.seq.issue_event(dap_types::StoppedEvent {
+            reason: "breakpoint".to_owned(),
+            threadId: Some(0),
+            .. Default::default()
+        });
+        //self.sender.send(BreakpointResume);
+    }
+
+    on CallStack(&mut self, stack) {
+        self.threads.lock().unwrap().insert(0, ThreadInfo { call_stack: stack.0 });
     }
 }
 

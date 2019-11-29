@@ -150,6 +150,7 @@ handle_request! {
 
         if !params.base.noDebug.unwrap_or(false) {
             self.extools = Some(Extools::connect(self.seq.clone())?);
+            self.seq.issue_event(InitializedEvent);
         }
     }
 
@@ -165,6 +166,28 @@ handle_request! {
                 launched.detach();
             }
         }
+    }
+
+    on Threads(&mut self, ()) {
+        ThreadsResponse {
+            threads: vec![Thread { id: 0, name: "Main".to_owned() }]
+        }
+    }
+
+    on StackTrace(&mut self, params) {
+        if let Some(extools) = self.extools.as_ref() {
+            if let Some(thread) = extools.get_thread(params.threadId) {
+                return Ok(StackTraceResponse {
+                    totalFrames: Some(thread.call_stack.len() as i64),
+                    stackFrames: thread.call_stack.into_iter().map(|name| StackFrame {
+                        name,
+                        // TODO: id, source, line
+                        .. Default::default()
+                    }).collect(),
+                });
+            }
+        }
+        return Err(Box::new(std::io::Error::from(std::io::ErrorKind::InvalidData)));
     }
 }
 
