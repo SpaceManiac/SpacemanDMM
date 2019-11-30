@@ -359,6 +359,33 @@ pub struct DisconnectArguments {
     pub terminateDebuggee: Option<bool>,
 }
 
+/// The request starts the debuggee to run again.
+pub enum Continue {}
+
+impl Request for Continue {
+    type Params = ContinueArguments;
+    type Result = ContinueResponse;
+    const COMMAND: &'static str = "continue";
+}
+
+/// Arguments for ‘continue’ request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ContinueArguments {
+    /**
+     * Continue execution for the specified thread (if possible). If the backend cannot continue on a single thread but will continue on all threads, it should set the 'allThreadsContinued' attribute in the response to true.
+     */
+    pub threadId: i64,
+}
+
+/// Response to ‘continue’ request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ContinueResponse {
+    /**
+     * If true, the 'continue' request has ignored the specified thread and continued all threads instead. If this attribute is missing a value of 'true' is assumed for backward compatibility.
+     */
+    pub allThreadsContinued: Option<bool>,
+}
+
 /// The request returns the variable scopes for a given stackframe ID.
 pub enum Scopes {}
 

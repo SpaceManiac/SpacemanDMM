@@ -149,7 +149,7 @@ handle_request! {
         self.launched = Some(Launched::new(self.seq.clone(), &self.dreamseeker_exe, &params.dmb)?);
 
         if !params.base.noDebug.unwrap_or(false) {
-            self.extools = Some(Extools::connect(self.seq.clone())?);
+            self.extools = Extools::connect(self.seq.clone())?;
             self.seq.issue_event(InitializedEvent);
         }
     }
@@ -241,6 +241,17 @@ handle_request! {
                 }
             } else {
                 return Err(Box::new(GenericError("Bad thread ID")));
+            }
+        } else {
+            return Err(Box::new(GenericError("No extools connection")));
+        }
+    }
+
+    on Continue(&mut self, _params) {
+        if let Some(extools) = self.extools.as_ref() {
+            extools.continue_execution();
+            ContinueResponse {
+                allThreadsContinued: Some(true),
             }
         } else {
             return Err(Box::new(GenericError("No extools connection")));

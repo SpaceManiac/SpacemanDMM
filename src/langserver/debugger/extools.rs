@@ -25,49 +25,52 @@ pub struct ThreadInfo {
 
 pub struct Extools {
     seq: Arc<SequenceNumber>,
+    sender: ExtoolsSender,
     threads: Arc<Mutex<HashMap<i64, ThreadInfo>>>,
 }
 
 impl Extools {
-    pub fn connect(seq: Arc<SequenceNumber>) -> std::io::Result<Extools> {
+    pub fn connect(seq: Arc<SequenceNumber>) -> std::io::Result<Option<Extools>> {
+        let addr: SocketAddr = (Ipv4Addr::LOCALHOST, 2448).into();
+
+        debug_output!(in seq, "[extools] Connecting...");
+        let stream;
+        let mut attempts = 0;
+        loop {
+            let _err = match TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(2)) {
+                Ok(s) => {
+                    stream = s;
+                    break;
+                }
+                Err(err) => err,
+            };
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            attempts += 1;
+            if attempts >= 5 {
+                output!(in seq, "[extools] Connection failed after {} retries, debugging not available.", attempts);
+                debug_output!(in seq, " - {:?}", _err);
+                return Ok(None);
+            }
+        }
+        output!(in seq, "[extools] Connected.");
+
+        let sender = ExtoolsSender {
+            seq: seq.clone(),
+            stream: stream.try_clone().expect("try clone bad"),
+        };
+
         let extools = Extools {
             seq,
+            sender,
             threads: Arc::new(Mutex::new(HashMap::new())),
         };
         let seq = extools.seq.clone();
         let threads = extools.threads.clone();
+        let sender = extools.sender.clone();
 
         std::thread::Builder::new()
             .name("extools read thread".to_owned())
             .spawn(move || {
-                let addr: SocketAddr = (Ipv4Addr::LOCALHOST, 2448).into();
-
-                debug_output!(in seq, "[extools] Connecting...");
-                let stream;
-                let mut attempts = 0;
-                loop {
-                    let _err = match TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(2)) {
-                        Ok(s) => {
-                            stream = s;
-                            break;
-                        }
-                        Err(err) => err,
-                    };
-                    std::thread::sleep(std::time::Duration::from_secs(1));
-                    attempts += 1;
-                    if attempts >= 5 {
-                        output!(in seq, "[extools] Connection failed after {} retries, debugging not available.", attempts);
-                        debug_output!(in seq, " - {:?}", _err);
-                        return;
-                    }
-                }
-                output!(in seq, "[extools] Connected.");
-
-                let sender = ExtoolsSender {
-                    seq: seq.clone(),
-                    stream: stream.try_clone().expect("try clone bad"),
-                };
-
                 ExtoolsThread {
                     seq,
                     sender,
@@ -75,11 +78,15 @@ impl Extools {
                 }.read_loop();
             })?;
 
-        Ok(extools)
+        Ok(Some(extools))
     }
 
     pub fn get_thread(&self, thread_id: i64) -> Option<ThreadInfo> {
         self.threads.lock().unwrap().get(&thread_id).cloned()
+    }
+
+    pub fn continue_execution(&self) {
+        self.sender.send(BreakpointResume);
     }
 }
 
@@ -161,8 +168,17 @@ struct ExtoolsSender {
     stream: TcpStream,
 }
 
+impl Clone for ExtoolsSender {
+    fn clone(&self) -> ExtoolsSender {
+        ExtoolsSender {
+            seq: self.seq.clone(),
+            stream: self.stream.try_clone().expect("TcpStream::try_clone failed in ExtoolsSender::clone")
+        }
+    }
+}
+
 impl ExtoolsSender {
-    pub fn send<M: Request>(&mut self, message: M) {
+    pub fn send<M: Request>(&self, message: M) {
         let content = serde_json::to_value(message).expect("extools body encode error");
         let mut buffer = serde_json::to_vec(&ProtocolMessage {
             type_: M::TYPE.to_owned(),
@@ -171,6 +187,6 @@ impl ExtoolsSender {
         debug_output!(in self.seq, "[extools] >> {}", String::from_utf8_lossy(&buffer[..]));
         buffer.push(0);
         // TODO: needs more synchronization
-        self.stream.write_all(&buffer[..]).expect("extools write error");
+        (&self.stream).write_all(&buffer[..]).expect("extools write error");
     }
 }
