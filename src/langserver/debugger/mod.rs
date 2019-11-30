@@ -179,15 +179,19 @@ handle_request! {
             if let Some(thread) = extools.get_thread(params.threadId) {
                 return Ok(StackTraceResponse {
                     totalFrames: Some(thread.call_stack.len() as i64),
-                    stackFrames: thread.call_stack.into_iter().map(|name| StackFrame {
+                    stackFrames: thread.call_stack.into_iter().enumerate().map(|(i, name)| StackFrame {
                         name,
-                        // TODO: id, source, line
+                        id: i as i64,
+                        // TODO: source, line
                         .. Default::default()
                     }).collect(),
                 });
+            } else {
+                return Err(GenericError("Bad thread ID passed"));
             }
+        } else {
+            return Err(GenericError("No extools connection"));
         }
-        return Err(Box::new(std::io::Error::from(std::io::ErrorKind::InvalidData)));
     }
 }
 
@@ -243,6 +247,19 @@ impl SequenceNumber {
             output,
             .. Default::default()
         })
+    }
+}
+
+#[derive(Debug)]
+struct GenericError(&'static str);
+
+impl Error for GenericError {
+    fn description(&self) -> &str { self.0 }
+}
+
+impl std::fmt::Display for GenericError {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        fmt.write_str(self.0)
     }
 }
 
