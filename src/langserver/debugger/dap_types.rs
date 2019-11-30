@@ -359,6 +359,33 @@ pub struct DisconnectArguments {
     pub terminateDebuggee: Option<bool>,
 }
 
+/// The request returns the variable scopes for a given stackframe ID.
+pub enum Scopes {}
+
+impl Request for Scopes {
+    type Params = ScopesArguments;
+    type Result = ScopesResponse;
+    const COMMAND: &'static str = "scopes";
+}
+
+/// Arguments for ‘scopes’ request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ScopesArguments {
+    /**
+     * Retrieve the scopes for this stackframe.
+     */
+    pub frameId: i64,
+}
+
+/// Response to ‘scopes’ request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ScopesResponse {
+    /**
+     * The scopes of the stackframe. If the array has length zero, there are no scopes available.
+     */
+    pub scopes: Vec<Scope>,
+}
+
 pub enum SetBreakpoints {}
 
 impl Request for SetBreakpoints {
@@ -467,6 +494,63 @@ pub struct ThreadsResponse {
      * All threads.
      */
     pub threads: Vec<Thread>,
+}
+
+/// Retrieves all child variables for the given variable reference.
+///
+/// An optional filter can be used to limit the fetched children to either named or indexed children.
+pub enum Variables {}
+
+impl Request for Variables {
+    type Params = VariablesArguments;
+    type Result = VariablesResponse;
+    const COMMAND: &'static str = "variables";
+}
+
+/// Arguments for ‘variables’ request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct VariablesArguments {
+    /**
+     * The Variable reference.
+     */
+    pub variablesReference: i64,
+
+    /**
+     * Optional filter to limit the child variables to either named or indexed. If omitted, both types are fetched.
+     */
+    pub filter: Option<VariablesFilter>,
+
+    /**
+     * The index of the first variable to return; if omitted children start at 0.
+     */
+    pub start: Option<i64>,
+
+    /**
+     * The number of variables to return. If count is missing or 0, all variables are returned.
+     */
+    pub count: Option<i64>,
+
+    /**
+     * Specifies details on how to format the Variable values.
+     */
+    pub format: Option<ValueFormat>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum VariablesFilter {
+    #[serde(rename="indexed")]
+    Indexed,
+    #[serde(rename="named")]
+    Named,
+}
+
+/// Response to ‘variables’ request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct VariablesResponse {
+    /**
+     * All (or a range) of variables for the given variable reference.
+     */
+    pub variables: Vec<Variable>,
 }
 
 // ----------------------------------------------------------------------------
@@ -723,6 +807,72 @@ pub struct Message {
     pub url_label: Option<String>,
 }
 
+/// A Scope is a named container for variables. Optionally a scope can map to a source or a range within a source.
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct Scope {
+    /**
+     * Name of the scope such as 'Arguments', 'Locals', or 'Registers'. This string is shown in the UI as is and can be translated.
+     */
+    pub name: String,
+
+    /**
+     * An optional hint for how to present this scope in the UI. If this attribute is missing, the scope is shown with a generic UI.
+     * Values:
+     * 'arguments': Scope contains method arguments.
+     * 'locals': Scope contains local variables.
+     * 'registers': Scope contains registers. Only a single 'registers' scope should be returned from a 'scopes' request.
+     * etc.
+     */
+    pub presentationHint: Option<String>,
+
+    /**
+     * The variables of this scope can be retrieved by passing the value of variablesReference to the VariablesRequest.
+     */
+    pub variablesReference: i64,
+
+    /**
+     * The number of named variables in this scope.
+     * The client can use this optional information to present the variables in a paged UI and fetch them in chunks.
+     */
+    pub namedVariables: Option<i64>,
+
+    /**
+     * The number of indexed variables in this scope.
+     * The client can use this optional information to present the variables in a paged UI and fetch them in chunks.
+     */
+    pub indexedVariables: Option<i64>,
+
+    /**
+     * If true, the number of variables in this scope is large or expensive to retrieve.
+     */
+    pub expensive: bool,
+
+    /**
+     * Optional source for this scope.
+     */
+    pub source: Option<Source>,
+
+    /**
+     * Optional start line of the range covered by this scope.
+     */
+    pub line: Option<i64>,
+
+    /**
+     * Optional start column of the range covered by this scope.
+     */
+    pub column: Option<i64>,
+
+    /**
+     * Optional end line of the range covered by this scope.
+     */
+    pub endLine: Option<i64>,
+
+    /**
+     * Optional end column of the range covered by this scope.
+     */
+    pub endColumn: Option<i64>,
+}
+
 /// A Source is a descriptor for source code.
 ///
 /// It is returned from the debug adapter as part of a StackFrame and it is used by clients when specifying breakpoints.
@@ -928,4 +1078,125 @@ pub struct Thread {
      * A name of the thread.
      */
     pub name: String,
+}
+
+/// Provides formatting information for a value.
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct ValueFormat {
+    /**
+     * Display the value in hex.
+     */
+    pub hex: Option<bool>,
+}
+
+/// A Variable is a name/value pair.
+///
+/// Optionally a variable can have a ‘type’ that is shown if space permits or
+/// when hovering over the variable’s name.
+///
+/// An optional ‘kind’ is used to render additional properties of the variable,
+/// e.g. different icons can be used to indicate that a variable is public or
+/// private.
+///
+/// If the value is structured (has children), a handle is provided to retrieve
+/// the children with the VariablesRequest.
+///
+/// If the number of named or indexed children is large, the numbers should be
+/// returned via the optional ‘namedVariables’ and ‘indexedVariables’
+/// attributes.
+///
+/// The client can use this optional information to present the children in a
+/// paged UI and fetch them in chunks.
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct Variable {
+    /**
+     * The variable's name.
+     */
+    pub name: String,
+
+    /**
+     * The variable's value. This can be a multi-line text, e.g. for a function the body of a function.
+     */
+    pub value: String,
+
+    /**
+     * The type of the variable's value. Typically shown in the UI when hovering over the value.
+     */
+    #[serde(rename="type")]
+    pub type_: Option<String>,
+
+    /**
+     * Properties of a variable that can be used to determine how to render the variable in the UI.
+     */
+    pub presentationHint: Option<VariablePresentationHint>,
+
+    /**
+     * Optional evaluatable name of this variable which can be passed to the 'EvaluateRequest' to fetch the variable's value.
+     */
+    pub evaluateName: Option<String>,
+
+    /**
+     * If variablesReference is > 0, the variable is structured and its children can be retrieved by passing variablesReference to the VariablesRequest.
+     */
+    pub variablesReference: i64,
+
+    /**
+     * The number of named child variables.
+     * The client can use this optional information to present the children in a paged UI and fetch them in chunks.
+     */
+    pub namedVariables: Option<i64>,
+
+    /**
+     * The number of indexed child variables.
+     * The client can use this optional information to present the children in a paged UI and fetch them in chunks.
+     */
+    pub indexedVariables: Option<i64>,
+
+    /**
+     * Optional memory reference for the variable if the variable represents executable code, such as a function pointer.
+     */
+    pub memoryReference: Option<String>,
+}
+
+/// Optional properties of a variable that can be used to determine how to
+/// render the variable in the UI.
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct VariablePresentationHint {
+    /**
+     * The kind of variable. Before introducing additional values, try to use the listed values.
+     * Values:
+     * 'property': Indicates that the object is a property.
+     * 'method': Indicates that the object is a method.
+     * 'class': Indicates that the object is a class.
+     * 'data': Indicates that the object is data.
+     * 'event': Indicates that the object is an event.
+     * 'baseClass': Indicates that the object is a base class.
+     * 'innerClass': Indicates that the object is an inner class.
+     * 'interface': Indicates that the object is an interface.
+     * 'mostDerivedClass': Indicates that the object is the most derived class.
+     * 'virtual': Indicates that the object is virtual, that means it is a synthetic object introduced by the adapter for rendering purposes, e.g. an index range for large arrays.
+     * 'dataBreakpoint': Indicates that a data breakpoint is registered for the object.
+     * etc.
+     */
+    pub kind: Option<String>,
+
+    /**
+     * Set of attributes represented as an array of strings. Before introducing additional values, try to use the listed values.
+     * Values:
+     * 'static': Indicates that the object is static.
+     * 'constant': Indicates that the object is a constant.
+     * 'readOnly': Indicates that the object is read only.
+     * 'rawString': Indicates that the object is a raw string.
+     * 'hasObjectId': Indicates that the object can have an Object ID created for it.
+     * 'canHaveObjectId': Indicates that the object has an Object ID associated with it.
+     * 'hasSideEffects': Indicates that the evaluation had side effects.
+     * etc.
+     */
+    pub attributes: Option<Vec<String>>,
+
+    /**
+     * Visibility of variable. Before introducing additional values, try to use the listed values.
+     * Values: 'public', 'private', 'protected', 'internal', 'final', etc.
+     */
+    pub visibility: Option<String>,
 }
