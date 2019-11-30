@@ -10,14 +10,16 @@ use super::SequenceNumber;
 use super::dap_types;
 use super::extools_types::*;
 
+#[derive(Clone, Default)]
+pub struct ThreadInfo {
+    pub call_stack: Vec<String>,
+    pub args: Vec<ValueText>,
+    pub locals: Vec<ValueText>,
+}
+
 pub struct Extools {
     seq: Arc<SequenceNumber>,
     threads: Arc<Mutex<HashMap<i64, ThreadInfo>>>,
-}
-
-#[derive(Clone)]
-pub struct ThreadInfo {
-    pub call_stack: Vec<String>,
 }
 
 impl Extools {
@@ -133,7 +135,18 @@ handle_extools! {
     }
 
     on CallStack(&mut self, stack) {
-        self.threads.lock().unwrap().insert(0, ThreadInfo { call_stack: stack.0 });
+        let mut map = self.threads.lock().unwrap();
+        map.entry(0).or_default().call_stack = stack.0;
+    }
+
+    on Locals(&mut self, Locals(values)) {
+        let mut map = self.threads.lock().unwrap();
+        map.entry(0).or_default().locals = values;
+    }
+
+    on Args(&mut self, Args(values)) {
+        let mut map = self.threads.lock().unwrap();
+        map.entry(0).or_default().args = values;
     }
 }
 

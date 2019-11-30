@@ -187,10 +187,10 @@ handle_request! {
                     }).collect(),
                 });
             } else {
-                return Err(GenericError("Bad thread ID passed"));
+                return Err(Box::new(GenericError("Bad thread ID passed")));
             }
         } else {
-            return Err(GenericError("No extools connection"));
+            return Err(Box::new(GenericError("No extools connection")));
         }
     }
 }
