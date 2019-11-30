@@ -976,6 +976,27 @@ pub fn default_defines_513(defines: &mut DefineMap) {
         MASK_INVERSE = Int(1);
         MASK_SWAP = Int(2);
 
+        // rgb filter
+        FILTER_COLOR_RGB = Int(1);
+        FILTER_COLOR_HSV = Int(2);
+        FILTER_COLOR_HSL = Int(4);
+        FILTER_COLOR_HCY = Int(8);
+
+        // layering
+        FILTER_OVERLAY = Int(1);
+        FILTER_UNDERLAY = Int(2);
+
+        // ray filter
+        FLAG_OVERLAY = Int(1);
+        FLAG_UNDERLAY = Int(2);
+
+        // ripple filter
+        WAVE_BOUND = Int(1);
+
+        // wave filter
+        WAVE_SIDEWAYS = Int(1);
+        WAVE_BOUND = Int(1);
+
         // vis_flags
         VIS_INHERIT_ICON = Int(1);
         VIS_INHERIT_ICON_STATE = Int(2);
