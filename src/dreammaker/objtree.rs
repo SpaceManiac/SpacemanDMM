@@ -625,6 +625,10 @@ impl ObjectTree {
         super::builtins::register_builtins(self).expect("register_builtins failed");
     }
 
+    pub fn register_builtins_513(&mut self) {
+        super::builtins::register_builtins_513(self).expect("register_builtins failed");
+    }
+
     // ------------------------------------------------------------------------
     // Access
 

@@ -907,3 +907,150 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
 
     Ok(())
 }
+
+/// Register BYOND builtin macros to the given define map.
+pub fn default_defines_513(defines: &mut DefineMap) {
+    use super::lexer::*;
+    use super::lexer::Token::*;
+    let location = Location::builtins();
+
+    // #define EXCEPTION(value) new /exception(value)
+    defines.insert("EXCEPTION".to_owned(), (location, Define::Function {
+        params: vec!["value".to_owned()],
+        variadic: false,
+        subst: vec![
+            Ident("new".to_owned(), true),
+            Punct(Punctuation::Slash),
+            Ident("exception".to_owned(), false),
+            Punct(Punctuation::LParen),
+            Ident("value".to_owned(), false),
+            Punct(Punctuation::RParen),
+        ],
+        docs: Default::default(),
+    }));
+
+    // #define ASSERT(expression) if (!(expression)) { CRASH("[__FILE__]:[__LINE__]:Assertion Failed: [#X]") }
+    defines.insert("ASSERT".to_owned(), (location, Define::Function {
+        params: vec!["expression".to_owned()],
+        variadic: false,
+        subst: vec![
+            Ident("if".to_owned(), true),
+            Punct(Punctuation::LParen),
+            Punct(Punctuation::Not),
+            Punct(Punctuation::LParen),
+            Ident("expression".to_owned(), false),
+            Punct(Punctuation::RParen),
+            Punct(Punctuation::RParen),
+            Punct(Punctuation::LBrace),
+            Ident("CRASH".to_owned(), false),
+            Punct(Punctuation::LParen),
+            InterpStringBegin("".to_owned()),
+            Ident("__FILE__".to_owned(), false),
+            InterpStringPart(":".to_owned()),
+            Ident("__LINE__".to_owned(), false),
+            InterpStringPart(":Assertion Failed: ".to_owned()),
+            Punct(Punctuation::Hash),
+            Ident("expression".to_owned(), false),
+            InterpStringEnd("".to_owned()),
+            Punct(Punctuation::RParen),
+            Punct(Punctuation::RBrace),
+        ],
+        docs: Default::default(),
+    }));
+
+    // constants
+    macro_rules! c {
+        ($($i:ident = $($x:expr),*;)*) => {
+            $(
+                assert!(defines.insert(
+                    stringify!($i).into(), (location, Define::Constant { subst: vec![$($x),*], docs: Default::default() })
+                ).is_none(), stringify!($i));
+            )*
+        }
+    }
+    c! {
+        // animation easing
+        JUMP_EASING = Int(256);
+
+        // alpha mask filter
+        MASK_INVERSE = Int(1);
+        MASK_SWAP = Int(2);
+
+        // vis_flags
+        VIS_INHERIT_ICON = Int(1);
+        VIS_INHERIT_ICON_STATE = Int(2);
+        VIS_INHERIT_DIR = Int(4);
+        VIS_INHERIT_LAYER = Int(8);
+        VIS_INHERIT_PLANE = Int(16);
+        VIS_INHERIT_ID = Int(32);
+        VIS_UNDERLAY = Int(64);
+        VIS_HIDE = Int(128);
+    }
+}
+
+
+/// Register BYOND builtins into the specified object tree.
+pub fn register_builtins_513(tree: &mut ObjectTree) -> Result<(), DMError> {
+    let location = Location {
+        file: FileId::builtins(),
+        line: 1,
+        column: 1,
+    };
+    let _context = ::Context::default();
+
+    macro_rules! entries {
+        ($($($elem:ident)/ * $(($($arg:ident $(= $ignored:expr)*),*))* $(= $val:expr)*;)*) => {
+            $(loop {
+                #![allow(unreachable_code)]
+                let elems = [$(stringify!($elem)),*];
+                $(
+                    tree.add_var(location, elems.iter().cloned(), elems.len() + 1, $val, Default::default(), Default::default())?;
+                    break;
+                )*
+                $(
+                    tree.add_proc(&_context, location, elems.iter().cloned(), elems.len() + 1, vec![$(
+                        Parameter { name: stringify!($arg).to_owned(), .. Default::default() }
+                    ),*], Code::Builtin)?;
+                    break;
+                )*
+                tree.add_entry(location, elems.iter().cloned(), elems.len() + 1, Default::default(), Default::default())?;
+                break;
+            })*
+        }
+    }
+
+    entries! {
+        proc/arctan(A,B);
+        proc/clamp(NumberOrList,Low,High);
+        proc/islist(List);
+        proc/ismovable(Loc1, Loc2/*,...*/);
+        proc/sha1(StringOrFile);
+        proc/tan(A);
+
+        // text procs
+        proc/length_char(E);
+        proc/text2ascii_char(T,pos=1);
+        proc/copytext_char(T,Start/*=1*/,End/*=0*/);
+        proc/findtext_char(Haystack,Needle,Start=1,End=0);
+        proc/findtextEx_char(Haystack,Needle,Start=1,End=0);
+        proc/findlasttext_char(Haystack,Needle,Start=0,End=1);
+        proc/findlasttextEx_char(Haystack,Needle,Start=0,End=1);
+        proc/replacetext_char(Haystack,Needle,Replacement,Start=1,End=0);
+        proc/replacetextEx_char(Haystack,Needle,Replacement,Start=1,End=0);
+        proc/spantext_char(Haystack,Needles,Start=1);
+        proc/nonspantext_char(Haystack,Needles,Start=1);
+        proc/splittext_char(Text,Delimiter,Start=1,End=0,include_delimiters=0);
+
+        atom/var/render_target;
+        atom/var/render_source;
+        atom/var/vis_flags;
+
+        client/proc/MeasureText(Text, Style, Width/*=0*/);
+        client/proc/SoundQuery();
+
+        regex/proc/Find_char(text, start, end);
+        regex/proc/Replace_char(text, rep, start, end);
+    };
+
+    Ok(())
+}
