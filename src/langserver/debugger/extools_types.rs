@@ -139,7 +139,7 @@ impl Response for CallStack {
     const TYPE: &'static str = "call stack";
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ValueText {
     #[serde(rename = "type")]
     pub type_: String,

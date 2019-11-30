@@ -10,12 +10,18 @@ use super::SequenceNumber;
 use super::dap_types;
 use super::extools_types::*;
 
-#[derive(Clone, Default)]
+// ----------------------------------------------------------------------------
+// Data structures
+
+#[derive(Clone, Default, Debug)]
 pub struct ThreadInfo {
     pub call_stack: Vec<String>,
     pub args: Vec<ValueText>,
     pub locals: Vec<ValueText>,
 }
+
+// ----------------------------------------------------------------------------
+// TCP connection management
 
 pub struct Extools {
     seq: Arc<SequenceNumber>,

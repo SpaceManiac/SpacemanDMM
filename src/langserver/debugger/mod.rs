@@ -193,6 +193,59 @@ handle_request! {
             return Err(Box::new(GenericError("No extools connection")));
         }
     }
+
+    on Scopes(&mut self, ScopesArguments { frameId }) {
+        if frameId == 0 {
+            ScopesResponse {
+                scopes: vec![
+                    Scope {
+                        name: "Arguments".to_owned(),
+                        presentationHint: Some("arguments".to_owned()),
+                        variablesReference: 1,
+                        .. Default::default()
+                    },
+                    Scope {
+                        name: "Locals".to_owned(),
+                        presentationHint: Some("locals".to_owned()),
+                        variablesReference: 2,
+                        .. Default::default()
+                    }
+                ]
+            }
+        } else {
+            ScopesResponse {
+                scopes: Vec::new(),
+            }
+        }
+    }
+
+    on Variables(&mut self, params) {
+        if let Some(extools) = self.extools.as_ref() {
+            if let Some(thread) = extools.get_thread(0) {
+                if params.variablesReference == 1 {
+                    let variables = thread.args.iter().enumerate().map(|(i, vt)| Variable {
+                        name: i.to_string(),
+                        value: format!("{}: {}", vt.type_, vt.value),
+                        .. Default::default()
+                    }).collect();
+                    VariablesResponse { variables }
+                } else if params.variablesReference == 2 {
+                    let variables = thread.locals.iter().enumerate().map(|(i, vt)| Variable {
+                        name: i.to_string(),
+                        value: format!("{}: {}", vt.type_, vt.value),
+                        .. Default::default()
+                    }).collect();
+                    VariablesResponse { variables }
+                } else {
+                    return Err(Box::new(GenericError("Bad variables reference")));
+                }
+            } else {
+                return Err(Box::new(GenericError("Bad thread ID")));
+            }
+        } else {
+            return Err(Box::new(GenericError("No extools connection")));
+        }
+    }
 }
 
 #[derive(Default, Debug)]
