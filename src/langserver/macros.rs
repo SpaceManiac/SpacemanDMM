@@ -115,7 +115,7 @@ macro_rules! handle_request {
                     let result: <$what as Request>::Result = self.$what(params)?;
                     Ok(serde_json::to_value(result).expect("encode problem"))
                 } else)* {
-                    debug_output!(in self.seq, "[main] NYI: {} -> {:?}", request.command, request.arguments);
+                    //debug_output!(in self.seq, "[main] NYI: {} -> {:?}", request.command, request.arguments);
                     Err(format!("Request NYI: {}", request.command).into())
                 }
             }

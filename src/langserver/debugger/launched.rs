@@ -59,7 +59,6 @@ impl Launched {
                 let code = match wait {
                     Ok(status) => {
                         let code = status.code();
-                        debug_output!(in seq2, "[launched] child exited in state {:?} with code {:?}", *state, code);
                         match code {
                             Some(code) => output!(in seq2, "[launched] Child exited with code {:#x}.", code),
                             None => output!(in seq2, "Child exited due to signal."),
@@ -67,8 +66,8 @@ impl Launched {
                         code.unwrap_or(-1)
                     }
                     Err(err) => {
-                        debug_output!(in seq2, "[launched] wait() errored in state {:?}: {:?}", *state, err);
                         output!(in seq2, "[launched] Lost track of child process, this may be a SpacemanDMM bug.\n - {}", err);
+                        debug_output!(in seq2, " - state was {:?}\n - more error details: {:?}", *state, err);
                         -1
                     }
                 };
@@ -100,6 +99,7 @@ impl Launched {
                     false => Err(std::io::Error::last_os_error()),
                 }
             }
+            State::Exited => Ok(()),
             _other => {
                 debug_output!(in self.seq, "[launched] kill no-op in state {:?}", _other);
                 Ok(())
