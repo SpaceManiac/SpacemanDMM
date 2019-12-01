@@ -5,8 +5,8 @@ use super::ast::*;
 use super::{Location, FileId, DMError};
 use super::preprocessor::{DefineMap, Define};
 
-const DM_VERSION: i32 = 512;
-const DM_BUILD: i32 = 1464;
+const DM_VERSION: i32 = 513;
+const DM_BUILD: i32 = 1501;
 
 /// Register BYOND builtin macros to the given define map.
 pub fn default_defines(defines: &mut DefineMap) {
@@ -133,6 +133,7 @@ pub fn default_defines(defines: &mut DefineMap) {
         QUAD_EASING = Int(7);
         EASE_IN = Int(64);
         EASE_OUT = Int(128);
+        JUMP_EASING = Int(256); // 513
 
         // animation flags
         ANIMATION_END_NOW = Int(1);
@@ -155,6 +156,42 @@ pub fn default_defines(defines: &mut DefineMap) {
         DATABASE_ROW_COLUMN_NAMES = Int(16);
         DATABASE_ROW_COLUMN_VALUE = Int(17);
         DATABASE_ROW_LIST = Int(18);
+
+        // 513 stuff
+        // alpha mask filter
+        MASK_INVERSE = Int(1);
+        MASK_SWAP = Int(2);
+
+        // rgb filter
+        FILTER_COLOR_RGB = Int(1);
+        FILTER_COLOR_HSV = Int(2);
+        FILTER_COLOR_HSL = Int(4);
+        FILTER_COLOR_HCY = Int(8);
+
+        // layering
+        FILTER_OVERLAY = Int(1);
+        FILTER_UNDERLAY = Int(2);
+
+        // ray filter
+        FLAG_OVERLAY = Int(1);
+        FLAG_UNDERLAY = Int(2);
+
+        // ripple filter
+        //WAVE_BOUND = Int(2);
+
+        // wave filter
+        WAVE_SIDEWAYS = Int(1);
+        WAVE_BOUND = Int(2);
+
+        // vis_flags
+        VIS_INHERIT_ICON = Int(1);
+        VIS_INHERIT_ICON_STATE = Int(2);
+        VIS_INHERIT_DIR = Int(4);
+        VIS_INHERIT_LAYER = Int(8);
+        VIS_INHERIT_PLANE = Int(16);
+        VIS_INHERIT_ID = Int(32);
+        VIS_UNDERLAY = Int(64);
+        VIS_HIDE = Int(128);
     }
 }
 
@@ -903,6 +940,38 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         savefile/proc/ImportText(/* path=cd, file */);
         savefile/proc/Lock(timeout);
         savefile/proc/Unlock();
+
+        // 513 stuff
+        proc/arctan(A,B);
+        proc/clamp(NumberOrList,Low,High);
+        proc/islist(List);
+        proc/ismovable(Loc1, Loc2/*,...*/);
+        proc/sha1(StringOrFile);
+        proc/tan(A);
+
+        // text procs
+        proc/length_char(E);
+        proc/text2ascii_char(T,pos=1);
+        proc/copytext_char(T,Start/*=1*/,End/*=0*/);
+        proc/findtext_char(Haystack,Needle,Start=1,End=0);
+        proc/findtextEx_char(Haystack,Needle,Start=1,End=0);
+        proc/findlasttext_char(Haystack,Needle,Start=0,End=1);
+        proc/findlasttextEx_char(Haystack,Needle,Start=0,End=1);
+        proc/replacetext_char(Haystack,Needle,Replacement,Start=1,End=0);
+        proc/replacetextEx_char(Haystack,Needle,Replacement,Start=1,End=0);
+        proc/spantext_char(Haystack,Needles,Start=1);
+        proc/nonspantext_char(Haystack,Needles,Start=1);
+        proc/splittext_char(Text,Delimiter,Start=1,End=0,include_delimiters=0);
+
+        atom/var/render_target;
+        atom/var/render_source;
+        atom/var/vis_flags;
+
+        client/proc/MeasureText(Text, Style, Width/*=0*/);
+        client/proc/SoundQuery();
+
+        regex/proc/Find_char(text, start, end);
+        regex/proc/Replace_char(text, rep, start, end);
     };
 
     Ok(())
