@@ -29,6 +29,7 @@ mod extools;
 
 use std::error::Error;
 use std::sync::{atomic, Arc, Mutex};
+use std::collections::HashMap;
 
 use dm::objtree::ObjectTree;
 
@@ -102,10 +103,32 @@ pub struct DebugDatabaseBuilder {
 impl DebugDatabaseBuilder {
     fn build(self) -> DebugDatabase {
         let DebugDatabaseBuilder { root_dir, files, objtree } = self;
+        let mut line_numbers: HashMap<dm::FileId, Vec<(i64, String, String, i64)>> = HashMap::new();
+
+        objtree.root().recurse(&mut |ty| {
+            for (name, proc) in ty.procs.iter() {
+                if let Some(pv) = proc.value.last() {
+                    line_numbers.entry(pv.location.file)
+                        .or_default()
+                        .push((
+                            pv.location.line.into(),
+                            ty.path.to_owned(),
+                            name.to_owned(),
+                            proc.value.len() as i64 - 1,
+                        ));
+                }
+            }
+        });
+
+        for vec in line_numbers.values_mut() {
+            vec.sort();
+        }
+
         DebugDatabase {
             root_dir,
             files,
             objtree,
+            line_numbers,
         }
     }
 }
@@ -114,6 +137,7 @@ pub struct DebugDatabase {
     root_dir: std::path::PathBuf,
     files: dm::Context,
     objtree: Arc<ObjectTree>,
+    line_numbers: HashMap<dm::FileId, Vec<(i64, String, String, i64)>>,
 }
 
 impl DebugDatabase {
@@ -129,6 +153,21 @@ impl DebugDatabase {
         if let Some(ty) = self.objtree.find(&typename) {
             if let Some(ty_proc) = ty.get().procs.get(procname) {
                 return ty_proc.value.last();
+            }
+        }
+        None
+    }
+
+    fn location_to_proc_ref(&self, file_path: &str, line: i64) -> Option<(&str, &str, i64)> {
+        let path = std::path::Path::new(file_path);
+        let path = path.strip_prefix(&self.root_dir).ok().unwrap_or(path);
+        if let Some(file_id) = self.files.get_file(path) {
+            if let Some(list) = self.line_numbers.get(&file_id) {
+                for (proc_line, type_path, proc_name, index) in list.iter().rev() {
+                    if *proc_line <= line {
+                        return Some((type_path, proc_name, *index));
+                    }
+                }
             }
         }
         None
@@ -232,7 +271,6 @@ handle_request! {
 
         if !params.base.noDebug.unwrap_or(false) {
             self.extools = Extools::connect(self.seq.clone())?;
-            self.seq.issue_event(InitializedEvent);
         }
     }
 
@@ -253,6 +291,60 @@ handle_request! {
     on Threads(&mut self, ()) {
         ThreadsResponse {
             threads: vec![Thread { id: 0, name: "Main".to_owned() }]
+        }
+    }
+
+    on SetBreakpoints(&mut self, params) {
+        let file_path = match params.source.path {
+            Some(s) => s,
+            None => return Err(Box::new(GenericError("missing .source.path"))),
+        };
+
+        let mut result = Vec::new();
+
+        if let Some(breakpoints) = params.breakpoints {
+            if let Some(extools) = self.extools.as_ref() {
+                for sbp in breakpoints {
+                    if let Some(proc_ref) = self.db.location_to_proc_ref(&file_path, sbp.line) {
+                        let proc_ref = extools.resolve_proc(proc_ref);
+                        if let Some(offset) = extools.line_to_offset(&proc_ref, sbp.line) {
+                            extools.set_breakpoint(proc_ref, offset);
+                            result.push(Breakpoint {
+                                line: Some(sbp.line),
+                                verified: true,
+                                .. Default::default()
+                            });
+                        } else {
+                            result.push(Breakpoint {
+                                message: Some("Unable to determine offset in proc".to_owned()),
+                                line: Some(sbp.line),
+                                verified: false,
+                                .. Default::default()
+                            });
+                        }
+                    } else {
+                        result.push(Breakpoint {
+                            message: Some("Unable to determine proc ref".to_owned()),
+                            line: Some(sbp.line),
+                            verified: false,
+                            .. Default::default()
+                        });
+                    }
+                }
+            } else {
+                for sbp in breakpoints {
+                    result.push(Breakpoint {
+                        message: Some("Debugging hooks not available".to_owned()),
+                        line: Some(sbp.line),
+                        verified: false,
+                        .. Default::default()
+                    });
+                }
+            }
+        }
+
+        SetBreakpointsResponse {
+            breakpoints: result,
         }
     }
 

@@ -81,6 +81,7 @@ impl Extools {
                     sender,
                     threads,
                     bytecode,
+                    expecting_bytecode_len: 0,
                 }.read_loop();
             })?;
 
@@ -123,6 +124,20 @@ impl Extools {
         None
     }
 
+    pub fn set_breakpoint(&self, proc: String, offset: i64) {
+        self.sender.send(BreakpointSet { proc, offset });
+    }
+
+    pub fn resolve_proc(&self, (type_path, proc_name, _index): (&str, &str, i64)) -> String {
+        let bytecode = self.bytecode.lock().unwrap();
+        let candidate = format!("{}/{}", type_path, proc_name);
+        if bytecode.contains_key(&candidate) {
+            candidate
+        } else {
+            format!("{}/proc/{}", type_path, proc_name)
+        }
+    }
+
     pub fn continue_execution(&self) {
         self.sender.send(BreakpointResume);
     }
@@ -142,6 +157,7 @@ struct ExtoolsThread {
     sender: ExtoolsSender,
     threads: Arc<Mutex<HashMap<i64, ThreadInfo>>>,
     bytecode: Arc<Mutex<HashMap<String, Vec<DisassembledInstruction>>>>,
+    expecting_bytecode_len: usize,
 }
 
 impl ExtoolsThread {
@@ -212,13 +228,22 @@ handle_extools! {
     }
 
     on ProcListResponse(&mut self, ProcListResponse(proc_refs)) {
+        self.expecting_bytecode_len = proc_refs.len();
         for proc_ref in proc_refs {
             self.sender.send(ProcDisassemblyRequest(proc_ref));
         }
     }
 
     on DisassembledProc(&mut self, disasm) {
-        self.bytecode.lock().unwrap().insert(disasm.name, disasm.instructions);
+        let mut bytecode = self.bytecode.lock().unwrap();
+        bytecode.insert(disasm.name, disasm.instructions);
+
+        if self.expecting_bytecode_len > 0 {
+            self.expecting_bytecode_len -= 1;
+            if self.expecting_bytecode_len == 0 {
+                self.seq.issue_event(dap_types::InitializedEvent);
+            }
+        }
     }
 }
 
