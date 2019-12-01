@@ -1,5 +1,10 @@
 //! Utility macros.
 
+pub mod all_methods {
+    pub use langserver::request::*;
+    pub use extras::*;
+}
+
 pub mod all_notifications {
     pub use langserver::notification::*;
     pub use extras::*;
@@ -9,7 +14,7 @@ macro_rules! handle_method_call {
     ($(on $what:ident(&mut $self:ident, $p:pat) $b:block)*) => {
         impl<'a> Engine<'a> {
             fn handle_method_call(&mut self, call: jsonrpc::MethodCall) -> Result<serde_json::Value, jsonrpc::Error> {
-                use langserver::request::*;
+                use macros::all_methods::*;
 
                 // "If the server receives a request... before the initialize request...
                 // the response should be an error with code: -32002"
@@ -40,8 +45,8 @@ macro_rules! handle_method_call {
 
             $(
                 #[allow(non_snake_case)]
-                fn $what(&mut $self, $p: <langserver::request::$what as langserver::request::Request>::Params)
-                -> Result<<langserver::request::$what as langserver::request::Request>::Result, jsonrpc::Error>
+                fn $what(&mut $self, $p: <macros::all_methods::$what as langserver::request::Request>::Params)
+                -> Result<<macros::all_methods::$what as langserver::request::Request>::Result, jsonrpc::Error>
                 {
                     #[allow(unused_imports)]
                     use langserver::*;

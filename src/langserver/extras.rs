@@ -2,6 +2,7 @@
 
 use langserver::SymbolKind;
 use langserver::notification::*;
+use langserver::request::*;
 
 pub enum WindowStatus {}
 impl Notification for WindowStatus {
@@ -51,4 +52,19 @@ pub enum Reparse {}
 impl Notification for Reparse {
     const METHOD: &'static str = "experimental/dreammaker/reparse";
     type Params = ::langserver::InitializedParams;
+}
+
+pub enum StartDebugger {}
+impl Request for StartDebugger {
+    const METHOD: &'static str = "experimental/dreammaker/startDebugger";
+    type Params = StartDebuggerParams;
+    type Result = StartDebuggerResult;
+}
+#[derive(Debug, Deserialize)]
+pub struct StartDebuggerParams {
+    pub dreamseeker_exe: String,
+}
+#[derive(Debug, Serialize)]
+pub struct StartDebuggerResult {
+    pub port: u16,
 }
