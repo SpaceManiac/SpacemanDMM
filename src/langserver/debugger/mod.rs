@@ -30,7 +30,7 @@ mod extools;
 use std::error::Error;
 use std::sync::{atomic, Arc};
 
-use io;
+use jrpc_io;
 use self::dap_types::*;
 use self::launched::Launched;
 use self::extools::Extools;
@@ -50,7 +50,7 @@ pub fn start_server(dreamseeker_exe: String) -> std::io::Result<u16> {
 
             let mut input = std::io::BufReader::new(stream.try_clone().unwrap());
             let mut debugger = Debugger::new(dreamseeker_exe);
-            io::run_with_read(&mut input, |message| debugger.handle_input(message));
+            jrpc_io::run_with_read(&mut input, |message| debugger.handle_input(message));
         })?;
 
     Ok(port)
@@ -72,7 +72,7 @@ pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
     eprintln!("dreamseeker: {}", dreamseeker_exe);
 
     let mut debugger = Debugger::new(dreamseeker_exe);
-    io::run_forever(|message| debugger.handle_input(message));
+    jrpc_io::run_forever(|message| debugger.handle_input(message));
 }
 
 struct Debugger {
@@ -129,7 +129,7 @@ impl Debugger {
                     },
                     command,
                 };
-                io::write(serde_json::to_string(&response).expect("response encode error"))
+                jrpc_io::write(serde_json::to_string(&response).expect("response encode error"))
             }
             other => return Err(format!("unknown `type` field {:?}", other).into())
         }
@@ -322,7 +322,7 @@ impl SequenceNumber {
             event: E::EVENT.to_owned(),
             body: Some(body),
         };
-        io::write(serde_json::to_string(&message).expect("event encode error"))
+        jrpc_io::write(serde_json::to_string(&message).expect("event encode error"))
     }
 
     fn println<S: Into<String>>(&self, output: S) {

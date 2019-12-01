@@ -20,7 +20,7 @@ extern crate dreamchecker;
 extern crate libc;
 
 #[macro_use] mod macros;
-mod io;
+mod jrpc_io;
 mod document;
 mod symbol_search;
 mod find_references;
@@ -78,7 +78,7 @@ fn main() {
 
     let context = dm::Context::default();
     let mut engine = Engine::new(&context);
-    io::run_forever(|message| engine.handle_input(message));
+    jrpc_io::run_forever(|message| engine.handle_input(message));
 }
 
 const VERSION: Option<jsonrpc::Version> = Some(jsonrpc::Version::V2);
@@ -689,7 +689,7 @@ impl<'a> Engine<'a> {
             _ => Response::Batch(outputs),
         };
 
-        io::write(serde_json::to_string(&response).expect("response bad to_string"));
+        jrpc_io::write(serde_json::to_string(&response).expect("response bad to_string"));
     }
 
     fn handle_call(&mut self, call: Call) -> Option<Output> {
@@ -1738,7 +1738,7 @@ where
         method: T::METHOD.to_owned(),
         params: value_to_params(params),
     }));
-    io::write(serde_json::to_string(&request).expect("notification bad to_string"))
+    jrpc_io::write(serde_json::to_string(&request).expect("notification bad to_string"))
 }
 
 fn component_to_source(component: dm::Component) -> Option<String> {
