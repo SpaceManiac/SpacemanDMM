@@ -2,53 +2,51 @@
 //!
 //! JSON-RPC over stdin/stdout with Content-Length headers.
 
-use std::io::{self, Read, Write};
+use std::io::{self, BufRead, Write};
 
 pub fn run_forever<F: FnMut(&str)>(mut f: F) -> ! {
-    while let Some(message) = read() {
+    let stdin = io::stdin();
+    let mut stdin = stdin.lock();
+    while let Some(message) = read(&mut stdin).expect("JSON-RPC read error") {
         f(&message);
     }
     std::process::exit(0);
 }
 
-fn read() -> Option<String> {
-    macro_rules! check {
-        ($exp:expr) => {
-            match $exp {
-                Ok(x) => x,
-                Err(e) => {
-                    eprintln!("{:?}", e);
-                    return None;
-                }
-            }
-        };
+pub fn run_with_read<R: BufRead, F: FnMut(&str)>(input: &mut R, mut f: F) {
+    while let Some(message) = read(input).expect("JSON-RPC read error") {
+        f(&message);
     }
+}
 
+fn read<R: BufRead>(input: &mut R) -> Result<Option<String>, Box<dyn std::error::Error>> {
     // read the content-length
     let mut buffer = String::new();
-    check!(io::stdin().read_line(&mut buffer));
+    input.read_line(&mut buffer)?;
     if buffer.is_empty() {
-        return None;
+        return Ok(None);
     }
     let size = {
         let parts: Vec<&str> = buffer.split(' ').collect();
         if parts.len() != 2 {
-            return None;
+            eprintln!("JSON-RPC read error: parts.len() != 2\n{:?}", parts);
+            return Ok(None);
         }
         if !parts[0].eq_ignore_ascii_case("content-length:") {
-            return None;
+            eprintln!("JSON-RPC read error: !parts[0].eq_ignore_ascii_case(\"content-length:\")\n{:?}", parts);
+            return Ok(None);
         }
-        check!(usize::from_str_radix(parts[1].trim(), 10))
+        usize::from_str_radix(parts[1].trim(), 10)?
     };
 
     // skip blank line
     buffer.clear();
-    check!(io::stdin().read_line(&mut buffer));
+    input.read_line(&mut buffer)?;
 
     // read content
     let mut content = vec![0; size];
-    check!(io::stdin().read_exact(&mut content));
-    Some(check!(String::from_utf8(content)))
+    input.read_exact(&mut content)?;
+    Ok(Some(String::from_utf8(content)?))
 }
 
 pub fn write(output: String) {

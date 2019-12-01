@@ -45,10 +45,12 @@ pub fn start_server(dreamseeker_exe: String) -> std::io::Result<u16> {
     std::thread::Builder::new()
         .name(format!("DAP listener on port {}", port))
         .spawn(|| {
-            let mut debugger = Debugger::new(dreamseeker_exe);
-            let (stream, addr) = listener.accept().unwrap();
+            let (stream, _) = listener.accept().unwrap();
             drop(listener);
-            // TODO
+
+            let mut input = std::io::BufReader::new(stream.try_clone().unwrap());
+            let mut debugger = Debugger::new(dreamseeker_exe);
+            io::run_with_read(&mut input, |message| debugger.handle_input(message));
         })?;
 
     Ok(port)
