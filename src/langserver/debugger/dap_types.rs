@@ -903,7 +903,7 @@ pub struct Scope {
 /// A Source is a descriptor for source code.
 ///
 /// It is returned from the debug adapter as part of a StackFrame and it is used by clients when specifying breakpoints.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Source {
     /**
      * The short name of the source. Every source returned from the debug adapter has a name. When sending a source to the debug adapter this name is optional.

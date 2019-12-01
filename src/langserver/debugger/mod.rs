@@ -223,14 +223,45 @@ handle_request! {
     on StackTrace(&mut self, params) {
         if let Some(extools) = self.extools.as_ref() {
             if let Some(thread) = extools.get_thread(params.threadId) {
-                return Ok(StackTraceResponse {
-                    totalFrames: Some(thread.call_stack.len() as i64),
-                    stackFrames: thread.call_stack.into_iter().enumerate().map(|(i, name)| StackFrame {
-                        name,
+                let len = thread.call_stack.len();
+                let mut frames = Vec::with_capacity(len);
+                for (i, name) in thread.call_stack.into_iter().enumerate() {
+                    let mut frame = StackFrame {
+                        name: name.clone(),
                         id: i as i64,
-                        // TODO: source, line
                         .. Default::default()
-                    }).collect(),
+                    };
+
+                    let mut bits: Vec<&str> = name.split('/').collect();
+                    let procname = bits.pop().unwrap();
+                    match bits.last() {
+                        Some(&"proc") | Some(&"verb") => { bits.pop(); }
+                        _ => {}
+                    }
+                    let typename = bits.join("/");
+
+                    if let Some(ty) = self.db.objtree.find(&typename) {
+                        if let Some(proc) = ty.get_proc(procname) {
+                            let path = self.db.files.file_path(proc.location.file);
+
+                            frame.source = Some(Source {
+                                name: Some(path.file_name()
+                                    .unwrap_or_default()
+                                    .to_string_lossy()
+                                    .into_owned()),
+                                path: Some(self.db.root_dir.join(path).to_string_lossy().into_owned()),
+                                .. Default::default()
+                            });
+                            frame.line = i64::from(proc.location.line);
+                        }
+                    }
+
+                    frames.push(frame);
+                }
+
+                return Ok(StackTraceResponse {
+                    totalFrames: Some(len as i64),
+                    stackFrames: frames,
                 });
             } else {
                 return Err(Box::new(GenericError("Bad thread ID passed")));
