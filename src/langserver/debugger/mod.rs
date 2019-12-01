@@ -99,6 +99,25 @@ pub struct DebugDatabase {
     pub objtree: Arc<ObjectTree>,
 }
 
+impl DebugDatabase {
+    fn get_proc(&self, proc_ref: &str) -> Option<&dm::objtree::ProcValue> {
+        let mut bits: Vec<&str> = proc_ref.split('/').collect();
+        let procname = bits.pop().unwrap();
+        match bits.last() {
+            Some(&"proc") | Some(&"verb") => { bits.pop(); }
+            _ => {}
+        }
+        let typename = bits.join("/");
+
+        if let Some(ty) = self.objtree.find(&typename) {
+            if let Some(ty_proc) = ty.get().procs.get(procname) {
+                return ty_proc.value.last();
+            }
+        }
+        None
+    }
+}
+
 struct Debugger {
     dreamseeker_exe: String,
     db: DebugDatabase,
@@ -232,28 +251,18 @@ handle_request! {
                         .. Default::default()
                     };
 
-                    let mut bits: Vec<&str> = name.split('/').collect();
-                    let procname = bits.pop().unwrap();
-                    match bits.last() {
-                        Some(&"proc") | Some(&"verb") => { bits.pop(); }
-                        _ => {}
-                    }
-                    let typename = bits.join("/");
+                    if let Some(proc) = self.db.get_proc(&name) {
+                        let path = self.db.files.file_path(proc.location.file);
 
-                    if let Some(ty) = self.db.objtree.find(&typename) {
-                        if let Some(proc) = ty.get_proc(procname) {
-                            let path = self.db.files.file_path(proc.location.file);
-
-                            frame.source = Some(Source {
-                                name: Some(path.file_name()
-                                    .unwrap_or_default()
-                                    .to_string_lossy()
-                                    .into_owned()),
-                                path: Some(self.db.root_dir.join(path).to_string_lossy().into_owned()),
-                                .. Default::default()
-                            });
-                            frame.line = i64::from(proc.location.line);
-                        }
+                        frame.source = Some(Source {
+                            name: Some(path.file_name()
+                                .unwrap_or_default()
+                                .to_string_lossy()
+                                .into_owned()),
+                            path: Some(self.db.root_dir.join(path).to_string_lossy().into_owned()),
+                            .. Default::default()
+                        });
+                        frame.line = i64::from(proc.location.line);
                     }
 
                     frames.push(frame);
