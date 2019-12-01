@@ -633,6 +633,9 @@ impl ObjectTree {
     }
 
     pub fn find(&self, path: &str) -> Option<TypeRef> {
+        if path.is_empty() {
+            return Some(self.root());
+        }
         self.types.get(path).map(|&ix| TypeRef::new(self, ix))
     }
 
