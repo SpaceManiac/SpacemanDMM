@@ -1581,7 +1581,7 @@ handle_method_call! {
             Some(url) => url_to_path(url)?,
             None => Default::default(),
         };
-        let db = debugger::DebugDatabase {
+        let db = debugger::DebugDatabaseBuilder {
             root_dir,
             files: self.context.clone_file_list(),
             objtree: self.objtree.clone(),

@@ -37,7 +37,7 @@ use self::dap_types::*;
 use self::launched::Launched;
 use self::extools::Extools;
 
-pub fn start_server(dreamseeker_exe: String, db: DebugDatabase) -> std::io::Result<u16> {
+pub fn start_server(dreamseeker_exe: String, db: DebugDatabaseBuilder) -> std::io::Result<u16> {
     use std::net::*;
 
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
@@ -84,7 +84,7 @@ pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
         Arc::new(parser.parse_object_tree())
     };
 
-    let db = DebugDatabase {
+    let db = DebugDatabaseBuilder {
         root_dir: Default::default(),
         files: ctx,
         objtree,
@@ -93,10 +93,27 @@ pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
     jrpc_io::run_forever(|message| debugger.handle_input(message));
 }
 
-pub struct DebugDatabase {
+pub struct DebugDatabaseBuilder {
     pub root_dir: std::path::PathBuf,
     pub files: dm::Context,
     pub objtree: Arc<ObjectTree>,
+}
+
+impl DebugDatabaseBuilder {
+    fn build(self) -> DebugDatabase {
+        let DebugDatabaseBuilder { root_dir, files, objtree } = self;
+        DebugDatabase {
+            root_dir,
+            files,
+            objtree,
+        }
+    }
+}
+
+pub struct DebugDatabase {
+    root_dir: std::path::PathBuf,
+    files: dm::Context,
+    objtree: Arc<ObjectTree>,
 }
 
 impl DebugDatabase {
@@ -129,10 +146,10 @@ struct Debugger {
 }
 
 impl Debugger {
-    fn new(dreamseeker_exe: String, db: DebugDatabase, stream: OutStream) -> Self {
+    fn new(dreamseeker_exe: String, db: DebugDatabaseBuilder, stream: OutStream) -> Self {
         Debugger {
             dreamseeker_exe,
-            db,
+            db: db.build(),
             launched: None,
             extools: None,
 
