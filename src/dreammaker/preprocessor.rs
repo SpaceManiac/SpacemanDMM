@@ -74,10 +74,6 @@ impl DefineMap {
     pub fn with_builtins() -> DefineMap {
         let mut this = Default::default();
         super::builtins::default_defines(&mut this);
-        #[cfg(feature = "513")]
-        {
-            super::builtins::default_defines_513(&mut this);
-        }
         this
     }
 
