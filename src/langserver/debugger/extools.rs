@@ -243,7 +243,6 @@ impl ExtoolsSender {
             type_: M::TYPE.to_owned(),
             content: Some(content),
         }).expect("extools encode error");
-        debug_output!(in self.seq, "[extools] >> {}", String::from_utf8_lossy(&buffer[..]));
         buffer.push(0);
         // TODO: needs more synchronization
         (&self.stream).write_all(&buffer[..]).expect("extools write error");
