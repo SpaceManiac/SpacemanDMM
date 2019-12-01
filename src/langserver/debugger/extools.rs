@@ -18,6 +18,7 @@ pub struct ThreadInfo {
     pub call_stack: Vec<String>,
     pub args: Vec<ValueText>,
     pub locals: Vec<ValueText>,
+    pub offset: i64,
 }
 
 // ----------------------------------------------------------------------------
@@ -144,7 +145,8 @@ handle_extools! {
             threadId: Some(0),
             .. Default::default()
         });
-        //self.sender.send(BreakpointResume);
+        let mut map = self.threads.lock().unwrap();
+        map.entry(0).or_default().offset = hit.offset;
     }
 
     on CallStack(&mut self, stack) {
