@@ -104,7 +104,7 @@ impl ExtoolsThread {
             // read into the buffer
             let mut terminator = None;
             match self.sender.stream.read(&mut read_buf[..]) {
-                Ok(0) => panic!("extools eof"),
+                Ok(0) => return,
                 Ok(n) => {
                     let slice = &read_buf[..n];
                     if let Some(pos) = slice.iter().position(|&x| x == 0) {
