@@ -411,9 +411,6 @@ where
 
     pub fn run(&mut self) {
         self.tree.register_builtins();
-        //if cfg!(feature = "513") {
-        self.tree.register_builtins_513();
-        //}
         let root = self.root();
         if let Err(mut e) = self.require(root) {
             let loc = e.location();
