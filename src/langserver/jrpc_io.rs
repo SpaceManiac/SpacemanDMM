@@ -52,6 +52,10 @@ fn read<R: BufRead>(input: &mut R) -> Result<Option<String>, Box<dyn std::error:
 pub fn write(output: String) {
     let stdout = io::stdout();
     let mut stdout_lock = stdout.lock();
-    write!(stdout_lock, "Content-Length: {}\r\n\r\n{}", output.len(), output).unwrap();
-    stdout_lock.flush().unwrap();
+    write_to(&mut stdout_lock, &output);
+}
+
+pub fn write_to<W: Write>(output: &mut W, json: &str) {
+    write!(output, "Content-Length: {}\r\n\r\n{}", json.len(), json).expect("JSON-RPC write error");
+    output.flush().expect("JSON-RPC write flush error");
 }

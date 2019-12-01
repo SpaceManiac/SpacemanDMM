@@ -28,7 +28,7 @@ mod extools_types;
 mod extools;
 
 use std::error::Error;
-use std::sync::{atomic, Arc};
+use std::sync::{atomic, Arc, Mutex};
 
 use jrpc_io;
 use self::dap_types::*;
@@ -49,7 +49,7 @@ pub fn start_server(dreamseeker_exe: String) -> std::io::Result<u16> {
             drop(listener);
 
             let mut input = std::io::BufReader::new(stream.try_clone().unwrap());
-            let mut debugger = Debugger::new(dreamseeker_exe);
+            let mut debugger = Debugger::new(dreamseeker_exe, Box::new(stream));
             jrpc_io::run_with_read(&mut input, |message| debugger.handle_input(message));
         })?;
 
@@ -71,7 +71,7 @@ pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
     let dreamseeker_exe = dreamseeker_exe.expect("must provide argument `--dreamseeker-exe path/to/dreamseeker.exe`");
     eprintln!("dreamseeker: {}", dreamseeker_exe);
 
-    let mut debugger = Debugger::new(dreamseeker_exe);
+    let mut debugger = Debugger::new(dreamseeker_exe, Box::new(std::io::stdout()));
     jrpc_io::run_forever(|message| debugger.handle_input(message));
 }
 
@@ -86,13 +86,13 @@ struct Debugger {
 }
 
 impl Debugger {
-    fn new(dreamseeker_exe: String) -> Self {
+    fn new(dreamseeker_exe: String, stream: OutStream) -> Self {
         Debugger {
             dreamseeker_exe,
             launched: None,
             extools: None,
 
-            seq: Default::default(),
+            seq: Arc::new(SequenceNumber::new(stream)),
             client_caps: Default::default(),
         }
     }
@@ -129,7 +129,7 @@ impl Debugger {
                     },
                     command,
                 };
-                jrpc_io::write(serde_json::to_string(&response).expect("response encode error"))
+                self.seq.send_raw(&serde_json::to_string(&response).expect("response encode error"))
             }
             other => return Err(format!("unknown `type` field {:?}", other).into())
         }
@@ -304,12 +304,23 @@ impl ClientCaps {
     }
 }
 
-#[derive(Default)]
-pub struct SequenceNumber(atomic::AtomicI64);
+type OutStream = Box<dyn std::io::Write + Send>;
+
+pub struct SequenceNumber {
+    seq: atomic::AtomicI64,
+    stream: Mutex<OutStream>,
+}
 
 impl SequenceNumber {
+    fn new(stream: OutStream) -> SequenceNumber {
+        SequenceNumber {
+            seq: Default::default(),
+            stream: Mutex::new(stream),
+        }
+    }
+
     fn next(&self) -> i64 {
-        self.0.fetch_add(1, atomic::Ordering::Relaxed)
+        self.seq.fetch_add(1, atomic::Ordering::Relaxed)
     }
 
     fn issue_event<E: Event>(&self, event: E) {
@@ -322,7 +333,7 @@ impl SequenceNumber {
             event: E::EVENT.to_owned(),
             body: Some(body),
         };
-        jrpc_io::write(serde_json::to_string(&message).expect("event encode error"))
+        self.send_raw(&serde_json::to_string(&message).expect("event encode error"))
     }
 
     fn println<S: Into<String>>(&self, output: S) {
@@ -332,6 +343,11 @@ impl SequenceNumber {
             output,
             .. Default::default()
         })
+    }
+
+    fn send_raw(&self, json: &str) {
+        let mut stream = self.stream.lock().expect("DAP output stream poisoned");
+        jrpc_io::write_to(&mut *stream, json);
     }
 }
 
