@@ -5,8 +5,8 @@ use super::ast::*;
 use super::{Location, FileId, DMError};
 use super::preprocessor::{DefineMap, Define};
 
-const DM_VERSION: i32 = 512;
-const DM_BUILD: i32 = 1464;
+const DM_VERSION: i32 = 513;
+const DM_BUILD: i32 = 1501;
 
 /// Register BYOND builtin macros to the given define map.
 pub fn default_defines(defines: &mut DefineMap) {
