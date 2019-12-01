@@ -32,6 +32,7 @@ mod debugger;
 use std::path::PathBuf;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::collections::hash_map::Entry;
+use std::sync::Arc;
 use std::rc::Rc;
 
 use url::Url;
@@ -141,7 +142,7 @@ struct Engine<'a> {
 
     context: &'a dm::Context,
     preprocessor: Option<dm::preprocessor::Preprocessor<'a>>,
-    objtree: dm::objtree::ObjectTree,
+    objtree: Arc<dm::objtree::ObjectTree>,
     references_table: Option<find_references::ReferencesTable>,
 
     annotations: HashMap<Url, (FileId, FileId, Rc<AnnotationTree>)>,
@@ -328,7 +329,7 @@ impl<'a> Engine<'a> {
         {
             let mut parser = dm::parser::Parser::new(ctx, dm::indents::IndentProcessor::new(ctx, &mut pp));
             parser.enable_procs();
-            self.objtree = parser.parse_object_tree();
+            self.objtree = Arc::new(parser.parse_object_tree());
         }
         self.update_objtree();
         self.references_table = Some(find_references::ReferencesTable::new(&self.objtree));
@@ -413,7 +414,9 @@ impl<'a> Engine<'a> {
             );
         }
 
-        self.objtree.drop_code();
+        if let Some(objtree) = Arc::get_mut(&mut self.objtree) {
+            objtree.drop_code();
+        }
 
         Ok(())
     }
@@ -471,7 +474,7 @@ impl<'a> Engine<'a> {
                         // Every time anyone types anything the object tree is replaced.
                         // This is probably really inefficient, but it will do until
                         // selective definition deletion/reintroduction is implemented.
-                        self.objtree = parser.parse_object_tree();
+                        self.objtree = Arc::new(parser.parse_object_tree());
                     }
                     pp.finalize();
                     dreamchecker::run(&self.context, &self.objtree);
@@ -1575,7 +1578,7 @@ handle_method_call! {
     // debugger entry point
     on StartDebugger(&mut self, params) {
         extras::StartDebuggerResult {
-            port: debugger::start_server(params.dreamseeker_exe).map_err(invalid_request)?,
+            port: debugger::start_server(params.dreamseeker_exe, self.objtree.clone()).map_err(invalid_request)?,
         }
     }
 }

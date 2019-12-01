@@ -30,12 +30,14 @@ mod extools;
 use std::error::Error;
 use std::sync::{atomic, Arc, Mutex};
 
+use dm::objtree::ObjectTree;
+
 use jrpc_io;
 use self::dap_types::*;
 use self::launched::Launched;
 use self::extools::Extools;
 
-pub fn start_server(dreamseeker_exe: String) -> std::io::Result<u16> {
+pub fn start_server(dreamseeker_exe: String, objtree: Arc<ObjectTree>) -> std::io::Result<u16> {
     use std::net::*;
 
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
@@ -49,7 +51,7 @@ pub fn start_server(dreamseeker_exe: String) -> std::io::Result<u16> {
             drop(listener);
 
             let mut input = std::io::BufReader::new(stream.try_clone().unwrap());
-            let mut debugger = Debugger::new(dreamseeker_exe, Box::new(stream));
+            let mut debugger = Debugger::new(dreamseeker_exe, objtree, Box::new(stream));
             jrpc_io::run_with_read(&mut input, |message| debugger.handle_input(message));
         })?;
 
@@ -71,24 +73,36 @@ pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
     let dreamseeker_exe = dreamseeker_exe.expect("must provide argument `--dreamseeker-exe path/to/dreamseeker.exe`");
     eprintln!("dreamseeker: {}", dreamseeker_exe);
 
-    let mut debugger = Debugger::new(dreamseeker_exe, Box::new(std::io::stdout()));
+    // This isn't the preferred way to run the DAP server so it's okay for it
+    // to be kind of sloppy.
+    let environment = dm::detect_environment_default().expect("detect .dme error").expect("did not detect a .dme");
+    let ctx = dm::Context::default();
+    let mut pp = dm::preprocessor::Preprocessor::new(&ctx, environment).unwrap();
+    let objtree = {
+        let mut parser = dm::parser::Parser::new(&ctx, dm::indents::IndentProcessor::new(&ctx, &mut pp));
+        parser.enable_procs();
+        Arc::new(parser.parse_object_tree())
+    };
+
+    let mut debugger = Debugger::new(dreamseeker_exe, objtree, Box::new(std::io::stdout()));
     jrpc_io::run_forever(|message| debugger.handle_input(message));
 }
 
 struct Debugger {
     dreamseeker_exe: String,
+    objtree: Arc<ObjectTree>,
     launched: Option<Launched>,
     extools: Option<Extools>,
-    // TODO: separate field from `child` for attached debugger.
 
     seq: Arc<SequenceNumber>,
     client_caps: ClientCaps,
 }
 
 impl Debugger {
-    fn new(dreamseeker_exe: String, stream: OutStream) -> Self {
+    fn new(dreamseeker_exe: String, objtree: Arc<ObjectTree>, stream: OutStream) -> Self {
         Debugger {
             dreamseeker_exe,
+            objtree,
             launched: None,
             extools: None,
 
