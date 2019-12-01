@@ -133,6 +133,7 @@ pub fn default_defines(defines: &mut DefineMap) {
         QUAD_EASING = Int(7);
         EASE_IN = Int(64);
         EASE_OUT = Int(128);
+        JUMP_EASING = Int(256); // 513
 
         // animation flags
         ANIMATION_END_NOW = Int(1);
@@ -157,9 +158,6 @@ pub fn default_defines(defines: &mut DefineMap) {
         DATABASE_ROW_LIST = Int(18);
 
         // 513 stuff
-        // animation easing
-        JUMP_EASING = Int(256);
-
         // alpha mask filter
         MASK_INVERSE = Int(1);
         MASK_SWAP = Int(2);
@@ -179,11 +177,11 @@ pub fn default_defines(defines: &mut DefineMap) {
         FLAG_UNDERLAY = Int(2);
 
         // ripple filter
-        WAVE_BOUND = Int(1);
+        //WAVE_BOUND = Int(2);
 
         // wave filter
         WAVE_SIDEWAYS = Int(1);
-        WAVE_BOUND = Int(1);
+        WAVE_BOUND = Int(2);
 
         // vis_flags
         VIS_INHERIT_ICON = Int(1);
