@@ -1570,6 +1570,14 @@ handle_method_call! {
             Some(DocumentSymbolResponse::Nested(find_document_symbols(&mut iter, end)))
         }
     }
+
+    // ------------------------------------------------------------------------
+    // debugger entry point
+    on StartDebugger(&mut self, params) {
+        extras::StartDebuggerResult {
+            port: debugger::start_server(params.dreamseeker_exe).map_err(invalid_request)?,
+        }
+    }
 }
 
 handle_notification! {

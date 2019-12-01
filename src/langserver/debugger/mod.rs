@@ -35,6 +35,25 @@ use self::dap_types::*;
 use self::launched::Launched;
 use self::extools::Extools;
 
+pub fn start_server(dreamseeker_exe: String) -> std::io::Result<u16> {
+    use std::net::*;
+
+    let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
+    let port = listener.local_addr()?.port();
+    eprintln!("listening for debugger connection on port {}", port);
+
+    std::thread::Builder::new()
+        .name(format!("DAP listener on port {}", port))
+        .spawn(|| {
+            let mut debugger = Debugger::new(dreamseeker_exe);
+            let (stream, addr) = listener.accept().unwrap();
+            drop(listener);
+            // TODO
+        })?;
+
+    Ok(port)
+}
+
 pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
     eprintln!("acting as debug adapter");
     let mut dreamseeker_exe = None;
