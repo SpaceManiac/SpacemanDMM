@@ -28,6 +28,7 @@ pub struct Extools {
     seq: Arc<SequenceNumber>,
     sender: ExtoolsSender,
     threads: Arc<Mutex<HashMap<i64, ThreadInfo>>>,
+    bytecode: Arc<Mutex<HashMap<String, Vec<DisassembledInstruction>>>>,
 }
 
 impl Extools {
@@ -59,15 +60,18 @@ impl Extools {
             seq: seq.clone(),
             stream: stream.try_clone().expect("try clone bad"),
         };
+        sender.send(ProcListRequest);
 
         let extools = Extools {
             seq,
             sender,
             threads: Arc::new(Mutex::new(HashMap::new())),
+            bytecode: Arc::new(Mutex::new(HashMap::new())),
         };
         let seq = extools.seq.clone();
         let threads = extools.threads.clone();
         let sender = extools.sender.clone();
+        let bytecode = extools.bytecode.clone();
 
         std::thread::Builder::new()
             .name("extools read thread".to_owned())
@@ -76,6 +80,7 @@ impl Extools {
                     seq,
                     sender,
                     threads,
+                    bytecode,
                 }.read_loop();
             })?;
 
@@ -86,8 +91,49 @@ impl Extools {
         self.threads.lock().unwrap().get(&thread_id).cloned()
     }
 
+    pub fn offset_to_line(&self, proc_ref: &str, offset: i64) -> Option<i64> {
+        let bytecode = self.bytecode.lock().unwrap();
+        if let Some(bc) = bytecode.get(proc_ref) {
+            let mut comment = "";
+            for instr in bc.iter() {
+                if instr.mnemonic == "DBG LINENO" {
+                    comment = &instr.comment;
+                }
+                if instr.offset >= offset {
+                    return parse_lineno(comment);
+                }
+            }
+        }
+        None
+    }
+
+    pub fn line_to_offset(&self, proc_ref: &str, line: i64) -> Option<i64> {
+        let bytecode = self.bytecode.lock().unwrap();
+        if let Some(bc) = bytecode.get(proc_ref) {
+            for instr in bc.iter() {
+                if instr.mnemonic == "DBG LINENO" {
+                    if let Some(parsed) = parse_lineno(&instr.comment) {
+                        if parsed == line {
+                            return Some(instr.offset);
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
     pub fn continue_execution(&self) {
         self.sender.send(BreakpointResume);
+    }
+}
+
+fn parse_lineno(comment: &str) -> Option<i64> {
+    let prefix = "Line number: ";
+    if comment.starts_with(prefix) {
+        comment[prefix.len()..].parse::<i64>().ok()
+    } else {
+        None
     }
 }
 
@@ -95,6 +141,7 @@ struct ExtoolsThread {
     seq: Arc<SequenceNumber>,
     sender: ExtoolsSender,
     threads: Arc<Mutex<HashMap<i64, ThreadInfo>>>,
+    bytecode: Arc<Mutex<HashMap<String, Vec<DisassembledInstruction>>>>,
 }
 
 impl ExtoolsThread {
@@ -162,6 +209,16 @@ handle_extools! {
     on Args(&mut self, Args(values)) {
         let mut map = self.threads.lock().unwrap();
         map.entry(0).or_default().args = values;
+    }
+
+    on ProcListResponse(&mut self, ProcListResponse(proc_refs)) {
+        for proc_ref in proc_refs {
+            self.sender.send(ProcDisassemblyRequest(proc_ref));
+        }
+    }
+
+    on DisassembledProc(&mut self, disasm) {
+        self.bytecode.lock().unwrap().insert(disasm.name, disasm.instructions);
     }
 }
 

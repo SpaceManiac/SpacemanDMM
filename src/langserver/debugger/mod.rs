@@ -265,6 +265,12 @@ handle_request! {
                         frame.line = i64::from(proc.location.line);
                     }
 
+                    if i == 0 {
+                        if let Some(line) = extools.offset_to_line(&name, thread.offset) {
+                            frame.line = line;
+                        }
+                    }
+
                     frames.push(frame);
                 }
 
