@@ -174,6 +174,16 @@ impl Context {
             panic!("there were parse errors");
         }
     }
+
+    /// Clone the file list of this Context but not its error list.
+    pub fn clone_file_list(&self) -> Context {
+        Context {
+            files: self.files.clone(),
+            reverse_files: self.reverse_files.clone(),
+            errors: Default::default(),
+            print_severity: Default::default(),
+        }
+    }
 }
 
 // ----------------------------------------------------------------------------

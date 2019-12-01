@@ -1578,7 +1578,7 @@ handle_method_call! {
     // debugger entry point
     on StartDebugger(&mut self, params) {
         extras::StartDebuggerResult {
-            port: debugger::start_server(params.dreamseeker_exe, self.objtree.clone()).map_err(invalid_request)?,
+            port: debugger::start_server(params.dreamseeker_exe, self.objtree.clone(), self.context.clone_file_list()).map_err(invalid_request)?,
         }
     }
 }

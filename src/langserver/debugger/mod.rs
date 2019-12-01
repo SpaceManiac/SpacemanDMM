@@ -37,7 +37,7 @@ use self::dap_types::*;
 use self::launched::Launched;
 use self::extools::Extools;
 
-pub fn start_server(dreamseeker_exe: String, objtree: Arc<ObjectTree>) -> std::io::Result<u16> {
+pub fn start_server(dreamseeker_exe: String, objtree: Arc<ObjectTree>, ctx: dm::Context) -> std::io::Result<u16> {
     use std::net::*;
 
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
@@ -51,7 +51,11 @@ pub fn start_server(dreamseeker_exe: String, objtree: Arc<ObjectTree>) -> std::i
             drop(listener);
 
             let mut input = std::io::BufReader::new(stream.try_clone().unwrap());
-            let mut debugger = Debugger::new(dreamseeker_exe, objtree, Box::new(stream));
+            let db = DebugDatabase {
+                files: Arc::new(ctx),
+                objtree,
+            };
+            let mut debugger = Debugger::new(dreamseeker_exe, db, Box::new(stream));
             jrpc_io::run_with_read(&mut input, |message| debugger.handle_input(message));
         })?;
 
@@ -84,13 +88,23 @@ pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
         Arc::new(parser.parse_object_tree())
     };
 
-    let mut debugger = Debugger::new(dreamseeker_exe, objtree, Box::new(std::io::stdout()));
+    let db = DebugDatabase {
+        files: Arc::new(ctx),
+        objtree,
+    };
+    let mut debugger = Debugger::new(dreamseeker_exe, db, Box::new(std::io::stdout()));
     jrpc_io::run_forever(|message| debugger.handle_input(message));
+}
+
+#[derive(Clone)]
+struct DebugDatabase {
+    files: Arc<dm::Context>,
+    objtree: Arc<ObjectTree>,
 }
 
 struct Debugger {
     dreamseeker_exe: String,
-    objtree: Arc<ObjectTree>,
+    db: DebugDatabase,
     launched: Option<Launched>,
     extools: Option<Extools>,
 
@@ -99,10 +113,10 @@ struct Debugger {
 }
 
 impl Debugger {
-    fn new(dreamseeker_exe: String, objtree: Arc<ObjectTree>, stream: OutStream) -> Self {
+    fn new(dreamseeker_exe: String, db: DebugDatabase, stream: OutStream) -> Self {
         Debugger {
             dreamseeker_exe,
-            objtree,
+            db,
             launched: None,
             extools: None,
 
