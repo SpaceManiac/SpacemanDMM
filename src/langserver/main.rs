@@ -1577,8 +1577,17 @@ handle_method_call! {
     // ------------------------------------------------------------------------
     // debugger entry point
     on StartDebugger(&mut self, params) {
+        let root_dir = match self.root.as_ref() {
+            Some(url) => url_to_path(url)?,
+            None => Default::default(),
+        };
+        let db = debugger::DebugDatabase {
+            root_dir,
+            files: self.context.clone_file_list(),
+            objtree: self.objtree.clone(),
+        };
         extras::StartDebuggerResult {
-            port: debugger::start_server(params.dreamseeker_exe, self.objtree.clone(), self.context.clone_file_list()).map_err(invalid_request)?,
+            port: debugger::start_server(params.dreamseeker_exe, db).map_err(invalid_request)?,
         }
     }
 }

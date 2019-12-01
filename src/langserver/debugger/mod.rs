@@ -37,7 +37,7 @@ use self::dap_types::*;
 use self::launched::Launched;
 use self::extools::Extools;
 
-pub fn start_server(dreamseeker_exe: String, objtree: Arc<ObjectTree>, ctx: dm::Context) -> std::io::Result<u16> {
+pub fn start_server(dreamseeker_exe: String, db: DebugDatabase) -> std::io::Result<u16> {
     use std::net::*;
 
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
@@ -46,15 +46,11 @@ pub fn start_server(dreamseeker_exe: String, objtree: Arc<ObjectTree>, ctx: dm::
 
     std::thread::Builder::new()
         .name(format!("DAP listener on port {}", port))
-        .spawn(|| {
+        .spawn(move || {
             let (stream, _) = listener.accept().unwrap();
             drop(listener);
 
             let mut input = std::io::BufReader::new(stream.try_clone().unwrap());
-            let db = DebugDatabase {
-                files: Arc::new(ctx),
-                objtree,
-            };
             let mut debugger = Debugger::new(dreamseeker_exe, db, Box::new(stream));
             jrpc_io::run_with_read(&mut input, |message| debugger.handle_input(message));
         })?;
@@ -89,17 +85,18 @@ pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
     };
 
     let db = DebugDatabase {
-        files: Arc::new(ctx),
+        root_dir: Default::default(),
+        files: ctx,
         objtree,
     };
     let mut debugger = Debugger::new(dreamseeker_exe, db, Box::new(std::io::stdout()));
     jrpc_io::run_forever(|message| debugger.handle_input(message));
 }
 
-#[derive(Clone)]
-struct DebugDatabase {
-    files: Arc<dm::Context>,
-    objtree: Arc<ObjectTree>,
+pub struct DebugDatabase {
+    pub root_dir: std::path::PathBuf,
+    pub files: dm::Context,
+    pub objtree: Arc<ObjectTree>,
 }
 
 struct Debugger {
