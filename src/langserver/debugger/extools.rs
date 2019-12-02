@@ -34,7 +34,7 @@ impl Extools {
 
         debug_output!(in seq, "[extools] Connecting...");
         let stream;
-        let mut attempts = 0;
+        //let mut attempts = 0;
         loop {
             let _err = match TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(2)) {
                 Ok(s) => {
@@ -44,12 +44,15 @@ impl Extools {
                 Err(err) => err,
             };
             std::thread::sleep(std::time::Duration::from_secs(1));
+            // TODO: a more reliable means of detecting if extools is available.
+            /*
             attempts += 1;
             if attempts >= 5 {
                 output!(in seq, "[extools] Connection failed after {} retries, debugging not available.", attempts);
                 debug_output!(in seq, " - {:?}", _err);
                 return Ok(None);
             }
+            */
         }
         output!(in seq, "[extools] Connected.");
 
