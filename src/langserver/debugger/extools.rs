@@ -194,12 +194,12 @@ handle_extools! {
         debug_output!(in self.seq, "[extools] Raw: {}", _message);
     }
 
-    on BreakpointSet(&mut self, bp) {
-        debug_output!(in self.seq, "[extools] {}#{}@{} validated", bp.proc, bp.override_id, bp.offset);
+    on BreakpointSet(&mut self, _bp) {
+        debug_output!(in self.seq, "[extools] {}#{}@{} validated", _bp.proc, _bp.override_id, _bp.offset);
     }
 
-    on BreakpointHit(&mut self, hit) {
-        debug_output!(in self.seq, "[extools] Hit breakpoint in {}", hit.proc);
+    on BreakpointHit(&mut self, _hit) {
+        debug_output!(in self.seq, "[extools] {}#{}@{} hit", _hit.proc, _hit.override_id, _hit.offset);
         self.seq.issue_event(dap_types::StoppedEvent {
             reason: "breakpoint".to_owned(),
             threadId: Some(0),
