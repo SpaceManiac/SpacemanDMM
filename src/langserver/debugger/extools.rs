@@ -16,9 +16,6 @@ use super::extools_types::*;
 #[derive(Clone, Default, Debug)]
 pub struct ThreadInfo {
     pub call_stack: Vec<StackFrame>,
-    pub args: Vec<ValueText>,
-    pub locals: Vec<ValueText>,
-    pub offset: i64,
 }
 
 // ----------------------------------------------------------------------------
@@ -205,23 +202,11 @@ handle_extools! {
             threadId: Some(0),
             .. Default::default()
         });
-        let mut map = self.threads.lock().unwrap();
-        map.entry(0).or_default().offset = hit.offset;
     }
 
     on CallStack(&mut self, stack) {
         let mut map = self.threads.lock().unwrap();
         map.entry(0).or_default().call_stack = stack.0;
-    }
-
-    on Locals(&mut self, Locals(values)) {
-        let mut map = self.threads.lock().unwrap();
-        map.entry(0).or_default().locals = values;
-    }
-
-    on Args(&mut self, Args(values)) {
-        let mut map = self.threads.lock().unwrap();
-        map.entry(0).or_default().args = values;
     }
 
     on ProcListResponse(&mut self, ProcListResponse(proc_refs)) {

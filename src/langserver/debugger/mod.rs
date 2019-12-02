@@ -375,10 +375,8 @@ handle_request! {
                         dap_frame.line = i64::from(proc.location.line);
                     }
 
-                    if i == 0 {
-                        if let Some(line) = extools.offset_to_line(&ex_frame.name, ex_frame.override_id, thread.offset) {
-                            dap_frame.line = line;
-                        }
+                    if let Some(line) = extools.offset_to_line(&ex_frame.name, ex_frame.override_id, ex_frame.instruction_pointer) {
+                        dap_frame.line = line;
                     }
 
                     frames.push(dap_frame);
@@ -397,42 +395,41 @@ handle_request! {
     }
 
     on Scopes(&mut self, ScopesArguments { frameId }) {
-        if frameId == 0 {
-            ScopesResponse {
-                scopes: vec![
-                    Scope {
-                        name: "Arguments".to_owned(),
-                        presentationHint: Some("arguments".to_owned()),
-                        variablesReference: 1,
-                        .. Default::default()
-                    },
-                    Scope {
-                        name: "Locals".to_owned(),
-                        presentationHint: Some("locals".to_owned()),
-                        variablesReference: 2,
-                        .. Default::default()
-                    }
-                ]
-            }
-        } else {
-            ScopesResponse {
-                scopes: Vec::new(),
-            }
+        ScopesResponse {
+            scopes: vec![
+                Scope {
+                    name: "Arguments".to_owned(),
+                    presentationHint: Some("arguments".to_owned()),
+                    variablesReference: frameId * 2 + 1,
+                    .. Default::default()
+                },
+                Scope {
+                    name: "Locals".to_owned(),
+                    presentationHint: Some("locals".to_owned()),
+                    variablesReference: frameId * 2 + 2,
+                    .. Default::default()
+                }
+            ]
         }
     }
 
     on Variables(&mut self, params) {
         if let Some(extools) = self.extools.as_ref() {
             if let Some(thread) = extools.get_thread(0) {
-                if params.variablesReference == 1 {
-                    let variables = thread.args.iter().enumerate().map(|(i, vt)| Variable {
+                let frame_idx = (params.variablesReference - 1) / 2;
+                let mod2 = params.variablesReference % 2;
+
+                let frame = &thread.call_stack[frame_idx as usize];
+
+                if mod2 == 1 {
+                    let variables = frame.args.iter().enumerate().map(|(i, vt)| Variable {
                         name: i.to_string(),
                         value: format!("{}: {}", vt.type_, vt.value),
                         .. Default::default()
                     }).collect();
                     VariablesResponse { variables }
-                } else if params.variablesReference == 2 {
-                    let variables = thread.locals.iter().enumerate().map(|(i, vt)| Variable {
+                } else if mod2 == 0 {
+                    let variables = frame.locals.iter().enumerate().map(|(i, vt)| Variable {
                         name: i.to_string(),
                         value: format!("{}: {}", vt.type_, vt.value),
                         .. Default::default()
