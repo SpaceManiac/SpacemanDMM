@@ -46,7 +46,13 @@ impl Request for ProcListRequest {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ProcListResponse(pub Vec<String>);
+pub struct ProcListResponse(pub Vec<ProcListResponseEntry>);
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ProcListResponseEntry {
+    pub name: String,
+    pub override_id: usize,
+}
 
 impl Response for ProcListResponse {
     const TYPE: &'static str = "proc list";
@@ -54,7 +60,10 @@ impl Response for ProcListResponse {
 
 // #define MESSAGE_PROC_DISASSEMBLY "proc disassembly" //Request content is the proc name, response content is DisassembledProc
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ProcDisassemblyRequest(pub String);
+pub struct ProcDisassemblyRequest {
+    pub name: String,
+    pub override_id: usize,
+}
 
 impl Request for ProcDisassemblyRequest {
     const TYPE: &'static str = "proc disassembly";
@@ -63,6 +72,7 @@ impl Request for ProcDisassemblyRequest {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DisassembledProc {
     pub name: String,
+    pub override_id: usize,
     pub instructions: Vec<DisassembledInstruction>,
 }
 
@@ -83,6 +93,7 @@ pub struct DisassembledInstruction {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BreakpointSet {
     pub proc: String,
+    pub override_id: usize,
     pub offset: i64,
 }
 
@@ -98,6 +109,7 @@ impl Response for BreakpointSet {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BreakpointUnset {
     pub proc: String,
+    pub override_id: usize,
     pub offset: i64,
 }
 
@@ -124,6 +136,7 @@ impl Request for BreakpointResume {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BreakpointHit {
     pub proc: String,
+    pub override_id: usize,
     pub offset: i64,
 }
 
@@ -133,7 +146,18 @@ impl Response for BreakpointHit {
 
 // #define MESSAGE_CALL_STACK "call stack" //Content is a vector of proc paths
 #[derive(Serialize, Deserialize, Debug)]
-pub struct CallStack(pub Vec<String>);
+pub struct CallStack(pub Vec<StackFrame>);
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct StackFrame {
+    pub name: String,
+    pub override_id: usize,
+    pub usr: ValueText,
+    pub src: ValueText,
+    pub locals: Vec<ValueText>,
+    pub args: Vec<ValueText>,
+    pub instruction_pointer: i64,
+}
 
 impl Response for CallStack {
     const TYPE: &'static str = "call stack";

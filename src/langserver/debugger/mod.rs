@@ -103,18 +103,18 @@ pub struct DebugDatabaseBuilder {
 impl DebugDatabaseBuilder {
     fn build(self) -> DebugDatabase {
         let DebugDatabaseBuilder { root_dir, files, objtree } = self;
-        let mut line_numbers: HashMap<dm::FileId, Vec<(i64, String, String, i64)>> = HashMap::new();
+        let mut line_numbers: HashMap<dm::FileId, Vec<(i64, String, String, usize)>> = HashMap::new();
 
         objtree.root().recurse(&mut |ty| {
             for (name, proc) in ty.procs.iter() {
-                if let Some(pv) = proc.value.last() {
+                for (override_id, pv) in proc.value.iter().enumerate() {
                     line_numbers.entry(pv.location.file)
                         .or_default()
                         .push((
                             pv.location.line.into(),
                             ty.path.to_owned(),
                             name.to_owned(),
-                            proc.value.len() as i64 - 1,
+                            override_id,
                         ));
                 }
             }
@@ -137,7 +137,7 @@ pub struct DebugDatabase {
     root_dir: std::path::PathBuf,
     files: dm::Context,
     objtree: Arc<ObjectTree>,
-    line_numbers: HashMap<dm::FileId, Vec<(i64, String, String, i64)>>,
+    line_numbers: HashMap<dm::FileId, Vec<(i64, String, String, usize)>>,
 }
 
 impl DebugDatabase {
@@ -158,14 +158,14 @@ impl DebugDatabase {
         None
     }
 
-    fn location_to_proc_ref(&self, file_path: &str, line: i64) -> Option<(&str, &str, i64)> {
+    fn location_to_proc_ref(&self, file_path: &str, line: i64) -> Option<(&str, &str, usize)> {
         let path = std::path::Path::new(file_path);
         let path = path.strip_prefix(&self.root_dir).ok().unwrap_or(path);
         if let Some(file_id) = self.files.get_file(path) {
             if let Some(list) = self.line_numbers.get(&file_id) {
-                for (proc_line, type_path, proc_name, index) in list.iter().rev() {
+                for (proc_line, type_path, proc_name, override_id) in list.iter().rev() {
                     if *proc_line <= line {
-                        return Some((type_path, proc_name, *index));
+                        return Some((type_path, proc_name, *override_id));
                     }
                 }
             }
@@ -305,10 +305,11 @@ handle_request! {
         if let Some(breakpoints) = params.breakpoints {
             if let Some(extools) = self.extools.as_ref() {
                 for sbp in breakpoints {
-                    if let Some(proc_ref) = self.db.location_to_proc_ref(&file_path, sbp.line) {
-                        let proc_ref = extools.resolve_proc(proc_ref);
-                        if let Some(offset) = extools.line_to_offset(&proc_ref, sbp.line) {
-                            extools.set_breakpoint(proc_ref, offset);
+                    if let Some((typepath, name, override_id)) = self.db.location_to_proc_ref(&file_path, sbp.line) {
+                        // TODO: better discipline around format!("{}/{}") and so on
+                        let proc = format!("{}/{}", typepath, name);
+                        if let Some(offset) = extools.line_to_offset(&proc, override_id, sbp.line) {
+                            extools.set_breakpoint(&proc, override_id, offset);
                             result.push(Breakpoint {
                                 line: Some(sbp.line),
                                 verified: true,
@@ -353,17 +354,17 @@ handle_request! {
             if let Some(thread) = extools.get_thread(params.threadId) {
                 let len = thread.call_stack.len();
                 let mut frames = Vec::with_capacity(len);
-                for (i, name) in thread.call_stack.into_iter().enumerate() {
-                    let mut frame = StackFrame {
-                        name: name.clone(),
+                for (i, ex_frame) in thread.call_stack.into_iter().enumerate() {
+                    let mut dap_frame = StackFrame {
+                        name: ex_frame.name.clone(),
                         id: i as i64,
                         .. Default::default()
                     };
 
-                    if let Some(proc) = self.db.get_proc(&name) {
+                    if let Some(proc) = self.db.get_proc(&ex_frame.name) {
                         let path = self.db.files.file_path(proc.location.file);
 
-                        frame.source = Some(Source {
+                        dap_frame.source = Some(Source {
                             name: Some(path.file_name()
                                 .unwrap_or_default()
                                 .to_string_lossy()
@@ -371,16 +372,16 @@ handle_request! {
                             path: Some(self.db.root_dir.join(path).to_string_lossy().into_owned()),
                             .. Default::default()
                         });
-                        frame.line = i64::from(proc.location.line);
+                        dap_frame.line = i64::from(proc.location.line);
                     }
 
                     if i == 0 {
-                        if let Some(line) = extools.offset_to_line(&name, thread.offset) {
-                            frame.line = line;
+                        if let Some(line) = extools.offset_to_line(&ex_frame.name, ex_frame.override_id, thread.offset) {
+                            dap_frame.line = line;
                         }
                     }
 
-                    frames.push(frame);
+                    frames.push(dap_frame);
                 }
 
                 return Ok(StackTraceResponse {

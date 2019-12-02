@@ -15,7 +15,7 @@ use super::extools_types::*;
 
 #[derive(Clone, Default, Debug)]
 pub struct ThreadInfo {
-    pub call_stack: Vec<String>,
+    pub call_stack: Vec<StackFrame>,
     pub args: Vec<ValueText>,
     pub locals: Vec<ValueText>,
     pub offset: i64,
@@ -28,7 +28,7 @@ pub struct Extools {
     seq: Arc<SequenceNumber>,
     sender: ExtoolsSender,
     threads: Arc<Mutex<HashMap<i64, ThreadInfo>>>,
-    bytecode: Arc<Mutex<HashMap<String, Vec<DisassembledInstruction>>>>,
+    bytecode: Arc<Mutex<HashMap<(String, usize), Vec<DisassembledInstruction>>>>,
 }
 
 impl Extools {
@@ -92,9 +92,10 @@ impl Extools {
         self.threads.lock().unwrap().get(&thread_id).cloned()
     }
 
-    pub fn offset_to_line(&self, proc_ref: &str, offset: i64) -> Option<i64> {
+    pub fn offset_to_line(&self, proc_ref: &str, override_id: usize, offset: i64) -> Option<i64> {
         let bytecode = self.bytecode.lock().unwrap();
-        if let Some(bc) = bytecode.get(proc_ref) {
+        // TODO: avoid to_owned here
+        if let Some(bc) = bytecode.get(&(proc_ref.to_owned(), override_id)) {
             let mut comment = "";
             for instr in bc.iter() {
                 if instr.mnemonic == "DBG LINENO" {
@@ -108,9 +109,10 @@ impl Extools {
         None
     }
 
-    pub fn line_to_offset(&self, proc_ref: &str, line: i64) -> Option<i64> {
+    pub fn line_to_offset(&self, proc_ref: &str, override_id: usize, line: i64) -> Option<i64> {
         let bytecode = self.bytecode.lock().unwrap();
-        if let Some(bc) = bytecode.get(proc_ref) {
+        // TODO: avoid to_owned here
+        if let Some(bc) = bytecode.get(&(proc_ref.to_owned(), override_id)) {
             for instr in bc.iter() {
                 if instr.mnemonic == "DBG LINENO" {
                     if let Some(parsed) = parse_lineno(&instr.comment) {
@@ -124,18 +126,8 @@ impl Extools {
         None
     }
 
-    pub fn set_breakpoint(&self, proc: String, offset: i64) {
-        self.sender.send(BreakpointSet { proc, offset });
-    }
-
-    pub fn resolve_proc(&self, (type_path, proc_name, _index): (&str, &str, i64)) -> String {
-        let bytecode = self.bytecode.lock().unwrap();
-        let candidate = format!("{}/{}", type_path, proc_name);
-        if bytecode.contains_key(&candidate) {
-            candidate
-        } else {
-            format!("{}/proc/{}", type_path, proc_name)
-        }
+    pub fn set_breakpoint(&self, proc: &str, override_id: usize, offset: i64) {
+        self.sender.send(BreakpointSet { proc: proc.to_owned(), override_id, offset });
     }
 
     pub fn continue_execution(&self) {
@@ -156,7 +148,7 @@ struct ExtoolsThread {
     seq: Arc<SequenceNumber>,
     sender: ExtoolsSender,
     threads: Arc<Mutex<HashMap<i64, ThreadInfo>>>,
-    bytecode: Arc<Mutex<HashMap<String, Vec<DisassembledInstruction>>>>,
+    bytecode: Arc<Mutex<HashMap<(String, usize), Vec<DisassembledInstruction>>>>,
     expecting_bytecode_len: usize,
 }
 
@@ -230,13 +222,16 @@ handle_extools! {
     on ProcListResponse(&mut self, ProcListResponse(proc_refs)) {
         self.expecting_bytecode_len = proc_refs.len();
         for proc_ref in proc_refs {
-            self.sender.send(ProcDisassemblyRequest(proc_ref));
+            self.sender.send(ProcDisassemblyRequest {
+                name: proc_ref.name,
+                override_id: proc_ref.override_id,
+            });
         }
     }
 
     on DisassembledProc(&mut self, disasm) {
         let mut bytecode = self.bytecode.lock().unwrap();
-        bytecode.insert(disasm.name, disasm.instructions);
+        bytecode.insert((disasm.name, disasm.override_id), disasm.instructions);
 
         if self.expecting_bytecode_len > 0 {
             self.expecting_bytecode_len -= 1;
