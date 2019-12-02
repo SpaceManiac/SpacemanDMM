@@ -42,7 +42,7 @@ impl Launched {
             .stdout(Stdio::null())
             .stderr(Stdio::null());
         let mut child = command.spawn()?;
-
+        output!(in seq, "[launched] Started: {:?}", command);
         let mutex = Arc::new(Mutex::new(State::Active));
         let handle = raw::from(&child);
 
@@ -52,7 +52,6 @@ impl Launched {
         std::thread::Builder::new()
             .name("launched debuggee manager thread".to_owned())
             .spawn(move || {
-                output!(in seq2, "[launched] Started: {:?}", command);
                 let wait = child.wait();
                 // lock as soon as possible to minimize risk of shenanigans
                 let mut state = mutex2.lock().expect("launched mutex poisoned");
