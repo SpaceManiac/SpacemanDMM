@@ -141,7 +141,7 @@ pub struct DebugDatabase {
 }
 
 impl DebugDatabase {
-    fn get_proc(&self, proc_ref: &str) -> Option<&dm::objtree::ProcValue> {
+    fn get_proc(&self, proc_ref: &str, override_id: usize) -> Option<&dm::objtree::ProcValue> {
         let mut bits: Vec<&str> = proc_ref.split('/').collect();
         let procname = bits.pop().unwrap();
         match bits.last() {
@@ -152,7 +152,7 @@ impl DebugDatabase {
 
         if let Some(ty) = self.objtree.find(&typename) {
             if let Some(ty_proc) = ty.get().procs.get(procname) {
-                return ty_proc.value.last();
+                return ty_proc.value.get(override_id);
             }
         }
         None
@@ -361,7 +361,7 @@ handle_request! {
                         .. Default::default()
                     };
 
-                    if let Some(proc) = self.db.get_proc(&ex_frame.name) {
+                    if let Some(proc) = self.db.get_proc(&ex_frame.name, ex_frame.override_id) {
                         let path = self.db.files.file_path(proc.location.file);
 
                         dap_frame.source = Some(Source {
