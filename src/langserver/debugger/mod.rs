@@ -421,6 +421,13 @@ handle_request! {
 
                 let frame = &thread.call_stack[frame_idx as usize];
 
+                let parameters;
+                if let Some(proc) = self.db.get_proc(&frame.name, frame.override_id) {
+                    parameters = &proc.parameters[..];
+                } else {
+                    parameters = &[];
+                }
+
                 if mod2 == 1 {
                     // arguments
                     let mut variables = Vec::with_capacity(2 + frame.args.len());
@@ -437,7 +444,10 @@ handle_request! {
                     });
 
                     variables.extend(frame.args.iter().enumerate().map(|(i, vt)| Variable {
-                        name: i.to_string(),
+                        name: match parameters.get(i) {
+                            Some(param) => param.name.clone(),
+                            None => i.to_string(),
+                        },
                         value: format!("{}: {}", vt.type_, vt.value),
                         .. Default::default()
                     }));
