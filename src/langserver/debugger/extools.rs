@@ -127,6 +127,7 @@ impl Extools {
     }
 
     pub fn set_breakpoint(&self, proc: &str, override_id: usize, offset: i64) {
+        debug_output!(in self.seq, "[extools] {}#{}@{} set", proc, override_id, offset);
         self.sender.send(BreakpointSet { proc: proc.to_owned(), override_id, offset });
     }
 
@@ -191,6 +192,10 @@ impl ExtoolsThread {
 handle_extools! {
     on Raw(&mut self, Raw(_message)) {
         debug_output!(in self.seq, "[extools] Raw: {}", _message);
+    }
+
+    on BreakpointSet(&mut self, bp) {
+        debug_output!(in self.seq, "[extools] {}#{}@{} validated", bp.proc, bp.override_id, bp.offset);
     }
 
     on BreakpointHit(&mut self, hit) {
