@@ -422,13 +422,28 @@ handle_request! {
                 let frame = &thread.call_stack[frame_idx as usize];
 
                 if mod2 == 1 {
-                    let variables = frame.args.iter().enumerate().map(|(i, vt)| Variable {
+                    // arguments
+                    let mut variables = Vec::with_capacity(2 + frame.args.len());
+
+                    variables.push(Variable {
+                        name: "src".to_string(),
+                        value: format!("{}: {}", frame.src.type_, frame.src.value),
+                        .. Default::default()
+                    });
+                    variables.push(Variable {
+                        name: "usr".to_string(),
+                        value: format!("{}: {}", frame.usr.type_, frame.usr.value),
+                        .. Default::default()
+                    });
+
+                    variables.extend(frame.args.iter().enumerate().map(|(i, vt)| Variable {
                         name: i.to_string(),
                         value: format!("{}: {}", vt.type_, vt.value),
                         .. Default::default()
-                    }).collect();
+                    }));
                     VariablesResponse { variables }
                 } else if mod2 == 0 {
+                    // locals
                     let variables = frame.locals.iter().enumerate().map(|(i, vt)| Variable {
                         name: i.to_string(),
                         value: format!("{}: {}", vt.type_, vt.value),
