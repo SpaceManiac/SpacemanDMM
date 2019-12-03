@@ -71,7 +71,6 @@ pub struct VarValue {
 #[derive(Debug, Clone)]
 pub struct TypeVar {
     pub value: VarValue,
-    pub location: Location,
     pub declaration: Option<VarDeclaration>,
 }
 
@@ -914,9 +913,8 @@ impl ObjectTree {
         };
         var_type.suffix(&suffix);
 
-        let symbolid = self.symbols.allocate();
+        let symbols = &mut self.symbols;
         let node = self.graph.node_weight_mut(parent).unwrap();
-
         // TODO: warn and merge docs for repeats
         Ok(Some(node.vars.entry(prev.to_owned()).or_insert_with(|| TypeVar {
             value: VarValue {
@@ -926,12 +924,11 @@ impl ObjectTree {
                 being_evaluated: false,
                 docs: comment,
             },
-            location: location,
             declaration: if is_declaration {
                 Some(VarDeclaration {
                     var_type,
                     location,
-                    id: symbolid,
+                    id: symbols.allocate(),
                 })
             } else {
                 None
