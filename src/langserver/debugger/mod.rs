@@ -394,18 +394,30 @@ handle_request! {
     }
 
     on Scopes(&mut self, ScopesArguments { frameId }) {
+        guard!(let Some(extools) = self.extools.as_ref() else {
+            return Err(Box::new(GenericError("No extools connection")));
+        });
+        guard!(let Some(thread) = extools.get_thread(0) else {
+            return Err(Box::new(GenericError("Bad thread ID")));
+        });
+        guard!(let Some(frame) = thread.call_stack.get(frameId as usize) else {
+            return Err(Box::new(GenericError("Stack frame out of range")));
+        });
+
         ScopesResponse {
             scopes: vec![
                 Scope {
                     name: "Arguments".to_owned(),
                     presentationHint: Some("arguments".to_owned()),
                     variablesReference: frameId * 2 + 1,
+                    namedVariables: Some(2 + frame.args.len() as i64),
                     .. Default::default()
                 },
                 Scope {
                     name: "Locals".to_owned(),
                     presentationHint: Some("locals".to_owned()),
                     variablesReference: frameId * 2 + 2,
+                    indexedVariables: Some(frame.locals.len() as i64),
                     .. Default::default()
                 }
             ]
