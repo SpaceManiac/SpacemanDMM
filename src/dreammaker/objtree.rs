@@ -1052,55 +1052,6 @@ impl ObjectTree {
         self.register_proc(context, location, parent, proc_name, declaration, parameters, code)
     }
 
-    pub fn check_var_defs(&self, context: &Context) {
-        for (path, nodeindex) in self.types.iter() {
-            guard!(let Some(atype) = self.graph.node_weight(*nodeindex)
-                else { continue });
-
-            guard!(let Some(typeref) = self.find(path)
-                else { continue });
-
-            for parent_typeref in typeref.iter_parent_types() {
-                if parent_typeref.is_root() {
-                    break;
-                }
-                guard!(let Some(parent) = self.graph.node_weight(parent_typeref.idx)
-                    else { break });
-
-                if &parent.path == path {
-                    continue
-                }
-
-                for (varname, typevar) in atype.vars.iter() {
-                    if varname == "vars" {
-                        continue;
-                    }
-                    guard!(let Some(parentvar) = parent.vars.get(varname)
-                        else { continue });
-
-                    guard!(let Some(decl) = &parentvar.declaration
-                        else { continue });
-
-                    if let Some(mydecl) = &typevar.declaration {
-                        if mydecl.location.is_builtins() {
-                            continue;
-                        }
-                        DMError::new(mydecl.location, format!("{} redeclares {}", path, varname))
-                        .with_note(decl.location, "var declared here")
-                        .register(context);
-                    }
-
-                    if decl.var_type.is_final {
-                        DMError::new(typevar.location, format!("{} overrides final var {}", path, varname))
-                        .with_note(decl.location, "var declared here")
-                        .register(context);
-                    }
-
-                }
-            }
-        }
-    }
-
     /// Drop all code ASTs to attempt to reduce memory usage.
     pub fn drop_code(&mut self) {
         for node in self.graph.node_weights_mut() {

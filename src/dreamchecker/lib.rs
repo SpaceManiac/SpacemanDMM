@@ -1,6 +1,7 @@
 //! DreamChecker, a robust static analysis and typechecking engine for
 //! DreamMaker.
 #![allow(dead_code, unused_variables)]
+#[macro_use] extern crate guard;
 
 extern crate dreammaker as dm;
 use dm::{Context, DMError, Location, Severity};
@@ -490,6 +491,58 @@ fn static_type<'o>(objtree: &'o ObjectTree, location: Location, mut of: &[String
 
 fn error<S: Into<String>>(location: Location, desc: S) -> DMError {
     DMError::new(location, desc).with_component(dm::Component::DreamChecker)
+}
+
+// ----------------------------------------------------------------------------
+// Variable analyzer
+
+pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
+    for (path, nodeindex) in objtree.types.iter() {
+        guard!(let Some(atype) = objtree.graph.node_weight(*nodeindex)
+            else { continue });
+
+        guard!(let Some(typeref) = objtree.find(path)
+            else { continue });
+
+        for parent_typeref in typeref.iter_parent_types() {
+            if parent_typeref.is_root() {
+                break;
+            }
+            guard!(let parent = parent_typeref.get()
+                else { break });
+
+            if &parent.path == path {
+                continue
+            }
+
+            for (varname, typevar) in atype.vars.iter() {
+                if varname == "vars" {
+                    continue;
+                }
+                guard!(let Some(parentvar) = parent.vars.get(varname)
+                    else { continue });
+
+                guard!(let Some(decl) = &parentvar.declaration
+                    else { continue });
+
+                if let Some(mydecl) = &typevar.declaration {
+                    if typevar.value.location.is_builtins() {
+                        continue;
+                    }
+                    DMError::new(mydecl.location, format!("{} redeclares {}", path, varname))
+                    .with_note(decl.location, "var declared here")
+                    .register(context);
+                }
+
+                if decl.var_type.is_final {
+                    DMError::new(typevar.value.location, format!("{} overrides final var {}", path, varname))
+                    .with_note(decl.location, "var declared here")
+                    .register(context);
+                }
+
+            }
+        }
+    }
 }
 
 // ----------------------------------------------------------------------------
