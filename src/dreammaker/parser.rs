@@ -1756,6 +1756,7 @@ where
                 //   * new .relative/path()
                 //   * new some_list[0]()
                 //   * new various.field.accesses()
+                //   * new .
                 // But some things definitely aren't:
                 //   * new some_proc()() - first parens belong to the 'new'
                 //   * new /path[0]() - DM gives "expected expression"
@@ -1769,6 +1770,16 @@ where
                     while let Some(item) = self.index_or_field(&mut belongs_to, false)? {
                         fields.push(item);
                     }
+                    NewType::MiniExpr { ident, fields }
+                // new . but not new .(arguments)
+                } else if let Ok(tok) = self.next(".") {
+                    if let Some(()) = self.exact(Token::Punct(Punctuation::LParen))? {
+                        self.error("new .() or new .(<arguments>) is dumb")
+                        .set_severity(Severity::Warning)
+                        .register(self.context);
+                    }
+                    let ident = tok.to_string();
+                    let fields = Vec::new();
                     NewType::MiniExpr { ident, fields }
                 } else if let Some(path) = self.prefab()? {
                     NewType::Prefab(path)
