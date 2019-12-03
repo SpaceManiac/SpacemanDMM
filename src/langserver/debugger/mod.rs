@@ -350,47 +350,46 @@ handle_request! {
     }
 
     on StackTrace(&mut self, params) {
-        if let Some(extools) = self.extools.as_ref() {
-            if let Some(thread) = extools.get_thread(params.threadId) {
-                let len = thread.call_stack.len();
-                let mut frames = Vec::with_capacity(len);
-                for (i, ex_frame) in thread.call_stack.into_iter().enumerate() {
-                    let mut dap_frame = StackFrame {
-                        name: ex_frame.name.clone(),
-                        id: i as i64,
-                        .. Default::default()
-                    };
-
-                    if let Some(proc) = self.db.get_proc(&ex_frame.name, ex_frame.override_id) {
-                        let path = self.db.files.file_path(proc.location.file);
-
-                        dap_frame.source = Some(Source {
-                            name: Some(path.file_name()
-                                .unwrap_or_default()
-                                .to_string_lossy()
-                                .into_owned()),
-                            path: Some(self.db.root_dir.join(path).to_string_lossy().into_owned()),
-                            .. Default::default()
-                        });
-                        dap_frame.line = i64::from(proc.location.line);
-                    }
-
-                    if let Some(line) = extools.offset_to_line(&ex_frame.name, ex_frame.override_id, ex_frame.instruction_pointer) {
-                        dap_frame.line = line;
-                    }
-
-                    frames.push(dap_frame);
-                }
-
-                return Ok(StackTraceResponse {
-                    totalFrames: Some(len as i64),
-                    stackFrames: frames,
-                });
-            } else {
-                return Err(Box::new(GenericError("Bad thread ID passed")));
-            }
-        } else {
+        guard!(let Some(extools) = self.extools.as_ref() else {
             return Err(Box::new(GenericError("No extools connection")));
+        });
+        guard!(let Some(thread) = extools.get_thread(params.threadId) else {
+            return Err(Box::new(GenericError("Bad thread ID")));
+        });
+
+        let len = thread.call_stack.len();
+        let mut frames = Vec::with_capacity(len);
+        for (i, ex_frame) in thread.call_stack.into_iter().enumerate() {
+            let mut dap_frame = StackFrame {
+                name: ex_frame.name.clone(),
+                id: i as i64,
+                .. Default::default()
+            };
+
+            if let Some(proc) = self.db.get_proc(&ex_frame.name, ex_frame.override_id) {
+                let path = self.db.files.file_path(proc.location.file);
+
+                dap_frame.source = Some(Source {
+                    name: Some(path.file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .into_owned()),
+                    path: Some(self.db.root_dir.join(path).to_string_lossy().into_owned()),
+                    .. Default::default()
+                });
+                dap_frame.line = i64::from(proc.location.line);
+            }
+
+            if let Some(line) = extools.offset_to_line(&ex_frame.name, ex_frame.override_id, ex_frame.instruction_pointer) {
+                dap_frame.line = line;
+            }
+
+            frames.push(dap_frame);
+        }
+
+        StackTraceResponse {
+            totalFrames: Some(len as i64),
+            stackFrames: frames,
         }
     }
 
@@ -414,75 +413,76 @@ handle_request! {
     }
 
     on Variables(&mut self, params) {
-        if let Some(extools) = self.extools.as_ref() {
-            if let Some(thread) = extools.get_thread(0) {
-                let frame_idx = (params.variablesReference - 1) / 2;
-                let mod2 = params.variablesReference % 2;
-
-                let frame = &thread.call_stack[frame_idx as usize];
-
-                let parameters;
-                if let Some(proc) = self.db.get_proc(&frame.name, frame.override_id) {
-                    parameters = &proc.parameters[..];
-                } else {
-                    parameters = &[];
-                }
-
-                if mod2 == 1 {
-                    // arguments
-                    let mut variables = Vec::with_capacity(2 + frame.args.len());
-
-                    variables.push(Variable {
-                        name: "src".to_string(),
-                        value: frame.src.to_string(),
-                        variablesReference: frame.src.datum_address(),
-                        .. Default::default()
-                    });
-                    variables.push(Variable {
-                        name: "usr".to_string(),
-                        value: frame.usr.to_string(),
-                        variablesReference: frame.usr.datum_address(),
-                        .. Default::default()
-                    });
-
-                    variables.extend(frame.args.iter().enumerate().map(|(i, vt)| Variable {
-                        name: match parameters.get(i) {
-                            Some(param) => param.name.clone(),
-                            None => i.to_string(),
-                        },
-                        value: vt.to_string(),
-                        variablesReference: vt.datum_address(),
-                        .. Default::default()
-                    }));
-                    VariablesResponse { variables }
-                } else if mod2 == 0 {
-                    // locals
-                    let variables = frame.locals.iter().enumerate().map(|(i, vt)| Variable {
-                        name: i.to_string(),
-                        value: vt.to_string(),
-                        variablesReference: vt.datum_address(),
-                        .. Default::default()
-                    }).collect();
-                    VariablesResponse { variables }
-                } else {
-                    return Err(Box::new(GenericError("Bad variables reference")));
-                }
-            } else {
-                return Err(Box::new(GenericError("Bad thread ID")));
-            }
-        } else {
+        guard!(let Some(extools) = self.extools.as_ref() else {
             return Err(Box::new(GenericError("No extools connection")));
+        });
+        guard!(let Some(thread) = extools.get_thread(0) else {
+            return Err(Box::new(GenericError("Bad thread ID")));
+        });
+
+        let frame_idx = (params.variablesReference - 1) / 2;
+        let mod2 = params.variablesReference % 2;
+
+        guard!(let Some(frame) = thread.call_stack.get(frame_idx as usize) else {
+            return Err(Box::new(GenericError("Stack frame out of range")));
+        });
+
+        let parameters;
+        if let Some(proc) = self.db.get_proc(&frame.name, frame.override_id) {
+            parameters = &proc.parameters[..];
+        } else {
+            parameters = &[];
+        }
+
+        if mod2 == 1 {
+            // arguments
+            let mut variables = Vec::with_capacity(2 + frame.args.len());
+
+            variables.push(Variable {
+                name: "src".to_string(),
+                value: frame.src.to_string(),
+                variablesReference: frame.src.datum_address(),
+                .. Default::default()
+            });
+            variables.push(Variable {
+                name: "usr".to_string(),
+                value: frame.usr.to_string(),
+                variablesReference: frame.usr.datum_address(),
+                .. Default::default()
+            });
+
+            variables.extend(frame.args.iter().enumerate().map(|(i, vt)| Variable {
+                name: match parameters.get(i) {
+                    Some(param) => param.name.clone(),
+                    None => i.to_string(),
+                },
+                value: vt.to_string(),
+                variablesReference: vt.datum_address(),
+                .. Default::default()
+            }));
+            VariablesResponse { variables }
+        } else if mod2 == 0 {
+            // locals
+            let variables = frame.locals.iter().enumerate().map(|(i, vt)| Variable {
+                name: i.to_string(),
+                value: vt.to_string(),
+                variablesReference: vt.datum_address(),
+                .. Default::default()
+            }).collect();
+            VariablesResponse { variables }
+        } else {
+            return Err(Box::new(GenericError("Bad variables reference")));
         }
     }
 
     on Continue(&mut self, _params) {
-        if let Some(extools) = self.extools.as_ref() {
-            extools.continue_execution();
-            ContinueResponse {
-                allThreadsContinued: Some(true),
-            }
-        } else {
+        guard!(let Some(extools) = self.extools.as_ref() else {
             return Err(Box::new(GenericError("No extools connection")));
+        });
+
+        extools.continue_execution();
+        ContinueResponse {
+            allThreadsContinued: Some(true),
         }
     }
 }

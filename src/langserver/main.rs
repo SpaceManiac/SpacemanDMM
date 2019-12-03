@@ -18,6 +18,7 @@ extern crate jsonrpc_core as jsonrpc;
 extern crate dreammaker as dm;
 extern crate dreamchecker;
 extern crate libc;
+#[macro_use] extern crate guard;
 
 #[macro_use] mod macros;
 mod jrpc_io;
