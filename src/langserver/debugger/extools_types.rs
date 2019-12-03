@@ -222,6 +222,77 @@ pub struct ValueText {
     pub value: String,
 }
 
+impl ValueText {
+    fn has_vars(&self) -> bool {
+        match self.type_.as_str() {
+            "TURF" |
+            "OBJ" |
+            "MOB" |
+            "AREA" |
+            "CLIENT" |
+            "IMAGE" |
+            "WORLD" |
+            "DATUM" => true,
+            _ => false,
+        }
+    }
+
+    pub fn datum_address(&self) -> i64 {
+        if self.has_vars() {
+            match (category_number(&self.type_), self.value.parse::<i64>()) {
+                (Some(cat), Ok(id)) => (cat << 24) | id,
+                _ => 0
+            }
+        } else {
+            0
+        }
+    }
+}
+
+impl std::fmt::Display for ValueText {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let category = match self.type_.as_str() {
+            "NULL" => return fmt.write_str("null"),
+            "STRING" => return write!(fmt, "{:?}", self.value),
+            "WORLD" => return fmt.write_str("world"),
+            "NUMBER" => return write!(fmt, "{}", self.value),
+            other => match category_number(other) {
+                Some(n) => n,
+                None => { write!(fmt, "{} ", self.type_)?; 0 }
+            }
+        };
+        match self.value.parse::<i64>() {
+            Ok(v) => write!(fmt, "[0x{:x}{:06x}]", category, v),
+            Err(_) => write!(fmt, "[{}]", self.value),
+        }
+    }
+}
+
+fn category_number(type_: &str) -> Option<i64> {
+    Some(match type_ {
+        "NULL" => 0x00,
+        "TURF" => 0x01,
+        "OBJ" => 0x02,
+        "MOB" => 0x03,
+        "AREA" => 0x04,
+        "CLIENT" => 0x05,
+        "STRING" => 0x06,
+        "MOBTYPE" => 0x08,
+        "OBJTYPE" => 0x09,
+        "IMAGE" => 0x0D,
+        "WORLD" => 0x0E,
+        "LIST" => 0x0F,
+        "DATUM" => 0x21,
+        "SAVEFILE" => 0x23,
+        "FILE" => 0x27,
+        "PATH_LIST" => 0x28,
+        "NUMBER" => 0x2A,
+        "CLIENTTYPE" => 0x3B,
+        "VARS_LIST" => 0x52,
+        _ => return None,
+    })
+}
+
 // #define MESSAGE_VALUES_LOCALS "locals" //Content is a vector of ValueTexts
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Locals(pub Vec<ValueText>);

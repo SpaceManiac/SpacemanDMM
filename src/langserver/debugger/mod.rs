@@ -434,12 +434,14 @@ handle_request! {
 
                     variables.push(Variable {
                         name: "src".to_string(),
-                        value: format!("{}: {}", frame.src.type_, frame.src.value),
+                        value: frame.src.to_string(),
+                        variablesReference: frame.src.datum_address(),
                         .. Default::default()
                     });
                     variables.push(Variable {
                         name: "usr".to_string(),
-                        value: format!("{}: {}", frame.usr.type_, frame.usr.value),
+                        value: frame.usr.to_string(),
+                        variablesReference: frame.usr.datum_address(),
                         .. Default::default()
                     });
 
@@ -448,7 +450,8 @@ handle_request! {
                             Some(param) => param.name.clone(),
                             None => i.to_string(),
                         },
-                        value: format!("{}: {}", vt.type_, vt.value),
+                        value: vt.to_string(),
+                        variablesReference: vt.datum_address(),
                         .. Default::default()
                     }));
                     VariablesResponse { variables }
@@ -456,7 +459,8 @@ handle_request! {
                     // locals
                     let variables = frame.locals.iter().enumerate().map(|(i, vt)| Variable {
                         name: i.to_string(),
-                        value: format!("{}: {}", vt.type_, vt.value),
+                        value: vt.to_string(),
+                        variablesReference: vt.datum_address(),
                         .. Default::default()
                     }).collect();
                     VariablesResponse { variables }
