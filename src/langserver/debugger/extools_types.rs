@@ -142,7 +142,7 @@ impl Request for FieldRequest {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct FieldResponse(ValueText);
+pub struct FieldResponse(pub ValueText);
 
 impl Response for FieldResponse {
     const TYPE: &'static str = "get field";
@@ -150,7 +150,7 @@ impl Response for FieldResponse {
 
 // #define MESSAGE_GET_GLOBAL "get global" //Request content is a string with the global name, response is a ValueText
 #[derive(Serialize, Deserialize, Debug)]
-pub struct GetGlobal(String);
+pub struct GetGlobal(pub String);
 
 impl Request for GetGlobal {
     const TYPE: &'static str = "get global";
@@ -175,9 +175,9 @@ impl Request for GetType {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct GetTypeResponse(String);
+pub struct GetTypeResponse(pub String);
 
-impl Response for GetType {
+impl Response for GetTypeResponse {
     const TYPE: &'static str = "get type";
 }
 
@@ -289,6 +289,22 @@ fn category_number(type_: &str) -> Option<i64> {
         "NUMBER" => 0x2A,
         "CLIENTTYPE" => 0x3B,
         "VARS_LIST" => 0x52,
+        _ => return None,
+    })
+}
+
+pub fn category_name(id: i64) -> Option<&'static str> {
+    Some(match id {
+        0x00 => "NULL",
+        0x01 => "TURF",
+        0x02 => "OBJ",
+        0x03 => "MOB",
+        0x04 => "AREA",
+        0x05 => "CLIENT",
+        0x0D => "IMAGE",
+        0x0E => "WORLD",
+        0x21 => "DATUM",
+        // TODO: others
         _ => return None,
     })
 }

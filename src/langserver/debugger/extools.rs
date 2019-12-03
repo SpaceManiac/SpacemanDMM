@@ -1,6 +1,6 @@
 //! Client for the Extools debugger protocol.
 
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 use std::net::{SocketAddr, Ipv4Addr, TcpStream};
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -26,6 +26,7 @@ pub struct Extools {
     sender: ExtoolsSender,
     threads: Arc<Mutex<HashMap<i64, ThreadInfo>>>,
     bytecode: Arc<Mutex<HashMap<(String, usize), Vec<DisassembledInstruction>>>>,
+    get_type_rx: mpsc::Receiver<GetTypeResponse>,
 }
 
 impl Extools {
@@ -62,11 +63,14 @@ impl Extools {
         };
         sender.send(ProcListRequest);
 
+        let (get_type_tx, get_type_rx) = mpsc::channel();
+
         let extools = Extools {
             seq,
             sender,
             threads: Arc::new(Mutex::new(HashMap::new())),
             bytecode: Arc::new(Mutex::new(HashMap::new())),
+            get_type_rx,
         };
         let seq = extools.seq.clone();
         let threads = extools.threads.clone();
@@ -82,6 +86,7 @@ impl Extools {
                     threads,
                     bytecode,
                     expecting_bytecode_len: 0,
+                    get_type_tx,
                 }.read_loop();
             })?;
 
@@ -134,6 +139,15 @@ impl Extools {
     pub fn continue_execution(&self) {
         self.sender.send(BreakpointResume);
     }
+
+    pub fn get_reference_type(&self, reference: i64) -> Option<String> {
+        // TODO: error handling
+        self.sender.send(GetType {
+            datum_type: category_name(reference >> 24)?.to_owned(),
+            datum_id: reference & 0xffffff,
+        });
+        Some(self.get_type_rx.recv().ok()?.0)
+    }
 }
 
 fn parse_lineno(comment: &str) -> Option<i64> {
@@ -151,6 +165,7 @@ struct ExtoolsThread {
     threads: Arc<Mutex<HashMap<i64, ThreadInfo>>>,
     bytecode: Arc<Mutex<HashMap<(String, usize), Vec<DisassembledInstruction>>>>,
     expecting_bytecode_len: usize,
+    get_type_tx: mpsc::Sender<GetTypeResponse>,
 }
 
 impl ExtoolsThread {
@@ -232,6 +247,10 @@ handle_extools! {
                 self.seq.issue_event(dap_types::InitializedEvent);
             }
         }
+    }
+
+    on GetTypeResponse(&mut self, response) {
+        let _ = self.get_type_tx.send(response);
     }
 }
 

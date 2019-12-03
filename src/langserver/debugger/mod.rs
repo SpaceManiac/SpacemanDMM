@@ -432,6 +432,17 @@ handle_request! {
             return Err(Box::new(GenericError("Bad thread ID")));
         });
 
+        if params.variablesReference >= 0x1000000 {
+            // Datum reference
+            guard!(let Some(typepath) = extools.get_reference_type(params.variablesReference) else {
+                return Err(Box::new(GenericError("Unable to determine type for reference")));
+            });
+            guard!(let Some(_ty) = self.db.objtree.find(&typepath) else {
+                return Err(Box::new(GenericError("Unable to find type according to typepath")));
+            });
+            return Err(Box::new(GenericError("TODO: read vars from type")));
+        }
+
         let frame_idx = (params.variablesReference - 1) / 2;
         let mod2 = params.variablesReference % 2;
 
