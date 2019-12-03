@@ -16,7 +16,7 @@ use type_expr::TypeExpr;
 // ----------------------------------------------------------------------------
 // Helper structures
 
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum StaticType<'o> {
     None,
     Type(TypeRef<'o>),
@@ -737,7 +737,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     ty = self.visit_follow(each.location, ty, &each.elem);
                 }
                 for each in unary.iter().rev() {
-                    ty = self.visit_unary(ty, each);
+                    ty = self.visit_unary(ty, each, location);
                 }
                 ty
             },
@@ -1043,10 +1043,42 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
     }
 
-    fn visit_unary(&mut self, rhs: Analysis<'o>, op: &UnaryOp) -> Analysis<'o> {
+    fn visit_unary(&mut self, rhs: Analysis<'o>, op: &UnaryOp, location: Location) -> Analysis<'o> {
         match op {
             // !x just evaluates the "truthiness" of x and negates it, returning 1 or 0
             UnaryOp::Not => Analysis::from(assumption_set![Assumption::IsNum(true)]),
+            UnaryOp::PreIncr => {
+                //println!("var analysis {:?}", rhs);
+                if rhs.static_ty != StaticType::None {
+                    error(location, format!("attempted PreIncr (++) on something with a type"))
+                    .register(self.context);
+                }
+                Analysis::empty()
+            }
+            UnaryOp::PostIncr => {
+                //println!("var analysis {:?}", rhs);
+                if rhs.static_ty != StaticType::None {
+                    error(location, format!("attempted PostIncr (++) on something with a type"))
+                    .register(self.context);
+                }
+                Analysis::empty()
+            }
+            UnaryOp::PreDecr => {
+                //println!("var analysis {:?}", rhs);
+                if rhs.static_ty != StaticType::None {
+                    error(location, format!("attempted PreDecr (--) on something with a type"))
+                    .register(self.context);
+                }
+                Analysis::empty()
+            }
+            UnaryOp::PostDecr => {
+                //println!("var analysis {:?}", rhs);
+                if rhs.static_ty != StaticType::None {
+                    error(location, format!("attempted PostDecr (++) on something with a type"))
+                    .register(self.context);
+                }
+                Analysis::empty()
+            }
             /*
             (UnaryOp::Neg, Type::Number) => Type::Number.into(),
             (UnaryOp::BitNot, Type::Number) => Type::Number.into(),
