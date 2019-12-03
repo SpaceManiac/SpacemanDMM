@@ -129,6 +129,58 @@ impl Request for BreakpointResume {
     const TYPE: &'static str = "breakpoint resume";
 }
 
+// #define MESSAGE_GET_FIELD "get field" //Request content is FieldRequest, response content is ValueText
+#[derive(Serialize, Deserialize, Debug)]
+pub struct FieldRequest {
+    pub datum_type: String,
+    pub datum_id: i64,
+    pub field_name: String,
+}
+
+impl Request for FieldRequest {
+    const TYPE: &'static str = "get field";
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct FieldResponse(ValueText);
+
+impl Response for FieldResponse {
+    const TYPE: &'static str = "get field";
+}
+
+// #define MESSAGE_GET_GLOBAL "get global" //Request content is a string with the global name, response is a ValueText
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GetGlobal(String);
+
+impl Request for GetGlobal {
+    const TYPE: &'static str = "get global";
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GetGlobalResponse(ValueText);
+
+impl Response for GetGlobalResponse {
+    const TYPE: &'static str = "get global";
+}
+
+// #define MESSAGE_GET_TYPE "get type" //Request content is Datum, response content is a string
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GetType {
+    pub datum_type: String,
+    pub datum_id: i64,
+}
+
+impl Request for GetType {
+    const TYPE: &'static str = "get type";
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GetTypeResponse(String);
+
+impl Response for GetType {
+    const TYPE: &'static str = "get type";
+}
+
 // ----------------------------------------------------------------------------
 // Spontaneous events
 
