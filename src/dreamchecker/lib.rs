@@ -1047,45 +1047,51 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         match op {
             // !x just evaluates the "truthiness" of x and negates it, returning 1 or 0
             UnaryOp::Not => Analysis::from(assumption_set![Assumption::IsNum(true)]),
-            UnaryOp::PreIncr => {
-                //println!("var analysis {:?}", rhs);
-                if rhs.static_ty != StaticType::None {
-                    error(location, format!("attempted PreIncr (++) on something with a type"))
+            UnaryOp::PreIncr | UnaryOp::PostIncr => {
+                let typeerror;
+                match rhs.static_ty {
+                    StaticType::None => {
+                        return Analysis::empty()
+                    },
+                    StaticType::Type(t) => {
+                        let typeref = rhs.static_ty.basic_type().unwrap();
+                        if let Some(proc) = typeref.get_proc("operator++") {
+                            return Analysis::empty()
+                        }
+                        typeerror = typeref.get().pretty_path();
+                    },
+                    StaticType::List { list, .. } => {
+                        typeerror = "list";
+                    },
+                };
+                error(location, format!("attempted increment (++) on a {}", typeerror))
                     .register(self.context);
-                }
                 Analysis::empty()
             }
-            UnaryOp::PostIncr => {
-                //println!("var analysis {:?}", rhs);
-                if rhs.static_ty != StaticType::None {
-                    error(location, format!("attempted PostIncr (++) on something with a type"))
-                    .register(self.context);
+            UnaryOp::PreDecr | UnaryOp::PostDecr => {
+                let typeerror;
+                match rhs.static_ty {
+                    StaticType::None => {
+                        return Analysis::empty()
+                    },
+                    StaticType::Type(t) => {
+                        let typeref = rhs.static_ty.basic_type().unwrap();
+                        if let Some(proc) = typeref.get_proc("operator--") {
+                            return Analysis::empty()
+                        }
+                        typeerror = typeref.get().pretty_path();
+                    },
+                    StaticType::List { list, .. } => {
+                        typeerror = "list";
+                    }
                 }
-                Analysis::empty()
-            }
-            UnaryOp::PreDecr => {
-                //println!("var analysis {:?}", rhs);
-                if rhs.static_ty != StaticType::None {
-                    error(location, format!("attempted PreDecr (--) on something with a type"))
+                error(location, format!("attempted decrement (--) on a {}", typeerror))
                     .register(self.context);
-                }
-                Analysis::empty()
-            }
-            UnaryOp::PostDecr => {
-                //println!("var analysis {:?}", rhs);
-                if rhs.static_ty != StaticType::None {
-                    error(location, format!("attempted PostDecr (++) on something with a type"))
-                    .register(self.context);
-                }
                 Analysis::empty()
             }
             /*
             (UnaryOp::Neg, Type::Number) => Type::Number.into(),
             (UnaryOp::BitNot, Type::Number) => Type::Number.into(),
-            (UnaryOp::PreIncr, Type::Number) => Type::Number.into(),
-            (UnaryOp::PostIncr, Type::Number) => Type::Number.into(),
-            (UnaryOp::PreDecr, Type::Number) => Type::Number.into(),
-            (UnaryOp::PostDecr, Type::Number) => Type::Number.into(),
             */
             _ => Analysis::empty(),
         }
