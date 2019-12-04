@@ -267,9 +267,9 @@ handle_request! {
     }
 
     on LaunchVsc(&mut self, params) {
-        self.launched = Some(Launched::new(self.seq.clone(), &self.dreamseeker_exe, &params.dmb)?);
-
-        if !params.base.noDebug.unwrap_or(false) {
+        let debug = !params.base.noDebug.unwrap_or(false);
+        self.launched = Some(Launched::new(self.seq.clone(), &self.dreamseeker_exe, &params.dmb, debug)?);
+        if debug {
             self.extools = Extools::connect(self.seq.clone(), extools::DEFAULT_PORT)?;
         }
     }

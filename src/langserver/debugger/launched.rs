@@ -33,11 +33,12 @@ pub struct Launched {
 }
 
 impl Launched {
-    pub fn new(seq: Arc<SequenceNumber>, dreamseeker_exe: &str, dmb: &str) -> std::io::Result<Launched> {
+    pub fn new(seq: Arc<SequenceNumber>, dreamseeker_exe: &str, dmb: &str, debug: bool) -> std::io::Result<Launched> {
         let mut command = Command::new(dreamseeker_exe);
         command
             .arg(dmb)
             .arg("-trusted")
+            .env("SPACEMANDMM_LAUNCHING", format!("debug={}", debug))
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
