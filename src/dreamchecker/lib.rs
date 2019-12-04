@@ -1043,50 +1043,34 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
     }
 
+    // crement = increment/decrement
+    fn check_crement(&mut self, rhs: Analysis<'o>, location: Location, crement: &str) -> Analysis<'o> {
+        let typeerror;
+        match rhs.static_ty {
+            StaticType::None => {
+                return Analysis::empty()
+            },
+            StaticType::Type(typeref) => {
+                if let Some(proc) = typeref.get_proc(crement) {
+                    return Analysis::empty()
+                }
+                typeerror = typeref.get().pretty_path();
+            },
+            StaticType::List { list, .. } => {
+                typeerror = "list";
+            },
+        };
+        error(location, format!("attempted {} on a {}", crement, typeerror))
+            .register(self.context);
+        return Analysis::empty()
+    }
+
     fn visit_unary(&mut self, rhs: Analysis<'o>, op: &UnaryOp, location: Location) -> Analysis<'o> {
         match op {
             // !x just evaluates the "truthiness" of x and negates it, returning 1 or 0
             UnaryOp::Not => Analysis::from(assumption_set![Assumption::IsNum(true)]),
-            UnaryOp::PreIncr | UnaryOp::PostIncr => {
-                let typeerror;
-                match rhs.static_ty {
-                    StaticType::None => {
-                        return Analysis::empty()
-                    },
-                    StaticType::Type(typeref) => {
-                        if let Some(proc) = typeref.get_proc("operator++") {
-                            return Analysis::empty()
-                        }
-                        typeerror = typeref.get().pretty_path();
-                    },
-                    StaticType::List { list, .. } => {
-                        typeerror = "list";
-                    },
-                };
-                error(location, format!("attempted increment (++) on a {}", typeerror))
-                    .register(self.context);
-                Analysis::empty()
-            }
-            UnaryOp::PreDecr | UnaryOp::PostDecr => {
-                let typeerror;
-                match rhs.static_ty {
-                    StaticType::None => {
-                        return Analysis::empty()
-                    },
-                    StaticType::Type(typeref) => {
-                        if let Some(proc) = typeref.get_proc("operator--") {
-                            return Analysis::empty()
-                        }
-                        typeerror = typeref.get().pretty_path();
-                    },
-                    StaticType::List { list, .. } => {
-                        typeerror = "list";
-                    }
-                }
-                error(location, format!("attempted decrement (--) on a {}", typeerror))
-                    .register(self.context);
-                Analysis::empty()
-            }
+            UnaryOp::PreIncr | UnaryOp::PostIncr => { return self.check_crement(rhs, location, "operator++"); },
+            UnaryOp::PreDecr | UnaryOp::PostDecr => { return self.check_crement(rhs, location, "operator--"); },
             /*
             (UnaryOp::Neg, Type::Number) => Type::Number.into(),
             (UnaryOp::BitNot, Type::Number) => Type::Number.into(),
