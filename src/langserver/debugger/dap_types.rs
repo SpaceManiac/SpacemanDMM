@@ -335,6 +335,28 @@ pub struct LaunchRequestArguments {
     pub __restart: Option<Value>,
 }
 
+/// The attach request is sent from the client to the debug adapter to attach to a debuggee that is already running.
+///
+/// Since attaching is debugger/runtime specific, the arguments for this request are not part of this specification.
+pub enum Attach {}
+
+impl Request for Attach {
+    type Params = AttachRequestArguments;
+    type Result = ();
+    const COMMAND: &'static str = "attach";
+}
+
+/// Arguments for ‘attach’ request. Additional attributes are implementation specific.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AttachRequestArguments {
+    /**
+     * Optional data from the previous, restarted session.
+     * The data is sent as the 'restart' attribute of the 'terminated' event.
+     * The client should leave the data intact.
+     */
+    pub __restart: Option<Value>,
+}
+
 pub enum Disconnect {}
 
 impl Request for Disconnect {

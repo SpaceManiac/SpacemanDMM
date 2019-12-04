@@ -10,6 +10,8 @@ use super::SequenceNumber;
 use super::dap_types;
 use super::extools_types::*;
 
+pub const DEFAULT_PORT: u16 = 2448;
+
 // ----------------------------------------------------------------------------
 // Data structures
 
@@ -30,8 +32,8 @@ pub struct Extools {
 }
 
 impl Extools {
-    pub fn connect(seq: Arc<SequenceNumber>) -> std::io::Result<Option<Extools>> {
-        let addr: SocketAddr = (Ipv4Addr::LOCALHOST, 2448).into();
+    pub fn connect(seq: Arc<SequenceNumber>, port: u16) -> std::io::Result<Option<Extools>> {
+        let addr: SocketAddr = (Ipv4Addr::LOCALHOST, port).into();
 
         debug_output!(in seq, "[extools] Connecting...");
         let stream;

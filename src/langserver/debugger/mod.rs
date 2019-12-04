@@ -270,8 +270,12 @@ handle_request! {
         self.launched = Some(Launched::new(self.seq.clone(), &self.dreamseeker_exe, &params.dmb)?);
 
         if !params.base.noDebug.unwrap_or(false) {
-            self.extools = Extools::connect(self.seq.clone())?;
+            self.extools = Extools::connect(self.seq.clone(), extools::DEFAULT_PORT)?;
         }
+    }
+
+    on AttachVsc(&mut self, params) {
+        self.extools = Extools::connect(self.seq.clone(), params.port.unwrap_or(extools::DEFAULT_PORT))?;
     }
 
     on Disconnect(&mut self, params) {
@@ -601,7 +605,7 @@ enum LaunchVsc {}
 
 impl Request for LaunchVsc {
     type Params = LaunchRequestArgumentsVsc;
-    type Result = ();
+    type Result = <Launch as Request>::Result;
     const COMMAND: &'static str = Launch::COMMAND;
 }
 
@@ -614,4 +618,20 @@ pub struct LaunchRequestArgumentsVsc {
     dmb: String,
 
     // other keys: __sessionId, name, preLaunchTask, request, type
+}
+
+enum AttachVsc {}
+
+impl Request for AttachVsc {
+    type Params = AttachRequestArgumentsVsc;
+    type Result = <Attach as Request>::Result;
+    const COMMAND: &'static str = Attach::COMMAND;
+}
+
+#[derive(Deserialize)]
+pub struct AttachRequestArgumentsVsc {
+    #[serde(flatten)]
+    base: AttachRequestArguments,
+
+    port: Option<u16>,
 }
