@@ -438,9 +438,7 @@ handle_request! {
 
         if params.variablesReference >= 0x1000000 {
             // Datum reference
-            guard!(let Some(typepath) = extools.get_reference_type(params.variablesReference) else {
-                return Err(Box::new(GenericError("Unable to determine type for reference")));
-            });
+            let typepath = extools.get_reference_type(params.variablesReference)?;
             guard!(let Some(ty) = self.db.objtree.find(&typepath) else {
                 return Err(Box::new(GenericError("Unable to find type according to typepath")));
             });
@@ -451,17 +449,16 @@ handle_request! {
             while let Some(current) = next {
                 for (name, ty_var) in current.vars.iter() {
                     if ty_var.declaration.is_some() {
-                        if let Some(vt) = extools.get_reference_field(params.variablesReference, name) {
-                            variables.push(Variable {
+                        match extools.get_reference_field(params.variablesReference, name) {
+                            Ok(vt) => variables.push(Variable {
                                 name: name.to_owned(),
                                 value: vt.to_string(),
                                 variablesReference: vt.datum_address(),
                                 .. Default::default()
-                            });
-                        } else {
-                            variables.push(Variable {
+                            }),
+                            Err(e) => variables.push(Variable {
                                 name: name.to_owned(),
-                                value: "! fetch failed".to_owned(),
+                                value: e.to_string(),
                                 .. Default::default()
                             })
                         }
@@ -613,7 +610,7 @@ impl SequenceNumber {
 }
 
 #[derive(Debug)]
-struct GenericError(&'static str);
+pub struct GenericError(&'static str);
 
 impl Error for GenericError {
     fn description(&self) -> &str { self.0 }

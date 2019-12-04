@@ -293,8 +293,8 @@ fn category_number(type_: &str) -> Option<i64> {
     })
 }
 
-pub fn category_name(id: i64) -> Option<&'static str> {
-    Some(match id {
+pub fn category_name(id: i64) -> Result<&'static str, super::GenericError> {
+    Ok(match id {
         0x00 => "NULL",
         0x01 => "TURF",
         0x02 => "OBJ",
@@ -305,7 +305,7 @@ pub fn category_name(id: i64) -> Option<&'static str> {
         0x0E => "WORLD",
         0x21 => "DATUM",
         // TODO: others
-        _ => return None,
+        _ => return Err(super::GenericError("Unknown category name")),
     })
 }
 

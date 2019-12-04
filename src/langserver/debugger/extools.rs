@@ -1,5 +1,6 @@
 //! Client for the Extools debugger protocol.
 
+use std::time::Duration;
 use std::sync::{mpsc, Arc, Mutex};
 use std::net::{SocketAddr, Ipv4Addr, TcpStream};
 use std::collections::HashMap;
@@ -11,6 +12,8 @@ use super::dap_types;
 use super::extools_types::*;
 
 pub const DEFAULT_PORT: u16 = 2448;
+
+const RECV_TIMEOUT: Duration = Duration::from_secs(1);
 
 // ----------------------------------------------------------------------------
 // Data structures
@@ -154,22 +157,22 @@ impl Extools {
         self.sender.send(BreakpointResume);
     }
 
-    pub fn get_reference_type(&self, reference: i64) -> Option<String> {
+    pub fn get_reference_type(&self, reference: i64) -> Result<String, Box<dyn Error>> {
         // TODO: error handling
         self.sender.send(GetType {
             datum_type: category_name(reference >> 24)?.to_owned(),
             datum_id: reference & 0xffffff,
         });
-        Some(self.get_type_rx.recv().ok()?.0)
+        Ok(self.get_type_rx.recv_timeout(RECV_TIMEOUT)?.0)
     }
 
-    pub fn get_reference_field(&self, reference: i64, var: &str) -> Option<ValueText> {
+    pub fn get_reference_field(&self, reference: i64, var: &str) -> Result<ValueText, Box<dyn Error>> {
         self.sender.send(FieldRequest {
             datum_type: category_name(reference >> 24)?.to_owned(),
             datum_id: reference & 0xffffff,
             field_name: var.to_owned(),
         });
-        Some(self.get_field_rx.recv().ok()?.0)
+        Ok(self.get_field_rx.recv_timeout(RECV_TIMEOUT)?.0)
     }
 }
 
