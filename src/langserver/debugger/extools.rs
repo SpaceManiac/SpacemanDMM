@@ -30,6 +30,7 @@ pub struct Extools {
     bytecode: HashMap<(String, usize), Vec<DisassembledInstruction>>,
     get_type_rx: mpsc::Receiver<GetTypeResponse>,
     bytecode_rx: mpsc::Receiver<DisassembledProc>,
+    get_field_rx: mpsc::Receiver<FieldResponse>,
 }
 
 impl Extools {
@@ -69,6 +70,7 @@ impl Extools {
 
         let (get_type_tx, get_type_rx) = mpsc::channel();
         let (bytecode_tx, bytecode_rx) = mpsc::channel();
+        let (get_field_tx, get_field_rx) = mpsc::channel();
 
         let extools = Extools {
             seq,
@@ -77,6 +79,7 @@ impl Extools {
             bytecode: HashMap::new(),
             bytecode_rx,
             get_type_rx,
+            get_field_rx,
         };
         let seq = extools.seq.clone();
         let threads = extools.threads.clone();
@@ -91,6 +94,7 @@ impl Extools {
                     threads,
                     get_type_tx,
                     bytecode_tx,
+                    get_field_tx,
                 }.read_loop();
             })?;
 
@@ -158,6 +162,15 @@ impl Extools {
         });
         Some(self.get_type_rx.recv().ok()?.0)
     }
+
+    pub fn get_reference_field(&self, reference: i64, var: &str) -> Option<ValueText> {
+        self.sender.send(FieldRequest {
+            datum_type: category_name(reference >> 24)?.to_owned(),
+            datum_id: reference & 0xffffff,
+            field_name: var.to_owned(),
+        });
+        Some(self.get_field_rx.recv().ok()?.0)
+    }
 }
 
 fn parse_lineno(comment: &str) -> Option<i64> {
@@ -175,6 +188,7 @@ struct ExtoolsThread {
     threads: Arc<Mutex<HashMap<i64, ThreadInfo>>>,
     get_type_tx: mpsc::Sender<GetTypeResponse>,
     bytecode_tx: mpsc::Sender<DisassembledProc>,
+    get_field_tx: mpsc::Sender<FieldResponse>,
 }
 
 impl ExtoolsThread {
@@ -242,6 +256,10 @@ handle_extools! {
 
     on GetTypeResponse(&mut self, response) {
         let _ = self.get_type_tx.send(response);
+    }
+
+    on FieldResponse(&mut self, response) {
+        let _ = self.get_field_tx.send(response);
     }
 }
 

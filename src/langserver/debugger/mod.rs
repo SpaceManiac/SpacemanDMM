@@ -441,12 +441,39 @@ handle_request! {
             guard!(let Some(typepath) = extools.get_reference_type(params.variablesReference) else {
                 return Err(Box::new(GenericError("Unable to determine type for reference")));
             });
-            guard!(let Some(_ty) = self.db.objtree.find(&typepath) else {
+            guard!(let Some(ty) = self.db.objtree.find(&typepath) else {
                 return Err(Box::new(GenericError("Unable to find type according to typepath")));
             });
-            return Err(Box::new(GenericError("TODO: read vars from type")));
+
+            let mut variables = Vec::new();
+
+            let mut next = Some(ty);
+            while let Some(current) = next {
+                for (name, ty_var) in current.vars.iter() {
+                    if ty_var.declaration.is_some() {
+                        if let Some(vt) = extools.get_reference_field(params.variablesReference, name) {
+                            variables.push(Variable {
+                                name: name.to_owned(),
+                                value: vt.to_string(),
+                                variablesReference: vt.datum_address(),
+                                .. Default::default()
+                            });
+                        } else {
+                            variables.push(Variable {
+                                name: name.to_owned(),
+                                value: "! fetch failed".to_owned(),
+                                .. Default::default()
+                            })
+                        }
+                    }
+                }
+                next = ::ignore_root(current.parent_type());
+            }
+
+            return Ok(VariablesResponse { variables });
         }
 
+        // Stack frame, arguments or locals
         let frame_idx = (params.variablesReference - 1) / 2;
         let mod2 = params.variablesReference % 2;
 
