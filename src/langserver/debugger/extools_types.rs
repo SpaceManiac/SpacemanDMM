@@ -255,7 +255,7 @@ impl std::fmt::Display for ValueText {
             "NULL" => return fmt.write_str("null"),
             "STRING" => return write!(fmt, "{:?}", self.value),
             "WORLD" => return fmt.write_str("world"),
-            "NUMBER" => return write!(fmt, "{}", self.value),
+            "NUMBER" => return write!(fmt, "{}", self.value.trim_end_matches('0').trim_end_matches('.')),
             other => match category_number(other) {
                 Some(n) => n,
                 None => { write!(fmt, "{} ", self.type_)?; 0 }
