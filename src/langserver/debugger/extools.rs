@@ -27,8 +27,9 @@ pub struct Extools {
     seq: Arc<SequenceNumber>,
     sender: ExtoolsSender,
     threads: Arc<Mutex<HashMap<i64, ThreadInfo>>>,
-    bytecode: Arc<Mutex<HashMap<(String, usize), Vec<DisassembledInstruction>>>>,
+    bytecode: HashMap<(String, usize), Vec<DisassembledInstruction>>,
     get_type_rx: mpsc::Receiver<GetTypeResponse>,
+    bytecode_rx: mpsc::Receiver<DisassembledProc>,
 }
 
 impl Extools {
@@ -58,26 +59,28 @@ impl Extools {
             */
         }
         output!(in seq, "[extools] Connected.");
+        seq.issue_event(dap_types::InitializedEvent);
 
         let sender = ExtoolsSender {
             seq: seq.clone(),
             stream: stream.try_clone().expect("try clone bad"),
         };
-        sender.send(ProcListRequest);
+        //sender.send(ProcListRequest);
 
         let (get_type_tx, get_type_rx) = mpsc::channel();
+        let (bytecode_tx, bytecode_rx) = mpsc::channel();
 
         let extools = Extools {
             seq,
             sender,
             threads: Arc::new(Mutex::new(HashMap::new())),
-            bytecode: Arc::new(Mutex::new(HashMap::new())),
+            bytecode: HashMap::new(),
+            bytecode_rx,
             get_type_rx,
         };
         let seq = extools.seq.clone();
         let threads = extools.threads.clone();
         let sender = extools.sender.clone();
-        let bytecode = extools.bytecode.clone();
 
         std::thread::Builder::new()
             .name("extools read thread".to_owned())
@@ -86,9 +89,8 @@ impl Extools {
                     seq,
                     sender,
                     threads,
-                    bytecode,
-                    expecting_bytecode_len: 0,
                     get_type_tx,
+                    bytecode_tx,
                 }.read_loop();
             })?;
 
@@ -99,33 +101,39 @@ impl Extools {
         self.threads.lock().unwrap().get(&thread_id).cloned()
     }
 
-    pub fn offset_to_line(&self, proc_ref: &str, override_id: usize, offset: i64) -> Option<i64> {
-        let bytecode = self.bytecode.lock().unwrap();
-        // TODO: avoid to_owned here
-        if let Some(bc) = bytecode.get(&(proc_ref.to_owned(), override_id)) {
-            let mut comment = "";
-            for instr in bc.iter() {
-                if instr.mnemonic == "DBG LINENO" {
-                    comment = &instr.comment;
-                }
-                if instr.offset >= offset {
-                    return parse_lineno(comment);
-                }
+    fn bytecode(&mut self, proc_ref: &str, override_id: usize) -> &[DisassembledInstruction] {
+        let Extools { bytecode, sender, seq, bytecode_rx, .. } = self;
+        bytecode.entry((proc_ref.to_owned(), override_id)).or_insert_with(|| {
+            debug_output!(in seq, "[extools] Fetching bytecode for {}#{}", proc_ref, override_id);
+            sender.send(ProcDisassemblyRequest {
+                name: proc_ref.to_owned(),
+                override_id,
+            });
+            bytecode_rx.recv().expect("error receiving bytecode").instructions
+        })
+    }
+
+    pub fn offset_to_line(&mut self, proc_ref: &str, override_id: usize, offset: i64) -> Option<i64> {
+        let bc = self.bytecode(proc_ref, override_id);
+        let mut comment = "";
+        for instr in bc.iter() {
+            if instr.mnemonic == "DBG LINENO" {
+                comment = &instr.comment;
+            }
+            if instr.offset >= offset {
+                return parse_lineno(comment);
             }
         }
         None
     }
 
-    pub fn line_to_offset(&self, proc_ref: &str, override_id: usize, line: i64) -> Option<i64> {
-        let bytecode = self.bytecode.lock().unwrap();
-        // TODO: avoid to_owned here
-        if let Some(bc) = bytecode.get(&(proc_ref.to_owned(), override_id)) {
-            for instr in bc.iter() {
-                if instr.mnemonic == "DBG LINENO" {
-                    if let Some(parsed) = parse_lineno(&instr.comment) {
-                        if parsed == line {
-                            return Some(instr.offset);
-                        }
+    pub fn line_to_offset(&mut self, proc_ref: &str, override_id: usize, line: i64) -> Option<i64> {
+        let bc = self.bytecode(proc_ref, override_id);
+        for instr in bc.iter() {
+            if instr.mnemonic == "DBG LINENO" {
+                if let Some(parsed) = parse_lineno(&instr.comment) {
+                    if parsed == line {
+                        return Some(instr.offset);
                     }
                 }
             }
@@ -165,9 +173,8 @@ struct ExtoolsThread {
     seq: Arc<SequenceNumber>,
     sender: ExtoolsSender,
     threads: Arc<Mutex<HashMap<i64, ThreadInfo>>>,
-    bytecode: Arc<Mutex<HashMap<(String, usize), Vec<DisassembledInstruction>>>>,
-    expecting_bytecode_len: usize,
     get_type_tx: mpsc::Sender<GetTypeResponse>,
+    bytecode_tx: mpsc::Sender<DisassembledProc>,
 }
 
 impl ExtoolsThread {
@@ -229,26 +236,8 @@ handle_extools! {
         map.entry(0).or_default().call_stack = stack.0;
     }
 
-    on ProcListResponse(&mut self, ProcListResponse(proc_refs)) {
-        self.expecting_bytecode_len = proc_refs.len();
-        for proc_ref in proc_refs {
-            self.sender.send(ProcDisassemblyRequest {
-                name: proc_ref.name,
-                override_id: proc_ref.override_id,
-            });
-        }
-    }
-
     on DisassembledProc(&mut self, disasm) {
-        let mut bytecode = self.bytecode.lock().unwrap();
-        bytecode.insert((disasm.name, disasm.override_id), disasm.instructions);
-
-        if self.expecting_bytecode_len > 0 {
-            self.expecting_bytecode_len -= 1;
-            if self.expecting_bytecode_len == 0 {
-                self.seq.issue_event(dap_types::InitializedEvent);
-            }
-        }
+        let _ = self.bytecode_tx.send(disasm);
     }
 
     on GetTypeResponse(&mut self, response) {

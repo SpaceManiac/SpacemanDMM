@@ -307,7 +307,7 @@ handle_request! {
         let mut result = Vec::new();
 
         if let Some(breakpoints) = params.breakpoints {
-            if let Some(extools) = self.extools.as_ref() {
+            if let Some(extools) = self.extools.as_mut() {
                 for sbp in breakpoints {
                     if let Some((typepath, name, override_id)) = self.db.location_to_proc_ref(&file_path, sbp.line) {
                         // TODO: better discipline around format!("{}/{}") and so on
@@ -354,7 +354,7 @@ handle_request! {
     }
 
     on StackTrace(&mut self, params) {
-        guard!(let Some(extools) = self.extools.as_ref() else {
+        guard!(let Some(extools) = self.extools.as_mut() else {
             return Err(Box::new(GenericError("No extools connection")));
         });
         guard!(let Some(thread) = extools.get_thread(params.threadId) else {
