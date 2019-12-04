@@ -1053,8 +1053,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     StaticType::None => {
                         return Analysis::empty()
                     },
-                    StaticType::Type(t) => {
-                        let typeref = rhs.static_ty.basic_type().unwrap();
+                    StaticType::Type(typeref) => {
                         if let Some(proc) = typeref.get_proc("operator++") {
                             return Analysis::empty()
                         }
@@ -1074,8 +1073,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     StaticType::None => {
                         return Analysis::empty()
                     },
-                    StaticType::Type(t) => {
-                        let typeref = rhs.static_ty.basic_type().unwrap();
+                    StaticType::Type(typeref) => {
                         if let Some(proc) = typeref.get_proc("operator--") {
                             return Analysis::empty()
                         }
