@@ -31,6 +31,7 @@ use std::error::Error;
 use std::sync::{atomic, Arc, Mutex};
 use std::collections::HashMap;
 
+use dm::FileId;
 use dm::objtree::ObjectTree;
 
 use jrpc_io;
@@ -158,15 +159,16 @@ impl DebugDatabase {
         None
     }
 
-    fn location_to_proc_ref(&self, file_path: &str, line: i64) -> Option<(&str, &str, usize)> {
+    fn file_id(&self, file_path: &str) -> Option<FileId> {
         let path = std::path::Path::new(file_path);
-        let path = path.strip_prefix(&self.root_dir).ok().unwrap_or(path);
-        if let Some(file_id) = self.files.get_file(path) {
-            if let Some(list) = self.line_numbers.get(&file_id) {
-                for (proc_line, type_path, proc_name, override_id) in list.iter().rev() {
-                    if *proc_line <= line {
-                        return Some((type_path, proc_name, *override_id));
-                    }
+        self.files.get_file(path.strip_prefix(&self.root_dir).unwrap_or(path))
+    }
+
+    fn location_to_proc_ref(&self, file_id: FileId, line: i64) -> Option<(&str, &str, usize)> {
+        if let Some(list) = self.line_numbers.get(&file_id) {
+            for (proc_line, type_path, proc_name, override_id) in list.iter().rev() {
+                if *proc_line <= line {
+                    return Some((type_path, proc_name, *override_id));
                 }
             }
         }
@@ -299,17 +301,19 @@ handle_request! {
     }
 
     on SetBreakpoints(&mut self, params) {
-        let file_path = match params.source.path {
-            Some(s) => s,
-            None => return Err(Box::new(GenericError("missing .source.path"))),
-        };
+        guard!(let Some(file_path) = params.source.path else {
+            return Err(Box::new(GenericError("missing .source.path")));
+        });
+        guard!(let Some(file_id) = self.db.file_id(&file_path) else {
+            return Err(Box::new(GenericError("file is not part of environment")));
+        });
 
         let mut result = Vec::new();
 
         if let Some(breakpoints) = params.breakpoints {
             if let Some(extools) = self.extools.as_mut() {
                 for sbp in breakpoints {
-                    if let Some((typepath, name, override_id)) = self.db.location_to_proc_ref(&file_path, sbp.line) {
+                    if let Some((typepath, name, override_id)) = self.db.location_to_proc_ref(file_id, sbp.line) {
                         // TODO: better discipline around format!("{}/{}") and so on
                         let proc = format!("{}/{}", typepath, name);
                         if let Some(offset) = extools.line_to_offset(&proc, override_id, sbp.line) {
