@@ -663,6 +663,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 if must_not && proc != self.proc_ref {
                     error(self.proc_ref.location, format!("proc overrides parent, prohibited by {}", proc))
                         .with_note(location, "prohibited by this must_not_override annotation")
+                        .with_errortype("must_not_override")
                         .register(self.context);
                 }
             }
@@ -671,6 +672,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     if must {
                         error(self.proc_ref.location, format!("proc never calls parent, required by {}", proc))
                             .with_note(location, "required by this must_call_parent annotation")
+                            .with_errortype("must_call_parent")
                             .register(self.context);
                     }
                 }
@@ -1154,6 +1156,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 } else {
                     error(location, format!("field access requires static type: {:?}", name))
                         .set_severity(Severity::Warning)
+                        .with_errortype("field_access_static_type")
                         .with_fix_hint(&lhs)
                         .register(self.context);
                     Analysis::empty()
@@ -1171,6 +1174,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 } else {
                     error(location, format!("proc call requires static type: {:?}", name))
                         .set_severity(Severity::Warning)
+                        .with_errortype("proc_call_static_type")
                         .with_fix_hint(&lhs)
                         .register(self.context);
                     Analysis::empty()

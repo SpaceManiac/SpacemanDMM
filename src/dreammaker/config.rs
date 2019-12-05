@@ -21,21 +21,61 @@ impl Config {
 
 #[derive(Deserialize, Default, Debug, Clone)]
 pub struct Warnings {
-    #[serde(default)]
+    #[serde(default="default_to_true")]
     duplicate_includes: bool,
 
-    #[serde(default)]
+    #[serde(default="default_to_true")]
     should_call_parent: bool,
+
+    #[serde(default="default_to_true")]
+    should_not_override: bool,
+
+    #[serde(default="default_to_true")]
+    field_access_static_type: bool,
+
+    #[serde(default="default_to_true")]
+    proc_call_static_type: bool,
+
+    #[serde(default="default_to_true")]
+    integer_precision_loss: bool,
+
+    #[serde(default="default_to_true")]
+    colon_path_warning: bool,
+
+    #[serde(default="default_to_true")]
+    var_in_proc_paramater: bool,
+
+    #[serde(default="default_to_true")]
+    static_in_proc_paramater: bool,
+
+    #[serde(default="default_to_true")]
+    macro_redefined: bool,
+
+    #[serde(default="default_to_true")]
+    undefine_undefined_macro: bool,
 
     #[serde(default="Severity::default_all")]
     error_level: Severity,
 }
 
+pub fn default_to_true() -> bool {
+    true
+}
+
 impl Warnings {
     pub fn is_disabled(&self, errortype: &'static str) -> bool {
         match errortype {
-            "duplicateinclude" => { return self.duplicate_includes }
-            "shouldcallparent" => { return self.should_call_parent }
+            "duplicate_include" => { return !self.duplicate_includes },
+            "must_call_parent" => { return !self.should_call_parent },
+            "must_not_override" => { return !self.should_not_override },
+            "field_access_static_type" => { return !self.field_access_static_type },
+            "proc_call_static_type" => { return !self.proc_call_static_type },
+            "integer_precision_loss" => { return !self.integer_precision_loss },
+            "colon_path_warning" => { return !self.colon_path_warning },
+            "var_in_proc_paramater" => { return !self.var_in_proc_paramater },
+            "static_in_proc_parameter" => { return !self.var_in_proc_paramater },
+            "macro_redefined" => { return !self.macro_redefined },
+            "undefine_undefined_macro" => { return !self.undefine_undefined_macro }
             _ => { return false }
         };
     }

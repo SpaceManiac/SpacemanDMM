@@ -638,6 +638,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 spurious_lead = true;
                 self.error(format!("path started by '{}', should be unprefixed", p))
                     .set_severity(Severity::Warning)
+                    .with_errortype("colon_path_warning")
                     .register(self.context);
             }
             t => { self.put_back(t); }
@@ -668,6 +669,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 Token::Punct(p @ Punctuation::Colon) => {
                     self.error(format!("path separated by '{}', should be '/'", p))
                         .set_severity(Severity::Warning)
+                        .with_errortype("colon_path_warning")
                         .register(self.context);
                 }
                 t => { self.put_back(t); break; }
@@ -930,12 +932,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             path.remove(0);
             DMError::new(leading_loc, "'var/' is unnecessary here")
                 .set_severity(Severity::Hint)
+                .with_errortype("var_in_proc_paramater")
                 .register(self.context);
         }
         let mut var_type: VarType = path.into_iter().collect();
         if var_type.is_static {
             DMError::new(leading_loc, "'static/' has no effect here")
                 .set_severity(Severity::Warning)
+                .with_errortype("static_in_proc_parameter")
                 .register(self.context);
         }
         let location = self.location;

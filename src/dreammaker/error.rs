@@ -82,9 +82,11 @@ impl Context {
 
     /// Push an error or other diagnostic to the context.
     pub fn register_error(&self, error: DMError) {
+        // ignore errors with severity above configured level
         if !self.filter.severe_enough(error.severity) {
             return
         }
+        // check if the optional errortype is in the list to ignore
         if let Some(errortype) = error.errortype {
             if self.filter.is_disabled(errortype) {
                 return
