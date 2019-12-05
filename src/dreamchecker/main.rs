@@ -16,6 +16,7 @@ use dm::config::*;
 fn main() {
     // command-line args
     let mut environment = None;
+    let mut config_file = None;
 
     let mut args = std::env::args();
     let _ = args.next();  // skip executable name
@@ -32,6 +33,8 @@ fn main() {
             return;
         } else if arg == "-e" {
             environment = Some(args.next().expect("must specify a value for -e"));
+        } else if arg == "-c" {
+            config_file = Some(args.next().expect("must specify a file for -c"));
         } else {
             eprintln!("unknown argument: {}", arg);
             return;
@@ -47,8 +50,10 @@ fn main() {
     const PRINT_SEVERITY: dm::Severity = dm::Severity::Info;
 
     let mut context = Context::default();
-    let config = read_config_toml("SpacemanDMM.toml".to_string());
-    context.register_filter(config.warnings);
+    if let Some(filepath) = config_file {
+        let config = read_config_toml(filepath);
+        context.register_filter(config.warnings);
+    }
     context.set_print_severity(Some(PRINT_SEVERITY));
     println!("============================================================");
     println!("Parsing {}...\n", dme.display());
