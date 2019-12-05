@@ -228,6 +228,13 @@ impl ExtoolsThread {
             }
         }
     }
+
+    fn queue<T>(&self, tx: &mpsc::Sender<T>, val: T) {
+        // If the other side isn't listening, log that.
+        if let Err(e) = tx.send(val) {
+            debug_output!(in self.seq, "[extools] Dropping {:?}", e);
+        }
+    }
 }
 
 handle_extools! {
@@ -254,15 +261,15 @@ handle_extools! {
     }
 
     on DisassembledProc(&mut self, disasm) {
-        let _ = self.bytecode_tx.send(disasm);
+        self.queue(&self.bytecode_tx, disasm);
     }
 
     on GetTypeResponse(&mut self, response) {
-        let _ = self.get_type_tx.send(response);
+        self.queue(&self.get_type_tx, response);
     }
 
     on FieldResponse(&mut self, response) {
-        let _ = self.get_field_tx.send(response);
+        self.queue(&self.get_field_tx, response);
     }
 }
 
