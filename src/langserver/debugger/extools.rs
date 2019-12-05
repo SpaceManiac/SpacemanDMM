@@ -153,6 +153,11 @@ impl Extools {
         self.sender.send(BreakpointSet { proc: proc.to_owned(), override_id, offset });
     }
 
+    pub fn unset_breakpoint(&self, proc: &str, override_id: usize, offset: i64) {
+        debug_output!(in self.seq, "[extools] {}#{}@{} unset", proc, override_id, offset);
+        self.sender.send(BreakpointUnset { proc: proc.to_owned(), override_id, offset });
+    }
+
     pub fn continue_execution(&self) {
         self.sender.send(BreakpointResume);
     }

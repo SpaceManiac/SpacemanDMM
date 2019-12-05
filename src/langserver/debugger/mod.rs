@@ -308,53 +308,51 @@ handle_request! {
             return Err(Box::new(GenericError("file is not part of environment")));
         });
 
-        let mut result = Vec::new();
+        let inputs = params.breakpoints.unwrap_or_default();
+        let mut breakpoints = Vec::new();
 
-        if let Some(breakpoints) = params.breakpoints {
-            if let Some(extools) = self.extools.as_mut() {
-                for sbp in breakpoints {
-                    if let Some((typepath, name, override_id)) = self.db.location_to_proc_ref(file_id, sbp.line) {
-                        // TODO: better discipline around format!("{}/{}") and so on
-                        let proc = format!("{}/{}", typepath, name);
-                        if let Some(offset) = extools.line_to_offset(&proc, override_id, sbp.line) {
-                            extools.set_breakpoint(&proc, override_id, offset);
-                            result.push(Breakpoint {
-                                line: Some(sbp.line),
-                                verified: true,
-                                .. Default::default()
-                            });
-                        } else {
-                            result.push(Breakpoint {
-                                message: Some("Unable to determine offset in proc".to_owned()),
-                                line: Some(sbp.line),
-                                verified: false,
-                                .. Default::default()
-                            });
-                        }
-                    } else {
-                        result.push(Breakpoint {
-                            message: Some("Unable to determine proc ref".to_owned()),
-                            line: Some(sbp.line),
-                            verified: false,
-                            .. Default::default()
-                        });
-                    }
-                }
-            } else {
-                for sbp in breakpoints {
-                    result.push(Breakpoint {
-                        message: Some("Debugging hooks not available".to_owned()),
+        guard!(let Some(extools) = self.extools.as_mut() else {
+            for sbp in inputs {
+                breakpoints.push(Breakpoint {
+                    message: Some("Debugging hooks not available".to_owned()),
+                    line: Some(sbp.line),
+                    verified: false,
+                    .. Default::default()
+                });
+            }
+            return Ok(SetBreakpointsResponse { breakpoints });
+        });
+
+        for sbp in inputs {
+            if let Some((typepath, name, override_id)) = self.db.location_to_proc_ref(file_id, sbp.line) {
+                // TODO: better discipline around format!("{}/{}") and so on
+                let proc = format!("{}/{}", typepath, name);
+                if let Some(offset) = extools.line_to_offset(&proc, override_id, sbp.line) {
+                    extools.set_breakpoint(&proc, override_id, offset);
+                    breakpoints.push(Breakpoint {
+                        line: Some(sbp.line),
+                        verified: true,
+                        .. Default::default()
+                    });
+                } else {
+                    breakpoints.push(Breakpoint {
+                        message: Some("Unable to determine offset in proc".to_owned()),
                         line: Some(sbp.line),
                         verified: false,
                         .. Default::default()
                     });
                 }
+            } else {
+                breakpoints.push(Breakpoint {
+                    message: Some("Unable to determine proc ref".to_owned()),
+                    line: Some(sbp.line),
+                    verified: false,
+                    .. Default::default()
+                });
             }
         }
 
-        SetBreakpointsResponse {
-            breakpoints: result,
-        }
+        SetBreakpointsResponse { breakpoints }
     }
 
     on StackTrace(&mut self, params) {

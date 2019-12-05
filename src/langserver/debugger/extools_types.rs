@@ -113,6 +113,14 @@ pub struct BreakpointUnset {
     pub offset: i64,
 }
 
+impl Request for BreakpointUnset {
+    const TYPE: &'static str = "breakpoint unset";
+}
+
+impl Response for BreakpointUnset {
+    const TYPE: &'static str = "breakpoint unset";
+}
+
 // #define MESSAGE_BREAKPOINT_STEP "breakpoint step" //Content is empty
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BreakpointStep;
