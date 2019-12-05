@@ -29,7 +29,7 @@ mod extools;
 
 use std::error::Error;
 use std::sync::{atomic, Arc, Mutex};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use dm::FileId;
 use dm::objtree::ObjectTree;
@@ -184,6 +184,8 @@ struct Debugger {
 
     seq: Arc<SequenceNumber>,
     client_caps: ClientCaps,
+
+    saved_breakpoints: HashMap<FileId, HashSet<(String, usize, i64)>>,
 }
 
 impl Debugger {
@@ -196,6 +198,8 @@ impl Debugger {
 
             seq: Arc::new(SequenceNumber::new(stream)),
             client_caps: Default::default(),
+
+            saved_breakpoints: Default::default(),
         }
     }
 
@@ -308,6 +312,10 @@ handle_request! {
             return Err(Box::new(GenericError("file is not part of environment")));
         });
 
+        if params.sourceModified.unwrap_or(false) {
+            return Err(Box::new(GenericError("cannot update breakpoints in modified source")));
+        }
+
         let inputs = params.breakpoints.unwrap_or_default();
         let mut breakpoints = Vec::new();
 
@@ -323,12 +331,19 @@ handle_request! {
             return Ok(SetBreakpointsResponse { breakpoints });
         });
 
+        let saved = self.saved_breakpoints.entry(file_id).or_default();
+        let mut keep = HashSet::new();
+
         for sbp in inputs {
             if let Some((typepath, name, override_id)) = self.db.location_to_proc_ref(file_id, sbp.line) {
                 // TODO: better discipline around format!("{}/{}") and so on
                 let proc = format!("{}/{}", typepath, name);
                 if let Some(offset) = extools.line_to_offset(&proc, override_id, sbp.line) {
-                    extools.set_breakpoint(&proc, override_id, offset);
+                    let tup = (proc, override_id, offset);
+                    if saved.insert(tup.clone()) {
+                        extools.set_breakpoint(&tup.0, tup.1, tup.2);
+                    }
+                    keep.insert(tup);
                     breakpoints.push(Breakpoint {
                         line: Some(sbp.line),
                         verified: true,
@@ -351,6 +366,15 @@ handle_request! {
                 });
             }
         }
+
+        saved.retain(|k| {
+            if !keep.contains(&k) {
+                extools.unset_breakpoint(&k.0, k.1, k.2);
+                false
+            } else {
+                true
+            }
+        });
 
         SetBreakpointsResponse { breakpoints }
     }
