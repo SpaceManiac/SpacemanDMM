@@ -163,7 +163,7 @@ pub struct OutputEvent {
     /**
      * An optional source location where the output was produced.
      */
-    pub source: Option<Value>,  // TODO: Value -> Source
+    pub source: Option<Source>,
 
     /**
      * An optional source location line where the output was produced.
