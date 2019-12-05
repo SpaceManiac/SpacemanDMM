@@ -38,10 +38,12 @@ impl Launched {
         command
             .arg(dmb)
             .arg("-trusted")
-            .env("SPACEMANDMM_LAUNCHING", format!("debug={}", debug))
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
+        if debug {
+            command.env("EXTOOLS_DEBUG", "1");
+        }
         let mut child = command.spawn()?;
         output!(in seq, "[launched] Started: {:?}", command);
         let mutex = Arc::new(Mutex::new(State::Active));
