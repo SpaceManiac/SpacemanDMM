@@ -7,6 +7,8 @@ use std::collections::HashMap;
 
 use termcolor::{ColorSpec, Color};
 
+use config::Warnings;
+
 /// An identifier referring to a loaded file.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct FileId(u16);
@@ -33,6 +35,8 @@ pub struct Context {
     errors: RefCell<Vec<DMError>>,
     /// Severity at and above which errors will be printed immediately.
     print_severity: Option<Severity>,
+    /// Warnings/Errors that should be filtered out
+    filter: Warnings,
 }
 
 impl Context {
@@ -73,6 +77,11 @@ impl Context {
 
     /// Push an error or other diagnostic to the context.
     pub fn register_error(&self, error: DMError) {
+        if let Some(errortype) = error.errortype {
+            if self.filter.is_disabled(errortype) {
+                return
+            }
+        }
         if let Some(severity) = self.print_severity {
             if error.severity <= severity {
                 let stderr = termcolor::StandardStream::stderr(termcolor::ColorChoice::Auto);
@@ -175,6 +184,7 @@ impl Context {
             reverse_files: self.reverse_files.clone(),
             errors: Default::default(),
             print_severity: Default::default(),
+            filter: self.filter.clone(),
         }
     }
 }
@@ -325,6 +335,7 @@ pub struct DMError {
     description: String,
     notes: Vec<DiagnosticNote>,
     cause: Option<Box<dyn error::Error + Send + Sync>>,
+    errortype: Option<&'static str>,
 }
 
 /// An additional note attached to an error, at some other location.
@@ -344,6 +355,7 @@ impl DMError {
             description: desc.into(),
             notes: Vec::new(),
             cause: None,
+            errortype: None,
         }
     }
 
@@ -371,6 +383,11 @@ impl DMError {
 
     pub fn with_component(mut self, component: Component) -> DMError {
         self.component = component;
+        self
+    }
+
+    pub fn with_errortype(mut self, errortype: &'static str) -> DMError {
+        self.errortype = Some(errortype);
         self
     }
 
@@ -435,6 +452,7 @@ impl Clone for DMError {
             description: self.description.clone(),
             notes: self.notes.clone(),
             cause: None,  // not trivially cloneable
+            errortype: self.errortype,
         }
     }
 }

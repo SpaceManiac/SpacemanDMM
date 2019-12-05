@@ -627,7 +627,8 @@ impl<'ctx> Preprocessor<'ctx> {
         if let Some(&loc) = self.include_locations.get(&file_id) {
             Err(DMError::new(self.last_input_loc, format!("duplicate #include {:?}", path))
                 .set_severity(Severity::Warning)
-                .with_note(loc, "previously included here"))
+                .with_note(loc, "previously included here")
+                .with_errortype("duplicateinclude"))
         } else {
             self.include_locations.insert(file_id, self.last_input_loc);
             Ok(Include::File {
