@@ -508,8 +508,8 @@ pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
             if parent_typeref.is_root() {
                 break;
             }
-            guard!(let parent = parent_typeref.get()
-                else { break });
+
+            let parent = parent_typeref.get();
 
             if &parent.path == path {
                 continue
