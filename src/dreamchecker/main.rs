@@ -46,9 +46,9 @@ fn main() {
 
     const PRINT_SEVERITY: dm::Severity = dm::Severity::Info;
 
-	let mut context = Context::default();
-	let config = read_config_toml("SpacemanDMM.toml".to_string());
-	context.register_filter(config.warnings);
+    let mut context = Context::default();
+    let config = read_config_toml("SpacemanDMM.toml".to_string());
+    context.register_filter(config.warnings);
     context.set_print_severity(Some(PRINT_SEVERITY));
     println!("============================================================");
     println!("Parsing {}...\n", dme.display());
