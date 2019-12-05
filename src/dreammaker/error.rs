@@ -6,6 +6,7 @@ use std::cell::{RefCell, Ref, RefMut};
 use std::collections::HashMap;
 
 use termcolor::{ColorSpec, Color};
+use serde::de::{Deserialize, Deserializer};
 
 use config::Warnings;
 
@@ -81,6 +82,9 @@ impl Context {
 
     /// Push an error or other diagnostic to the context.
     pub fn register_error(&self, error: DMError) {
+        if !self.filter.severe_enough(error.severity) {
+            return
+        }
         if let Some(errortype) = error.errortype {
             if self.filter.is_disabled(errortype) {
                 return
@@ -279,6 +283,9 @@ impl Severity {
         }
         spec
     }
+    pub fn default_all() -> Severity {
+        Severity::Hint
+    }
 }
 
 impl Default for Severity {
@@ -295,6 +302,23 @@ impl fmt::Display for Severity {
             Severity::Info => f.write_str("info"),
             Severity::Hint => f.write_str("hint"),
         }
+    }
+}
+
+impl<'de> Deserialize<'de> for Severity {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?.to_lowercase();
+        let severity = match s.as_str() {
+            "error" | "errors" => Ok(Severity::Error),
+            "warning" | "warnings" => Ok(Severity::Warning),
+            "info" | "infos" => Ok(Severity::Info),
+            "hint" | "hints" => Ok(Severity::Hint),
+            _other => Ok(Severity::Hint),
+        };
+        severity
     }
 }
 

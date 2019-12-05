@@ -3,6 +3,7 @@
 use serde::Deserialize;
 use std::fs::File;
 use std::io::Read;
+use error::Severity;
 
 #[derive(Deserialize, Default)]
 pub struct Config {
@@ -25,6 +26,9 @@ pub struct Warnings {
 
     #[serde(default)]
     should_call_parent: bool,
+
+    #[serde(default="Severity::default_all")]
+    error_level: Severity,
 }
 
 impl Warnings {
@@ -34,6 +38,10 @@ impl Warnings {
             "shouldcallparent" => { return self.should_call_parent }
             _ => { return false }
         };
+    }
+
+    pub fn severe_enough(&self, severity: Severity) -> bool {
+        return severity <= self.error_level
     }
 }
 
