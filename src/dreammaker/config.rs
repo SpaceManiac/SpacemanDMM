@@ -7,7 +7,7 @@ use std::io::Read;
 #[derive(Deserialize, Default)]
 pub struct Config {
     #[serde(default)]
-    warnings: Warnings,
+    pub warnings: Warnings,
 }
 
 impl Config {

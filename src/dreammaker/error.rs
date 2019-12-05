@@ -56,6 +56,10 @@ impl Context {
         id
     }
 
+    pub fn register_filter(&mut self, warnings: Warnings) {
+        self.filter = warnings;
+    }
+
     /// Look up a file's ID by its path, without inserting it.
     pub fn get_file(&self, path: &Path) -> Option<FileId> {
         self.reverse_files.borrow().get(path).cloned()
