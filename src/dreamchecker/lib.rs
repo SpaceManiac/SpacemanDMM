@@ -528,14 +528,14 @@ pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
                     if typevar.value.location.is_builtins() {
                         continue;
                     }
-                    DMError::new(mydecl.location, format!("{} redeclares {}", path, varname))
-                        .with_note(decl.location, "var declared here")
+                    DMError::new(mydecl.location, format!("{} redeclares var {:?}", path, varname))
+                        .with_note(decl.location, format!("declared on {} here", parent.path))
                         .register(context);
                 }
 
                 if decl.var_type.is_final {
-                    DMError::new(typevar.value.location, format!("{} overrides final var {}", path, varname))
-                        .with_note(decl.location, "var declared here")
+                    DMError::new(typevar.value.location, format!("{} overrides final var {:?}", path, varname))
+                        .with_note(decl.location, format!("declared final on {} here", parent.path))
                         .register(context);
                 }
             }
