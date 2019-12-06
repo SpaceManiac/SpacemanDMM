@@ -748,7 +748,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         if unary.len() > 0 {
                             error(location, format!("Found a unary {} on left side of an `in`", unary[0].name()))
                                 .set_severity(Severity::Warning)
-                                .with_note(location, "add parentheses around the 'in' expression, !(a in b)")
+                                .with_note(location, format!("add parentheses around the 'in' expression, {}(a in b)", unary[0].name()))
                                 .register(self.context);
                         }
                     },
