@@ -613,12 +613,14 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                                 if unary.len() > 0 {
                                     error(location, format!("Found a unary operation on left side of an if(x in y) eg if(!a in b)"))
                                         .set_severity(Severity::Warning)
+                                        .with_note(location, "add parentheses around the 'in' expression, if(!(a in b))")
                                         .register(self.context);
                                 }
                             },
                             others => {
                                 error(location, format!("Found an operation on left side of an if(x in y), eg if(a || b in c)"))
                                         .set_severity(Severity::Warning)
+                                        .with_note(location, "add parentheses around the 'in' expression, if(a || (b in c))")
                                         .register(self.context);
                             }
                         };
