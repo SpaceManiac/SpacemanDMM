@@ -763,7 +763,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                             .set_severity(Severity::Warning)
                             .register(self.context);
                     },
-                    others => {},
+                    Expression::TernaryOp{ cond, if_, else_ } => {
+                        error(location, format!("Found ternary op on left side of an `in`"))
+                            .set_severity(Severity::Warning)
+                            .register(self.context);
+                    },
                 };
                 let lty = self.visit_expression(location, lhs, None);
                 let rty = self.visit_expression(location, rhs, None);
