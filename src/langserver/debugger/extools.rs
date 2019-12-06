@@ -181,6 +181,16 @@ impl Extools {
     }
 }
 
+impl Drop for Extools {
+    fn drop(&mut self) {
+        if let Err(e) = self.sender.stream.shutdown(std::net::Shutdown::Both) {
+            output!(in self.seq, "[extools] Shutdown failed: {}", e);
+        } else {
+            debug_output!(in self.seq, "[extools] Shutdown succeeded");
+        }
+    }
+}
+
 fn parse_lineno(comment: &str) -> Option<i64> {
     let prefix = "Line number: ";
     if comment.starts_with(prefix) {

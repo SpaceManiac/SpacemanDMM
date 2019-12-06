@@ -285,9 +285,10 @@ handle_request! {
     }
 
     on Disconnect(&mut self, params) {
-        // TODO: `false` if `attach` was used instead of `launch`.
-        let default_terminate = true;
+        let default_terminate = self.launched.is_some();
         let terminate = params.terminateDebuggee.unwrap_or(default_terminate);
+
+        drop(self.extools.take());
 
         if let Some(launched) = self.launched.take() {
             if terminate {
