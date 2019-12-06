@@ -746,18 +746,24 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 match &**lhs {
                     Expression::Base{unary, term, follow} => {
                         if unary.len() > 0 {
-                            error(location, format!("Found a unary operation on left side of an x in y eg !a in b"))
+                            error(location, format!("Found a unary {} on left side of an `in`", unary[0].name()))
                                 .set_severity(Severity::Warning)
                                 .with_note(location, "add parentheses around the 'in' expression, !(a in b)")
                                 .register(self.context);
                         }
                     },
-                    others => {
-                        error(location, format!("Found an operation on left side of an x in y, eg a || b in c"))
-                                .set_severity(Severity::Warning)
-                                .with_note(location, "add parentheses around the 'in' expression, a || (b in c)")
-                                .register(self.context);
-                    }
+                    Expression::BinaryOp{ op, lhs, rhs} => {
+                        error(location, format!("Found {} on left side of an `in`", op))
+                            .set_severity(Severity::Warning)
+                            .with_note(location, "add parentheses around the 'in' expression, a || (b in c)")
+                            .register(self.context);
+                    },
+                    Expression::AssignOp{ op, lhs, rhs} => {
+                        error(location, format!("Found assignment on left side of an `in`"))
+                            .set_severity(Severity::Warning)
+                            .register(self.context);
+                    },
+                    others => {},
                 };
                 let lty = self.visit_expression(location, lhs, None);
                 let rty = self.visit_expression(location, rhs, None);
