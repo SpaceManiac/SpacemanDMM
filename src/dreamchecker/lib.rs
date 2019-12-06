@@ -607,6 +607,22 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Statement::If { arms, else_arm } => {
                 for &(ref condition, ref block) in arms.iter() {
+                    if let Expression::BinaryOp { op: BinaryOp::In, lhs, rhs } = condition {
+                        match &**lhs {
+                            Expression::Base{unary, term, follow} => {
+                                if unary.len() > 0 {
+                                    error(location, format!("Found a unary operation on left side of an if(x in y) eg if(!a in b)"))
+                                        .set_severity(Severity::Warning)
+                                        .register(self.context);
+                                }
+                            },
+                            others => {
+                                error(location, format!("Found an operation on left side of an if(x in y), eg if(a || b in c)"))
+                                        .set_severity(Severity::Warning)
+                                        .register(self.context);
+                            }
+                        };
+                    }
                     self.visit_expression(location, condition, None);
                     self.visit_block(block);
                 }
