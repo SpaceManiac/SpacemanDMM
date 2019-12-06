@@ -755,7 +755,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     Expression::BinaryOp{ op, lhs, rhs} => {
                         error(location, format!("Found {} on left side of an `in`", op))
                             .set_severity(Severity::Warning)
-                            .with_note(location, "add parentheses around the 'in' expression, a || (b in c)")
+                            .with_note(location, format!("add parentheses around the 'in' expression, a {} (b in c)", op))
                             .register(self.context);
                     },
                     Expression::AssignOp{ op, lhs, rhs} => {
