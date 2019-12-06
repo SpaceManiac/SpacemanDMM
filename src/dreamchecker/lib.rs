@@ -607,24 +607,6 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Statement::If { arms, else_arm } => {
                 for &(ref condition, ref block) in arms.iter() {
-                    if let Expression::BinaryOp { op: BinaryOp::In, lhs, rhs } = condition {
-                        match &**lhs {
-                            Expression::Base{unary, term, follow} => {
-                                if unary.len() > 0 {
-                                    error(location, format!("Found a unary operation on left side of an if(x in y) eg if(!a in b)"))
-                                        .set_severity(Severity::Warning)
-                                        .with_note(location, "add parentheses around the 'in' expression, if(!(a in b))")
-                                        .register(self.context);
-                                }
-                            },
-                            others => {
-                                error(location, format!("Found an operation on left side of an if(x in y), eg if(a || b in c)"))
-                                        .set_severity(Severity::Warning)
-                                        .with_note(location, "add parentheses around the 'in' expression, if(a || (b in c))")
-                                        .register(self.context);
-                            }
-                        };
-                    }
                     self.visit_expression(location, condition, None);
                     self.visit_block(block);
                 }
@@ -758,6 +740,28 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     ty = self.visit_unary(ty, each);
                 }
                 ty
+            },
+            Expression::BinaryOp { op: BinaryOp::In, lhs, rhs } => {
+                // check for incorrect/ambiguous in statements
+                match &**lhs {
+                    Expression::Base{unary, term, follow} => {
+                        if unary.len() > 0 {
+                            error(location, format!("Found a unary operation on left side of an x in y eg !a in b"))
+                                .set_severity(Severity::Warning)
+                                .with_note(location, "add parentheses around the 'in' expression, !(a in b)")
+                                .register(self.context);
+                        }
+                    },
+                    others => {
+                        error(location, format!("Found an operation on left side of an x in y, eg a || b in c"))
+                                .set_severity(Severity::Warning)
+                                .with_note(location, "add parentheses around the 'in' expression, a || (b in c)")
+                                .register(self.context);
+                    }
+                };
+                let lty = self.visit_expression(location, lhs, None);
+                let rty = self.visit_expression(location, rhs, None);
+                self.visit_binary(lty, rty, BinaryOp::In)
             },
             Expression::BinaryOp { op: BinaryOp::Or, lhs, rhs } => {
                 // It appears that DM does this in more cases than this, but
