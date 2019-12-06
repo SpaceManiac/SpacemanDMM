@@ -54,11 +54,13 @@ be enabled:
 	#define SHOULD_CALL_PARENT(X) set SpacemanDMM_should_call_parent = X
 	#define UNLINT(X) SpacemanDMM_unlint(X)
 	#define SHOULD_NOT_OVERRIDE(X) set SpacemanDMM_should_not_override = X
+  #define FINAL_VAR var/final
 #else
 	#define RETURN_TYPE(X)
 	#define SHOULD_CALL_PARENT(X)
 	#define UNLINT(X) X
 	#define SHOULD_NOT_OVERRIDE(X)
+  #define FINAL_VAR var
 #endif
 ```
 
@@ -85,6 +87,15 @@ parent proc is being skipped. Child procs may set this setting to `0` instead
 to override the check.
 
 ### Should not override
+
 Use `set SpacemanDMM_should_not_override = 1` to raise a warning for any child
 procs that override this one, regardless of if it calls parent or not.
 This functions in a similar way to the `final` keyword in some languages.
+
+### `final` vars
+
+Use the above definition of FINAL_VAR to declare vars as `final`, `var/final/foo` such that overriding their value isn't permitted by types that inherit it.
+```
+/a/type
+  FINAL_VAR/foo = somevalue
+```

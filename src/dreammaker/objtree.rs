@@ -265,6 +265,23 @@ impl<'a> TypeRef<'a> {
         }
     }
 
+    pub fn iter_parent_types(&self) -> impl Iterator<Item=TypeRef<'a>> {
+        struct ParentTypeIter<'a>(Option<TypeRef<'a>>);
+        impl<'a> Iterator for ParentTypeIter<'a> {
+            type Item = TypeRef<'a>;
+            fn next(&mut self) -> Option<TypeRef<'a>> {
+                match self.0 {
+                    Some(v) => {
+                        self.0 = v.parent_type();
+                        Some(v)
+                    },
+                    None => None,
+                }
+            }
+        }
+        ParentTypeIter(Some(*self))
+    }
+
     /// Recursively visit this and all parent **paths**.
     pub fn visit_parent_paths<F: FnMut(TypeRef<'a>)>(&self, f: &mut F) {
         let mut next = Some(*self);
@@ -862,7 +879,7 @@ impl ObjectTree {
     where
         I: Iterator<Item=&'a str>,
     {
-        let (mut is_declaration, mut is_static, mut is_const, mut is_tmp) = (false, false, false, false);
+        let (mut is_declaration, mut is_static, mut is_const, mut is_tmp, mut is_final) = (false, false, false, false, false);
 
         if is_var_decl(prev) {
             is_declaration = true;
@@ -870,11 +887,12 @@ impl ObjectTree {
                 Some(name) => name,
                 None => return Ok(None), // var{} block, children will be real vars
             };
-            while prev == "global" || prev == "static" || prev == "tmp" || prev == "const" {
+            while prev == "global" || prev == "static" || prev == "tmp" || prev == "const" || prev == "final" {
                 if let Some(name) = rest.next() {
                     is_static |= prev == "global" || prev == "static";
                     is_const |= prev == "const";
                     is_tmp |= prev == "tmp";
+                    is_final |= prev == "final";
                     prev = name;
                 } else {
                     return Ok(None); // var/const{} block, children will be real vars
@@ -893,6 +911,7 @@ impl ObjectTree {
             is_static,
             is_const,
             is_tmp,
+            is_final,
             type_path,
         };
         var_type.suffix(&suffix);

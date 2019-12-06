@@ -1384,6 +1384,11 @@ where
                         .set_severity(Severity::Warning)
                         .register(self.context);
                 }
+                if var_type.is_final {
+                    DMError::new(type_path_start, "var/final has no effect here")
+                        .set_severity(Severity::Warning)
+                        .register(self.context);
+                }
                 let var_suffix = require!(self.var_suffix());
                 var_type.suffix(&var_suffix);
 

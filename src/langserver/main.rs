@@ -908,6 +908,9 @@ handle_method_call! {
                                 if decl.var_type.is_tmp {
                                     declaration.push_str("/tmp");
                                 }
+                                if decl.var_type.is_final {
+                                    declaration.push_str("/final");
+                                }
                                 for bit in decl.var_type.type_path.iter() {
                                     declaration.push('/');
                                     declaration.push_str(&bit);
