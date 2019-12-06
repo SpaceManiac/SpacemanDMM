@@ -497,28 +497,24 @@ fn error<S: Into<String>>(location: Location, desc: S) -> DMError {
 // Variable analyzer
 
 pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
-    for (path, nodeindex) in objtree.types.iter() {
-        guard!(let Some(atype) = objtree.graph.node_weight(*nodeindex)
-            else { continue });
-
+    for (path, _) in objtree.types.iter() {
         guard!(let Some(typeref) = objtree.find(path)
             else { continue });
 
-        for parent_typeref in typeref.iter_parent_types() {
-            if parent_typeref.is_root() {
+        for parent in typeref.iter_parent_types() {
+            if parent.is_root() {
                 break;
             }
 
-            let parent = parent_typeref.get();
-
             if &parent.path == path {
-                continue
+                continue;
             }
 
-            for (varname, typevar) in atype.vars.iter() {
+            for (varname, typevar) in typeref.vars.iter() {
                 if varname == "vars" {
                     continue;
                 }
+
                 guard!(let Some(parentvar) = parent.vars.get(varname)
                     else { continue });
 
@@ -530,16 +526,15 @@ pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
                         continue;
                     }
                     DMError::new(mydecl.location, format!("{} redeclares {}", path, varname))
-                    .with_note(decl.location, "var declared here")
-                    .register(context);
+                        .with_note(decl.location, "var declared here")
+                        .register(context);
                 }
 
                 if decl.var_type.is_final {
                     DMError::new(typevar.value.location, format!("{} overrides final var {}", path, varname))
-                    .with_note(decl.location, "var declared here")
-                    .register(context);
+                        .with_note(decl.location, "var declared here")
+                        .register(context);
                 }
-
             }
         }
     }
