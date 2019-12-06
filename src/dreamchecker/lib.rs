@@ -614,6 +614,91 @@ pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
 
 // ----------------------------------------------------------------------------
 // Procedure analyzer
+#[derive(Debug)]
+pub struct ControlFlow {
+    pub returns: bool,
+    pub continues: bool,
+    pub breaks: bool,
+    pub fuzzy: bool,
+}
+
+impl ControlFlow {
+    pub fn alltrue() -> ControlFlow {
+        ControlFlow {
+            returns: true,
+            continues: true,
+            breaks: true,
+            fuzzy: false,
+        }
+    }
+    pub fn allfalse() -> ControlFlow {
+        ControlFlow {
+            returns: false,
+            continues: false,
+            breaks: false,
+            fuzzy: false,
+        }
+    }
+    pub fn terminates(&self) -> bool {
+        return !self.fuzzy && ( self.returns || self.continues || self.breaks )
+    }
+
+    pub fn terminates_loop(&self) -> bool {
+        return !self.fuzzy && ( self.returns || self.breaks )
+    }
+
+    pub fn no_else(&mut self) {
+        self.returns = false;
+        self.continues = false;
+        self.breaks = false;
+    }
+
+    pub fn merge(&mut self, other: ControlFlow) {
+        if !self.fuzzy && other.returns {
+            self.returns = true;
+        }
+        if other.fuzzy {
+            self.returns = false;
+        }
+        if other.continues {
+            self.continues = true;
+        }
+        if other.breaks {
+            self.breaks = true;
+        }
+        if other.fuzzy {
+            self.fuzzy = true;
+        }
+    }
+
+    pub fn merge_false(&mut self, other: ControlFlow) {
+        if !other.returns {
+            self.returns = false;
+        }
+        if !other.continues {
+            self.continues = false;
+        }
+        if !other.breaks {
+            self.breaks = false;
+        }
+        if other.fuzzy {
+            self.fuzzy = true;
+        }
+    }
+
+    pub fn finalize(&mut self) {
+        if self.returns || self.breaks || self.continues {
+            self.fuzzy = false;
+        }
+    }
+
+    pub fn end_loop(&mut self) {
+        self.returns = false;
+        self.continues = false;
+        self.breaks = false;
+        self.fuzzy = false;
+    }
+}
 
 struct LocalVar<'o> {
     location: Location,
@@ -697,13 +782,22 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
     }
 
-    fn visit_block(&mut self, block: &'o [Spanned<Statement>]) {
+    fn visit_block(&mut self, block: &'o [Spanned<Statement>]) -> ControlFlow {
+        let mut term = ControlFlow::allfalse();
         for stmt in block.iter() {
-            self.visit_statement(stmt.location, &stmt.elem);
+            if term.terminates() {
+                error(stmt.location,"possible unreachable code here")
+                    .register(self.context);
+                return term // stop evaluating
+            }
+            let state = self.visit_statement(stmt.location, &stmt.elem);
+            //println!("{:#?} {:#?}", stmt, state);
+            term.merge(state);
         }
+        return term
     }
 
-    fn visit_statement(&mut self, location: Location, statement: &'o Statement) {
+    fn visit_statement(&mut self, location: Location, statement: &'o Statement) -> ControlFlow {
         match statement {
             Statement::Expr(expr) => { self.visit_expression(location, expr, None); },
             Statement::Return(Some(expr)) => {
@@ -711,25 +805,51 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 let return_type = self.visit_expression(location, expr, None);
                 self.local_vars.get_mut(".").unwrap().analysis = return_type;
                 // TODO: break out of the analysis for this branch?
+                return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false }
             },
-            Statement::Return(None) => {},
+            Statement::Return(None) => { return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false } },
             Statement::Throw(expr) => { self.visit_expression(location, expr, None); },
             Statement::While { condition, block } => {
                 self.visit_expression(location, condition, None);
-                self.visit_block(block);
+                let mut state = self.visit_block(block);
+                //println!("end of while {:#?}", state);
+                state.end_loop();
+                //println!("after endloop {:#?}", state);
+                return state
             },
             Statement::DoWhile { block, condition } => {
-                self.visit_block(block);
+                let mut state = self.visit_block(block);
+                if state.terminates_loop() {
+                    error(location,"do while terminates without ever reaching condition")
+                        .register(self.context);
+                    return state
+                }
                 self.visit_expression(location, condition, None);
+                state.end_loop();
+                return state
             },
             Statement::If { arms, else_arm } => {
+                let mut allterm = ControlFlow::alltrue();
                 for (condition, ref block) in arms.iter() {
                     self.visit_expression(condition.location, &condition.elem, None);
-                    self.visit_block(block);
+                    let state = self.visit_block(block);
+                    //println!("if arm {:#?}", state);
+                    allterm.merge_false(state);
+                    //println!("after merge {:#?}", allterm);
                 }
                 if let Some(else_arm) = else_arm {
-                    self.visit_block(else_arm);
+                    let state = self.visit_block(else_arm);
+                    //println!("else arm {:#?}", state);
+                    allterm.merge_false(state);
+                    //println!("after merge {:#?}", allterm);
+                } else {
+                    allterm.no_else();
+                    return allterm
                 }
+                //println!("end of if {:#?}", allterm);
+                allterm.finalize();
+                //println!("after finalize {:#?}", allterm);
+                return allterm
             },
             Statement::ForLoop { init, test, inc, block } => {
                 if let Some(init) = init {
@@ -741,7 +861,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 if let Some(inc) = inc {
                     self.visit_statement(location, inc);
                 }
-                self.visit_block(block);
+                let mut state = self.visit_block(block);
+                state.end_loop();
+                return state
             },
             Statement::ForList { in_list, block, var_type, name, .. } => {
                 if let Some(in_list) = in_list {
@@ -750,7 +872,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 if let Some(var_type) = var_type {
                     self.visit_var(location, var_type, name, None);
                 }
-                self.visit_block(block);
+                let mut state = self.visit_block(block);
+                state.end_loop();
+                return state
             },
             Statement::ForRange { var_type, name, start, end, step, block } => {
                 self.visit_expression(location, end, None);
@@ -760,7 +884,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 if let Some(var_type) = var_type {
                     self.visit_var(location, var_type, name, Some(start));
                 }
-                self.visit_block(block);
+                let mut state = self.visit_block(block);
+                state.end_loop();
+                return state
             },
             Statement::Var(var) => self.visit_var_stmt(location, var),
             Statement::Vars(vars) => {
@@ -776,6 +902,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 self.visit_block(block);
             },
             Statement::Switch { input, cases, default } => {
+                let mut allterm = ControlFlow::alltrue();
                 self.visit_expression(location, input, None);
                 for &(ref case, ref block) in cases.iter() {
                     for case_part in case.iter() {
@@ -787,11 +914,18 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                             }
                         }
                     }
-                    self.visit_block(block);
+                    let state = self.visit_block(block);
+                    allterm.merge_false(state);
                 }
                 if let Some(default) = default {
-                    self.visit_block(default);
+                    let state = self.visit_block(default);
+                    allterm.merge_false(state);
+                } else {
+                    allterm.no_else();
+                    return allterm
                 }
+                allterm.finalize();
+                return allterm
             },
             Statement::TryCatch { try_block, catch_params, catch_block } => {
                 self.visit_block(try_block);
@@ -814,12 +948,13 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
                 self.visit_block(catch_block);
             },
-            Statement::Continue(_) => {},
-            Statement::Break(_) => {},
+            Statement::Continue(_) => { return ControlFlow { returns: false, continues: true, breaks: false, fuzzy: true } },
+            Statement::Break(_) => { return ControlFlow { returns: false, continues: false, breaks: true, fuzzy: true } },
             Statement::Goto(_) => {},
-            Statement::Label { name: _, block } => self.visit_block(block),
+            Statement::Label { name: _, block } => { self.visit_block(block); },
             Statement::Del(expr) => { self.visit_expression(location, expr, None); },
         }
+        return ControlFlow::allfalse()
     }
 
     fn visit_var_stmt(&mut self, location: Location, var: &'o VarStatement) {
