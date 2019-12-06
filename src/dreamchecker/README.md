@@ -54,13 +54,13 @@ be enabled:
 	#define SHOULD_CALL_PARENT(X) set SpacemanDMM_should_call_parent = X
 	#define UNLINT(X) SpacemanDMM_unlint(X)
 	#define SHOULD_NOT_OVERRIDE(X) set SpacemanDMM_should_not_override = X
-	#define FINAL_VAR var/final
+	#define VAR_FINAL var/SpacemanDMM_final
 #else
 	#define RETURN_TYPE(X)
 	#define SHOULD_CALL_PARENT(X)
 	#define UNLINT(X) X
 	#define SHOULD_NOT_OVERRIDE(X)
-	#define FINAL_VAR var
+	#define VAR_FINAL var
 #endif
 ```
 
@@ -94,8 +94,8 @@ This functions in a similar way to the `final` keyword in some languages.
 
 ### Final variables
 
-Use the above definition of FINAL_VAR to declare vars as `final`, `var/final/foo` such that overriding their value isn't permitted by types that inherit it.
+Use the above definition of VAR_FINAL to declare vars as `final`, `var/final/foo` such that overriding their value isn't permitted by types that inherit it.
 ```
 /a/type
-  FINAL_VAR/foo = somevalue
+  VAR_FINAL/foo = somevalue
 ```
