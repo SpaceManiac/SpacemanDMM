@@ -700,7 +700,7 @@ impl FromIterator<String> for VarType {
                 if p == "global" || p == "static" {
                     is_static = true;
                     true
-                } else if p == "final" {
+                } else if p == "SpacemanDMM_final" {
                     is_final = true;
                     true
                 } else if p == "const" {

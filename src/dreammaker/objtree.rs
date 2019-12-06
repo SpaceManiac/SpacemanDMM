@@ -887,12 +887,12 @@ impl ObjectTree {
                 Some(name) => name,
                 None => return Ok(None), // var{} block, children will be real vars
             };
-            while prev == "global" || prev == "static" || prev == "tmp" || prev == "const" || prev == "final" {
+            while prev == "global" || prev == "static" || prev == "tmp" || prev == "const" || prev == "SpacemanDMM_final" {
                 if let Some(name) = rest.next() {
                     is_static |= prev == "global" || prev == "static";
                     is_const |= prev == "const";
                     is_tmp |= prev == "tmp";
-                    is_final |= prev == "final";
+                    is_final |= prev == "SpacemanDMM_final";
                     prev = name;
                 } else {
                     return Ok(None); // var/const{} block, children will be real vars

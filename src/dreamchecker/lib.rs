@@ -470,7 +470,7 @@ impl<'o> AnalyzeObjectTree<'o> {
 }
 
 fn static_type<'o>(objtree: &'o ObjectTree, location: Location, mut of: &[String]) -> Result<StaticType<'o>, DMError> {
-    while !of.is_empty() && ["static", "global", "const", "tmp", "final"].contains(&&*of[0]) {
+    while !of.is_empty() && ["static", "global", "const", "tmp", "SpacemanDMM_final"].contains(&&*of[0]) {
         of = &of[1..];
     }
 
@@ -512,6 +512,9 @@ pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
 
             for (varname, typevar) in typeref.vars.iter() {
                 if varname == "vars" {
+                    continue;
+                }
+                if path == "/client" && varname == "parent_type" {
                     continue;
                 }
 
