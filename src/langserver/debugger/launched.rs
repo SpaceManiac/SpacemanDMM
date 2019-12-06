@@ -4,7 +4,7 @@
 use std::sync::{Arc, Mutex};
 use std::process::{Command, Stdio};
 use super::SequenceNumber;
-use super::dap_types::{ExitedEvent, TerminatedEvent};
+use super::dap_types::ExitedEvent;
 
 // active --kill--> killed: emit Terminated, send SIGKILL
 // active --detach--> detached: emit Terminated
@@ -21,10 +21,6 @@ enum State {
     Detached,
     Exited,
 }
-
-// TODO: This code currently emits the Terminated event in order to cover for
-// no actual debugging taking place. When debugging is implemented, that event
-// should be moved to be
 
 pub struct Launched {
     handle: raw::Handle,
@@ -73,9 +69,6 @@ impl Launched {
                         -1
                     }
                 };
-                if let State::Active = *state {
-                    seq2.issue_event(TerminatedEvent::default());
-                }
                 *state = State::Exited;
                 seq2.issue_event(ExitedEvent {
                     exitCode: code as i64,
@@ -94,7 +87,6 @@ impl Launched {
         match *state {
             State::Active => {
                 output!(in self.seq, "[launched] Killing child process...");
-                self.seq.issue_event(TerminatedEvent::default());
                 *state = State::Killed;
                 match unsafe { raw::kill(self.handle) } {
                     true => Ok(()),
@@ -114,7 +106,6 @@ impl Launched {
         match *state {
             State::Active => {
                 output!(in self.seq, "[launched] Detaching from child process...");
-                self.seq.issue_event(TerminatedEvent::default());
                 *state = State::Detached;
             }
             _other => {

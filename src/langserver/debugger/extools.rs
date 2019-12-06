@@ -217,7 +217,7 @@ impl ExtoolsThread {
             // read into the buffer
             let mut terminator = None;
             match self.sender.stream.read(&mut read_buf[..]) {
-                Ok(0) => return,
+                Ok(0) => break,
                 Ok(n) => {
                     let slice = &read_buf[..n];
                     if let Some(pos) = slice.iter().position(|&x| x == 0) {
@@ -242,6 +242,8 @@ impl ExtoolsThread {
                 buffer.drain(..start);
             }
         }
+
+        self.seq.issue_event(dap_types::TerminatedEvent::default());
     }
 
     fn queue<T>(&self, tx: &mpsc::Sender<T>, val: T) {
