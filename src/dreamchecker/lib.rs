@@ -79,6 +79,7 @@ enum Assumption<'o> {
     IsNum(bool),
     IsType(bool, TypeRef<'o>),
     IsPath(bool, TypeRef<'o>),
+    IsTypeVar(bool, TypeRef<'o>),
 }
 
 impl<'o> Assumption<'o> {
@@ -182,6 +183,7 @@ pub struct Analysis<'o> {
     aset: AssumptionSet<'o>,
     value: Option<Constant>,
     fix_hint: Option<(Location, String)>,
+    is_impure: Option<bool>,
 }
 
 impl<'o> Analysis<'o> {
@@ -191,6 +193,7 @@ impl<'o> Analysis<'o> {
             aset: AssumptionSet::default(),
             value: None,
             fix_hint: None,
+            is_impure: None,
         }
     }
 
@@ -200,6 +203,7 @@ impl<'o> Analysis<'o> {
             aset: assumption_set![Assumption::IsNull(true)],
             value: Some(Constant::Null(None)),
             fix_hint: None,
+            is_impure: None,
         }
     }
 
@@ -213,6 +217,7 @@ impl<'o> Analysis<'o> {
             aset: AssumptionSet::from_constant(objtree, &value, type_hint),
             value: Some(value),
             fix_hint: None,
+            is_impure: None,
         }
     }
 
@@ -245,6 +250,7 @@ impl<'o> From<AssumptionSet<'o>> for Analysis<'o> {
             aset,
             value: None,
             fix_hint: None,
+            is_impure: None,
         }
     }
 }
@@ -262,6 +268,7 @@ impl<'o> From<StaticType<'o>> for Analysis<'o> {
             static_ty: static_ty,
             fix_hint: None,
             value: None,
+            is_impure: None,
         }
     }
 }
@@ -448,13 +455,14 @@ pub struct AnalyzeObjectTree<'o> {
     must_not_override: ProcDirective<'o>,
     must_not_sleep: ProcDirective<'o>,
     sleep_exempt: ProcDirective<'o>,
-
+    must_be_pure: ProcDirective<'o>,
     // Debug(ProcRef) -> KwargInfo
     used_kwargs: BTreeMap<String, KwargInfo>,
 
     call_tree: HashMap<ProcRef<'o>, Vec<(ProcRef<'o>, Location)>>,
 
     sleeping_procs: SleepingProcs<'o>,
+    impure_procs: HashSet<ProcRef<'o>>,
     waitfor_procs: HashSet<ProcRef<'o>>,
 }
 
@@ -470,10 +478,12 @@ impl<'o> AnalyzeObjectTree<'o> {
             must_call_parent: ProcDirective::new("SpacemanDMM_should_call_parent", true),
             must_not_override: ProcDirective::new("SpacemanDMM_should_not_override", false),
             must_not_sleep: ProcDirective::new("SpacemanDMM_should_not_sleep", false),
-            sleep_exempt: ProcDirective::new("SpacemanDMM_allowed_to_sleep", false)
+            sleep_exempt: ProcDirective::new("SpacemanDMM_allowed_to_sleep", false),
+            must_be_pure: ProcDirective::new("SpacemanDMM_should_be_pure", false),
             used_kwargs: Default::default(),
             call_tree: Default::default(),
             sleeping_procs: Default::default(),
+            impure_procs: Default::default(),
             waitfor_procs: Default::default(),
         }
     }
@@ -545,6 +555,45 @@ impl<'o> AnalyzeObjectTree<'o> {
                     error(procref.get().location, format!("{} sets SpacemanDMM_should_not_sleep but calls blocking proc {}", procref, nextproc))
                         .with_callstack(callstack)
                         .with_blocking_builtins(sleepvec)
+                        .register(self.context)
+                } else {
+                    guard!(let Some(calledvec) = self.call_tree.get(&nextproc) else {
+                        continue
+                    });
+                    for (proccalled, location) in calledvec.iter() {
+                        let mut newstack = callstack.clone();
+                        newstack.add_step(*proccalled, *location);
+                        to_visit.push_back((*proccalled, newstack));
+                    }
+                }
+            }
+        }
+
+        for procref in self.must_be_pure.iter() {
+            if let Some(_) = self.impure_procs.get(procref) {
+                error(procref.get().location, format!("{} sets SpacemanDMM_should_be_pure but does impure operations", procref))
+                    .register(self.context)
+            }
+            let mut visited = HashSet::<ProcRef<'o>>::new();
+            let mut to_visit = VecDeque::<(ProcRef<'o>, CallStack)>::new();
+            if let Some(procscalled) = self.call_tree.get(procref) {
+                for (proccalled, location) in procscalled {
+                    let mut callstack = CallStack::default();
+                    callstack.add_step(*proccalled, *location);
+                    to_visit.push_back((*proccalled, callstack));
+                }
+            }
+            while !to_visit.is_empty() {
+                guard!(let Some((nextproc, callstack)) = to_visit.pop_front() else {
+                    break
+                });
+                if let Some(_) = visited.get(&nextproc) {
+                    continue
+                }
+                visited.insert(nextproc);
+                if let Some(sleepvec) = self.impure_procs.get(&nextproc) {
+                    error(procref.get().location, format!("{} sets SpacemanDMM_should_be_pure but calls a {} that does impure operations", procref, nextproc))
+                        .with_callstack(callstack)
                         .register(self.context)
                 } else {
                     guard!(let Some(calledvec) = self.call_tree.get(&nextproc) else {
@@ -786,6 +835,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             aset: assumption_set![Assumption::IsNull(false)],
             value: None,
             fix_hint: None,
+            is_impure: Some(true),
         }.into());
 
         AnalyzeProc {
@@ -812,6 +862,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         self.env.call_tree.insert(self.proc_ref, Default::default());
 
         self.visit_block(block);
+
+        //println!("purity {}", self.is_pure);
 
         if self.proc_ref.parent_proc().is_some() {
             if let Some((proc, true, location)) = self.env.must_not_override.get_self_or_parent(self.proc_ref) {
@@ -993,6 +1045,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     }
 
     fn visit_expression(&mut self, location: Location, expression: &'o Expression, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
+        //println!("{:#?}", expression);
         match expression {
             Expression::Base { unary, term, follow } => {
                 let base_type_hint = if follow.is_empty() && unary.is_empty() {
@@ -1066,6 +1119,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Expression::AssignOp { lhs, rhs, .. } => {
                 let lhs = self.visit_expression(location, lhs, None);
+                if let Some(impurity) = lhs.is_impure {
+                    if impurity  {
+                        self.env.impure_procs.insert(self.proc_ref);
+                    }
+                }
                 self.visit_expression(location, rhs, lhs.static_ty.basic_type())
             },
             Expression::TernaryOp { cond, if_, else_ } => {
@@ -1079,6 +1137,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     }
 
     fn visit_term(&mut self, location: Location, term: &'o Term, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
+        //println!("term {:#?}", term);
         match term {
             Term::Null => Analysis::null(),
             Term::Int(number) => Analysis::from_value(self.objtree, Constant::from(*number), type_hint),
@@ -1093,8 +1152,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         .with_fix_hint(var.location, "add additional type info here")
                 }
                 if let Some(decl) = self.ty.get_var_declaration(unscoped_name) {
-                    self.static_type(location, &decl.var_type.type_path)
-                        .with_fix_hint(decl.location, "add additional type info here")
+                    //println!("found type var");
+                    let mut ana = self.static_type(location, &decl.var_type.type_path)
+                        .with_fix_hint(decl.location, "add additional type info here");
+                    ana.is_impure = Some(true);
+                    return ana
                 } else {
                     error(location, format!("undefined var: {:?}", unscoped_name))
                         .register(self.context);
@@ -1112,6 +1174,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         aset: assumption_set![Assumption::IsPath(true, nav.ty())].into(),
                         value: Some(Constant::Prefab(pop)),
                         fix_hint: None,
+                        is_impure: None,
                     }
                 } else {
                     error(location, format!("failed to resolve path {}", FormatTypePath(&prefab.path)))
@@ -1366,6 +1429,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
     // checks operatorX overloads on types
     fn check_operator_overload(&mut self, rhs: Analysis<'o>, location: Location, operator: &'o str) -> Analysis<'o> {
+        if let Some(impurity) = rhs.is_impure {
+            if impurity {
+                self.env.impure_procs.insert(self.proc_ref);
+            }
+        }
         let typeerror;
         match rhs.static_ty {
             StaticType::None => {
@@ -1391,8 +1459,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         match op {
             // !x just evaluates the "truthiness" of x and negates it, returning 1 or 0
             UnaryOp::Not => Analysis::from(assumption_set![Assumption::IsNum(true)]),
-            UnaryOp::PreIncr | UnaryOp::PostIncr => self.check_operator_overload(rhs, location, "operator++"),
-            UnaryOp::PreDecr | UnaryOp::PostDecr => self.check_operator_overload(rhs, location, "operator--"),
+            UnaryOp::PreIncr | UnaryOp::PostIncr => {
+                self.check_operator_overload(rhs, location, "operator++")
+            },
+            UnaryOp::PreDecr | UnaryOp::PostDecr => {
+                self.check_operator_overload(rhs, location, "operator--")
+            },
             /*
             (UnaryOp::Neg, Type::Number) => Type::Number.into(),
             (UnaryOp::BitNot, Type::Number) => Type::Number.into(),
