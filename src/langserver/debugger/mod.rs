@@ -108,7 +108,10 @@ impl DebugDatabaseBuilder {
 
         objtree.root().recurse(&mut |ty| {
             for (name, proc) in ty.procs.iter() {
-                for (override_id, pv) in proc.value.iter().enumerate() {
+                for (override_id, pv) in proc.value.iter()
+                    .skip_while(|pv| pv.location.is_builtins() && !STDDEF_PROCS.contains(&format!("{}/{}", ty.path, name).as_str()))
+                    .enumerate()
+                {
                     line_numbers.entry(pv.location.file)
                         .or_default()
                         .push((
@@ -153,7 +156,11 @@ impl DebugDatabase {
 
         if let Some(ty) = self.objtree.find(&typename) {
             if let Some(ty_proc) = ty.get().procs.get(procname) {
-                return ty_proc.value.get(override_id);
+                // Don't consider (most) builtins against the override_id count.
+                return ty_proc.value.iter()
+                    .skip_while(|pv| pv.location.is_builtins() && !STDDEF_PROCS.contains(&proc_ref))
+                    .skip(override_id)
+                    .next();
             }
         }
         None
@@ -686,3 +693,63 @@ pub struct AttachRequestArgumentsVsc {
 
     port: Option<u16>,
 }
+
+// ----------------------------------------------------------------------------
+// Tables
+
+// These procs are currently considered "builtins" by the parser, but unlike
+// other builtins, they are written in softcode in the the internal `stddef.dm`
+// file and therefore *do* take an `override_id` slot.
+// TODO: Reserve a FileId for `stddef.dm` instead of using a table here.
+const STDDEF_PROCS: &[&str] = &[
+    "/sound/New",
+    "/sound/RscFile",
+    "/icon/New",
+    "/icon/Icon",
+    "/icon/RscFile",
+    "/icon/IconStates",
+    "/icon/Turn",
+    "/icon/Flip",
+    "/icon/Shift",
+    "/icon/SetIntensity",
+    "/icon/Blend",
+    "/icon/SwapColor",
+    "/icon/DrawBox",
+    "/icon/Insert",
+    "/icon/MapColors",
+    "/icon/Scale",
+    "/icon/Crop",
+    "/icon/GetPixel",
+    "/icon/Width",
+    "/icon/Height",
+    "/matrix/New",
+    "/matrix/Multiply",
+    "/matrix/Add",
+    "/matrix/Subtract",
+    "/matrix/Invert",
+    "/matrix/Turn",
+    "/matrix/Scale",
+    "/matrix/Translate",
+    "/matrix/Interpolate",
+    "/database/New",
+    "/database/Open",
+    "/database/Close",
+    "/database/Error",
+    "/database/ErrorMsg",
+    "/database/query/New",
+    "/database/query/Open",
+    "/database/query/Clear",
+    "/database/query/Add",
+    "/database/query/Execute",
+    "/database/query/NextRow",
+    "/database/query/RowsAffected",
+    "/database/query/Reset",
+    "/database/query/Columns",
+    "/database/query/GetColumn",
+    "/database/query/GetRowData",
+    "/database/query/Close",
+    "/exception/New",
+    "/regex/New",
+    "/regex/Find",
+    "/regex/Replace"
+];
