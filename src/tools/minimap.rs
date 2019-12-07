@@ -590,15 +590,34 @@ pub fn color_of<'s, T: GetVar<'s> + ?Sized>(objtree: &'s ObjectTree, atom: &T) -
                 [255, 255, 255, alpha]  // invalid
             }
         }
-        &Constant::String(ref color) if color == "red" => [255, 0, 0, alpha],
-        &Constant::String(ref color) if color == "green" => [0, 255, 0, alpha],
-        &Constant::String(ref color) if color == "blue" => [0, 0, 255, alpha],
-        &Constant::String(ref color) if color == "black" => [0, 0, 0, alpha],
-        &Constant::String(ref color) if color == "white" => [255, 255, 255, alpha],
-        &Constant::String(ref color) if color == "yellow" => [255, 255, 0, alpha],
-        &Constant::String(ref color) if color == "cyan" => [0, 255, 255, alpha],
-        &Constant::String(ref color) if color == "magenta" => [255, 0, 255, alpha],
+        &Constant::String(ref color) => match html_color(color) {
+            Some([r, g, b]) => [r, g, b, alpha],
+            None => [255, 255, 255, alpha],
+        }
         // TODO: color matrix support?
         _ => [255, 255, 255, alpha],
     }
+}
+
+fn html_color(name: &str) -> Option<[u8; 3]> {
+    Some(match name {
+        // from "tags (text)" in the DM reference
+        "black" => [0, 0, 0],
+        "silver" => [0xc0, 0xc0, 0xc0],
+        "gray" | "grey" => [0x80, 0x80, 0x80],
+        "white" => [0xff, 0xff, 0xff],
+        "maroon" => [0x80, 0, 0],
+        "red" => [0xff, 0, 0],
+        "purple" => [0x80, 0, 0x80],
+        "fuchsia" | "magenta" => [0xff, 0, 0xff],
+        "green" => [0, 0xc0, 0],
+        "lime" => [0, 0xff, 0],
+        "olive" | "gold" => [0x80, 0x80, 0],
+        "yellow" => [0xff, 0xff, 0],
+        "navy" => [0, 0, 0x80],
+        "blue" => [0, 0, 0xff],
+        "teal" => [0, 0x80, 0x80],
+        "aqua" | "cyan" => [0, 0xff, 0xff],
+        _ => return None,
+    })
 }
