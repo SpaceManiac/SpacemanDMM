@@ -211,6 +211,12 @@ impl<'o> Analysis<'o> {
         Analysis::from(StaticType::Type(ty))
     }
 
+    fn from_static_type_impure(ty: TypeRef<'o>) -> Analysis<'o> {
+        let mut analysis = Analysis::from(StaticType::Type(ty));
+        analysis.is_impure = Some(true);
+        return analysis
+    }
+
     fn from_value(objtree: &'o ObjectTree, value: Constant, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
         Analysis {
             static_ty: StaticType::None,
@@ -797,6 +803,7 @@ pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
 // ----------------------------------------------------------------------------
 // Procedure analyzer
 
+#[derive(Debug)]
 struct LocalVar<'o> {
     location: Location,
     analysis: Analysis<'o>,
@@ -825,7 +832,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
         let mut local_vars = HashMap::<String, LocalVar>::new();
         local_vars.insert(".".to_owned(), Analysis::empty().into());
-        local_vars.insert("args".to_owned(), Analysis::from_static_type(objtree.expect("/list")).into());
+        local_vars.insert("args".to_owned(), Analysis::from_static_type_impure(objtree.expect("/list")).into());
         local_vars.insert("usr".to_owned(), Analysis::from_static_type(objtree.expect("/mob")).into());
         if !ty.is_root() {
             local_vars.insert("src".to_owned(), Analysis::from_static_type(ty).into());
@@ -852,11 +859,17 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
     pub fn run(&mut self, block: &'o [Spanned<Statement>]) {
         for param in self.proc_ref.get().parameters.iter() {
-            let analysis = self.static_type(param.location, &param.var_type.type_path);
+            let mut analysis = self.static_type(param.location, &param.var_type.type_path);
+            if let StaticType::None = analysis.static_ty {
+                analysis.is_impure = Some(false);
+            } else {
+                analysis.is_impure = Some(true);
+            }
             self.local_vars.insert(param.name.to_owned(), LocalVar {
                 location: self.proc_ref.location,
                 analysis,
             });
+            //println!("adding parameters {:#?}", self.local_vars);
         }
 
         self.env.call_tree.insert(self.proc_ref, Default::default());
@@ -893,7 +906,26 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
     fn visit_statement(&mut self, location: Location, statement: &'o Statement) {
         match statement {
-            Statement::Expr(expr) => { self.visit_expression(location, expr, None); },
+            Statement::Expr(expr) => {
+                if let Expression::Base { unary, term, follow } = expr {
+                    if let Term::Call(call, vec) = &term.elem {
+                        if let Some(proc) = self.ty.get_proc(call) {
+                            let mut next = Some(proc);
+                            while let Some(current) = next {
+                                if let Some(&(purity, loc)) = self.env.must_be_pure.get(&current) {
+                                    if purity {
+                                        error(location, format!("call to pure proc {} discards return value", call))
+                                            .with_note(loc, "prohibited by this must_be_pure annotation")
+                                            .register(self.context);
+                                    }
+                                }
+                                next = current.parent_proc();
+                            }
+                        }
+                    }
+                }
+                self.visit_expression(location, expr, None); 
+            },
             Statement::Return(Some(expr)) => {
                 // TODO: factor in the previous return type if there was one
                 let return_type = self.visit_expression(location, expr, None);
