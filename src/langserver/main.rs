@@ -991,6 +991,9 @@ handle_method_call! {
                                 if decl.var_type.is_final {
                                     declaration.push_str("/final");
                                 }
+                                if decl.var_type.is_private {
+                                    declaration.push_str("/private");
+                                }
                                 for bit in decl.var_type.type_path.iter() {
                                     declaration.push('/');
                                     declaration.push_str(&bit);

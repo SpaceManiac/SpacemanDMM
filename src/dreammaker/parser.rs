@@ -1442,6 +1442,11 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         .with_errortype("final_no_effect")
                         .register(self.context);
                 }
+                if var_type.is_private {
+                    DMError::new(type_path_start, "var/private has no effect here")
+                        .set_severity(Severity::Warning)
+                        .register(self.context);
+                }
                 let var_suffix = require!(self.var_suffix());
                 var_type.suffix(&var_suffix);
 

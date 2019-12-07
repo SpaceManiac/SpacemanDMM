@@ -549,7 +549,7 @@ impl<'o> AnalyzeObjectTree<'o> {
 }
 
 fn static_type<'o>(objtree: &'o ObjectTree, location: Location, mut of: &[String]) -> Result<StaticType<'o>, DMError> {
-    while !of.is_empty() && ["static", "global", "const", "tmp", "SpacemanDMM_final"].contains(&&*of[0]) {
+    while !of.is_empty() && ["static", "global", "const", "tmp", "SpacemanDMM_final", "SpacemanDMM_private"].contains(&&*of[0]) {
         of = &of[1..];
     }
 
@@ -839,7 +839,6 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     fn visit_var(&mut self, location: Location, var_type: &VarType, name: &str, value: Option<&'o Expression>) {
         // Calculate type hint
         let static_type = self.env.static_type(location, &var_type.type_path);
-
         // Visit the expression if it's there
         let mut analysis = match value {
             Some(ref expr) => self.visit_expression(location, expr, static_type.basic_type()),
@@ -1178,6 +1177,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Follow::Field(kind, name) => {
                 if let Some(ty) = lhs.static_ty.basic_type() {
                     if let Some(decl) = ty.get_var_declaration(name) {
+                        if ty != self.ty && decl.var_type.is_private {
+                            error(location, format!("field {:?} on {} is declared as private", name, ty))
+                                .set_severity(Severity::Warning)
+                                .with_note(decl.location, "definition is here")
+                                .register(self.context);
+                        }
                         self.static_type(location, &decl.var_type.type_path)
                             .with_fix_hint(decl.location, "add additional type info here")
                     } else {
@@ -1196,7 +1201,31 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Follow::Call(kind, name, arguments) => {
                 if let Some(ty) = lhs.static_ty.basic_type() {
+                    println!("following call {} on {}", name, ty);
                     if let Some(proc) = ty.get_proc(name) {
+                        if self.proc_ref.parent_proc().is_some() {
+                            let mut next = Some(self.proc_ref);
+                            while let Some(current) = next {
+                                if let Some(&(must_not, location)) = self.env.must_not_override.get(&current) {
+                                    if must_not {
+                                        error(self.proc_ref.location, format!("proc overrides parent, prohibited by {}", current))
+                                            .with_note(location, "prohibited by this must_not_override annotation")
+                                            .register(self.context);
+                                    }
+                                }
+                                if !self.calls_parent {
+                                    if let Some(&(must, location)) = self.env.must_call_parent.get(&current) {
+                                        if must {
+                                            error(self.proc_ref.location, format!("proc never calls parent, required by {}", current))
+                                                .with_note(location, "required by this must_call_parent annotation")
+                                                .register(self.context);
+                                        }
+                                        break;
+                                    }
+                                }
+                                next = current.parent_proc();
+                            }
+                        }
                         self.visit_call(location, ty, proc, arguments, false)
                     } else {
                         error(location, format!("undefined proc: {:?} on {}", name, ty))
