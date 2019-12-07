@@ -324,15 +324,17 @@ struct KwargInfo {
 struct ProcDirective<'o> {
     directive: HashMap<ProcRef<'o>, (bool, Location)>,
     can_be_disabled: bool,
+    set_at_definition: bool,
     directive_string: &'static str,
 }
 
 impl<'o> ProcDirective<'o> {
-    pub fn new(directive_string: &'static str, can_be_disabled: bool) -> ProcDirective<'o> {
+    pub fn new(directive_string: &'static str, can_be_disabled: bool, set_at_definition: bool) -> ProcDirective<'o> {
         ProcDirective {
             directive: Default::default(),
             directive_string,
             can_be_disabled,
+            set_at_definition,
         }
     }
 
@@ -392,6 +394,7 @@ pub struct AnalyzeObjectTree<'o> {
     return_type: HashMap<ProcRef<'o>, TypeExpr<'o>>,
     must_call_parent: ProcDirective<'o>,
     must_not_override: ProcDirective<'o>,
+    private: ProcDirective<'o>,
     // Debug(ProcRef) -> KwargInfo
     used_kwargs: BTreeMap<String, KwargInfo>,
 }
@@ -405,8 +408,9 @@ impl<'o> AnalyzeObjectTree<'o> {
             context,
             objtree,
             return_type,
-            must_call_parent: ProcDirective::new("SpacemanDMM_should_call_parent", true),
-            must_not_override: ProcDirective::new("SpacemanDMM_should_not_override", false),
+            must_call_parent: ProcDirective::new("SpacemanDMM_should_call_parent", true, false),
+            must_not_override: ProcDirective::new("SpacemanDMM_should_not_override", false, false),
+            private: ProcDirective::new("SpacemanDMM_private_proc", false, true),
             used_kwargs: Default::default(),
         }
     }
@@ -421,6 +425,7 @@ impl<'o> AnalyzeObjectTree<'o> {
         let procdirective = match directive {
             "SpacemanDMM_should_not_override" => &mut self.must_not_override,
             "SpacemanDMM_should_call_parent" => &mut self.must_call_parent,
+            "SpacemanDMM_private_proc" => &mut self.private,
             other => {
                 error(location, format!("unknown linter setting {:?}", directive))
                     .with_errortype("unknown_linter_setting")
@@ -429,6 +434,18 @@ impl<'o> AnalyzeObjectTree<'o> {
                 return
             }
         };
+
+        if procdirective.set_at_definition {
+            if let Some(procdef) = &mut proc.get_declaration() {
+                if procdef.location != proc.get().location {
+                    error(location, format!("Can't define procs {} outside their initial definition", directive))
+                        .set_severity(Severity::Warning)
+                        .register(self.context);
+                    return
+                }
+            }
+        }
+
         match directive_value_to_truthy(expr, location) {
             Ok(truthy) => {
                 if let Err(error) = procdirective.insert(proc, truthy, location) {
@@ -1201,29 +1218,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Follow::Call(kind, name, arguments) => {
                 if let Some(ty) = lhs.static_ty.basic_type() {
-                    println!("following call {} on {}", name, ty);
                     if let Some(proc) = ty.get_proc(name) {
-                        if self.proc_ref.parent_proc().is_some() {
-                            let mut next = Some(self.proc_ref);
-                            while let Some(current) = next {
-                                if let Some(&(must_not, location)) = self.env.must_not_override.get(&current) {
-                                    if must_not {
-                                        error(self.proc_ref.location, format!("proc overrides parent, prohibited by {}", current))
-                                            .with_note(location, "prohibited by this must_not_override annotation")
-                                            .register(self.context);
-                                    }
-                                }
-                                if !self.calls_parent {
-                                    if let Some(&(must, location)) = self.env.must_call_parent.get(&current) {
-                                        if must {
-                                            error(self.proc_ref.location, format!("proc never calls parent, required by {}", current))
-                                                .with_note(location, "required by this must_call_parent annotation")
-                                                .register(self.context);
-                                        }
-                                        break;
-                                    }
-                                }
-                                next = current.parent_proc();
+                        if let Some((privateproc, is_private, decllocation)) = self.env.private.get_self_or_parent(proc) {
+                            if is_private {
+                                error(location, format!("attempting to call private proc {} on {}", name, ty))
+                                    .with_note(decllocation, "prohibited by this private_proc annotation")
+                                    .register(self.context);
                             }
                         }
                         self.visit_call(location, ty, proc, arguments, false)
