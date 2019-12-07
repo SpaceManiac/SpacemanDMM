@@ -1,12 +1,9 @@
-extern crate rand;
-extern crate time;
-
 use std::cmp;
 use std::collections::BTreeSet;
-use self::time::PreciseTime;
-use RangeInclusive;
+use time::PreciseTime;
+use crate::RangeInclusive;
 
-type IntervalTree<V> = ::IntervalTree<u64, V>;
+type IntervalTree<V> = crate::IntervalTree<u64, V>;
 
 #[test]
 fn test_getters(){
@@ -189,7 +186,7 @@ fn test_range_iter_nontrivial(){
             //assert!(t.test_theban_interval_tree());
         };
     let query = random_range();
-    let should = set.iter().filter(|r| ::range::intersect(&query, r)).map(|r| r.clone()).collect::<Vec<RangeInclusive<u64>>>();
+    let should = set.iter().filter(|r| crate::range::intersect(&query, r)).map(|r| r.clone()).collect::<Vec<RangeInclusive<u64>>>();
     let is = t.range(query).map(|(r,_)| r).collect::<Vec<RangeInclusive<u64>>>();
     assert_eq!(should, is);
     };

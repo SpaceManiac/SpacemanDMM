@@ -1,7 +1,7 @@
 use std::collections::Bound;
-use range::RangeInclusive;
-use node::{Node, height};
-use iterators::{RangePairIter, IntoIter};
+use crate::range::RangeInclusive;
+use crate::node::{Node, height};
+use crate::iterators::{RangePairIter, IntoIter};
 
 /// An interval tree.
 #[derive(Debug, Clone)]
@@ -228,8 +228,8 @@ impl<K: Ord, V> IntervalTree<K, V> {
 #[cfg(test)]
 mod tests {
     extern crate rand;
-    use range::RangeInclusive;
-    use node::tests::is_interval_tree;
+    use crate::range::RangeInclusive;
+    use crate::node::tests::is_interval_tree;
 
     type IntervalTree<V> = super::IntervalTree<u64, V>;
 
@@ -237,7 +237,7 @@ mod tests {
         let offset = rand::random::<u64>()%50;
         let len: u64;
         len = rand::random::<u64>()%50;
-        ::range(offset, offset+len)
+        crate::range(offset, offset+len)
     }
 
     #[test]
