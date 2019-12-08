@@ -33,20 +33,26 @@ pub enum Define {
 }
 
 impl Define {
+    /// Get the documentation associated with this define.
     pub fn docs(&self) -> &DocCollection {
         match self {
             Define::Constant { docs, .. } => docs,
             Define::Function { docs, .. } => docs,
         }
     }
+
+    /// Get this define's substitution. May be empty.
+    pub fn substitution(&self) -> &[Token] {
+        match self {
+            Define::Constant { subst, .. } => subst,
+            Define::Function { subst, .. } => subst,
+        }
+    }
 }
 
 impl fmt::Display for Define {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let subst = match self {
-            Define::Constant { ref subst, .. } |
-            Define::Function { ref subst, .. } => subst,
-        };
+        let subst = self.substitution();
         if subst.is_empty() {
             fmt.write_str("(macro)")
         } else if subst.len() == 1 {
