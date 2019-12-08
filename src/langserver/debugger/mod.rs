@@ -616,18 +616,17 @@ handle_request! {
     }
 
     on ExceptionInfo(&mut self, _params) {
-        debug_output!(in self.seq, "[main] returning an ExceptionInfoResponse");
+        guard!(let Some(extools) = self.extools.as_mut() else {
+            return Err(Box::new(GenericError("No extools connection")));
+        });
+
+        // VSC shows exceptionId, description, stackTrace in that order.
+        let message = extools.last_error_message();
         ExceptionInfoResponse {
-            exceptionId: "exceptionId".to_owned(),
-            description: Some("description".to_owned()),
+            exceptionId: message.unwrap_or_default().to_owned(),
+            description: None,
             breakMode: ExceptionBreakMode::Always,
-            details: Some(ExceptionDetails {
-                message: Some("message".to_owned()),
-                typeName: Some("exception".to_owned()),
-                fullTypeName: Some("/exception".to_owned()),
-                stackTrace: Some("stackTrace".to_owned()),
-                .. Default::default()
-            }),
+            details: None,
         }
     }
 }

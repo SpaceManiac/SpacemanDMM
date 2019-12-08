@@ -34,6 +34,8 @@ pub struct Extools {
     get_type_rx: mpsc::Receiver<GetTypeResponse>,
     bytecode_rx: mpsc::Receiver<DisassembledProc>,
     get_field_rx: mpsc::Receiver<FieldResponse>,
+    runtime_rx: mpsc::Receiver<Runtime>,
+    last_runtime: Option<Runtime>,
 }
 
 impl Extools {
@@ -74,6 +76,7 @@ impl Extools {
         let (get_type_tx, get_type_rx) = mpsc::channel();
         let (bytecode_tx, bytecode_rx) = mpsc::channel();
         let (get_field_tx, get_field_rx) = mpsc::channel();
+        let (runtime_tx, runtime_rx) = mpsc::channel();
 
         let extools = Extools {
             seq,
@@ -83,6 +86,8 @@ impl Extools {
             bytecode_rx,
             get_type_rx,
             get_field_rx,
+            runtime_rx,
+            last_runtime: None,
         };
         let seq = extools.seq.clone();
         let threads = extools.threads.clone();
@@ -98,6 +103,7 @@ impl Extools {
                     get_type_tx,
                     bytecode_tx,
                     get_field_tx,
+                    runtime_tx,
                 }.read_loop();
             })?;
 
@@ -187,6 +193,13 @@ impl Extools {
         });
         Ok(self.get_field_rx.recv_timeout(RECV_TIMEOUT)?.0)
     }
+
+    pub fn last_error_message(&mut self) -> Option<&str> {
+        while let Ok(runtime) = self.runtime_rx.try_recv() {
+            self.last_runtime = Some(runtime);
+        }
+        self.last_runtime.as_ref().map(|r| r.message.as_str())
+    }
 }
 
 impl Drop for Extools {
@@ -215,6 +228,7 @@ struct ExtoolsThread {
     get_type_tx: mpsc::Sender<GetTypeResponse>,
     bytecode_tx: mpsc::Sender<DisassembledProc>,
     get_field_tx: mpsc::Sender<FieldResponse>,
+    runtime_tx: mpsc::Sender<Runtime>,
 }
 
 impl ExtoolsThread {
@@ -287,10 +301,11 @@ handle_extools! {
         debug_output!(in self.seq, "[extools] {}#{}@{} runtimed", runtime.proc, runtime.override_id, runtime.offset);
         self.seq.issue_event(dap_types::StoppedEvent {
             reason: "exception".to_owned(),
-            text: Some(runtime.message),
+            text: Some(runtime.message.clone()),
             threadId: Some(0),
             .. Default::default()
         });
+        self.queue(&self.runtime_tx, runtime);
     }
 
     on CallStack(&mut self, stack) {
