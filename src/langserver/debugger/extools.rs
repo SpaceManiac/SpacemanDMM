@@ -109,9 +109,9 @@ impl Extools {
     }
 
     fn bytecode(&mut self, proc_ref: &str, override_id: usize) -> &[DisassembledInstruction] {
-        let Extools { bytecode, sender, seq, bytecode_rx, .. } = self;
+        let Extools { bytecode, sender, seq: _seq, bytecode_rx, .. } = self;
         bytecode.entry((proc_ref.to_owned(), override_id)).or_insert_with(|| {
-            debug_output!(in seq, "[extools] Fetching bytecode for {}#{}", proc_ref, override_id);
+            debug_output!(in _seq, "[extools] Fetching bytecode for {}#{}", proc_ref, override_id);
             sender.send(ProcDisassemblyRequest {
                 name: proc_ref.to_owned(),
                 override_id,
@@ -248,8 +248,8 @@ impl ExtoolsThread {
 
     fn queue<T>(&self, tx: &mpsc::Sender<T>, val: T) {
         // If the other side isn't listening, log that.
-        if let Err(e) = tx.send(val) {
-            debug_output!(in self.seq, "[extools] Dropping {:?}", e);
+        if let Err(_e) = tx.send(val) {
+            debug_output!(in self.seq, "[extools] Dropping {:?}", _e);
         }
     }
 }
