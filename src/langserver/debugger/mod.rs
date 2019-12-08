@@ -294,6 +294,7 @@ handle_request! {
         // Tell the client our caps
         Some(Capabilities {
             supportTerminateDebuggee: Some(true),
+            supportsExceptionInfoRequest: Some(true),
             .. Default::default()
         })
     }
@@ -436,6 +437,7 @@ handle_request! {
                     .. Default::default()
                 });
                 dap_frame.line = i64::from(proc.location.line);
+                dap_frame.column = i64::from(proc.location.column);
             }
 
             if let Some(line) = extools.offset_to_line(&ex_frame.name, ex_frame.override_id, ex_frame.instruction_pointer) {
@@ -611,6 +613,22 @@ handle_request! {
         });
 
         extools.set_break_on_runtime(true);
+    }
+
+    on ExceptionInfo(&mut self, _params) {
+        debug_output!(in self.seq, "[main] returning an ExceptionInfoResponse");
+        ExceptionInfoResponse {
+            exceptionId: "exceptionId".to_owned(),
+            description: Some("description".to_owned()),
+            breakMode: ExceptionBreakMode::Always,
+            details: Some(ExceptionDetails {
+                message: Some("message".to_owned()),
+                typeName: Some("exception".to_owned()),
+                fullTypeName: Some("/exception".to_owned()),
+                stackTrace: Some("stackTrace".to_owned()),
+                .. Default::default()
+            }),
+        }
     }
 }
 

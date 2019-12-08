@@ -408,6 +408,46 @@ pub struct ContinueResponse {
     pub allThreadsContinued: Option<bool>,
 }
 
+/// Retrieves the details of the exception that caused this event to be raised.
+pub enum ExceptionInfo {}
+
+impl Request for ExceptionInfo {
+    type Params = ExceptionInfoArguments;
+    type Result = ExceptionInfoResponse;
+    const COMMAND: &'static str = "exceptionInfo";
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ExceptionInfoArguments {
+    /**
+     * Thread for which exception information should be retrieved.
+     */
+    pub threadId: i64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ExceptionInfoResponse {
+    /**
+     * ID of the exception that was thrown.
+     */
+    pub exceptionId: String,
+
+    /**
+     * Descriptive text for the exception provided by the debug adapter.
+     */
+    pub description: Option<String>,
+
+    /**
+     * Mode that caused the exception notification to be raised.
+     */
+    pub breakMode: ExceptionBreakMode,
+
+    /**
+     * Detailed information about the exception.
+     */
+    pub details: Option<ExceptionDetails>,
+}
+
 /// The request returns the variable scopes for a given stackframe ID.
 pub enum Scopes {}
 
@@ -858,6 +898,57 @@ pub struct Capabilities {
      * The debug adapter supports the 'breakpointLocations' request.
      */
     pub supportsBreakpointLocationsRequest: Option<bool>,
+}
+
+/// This enumeration defines all possible conditions when a thrown exception should result in a break.
+#[derive(Serialize, Deserialize, Debug)]
+pub enum ExceptionBreakMode {
+    /// never breaks
+    #[serde(rename="never")]
+    Never,
+    /// always breaks
+    #[serde(rename="always")]
+    Always,
+    /// breaks when exception unhandled
+    #[serde(rename="unhandled")]
+    Unhandled,
+    /// breaks if the exception is not handled by user code
+    #[serde(rename="userUnhandled")]
+    UserUnhandled,
+}
+
+/// Detailed information about an exception that has occurred.
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct ExceptionDetails {
+    /**
+     * Message contained in the exception.
+     */
+    pub message: Option<String>,
+
+    /**
+     * Short type name of the exception object.
+     */
+    pub typeName: Option<String>,
+
+    /**
+     * Fully-qualified type name of the exception object.
+     */
+    pub fullTypeName: Option<String>,
+
+    /**
+     * Optional expression that can be evaluated in the current scope to obtain the exception object.
+     */
+    pub evaluateName: Option<String>,
+
+    /**
+     * Stack trace at the time the exception was thrown.
+     */
+    pub stackTrace: Option<String>,
+
+    /**
+     * Details of the exception contained by this exception, if any.
+     */
+    pub innerException: Option<Vec<ExceptionDetails>>,
 }
 
 /// A structured message object. Used to return errors from requests.
