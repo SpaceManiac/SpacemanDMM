@@ -5,9 +5,7 @@ use dm::ast::*;
 
 pub fn extract(block: &[Spanned<Statement>]) -> Vec<String> {
     let mut output = Vec::new();
-    eprintln!("{:#?}", block);
     WalkProc { local_vars: &mut output }.visit_block(block);
-    eprintln!("{:#?}", output);
     output
 }
 
