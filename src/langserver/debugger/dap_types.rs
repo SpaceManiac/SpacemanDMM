@@ -467,6 +467,31 @@ pub struct SetBreakpointsArguments {
     pub sourceModified: Option<bool>,
 }
 
+/// The request configures the debuggers response to thrown exceptions.
+///
+/// If an exception is configured to break, a ‘stopped’ event is fired (with reason ‘exception’).
+pub enum SetExceptionBreakpoints {}
+
+impl Request for SetExceptionBreakpoints {
+    type Params = SetExceptionBreakpointsArguments;
+    type Result = ();
+    const COMMAND: &'static str = "setExceptionBreakpoints";
+}
+
+/// Arguments for ‘setExceptionBreakpoints’ request.
+#[derive(Deserialize, Debug)]
+pub struct SetExceptionBreakpointsArguments {
+    /**
+     * IDs of checked exception options. The set of IDs is returned via the 'exceptionBreakpointFilters' capability.
+     */
+    pub filters: Vec<String>,
+
+    /*/**
+     * Configuration options for selected exceptions.
+     */
+    pub exceptionOptions: Option<Vec<ExceptionOptions>>,*/
+}
+
 /// Response to ‘setBreakpoints’ request.
 ///
 /// Returned is information about each breakpoint created by this request.

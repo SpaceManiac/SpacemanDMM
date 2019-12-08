@@ -148,6 +148,10 @@ impl Extools {
         None
     }
 
+    pub fn set_break_on_runtime(&self, enable: bool) {
+        self.sender.send(BreakOnRuntime(enable));
+    }
+
     pub fn set_breakpoint(&self, proc: &str, override_id: usize, offset: i64) {
         debug_output!(in self.seq, "[extools] {}#{}@{} set", proc, override_id, offset);
         self.sender.send(BreakpointSet { proc: proc.to_owned(), override_id, offset });
@@ -274,6 +278,16 @@ handle_extools! {
         debug_output!(in self.seq, "[extools] {}#{}@{} hit", _hit.proc, _hit.override_id, _hit.offset);
         self.seq.issue_event(dap_types::StoppedEvent {
             reason: "breakpoint".to_owned(),
+            threadId: Some(0),
+            .. Default::default()
+        });
+    }
+
+    on Runtime(&mut self, runtime) {
+        debug_output!(in self.seq, "[extools] {}#{}@{} runtimed", runtime.proc, runtime.override_id, runtime.offset);
+        self.seq.issue_event(dap_types::StoppedEvent {
+            reason: "exception".to_owned(),
+            text: Some(runtime.message),
             threadId: Some(0),
             .. Default::default()
         });

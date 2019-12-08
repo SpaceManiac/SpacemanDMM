@@ -604,6 +604,14 @@ handle_request! {
 
         extools.step_in();
     }
+
+    on SetExceptionBreakpoints(&mut self, _params) {
+        guard!(let Some(extools) = self.extools.as_ref() else {
+            return Err(Box::new(GenericError("No extools connection")));
+        });
+
+        extools.set_break_on_runtime(true);
+    }
 }
 
 #[derive(Default, Debug)]

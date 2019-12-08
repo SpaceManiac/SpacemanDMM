@@ -189,8 +189,33 @@ impl Response for GetTypeResponse {
     const TYPE: &'static str = "get type";
 }
 
+// #define MESSAGE_TOGGLE_BREAK_ON_RUNTIME "break on runtimes" //Response content is true or false
+#[derive(Serialize, Deserialize, Debug)]
+pub struct BreakOnRuntime(pub bool);
+
+impl Request for BreakOnRuntime {
+    const TYPE: &'static str = "break on runtimes";
+}
+
+impl Response for BreakOnRuntime {
+    const TYPE: &'static str = "break on runtimes";
+}
+
 // ----------------------------------------------------------------------------
 // Spontaneous events
+
+// #define MESSAGE_RUNTIME "runtime" //Content is a Runtime
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Runtime {
+    pub proc: String,
+    pub override_id: usize,
+    pub offset: i64,
+    pub message: String,
+}
+
+impl Response for Runtime {
+    const TYPE: &'static str = "runtime";
+}
 
 // #define MESSAGE_BREAKPOINT_HIT "breakpoint hit" //Content is BreakpointHit
 #[derive(Serialize, Deserialize, Debug)]
