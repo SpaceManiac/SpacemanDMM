@@ -165,6 +165,33 @@ fn total_offset(text: &str, line: u64, mut character: u64) -> Result<usize, json
     Ok(text.len() - chars.as_str().len())
 }
 
+// Reverse of the above.
+pub fn offset_to_position(text: &str, offset: usize) -> langserver::Position {
+    let mut line = 0;
+    let mut line_start = 0;
+    loop {
+        match text[line_start..].find("\n") {
+            Some(next_pos) if line_start + next_pos < offset => line_start += next_pos + 1,
+            _ => break,
+        }
+        line += 1;
+    }
+
+    let mut character = 0;
+    for ch in text[line_start..offset].chars() {
+        character += ch.len_utf16() as u64;
+    }
+
+    langserver::Position { line, character }
+}
+
+pub fn get_range(text: &str, range: langserver::Range) -> Result<&str, jsonrpc::Error> {
+    Ok(&text[
+        total_offset(text, range.start.line, range.start.character)?
+        ..total_offset(text, range.end.line, range.end.character)?
+    ])
+}
+
 pub fn find_word(text: &str, offset: usize) -> &str {
     // go left as far as we can
     let mut start = offset;

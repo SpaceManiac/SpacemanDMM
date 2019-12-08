@@ -19,6 +19,8 @@ extern crate dreammaker as dm;
 extern crate dreamchecker;
 extern crate libc;
 #[macro_use] extern crate guard;
+extern crate regex;
+#[macro_use] extern crate lazy_static;
 
 #[macro_use] mod macros;
 mod jrpc_io;
@@ -27,6 +29,7 @@ mod symbol_search;
 mod find_references;
 mod extras;
 mod completion;
+mod color;
 
 mod debugger;
 
@@ -769,6 +772,7 @@ handle_method_call! {
                 signature_help_provider: Some(SignatureHelpOptions {
                     trigger_characters: Some(vec!["(".to_owned(), ",".to_owned()]),
                 }),
+                color_provider: Some(ColorProviderCapability::Simple(true)),
                 .. Default::default()
             }
         }
@@ -1576,6 +1580,45 @@ handle_method_call! {
             let mut iter = annotations.get_range(start..end).peekable();
             Some(DocumentSymbolResponse::Nested(find_document_symbols(&mut iter, end)))
         }
+    }
+
+    on DocumentColor(&mut self, params) {
+        let content = self.docs.get_contents(&params.text_document.uri).map_err(invalid_request)?;
+        let mut output = Vec::new();
+        for (start, end, [r, g, b, a]) in color::extract_colors(&content) {
+            output.push(ColorInformation {
+                range: Range {
+                    start: document::offset_to_position(&content, start),
+                    end: document::offset_to_position(&content, end),
+                },
+                color: Color {
+                    red: (r as f64) / 255.,
+                    green: (g as f64) / 255.,
+                    blue: (b as f64) / 255.,
+                    alpha: (a as f64) / 255.,
+                },
+            });
+        }
+        output
+    }
+
+    on ColorPresentationRequest(&mut self, params) {
+        let content = self.docs.get_contents(&params.text_document.uri).map_err(invalid_request)?;
+        let chunk = document::get_range(&content, params.range)?;
+        let color_format = color::ColorFormat::parse(&chunk).unwrap_or_default();
+        // TODO: return compatible alternate presentations for converting
+        // between "#..." and rgb().
+        vec![
+            ColorPresentation {
+                label: color_format.format([
+                    (params.color.red * 255.).round() as u8,
+                    (params.color.green * 255.).round() as u8,
+                    (params.color.blue * 255.).round() as u8,
+                    (params.color.alpha * 255.).round() as u8,
+                ]),
+                .. Default::default()
+            },
+        ]
     }
 
     // ------------------------------------------------------------------------
