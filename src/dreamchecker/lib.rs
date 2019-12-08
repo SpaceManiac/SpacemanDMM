@@ -1052,6 +1052,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             StaticType::Type(typeref) => {
                 if let Some(proc) = typeref.get_proc(crement) {
+                    let args = &[Expression::from(Term::Null)];
+                    self.visit_call(location, typeref, proc, args, true);
                     return Analysis::empty()
                 }
                 typeerror = typeref.get().pretty_path();
