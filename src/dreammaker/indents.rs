@@ -1,8 +1,8 @@
 //! The indentation processor.
 use std::collections::VecDeque;
 
-use super::{Location, HasLocation, Context};
-use super::lexer::{LocatedToken, Token, Punctuation};
+use crate::{Location, Context, DMError};
+use crate::lexer::{LocatedToken, Token, Punctuation};
 
 /// Eliminates blank lines, parses and validates indentation, braces, and semicolons.
 ///
@@ -21,12 +21,6 @@ pub struct IndentProcessor<'ctx, I> {
     current_spaces: Option<usize>,
     parentheses: usize,
     eof_yielded: bool,
-}
-
-impl<'ctx, I> HasLocation for IndentProcessor<'ctx, I> {
-    fn location(&self) -> Location {
-        self.last_input_loc
-    }
 }
 
 impl<'ctx, I> IndentProcessor<'ctx, I> where
@@ -122,10 +116,10 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
                             // Register the error, but cross our fingers and
                             // hope that truncating division will approximate
                             // a sane situation.
-                            self.context.register_error(self.error(format!(
+                            DMError::new(self.last_input_loc, format!(
                                 "inconsistent indentation: {} % {} != 0",
-                                spaces, spaces_per_indent
-                            )));
+                                spaces, spaces_per_indent,
+                            )).register(self.context)
                         }
                         new_indents = spaces / spaces_per_indent;
                         self.current = Some((spaces_per_indent, new_indents));
@@ -138,10 +132,10 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
                 self.push_eol(Token::Punct(Punctuation::LBrace));
             } else if indents < new_indents {
                 // multiple indent is an error, register it but let it work
-                self.context.register_error(self.error(format!(
+                DMError::new(self.last_input_loc, format!(
                     "inconsistent multiple indentation: {} > 1",
                     new_indents - indents,
-                )));
+                )).register(self.context);
                 for _ in indents..new_indents {
                     self.push_eol(Token::Punct(Punctuation::LBrace));
                 }
@@ -170,7 +164,7 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
             Token::Punct(Punctuation::RBrace) => {
                 self.current = match self.current {
                     None => {
-                        self.context.register_error(self.error("unmatched right brace"));
+                        DMError::new(self.last_input_loc, "unmatched right brace").register(self.context);
                         None
                     }
                     Some((_, 1)) => None,
