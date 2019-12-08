@@ -238,7 +238,7 @@ impl Location {
 }
 
 /// A trait for types which may yield location information.
-pub trait HasLocation {
+pub(crate) trait HasLocation {
     /// Get the current location of this parsing stage.
     fn location(&self) -> Location;
 
