@@ -235,7 +235,10 @@ impl ExtoolsThread {
             // chop off as many full messages from the buffer as we can
             let mut start = 0;
             while let Some(end) = terminator.take() {
-                self.handle_response(&buffer[start..end]).expect("error in extools::handle_response");
+                if let Err(e) = self.handle_response(&buffer[start..end]) {
+                    output!(in self.seq, "[extools] Error handling message: {}", e);
+                    debug_output!(in self.seq, " - {}", String::from_utf8_lossy(&buffer[start..end]));
+                }
 
                 start = end + 1;
                 if let Some(pos) = buffer[start..].iter().position(|&x| x == 0) {
