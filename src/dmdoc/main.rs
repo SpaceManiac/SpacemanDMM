@@ -109,14 +109,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut context = dm::Context::default();
     context.set_print_severity(Some(dm::Severity::Error));
     let mut pp = dm::preprocessor::Preprocessor::new(&context, environment.clone())?;
-    let (module_docs, objtree);
-    {
+    let (objtree, module_docs) = {
         let indents = dm::indents::IndentProcessor::new(&context, &mut pp);
-        let mut parser = dm::parser::Parser::new(&context, indents);
-        parser.run();
-        module_docs = parser.take_module_docs();
-        objtree = parser.finalize_object_tree();
-    }
+        let parser = dm::parser::Parser::new(&context, indents);
+        parser.parse_with_module_docs()
+    };
     pp.finalize();
 
     println!("collating documented types");

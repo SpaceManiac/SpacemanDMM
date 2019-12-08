@@ -452,9 +452,8 @@ impl<'a> Engine<'a> {
                     let mut annotations = AnnotationTree::default();
                     {
                         let indent = dm::indents::IndentProcessor::new(&self.context, &mut preprocessor);
-                        let mut parser = dm::parser::Parser::new(&self.context, indent);
-                        parser.annotate_to(&mut annotations);
-                        parser.run();
+                        let parser = dm::parser::Parser::new(&self.context, indent);
+                        parser.parse_annotations_only(&mut annotations);
                     }
                     annotations.merge(preprocessor.take_annotations().unwrap());
                     v.insert((real_file_id, file_id, Rc::new(annotations))).clone()

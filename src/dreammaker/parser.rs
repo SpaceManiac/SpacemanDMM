@@ -409,7 +409,18 @@ where
         self.finalize_object_tree()
     }
 
-    pub fn run(&mut self) {
+    pub fn parse_with_module_docs(mut self) -> (ObjectTree, BTreeMap<FileId, Vec<(u32, DocComment)>>) {
+        self.run();
+        let docs = ::std::mem::replace(&mut self.module_docs, Default::default());
+        (self.finalize_object_tree(), docs)
+    }
+
+    pub fn parse_annotations_only(mut self, annotations: &'an mut AnnotationTree) {
+        self.annotate_to(annotations);
+        self.run();
+    }
+
+    fn run(&mut self) {
         self.tree.register_builtins();
         let root = self.root();
         if let Err(mut e) = self.require(root) {
@@ -422,11 +433,7 @@ where
         }
     }
 
-    pub fn take_module_docs(&mut self) -> BTreeMap<FileId, Vec<(u32, DocComment)>> {
-        ::std::mem::replace(&mut self.module_docs, Default::default())
-    }
-
-    pub fn finalize_object_tree(mut self) -> ObjectTree {
+    fn finalize_object_tree(mut self) -> ObjectTree {
         let procs_total = self.procs_good + self.procs_bad;
         if procs_total > 0 {
             eprintln!(

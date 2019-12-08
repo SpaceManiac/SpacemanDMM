@@ -25,11 +25,7 @@ fn annotation_basic() {
     let lexer = Lexer::new(&context, Default::default(), code.bytes().map(Ok));
     let indent = IndentProcessor::new(&context, lexer);
     let mut annotations = AnnotationTree::default();
-    {
-        let mut parser = Parser::new(&context, indent);
-        parser.annotate_to(&mut annotations);
-        parser.run();
-    }
+    Parser::new(&context, indent).parse_annotations_only(&mut annotations);
     context.assert_success();
     println!("len: {}", annotations.len());
     for each in annotations.get_location(Location {
