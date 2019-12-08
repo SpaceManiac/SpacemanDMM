@@ -280,7 +280,8 @@ handle_request! {
     }
 
     on LaunchVsc(&mut self, params) {
-        let debug = !params.base.noDebug.unwrap_or(false);
+        // Extools is not currently enabled on release langserver builds.
+        let debug = cfg!(debug_assertions) && !params.base.noDebug.unwrap_or(false);
         self.launched = Some(Launched::new(self.seq.clone(), &self.dreamseeker_exe, &params.dmb, debug)?);
         if debug {
             self.extools = Extools::connect(self.seq.clone(), extools::DEFAULT_PORT)?;
