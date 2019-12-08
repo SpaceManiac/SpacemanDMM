@@ -3,8 +3,7 @@
 
 use std::sync::{Arc, Mutex};
 use std::process::{Command, Stdio};
-use super::SequenceNumber;
-use super::dap_types::ExitedEvent;
+use super::{dap_types, SequenceNumber};
 
 // active --kill--> killed: emit Terminated, send SIGKILL
 // active --detach--> detached: emit Terminated
@@ -69,8 +68,11 @@ impl Launched {
                         -1
                     }
                 };
+                if let State::Active = *state {
+                    seq2.issue_event(dap_types::TerminatedEvent::default());
+                }
                 *state = State::Exited;
-                seq2.issue_event(ExitedEvent {
+                seq2.issue_event(dap_types::ExitedEvent {
                     exitCode: code as i64,
                 });
             })?;
