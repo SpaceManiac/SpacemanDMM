@@ -1071,8 +1071,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         match op {
             // !x just evaluates the "truthiness" of x and negates it, returning 1 or 0
             UnaryOp::Not => Analysis::from(assumption_set![Assumption::IsNum(true)]),
-            UnaryOp::PreIncr | UnaryOp::PostIncr => { return self.check_crement(rhs, location, "operator++"); },
-            UnaryOp::PreDecr | UnaryOp::PostDecr => { return self.check_crement(rhs, location, "operator--"); },
+            UnaryOp::PreIncr | UnaryOp::PostIncr => self.check_crement(rhs, location, "operator++"),
+            UnaryOp::PreDecr | UnaryOp::PostDecr => self.check_crement(rhs, location, "operator--"),
             /*
             (UnaryOp::Neg, Type::Number) => Type::Number.into(),
             (UnaryOp::BitNot, Type::Number) => Type::Number.into(),
