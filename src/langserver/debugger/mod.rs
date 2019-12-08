@@ -596,6 +596,14 @@ handle_request! {
             allThreadsContinued: Some(true),
         }
     }
+
+    on StepIn(&mut self, _params) {
+        guard!(let Some(extools) = self.extools.as_ref() else {
+            return Err(Box::new(GenericError("No extools connection")));
+        });
+
+        extools.step_in();
+    }
 }
 
 #[derive(Default, Debug)]

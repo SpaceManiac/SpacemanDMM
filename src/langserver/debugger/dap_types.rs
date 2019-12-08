@@ -527,6 +527,28 @@ pub struct StackTraceResponse {
     pub totalFrames: Option<i64>,
 }
 
+/// The request starts the debuggee to step into a function/method if possible.
+pub enum StepIn {}
+
+impl Request for StepIn {
+    type Params = StepInArguments;
+    type Result = ();
+    const COMMAND: &'static str = "stepIn";
+}
+
+#[derive(Deserialize, Debug)]
+pub struct StepInArguments {
+    /**
+     * Execute 'stepIn' for this thread.
+     */
+    pub threadId: i64,
+
+    /**
+     * Optional id of the target to step into.
+     */
+    pub targetId: Option<i64>,
+}
+
 /// The request retrieves a list of all threads.
 pub enum Threads {}
 

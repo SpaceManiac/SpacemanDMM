@@ -121,12 +121,12 @@ impl Response for BreakpointUnset {
     const TYPE: &'static str = "breakpoint unset";
 }
 
-// #define MESSAGE_BREAKPOINT_STEP "breakpoint step" //Content is empty
+// #define MESSAGE_BREAKPOINT_STEP_INTO "breakpoint step into" //Content is empty
 #[derive(Serialize, Deserialize, Debug)]
-pub struct BreakpointStep;
+pub struct BreakpointStepInto;
 
-impl Request for BreakpointStep {
-    const TYPE: &'static str = "breakpoint step";
+impl Request for BreakpointStepInto {
+    const TYPE: &'static str = "breakpoint step into";
 }
 
 // #define MESSAGE_BREAKPOINT_RESUME "breakpoint resume" //Content is empty
