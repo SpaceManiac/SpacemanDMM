@@ -418,9 +418,9 @@ impl<'a> Engine<'a> {
             );
         }
 
-        if let Some(objtree) = Arc::get_mut(&mut self.objtree) {
+        /*if let Some(objtree) = Arc::get_mut(&mut self.objtree) {
             objtree.drop_code();
-        }
+        }*/
 
         Ok(())
     }

@@ -26,6 +26,7 @@ mod dap_types;
 mod launched;
 mod extools_types;
 mod extools;
+mod local_names;
 
 use std::error::Error;
 use std::sync::{atomic, Arc, Mutex};
@@ -133,6 +134,7 @@ impl DebugDatabaseBuilder {
             files,
             objtree,
             line_numbers,
+            local_names: Default::default(),
         }
     }
 }
@@ -142,28 +144,45 @@ pub struct DebugDatabase {
     files: dm::Context,
     objtree: Arc<ObjectTree>,
     line_numbers: HashMap<dm::FileId, Vec<(i64, String, String, usize)>>,
+    local_names: HashMap<(String, usize), Option<Vec<String>>>,
+}
+
+fn get_proc<'o>(objtree: &'o ObjectTree, proc_ref: &str, override_id: usize) -> Option<&'o dm::objtree::ProcValue> {
+    let mut bits: Vec<&str> = proc_ref.split('/').collect();
+    let procname = bits.pop().unwrap();
+    match bits.last() {
+        Some(&"proc") | Some(&"verb") => { bits.pop(); }
+        _ => {}
+    }
+    let typename = bits.join("/");
+
+    if let Some(ty) = objtree.find(&typename) {
+        if let Some(ty_proc) = ty.get().procs.get(procname) {
+            // Don't consider (most) builtins against the override_id count.
+            return ty_proc.value.iter()
+                .skip_while(|pv| pv.location.is_builtins() && !STDDEF_PROCS.contains(&proc_ref))
+                .skip(override_id)
+                .next();
+        }
+    }
+    None
 }
 
 impl DebugDatabase {
     fn get_proc(&self, proc_ref: &str, override_id: usize) -> Option<&dm::objtree::ProcValue> {
-        let mut bits: Vec<&str> = proc_ref.split('/').collect();
-        let procname = bits.pop().unwrap();
-        match bits.last() {
-            Some(&"proc") | Some(&"verb") => { bits.pop(); }
-            _ => {}
-        }
-        let typename = bits.join("/");
+        get_proc(&self.objtree, proc_ref, override_id)
+    }
 
-        if let Some(ty) = self.objtree.find(&typename) {
-            if let Some(ty_proc) = ty.get().procs.get(procname) {
-                // Don't consider (most) builtins against the override_id count.
-                return ty_proc.value.iter()
-                    .skip_while(|pv| pv.location.is_builtins() && !STDDEF_PROCS.contains(&proc_ref))
-                    .skip(override_id)
-                    .next();
+    fn get_local_names(&mut self, proc_ref: &str, override_id: usize) -> Option<&[String]> {
+        let objtree = &self.objtree;
+        self.local_names.entry((proc_ref.to_owned(), override_id)).or_insert_with(|| {
+            let proc = get_proc(objtree, proc_ref, override_id)?;
+            if let dm::objtree::Code::Present(ref code) = proc.code {
+                Some(local_names::extract(code))
+            } else {
+                None
             }
-        }
-        None
+        }).as_ref().map(|x| &x[..])
     }
 
     fn file_id(&self, file_path: &str) -> Option<FileId> {
@@ -513,11 +532,14 @@ handle_request! {
             return Err(Box::new(GenericError("Stack frame out of range")));
         });
 
-        let parameters;
-        if let Some(proc) = self.db.get_proc(&frame.name, frame.override_id) {
+        let (parameters, locals);
+        let objtree = self.db.objtree.clone();
+        if let Some(proc) = get_proc(&objtree, &frame.name, frame.override_id) {
             parameters = &proc.parameters[..];
+            locals = self.db.get_local_names(&frame.name, frame.override_id).unwrap_or(&[]);
         } else {
             parameters = &[];
+            locals = &[];
         }
 
         if mod2 == 1 {
@@ -550,7 +572,10 @@ handle_request! {
         } else if mod2 == 0 {
             // locals
             let variables = frame.locals.iter().enumerate().map(|(i, vt)| Variable {
-                name: i.to_string(),
+                name: match locals.get(i) {
+                    Some(local) => local.clone(),
+                    None => i.to_string(),
+                },
                 value: vt.to_string(),
                 variablesReference: vt.datum_address(),
                 .. Default::default()
