@@ -26,6 +26,19 @@ where
     Parser::new(context, iter.into_iter()).parse_object_tree()
 }
 
+/// Parse a token stream into an expression.
+///
+/// Fatal errors will be directly returned and miscellaneous diagnostics will
+/// be registered with the provided `Context`.
+pub fn parse_expression<I>(context: &Context, location: Location, iter: I) -> Result<Expression, DMError>
+where
+    I: IntoIterator<Item=LocatedToken>,
+{
+    let mut parser = Parser::new(context, iter.into_iter());
+    parser.set_fallback_location(location);
+    parser.require_expression()
+}
+
 type Ident = String;
 
 // ----------------------------------------------------------------------------
@@ -399,7 +412,7 @@ where
         self.procs = true;
     }
 
-    pub fn set_fallback_location(&mut self, fallback: Location) {
+    fn set_fallback_location(&mut self, fallback: Location) {
         assert!(self.location == Default::default());
         self.location = fallback;
     }
@@ -1571,7 +1584,7 @@ where
     }
 
     /// Parse an expression at the current position.
-    pub fn require_expression(&mut self) -> Result<Expression, DMError> {
+    fn require_expression(&mut self) -> Result<Expression, DMError> {
         Ok(require!(self.expression()))
     }
 

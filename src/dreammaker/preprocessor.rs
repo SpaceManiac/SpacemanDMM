@@ -554,12 +554,11 @@ impl<'ctx> Preprocessor<'ctx> {
             return Ok(false);
         }
 
-        let mut parser = ::parser::Parser::new(
+        let expr = crate::parser::parse_expression(
             self.context,
-            self.output.drain(..).map(|token| LocatedToken::new(start, token)),
-        );
-        parser.set_fallback_location(start);
-        let expr = parser.require_expression()?;
+            start,
+            self.output.drain(..).map(|token| LocatedToken::new(start, token))
+        )?;
         Ok(::constants::preprocessor_evaluate(start, expr, &self.defines)?.to_bool())
     }
 
