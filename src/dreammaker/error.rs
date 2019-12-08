@@ -249,18 +249,6 @@ pub trait HasLocation {
     }
 }
 
-impl<'a, T: HasLocation> HasLocation for &'a T {
-    fn location(&self) -> Location {
-        (**self).location()
-    }
-}
-
-impl<'a, T: HasLocation> HasLocation for &'a mut T {
-    fn location(&self) -> Location {
-        (**self).location()
-    }
-}
-
 // ----------------------------------------------------------------------------
 // Error handling
 

@@ -494,6 +494,10 @@ impl<I> LocationTracker<I> {
             at_line_end: true,
         }
     }
+
+    pub fn location(&self) -> Location {
+        self.location
+    }
 }
 
 impl<I> fmt::Debug for LocationTracker<I> {
@@ -503,12 +507,6 @@ impl<I> fmt::Debug for LocationTracker<I> {
             .field("location", &self.location)
             .field("at_line_end", &self.at_line_end)
             .finish()
-    }
-}
-
-impl<I> HasLocation for LocationTracker<I> {
-    fn location(&self) -> Location {
-        self.location
     }
 }
 

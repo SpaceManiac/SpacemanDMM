@@ -6,7 +6,7 @@ use std::cmp::max;
 
 use ndarray::Array3;
 
-use dm::{DMError, Location, HasLocation};
+use dm::{DMError, Location};
 use dm::lexer::{LocationTracker, from_utf8_or_latin1};
 
 use super::{Map, Key, KeyType, Prefab};

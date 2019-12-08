@@ -181,15 +181,6 @@ impl<'ctx> Include<'ctx> {
     }
 }
 
-impl<'ctx> HasLocation for Include<'ctx> {
-    fn location(&self) -> Location {
-        match self {
-            &Include::File { ref lexer, .. } => lexer.location(),
-            &Include::Expansion { location, .. } => location,
-        }
-    }
-}
-
 #[derive(Debug, Default)]
 struct IncludeStack<'ctx> {
     stack: Vec<Include<'ctx>>,
@@ -209,16 +200,6 @@ impl<'ctx> IncludeStack<'ctx> {
         match self.stack.last() {
             Some(Include::Expansion { .. }) => true,
             _ => false,
-        }
-    }
-}
-
-impl<'ctx> HasLocation for IncludeStack<'ctx> {
-    fn location(&self) -> Location {
-        if let Some(include) = self.stack.last() {
-            include.location()
-        } else {
-            Location::default()
         }
     }
 }
@@ -313,7 +294,11 @@ pub struct Preprocessor<'ctx> {
 
 impl<'ctx> HasLocation for Preprocessor<'ctx> {
     fn location(&self) -> Location {
-        self.include_stack.location()
+        match self.include_stack.stack.last() {
+            Some(&Include::File { ref lexer, .. }) => lexer.location(),
+            Some(&Include::Expansion { location, .. }) => location,
+            None => Location::default()
+        }
     }
 }
 
