@@ -7,8 +7,7 @@ use dm::ast::*;
 fn parse_expr(f: &str) -> Expression {
     let context = Default::default();
     let lexer = Lexer::new(&context, Default::default(), f.bytes().map(Ok));
-    let mut parser = Parser::new(&context, lexer);
-    let result = parser.require_expression().expect("failed to parse expression");
+    let result = parse_expression(&context, Default::default(), lexer).expect("failed to parse expression");
     context.assert_success();
     result
 }

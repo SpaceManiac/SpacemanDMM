@@ -14,31 +14,6 @@ use super::annotation::*;
 use super::ast::*;
 use super::docs::*;
 
-/// Parse a token stream, in the form emitted by the indent processor, into
-/// an object tree.
-///
-/// Compilation failures will return a best-effort parse, and diagnostics will
-/// be registered with the provided `Context`.
-pub fn parse<I>(context: &Context, iter: I) -> ObjectTree
-where
-    I: IntoIterator<Item=LocatedToken>,
-{
-    Parser::new(context, iter.into_iter()).parse_object_tree()
-}
-
-/// Parse a token stream into an expression.
-///
-/// Fatal errors will be directly returned and miscellaneous diagnostics will
-/// be registered with the provided `Context`.
-pub fn parse_expression<I>(context: &Context, location: Location, iter: I) -> Result<Expression, DMError>
-where
-    I: IntoIterator<Item=LocatedToken>,
-{
-    let mut parser = Parser::new(context, iter.into_iter());
-    parser.set_fallback_location(location);
-    parser.require_expression()
-}
-
 type Ident = String;
 
 // ----------------------------------------------------------------------------
@@ -70,6 +45,34 @@ macro_rules! leading {
             None => return Ok(None),
         }
     };
+}
+
+// ----------------------------------------------------------------------------
+// Convenience functions
+
+/// Parse a token stream, in the form emitted by the indent processor, into
+/// an object tree.
+///
+/// Compilation failures will return a best-effort parse, and diagnostics will
+/// be registered with the provided `Context`.
+pub fn parse<I>(context: &Context, iter: I) -> ObjectTree
+where
+    I: IntoIterator<Item=LocatedToken>,
+{
+    Parser::new(context, iter.into_iter()).parse_object_tree()
+}
+
+/// Parse a token stream into an expression.
+///
+/// Fatal errors will be directly returned and miscellaneous diagnostics will
+/// be registered with the provided `Context`.
+pub fn parse_expression<I>(context: &Context, location: Location, iter: I) -> Result<Expression, DMError>
+where
+    I: IntoIterator<Item=LocatedToken>,
+{
+    let mut parser = Parser::new(context, iter.into_iter());
+    parser.location = location;
+    Ok(require!(parser.expression()))
 }
 
 // ----------------------------------------------------------------------------
@@ -410,11 +413,6 @@ where
     pub fn annotate_to(&mut self, annotations: &'an mut AnnotationTree) {
         self.annotations = Some(annotations);
         self.procs = true;
-    }
-
-    fn set_fallback_location(&mut self, fallback: Location) {
-        assert!(self.location == Default::default());
-        self.location = fallback;
     }
 
     pub fn parse_object_tree(mut self) -> ObjectTree {
@@ -1581,11 +1579,6 @@ where
         }
 
         success(Prefab { path: parts, vars })
-    }
-
-    /// Parse an expression at the current position.
-    fn require_expression(&mut self) -> Result<Expression, DMError> {
-        Ok(require!(self.expression()))
     }
 
     fn expression(&mut self) -> Status<Expression> {
