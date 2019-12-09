@@ -1,5 +1,5 @@
 use super::*;
-use dmi::Dir;
+use crate::dmi::Dir;
 
 #[derive(Default)]
 pub struct TransitTube;
@@ -11,7 +11,7 @@ impl RenderPass for TransitTube {
         overlays: &mut Vec<Sprite<'a>>,
         _: &bumpalo::Bump,
     ) {
-        use dmi::Dir::*;
+        use crate::dmi::Dir::*;
 
         if !atom.istype("/obj/structure/transit_tube/") {
             return;

@@ -1,6 +1,6 @@
 use dm::objtree::*;
 use dm::constants::Constant;
-use minimap::{Atom, GetVar, Sprite, Layer, Neighborhood};
+use crate::minimap::{Atom, GetVar, Sprite, Layer, Neighborhood};
 
 mod transit_tube;
 mod random;
@@ -210,7 +210,7 @@ impl RenderPass for Overlays {
         objtree: &'a ObjectTree,
         _: &'a bumpalo::Bump,
     ) {
-        use dmi::Dir;
+        use crate::dmi::Dir;
 
         if atom.istype("/obj/machinery/power/apc/") {
             // auto-set pixel location

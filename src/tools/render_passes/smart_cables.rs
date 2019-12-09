@@ -1,5 +1,5 @@
 use std::fmt::Write;
-use dmi::Dir;
+use crate::dmi::Dir;
 use super::*;
 
 #[derive(Default)]

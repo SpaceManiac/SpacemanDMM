@@ -9,7 +9,7 @@ use linked_hash_map::LinkedHashMap;
 
 use dm::{DMError, Location};
 use dm::constants::Constant;
-use dmi::Dir;
+use crate::dmi::Dir;
 
 mod read;
 mod save_tgm;

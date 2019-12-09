@@ -2,8 +2,8 @@
 
 use dm::objtree::ObjectTree;
 use dm::constants::Constant;
-use dmi::Dir;
-use minimap::{Sprite, Atom, GetVar, Neighborhood};
+use crate::dmi::Dir;
+use crate::minimap::{Sprite, Atom, GetVar, Neighborhood};
 
 use super::RenderPass;
 

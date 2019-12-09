@@ -3,7 +3,7 @@ use std::fmt;
 
 use dm::objtree::*;
 use dm::constants::Constant;
-use dmm::Map;
+use crate::dmm::Map;
 
 macro_rules! lints {
     ($($ident:ident = $desc:expr;)*) => {

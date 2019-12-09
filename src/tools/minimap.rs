@@ -5,10 +5,10 @@ use ndarray::Axis;
 
 use dm::objtree::*;
 use dm::constants::Constant;
-use dmm::{Map, ZLevel, Prefab};
-use dmi::{Dir, Image};
-use render_passes::RenderPass;
-use icon_cache::IconCache;
+use crate::dmm::{Map, ZLevel, Prefab};
+use crate::dmi::{Dir, Image};
+use crate::render_passes::RenderPass;
+use crate::icon_cache::IconCache;
 
 const TILE_SIZE: u32 = 32;
 
