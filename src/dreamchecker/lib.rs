@@ -1051,10 +1051,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 return Analysis::empty()
             },
             StaticType::Type(typeref) => {
-                if let Some(proc) = typeref.get_proc(crement) {
-                    let args = &[Expression::from(Term::Null)];
-                    self.visit_call(location, typeref, proc, args, true);
-                    return Analysis::empty()
+                // Its been overloaded, assume they really know they want to do this
+                if let Some(proc) = typeref.get_proc(&format!("operator{}",crement)) {
+                    return self.visit_call(location, typeref, proc, &[], true)
                 }
                 typeerror = typeref.get().pretty_path();
             },
@@ -1062,7 +1061,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 typeerror = "list";
             },
         };
-        error(location, format!("attempted {} on a {}", crement, typeerror))
+        error(location, format!("Attempting {} on a {} which does not overload operator{}", crement, typeerror, crement))
             .register(self.context);
         return Analysis::empty()
     }
@@ -1071,8 +1070,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         match op {
             // !x just evaluates the "truthiness" of x and negates it, returning 1 or 0
             UnaryOp::Not => Analysis::from(assumption_set![Assumption::IsNum(true)]),
-            UnaryOp::PreIncr | UnaryOp::PostIncr => self.check_crement(rhs, location, "operator++"),
-            UnaryOp::PreDecr | UnaryOp::PostDecr => self.check_crement(rhs, location, "operator--"),
+            UnaryOp::PreIncr | UnaryOp::PostIncr => self.check_crement(rhs, location, "++"),
+            UnaryOp::PreDecr | UnaryOp::PostDecr => self.check_crement(rhs, location, "--"),
             /*
             (UnaryOp::Neg, Type::Number) => Type::Number.into(),
             (UnaryOp::BitNot, Type::Number) => Type::Number.into(),
