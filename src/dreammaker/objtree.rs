@@ -638,7 +638,13 @@ impl Default for ObjectTree {
 }
 
 impl ObjectTree {
-    pub fn register_builtins(&mut self) {
+    pub fn with_builtins() -> ObjectTree {
+        let mut objtree = ObjectTree::default();
+        objtree.register_builtins();
+        objtree
+    }
+
+    pub(crate) fn register_builtins(&mut self) {
         super::builtins::register_builtins(self).expect("register_builtins failed");
     }
 

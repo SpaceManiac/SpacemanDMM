@@ -416,11 +416,13 @@ where
     }
 
     pub fn parse_object_tree(mut self) -> ObjectTree {
+        self.tree.register_builtins();
         self.run();
         self.finalize_object_tree()
     }
 
     pub fn parse_with_module_docs(mut self) -> (ObjectTree, BTreeMap<FileId, Vec<(u32, DocComment)>>) {
+        self.tree.register_builtins();
         self.run();
         let docs = std::mem::replace(&mut self.module_docs, Default::default());
         (self.finalize_object_tree(), docs)
@@ -432,7 +434,6 @@ where
     }
 
     fn run(&mut self) {
-        self.tree.register_builtins();
         let root = self.root();
         if let Err(mut e) = self.require(root) {
             let loc = e.location();
