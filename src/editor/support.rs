@@ -2,7 +2,7 @@ use imgui::{FontConfig, Context, MouseCursor};
 use imgui_gfx_renderer::{Renderer, Shaders};
 use std::time::Instant;
 
-use {ColorFormat, DepthFormat, EditorScene};
+use crate::{ColorFormat, DepthFormat, EditorScene};
 
 #[derive(Copy, Clone, PartialEq, Debug, Default)]
 struct MouseState {

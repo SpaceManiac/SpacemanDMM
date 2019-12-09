@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use gfx;
 use gfx::traits::{Factory as FactoryTrait, FactoryExt};
-use {Resources, Factory, Encoder, ColorFormat, RenderTargetView, Texture};
+use crate::{Resources, Factory, Encoder, ColorFormat, RenderTargetView, Texture};
 
 use slice_of_array::prelude::*;
 
@@ -12,8 +12,8 @@ use dm::objtree::ObjectTree;
 use dmm_tools::dmm::Prefab;
 use dmm_tools::minimap::{Sprite, Category, Layer};
 
-use dmi::*;
-use map_repr::AtomMap;
+use crate::dmi::*;
+use crate::map_repr::AtomMap;
 use imgui::TextureId;
 
 const TILE_SIZE: u32 = 32;

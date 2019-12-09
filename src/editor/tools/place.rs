@@ -1,6 +1,6 @@
-use super::*;
-use {UiExt, EditPrefab, RetainMut};
 use std::collections::HashSet;
+use crate::{UiExt, EditPrefab, RetainMut};
+use super::*;
 
 /// The standard placement tool.
 #[derive(Default)]

@@ -8,7 +8,7 @@ use dm::dmi;
 use dm::objtree::ObjectTree;
 use dmm_tools::dmm::Prefab;
 
-use {History, Environment, ImRenderer};
+use crate::{History, Environment, ImRenderer};
 
 mod place;
 

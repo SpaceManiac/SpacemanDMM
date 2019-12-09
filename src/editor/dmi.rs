@@ -10,7 +10,7 @@ use lodepng::{self, RGBA};
 use lodepng::ffi::{State as PngState, ColorType};
 
 use gfx::{self, Factory as FactoryTrait};
-use {Factory, Texture};
+use crate::{Factory, Texture};
 
 type Rect = (u32, u32, u32, u32);
 
@@ -88,7 +88,7 @@ impl IconCache {
 
 impl TextureCache {
     pub fn retrieve(&mut self, factory: &mut Factory, icons: &IconCache, id: usize) -> &Texture {
-        use Fulfill;
+        use crate::Fulfill;
         if id >= self.textures.len() {
             self.textures.resize(id + 1, None);
         }
@@ -224,7 +224,7 @@ pub fn load_texture(factory: &mut Factory, bitmap: &lodepng::Bitmap<RGBA>) -> Te
     }
 
     let kind = gfx::texture::Kind::D2(width as u16, height as u16, gfx::texture::AaMode::Single);
-    let (_, view) = factory.create_texture_immutable_u8::<::ColorFormat>(
+    let (_, view) = factory.create_texture_immutable_u8::<crate::ColorFormat>(
         kind,
         gfx::texture::Mipmap::Provided,
         &[&new_buffer[..]]

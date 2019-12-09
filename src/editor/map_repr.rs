@@ -8,8 +8,8 @@ use weak_table::WeakKeyHashMap;
 use dmm_tools::dmm::{Map, Prefab, Key};
 use dm::objtree::{ObjectTree, subpath};
 
-use dmi::IconCache;
-use map_renderer::{RenderPop, Vertex, DrawCall};
+use crate::dmi::IconCache;
+use crate::map_renderer::{RenderPop, Vertex, DrawCall};
 
 #[derive(Debug, Clone)]
 pub struct AtomMap {
