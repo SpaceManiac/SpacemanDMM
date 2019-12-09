@@ -835,6 +835,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false }
             },
             Statement::Return(None) => { return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false } },
+            Statement::Crash(expr) => { 
+                self.visit_expression(location, expr, None);
+                return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false }
+            },
             Statement::Throw(expr) => { self.visit_expression(location, expr, None); },
             Statement::While { condition, block } => {
                 //self.loop_condition_check(location, condition);
@@ -939,6 +943,18 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     self.visit_var(location, var_type, name, Some(start));
                 }
                 let mut state = self.visit_block(block);
+                if let Some(startterm) = start.as_term() {
+                    if let Some(endterm) = end.as_term() {
+                        if let Some(validity) = startterm.valid_for_range(endterm, step) {
+                            if !validity {
+                                error(location,"for range loop body is never reached due to invalid range")
+                                    .register(self.context);
+                            } else {
+                                return state
+                            }
+                        }
+                    }
+                }
                 state.end_loop();
                 return state
             },

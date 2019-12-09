@@ -584,7 +584,30 @@ impl Term {
 
             _ => None,
         };
-        
+    }
+
+    pub fn valid_for_range(&self, other: &Term, step: &Option<Expression>) -> Option<bool> {
+        if let Term::Int(i) = self {
+            if let Term::Int(o) = other {
+                // edge case
+                if *i == 0 && *o == 0 {
+                    return Some(false)
+                }
+                if let Some(stepexp) = step {
+                    if let Some(stepterm) = stepexp.as_term() {
+                        if let Term::Int(s) = stepterm {
+                            if *s < 0 {
+                                return Some(*i >= *o)
+                            } else if *s == 0 {
+                                return Some(false)
+                            }
+                        }
+                    }
+                }
+                return Some(*i <= *o)
+            }
+        }
+        None
     }
 }
 
@@ -969,6 +992,7 @@ pub enum Statement {
         block: Block,
     },
     Del(Expression),
+    Crash(Expression),
 }
 
 #[derive(Debug, Clone, PartialEq)]
