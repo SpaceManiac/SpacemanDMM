@@ -612,7 +612,7 @@ impl<'a> std::hash::Hash for ProcRef<'a> {
 pub struct ObjectTree {
     pub graph: Graph<Type, ()>,
     pub types: BTreeMap<String, NodeIndex>,
-    pub symbols: SymbolIdSource,
+    symbols: SymbolIdSource,
 }
 
 impl Default for ObjectTree {
