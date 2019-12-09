@@ -390,6 +390,38 @@ impl Expression {
             _ => None,
         }
     }
+
+    pub fn is_const_eval(&self) -> bool {
+        match self {
+            Expression::BinaryOp { op, lhs, rhs } => {
+                guard!(let Some(lhterm) = lhs.as_term() else {
+                    return false
+                });
+                guard!(let Some(rhterm) = rhs.as_term() else {
+                    return false
+                });
+                if !lhterm.is_static() {
+                    return false
+                }
+                if !rhterm.is_static() {
+                    return false
+                }
+                match op {
+                    BinaryOp::Eq |
+                    BinaryOp::NotEq |
+                    BinaryOp::Less |
+                    BinaryOp::Greater |
+                    BinaryOp::LessEq |
+                    BinaryOp::GreaterEq |
+                    BinaryOp::And |
+                    BinaryOp::Or => return true,
+                    _ => return false,
+                }
+            },
+            _ => false,
+        }
+    }
+
     pub fn is_truthy(&self) -> Option<bool> {
         match self {
             Expression::Base { unary, term, follow: _ } => {
@@ -416,8 +448,6 @@ impl Expression {
                     return None
                 });
                 return match op {
-                    BinaryOp::Eq => Some(lhtruth == rhtruth),
-                    BinaryOp::NotEq => Some(lhtruth != rhtruth),
                     BinaryOp::And => Some(lhtruth && rhtruth),
                     BinaryOp::Or => Some(lhtruth || rhtruth),
                     _ => None,
@@ -521,6 +551,17 @@ pub enum Term {
 }
 
 impl Term {
+    pub fn is_static(&self) -> bool {
+        return match self {
+            Term::Null |
+            Term::Int(_) |
+            Term::Float(_) |
+            Term::String(_) |
+            Term::Prefab(_) => true,
+            _ => false,
+        }
+    }
+
     pub fn is_truthy(&self) -> Option<bool> {
         return match self {
             // null is always false

@@ -811,6 +811,19 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         };
     }
 
+    fn visit_control_condition(&mut self, location: Location, expression: &'o Expression) {
+        if expression.is_const_eval() {
+            error(location,"control flow condition is a constant evalutation")
+                    .register(self.context);
+        }
+        else if let Some(term) = expression.as_term() {
+            if term.is_static() {
+                error(location,"control flow condition is a static term")
+                    .register(self.context);
+            }
+        }
+    }
+
     fn visit_statement(&mut self, location: Location, statement: &'o Statement) -> ControlFlow {
         match statement {
             Statement::Expr(expr) => { self.visit_expression(location, expr, None); },
@@ -824,7 +837,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Statement::Return(None) => { return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false } },
             Statement::Throw(expr) => { self.visit_expression(location, expr, None); },
             Statement::While { condition, block } => {
-                self.loop_condition_check(location, condition);
+                //self.loop_condition_check(location, condition);
                 self.visit_expression(location, condition, None);
                 let mut state = self.visit_block(block);
                 //println!("end of while {:#?}", state);
@@ -839,7 +852,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         .register(self.context);
                     return state
                 }
-                self.loop_condition_check(location, condition);
+                //self.loop_condition_check(location, condition);
                 self.visit_expression(location, condition, None);
                 
                 state.end_loop();
@@ -849,14 +862,15 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 let mut allterm = ControlFlow::alltrue();
                 let mut alwaystrue = false;
                 for (condition, ref block) in arms.iter() {
+                    self.visit_control_condition(condition.location, &condition.elem);
                     if alwaystrue {
-                        error(location,"unreachable if/else block, preceeding if/elseif condition is always true")
+                        error(location,"unreachable if block, preceeding if/elseif condition(s) are always true")
                             .register(self.context);
                     }
                     self.visit_expression(condition.location, &condition.elem, None);
                     let state = self.visit_block(block);
                     //println!("if arm {:#?}", state);
-                    match condition.is_truthy() {
+                    match condition.elem.is_truthy() {
                         Some(true) => {
                             error(location,"if condition is always true")
                                 .register(self.context);
@@ -872,6 +886,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     //println!("after merge {:#?}", allterm);
                 }
                 if let Some(else_arm) = else_arm {
+                    if alwaystrue {
+                        error(location,"unreachable else block, preceeding if/elseif condition(s) are always true")
+                            .register(self.context);
+                    }
                     let state = self.visit_block(else_arm);
                     //println!("else arm {:#?}", state);
                     allterm.merge_false(state);
@@ -891,6 +909,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
                 if let Some(test) = test {
                     self.loop_condition_check(location, test);
+                    self.visit_control_condition(location, test);
                     self.visit_expression(location, test, None);
                 }
                 if let Some(inc) = inc {
@@ -938,6 +957,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Statement::Switch { input, cases, default } => {
                 let mut allterm = ControlFlow::alltrue();
+                self.visit_control_condition(location, input);
                 self.visit_expression(location, input, None);
                 for &(ref case, ref block) in cases.iter() {
                     for case_part in case.iter() {
