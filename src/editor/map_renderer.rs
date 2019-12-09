@@ -133,7 +133,7 @@ impl MapRenderer {
         ).expect("create index buffer");
 
         let texture = self.factory.create_texture::<gfx::format::R8_G8_B8_A8>(
-            gfx::texture::Kind::D2(::THUMBNAIL_SIZE, ::THUMBNAIL_SIZE, gfx::texture::AaMode::Single),
+            gfx::texture::Kind::D2(crate::THUMBNAIL_SIZE, crate::THUMBNAIL_SIZE, gfx::texture::AaMode::Single),
             1,
             gfx::memory::Bind::RENDER_TARGET | gfx::memory::Bind::SHADER_RESOURCE,
             gfx::memory::Usage::Data,
@@ -269,10 +269,10 @@ impl RenderedMap {
 }
 
 // forgive me
-impl ::std::cmp::Eq for RenderPop {}
+impl std::cmp::Eq for RenderPop {}
 
-impl ::std::hash::Hash for RenderPop {
-    fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+impl std::hash::Hash for RenderPop {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.category.hash(state);
         self.texture.hash(state);
         for each in self.size.iter() {
@@ -361,6 +361,6 @@ impl DrawCall {
     }
 }
 
-fn to_seconds(duration: ::std::time::Duration) -> f32 {
+fn to_seconds(duration: std::time::Duration) -> f32 {
     duration.as_secs() as f32 + duration.subsec_nanos() as f32 / 1_000_000_000.0
 }

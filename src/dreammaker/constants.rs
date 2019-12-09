@@ -365,10 +365,10 @@ impl fmt::Display for Constant {
                 write!(f, ")")
             },
             Constant::Prefab(ref val) => write!(f, "{}", val),
-            Constant::String(ref val) => ::lexer::Quote(val).fmt(f),
+            Constant::String(ref val) => crate::lexer::Quote(val).fmt(f),
             Constant::Resource(ref val) => write!(f, "'{}'", val),
-            Constant::Int(val) => ::lexer::FormatFloat(val as f32).fmt(f),
-            Constant::Float(val) => ::lexer::FormatFloat(val).fmt(f),
+            Constant::Int(val) => crate::lexer::FormatFloat(val as f32).fmt(f),
+            Constant::Float(val) => crate::lexer::FormatFloat(val).fmt(f),
         }
     }
 }
@@ -745,7 +745,7 @@ impl<'a> ConstantFolder<'a> {
                     result.push_str("#");
                     for each in args {
                         if let Some(i) = self.expr(each, None)?.to_int() {
-                            let clamped = ::std::cmp::max(::std::cmp::min(i, 255), 0);
+                            let clamped = std::cmp::max(::std::cmp::min(i, 255), 0);
                             let _ = write!(result, "{:02x}", clamped);
                         } else {
                             return Err(self.error("malformed rgb() call"));

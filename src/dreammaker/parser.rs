@@ -422,7 +422,7 @@ where
 
     pub fn parse_with_module_docs(mut self) -> (ObjectTree, BTreeMap<FileId, Vec<(u32, DocComment)>>) {
         self.run();
-        let docs = ::std::mem::replace(&mut self.module_docs, Default::default());
+        let docs = std::mem::replace(&mut self.module_docs, Default::default());
         (self.finalize_object_tree(), docs)
     }
 
@@ -893,7 +893,7 @@ where
             other => {
                 // usually `thing;` - a contentless declaration
                 // TODO: allow enclosing-targeting docs here somehow?
-                let comment = ::std::mem::replace(&mut self.docs_following, Default::default());
+                let comment = std::mem::replace(&mut self.docs_following, Default::default());
                 if let Err(e) = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), comment, var_suffix) {
                     self.context.register_error(e);
                 }
@@ -2006,7 +2006,7 @@ where
         let follow = match self.arguments(belongs_to, &ident)? {
             Some(args) => {
                 if !belongs_to.is_empty() {
-                    let past = ::std::mem::replace(belongs_to, Vec::new());
+                    let past = std::mem::replace(belongs_to, Vec::new());
                     self.annotate_precise(start..end, || Annotation::ScopedCall(past, ident.clone()));
                 }
                 Follow::Call(kind, ident, args)

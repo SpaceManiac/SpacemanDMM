@@ -1780,7 +1780,7 @@ fn location_to_range(loc: dm::Location) -> langserver::Range {
     langserver::Range::new(pos, pos)
 }
 
-fn span_to_range(range: ::std::ops::Range<dm::Location>) -> langserver::Range {
+fn span_to_range(range: std::ops::Range<dm::Location>) -> langserver::Range {
     langserver::Range::new(location_to_position(range.start), location_to_position(range.end))
 }
 

@@ -160,7 +160,7 @@ impl Image {
     pub fn to_file(&self, path: &Path) -> io::Result<()> {
         use std::fs::File;
 
-        let mut encoder = ::png::Encoder::new(File::create(path)?, self.width, self.height);
+        let mut encoder = png::Encoder::new(File::create(path)?, self.width, self.height);
         encoder.set_color(::png::ColorType::RGBA);
         encoder.set_depth(::png::BitDepth::Eight);
         let mut writer = encoder.write_header()?;

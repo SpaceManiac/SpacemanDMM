@@ -13,7 +13,7 @@ use super::{Map, Key, KeyType, Prefab};
 
 #[inline]
 fn take<T: Default>(t: &mut T) -> T {
-    ::std::mem::replace(t, T::default())
+    std::mem::replace(t, T::default())
 }
 
 pub fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {

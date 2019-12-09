@@ -411,7 +411,7 @@ impl RenderPass for FancyLayers {
                 overlays.push(Sprite {
                     icon_state: aboveground,
                     // use original layer, not modified layer above
-                    layer: ::minimap::layer_of(objtree, atom),
+                    layer: crate::minimap::layer_of(objtree, atom),
                     .. atom.sprite
                 });
             }

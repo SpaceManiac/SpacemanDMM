@@ -531,7 +531,7 @@ handle_request! {
                         }
                     }
                 }
-                next = ::ignore_root(current.parent_type());
+                next = crate::ignore_root(current.parent_type());
             }
 
             return Ok(VariablesResponse { variables });

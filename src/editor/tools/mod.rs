@@ -8,7 +8,7 @@ use dm::dmi;
 use dm::objtree::ObjectTree;
 use dmm_tools::dmm::Prefab;
 
-use {History, Environment};
+use {History, Environment, ImRenderer};
 
 mod place;
 
@@ -117,7 +117,7 @@ impl ToolIcon {
             .and_then(|v| v.to_int())
             .and_then(dmi::Dir::from_int)
             .unwrap_or(dmi::Dir::default());
-        let color = ::dmm_tools::minimap::color_of(&env.objtree, &prefab);
+        let color = dmm_tools::minimap::color_of(&env.objtree, &prefab);
         let tint = [
             color[0] as f32 / 255.0, color[1] as f32 / 255.0,
             color[2] as f32 / 255.0, color[3] as f32 / 255.0,
@@ -136,19 +136,19 @@ impl ToolIcon {
         environment: Option<&Environment>,
         ctx: &mut IconCtx,
     ) -> &mut Self {
-        let temp = ::std::mem::replace(self, ToolIcon::None);
-        *self = ::prepare_tool_icon(ctx.renderer, environment, ctx.map_renderer, temp);
+        let temp = std::mem::replace(self, ToolIcon::None);
+        *self = crate::prepare_tool_icon(ctx.renderer, environment, ctx.map_renderer, temp);
         self
     }
 }
 
 pub struct IconCtx<'a> {
-    renderer: &'a mut ::ImRenderer,
-    map_renderer: &'a mut ::map_renderer::MapRenderer,
+    renderer: &'a mut ImRenderer,
+    map_renderer: &'a mut crate::map_renderer::MapRenderer,
 }
 
 impl<'a> IconCtx<'a> {
-    pub fn new(renderer: &'a mut ::ImRenderer, map_renderer: &'a mut ::map_renderer::MapRenderer) -> Self {
+    pub fn new(renderer: &'a mut ImRenderer, map_renderer: &'a mut crate::map_renderer::MapRenderer) -> Self {
         IconCtx { renderer, map_renderer }
     }
 }

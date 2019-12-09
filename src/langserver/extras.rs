@@ -51,7 +51,7 @@ pub struct ObjectTreeProc {
 pub enum Reparse {}
 impl Notification for Reparse {
     const METHOD: &'static str = "experimental/dreammaker/reparse";
-    type Params = ::langserver::InitializedParams;
+    type Params = langserver::InitializedParams;
 }
 
 pub enum StartDebugger {}

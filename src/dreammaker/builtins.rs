@@ -202,7 +202,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         line: 1,
         column: 1,
     };
-    let _context = ::Context::default();
+    let _context = crate::Context::default();
 
     macro_rules! entries {
         ($($($elem:ident)/ * $(($($arg:ident $(= $ignored:expr)*),*))* $(= $val:expr)*;)*) => {

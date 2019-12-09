@@ -113,7 +113,7 @@ impl TypeProc {
 // ----------------------------------------------------------------------------
 // Types
 
-const BAD_NODE_INDEX: usize = ::std::usize::MAX;
+const BAD_NODE_INDEX: usize = std::usize::MAX;
 
 #[derive(Debug)]
 pub struct Type {
@@ -367,7 +367,7 @@ impl<'a> TypeRef<'a> {
     pub fn is_subtype_of(self, parent: &Type) -> bool {
         let mut current = Some(self);
         while let Some(ty) = current.take() {
-            if ::std::ptr::eq(ty.get(), parent) {
+            if std::ptr::eq(ty.get(), parent) {
                 return true;
             }
             current = ty.parent_type();
@@ -427,7 +427,7 @@ impl<'a> TypeRef<'a> {
     }
 }
 
-impl<'a> ::std::ops::Deref for TypeRef<'a> {
+impl<'a> std::ops::Deref for TypeRef<'a> {
     type Target = Type;
     fn deref(&self) -> &Type {
         self.get()
@@ -446,16 +446,16 @@ impl<'a> fmt::Display for TypeRef<'a> {
     }
 }
 
-impl<'a> ::std::cmp::PartialEq for TypeRef<'a> {
+impl<'a> std::cmp::PartialEq for TypeRef<'a> {
     fn eq(&self, other: &Self) -> bool {
-        ::std::ptr::eq(self.tree, other.tree) && self.idx == other.idx
+        std::ptr::eq(self.tree, other.tree) && self.idx == other.idx
     }
 }
 
-impl<'a> ::std::cmp::Eq for TypeRef<'a> {}
+impl<'a> std::cmp::Eq for TypeRef<'a> {}
 
-impl<'a> ::std::hash::Hash for TypeRef<'a> {
-    fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+impl<'a> std::hash::Hash for TypeRef<'a> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.idx.hash(state);
     }
 }
@@ -566,7 +566,7 @@ impl<'a> ProcRef<'a> {
     }
 }
 
-impl<'a> ::std::ops::Deref for ProcRef<'a> {
+impl<'a> std::ops::Deref for ProcRef<'a> {
     type Target = ProcValue;
     fn deref(&self) -> &ProcValue {
         self.get()
@@ -589,7 +589,7 @@ impl<'a> fmt::Display for ProcRef<'a> {
     }
 }
 
-impl<'a> ::std::cmp::PartialEq for ProcRef<'a> {
+impl<'a> std::cmp::PartialEq for ProcRef<'a> {
     fn eq(&self, other: &ProcRef<'a>) -> bool {
         self.ty == other.ty && self.name == other.name && self.idx == other.idx
     }
@@ -597,8 +597,8 @@ impl<'a> ::std::cmp::PartialEq for ProcRef<'a> {
 
 impl<'a> std::cmp::Eq for ProcRef<'a> {}
 
-impl<'a> ::std::hash::Hash for ProcRef<'a> {
-    fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+impl<'a> std::hash::Hash for ProcRef<'a> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.ty.hash(state);
         self.name.hash(state);
         self.idx.hash(state);

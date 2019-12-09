@@ -170,7 +170,7 @@ impl<'o> TypeExprCompiler<'o> {
 
             Term::Prefab(fab) => {
                 let bits: Vec<_> = fab.path.iter().map(|(_, name)| name.to_owned()).collect();
-                let ty = ::static_type(self.objtree, location, &bits)?;
+                let ty = crate::static_type(self.objtree, location, &bits)?;
                 Ok(TypeExpr::from(ty))
             },
 

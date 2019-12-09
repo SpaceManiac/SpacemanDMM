@@ -2,7 +2,7 @@ use imgui::{FontConfig, Context, MouseCursor};
 use imgui_gfx_renderer::{Renderer, Shaders};
 use std::time::Instant;
 
-use {ColorFormat, DepthFormat};
+use {ColorFormat, DepthFormat, EditorScene};
 
 #[derive(Copy, Clone, PartialEq, Debug, Default)]
 struct MouseState {
@@ -11,7 +11,7 @@ struct MouseState {
     wheel: f32,
 }
 
-pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
+pub fn run(title: String, clear_color: [f32; 4]) -> EditorScene {
     use gfx::Device;
 
     let mut events_loop = glutin::EventsLoop::new();
@@ -89,7 +89,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> ::EditorScene {
 
     configure_keys(&mut imgui);
 
-    let mut scene = ::EditorScene::new(&mut factory, &main_color, &main_depth);
+    let mut scene = EditorScene::new(&mut factory, &main_color, &main_depth);
 
     let mut last_frame = Instant::now();
     let mut mouse_state = MouseState::default();

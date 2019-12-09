@@ -11,7 +11,7 @@ impl RenderPass for Random {
         objtree: &'a ObjectTree,
         output: &mut Vec<Atom<'a>>,
     ) -> bool {
-        let mut rng = ::rand::thread_rng();
+        let mut rng = rand::thread_rng();
 
         if atom.istype("/obj/machinery/vending/snack/random/") {
             if let Some(root) = objtree.find("/obj/machinery/vending/snack") {
@@ -94,7 +94,7 @@ impl RenderPass for Random {
         objtree: &'a ObjectTree,
         bump: &'a bumpalo::Bump,
     ) {
-        let mut rng = ::rand::thread_rng();
+        let mut rng = rand::thread_rng();
 
         const CONTRABAND_POSTERS: u32 = 44;
         const LEGIT_POSTERS: u32 = 35;
@@ -158,7 +158,7 @@ impl RenderPass for Random {
 
 fn pickweight<'a>(list: &[&'a (Constant, Option<Constant>)]) -> &'a Constant {
     let mut total: i32 = list.iter().map(|(_, v)| v.as_ref().unwrap_or(Constant::null()).to_int().unwrap_or(1)).sum();
-    total = ::rand::thread_rng().gen_range(1, total + 1);
+    total = rand::thread_rng().gen_range(1, total + 1);
     for (k, v) in list.iter() {
         total -= v.as_ref().unwrap_or(Constant::null()).to_int().unwrap_or(1);
         if total <= 0 {

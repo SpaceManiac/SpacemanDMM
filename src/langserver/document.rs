@@ -12,7 +12,7 @@ use jsonrpc;
 use langserver::{TextDocumentItem, TextDocumentIdentifier,
     VersionedTextDocumentIdentifier, TextDocumentContentChangeEvent};
 
-use super::{invalid_request};
+use super::{invalid_request, url_to_path};
 
 /// A store for the contents of currently-open documents, with appropriate
 /// fallback for documents which are not currently open.
@@ -77,9 +77,9 @@ impl DocumentStore {
             return Ok(Cow::Borrowed(&document.text));
         }
 
-        if let Ok(path) = ::url_to_path(url) {
+        if let Ok(path) = url_to_path(url) {
             let mut text = String::new();
-            let mut file = ::std::fs::File::open(path)?;
+            let mut file = std::fs::File::open(path)?;
             file.read_to_string(&mut text)?;
             return Ok(Cow::Owned(text));
         }
@@ -93,8 +93,8 @@ impl DocumentStore {
             return Ok(Box::new(Cursor::new(document.text.clone())) as Box<dyn io::Read>);
         }
 
-        if let Ok(path) = ::url_to_path(url) {
-            let file = ::std::fs::File::open(path)?;
+        if let Ok(path) = url_to_path(url) {
+            let file = std::fs::File::open(path)?;
             return Ok(Box::new(file) as Box<dyn io::Read>);
         }
 
@@ -260,7 +260,7 @@ impl Read for Cursor {
 
 impl BufRead for Cursor {
     fn fill_buf(&mut self) -> io::Result<&[u8]> {
-        let amt = ::std::cmp::min(self.pos, self.inner.as_ref().len() as u64);
+        let amt = std::cmp::min(self.pos, self.inner.as_ref().len() as u64);
         Ok(&self.inner.as_bytes()[(amt as usize)..])
     }
     fn consume(&mut self, amt: usize) {

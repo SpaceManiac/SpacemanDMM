@@ -331,7 +331,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut _first = true;
         macro_rules! push_docs { () => {  // oof
             if !docs.is_empty() {
-                let doc = ::std::mem::replace(&mut docs, Default::default());
+                let doc = std::mem::replace(&mut docs, Default::default());
                 if _first {
                     _first = false;
                     let (title, block) = DocBlock::parse_with_title(&doc.text());

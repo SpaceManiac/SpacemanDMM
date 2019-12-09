@@ -3,7 +3,7 @@
 use std::path::Path;
 use tera::Tera;
 
-pub fn builtin() -> Result<Tera, ::tera::Error> {
+pub fn builtin() -> Result<Tera, tera::Error> {
     #[cfg(debug_assertions)] {
         Tera::new(concat!(env!("CARGO_MANIFEST_DIR"), "/template/*.html"))
     }
@@ -21,8 +21,8 @@ pub fn builtin() -> Result<Tera, ::tera::Error> {
     }
 }
 
-pub fn save_resources(output_path: &Path) -> ::std::io::Result<()> {
-    let mut progress = ::Progress::default();
+pub fn save_resources(output_path: &Path) -> std::io::Result<()> {
+    let mut progress = crate::Progress::default();
 
     #[cfg(debug_assertions)]
     macro_rules! resources {
@@ -30,7 +30,7 @@ pub fn save_resources(output_path: &Path) -> ::std::io::Result<()> {
             let env = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/template"));
             $(
                 progress.update($name);
-                ::std::fs::copy(&env.join($name), &output_path.join($name))?;
+                std::fs::copy(&env.join($name), &output_path.join($name))?;
             )*
         }
     }
@@ -41,7 +41,7 @@ pub fn save_resources(output_path: &Path) -> ::std::io::Result<()> {
             use std::io::Write;
             $(
                 progress.update($name);
-                ::create(&output_path.join($name))?.write_all(include_bytes!($name))?;
+                create(&output_path.join($name))?.write_all(include_bytes!($name))?;
             )*
         }}
     }

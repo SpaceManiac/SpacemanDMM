@@ -16,7 +16,7 @@ pub struct AtomMap {
     pub size: (u32, u32),
     pub pops: WeakKeyHashMap<Weak<Prefab>, RenderPop>,
     pub levels: Vec<AtomZ>,
-    pub duration: ::std::time::Duration,
+    pub duration: std::time::Duration,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -71,7 +71,7 @@ pub struct RemovedInstance {
 impl AtomMap {
     /// Convert from a dictionary-and-grid map.
     pub fn new(map: &Map, icons: &IconCache, objtree: &ObjectTree) -> AtomMap {
-        let start = ::std::time::Instant::now();
+        let start = std::time::Instant::now();
         let (dim_x, dim_y, dim_z) = map.dim_xyz();
         let mut atom_map = AtomMap {
             size: (dim_x as u32, dim_y as u32),
@@ -91,7 +91,7 @@ impl AtomMap {
                 }
             });
         }
-        atom_map.duration = ::std::time::Instant::now() - start;
+        atom_map.duration = std::time::Instant::now() - start;
         atom_map
     }
 

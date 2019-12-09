@@ -59,7 +59,7 @@ fn parser(markdown: &str) -> Parser {
     )
 }
 
-fn parse_main(mut parser: ::std::iter::Peekable<Parser>) -> DocBlock {
+fn parse_main(mut parser: std::iter::Peekable<Parser>) -> DocBlock {
     let mut html = String::new();
     let teaser;
     if let Some(&Event::Start(Tag::Paragraph)) = parser.peek() {

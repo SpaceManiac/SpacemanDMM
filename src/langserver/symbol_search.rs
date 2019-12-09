@@ -71,7 +71,7 @@ impl Query {
         }
     }
 
-    pub fn matches_proc(&self, name: &str, _kind: ::dm::ast::ProcDeclKind) -> bool {
+    pub fn matches_proc(&self, name: &str, _kind: dm::ast::ProcDeclKind) -> bool {
         match *self {
             Query::Anything(ref q) |
             Query::Proc(ref q) => starts_with(name, q),

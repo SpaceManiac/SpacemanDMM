@@ -122,8 +122,8 @@ macro_rules! handle_request {
 
             $(
                 #[allow(non_snake_case)]
-                fn $what(&mut $self, $p: <$what as ::debugger::dap_types::Request>::Params)
-                -> Result<<$what as ::debugger::dap_types::Request>::Result, Box<dyn Error>>
+                fn $what(&mut $self, $p: <$what as crate::debugger::dap_types::Request>::Params)
+                -> Result<<$what as crate::debugger::dap_types::Request>::Result, Box<dyn Error>>
                 {
                     let _v = $b;
                     #[allow(unreachable_code)] { Ok(_v) }

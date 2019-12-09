@@ -24,5 +24,5 @@ impl<Idx: Ord> RangeInclusive<Idx> {
 
 #[cfg(test)]
 pub(crate) fn intersect<Idx: Ord>(lhs: &RangeInclusive<Idx>, rhs: &RangeInclusive<Idx>) -> bool {
-    ::std::cmp::max(&lhs.start, &rhs.start) <= ::std::cmp::min(&lhs.end, &rhs.end)
+    std::cmp::max(&lhs.start, &rhs.start) <= std::cmp::min(&lhs.end, &rhs.end)
 }

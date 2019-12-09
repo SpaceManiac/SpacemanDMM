@@ -56,7 +56,7 @@ impl Default for AnnotationTree {
 }
 
 impl AnnotationTree {
-    pub fn insert(&mut self, place: ::std::ops::Range<Location>, value: Annotation) {
+    pub fn insert(&mut self, place: std::ops::Range<Location>, value: Annotation) {
         self.tree.insert(range(place.start, place.end.pred()), value);
         self.len += 1;
     }
@@ -82,7 +82,7 @@ impl AnnotationTree {
         self.tree.range(range(loc.pred(), loc))
     }
 
-    pub fn get_range(&self, place: ::std::ops::Range<Location>) -> Iter {
+    pub fn get_range(&self, place: std::ops::Range<Location>) -> Iter {
         self.tree.range(range(place.start, place.end.pred()))
     }
 

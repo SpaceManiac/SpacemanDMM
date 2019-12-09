@@ -49,7 +49,7 @@ fn load(path: &Path) -> io::Result<Config> {
 
     let mut contents = String::new();
     io::BufReader::new(fs::File::open(path)?).read_to_string(&mut contents)?;
-    match ::toml::from_str::<Config>(&contents) {
+    match toml::from_str::<Config>(&contents) {
         Ok(cfg) => Ok(cfg),
         Err(e) => {
             println!("Config read error:\n{}", e);
@@ -64,7 +64,7 @@ fn save(cfg: &Config, path: &Path) -> io::Result<()> {
 
     let mut buffer = String::new();
     cfg.serialize(
-        ::toml::ser::Serializer::new(&mut buffer)
+        toml::ser::Serializer::new(&mut buffer)
             .pretty_string(true)
             .pretty_string_literal(false)
             .pretty_array(true),
