@@ -55,7 +55,7 @@ fn parser(markdown: &str) -> Parser {
     Parser::new_with_broken_link_callback(
         markdown,
         pulldown_cmark::Options::ENABLE_TABLES,
-        Some(&::handle_crosslink),
+        Some(&crate::handle_crosslink),
     )
 }
 
