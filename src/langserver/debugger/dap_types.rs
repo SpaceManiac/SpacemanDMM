@@ -526,10 +526,10 @@ pub struct SetExceptionBreakpointsArguments {
      */
     pub filters: Vec<String>,
 
-    /*/**
+    /**
      * Configuration options for selected exceptions.
      */
-    pub exceptionOptions: Option<Vec<ExceptionOptions>>,*/
+    pub exceptionOptions: Option<Vec<ExceptionOptions>>,
 }
 
 /// Response to ‘setBreakpoints’ request.
@@ -767,7 +767,7 @@ pub struct Capabilities {
     /**
      * Available filters or options for the setExceptionBreakpoints request.
      */
-    //exceptionBreakpointFilters?: ExceptionBreakpointsFilter[];
+    pub exceptionBreakpointFilters: Option<Vec<ExceptionBreakpointsFilter>>,
 
     /**
      * The debug adapter supports stepping back via the 'stepBack' and 'reverseContinue' requests.
@@ -917,6 +917,25 @@ pub enum ExceptionBreakMode {
     UserUnhandled,
 }
 
+/// An ExceptionBreakpointsFilter is shown in the UI as an option for configuring how exceptions are dealt with.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ExceptionBreakpointsFilter {
+    /**
+     * The internal ID of the filter. This value is passed to the setExceptionBreakpoints request.
+     */
+    pub filter: String,
+
+    /**
+     * The name of the filter. This will be shown in the UI.
+     */
+    pub label: String,
+
+    /**
+     * Initial value of the filter. If not specified a value 'false' is assumed.
+     */
+    pub default: Option<bool>,
+}
+
 /// Detailed information about an exception that has occurred.
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct ExceptionDetails {
@@ -949,6 +968,36 @@ pub struct ExceptionDetails {
      * Details of the exception contained by this exception, if any.
      */
     pub innerException: Option<Vec<ExceptionDetails>>,
+}
+
+/// An ExceptionOptions assigns configuration options to a set of exceptions.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ExceptionOptions {
+    /**
+     * A path that selects a single or multiple exceptions in a tree. If 'path' is missing, the whole tree is selected. By convention the first segment of the path is a category that is used to group exceptions in the UI.
+     */
+    pub path: Option<Vec<ExceptionPathSegment>>,
+
+    /**
+     * Condition when a thrown exception should result in a break.
+     */
+    pub breakMode: ExceptionBreakMode,
+}
+
+/// An ExceptionPathSegment represents a segment in a path that is used to match leafs or nodes in a tree of exceptions.
+///
+/// If a segment consists of more than one name, it matches the names provided if ‘negate’ is false or missing or it matches anything except the names provided if ‘negate’ is true.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ExceptionPathSegment {
+    /**
+     * If false or missing this segment matches the names provided, otherwise it matches anything except the names provided.
+     */
+    pub negate: Option<bool>,
+
+    /**
+     * Depending on the value of 'negate' the names that should match or not match.
+     */
+    pub names: Vec<String>,
 }
 
 /// A structured message object. Used to return errors from requests.

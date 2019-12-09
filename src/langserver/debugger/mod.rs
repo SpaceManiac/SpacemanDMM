@@ -274,6 +274,8 @@ impl Debugger {
     }
 }
 
+const EXCEPTION_FILTER_RUNTIMES: &str = "runtimes";
+
 handle_request! {
     on Initialize(&mut self, params) {
         // Initialize client caps from request
@@ -295,6 +297,13 @@ handle_request! {
         Some(Capabilities {
             supportTerminateDebuggee: Some(true),
             supportsExceptionInfoRequest: Some(true),
+            exceptionBreakpointFilters: Some(vec![
+                ExceptionBreakpointsFilter {
+                    filter: EXCEPTION_FILTER_RUNTIMES.to_owned(),
+                    label: "Runtime errors".to_owned(),
+                    default: Some(true),
+                }
+            ]),
             .. Default::default()
         })
     }
@@ -442,6 +451,8 @@ handle_request! {
 
             if let Some(line) = extools.offset_to_line(&ex_frame.name, ex_frame.override_id, ex_frame.instruction_pointer) {
                 dap_frame.line = line;
+                // Column must be nonzero for VSC to show the exception widget.
+                dap_frame.column = 1;
             }
 
             frames.push(dap_frame);
@@ -607,12 +618,12 @@ handle_request! {
         extools.step_in();
     }
 
-    on SetExceptionBreakpoints(&mut self, _params) {
+    on SetExceptionBreakpoints(&mut self, params) {
         guard!(let Some(extools) = self.extools.as_ref() else {
             return Err(Box::new(GenericError("No extools connection")));
         });
 
-        extools.set_break_on_runtime(true);
+        extools.set_break_on_runtime(params.filters.iter().any(|x| x == EXCEPTION_FILTER_RUNTIMES));
     }
 
     on ExceptionInfo(&mut self, _params) {

@@ -324,6 +324,10 @@ handle_extools! {
     on FieldResponse(&mut self, response) {
         self.queue(&self.get_field_tx, response);
     }
+
+    on BreakOnRuntime(&mut self, _) {
+        // Either it worked or it didn't, nothing we can do about it now.
+    }
 }
 
 struct ExtoolsSender {
