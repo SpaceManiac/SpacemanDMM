@@ -145,7 +145,7 @@ struct Engine<'a> {
     root: Option<Url>,
 
     context: &'a dm::Context,
-    preprocessor: Option<dm::preprocessor::Preprocessor<'a>>,
+    defines: Option<dm::preprocessor::DefineHistory>,
     objtree: Arc<dm::objtree::ObjectTree>,
     references_table: Option<find_references::ReferencesTable>,
 
@@ -165,7 +165,7 @@ impl<'a> Engine<'a> {
             root: None,
 
             context,
-            preprocessor: None,
+            defines: None,
             objtree: Default::default(),
             references_table: None,
 
@@ -338,8 +338,7 @@ impl<'a> Engine<'a> {
         self.update_objtree();
         self.references_table = Some(find_references::ReferencesTable::new(&self.objtree));
         // TODO: run dreamchecker here if enabled
-        pp.finalize();
-        self.preprocessor = Some(pp);
+        self.defines = Some(pp.finalize());
         self.issue_notification::<extras::WindowStatus>(Default::default());
         let elapsed = start.elapsed();
         eprintln!(
@@ -438,13 +437,13 @@ impl<'a> Engine<'a> {
                         Err(_) => return Err(invalid_request(format!("outside workspace: {}", url))),
                     };
 
-                    let preprocessor = match self.preprocessor {
-                        Some(ref pp) => pp,
-                        None => return Err(invalid_request("no preprocessor")),
+                    let defines = match self.defines {
+                        Some(ref d) => d,
+                        None => return Err(invalid_request("no preprocessor history")),
                     };
                     let (real_file_id, mut preprocessor) = match self.context.get_file(&stripped) {
-                        Some(id) => (id, preprocessor.branch_at_file(id, &self.context)),
-                        None => (FileId::default(), preprocessor.branch(&self.context)),
+                        Some(id) => (id, defines.branch_at_file(id, &self.context)),
+                        None => (FileId::default(), defines.branch_at_end(&self.context)),
                     };
                     let contents = self.docs.read(url).map_err(invalid_request)?;
                     let file_id = preprocessor.push_file(stripped.to_owned(), contents);
@@ -792,8 +791,8 @@ handle_method_call! {
         };
 
         let mut results = Vec::new();
-        if let Some(ref preprocessor) = self.preprocessor {
-            for (range, &(ref name, _)) in preprocessor.history().iter() {
+        if let Some(ref defines) = self.defines {
+            for (range, &(ref name, _)) in defines.iter() {
                 if query.matches_define(name) {
                     results.push(SymbolInformation {
                         name: name.to_owned(),

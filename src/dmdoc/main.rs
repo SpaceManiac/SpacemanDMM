@@ -114,7 +114,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let parser = dm::parser::Parser::new(&context, indents);
         parser.parse_with_module_docs()
     };
-    pp.finalize();
+    let define_history = pp.finalize();
 
     println!("collating documented types");
     let mut types_with_docs = BTreeMap::new();
@@ -134,7 +134,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // if macros have docs, that counts as a module too
-    for (range, (name, define)) in pp.history().iter() {
+    for (range, (name, define)) in define_history.iter() {
         progress.update(&format!("#define {}", name));
 
         let (docs, has_params, params, is_variadic);

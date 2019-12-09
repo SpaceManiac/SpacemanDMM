@@ -389,9 +389,9 @@ impl<'a> Engine<'a> {
         }
 
         // macros
-        if let Some(ref preprocessor) = self.preprocessor {
+        if let Some(ref defines) = self.defines {
             // TODO: verify that the macro is in scope at the location
-            for (_, &(ref name, ref define)) in preprocessor.history().iter() {
+            for (_, &(ref name, ref define)) in defines.iter() {
                 if contains(name, query) {
                     results.push(CompletionItem {
                         label: name.to_owned(),

@@ -63,8 +63,85 @@ impl fmt::Display for Define {
     }
 }
 
+type InnerDefineHistory = IntervalTree<Location, (String, Define)>;
+
 /// An interval tree representing historic macro definitions.
-pub type DefineHistory = IntervalTree<Location, (String, Define)>;
+#[derive(Debug)]
+pub struct DefineHistory {
+    env_file: PathBuf,
+    last_input_loc: Location,
+    tree: InnerDefineHistory,
+}
+
+impl DefineHistory {
+    /// Branch a child preprocessor from this preprocessor's historic state at
+    /// the start of the given file.
+    pub fn branch_at_file<'ctx2>(&self, file: FileId, context: &'ctx2 Context) -> Preprocessor<'ctx2> {
+        let location = Location { file, line: 0, column: 0 };
+        let defines = DefineMap::from_history(self, location);
+
+        Preprocessor {
+            context,
+            env_file: self.env_file.clone(),
+            include_stack: Default::default(),
+            include_locations: Default::default(),
+            history: Default::default(),  // TODO: support branching a second time
+            defines,
+            maps: Default::default(),
+            skins: Default::default(),
+            scripts: Default::default(),
+            ifdef_stack: Default::default(),  // should be fine
+            ifdef_history: Default::default(),
+            last_input_loc: location,
+            last_printable_input_loc: location,
+            output: Default::default(),
+            danger_idents: Default::default(),
+            docs_in: Default::default(),
+            docs_out: Default::default(),
+            in_interp_string: 0,
+            annotations: None,
+        }
+    }
+
+    /// Branch a child preprocessor from this preprocessor's current state.
+    pub fn branch_at_end<'ctx2>(&self, context: &'ctx2 Context) -> Preprocessor<'ctx2> {
+        Preprocessor {
+            context,
+            env_file: self.env_file.clone(),
+            include_stack: Default::default(),
+            include_locations: Default::default(),
+            history: Default::default(),  // TODO: support branching a second time
+            defines: DefineMap::from_history(self, self.last_input_loc),
+            maps: Default::default(),
+            skins: Default::default(),
+            scripts: Default::default(),
+            ifdef_stack: Default::default(),  // should be fine
+            ifdef_history: Default::default(),
+            last_input_loc: self.last_input_loc,
+            last_printable_input_loc: self.last_input_loc,
+            output: Default::default(),
+            danger_idents: Default::default(),
+            docs_in: Default::default(),
+            docs_out: Default::default(),
+            in_interp_string: 0,
+            annotations: None,
+        }
+    }
+}
+
+impl std::ops::Deref for DefineHistory {
+    type Target = IntervalTree<Location, (String, Define)>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.tree
+    }
+}
+
+impl std::ops::DerefMut for DefineHistory {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.tree
+    }
+}
 
 /// A map from macro names to their locations and definitions.
 ///
@@ -134,7 +211,7 @@ impl DefineMap {
     }
 
     /// Cut a DefineMap from the state of a DefineHistory at the given location.
-    fn from_history(history: &DefineHistory, location: Location) -> DefineMap {
+    fn from_history(history: &InnerDefineHistory, location: Location) -> DefineMap {
         let mut map = DefineMap::default();
         for (range, &(ref name, ref define)) in history.range(range(location, location)) {
             map.insert(name.clone(), (range.start, define.clone()));
@@ -142,6 +219,7 @@ impl DefineMap {
         map
     }
 
+    /*
     /// Test whether two DefineMaps are equal, ignoring definition locations.
     fn equals(&self, rhs: &DefineMap) -> bool {
         if self.len() != rhs.len() {
@@ -157,6 +235,7 @@ impl DefineMap {
             })
         })
     }
+    */
 }
 
 // ----------------------------------------------------------------------------
@@ -284,7 +363,7 @@ pub struct Preprocessor<'ctx> {
     ifdef_history: IntervalTree<Location, bool>,
     annotations: Option<AnnotationTree>,
 
-    history: DefineHistory,
+    history: InnerDefineHistory,
     defines: DefineMap,
     maps: Vec<PathBuf>,
     skins: Vec<PathBuf>,
@@ -373,8 +452,8 @@ impl<'ctx> Preprocessor<'ctx> {
         }
     }
 
-    /// Move all active defines to the define history.
-    pub fn finalize(&mut self) {
+    /// Finalize this preprocessor into its complete define history.
+    pub fn finalize(mut self) -> DefineHistory {
         let mut i = 0;
         for (name, vector) in self.defines.inner.drain() {
             for (start, define) in vector {
@@ -389,16 +468,11 @@ impl<'ctx> Preprocessor<'ctx> {
                 self.history.insert(range(start, end), (name.clone(), define));
             }
         }
-    }
-
-    /// Access the define history. Will be incomplete until finalized.
-    pub fn history(&self) -> &DefineHistory {
-        &self.history
-    }
-
-    /// Access currently active defines.
-    pub fn defines_at(&self, location: Location) -> DefineMap {
-        DefineMap::from_history(&self.history, location)
+        DefineHistory {
+            env_file: self.env_file,
+            last_input_loc: self.last_input_loc,
+            tree: self.history,
+        }
     }
 
     /// Access the ifdef history.
@@ -406,60 +480,7 @@ impl<'ctx> Preprocessor<'ctx> {
         &self.ifdef_history
     }
 
-    /// Branch a child preprocessor from this preprocessor's historic state at
-    /// the start of the given file.
-    pub fn branch_at_file<'ctx2>(&self, file: FileId, context: &'ctx2 Context) -> Preprocessor<'ctx2> {
-        let location = Location { file, line: 0, column: 0 };
-        let defines = DefineMap::from_history(&self.history, location);
-
-        Preprocessor {
-            context,
-            env_file: self.env_file.clone(),
-            include_stack: Default::default(),
-            include_locations: Default::default(),
-            history: Default::default(),  // TODO: support branching a second time
-            defines,
-            maps: Default::default(),
-            skins: Default::default(),
-            scripts: Default::default(),
-            ifdef_stack: Default::default(),  // should be fine
-            ifdef_history: Default::default(),
-            last_input_loc: location,
-            last_printable_input_loc: location,
-            output: Default::default(),
-            danger_idents: Default::default(),
-            docs_in: Default::default(),
-            docs_out: Default::default(),
-            in_interp_string: 0,
-            annotations: None,
-        }
-    }
-
-    /// Branch a child preprocessor from this preprocessor's current state.
-    pub fn branch<'ctx2>(&self, context: &'ctx2 Context) -> Preprocessor<'ctx2> {
-        Preprocessor {
-            context,
-            env_file: self.env_file.clone(),
-            include_stack: Default::default(),
-            include_locations: Default::default(),
-            history: Default::default(),  // TODO: support branching a second time
-            defines: self.defines.clone(),
-            maps: Default::default(),
-            skins: Default::default(),
-            scripts: Default::default(),
-            ifdef_stack: Default::default(),  // should be fine
-            ifdef_history: Default::default(),
-            last_input_loc: self.last_input_loc,
-            last_printable_input_loc: self.last_printable_input_loc,
-            output: Default::default(),
-            danger_idents: Default::default(),
-            docs_in: Default::default(),
-            docs_out: Default::default(),
-            in_interp_string: 0,
-            annotations: None,
-        }
-    }
-
+    /*
     /// Check whether this preprocessor's state as of the end of the given file
     /// matches the given child preprocessor.
     pub fn matches_end_of_file(&self, file: FileId, other: &Preprocessor) -> bool {
@@ -467,6 +488,7 @@ impl<'ctx> Preprocessor<'ctx> {
         let defines = DefineMap::from_history(&self.history, location);
         defines.equals(&other.defines)
     }
+    */
 
     /// Push a DM file to the top of this preprocessor's stack.
     pub fn push_file<R: io::Read + 'static>(&mut self, path: PathBuf, read: R) -> FileId {
