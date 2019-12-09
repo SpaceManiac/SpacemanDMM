@@ -390,6 +390,61 @@ impl Expression {
             _ => None,
         }
     }
+    pub fn is_truthy(&self) -> Option<bool> {
+        match self {
+            Expression::Base { unary, term, follow: _ } => {
+                guard!(let Some(truthy) = term.elem.is_truthy() else {
+                    return None
+                });
+                let mut negation = false;
+                for u in unary {
+                    if let UnaryOp::Not = u {
+                        negation = !negation;
+                    }
+                }
+                if negation {
+                    return Some(!truthy)
+                } else {
+                    return Some(truthy)
+                }
+            },
+            Expression::BinaryOp { op, lhs, rhs } => {
+                guard!(let Some(lhtruth) = lhs.is_truthy() else {
+                    return None
+                });
+                guard!(let Some(rhtruth) = rhs.is_truthy() else {
+                    return None
+                });
+                return match op {
+                    BinaryOp::Eq => Some(lhtruth == rhtruth),
+                    BinaryOp::NotEq => Some(lhtruth != rhtruth),
+                    BinaryOp::And => Some(lhtruth && rhtruth),
+                    BinaryOp::Or => Some(lhtruth || rhtruth),
+                    _ => None,
+                }
+            },
+            Expression::AssignOp { op, lhs: _, rhs } => {
+                if let AssignOp::Assign = op {
+                    return match rhs.as_term() {
+                        Some(term) => term.is_truthy(),
+                        _ => None,
+                    }
+                } else {
+                    return None
+                }
+            },
+            Expression::TernaryOp { cond, if_, else_ } => {
+                guard!(let Some(condtruth) = cond.is_truthy() else {
+                    return None
+                });
+                if condtruth {
+                    return if_.is_truthy()
+                } else {
+                    return else_.is_truthy()
+                }
+            }
+        }
+    }
 }
 
 impl From<Term> for Expression {
@@ -463,6 +518,33 @@ pub enum Term {
     Pick(Vec<(Option<Expression>, Expression)>),
     /// A use of the `call()()` primitive.
     DynamicCall(Vec<Expression>, Vec<Expression>),
+}
+
+impl Term {
+    pub fn is_truthy(&self) -> Option<bool> {
+        return match self {
+            // null is always false
+            Term::Null => Some(false),
+            // number literals are false if they're 0
+            Term::Int(i) => Some(*i != 0),
+            Term::Float(i) => Some(*i != 0f32),
+            // empty strings are false
+            Term::String(s) => Some(s.len() > 0),
+            // recurse
+            Term::Expr(e) => e.is_truthy(),
+            // paths/prefabs are true
+            Term::Prefab(_) => Some(true),
+            // these always have a length therefore true
+            Term::InterpString(_, _) => Some(true),
+            // new is true if it succeeds, assume it does
+            Term::New{type_: _, args: _} => Some(true),
+            // since it returns a reference its true
+            Term::List(_) => Some(true),
+
+            _ => None,
+        };
+        
+    }
 }
 
 impl From<Expression> for Term {

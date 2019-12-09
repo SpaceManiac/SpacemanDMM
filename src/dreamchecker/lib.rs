@@ -797,6 +797,20 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         return term
     }
 
+    fn loop_condition_check(&mut self, location: Location, expression: &'o Expression) {
+        match expression.is_truthy() {
+            Some(true) => {
+                error(location,"loop condition is always true")
+                    .register(self.context);
+            },
+            Some(false) => {
+                error(location,"loop condition is always false")
+                    .register(self.context);
+            }
+            _ => ()
+        };
+    }
+
     fn visit_statement(&mut self, location: Location, statement: &'o Statement) -> ControlFlow {
         match statement {
             Statement::Expr(expr) => { self.visit_expression(location, expr, None); },
@@ -810,6 +824,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Statement::Return(None) => { return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false } },
             Statement::Throw(expr) => { self.visit_expression(location, expr, None); },
             Statement::While { condition, block } => {
+                self.loop_condition_check(location, condition);
                 self.visit_expression(location, condition, None);
                 let mut state = self.visit_block(block);
                 //println!("end of while {:#?}", state);
@@ -824,17 +839,36 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         .register(self.context);
                     return state
                 }
+                self.loop_condition_check(location, condition);
                 self.visit_expression(location, condition, None);
+                
                 state.end_loop();
                 return state
             },
             Statement::If { arms, else_arm } => {
                 let mut allterm = ControlFlow::alltrue();
+                let mut alwaystrue = false;
                 for (condition, ref block) in arms.iter() {
+                    if alwaystrue {
+                        error(location,"unreachable if/else block, preceeding if/elseif condition is always true")
+                            .register(self.context);
+                    }
                     self.visit_expression(condition.location, &condition.elem, None);
                     let state = self.visit_block(block);
                     //println!("if arm {:#?}", state);
-                    allterm.merge_false(state);
+                    match condition.is_truthy() {
+                        Some(true) => {
+                            error(location,"if condition is always true")
+                                .register(self.context);
+                            allterm.merge_false(state);
+                            alwaystrue = true;
+                        },
+                        Some(false) => {
+                            error(location,"if condition is always false")
+                                .register(self.context);
+                        },
+                        None => allterm.merge_false(state)
+                    };
                     //println!("after merge {:#?}", allterm);
                 }
                 if let Some(else_arm) = else_arm {
@@ -856,6 +890,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     self.visit_statement(location, init);
                 }
                 if let Some(test) = test {
+                    self.loop_condition_check(location, test);
                     self.visit_expression(location, test, None);
                 }
                 if let Some(inc) = inc {
