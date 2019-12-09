@@ -1043,8 +1043,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
     }
 
-    // crement = increment/decrement
-    fn check_crement(&mut self, rhs: Analysis<'o>, location: Location, crement: &str) -> Analysis<'o> {
+    // checks operatorX overloads on types
+    fn check_operator_overload(&mut self, rhs: Analysis<'o>, location: Location, operator: &str) -> Analysis<'o> {
         let typeerror;
         match rhs.static_ty {
             StaticType::None => {
@@ -1052,7 +1052,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             StaticType::Type(typeref) => {
                 // Its been overloaded, assume they really know they want to do this
-                if let Some(proc) = typeref.get_proc(&format!("operator{}",crement)) {
+                if let Some(proc) = typeref.get_proc(&format!("operator{}",operator)) {
                     return self.visit_call(location, typeref, proc, &[], true)
                 }
                 typeerror = typeref.get().pretty_path();
@@ -1061,7 +1061,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 typeerror = "list";
             },
         };
-        error(location, format!("Attempting {} on a {} which does not overload operator{}", crement, typeerror, crement))
+        error(location, format!("Attempting {} on a {} which does not overload operator{}", operator, typeerror, operator))
             .register(self.context);
         return Analysis::empty()
     }
@@ -1070,8 +1070,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         match op {
             // !x just evaluates the "truthiness" of x and negates it, returning 1 or 0
             UnaryOp::Not => Analysis::from(assumption_set![Assumption::IsNum(true)]),
-            UnaryOp::PreIncr | UnaryOp::PostIncr => self.check_crement(rhs, location, "++"),
-            UnaryOp::PreDecr | UnaryOp::PostDecr => self.check_crement(rhs, location, "--"),
+            UnaryOp::PreIncr | UnaryOp::PostIncr => self.check_operator_overload(rhs, location, "++"),
+            UnaryOp::PreDecr | UnaryOp::PostDecr => self.check_operator_overload(rhs, location, "--"),
             /*
             (UnaryOp::Neg, Type::Number) => Type::Number.into(),
             (UnaryOp::BitNot, Type::Number) => Type::Number.into(),
