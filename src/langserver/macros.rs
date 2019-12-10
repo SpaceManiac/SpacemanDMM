@@ -78,17 +78,16 @@ macro_rules! handle_notification {
 macro_rules! handle_request {
     ($(on $what:ident(&mut $self:ident, $p:pat) $b:block)*) => {
         impl Debugger {
-            fn handle_request(&mut self, request: RequestMessage) -> Result<serde_json::Value, Box<dyn Error>> {
+            fn handle_request_table(command: &str) -> Option<fn(&mut Self, serde_json::Value) -> Result<serde_json::Value, Box<dyn Error>>> {
                 use crate::debugger::dap_types::*;
-
-                $(if request.command == <$what>::COMMAND {
-                    let arguments = request.arguments.unwrap_or(serde_json::Value::Null);
-                    let params: <$what as Request>::Params = serde_json::from_value(arguments)?;
-                    let result: <$what as Request>::Result = self.$what(params)?;
-                    Ok(serde_json::to_value(result).expect("encode problem"))
+                $(if command == <$what>::COMMAND {
+                    Some(|this, arguments| {
+                        let params: <$what as Request>::Params = serde_json::from_value(arguments)?;
+                        let result: <$what as Request>::Result = this.$what(params)?;
+                        Ok(serde_json::to_value(result).expect("encode problem"))
+                    })
                 } else)* {
-                    //debug_output!(in self.seq, "[main] NYI: {} -> {:?}", request.command, request.arguments);
-                    Err(format!("Request NYI: {}", request.command).into())
+                    None
                 }
             }
 
@@ -108,15 +107,14 @@ macro_rules! handle_request {
 macro_rules! handle_extools {
     ($(on $what:ident(&mut $self:ident, $p:pat) $b:block)*) => {
         impl ExtoolsThread {
-            fn handle_response(&mut self, buffer: &[u8]) -> Result<(), Box<dyn Error>> {
-                let message = serde_json::from_slice::<ProtocolMessage>(buffer)?;
-                $(if message.type_ == <$what as Response>::TYPE {
-                    let content = message.content.unwrap_or(serde_json::Value::Null);
-                    let deserialized: $what = serde_json::from_value(content)?;
-                    self.$what(deserialized)
+            fn handle_response_table(type_: &str) -> Option<fn(&mut Self, serde_json::Value) -> Result<(), Box<dyn Error>>> {
+                $(if type_ == <$what as Response>::TYPE {
+                    Some(|this, content| {
+                        let deserialized: $what = serde_json::from_value(content)?;
+                        this.$what(deserialized)
+                    })
                 } else)* {
-                    debug_output!(in self.seq, "[extools] NYI: {}", String::from_utf8_lossy(buffer));
-                    Ok(())
+                    None
                 }
             }
 

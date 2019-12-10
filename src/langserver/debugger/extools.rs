@@ -275,6 +275,16 @@ impl ExtoolsThread {
         self.seq.issue_event(dap_types::TerminatedEvent::default());
     }
 
+    fn handle_response(&mut self, buffer: &[u8]) -> Result<(), Box<dyn Error>> {
+        let message = serde_json::from_slice::<ProtocolMessage>(buffer)?;
+        if let Some(handler) = Self::handle_response_table(&message.type_) {
+            handler(self, message.content.unwrap_or(serde_json::Value::Null))
+        } else {
+            debug_output!(in self.seq, "[extools] NYI: {}", String::from_utf8_lossy(buffer));
+            Ok(())
+        }
+    }
+
     fn queue<T>(&self, tx: &mpsc::Sender<T>, val: T) {
         // If the other side isn't listening, log that.
         if let Err(_e) = tx.send(val) {

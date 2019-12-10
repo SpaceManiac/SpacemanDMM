@@ -242,7 +242,11 @@ impl Debugger {
                 let request_seq = request.protocol_message.seq;
                 let command = request.command.clone();
 
-                let handled = self.handle_request(request);
+                let handled = match Self::handle_request_table(&request.command) {
+                    Some(handler) => handler(self, request.arguments.unwrap_or(serde_json::Value::Null)),
+                    None => Err(format!("Request NYI: {}", request.command).into()),
+                };
+
                 let response = ResponseMessage {
                     protocol_message: ProtocolMessage {
                         seq: self.seq.next(),
