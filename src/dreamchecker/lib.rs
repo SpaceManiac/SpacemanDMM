@@ -17,7 +17,7 @@ use type_expr::TypeExpr;
 // ----------------------------------------------------------------------------
 // Helper structures
 
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum StaticType<'o> {
     None,
     Type(TypeRef<'o>),
@@ -788,7 +788,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     ty = self.visit_follow(each.location, ty, &each.elem);
                 }
                 for each in unary.iter().rev() {
-                    ty = self.visit_unary(ty, each);
+                    ty = self.visit_unary(ty, each, location);
                 }
                 ty
             },
@@ -1094,17 +1094,38 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
     }
 
-    fn visit_unary(&mut self, rhs: Analysis<'o>, op: &UnaryOp) -> Analysis<'o> {
+    // checks operatorX overloads on types
+    fn check_operator_overload(&mut self, rhs: Analysis<'o>, location: Location, operator: &str) -> Analysis<'o> {
+        let typeerror;
+        match rhs.static_ty {
+            StaticType::None => {
+                return Analysis::empty()
+            },
+            StaticType::Type(typeref) => {
+                // Its been overloaded, assume they really know they want to do this
+                if let Some(proc) = typeref.get_proc(&format!("operator{}",operator)) {
+                    return self.visit_call(location, typeref, proc, &[], true)
+                }
+                typeerror = typeref.get().pretty_path();
+            },
+            StaticType::List { list, .. } => {
+                typeerror = "list";
+            },
+        };
+        error(location, format!("Attempting {} on a {} which does not overload operator{}", operator, typeerror, operator))
+            .register(self.context);
+        return Analysis::empty()
+    }
+
+    fn visit_unary(&mut self, rhs: Analysis<'o>, op: &UnaryOp, location: Location) -> Analysis<'o> {
         match op {
             // !x just evaluates the "truthiness" of x and negates it, returning 1 or 0
             UnaryOp::Not => Analysis::from(assumption_set![Assumption::IsNum(true)]),
+            UnaryOp::PreIncr | UnaryOp::PostIncr => self.check_operator_overload(rhs, location, "++"),
+            UnaryOp::PreDecr | UnaryOp::PostDecr => self.check_operator_overload(rhs, location, "--"),
             /*
             (UnaryOp::Neg, Type::Number) => Type::Number.into(),
             (UnaryOp::BitNot, Type::Number) => Type::Number.into(),
-            (UnaryOp::PreIncr, Type::Number) => Type::Number.into(),
-            (UnaryOp::PostIncr, Type::Number) => Type::Number.into(),
-            (UnaryOp::PreDecr, Type::Number) => Type::Number.into(),
-            (UnaryOp::PostDecr, Type::Number) => Type::Number.into(),
             */
             _ => Analysis::empty(),
         }
