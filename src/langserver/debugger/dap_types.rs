@@ -448,6 +448,26 @@ pub struct ExceptionInfoResponse {
     pub details: Option<ExceptionDetails>,
 }
 
+/// The request starts the debuggee to run again for one step.
+///
+/// The debug adapter first sends the response and then a ‘stopped’ event (with reason ‘step’) after the step has completed.
+pub enum Next {}
+
+impl Request for Next {
+    type Params = NextArguments;
+    type Result = ();
+    const COMMAND: &'static str = "next";
+}
+
+/// Arguments for ‘next’ request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct NextArguments {
+    /**
+     * Execute 'next' for this thread.
+     */
+    pub threadId: i64,
+}
+
 /// The request returns the variable scopes for a given stackframe ID.
 pub enum Scopes {}
 
