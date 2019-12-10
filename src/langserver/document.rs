@@ -9,7 +9,7 @@ use std::rc::Rc;
 use url::Url;
 
 use jsonrpc;
-use langserver::{TextDocumentItem, TextDocumentIdentifier,
+use lsp_types::{TextDocumentItem, TextDocumentIdentifier,
     VersionedTextDocumentIdentifier, TextDocumentContentChangeEvent};
 
 use super::{invalid_request, url_to_path};
@@ -166,7 +166,7 @@ fn total_offset(text: &str, line: u64, mut character: u64) -> Result<usize, json
 }
 
 // Reverse of the above.
-pub fn offset_to_position(text: &str, offset: usize) -> langserver::Position {
+pub fn offset_to_position(text: &str, offset: usize) -> lsp_types::Position {
     let mut line = 0;
     let mut line_start = 0;
     loop {
@@ -182,10 +182,10 @@ pub fn offset_to_position(text: &str, offset: usize) -> langserver::Position {
         character += ch.len_utf16() as u64;
     }
 
-    langserver::Position { line, character }
+    lsp_types::Position { line, character }
 }
 
-pub fn get_range(text: &str, range: langserver::Range) -> Result<&str, jsonrpc::Error> {
+pub fn get_range(text: &str, range: lsp_types::Range) -> Result<&str, jsonrpc::Error> {
     Ok(&text[
         total_offset(text, range.start.line, range.start.character)?
         ..total_offset(text, range.end.line, range.end.character)?

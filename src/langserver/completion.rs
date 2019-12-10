@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use langserver::*;
+use lsp_types::*;
 
 use dm::ast::PathOp;
 use dm::annotation::Annotation;

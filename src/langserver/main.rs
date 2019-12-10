@@ -13,7 +13,7 @@ extern crate serde_json;
 #[macro_use] extern crate serde_derive;
 extern crate petgraph;
 extern crate interval_tree;
-extern crate lsp_types as langserver;
+extern crate lsp_types;
 extern crate jsonrpc_core as jsonrpc;
 extern crate dreammaker as dm;
 extern crate dreamchecker;
@@ -41,7 +41,7 @@ use std::rc::Rc;
 
 use url::Url;
 use jsonrpc::{Request, Call, Response, Output};
-use langserver::MessageType;
+use lsp_types::MessageType;
 use petgraph::visit::IntoNodeReferences;
 
 use dm::FileId;
@@ -105,7 +105,7 @@ struct ClientCaps {
 }
 
 impl ClientCaps {
-    fn parse(caps: &langserver::ClientCapabilities) -> ClientCaps {
+    fn parse(caps: &lsp_types::ClientCapabilities) -> ClientCaps {
         let mut this = ClientCaps::default();
         if let Some(ref text_document) = caps.text_document {
             if let Some(ref signature_help) = text_document.signature_help {
@@ -181,7 +181,7 @@ impl<'a> Engine<'a> {
 
     fn issue_notification<T>(&self, params: T::Params)
     where
-        T: langserver::notification::Notification,
+        T: lsp_types::notification::Notification,
         T::Params: serde::Serialize,
     {
         issue_notification::<T>(params)
@@ -192,8 +192,8 @@ impl<'a> Engine<'a> {
     {
         let message = message.into();
         eprintln!("{:?}: {}", typ, message);
-        self.issue_notification::<langserver::notification::ShowMessage>(
-            langserver::ShowMessageParams { typ, message }
+        self.issue_notification::<lsp_types::notification::ShowMessage>(
+            lsp_types::ShowMessageParams { typ, message }
         )
     }
 
@@ -226,8 +226,8 @@ impl<'a> Engine<'a> {
         }
     }
 
-    fn convert_location(&self, loc: dm::Location, if_builtin: &[&str]) -> Result<langserver::Location, jsonrpc::Error> {
-        Ok(langserver::Location {
+    fn convert_location(&self, loc: dm::Location, if_builtin: &[&str]) -> Result<lsp_types::Location, jsonrpc::Error> {
+        Ok(lsp_types::Location {
             uri: if loc.file == dm::FileId::builtins() {
                 Url::parse(&format!("dm://docs/reference.dm#{}", if_builtin.join("")))
                     .map_err(invalid_request)?
@@ -253,7 +253,7 @@ impl<'a> Engine<'a> {
     fn recurse_objtree(&self, ty: TypeRef) -> extras::ObjectTreeType {
         let mut entry = extras::ObjectTreeType {
             name: ty.name.to_owned(),
-            kind: langserver::SymbolKind::Class,
+            kind: lsp_types::SymbolKind::Class,
             location: self.convert_location(ty.location, &[&ty.path]).ok(),
             vars: Vec::new(),
             procs: Vec::new(),
@@ -265,7 +265,7 @@ impl<'a> Engine<'a> {
             let is_declaration = var.declaration.is_some();
             entry.vars.push(extras::ObjectTreeVar {
                 name: name.to_owned(),
-                kind: langserver::SymbolKind::Field,
+                kind: lsp_types::SymbolKind::Field,
                 location: self.convert_location(var.value.location, &[&ty.path, "/var/", name]).ok(),
                 is_declaration,
             });
@@ -278,7 +278,7 @@ impl<'a> Engine<'a> {
             for value in proc.value.iter() {
                 entry.procs.push(extras::ObjectTreeProc {
                     name: name.to_owned(),
-                    kind: langserver::SymbolKind::Method,
+                    kind: lsp_types::SymbolKind::Method,
                     location: self.convert_location(value.location, &[&ty.path, "/proc/", name]).ok(),
                     is_verb,
                 });
@@ -316,10 +316,10 @@ impl<'a> Engine<'a> {
         let mut pp = match dm::preprocessor::Preprocessor::new(ctx, environment.clone()) {
             Ok(pp) => pp,
             Err(err) => {
-                self.issue_notification::<langserver::notification::PublishDiagnostics>(
-                    langserver::PublishDiagnosticsParams {
+                self.issue_notification::<lsp_types::notification::PublishDiagnostics>(
+                    lsp_types::PublishDiagnosticsParams {
                         uri: path_to_url(environment)?,
-                        diagnostics: vec![langserver::Diagnostic {
+                        diagnostics: vec![lsp_types::Diagnostic {
                             message: err.to_string(),
                             .. Default::default()
                         }],
@@ -356,8 +356,8 @@ impl<'a> Engine<'a> {
             } else {
                 let mut notes = Vec::with_capacity(error.notes().len());
                 for note in error.notes().iter() {
-                    notes.push(langserver::DiagnosticRelatedInformation {
-                        location: langserver::Location {
+                    notes.push(lsp_types::DiagnosticRelatedInformation {
+                        location: lsp_types::Location {
                             uri: self.file_url(note.location().file)?,
                             range: location_to_range(note.location()),
                         },
@@ -366,7 +366,7 @@ impl<'a> Engine<'a> {
                 }
                 Some(notes)
             };
-            let diag = langserver::Diagnostic {
+            let diag = lsp_types::Diagnostic {
                 message: error.description().to_owned(),
                 severity: Some(convert_severity(error.severity())),
                 range: location_to_range(loc),
@@ -381,9 +381,9 @@ impl<'a> Engine<'a> {
             if !self.client_caps.related_info {
                 // Fallback in case the client does not support related info
                 for note in error.notes().iter() {
-                    let diag = langserver::Diagnostic {
+                    let diag = lsp_types::Diagnostic {
                         message: note.description().to_owned(),
-                        severity: Some(langserver::DiagnosticSeverity::Information),
+                        severity: Some(lsp_types::DiagnosticSeverity::Information),
                         range: location_to_range(note.location()),
                         source: component_to_source(error.component()),
                         .. Default::default()
@@ -399,8 +399,8 @@ impl<'a> Engine<'a> {
         for (url, diagnostics) in map {
             self.diagnostics_set.remove(&url);  // don't erase below
             new_diagnostics_set.insert(url.clone());
-            self.issue_notification::<langserver::notification::PublishDiagnostics>(
-                langserver::PublishDiagnosticsParams {
+            self.issue_notification::<lsp_types::notification::PublishDiagnostics>(
+                lsp_types::PublishDiagnosticsParams {
                     uri: url,
                     diagnostics,
                 },
@@ -409,8 +409,8 @@ impl<'a> Engine<'a> {
 
         // erase diagnostics for files which no longer have any
         for url in std::mem::replace(&mut self.diagnostics_set, new_diagnostics_set) {
-            self.issue_notification::<langserver::notification::PublishDiagnostics>(
-                langserver::PublishDiagnosticsParams {
+            self.issue_notification::<lsp_types::notification::PublishDiagnostics>(
+                lsp_types::PublishDiagnosticsParams {
                     uri: url.clone(),
                     diagnostics: Vec::new(),
                 },
@@ -495,8 +495,8 @@ impl<'a> Engine<'a> {
                         } else {
                             let mut notes = Vec::with_capacity(error.notes().len());
                             for note in error.notes().iter() {
-                                notes.push(langserver::DiagnosticRelatedInformation {
-                                    location: langserver::Location {
+                                notes.push(lsp_types::DiagnosticRelatedInformation {
+                                    location: lsp_types::Location {
                                         uri: url.to_owned(),
                                         range: location_to_range(note.location()),
                                     },
@@ -505,7 +505,7 @@ impl<'a> Engine<'a> {
                             }
                             Some(notes)
                         };
-                        let diag = langserver::Diagnostic {
+                        let diag = lsp_types::Diagnostic {
                             message: error.description().to_owned(),
                             severity: Some(convert_severity(error.severity())),
                             range: location_to_range(loc),
@@ -518,9 +518,9 @@ impl<'a> Engine<'a> {
                         if !self.client_caps.related_info {
                             // Fallback in case the client does not support related info
                             for note in error.notes().iter() {
-                                let diag = langserver::Diagnostic {
+                                let diag = lsp_types::Diagnostic {
                                     message: note.description().to_owned(),
-                                    severity: Some(langserver::DiagnosticSeverity::Information),
+                                    severity: Some(lsp_types::DiagnosticSeverity::Information),
                                     range: location_to_range(note.location()),
                                     source: component_to_source(error.component()),
                                     .. Default::default()
@@ -530,8 +530,8 @@ impl<'a> Engine<'a> {
                         }
                     }
 
-                    issue_notification::<langserver::notification::PublishDiagnostics>(
-                        langserver::PublishDiagnosticsParams {
+                    issue_notification::<lsp_types::notification::PublishDiagnostics>(
+                        lsp_types::PublishDiagnosticsParams {
                             uri: url.to_owned(),
                             diagnostics,
                         },
@@ -1731,12 +1731,12 @@ fn path_to_url(path: PathBuf) -> Result<Url, jsonrpc::Error> {
     )))
 }
 
-fn convert_severity(severity: dm::Severity) -> langserver::DiagnosticSeverity {
+fn convert_severity(severity: dm::Severity) -> lsp_types::DiagnosticSeverity {
     match severity {
-        dm::Severity::Error => langserver::DiagnosticSeverity::Error,
-        dm::Severity::Warning => langserver::DiagnosticSeverity::Warning,
-        dm::Severity::Info => langserver::DiagnosticSeverity::Information,
-        dm::Severity::Hint => langserver::DiagnosticSeverity::Hint,
+        dm::Severity::Error => lsp_types::DiagnosticSeverity::Error,
+        dm::Severity::Warning => lsp_types::DiagnosticSeverity::Warning,
+        dm::Severity::Info => lsp_types::DiagnosticSeverity::Information,
+        dm::Severity::Hint => lsp_types::DiagnosticSeverity::Hint,
     }
 }
 
@@ -1768,25 +1768,25 @@ fn ignore_root(t: Option<TypeRef>) -> Option<TypeRef> {
     }
 }
 
-fn location_to_position(loc: dm::Location) -> langserver::Position  {
-    langserver::Position {
+fn location_to_position(loc: dm::Location) -> lsp_types::Position  {
+    lsp_types::Position {
         line: loc.line.saturating_sub(1) as u64,
         character: loc.column.saturating_sub(1) as u64,
     }
 }
 
-fn location_to_range(loc: dm::Location) -> langserver::Range {
+fn location_to_range(loc: dm::Location) -> lsp_types::Range {
     let pos = location_to_position(loc);
-    langserver::Range::new(pos, pos)
+    lsp_types::Range::new(pos, pos)
 }
 
-fn span_to_range(range: std::ops::Range<dm::Location>) -> langserver::Range {
-    langserver::Range::new(location_to_position(range.start), location_to_position(range.end))
+fn span_to_range(range: std::ops::Range<dm::Location>) -> lsp_types::Range {
+    lsp_types::Range::new(location_to_position(range.start), location_to_position(range.end))
 }
 
 fn issue_notification<T>(params: T::Params)
 where
-    T: langserver::notification::Notification,
+    T: lsp_types::notification::Notification,
     T::Params: serde::Serialize,
 {
     let params = serde_json::to_value(params).expect("notification bad to_value");

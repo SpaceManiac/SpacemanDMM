@@ -1,8 +1,8 @@
 //! Extensions to the language server protocol.
 
-use langserver::SymbolKind;
-use langserver::notification::*;
-use langserver::request::*;
+use lsp_types::SymbolKind;
+use lsp_types::notification::*;
+use lsp_types::request::*;
 
 pub enum WindowStatus {}
 impl Notification for WindowStatus {
@@ -28,7 +28,7 @@ pub struct ObjectTreeParams {
 pub struct ObjectTreeType {
     pub name: String,
     pub kind: SymbolKind,
-    pub location: Option<langserver::Location>,
+    pub location: Option<lsp_types::Location>,
     pub vars: Vec<ObjectTreeVar>,
     pub procs: Vec<ObjectTreeProc>,
     pub children: Vec<ObjectTreeType>,
@@ -37,21 +37,21 @@ pub struct ObjectTreeType {
 pub struct ObjectTreeVar {
     pub name: String,
     pub kind: SymbolKind,
-    pub location: Option<langserver::Location>,
+    pub location: Option<lsp_types::Location>,
     pub is_declaration: bool,
 }
 #[derive(Debug, Serialize)]
 pub struct ObjectTreeProc {
     pub name: String,
     pub kind: SymbolKind,
-    pub location: Option<langserver::Location>,
+    pub location: Option<lsp_types::Location>,
     pub is_verb: Option<bool>,
 }
 
 pub enum Reparse {}
 impl Notification for Reparse {
     const METHOD: &'static str = "experimental/dreammaker/reparse";
-    type Params = langserver::InitializedParams;
+    type Params = lsp_types::InitializedParams;
 }
 
 pub enum StartDebugger {}

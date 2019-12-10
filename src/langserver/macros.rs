@@ -1,12 +1,12 @@
 //! Utility macros.
 
 pub mod all_methods {
-    pub use langserver::request::*;
+    pub use lsp_types::request::*;
     pub use crate::extras::*;
 }
 
 pub mod all_notifications {
-    pub use langserver::notification::*;
+    pub use lsp_types::notification::*;
     pub use crate::extras::*;
 }
 
@@ -45,13 +45,13 @@ macro_rules! handle_method_call {
 
             $(
                 #[allow(non_snake_case)]
-                fn $what(&mut $self, $p: <macros::all_methods::$what as langserver::request::Request>::Params)
-                -> Result<<macros::all_methods::$what as langserver::request::Request>::Result, jsonrpc::Error>
+                fn $what(&mut $self, $p: <macros::all_methods::$what as lsp_types::request::Request>::Params)
+                -> Result<<macros::all_methods::$what as lsp_types::request::Request>::Result, jsonrpc::Error>
                 {
                     #[allow(unused_imports)]
-                    use langserver::*;
+                    use lsp_types::*;
                     #[allow(unused_imports)]
-                    use langserver::request::*;
+                    use lsp_types::request::*;
                     let _v = $b;
                     #[allow(unreachable_code)] { Ok(_v) }
                 }
@@ -88,13 +88,13 @@ macro_rules! handle_notification {
 
             $(
                 #[allow(non_snake_case)]
-                fn $what(&mut $self, $p: <macros::all_notifications::$what as langserver::notification::Notification>::Params)
+                fn $what(&mut $self, $p: <macros::all_notifications::$what as lsp_types::notification::Notification>::Params)
                 -> Result<(), jsonrpc::Error>
                 {
                     #[allow(unused_imports)]
-                    use langserver::*;
+                    use lsp_types::*;
                     #[allow(unused_imports)]
-                    use langserver::notification::*;
+                    use lsp_types::notification::*;
                     let _v = $b;
                     #[allow(unreachable_code)] { Ok(_v) }
                 }
