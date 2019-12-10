@@ -35,7 +35,7 @@ use std::collections::{HashMap, HashSet};
 use dm::FileId;
 use dm::objtree::ObjectTree;
 
-use jrpc_io;
+use crate::jrpc_io;
 use self::dap_types::*;
 use self::launched::Launched;
 use self::extools::Extools;

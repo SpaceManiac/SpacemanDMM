@@ -8,8 +8,8 @@ use dm::ast::PathOp;
 use dm::annotation::Annotation;
 use dm::objtree::{TypeRef, TypeVar, TypeProc, ProcValue};
 
-use {Engine, Span, is_constructor_name, ignore_root};
-use symbol_search::contains;
+use crate::{Engine, Span, is_constructor_name, ignore_root};
+use crate::symbol_search::contains;
 
 pub fn item_var(ty: TypeRef, name: &str, var: &TypeVar) -> CompletionItem {
     let mut detail = ty.pretty_path().to_owned();

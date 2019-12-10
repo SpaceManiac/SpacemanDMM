@@ -2,12 +2,12 @@
 
 pub mod all_methods {
     pub use langserver::request::*;
-    pub use extras::*;
+    pub use crate::extras::*;
 }
 
 pub mod all_notifications {
     pub use langserver::notification::*;
-    pub use extras::*;
+    pub use crate::extras::*;
 }
 
 macro_rules! handle_method_call {
@@ -107,7 +107,7 @@ macro_rules! handle_request {
     ($(on $what:ident(&mut $self:ident, $p:pat) $b:block)*) => {
         impl Debugger {
             fn handle_request(&mut self, request: RequestMessage) -> Result<serde_json::Value, Box<dyn Error>> {
-                use debugger::dap_types::*;
+                use crate::debugger::dap_types::*;
 
                 $(if request.command == <$what>::COMMAND {
                     let arguments = request.arguments.unwrap_or(serde_json::Value::Null);
