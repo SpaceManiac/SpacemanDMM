@@ -468,6 +468,26 @@ pub struct NextArguments {
     pub threadId: i64,
 }
 
+/// The request suspends the debuggee.
+///
+/// The debug adapter first sends the response and then a ‘stopped’ event (with reason ‘pause’) after the thread has been paused successfully.
+pub enum Pause {}
+
+impl Request for Pause {
+    type Params = PauseArguments;
+    type Result = ();
+    const COMMAND: &'static str = "pause";
+}
+
+/// Arguments for ‘pause’ request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PauseArguments {
+    /**
+     * Pause execution for this thread.
+     */
+    pub threadId: i64,
+}
+
 /// The request returns the variable scopes for a given stackframe ID.
 pub enum Scopes {}
 
