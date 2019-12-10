@@ -587,7 +587,7 @@ impl<'ctx> Preprocessor<'ctx> {
             start,
             self.output.drain(..).map(|token| LocatedToken::new(start, token))
         )?;
-        Ok(::constants::preprocessor_evaluate(start, expr, &self.defines)?.to_bool())
+        Ok(crate::constants::preprocessor_evaluate(start, expr, &self.defines)?.to_bool())
     }
 
     fn evaluate(&mut self) -> bool {

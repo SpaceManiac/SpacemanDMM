@@ -276,7 +276,7 @@ impl Frames {
 // Metadata parser
 
 fn read_metadata(path: &Path) -> io::Result<String> {
-    let path = &::fix_case(path);
+    let path = &crate::fix_case(path);
     let mut decoder = PngState::new();
     decoder.remember_unknown_chunks(false);
     match decoder.decode_file(path) {

@@ -820,7 +820,7 @@ where
                 SUCCESS
             }
             Punct(LParen) => {
-                use objtree::Code;
+                use crate::objtree::Code;
 
                 // `something(` - proc
                 let location = self.location;

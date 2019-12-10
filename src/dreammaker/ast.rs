@@ -6,7 +6,7 @@ use std::iter::FromIterator;
 
 use linked_hash_map::LinkedHashMap;
 
-use error::Location;
+use crate::error::Location;
 
 #[derive(Copy, Clone, Eq, Debug)]
 pub struct Spanned<T> {
