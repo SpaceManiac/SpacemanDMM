@@ -8,7 +8,7 @@ use dm::objtree::{ObjectTree, ProcRef};
 use dm::constants::Constant;
 use dm::ast::*;
 
-use {StaticType, Analysis};
+use crate::{StaticType, Analysis};
 
 pub struct TypeExprContext<'o, 't> {
     pub objtree: &'o ObjectTree,
@@ -77,7 +77,7 @@ impl<'o> TypeExpr<'o> {
             TypeExpr::ParamTypepath { name, p_idx, index_ct: _ } => {
                 if let Some(analysis) = ec.get(name, *p_idx) {
                     if let Some(Constant::Prefab(ref pop)) = analysis.value {
-                        Ok(::static_type(ec.objtree, location, &pop.path)?.into())
+                        crate::static_type(ec.objtree, location, &pop.path)
                     } else {
                         Ok(StaticType::None)
                     }
