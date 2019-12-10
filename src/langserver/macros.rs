@@ -63,27 +63,16 @@ macro_rules! handle_method_call {
 macro_rules! handle_notification {
     ($(on $what:ident(&mut $self:ident, $p:pat) $b:block)*) => {
         impl<'a> Engine<'a> {
-            fn handle_notification(&mut self, notification: jsonrpc::Notification) -> Result<(), jsonrpc::Error> {
+            fn handle_notification_inner(&mut self, method: &str, params_value: serde_json::Value) -> Result<(), jsonrpc::Error> {
                 use macros::all_notifications::*;
-
-                // "Notifications should be dropped, except for the exit notification"
-                if notification.method == <Exit>::METHOD {
-                    std::process::exit(if self.status == InitStatus::ShuttingDown { 0 } else { 1 });
-                }
-                if self.status != InitStatus::Running {
-                    return Ok(())
-                }
-
-                let params_value = params_to_value(notification.params);
-
-                $(if notification.method == <$what>::METHOD {
+                $(if method == <$what>::METHOD {
                     let params: <$what as Notification>::Params = serde_json::from_value(params_value)
                         .map_err(invalid_request)?;
-                    self.$what(params)?;
+                    self.$what(params)
                 } else)* {
-                    eprintln!("Notify NYI: {} => {:?}", notification.method, params_value);
+                    eprintln!("Notify NYI: {} => {:?}", method, params_value);
+                    Ok(())
                 }
-                Ok(())
             }
 
             $(

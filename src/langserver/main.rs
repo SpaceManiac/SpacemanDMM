@@ -712,6 +712,19 @@ impl<'a> Engine<'a> {
             },
         }
     }
+
+    fn handle_notification(&mut self, notification: jsonrpc::Notification) -> Result<(), jsonrpc::Error> {
+        // "Notifications should be dropped, except for the exit notification"
+        if notification.method == <lsp_types::notification::Exit as lsp_types::notification::Notification>::METHOD {
+            std::process::exit(if self.status == InitStatus::ShuttingDown { 0 } else { 1 });
+        }
+        if self.status != InitStatus::Running {
+            return Ok(())
+        }
+
+        let params_value = params_to_value(notification.params);
+        self.handle_notification_inner(&notification.method, params_value)
+    }
 }
 
 handle_method_call! {
