@@ -13,20 +13,16 @@ pub mod all_notifications {
 macro_rules! handle_method_call {
     ($(on $what:ident(&mut $self:ident, $p:pat) $b:block)*) => {
         impl<'a> Engine<'a> {
-            fn handle_method_call_inner(&mut self, method: &str, params_value: serde_json::Value) -> Result<serde_json::Value, jsonrpc::Error> {
+            fn handle_method_call_table(method: &str) -> Option<fn(&mut Self, serde_json::Value) -> Result<serde_json::Value, jsonrpc::Error>> {
                 use macros::all_methods::*;
                 $(if method == <$what>::METHOD {
-                    let params: <$what as Request>::Params = serde_json::from_value(params_value)
-                        .map_err(invalid_request)?;
-                    let result: <$what as Request>::Result = self.$what(params)?;
-                    Ok(serde_json::to_value(result).expect("encode problem"))
-                } else)* {
-                    eprintln!("Call NYI: {} -> {:?}", method, params_value);
-                    Err(jsonrpc::Error {
-                        code: jsonrpc::ErrorCode::InternalError,
-                        message: "not yet implemented".to_owned(),
-                        data: None,
+                    Some(|this, params_value| {
+                        let params: <$what as Request>::Params = serde_json::from_value(params_value).map_err(invalid_request)?;
+                        let result: <$what as Request>::Result = this.$what(params)?;
+                        Ok(serde_json::to_value(result).expect("encode problem"))
                     })
+                } else)* {
+                    None
                 }
             }
 
@@ -50,15 +46,15 @@ macro_rules! handle_method_call {
 macro_rules! handle_notification {
     ($(on $what:ident(&mut $self:ident, $p:pat) $b:block)*) => {
         impl<'a> Engine<'a> {
-            fn handle_notification_inner(&mut self, method: &str, params_value: serde_json::Value) -> Result<(), jsonrpc::Error> {
+            fn handle_notification_table(method: &str) -> Option<fn(&mut Self, serde_json::Value) -> Result<(), jsonrpc::Error>> {
                 use macros::all_notifications::*;
                 $(if method == <$what>::METHOD {
-                    let params: <$what as Notification>::Params = serde_json::from_value(params_value)
-                        .map_err(invalid_request)?;
-                    self.$what(params)
+                    Some(|this, params_value| {
+                        let params: <$what as Notification>::Params = serde_json::from_value(params_value).map_err(invalid_request)?;
+                        this.$what(params)
+                    })
                 } else)* {
-                    eprintln!("Notify NYI: {} => {:?}", method, params_value);
-                    Ok(())
+                    None
                 }
             }
 

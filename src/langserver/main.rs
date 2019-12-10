@@ -725,7 +725,16 @@ impl<'a> Engine<'a> {
         }
 
         let params_value = params_to_value(call.params);
-        self.handle_method_call_inner(&call.method, params_value)
+        if let Some(func) = Self::handle_method_call_table(&call.method) {
+            func(self, params_value)
+        } else {
+            eprintln!("Call NYI: {} -> {:?}", call.method, params_value);
+            Err(jsonrpc::Error {
+                code: jsonrpc::ErrorCode::InternalError,
+                message: "not yet implemented".to_owned(),
+                data: None,
+            })
+        }
     }
 
     fn handle_notification(&mut self, notification: jsonrpc::Notification) -> Result<(), jsonrpc::Error> {
@@ -738,7 +747,12 @@ impl<'a> Engine<'a> {
         }
 
         let params_value = params_to_value(notification.params);
-        self.handle_notification_inner(&notification.method, params_value)
+        if let Some(func) = Self::handle_notification_table(&notification.method) {
+            func(self, params_value)
+        } else {
+            eprintln!("Notify NYI: {} -> {:?}", &notification.method, params_value);
+            Ok(())
+        }
     }
 }
 
