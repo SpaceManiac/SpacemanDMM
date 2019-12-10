@@ -713,6 +713,21 @@ impl<'a> Engine<'a> {
         }
     }
 
+    fn handle_method_call(&mut self, call: jsonrpc::MethodCall) -> Result<serde_json::Value, jsonrpc::Error> {
+        // "If the server receives a request... before the initialize request...
+        // the response should be an error with code: -32002"
+        if call.method != <lsp_types::request::Initialize as lsp_types::request::Request>::METHOD && self.status != InitStatus::Running {
+            return Err(jsonrpc::Error {
+                code: jsonrpc::ErrorCode::from(-32002),
+                message: "method call before initialize or after shutdown".to_owned(),
+                data: None,
+            })
+        }
+
+        let params_value = params_to_value(call.params);
+        self.handle_method_call_inner(&call.method, params_value)
+    }
+
     fn handle_notification(&mut self, notification: jsonrpc::Notification) -> Result<(), jsonrpc::Error> {
         // "Notifications should be dropped, except for the exit notification"
         if notification.method == <lsp_types::notification::Exit as lsp_types::notification::Notification>::METHOD {

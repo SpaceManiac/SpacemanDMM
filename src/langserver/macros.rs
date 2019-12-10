@@ -13,28 +13,15 @@ pub mod all_notifications {
 macro_rules! handle_method_call {
     ($(on $what:ident(&mut $self:ident, $p:pat) $b:block)*) => {
         impl<'a> Engine<'a> {
-            fn handle_method_call(&mut self, call: jsonrpc::MethodCall) -> Result<serde_json::Value, jsonrpc::Error> {
+            fn handle_method_call_inner(&mut self, method: &str, params_value: serde_json::Value) -> Result<serde_json::Value, jsonrpc::Error> {
                 use macros::all_methods::*;
-
-                // "If the server receives a request... before the initialize request...
-                // the response should be an error with code: -32002"
-                if call.method != <Initialize>::METHOD && self.status != InitStatus::Running {
-                    return Err(jsonrpc::Error {
-                        code: jsonrpc::ErrorCode::from(-32002),
-                        message: "method call before initialize or after shutdown".to_owned(),
-                        data: None,
-                    })
-                }
-
-                let params_value = params_to_value(call.params);
-
-                $(if call.method == <$what>::METHOD {
+                $(if method == <$what>::METHOD {
                     let params: <$what as Request>::Params = serde_json::from_value(params_value)
                         .map_err(invalid_request)?;
                     let result: <$what as Request>::Result = self.$what(params)?;
                     Ok(serde_json::to_value(result).expect("encode problem"))
                 } else)* {
-                    eprintln!("Call NYI: {} -> {:?}", call.method, params_value);
+                    eprintln!("Call NYI: {} -> {:?}", method, params_value);
                     Err(jsonrpc::Error {
                         code: jsonrpc::ErrorCode::InternalError,
                         message: "not yet implemented".to_owned(),
