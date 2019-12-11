@@ -58,7 +58,7 @@ impl Launched {
                         let code = status.code();
                         match code {
                             Some(code) => output!(in seq2, "[launched] Child exited with code {:#x}.", code),
-                            None => output!(in seq2, "Child exited due to signal."),
+                            None => output!(in seq2, "[launched] Child exited due to signal."),
                         }
                         code.unwrap_or(-1)
                     }
