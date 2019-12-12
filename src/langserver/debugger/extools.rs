@@ -53,8 +53,7 @@ impl ExtoolsHolder {
     pub fn listen(seq: Arc<SequenceNumber>) -> std::io::Result<(u16, ExtoolsHolder)> {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
         let port = listener.local_addr()?.port();
-        output!(in seq, "[extools] Waiting for connection from implementation...");
-        debug_output!(in seq, " - Listening on {}", listener.local_addr()?);
+        debug_output!(in seq, "[extools] Listening on {}", listener.local_addr()?);
 
         let (conn_tx, conn_rx) = mpsc::channel();
 

@@ -14,7 +14,12 @@ macro_rules! output {
 
 #[cfg(debug_assertions)]
 macro_rules! debug_output {
-    ($($rest:tt)*) => { output!($($rest)*) }
+    (in $seq:expr, $fmt:expr) => {
+        $seq.eprintln($fmt)
+    };
+    (in $seq:expr, $fmt:expr, $($rest:tt)*) => {
+        $seq.eprintln(format!($fmt, $($rest)*))
+    }
 }
 
 #[cfg(not(debug_assertions))]
@@ -289,9 +294,9 @@ handle_request! {
         {
             let debug = format!("{:?}", self.client_caps);
             if let (Some(start), Some(end)) = (debug.find('{'), debug.rfind('}')) {
-                debug_output!(in self.seq, "[main] client capabilities: {}", &debug[start + 2..end - 1]);
+                debug_output!(in self.seq, "[main] {}", &debug[start + 2..end - 1]);
             } else {
-                debug_output!(in self.seq, "[main] client capabilities: {}", debug);
+                debug_output!(in self.seq, "[main] {}", debug);
             }
         }
 
@@ -736,6 +741,16 @@ impl SequenceNumber {
         output.push('\n');
         self.issue_event(OutputEvent {
             output,
+            .. Default::default()
+        })
+    }
+
+    fn eprintln<S: Into<String>>(&self, output: S) {
+        let mut output = output.into();
+        output.push('\n');
+        self.issue_event(OutputEvent {
+            output,
+            category: Some("console".to_owned()),
             .. Default::default()
         })
     }
