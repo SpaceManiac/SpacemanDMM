@@ -26,6 +26,111 @@ pub struct ThreadInfo {
 // ----------------------------------------------------------------------------
 // TCP connection management
 
+/// Possibly-connected Extools frontend.
+pub struct ExtoolsHolder(ExtoolsHolderInner);
+
+enum ExtoolsHolderInner {
+    /// Used to avoid a layer of Option.
+    None,
+    Listening {
+        port: u16,
+        conn_rx: mpsc::Receiver<Extools>,
+    },
+    Attaching {
+        cancel_tx: mpsc::Sender<()>,
+        conn_rx: mpsc::Receiver<Extools>,
+    },
+    Active(Extools),
+}
+
+impl Default for ExtoolsHolder {
+    fn default() -> Self {
+        ExtoolsHolder(ExtoolsHolderInner::None)
+    }
+}
+
+impl ExtoolsHolder {
+    pub fn listen(seq: Arc<SequenceNumber>) -> std::io::Result<(u16, ExtoolsHolder)> {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
+        let port = listener.local_addr()?.port();
+        output!(in seq, "[extools] Waiting for connection from implementation...");
+        debug_output!(in seq, " - Listening on {}", listener.local_addr()?);
+
+        let (conn_tx, conn_rx) = mpsc::channel();
+
+        std::thread::Builder::new()
+            .name(format!("extools listening on port {}", port))
+            .spawn(move || {
+                let stream = match listener.accept() {
+                    Ok((stream, _)) => stream,
+                    Err(e) => return output!(in seq, "[extools] Error listening: {}", e),
+                };
+                drop(listener);
+                let (conn, mut thread) = Extools::from_stream(seq, stream);
+                if conn_tx.send(conn).is_ok() {
+                    thread.read_loop();
+                }
+            })?;
+
+        Ok((port, ExtoolsHolder(ExtoolsHolderInner::Listening {
+            port,
+            conn_rx,
+        })))
+    }
+
+    pub fn attach(seq: Arc<SequenceNumber>, port: u16) -> std::io::Result<ExtoolsHolder> {
+        let addr: SocketAddr = (Ipv4Addr::LOCALHOST, port).into();
+        output!(in seq, "[extools] Attaching to {}...", addr);
+
+        let (conn_tx, conn_rx) = mpsc::channel();
+        let (cancel_tx, cancel_rx) = mpsc::channel();
+
+        std::thread::Builder::new()
+            .name(format!("extools attaching on port {}", port))
+            .spawn(move || {
+                while let Err(mpsc::TryRecvError::Empty) = cancel_rx.try_recv() {
+                    if let Ok(stream) = TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(5)) {
+                        let (conn, mut thread) = Extools::from_stream(seq, stream);
+                        if conn_tx.send(conn).is_ok() {
+                            thread.read_loop();
+                        }
+                        return;
+                    }
+                }
+            })?;
+
+        Ok(ExtoolsHolder(ExtoolsHolderInner::Attaching {
+            cancel_tx,
+            conn_rx,
+        }))
+    }
+
+    pub fn as_ref(&mut self) -> Option<&mut Extools> {
+        match &mut self.0 {
+            ExtoolsHolderInner::Listening { conn_rx, .. } |
+            ExtoolsHolderInner::Attaching { conn_rx, .. } => {
+                if let Ok(conn) = conn_rx.try_recv() {
+                    self.0 = ExtoolsHolderInner::Active(conn);
+                }
+            }
+            _ => {}
+        }
+        match &mut self.0 {
+            ExtoolsHolderInner::Active(conn) => Some(conn),
+            _ => None
+        }
+    }
+
+    pub fn disconnect(&mut self) {
+        match std::mem::replace(&mut self.0, ExtoolsHolderInner::None) {
+            ExtoolsHolderInner::Attaching { cancel_tx, .. } => { let _ = cancel_tx.send(()); },
+            // TODO: ExtoolsHolderInner::Listening
+            _ => {}
+        }
+    }
+}
+
+/// Actually connected Extools frontend.
 pub struct Extools {
     seq: Arc<SequenceNumber>,
     sender: ExtoolsSender,
@@ -39,37 +144,7 @@ pub struct Extools {
 }
 
 impl Extools {
-    pub fn listen(seq: Arc<SequenceNumber>) -> std::io::Result<(u16, Option<Extools>)> {
-        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
-        let port = listener.local_addr()?.port();
-        Ok((port, None))
-    }
-
-    pub fn connect(seq: Arc<SequenceNumber>, port: u16) -> std::io::Result<Option<Extools>> {
-        let addr: SocketAddr = (Ipv4Addr::LOCALHOST, port).into();
-
-        debug_output!(in seq, "[extools] Connecting...");
-        let stream;
-        //let mut attempts = 0;
-        loop {
-            let _err = match TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(2)) {
-                Ok(s) => {
-                    stream = s;
-                    break;
-                }
-                Err(err) => err,
-            };
-            std::thread::sleep(std::time::Duration::from_secs(1));
-            // TODO: a more reliable means of detecting if extools is available.
-            /*
-            attempts += 1;
-            if attempts >= 5 {
-                output!(in seq, "[extools] Connection failed after {} retries, debugging not available.", attempts);
-                debug_output!(in seq, " - {:?}", _err);
-                return Ok(None);
-            }
-            */
-        }
+    fn from_stream(seq: Arc<SequenceNumber>, stream: TcpStream) -> (Extools, ExtoolsThread) {
         output!(in seq, "[extools] Connected.");
         seq.issue_event(dap_types::InitializedEvent);
 
@@ -98,22 +173,16 @@ impl Extools {
         let seq = extools.seq.clone();
         let threads = extools.threads.clone();
         let sender = extools.sender.clone();
-
-        std::thread::Builder::new()
-            .name("extools read thread".to_owned())
-            .spawn(move || {
-                ExtoolsThread {
-                    seq,
-                    sender,
-                    threads,
-                    get_type_tx,
-                    bytecode_tx,
-                    get_field_tx,
-                    runtime_tx,
-                }.read_loop();
-            })?;
-
-        Ok(Some(extools))
+        let thread = ExtoolsThread {
+            seq,
+            sender,
+            threads,
+            get_type_tx,
+            bytecode_tx,
+            get_field_tx,
+            runtime_tx,
+        };
+        (extools, thread)
     }
 
     pub fn get_thread(&self, thread_id: i64) -> Option<ThreadInfo> {

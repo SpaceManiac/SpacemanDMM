@@ -38,14 +38,14 @@ use dm::objtree::ObjectTree;
 use crate::jrpc_io;
 use self::dap_types::*;
 use self::launched::Launched;
-use self::extools::Extools;
+use self::extools::ExtoolsHolder;
 
 pub fn start_server(dreamseeker_exe: String, db: DebugDatabaseBuilder) -> std::io::Result<u16> {
     use std::net::*;
 
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
     let port = listener.local_addr()?.port();
-    eprintln!("listening for debugger connection on port {}", port);
+    eprintln!("listening for DAP connection on port {}", port);
 
     std::thread::Builder::new()
         .name(format!("DAP listener on port {}", port))
@@ -206,7 +206,7 @@ struct Debugger {
     dreamseeker_exe: String,
     db: DebugDatabase,
     launched: Option<Launched>,
-    extools: Option<Extools>,
+    extools: ExtoolsHolder,
 
     seq: Arc<SequenceNumber>,
     client_caps: ClientCaps,
@@ -220,7 +220,7 @@ impl Debugger {
             dreamseeker_exe,
             db: db.build(),
             launched: None,
-            extools: None,
+            extools: ExtoolsHolder::default(),
 
             seq: Arc::new(SequenceNumber::new(stream)),
             client_caps: Default::default(),
@@ -316,7 +316,7 @@ handle_request! {
         // Extools is not currently enabled on release langserver builds.
         let debug = cfg!(debug_assertions) && !params.base.noDebug.unwrap_or(false);
         let port = if debug {
-            let (port, extools) = Extools::listen(self.seq.clone())?;
+            let (port, extools) = ExtoolsHolder::listen(self.seq.clone())?;
             self.extools = extools;
             Some(port)
         } else {
@@ -326,14 +326,14 @@ handle_request! {
     }
 
     on AttachVsc(&mut self, params) {
-        self.extools = Extools::connect(self.seq.clone(), params.port.unwrap_or(extools::DEFAULT_PORT))?;
+        self.extools = ExtoolsHolder::attach(self.seq.clone(), params.port.unwrap_or(extools::DEFAULT_PORT))?;
     }
 
     on Disconnect(&mut self, params) {
         let default_terminate = self.launched.is_some();
         let terminate = params.terminateDebuggee.unwrap_or(default_terminate);
 
-        drop(self.extools.take());
+        self.extools.disconnect();
 
         if let Some(launched) = self.launched.take() {
             if terminate {
@@ -365,7 +365,7 @@ handle_request! {
         let inputs = params.breakpoints.unwrap_or_default();
         let mut breakpoints = Vec::new();
 
-        guard!(let Some(extools) = self.extools.as_mut() else {
+        guard!(let Some(extools) = self.extools.as_ref() else {
             for sbp in inputs {
                 breakpoints.push(Breakpoint {
                     message: Some("Debugging hooks not available".to_owned()),
@@ -426,7 +426,7 @@ handle_request! {
     }
 
     on StackTrace(&mut self, params) {
-        guard!(let Some(extools) = self.extools.as_mut() else {
+        guard!(let Some(extools) = self.extools.as_ref() else {
             return Err(Box::new(GenericError("No extools connection")));
         });
         guard!(let Some(thread) = extools.get_thread(params.threadId) else {
@@ -651,7 +651,7 @@ handle_request! {
     }
 
     on ExceptionInfo(&mut self, _params) {
-        guard!(let Some(extools) = self.extools.as_mut() else {
+        guard!(let Some(extools) = self.extools.as_ref() else {
             return Err(Box::new(GenericError("No extools connection")));
         });
 
