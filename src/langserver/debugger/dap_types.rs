@@ -381,6 +381,15 @@ pub struct DisconnectArguments {
     pub terminateDebuggee: Option<bool>,
 }
 
+/// The client of the debug protocol must send this request at the end of the sequence of configuration requests (which was started by the ‘initialized’ event).
+pub enum ConfigurationDone {}
+
+impl Request for ConfigurationDone {
+    type Params = ();
+    type Result = ();
+    const COMMAND: &'static str = "configurationDone";
+}
+
 /// The request starts the debuggee to run again.
 pub enum Continue {}
 

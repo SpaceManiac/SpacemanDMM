@@ -279,6 +279,11 @@ impl Extools {
         }
         self.last_runtime.as_ref().map(|r| r.message.as_str())
     }
+
+    pub fn configuration_done(&mut self) {
+        debug_output!(in self.seq, "[extools] Configuration done");
+        self.sender.send(ConfigurationDone);
+    }
 }
 
 impl Drop for Extools {

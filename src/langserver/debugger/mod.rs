@@ -301,6 +301,7 @@ handle_request! {
         Some(Capabilities {
             supportTerminateDebuggee: Some(true),
             supportsExceptionInfoRequest: Some(true),
+            supportsConfigurationDoneRequest: Some(true),
             exceptionBreakpointFilters: Some(vec![
                 ExceptionBreakpointsFilter {
                     filter: EXCEPTION_FILTER_RUNTIMES.to_owned(),
@@ -342,6 +343,14 @@ handle_request! {
                 launched.detach();
             }
         }
+    }
+
+    on ConfigurationDone(&mut self, ()) {
+        guard!(let Some(extools) = self.extools.as_ref() else {
+            return Err(Box::new(GenericError("No extools connection")));
+        });
+
+        extools.configuration_done();
     }
 
     on Threads(&mut self, ()) {

@@ -209,6 +209,13 @@ impl Response for BreakOnRuntime {
     const TYPE: &'static str = "break on runtimes";
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ConfigurationDone;
+
+impl Request for ConfigurationDone {
+    const TYPE: &'static str = "configuration done";
+}
+
 // ----------------------------------------------------------------------------
 // Spontaneous events
 
