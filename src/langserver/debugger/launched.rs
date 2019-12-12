@@ -28,7 +28,7 @@ pub struct Launched {
 }
 
 impl Launched {
-    pub fn new(seq: Arc<SequenceNumber>, dreamseeker_exe: &str, dmb: &str, debug: bool) -> std::io::Result<Launched> {
+    pub fn new(seq: Arc<SequenceNumber>, dreamseeker_exe: &str, dmb: &str, port: Option<u16>) -> std::io::Result<Launched> {
         let mut command = Command::new(dreamseeker_exe);
         command
             .arg(dmb)
@@ -36,8 +36,11 @@ impl Launched {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
-        if debug {
-            command.env("EXTOOLS_DEBUG", "1");
+        if let Some(port) = port {
+            command.env("EXTOOLS_MODE", "LAUNCHED");
+            command.env("EXTOOLS_PORT", port.to_string());
+        } else {
+            command.env("EXTOOLS_MODE", "NONE");
         }
         let mut child = command.spawn()?;
         output!(in seq, "[launched] Started: {:?}", command);

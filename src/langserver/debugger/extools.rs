@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 use std::sync::{mpsc, Arc, Mutex};
-use std::net::{SocketAddr, Ipv4Addr, TcpStream};
+use std::net::{SocketAddr, Ipv4Addr, TcpStream, TcpListener};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::error::Error;
@@ -39,6 +39,12 @@ pub struct Extools {
 }
 
 impl Extools {
+    pub fn listen(seq: Arc<SequenceNumber>) -> std::io::Result<(u16, Option<Extools>)> {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
+        let port = listener.local_addr()?.port();
+        Ok((port, None))
+    }
+
     pub fn connect(seq: Arc<SequenceNumber>, port: u16) -> std::io::Result<Option<Extools>> {
         let addr: SocketAddr = (Ipv4Addr::LOCALHOST, port).into();
 
