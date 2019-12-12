@@ -356,27 +356,3 @@ pub fn category_name(id: i64) -> Result<&'static str, super::GenericError> {
         _ => return Err(super::GenericError("Unknown category name")),
     })
 }
-
-// #define MESSAGE_VALUES_LOCALS "locals" //Content is a vector of ValueTexts
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Locals(pub Vec<ValueText>);
-
-impl Response for Locals {
-    const TYPE: &'static str = "locals";
-}
-
-// #define MESSAGE_VALUES_ARGS "args" //^
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Args(pub Vec<ValueText>);
-
-impl Response for Args {
-    const TYPE: &'static str = "args";
-}
-
-// #define MESSAGE_VALUES_STACK "stack" //^
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Stack(pub Vec<ValueText>);
-
-impl Response for Stack {
-    const TYPE: &'static str = "stack";
-}
