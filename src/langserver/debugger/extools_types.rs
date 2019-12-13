@@ -157,7 +157,7 @@ impl Request for FieldRequest {
     const TYPE: &'static str = "get field";
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct FieldResponse(pub ValueText);
 
 impl Response for FieldResponse {
@@ -172,7 +172,7 @@ impl Request for GetGlobal {
     const TYPE: &'static str = "get global";
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct GetGlobalResponse(ValueText);
 
 impl Response for GetGlobalResponse {
@@ -245,10 +245,10 @@ impl Response for BreakpointHit {
 }
 
 // #define MESSAGE_CALL_STACK "call stack" //Content is a vector of proc paths
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 pub struct CallStack(pub Vec<StackFrame>);
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct StackFrame {
     pub name: String,
     pub override_id: usize,
@@ -263,96 +263,59 @@ impl Response for CallStack {
     const TYPE: &'static str = "call stack";
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum Literal {
+    #[serde(rename = "ref")]
+    Ref(i64),
+    #[serde(rename = "number")]
+    Number(f32),
+    #[serde(rename = "string")]
+    String(String),
+    #[serde(rename = "typepath")]
+    Typepath(String),
+    #[serde(rename = "resource")]
+    Resource(String),
+}
+
+impl Literal {
+    pub const NULL: Literal = Literal::Ref(0);
+    pub const WORLD: Literal = Literal::Ref(0x0e_00_00_00);
+}
+
+#[derive(Deserialize, Debug, Clone)]
 pub struct ValueText {
-    #[serde(rename = "type")]
-    pub type_: String,
-    pub value: String,
+    pub literal: Literal,
+    #[serde(default)]
+    pub has_vars: bool,
+    #[serde(default)]
+    pub is_list: bool,
 }
 
 impl ValueText {
-    fn has_vars(&self) -> bool {
-        match self.type_.as_str() {
-            "TURF" |
-            "OBJ" |
-            "MOB" |
-            "AREA" |
-            "CLIENT" |
-            "IMAGE" |
-            "WORLD" |
-            "DATUM" => true,
-            _ => false,
+    pub fn datum_address(&self) -> i64 {
+        match self.literal {
+            Literal::Ref(r) if self.has_vars => r,
+            _ => 0,
         }
     }
+}
 
-    pub fn datum_address(&self) -> i64 {
-        if self.has_vars() {
-            match (category_number(&self.type_), self.value.parse::<i64>()) {
-                (Some(cat), Ok(id)) => (cat << 24) | id,
-                _ => 0
-            }
-        } else {
-            0
+impl std::fmt::Display for Literal {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Literal::Ref(0) => fmt.write_str("null"),
+            Literal::Ref(0x0e_00_00_00) => fmt.write_str("world"),
+            Literal::Ref(v) => write!(fmt, "[0x{:08x}]", v),
+            Literal::Number(n) => write!(fmt, "{}", n),
+            Literal::String(s) => write!(fmt, "{:?}", s),
+            Literal::Typepath(t) => write!(fmt, "{}", t),
+            Literal::Resource(f) => write!(fmt, "'{}'", f),
         }
     }
 }
 
 impl std::fmt::Display for ValueText {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let category = match self.type_.as_str() {
-            "NULL" => return fmt.write_str("null"),
-            "STRING" => return write!(fmt, "{:?}", self.value),
-            "WORLD" => return fmt.write_str("world"),
-            "NUMBER" => return write!(fmt, "{}", self.value.trim_end_matches('0').trim_end_matches('.')),
-            other => match category_number(other) {
-                Some(n) => n,
-                None => { write!(fmt, "{} ", self.type_)?; 0 }
-            }
-        };
-        match self.value.parse::<i64>() {
-            Ok(v) => write!(fmt, "[0x{:x}{:06x}]", category, v),
-            Err(_) => write!(fmt, "[{}]", self.value),
-        }
+        self.literal.fmt(fmt)
     }
-}
-
-fn category_number(type_: &str) -> Option<i64> {
-    Some(match type_ {
-        "NULL" => 0x00,
-        "TURF" => 0x01,
-        "OBJ" => 0x02,
-        "MOB" => 0x03,
-        "AREA" => 0x04,
-        "CLIENT" => 0x05,
-        "STRING" => 0x06,
-        "MOBTYPE" => 0x08,
-        "OBJTYPE" => 0x09,
-        "IMAGE" => 0x0D,
-        "WORLD" => 0x0E,
-        "LIST" => 0x0F,
-        "DATUM" => 0x21,
-        "SAVEFILE" => 0x23,
-        "FILE" => 0x27,
-        "PATH_LIST" => 0x28,
-        "NUMBER" => 0x2A,
-        "CLIENTTYPE" => 0x3B,
-        "VARS_LIST" => 0x52,
-        _ => return None,
-    })
-}
-
-pub fn category_name(id: i64) -> Result<&'static str, super::GenericError> {
-    Ok(match id {
-        0x00 => "NULL",
-        0x01 => "TURF",
-        0x02 => "OBJ",
-        0x03 => "MOB",
-        0x04 => "AREA",
-        0x05 => "CLIENT",
-        0x0D => "IMAGE",
-        0x0E => "WORLD",
-        0x21 => "DATUM",
-        // TODO: others
-        _ => return Err(super::GenericError("Unknown category name")),
-    })
 }
