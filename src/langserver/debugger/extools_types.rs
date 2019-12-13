@@ -2,7 +2,7 @@
 //!
 //! * https://github.com/MCHSL/extools/blob/master/byond-extools/src/debug_server/protocol.h
 
-use serde_json::Value;
+use serde_json::Value as Json;
 
 // > All communication happens over a TCP socket using a JSON-based protocol.
 // > A null byte signifies the end of a message.
@@ -19,7 +19,7 @@ pub trait Response: for<'de> serde::Deserialize<'de> {
 pub struct ProtocolMessage {
     #[serde(rename = "type")]
     pub type_: String,
-    pub content: Option<Value>,
+    pub content: Option<Json>,
 }
 
 // ----------------------------------------------------------------------------
