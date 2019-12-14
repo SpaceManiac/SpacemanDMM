@@ -1747,11 +1747,11 @@ where
 
         // This has the effect of stripping unnecessary parentheses, which
         // simplifies later logic.
-        if unary_ops.is_empty() && follow.is_empty() {
+        /*if unary_ops.is_empty() && follow.is_empty() {
             if let Term::Expr(expr) = term.elem {
                 return success(*expr);
             }
-        }
+        }*/
 
         success(Expression::Base {
             unary: unary_ops,

@@ -792,6 +792,38 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
                 ty
             },
+            Expression::BinaryOp { op: BinaryOp::In, lhs, rhs } => {
+                // check for incorrect/ambiguous in statements
+                match &**lhs {
+                    Expression::Base{unary, term, follow} => {
+                        if unary.len() > 0 {
+                            error(location, format!("Found a unary {} on left side of an `in`", unary[0].name()))
+                                .set_severity(Severity::Warning)
+                                .with_note(location, format!("add parentheses around the 'in' expression, {}(a in b)", unary[0].name()))
+                                .register(self.context);
+                        }
+                    },
+                    Expression::BinaryOp{ op, lhs, rhs} => {
+                        error(location, format!("Found {} on left side of an `in`", op))
+                            .set_severity(Severity::Warning)
+                            .with_note(location, format!("add parentheses around the 'in' expression, a {} (b in c)", op))
+                            .register(self.context);
+                    },
+                    Expression::AssignOp{ op, lhs, rhs} => {
+                        error(location, format!("Found assignment on left side of an `in`"))
+                            .set_severity(Severity::Warning)
+                            .register(self.context);
+                    },
+                    Expression::TernaryOp{ cond, if_, else_ } => {
+                        error(location, format!("Found ternary op on left side of an `in`"))
+                            .set_severity(Severity::Warning)
+                            .register(self.context);
+                    },
+                };
+                let lty = self.visit_expression(location, lhs, None);
+                let rty = self.visit_expression(location, rhs, None);
+                self.visit_binary(lty, rty, BinaryOp::In)
+            },
             Expression::BinaryOp { op: BinaryOp::Or, lhs, rhs } => {
                 // It appears that DM does this in more cases than this, but
                 // this is the only case I've seen it used in the wild.
