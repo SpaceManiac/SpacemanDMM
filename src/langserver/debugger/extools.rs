@@ -196,10 +196,10 @@ impl Extools {
         let Extools { bytecode, sender, seq: _seq, bytecode_rx, .. } = self;
         bytecode.entry((proc_ref.to_owned(), override_id)).or_insert_with(|| {
             debug_output!(in _seq, "[extools] Fetching bytecode for {}#{}", proc_ref, override_id);
-            sender.send(ProcDisassemblyRequest {
+            sender.send(ProcDisassemblyRequest(ProcId {
                 proc: proc_ref.to_owned(),
                 override_id,
-            });
+            }));
             bytecode_rx.recv().expect("error receiving bytecode").instructions
         })
     }
@@ -238,12 +238,12 @@ impl Extools {
 
     pub fn set_breakpoint(&self, proc: &str, override_id: usize, offset: i64) {
         debug_output!(in self.seq, "[extools] {}#{}@{} set", proc, override_id, offset);
-        self.sender.send(BreakpointSet { proc: proc.to_owned(), override_id, offset });
+        self.sender.send(BreakpointSet(ProcOffset { proc: proc.to_owned(), override_id, offset }));
     }
 
     pub fn unset_breakpoint(&self, proc: &str, override_id: usize, offset: i64) {
         debug_output!(in self.seq, "[extools] {}#{}@{} unset", proc, override_id, offset);
-        self.sender.send(BreakpointUnset { proc: proc.to_owned(), override_id, offset });
+        self.sender.send(BreakpointUnset(ProcOffset { proc: proc.to_owned(), override_id, offset }));
     }
 
     pub fn continue_execution(&self) {
@@ -384,11 +384,11 @@ handle_extools! {
         debug_output!(in self.seq, "[extools] Raw: {}", _message);
     }
 
-    on BreakpointSet(&mut self, _bp) {
+    on BreakpointSet(&mut self, BreakpointSet(_bp)) {
         debug_output!(in self.seq, "[extools] {}#{}@{} validated", _bp.proc, _bp.override_id, _bp.offset);
     }
 
-    on BreakpointHit(&mut self, _hit) {
+    on BreakpointHit(&mut self, BreakpointHit(_hit)) {
         debug_output!(in self.seq, "[extools] {}#{}@{} hit", _hit.proc, _hit.override_id, _hit.offset);
         self.seq.issue_event(dap_types::StoppedEvent {
             reason: "breakpoint".to_owned(),

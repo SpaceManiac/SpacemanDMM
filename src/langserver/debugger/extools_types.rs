@@ -1,35 +1,35 @@
 //! Serde types for the Extools debugger protocol.
 //!
 //! * https://github.com/MCHSL/extools/blob/master/byond-extools/src/debug_server/protocol.h
+///
+/// > All communication happens over a TCP socket using a JSON-based protocol.
+/// > A null byte signifies the end of a message.
 
 use std::collections::HashMap;
 use serde_json::Value as Json;
-
-// > All communication happens over a TCP socket using a JSON-based protocol.
-// > A null byte signifies the end of a message.
-
-pub trait Request: serde::Serialize {
-    const TYPE: &'static str;
-}
-
-pub trait Response: for<'de> serde::Deserialize<'de> {
-    const TYPE: &'static str;
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ProtocolMessage {
-    #[serde(rename = "type")]
-    pub type_: String,
-    pub content: Option<Json>,
-}
 
 // ----------------------------------------------------------------------------
 // Extools data structures
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct ProcId {
+    pub proc: String,
+    pub override_id: usize,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ProcOffset {
+    pub proc: String,
+    pub override_id: usize,
+    // end ProcId
+    pub offset: i64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct DisassembledProc {
     pub proc: String,
     pub override_id: usize,
+    // end ProcId
     pub instructions: Vec<DisassembledInstruction>,
 }
 
@@ -47,7 +47,7 @@ pub struct StackFrame {
     pub proc: String,
     pub override_id: usize,
     pub offset: i64,
-
+    // end ProcOffset
     pub usr: ValueText,
     pub src: ValueText,
     pub locals: Vec<ValueText>,
@@ -59,6 +59,7 @@ pub struct Runtime {
     pub proc: String,
     pub override_id: usize,
     pub offset: i64,
+    // end ProcOffset
     pub message: String,
 }
 
@@ -160,6 +161,21 @@ impl std::fmt::Display for ValueText {
 // ----------------------------------------------------------------------------
 // Requests and responses
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ProtocolMessage {
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub content: Option<Json>,
+}
+
+pub trait Request: serde::Serialize {
+    const TYPE: &'static str;
+}
+
+pub trait Response: for<'de> serde::Deserialize<'de> {
+    const TYPE: &'static str;
+}
+
 // #define MESSAGE_RAW "raw message" //Content is a string, used for debugging purposes (how meta)
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Raw(pub String);
@@ -181,13 +197,7 @@ impl Request for ProcListRequest {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ProcListResponse(pub Vec<ProcListResponseEntry>);
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ProcListResponseEntry {
-    pub proc: String,
-    pub override_id: usize,
-}
+pub struct ProcListResponse(pub Vec<ProcId>);
 
 impl Response for ProcListResponse {
     const TYPE: &'static str = "proc list";
@@ -195,10 +205,7 @@ impl Response for ProcListResponse {
 
 // #define MESSAGE_PROC_DISASSEMBLY "proc disassembly" //Request content is the proc name, response content is DisassembledProc
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ProcDisassemblyRequest {
-    pub proc: String,
-    pub override_id: usize,
-}
+pub struct ProcDisassemblyRequest(pub ProcId);
 
 impl Request for ProcDisassemblyRequest {
     const TYPE: &'static str = "proc disassembly";
@@ -210,11 +217,7 @@ impl Response for DisassembledProc {
 
 // #define MESSAGE_BREAKPOINT_SET "breakpoint set" //Content is BreakpointSet
 #[derive(Serialize, Deserialize, Debug)]
-pub struct BreakpointSet {
-    pub proc: String,
-    pub override_id: usize,
-    pub offset: i64,
-}
+pub struct BreakpointSet(pub ProcOffset);
 
 impl Request for BreakpointSet {
     const TYPE: &'static str = "breakpoint set";
@@ -226,11 +229,7 @@ impl Response for BreakpointSet {
 
 // #define MESSAGE_BREAKPOINT_UNSET "breakpoint unset" //Content is BreakpointUnset
 #[derive(Serialize, Deserialize, Debug)]
-pub struct BreakpointUnset {
-    pub proc: String,
-    pub override_id: usize,
-    pub offset: i64,
-}
+pub struct BreakpointUnset(pub ProcOffset);
 
 impl Request for BreakpointUnset {
     const TYPE: &'static str = "breakpoint unset";
@@ -256,19 +255,19 @@ impl Request for BreakpointStepOver {
     const TYPE: &'static str = "breakpoint step over";
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Pause;
-
-impl Request for Pause {
-    const TYPE: &'static str = "breakpoint pause";
-}
-
 // #define MESSAGE_BREAKPOINT_RESUME "breakpoint resume" //Content is empty
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BreakpointResume;
 
 impl Request for BreakpointResume {
     const TYPE: &'static str = "breakpoint resume";
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Pause;
+
+impl Request for Pause {
+    const TYPE: &'static str = "breakpoint pause";
 }
 
 // #define MESSAGE_GET_FIELD "get field" //Request content is FieldRequest, response content is ValueText
@@ -367,17 +366,9 @@ impl Request for ConfigurationDone {
 // ----------------------------------------------------------------------------
 // Spontaneous events
 
-impl Response for Runtime {
-    const TYPE: &'static str = "runtime";
-}
-
 // #define MESSAGE_BREAKPOINT_HIT "breakpoint hit" //Content is BreakpointHit
 #[derive(Serialize, Deserialize, Debug)]
-pub struct BreakpointHit {
-    pub proc: String,
-    pub override_id: usize,
-    pub offset: i64,
-}
+pub struct BreakpointHit(pub ProcOffset);
 
 impl Response for BreakpointHit {
     const TYPE: &'static str = "breakpoint hit";
@@ -389,4 +380,8 @@ pub struct CallStack(pub Vec<StackFrame>);
 
 impl Response for CallStack {
     const TYPE: &'static str = "call stack";
+}
+
+impl Response for Runtime {
+    const TYPE: &'static str = "runtime";
 }
