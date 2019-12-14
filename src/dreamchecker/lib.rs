@@ -795,27 +795,33 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Expression::BinaryOp { op: BinaryOp::In, lhs, rhs } => {
                 // check for incorrect/ambiguous in statements
                 match &**lhs {
-                    Expression::Base{unary, term, follow} => {
+                    Expression::Base { unary, term, follow } => {
                         if unary.len() > 0 {
-                            error(location, format!("Found a unary {} on left side of an `in`", unary[0].name()))
+                            error(location, format!("ambiguous `{}` on left side of an `in`", unary[0].name()))
                                 .set_severity(Severity::Warning)
-                                .with_note(location, format!("add parentheses around the 'in' expression, {}(a in b)", unary[0].name()))
+                                .with_note(location, format!("add parentheses to fix: `{}`", unary[0].around("(a in b)")))
+                                .with_note(location, format!("add parentheses to disambiguate: `({}) in b`", unary[0].around("a")))
                                 .register(self.context);
                         }
                     },
-                    Expression::BinaryOp{ op, lhs, rhs} => {
-                        error(location, format!("Found {} on left side of an `in`", op))
+                    Expression::BinaryOp { op, lhs, rhs } => {
+                        error(location, format!("ambiguous `{}` on left side of an `in`", op))
                             .set_severity(Severity::Warning)
-                            .with_note(location, format!("add parentheses around the 'in' expression, a {} (b in c)", op))
+                            .with_note(location, format!("add parentheses to fix: `a {} (b in c)`", op))
+                            .with_note(location, format!("add parentheses to disambiguate: `(a {} b) in c`", op))
                             .register(self.context);
                     },
-                    Expression::AssignOp{ op, lhs, rhs} => {
-                        error(location, format!("Found assignment on left side of an `in`"))
+                    Expression::AssignOp { op, lhs, rhs } => {
+                        error(location, format!("ambiguous `{}` on left side of an `in`", op))
                             .set_severity(Severity::Warning)
+                            .with_note(location, format!("add parentheses to fix: `a {} (b in c)`", op))
+                            .with_note(location, format!("add parentheses to disambiguate: `(a {} b) in c`", op))
                             .register(self.context);
                     },
-                    Expression::TernaryOp{ cond, if_, else_ } => {
-                        error(location, format!("Found ternary op on left side of an `in`"))
+                    Expression::TernaryOp { cond, if_, else_ } => {
+                        error(location, format!("ambiguous ternary on left side of an `in`"))
+                            .with_note(location, "add parentheses to fix: `a ? b : (c in d)`")
+                            .with_note(location, "add parentheses to disambiguate: `(a ? b : c) in d`")
                             .set_severity(Severity::Warning)
                             .register(self.context);
                     },
