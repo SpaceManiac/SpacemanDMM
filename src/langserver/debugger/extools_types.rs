@@ -24,7 +24,46 @@ pub struct ProtocolMessage {
 }
 
 // ----------------------------------------------------------------------------
-// Core types
+// Extools data structures
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DisassembledProc {
+    pub proc: String,
+    pub override_id: usize,
+    pub instructions: Vec<DisassembledInstruction>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DisassembledInstruction {
+    pub offset: i64,
+    pub bytes: String,
+    pub mnemonic: String,
+    pub comment: String,
+    pub possible_jumps: Vec<u16>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct StackFrame {
+    pub proc: String,
+    pub override_id: usize,
+    pub offset: i64,
+
+    pub usr: ValueText,
+    pub src: ValueText,
+    pub locals: Vec<ValueText>,
+    pub args: Vec<ValueText>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Runtime {
+    pub proc: String,
+    pub override_id: usize,
+    pub offset: i64,
+    pub message: String,
+}
+
+// ----------------------------------------------------------------------------
+// BYOND value types
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ref(pub i64);
@@ -50,6 +89,14 @@ pub struct ValueText {
     pub has_vars: bool,
     #[serde(default)]
     pub is_list: bool,
+}
+
+#[derive(Deserialize, Debug)]
+pub enum ListContents {
+    #[serde(rename = "linear")]
+    Linear(Vec<ValueText>),
+    #[serde(rename = "associative")]
+    Associative(Vec<(ValueText, ValueText)>),
 }
 
 impl Ref {
@@ -157,24 +204,8 @@ impl Request for ProcDisassemblyRequest {
     const TYPE: &'static str = "proc disassembly";
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct DisassembledProc {
-    pub proc: String,
-    pub override_id: usize,
-    pub instructions: Vec<DisassembledInstruction>,
-}
-
 impl Response for DisassembledProc {
     const TYPE: &'static str = "proc disassembly";
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct DisassembledInstruction {
-    pub offset: i64,
-    pub bytes: String,
-    pub mnemonic: String,
-    pub comment: String,
-    pub possible_jumps: Vec<u16>,
 }
 
 // #define MESSAGE_BREAKPOINT_SET "breakpoint set" //Content is BreakpointSet
@@ -295,14 +326,6 @@ impl Request for GetListContents {
     const TYPE: &'static str = "get list contents";
 }
 
-#[derive(Deserialize, Debug)]
-pub enum ListContents {
-    #[serde(rename = "linear")]
-    Linear(Vec<ValueText>),
-    #[serde(rename = "associative")]
-    Associative(Vec<(ValueText, ValueText)>),
-}
-
 impl Response for ListContents {
     const TYPE: &'static str = "get list contents";
 }
@@ -344,15 +367,6 @@ impl Request for ConfigurationDone {
 // ----------------------------------------------------------------------------
 // Spontaneous events
 
-// #define MESSAGE_RUNTIME "runtime" //Content is a Runtime
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Runtime {
-    pub proc: String,
-    pub override_id: usize,
-    pub offset: i64,
-    pub message: String,
-}
-
 impl Response for Runtime {
     const TYPE: &'static str = "runtime";
 }
@@ -372,18 +386,6 @@ impl Response for BreakpointHit {
 // #define MESSAGE_CALL_STACK "call stack" //Content is a vector of proc paths
 #[derive(Deserialize, Debug)]
 pub struct CallStack(pub Vec<StackFrame>);
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct StackFrame {
-    pub proc: String,
-    pub override_id: usize,
-    pub offset: i64,
-
-    pub usr: ValueText,
-    pub src: ValueText,
-    pub locals: Vec<ValueText>,
-    pub args: Vec<ValueText>,
-}
 
 impl Response for CallStack {
     const TYPE: &'static str = "call stack";
