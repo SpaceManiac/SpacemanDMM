@@ -457,18 +457,21 @@ handle_request! {
             };
 
             if let Some(proc) = self.db.get_proc(&ex_frame.proc, ex_frame.override_id) {
-                let path = self.db.files.file_path(proc.location.file);
+                // `stddef.dm` procs will show as "Unknown source" which is fine for now.
+                if !proc.location.is_builtins() {
+                    let path = self.db.files.file_path(proc.location.file);
 
-                dap_frame.source = Some(Source {
-                    name: Some(path.file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .into_owned()),
-                    path: Some(self.db.root_dir.join(path).to_string_lossy().into_owned()),
-                    .. Default::default()
-                });
-                dap_frame.line = i64::from(proc.location.line);
-                dap_frame.column = i64::from(proc.location.column);
+                    dap_frame.source = Some(Source {
+                        name: Some(path.file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .into_owned()),
+                        path: Some(self.db.root_dir.join(path).to_string_lossy().into_owned()),
+                        .. Default::default()
+                    });
+                    dap_frame.line = i64::from(proc.location.line);
+                    dap_frame.column = i64::from(proc.location.column);
+                }
             }
 
             if let Some(line) = extools.offset_to_line(&ex_frame.proc, ex_frame.override_id, ex_frame.offset) {
