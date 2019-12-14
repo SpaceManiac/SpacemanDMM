@@ -451,12 +451,12 @@ handle_request! {
         let mut frames = Vec::with_capacity(len);
         for (i, ex_frame) in thread.call_stack.into_iter().enumerate() {
             let mut dap_frame = StackFrame {
-                name: ex_frame.name.clone(),
+                name: ex_frame.proc.clone(),
                 id: i as i64,
                 .. Default::default()
             };
 
-            if let Some(proc) = self.db.get_proc(&ex_frame.name, ex_frame.override_id) {
+            if let Some(proc) = self.db.get_proc(&ex_frame.proc, ex_frame.override_id) {
                 let path = self.db.files.file_path(proc.location.file);
 
                 dap_frame.source = Some(Source {
@@ -471,7 +471,7 @@ handle_request! {
                 dap_frame.column = i64::from(proc.location.column);
             }
 
-            if let Some(line) = extools.offset_to_line(&ex_frame.name, ex_frame.override_id, ex_frame.instruction_pointer) {
+            if let Some(line) = extools.offset_to_line(&ex_frame.proc, ex_frame.override_id, ex_frame.offset) {
                 dap_frame.line = line;
                 // Column must be nonzero for VSC to show the exception widget.
                 dap_frame.column = 1;
@@ -587,9 +587,9 @@ handle_request! {
 
         let (parameters, locals);
         let objtree = self.db.objtree.clone();
-        if let Some(proc) = get_proc(&objtree, &frame.name, frame.override_id) {
+        if let Some(proc) = get_proc(&objtree, &frame.proc, frame.override_id) {
             parameters = &proc.parameters[..];
-            locals = self.db.get_local_names(&frame.name, frame.override_id).unwrap_or(&[]);
+            locals = self.db.get_local_names(&frame.proc, frame.override_id).unwrap_or(&[]);
         } else {
             parameters = &[];
             locals = &[];

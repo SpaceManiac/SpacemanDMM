@@ -197,7 +197,7 @@ impl Extools {
         bytecode.entry((proc_ref.to_owned(), override_id)).or_insert_with(|| {
             debug_output!(in _seq, "[extools] Fetching bytecode for {}#{}", proc_ref, override_id);
             sender.send(ProcDisassemblyRequest {
-                name: proc_ref.to_owned(),
+                proc: proc_ref.to_owned(),
                 override_id,
             });
             bytecode_rx.recv().expect("error receiving bytecode").instructions

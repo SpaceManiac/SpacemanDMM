@@ -138,7 +138,7 @@ pub struct ProcListResponse(pub Vec<ProcListResponseEntry>);
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ProcListResponseEntry {
-    pub name: String,
+    pub proc: String,
     pub override_id: usize,
 }
 
@@ -149,7 +149,7 @@ impl Response for ProcListResponse {
 // #define MESSAGE_PROC_DISASSEMBLY "proc disassembly" //Request content is the proc name, response content is DisassembledProc
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ProcDisassemblyRequest {
-    pub name: String,
+    pub proc: String,
     pub override_id: usize,
 }
 
@@ -159,7 +159,7 @@ impl Request for ProcDisassemblyRequest {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DisassembledProc {
-    pub name: String,
+    pub proc: String,
     pub override_id: usize,
     pub instructions: Vec<DisassembledInstruction>,
 }
@@ -375,13 +375,14 @@ pub struct CallStack(pub Vec<StackFrame>);
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct StackFrame {
-    pub name: String,
+    pub proc: String,
     pub override_id: usize,
+    pub offset: i64,
+
     pub usr: ValueText,
     pub src: ValueText,
     pub locals: Vec<ValueText>,
     pub args: Vec<ValueText>,
-    pub instruction_pointer: i64,
 }
 
 impl Response for CallStack {
