@@ -139,6 +139,7 @@ pub struct Extools {
     bytecode_rx: mpsc::Receiver<DisassembledProc>,
     get_field_rx: mpsc::Receiver<FieldResponse>,
     runtime_rx: mpsc::Receiver<Runtime>,
+    get_list_contents_rx: mpsc::Receiver<ListContents>,
     last_runtime: Option<Runtime>,
 }
 
@@ -157,6 +158,7 @@ impl Extools {
         let (bytecode_tx, bytecode_rx) = mpsc::channel();
         let (get_field_tx, get_field_rx) = mpsc::channel();
         let (runtime_tx, runtime_rx) = mpsc::channel();
+        let (get_list_contents_tx, get_list_contents_rx) = mpsc::channel();
 
         let extools = Extools {
             seq,
@@ -167,6 +169,7 @@ impl Extools {
             get_type_rx,
             get_field_rx,
             runtime_rx,
+            get_list_contents_rx,
             last_runtime: None,
         };
         let seq = extools.seq.clone();
@@ -180,6 +183,7 @@ impl Extools {
             bytecode_tx,
             get_field_tx,
             runtime_tx,
+            get_list_contents_tx,
         };
         (extools, thread)
     }
@@ -254,18 +258,23 @@ impl Extools {
         self.sender.send(BreakpointStepOver);
     }
 
-    pub fn get_reference_type(&self, reference: i64) -> Result<String, Box<dyn Error>> {
+    pub fn get_reference_type(&self, reference: Ref) -> Result<String, Box<dyn Error>> {
         // TODO: error handling
-        self.sender.send(GetType(Ref(reference)));
+        self.sender.send(GetType(reference));
         Ok(self.get_type_rx.recv_timeout(RECV_TIMEOUT)?.0)
     }
 
-    pub fn get_reference_field(&self, reference: i64, var: &str) -> Result<ValueText, Box<dyn Error>> {
+    pub fn get_reference_field(&self, reference: Ref, var: &str) -> Result<ValueText, Box<dyn Error>> {
         self.sender.send(FieldRequest {
-            ref_: Ref(reference),
+            ref_: reference,
             field_name: var.to_owned(),
         });
         Ok(self.get_field_rx.recv_timeout(RECV_TIMEOUT)?.0)
+    }
+
+    pub fn get_list_contents(&self, reference: Ref) -> Result<ListContents, Box<dyn Error>> {
+        self.sender.send(GetListContents(reference));
+        Ok(self.get_list_contents_rx.recv_timeout(RECV_TIMEOUT)?)
     }
 
     pub fn last_error_message(&mut self) -> Option<&str> {
@@ -308,6 +317,7 @@ struct ExtoolsThread {
     bytecode_tx: mpsc::Sender<DisassembledProc>,
     get_field_tx: mpsc::Sender<FieldResponse>,
     runtime_tx: mpsc::Sender<Runtime>,
+    get_list_contents_tx: mpsc::Sender<ListContents>,
 }
 
 impl ExtoolsThread {
@@ -412,6 +422,10 @@ handle_extools! {
 
     on FieldResponse(&mut self, response) {
         self.queue(&self.get_field_tx, response);
+    }
+
+    on ListContents(&mut self, response) {
+        self.queue(&self.get_list_contents_tx, response);
     }
 
     on BreakOnRuntime(&mut self, _) {

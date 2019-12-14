@@ -526,34 +526,67 @@ handle_request! {
         });
 
         if params.variablesReference >= 0x1000000 {
-            // Datum reference
-            let typepath = extools.get_reference_type(params.variablesReference)?;
-            guard!(let Some(ty) = self.db.objtree.find(&typepath) else {
-                return Err(Box::new(GenericError("Unable to find type according to typepath")));
-            });
-
+            let (var, ref_) = extools_types::ValueText::from_variables_reference(params.variablesReference);
             let mut variables = Vec::new();
 
-            let mut next = Some(ty);
-            while let Some(current) = next {
-                for (name, ty_var) in current.vars.iter() {
-                    if ty_var.declaration.is_some() {
-                        match extools.get_reference_field(params.variablesReference, name) {
-                            Ok(vt) => variables.push(Variable {
-                                name: name.to_owned(),
-                                value: vt.to_string(),
-                                variablesReference: vt.datum_address(),
+            if var.is_list {
+                // List reference
+                match extools.get_list_contents(ref_)? {
+                    extools_types::ListContents::Linear(entries) => {
+                        for (i, entry) in entries.iter().enumerate() {
+                            variables.push(Variable {
+                                name: format!("[{}]", 1 + i),
+                                value: entry.to_string(),
+                                variablesReference: entry.to_variables_reference(),
                                 .. Default::default()
-                            }),
-                            Err(e) => variables.push(Variable {
-                                name: name.to_owned(),
-                                value: e.to_string(),
+                            });
+                        }
+                    }
+                    extools_types::ListContents::Associative(entries) => {
+                        for (i, (key, val)) in entries.iter().enumerate() {
+                            variables.push(Variable {
+                                name: format!("keys[{}]", 1 + i),
+                                value: key.to_string(),
+                                variablesReference: key.to_variables_reference(),
                                 .. Default::default()
-                            })
+                            });
+                            variables.push(Variable {
+                                name: format!("vals[{}]", 1 + i),
+                                value: val.to_string(),
+                                variablesReference: val.to_variables_reference(),
+                                .. Default::default()
+                            });
                         }
                     }
                 }
-                next = crate::ignore_root(current.parent_type());
+            } else if var.has_vars {
+                // Datum reference
+                let typepath = extools.get_reference_type(ref_)?;
+                guard!(let Some(ty) = self.db.objtree.find(&typepath) else {
+                    return Err(Box::new(GenericError("Unable to find type according to typepath")));
+                });
+
+                let mut next = Some(ty);
+                while let Some(current) = next {
+                    for (name, ty_var) in current.vars.iter() {
+                        if ty_var.declaration.is_some() {
+                            match extools.get_reference_field(ref_, name) {
+                                Ok(vt) => variables.push(Variable {
+                                    name: name.to_owned(),
+                                    value: vt.to_string(),
+                                    variablesReference: vt.to_variables_reference(),
+                                    .. Default::default()
+                                }),
+                                Err(e) => variables.push(Variable {
+                                    name: name.to_owned(),
+                                    value: e.to_string(),
+                                    .. Default::default()
+                                })
+                            }
+                        }
+                    }
+                    next = crate::ignore_root(current.parent_type());
+                }
             }
 
             return Ok(VariablesResponse { variables });
@@ -584,13 +617,13 @@ handle_request! {
             variables.push(Variable {
                 name: "src".to_string(),
                 value: frame.src.to_string(),
-                variablesReference: frame.src.datum_address(),
+                variablesReference: frame.src.to_variables_reference(),
                 .. Default::default()
             });
             variables.push(Variable {
                 name: "usr".to_string(),
                 value: frame.usr.to_string(),
-                variablesReference: frame.usr.datum_address(),
+                variablesReference: frame.usr.to_variables_reference(),
                 .. Default::default()
             });
 
@@ -600,7 +633,7 @@ handle_request! {
                     None => i.to_string(),
                 },
                 value: vt.to_string(),
-                variablesReference: vt.datum_address(),
+                variablesReference: vt.to_variables_reference(),
                 .. Default::default()
             }));
             VariablesResponse { variables }
@@ -612,7 +645,7 @@ handle_request! {
                     None => i.to_string(),
                 },
                 value: vt.to_string(),
-                variablesReference: vt.datum_address(),
+                variablesReference: vt.to_variables_reference(),
                 .. Default::default()
             }).collect();
             VariablesResponse { variables }

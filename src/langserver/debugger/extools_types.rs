@@ -62,9 +62,20 @@ impl Literal {
 }
 
 impl ValueText {
-    pub fn datum_address(&self) -> i64 {
+    pub fn from_variables_reference(raw: i64) -> (ValueText, Ref) {
+        let ref_ = Ref(raw);
+        let is_list = raw >> 24 == 0x0F;
+
+        (ValueText {
+            literal: Literal::Ref(ref_),
+            has_vars: !is_list,
+            is_list,
+        }, ref_)
+    }
+
+    pub fn to_variables_reference(&self) -> i64 {
         match self.literal {
-            Literal::Ref(r) if self.has_vars => r.0,
+            Literal::Ref(r) if self.has_vars || self.is_list => r.0,
             _ => 0,
         }
     }
@@ -253,6 +264,25 @@ pub struct GetGlobalResponse(ValueText);
 
 impl Response for GetGlobalResponse {
     const TYPE: &'static str = "get global";
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GetListContents(pub Ref);
+
+impl Request for GetListContents {
+    const TYPE: &'static str = "get list contents";
+}
+
+#[derive(Deserialize, Debug)]
+pub enum ListContents {
+    #[serde(rename = "linear")]
+    Linear(Vec<ValueText>),
+    #[serde(rename = "associative")]
+    Associative(Vec<(ValueText, ValueText)>),
+}
+
+impl Response for ListContents {
+    const TYPE: &'static str = "get list contents";
 }
 
 // #define MESSAGE_GET_TYPE "get type" //Request content is Datum, response content is a string
