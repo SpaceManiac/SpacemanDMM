@@ -258,6 +258,10 @@ impl Extools {
         self.sender.send(BreakpointStepOver);
     }
 
+    pub fn pause(&self) {
+        self.sender.send(Pause);
+    }
+
     pub fn get_reference_type(&self, reference: Ref) -> Result<String, Box<dyn Error>> {
         // TODO: error handling
         self.sender.send(GetType(reference));

@@ -225,6 +225,13 @@ impl Request for BreakpointStepOver {
     const TYPE: &'static str = "breakpoint step over";
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Pause;
+
+impl Request for Pause {
+    const TYPE: &'static str = "breakpoint pause";
+}
+
 // #define MESSAGE_BREAKPOINT_RESUME "breakpoint resume" //Content is empty
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BreakpointResume;

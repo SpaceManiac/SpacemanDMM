@@ -671,7 +671,7 @@ handle_request! {
             return Err(Box::new(GenericError("No extools connection")));
         });
 
-        extools.step_in();
+        extools.pause();
     }
 
     on SetExceptionBreakpoints(&mut self, params) {
