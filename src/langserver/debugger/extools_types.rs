@@ -23,6 +23,82 @@ pub struct ProtocolMessage {
 }
 
 // ----------------------------------------------------------------------------
+// Core types
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Ref(pub i64);
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum Literal {
+    #[serde(rename = "ref")]
+    Ref(Ref),
+    #[serde(rename = "number")]
+    Number(f32),
+    #[serde(rename = "string")]
+    String(String),
+    #[serde(rename = "typepath")]
+    Typepath(String),
+    #[serde(rename = "resource")]
+    Resource(String),
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct ValueText {
+    pub literal: Literal,
+    #[serde(default)]
+    pub has_vars: bool,
+    #[serde(default)]
+    pub is_list: bool,
+}
+
+impl Ref {
+    pub const NULL: Ref = Ref(0);
+    pub const WORLD: Ref = Ref(0x0e_00_00_00);
+}
+
+impl Literal {
+    pub const NULL: Literal = Literal::Ref(Ref::NULL);
+    pub const WORLD: Literal = Literal::Ref(Ref::WORLD);
+}
+
+impl ValueText {
+    pub fn datum_address(&self) -> i64 {
+        match self.literal {
+            Literal::Ref(r) if self.has_vars => r.0,
+            _ => 0,
+        }
+    }
+}
+
+impl std::fmt::Display for Ref {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match *self {
+            Ref::NULL => fmt.write_str("null"),
+            Ref::WORLD => fmt.write_str("world"),
+            Ref(v) => write!(fmt, "[0x{:08x}]", v),
+        }
+    }
+}
+
+impl std::fmt::Display for Literal {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Literal::Ref(v) => write!(fmt, "{}", v),
+            Literal::Number(n) => write!(fmt, "{}", n),
+            Literal::String(s) => write!(fmt, "{:?}", s),
+            Literal::Typepath(t) => write!(fmt, "{}", t),
+            Literal::Resource(f) => write!(fmt, "'{}'", f),
+        }
+    }
+}
+
+impl std::fmt::Display for ValueText {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        self.literal.fmt(fmt)
+    }
+}
+
+// ----------------------------------------------------------------------------
 // Requests and responses
 
 // #define MESSAGE_RAW "raw message" //Content is a string, used for debugging purposes (how meta)
@@ -148,8 +224,8 @@ impl Request for BreakpointResume {
 // #define MESSAGE_GET_FIELD "get field" //Request content is FieldRequest, response content is ValueText
 #[derive(Serialize, Deserialize, Debug)]
 pub struct FieldRequest {
-    pub datum_type: String,
-    pub datum_id: i64,
+    #[serde(rename = "ref")]
+    pub ref_: Ref,
     pub field_name: String,
 }
 
@@ -181,10 +257,7 @@ impl Response for GetGlobalResponse {
 
 // #define MESSAGE_GET_TYPE "get type" //Request content is Datum, response content is a string
 #[derive(Serialize, Deserialize, Debug)]
-pub struct GetType {
-    pub datum_type: String,
-    pub datum_id: i64,
-}
+pub struct GetType(pub Ref);
 
 impl Request for GetType {
     const TYPE: &'static str = "get type";
@@ -261,61 +334,4 @@ pub struct StackFrame {
 
 impl Response for CallStack {
     const TYPE: &'static str = "call stack";
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub enum Literal {
-    #[serde(rename = "ref")]
-    Ref(i64),
-    #[serde(rename = "number")]
-    Number(f32),
-    #[serde(rename = "string")]
-    String(String),
-    #[serde(rename = "typepath")]
-    Typepath(String),
-    #[serde(rename = "resource")]
-    Resource(String),
-}
-
-impl Literal {
-    pub const NULL: Literal = Literal::Ref(0);
-    pub const WORLD: Literal = Literal::Ref(0x0e_00_00_00);
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct ValueText {
-    pub literal: Literal,
-    #[serde(default)]
-    pub has_vars: bool,
-    #[serde(default)]
-    pub is_list: bool,
-}
-
-impl ValueText {
-    pub fn datum_address(&self) -> i64 {
-        match self.literal {
-            Literal::Ref(r) if self.has_vars => r,
-            _ => 0,
-        }
-    }
-}
-
-impl std::fmt::Display for Literal {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Literal::Ref(0) => fmt.write_str("null"),
-            Literal::Ref(0x0e_00_00_00) => fmt.write_str("world"),
-            Literal::Ref(v) => write!(fmt, "[0x{:08x}]", v),
-            Literal::Number(n) => write!(fmt, "{}", n),
-            Literal::String(s) => write!(fmt, "{:?}", s),
-            Literal::Typepath(t) => write!(fmt, "{}", t),
-            Literal::Resource(f) => write!(fmt, "'{}'", f),
-        }
-    }
-}
-
-impl std::fmt::Display for ValueText {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.literal.fmt(fmt)
-    }
 }

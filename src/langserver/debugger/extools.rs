@@ -256,17 +256,13 @@ impl Extools {
 
     pub fn get_reference_type(&self, reference: i64) -> Result<String, Box<dyn Error>> {
         // TODO: error handling
-        self.sender.send(GetType {
-            datum_type: category_name(reference >> 24)?.to_owned(),
-            datum_id: reference & 0xffffff,
-        });
+        self.sender.send(GetType(Ref(reference)));
         Ok(self.get_type_rx.recv_timeout(RECV_TIMEOUT)?.0)
     }
 
     pub fn get_reference_field(&self, reference: i64, var: &str) -> Result<ValueText, Box<dyn Error>> {
         self.sender.send(FieldRequest {
-            datum_type: category_name(reference >> 24)?.to_owned(),
-            datum_id: reference & 0xffffff,
+            ref_: Ref(reference),
             field_name: var.to_owned(),
         });
         Ok(self.get_field_rx.recv_timeout(RECV_TIMEOUT)?.0)
