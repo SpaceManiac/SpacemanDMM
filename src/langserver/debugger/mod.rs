@@ -561,31 +561,16 @@ handle_request! {
                 }
             } else if var.has_vars {
                 // Datum reference
-                let typepath = extools.get_reference_type(ref_)?;
-                guard!(let Some(ty) = self.db.objtree.find(&typepath) else {
-                    return Err(Box::new(GenericError("Unable to find type according to typepath")));
-                });
-
-                let mut next = Some(ty);
-                while let Some(current) = next {
-                    for (name, ty_var) in current.vars.iter() {
-                        if ty_var.declaration.is_some() {
-                            match extools.get_reference_field(ref_, name) {
-                                Ok(vt) => variables.push(Variable {
-                                    name: name.to_owned(),
-                                    value: vt.to_string(),
-                                    variablesReference: vt.to_variables_reference(),
-                                    .. Default::default()
-                                }),
-                                Err(e) => variables.push(Variable {
-                                    name: name.to_owned(),
-                                    value: e.to_string(),
-                                    .. Default::default()
-                                })
-                            }
-                        }
-                    }
-                    next = crate::ignore_root(current.parent_type());
+                let hashmap = extools.get_all_fields(ref_)?;
+                let mut entries: Vec<_> = hashmap.iter().collect();
+                entries.sort_unstable_by_key(|tup| tup.0);
+                for (name, vt) in entries {
+                    variables.push(Variable {
+                        name: name.to_owned(),
+                        value: vt.to_string(),
+                        variablesReference: vt.to_variables_reference(),
+                        .. Default::default()
+                    })
                 }
             }
 

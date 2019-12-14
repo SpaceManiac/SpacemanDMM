@@ -2,6 +2,7 @@
 //!
 //! * https://github.com/MCHSL/extools/blob/master/byond-extools/src/debug_server/protocol.h
 
+use std::collections::HashMap;
 use serde_json::Value as Json;
 
 // > All communication happens over a TCP socket using a JSON-based protocol.
@@ -249,6 +250,20 @@ pub struct FieldResponse(pub ValueText);
 
 impl Response for FieldResponse {
     const TYPE: &'static str = "get field";
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GetAllFields(pub Ref);
+
+impl Request for GetAllFields {
+    const TYPE: &'static str = "get all fields";
+}
+
+#[derive(Deserialize, Debug)]
+pub struct GetAllFieldsResponse(pub HashMap<String, ValueText>);
+
+impl Response for GetAllFieldsResponse {
+    const TYPE: &'static str = "get all fields";
 }
 
 // #define MESSAGE_GET_GLOBAL "get global" //Request content is a string with the global name, response is a ValueText
