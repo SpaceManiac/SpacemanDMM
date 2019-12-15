@@ -50,7 +50,6 @@ pub fn start_server(dreamseeker_exe: String, db: DebugDatabaseBuilder) -> std::i
 
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
     let port = listener.local_addr()?.port();
-    eprintln!("listening for DAP connection on port {}", port);
 
     let handle = std::thread::Builder::new()
         .name(format!("DAP listener on port {}", port))

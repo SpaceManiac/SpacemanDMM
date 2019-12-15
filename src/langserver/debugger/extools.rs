@@ -241,12 +241,10 @@ impl Extools {
     }
 
     pub fn set_breakpoint(&self, proc: &str, override_id: usize, offset: i64) {
-        debug_output!(in self.seq, "[extools] {}#{}@{} set", proc, override_id, offset);
         self.sender.send(BreakpointSet(ProcOffset { proc: proc.to_owned(), override_id, offset }));
     }
 
     pub fn unset_breakpoint(&self, proc: &str, override_id: usize, offset: i64) {
-        debug_output!(in self.seq, "[extools] {}#{}@{} unset", proc, override_id, offset);
         self.sender.send(BreakpointUnset(ProcOffset { proc: proc.to_owned(), override_id, offset }));
     }
 
@@ -431,8 +429,8 @@ impl ExtoolsThread {
 }
 
 handle_extools! {
-    on Raw(&mut self, Raw(_message)) {
-        debug_output!(in self.seq, "[extools] Raw: {}", _message);
+    on Raw(&mut self, Raw(message)) {
+        output!(in self.seq, "[extools] Message: {}", message);
     }
 
     on BreakpointSet(&mut self, BreakpointSet(_bp)) {
@@ -464,7 +462,7 @@ handle_extools! {
     }
 
     on Runtime(&mut self, runtime) {
-        debug_output!(in self.seq, "[extools] {}#{}@{} runtimed", runtime.proc, runtime.override_id, runtime.offset);
+        output!(in self.seq, "[extools] Runtime in {}: {}", runtime.proc, runtime.message);
         self.seq.issue_event(dap_types::StoppedEvent {
             reason: dap_types::StoppedEvent::REASON_EXCEPTION.to_owned(),
             text: Some(runtime.message.clone()),
