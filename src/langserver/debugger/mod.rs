@@ -32,6 +32,7 @@ mod launched;
 mod extools_types;
 mod extools;
 mod local_names;
+mod extools_bundle;
 
 use std::error::Error;
 use std::sync::{atomic, Arc, Mutex};

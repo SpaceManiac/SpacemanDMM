@@ -36,6 +36,9 @@ impl Launched {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
+        #[cfg(extools_bundle)] {
+            command.env("EXTOOLS_DLL", super::extools_bundle::extract()?);
+        }
         if let Some(port) = port {
             command.env("EXTOOLS_MODE", "LAUNCHED");
             command.env("EXTOOLS_PORT", port.to_string());

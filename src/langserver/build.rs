@@ -7,6 +7,7 @@ use std::env;
 use std::path::PathBuf;
 
 fn main() {
+    // build info
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
     let mut f = File::create(&out_dir.join("build-info.txt")).unwrap();
 
@@ -14,6 +15,12 @@ fn main() {
         writeln!(f, "commit: {}", commit).unwrap();
     }
     writeln!(f, "build date: {}", chrono::Utc::today()).unwrap();
+
+    // extools bundling
+    println!("cargo:rerun-if-env-changed=EXTOOLS_BUNDLE_DLL");
+    if env::var_os("EXTOOLS_BUNDLE_DLL").is_some() {
+        println!("cargo:rustc-cfg=extools_bundle");
+    }
 }
 
 fn read_commit() -> Result<String, git2::Error> {
