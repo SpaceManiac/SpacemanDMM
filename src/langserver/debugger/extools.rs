@@ -388,6 +388,10 @@ handle_extools! {
         debug_output!(in self.seq, "[extools] {}#{}@{} validated", _bp.proc, _bp.override_id, _bp.offset);
     }
 
+    on BreakpointUnset(&mut self, _) {
+        // silent
+    }
+
     on BreakpointHit(&mut self, BreakpointHit(_hit)) {
         debug_output!(in self.seq, "[extools] {}#{}@{} hit", _hit.proc, _hit.override_id, _hit.offset);
         self.seq.issue_event(dap_types::StoppedEvent {
