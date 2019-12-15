@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use termcolor::{ColorSpec, Color};
 use serde::de::{Deserialize, Deserializer};
 
-use crate::config::Warnings;
+use crate::config::{Warnings, WarningLevel};
 
 /// An identifier referring to a loaded file.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -81,16 +81,16 @@ impl Context {
     }
 
     /// Push an error or other diagnostic to the context.
-    pub fn register_error(&self, error: DMError) {
-        // ignore errors with severity above configured level
-        if !self.filter.severe_enough(error.severity) {
-            return
-        }
+    pub fn register_error(&self, mut error: DMError) {
         // check if the optional errortype is in the list to ignore
         if let Some(errortype) = error.errortype {
-            if self.filter.is_disabled(errortype) {
-                return
-            }
+            match self.filter.warning_level_for(errortype) {
+                WarningLevel::Disabled => { return },
+                WarningLevel::Unset => (),
+                other => {
+                    error.severity = Severity::from(other);
+                }
+            };
         }
         if let Some(severity) = self.print_severity {
             if error.severity <= severity {
@@ -98,6 +98,10 @@ impl Context {
                 self.pretty_print_error(&mut stderr.lock(), &error)
                     .expect("error writing to stderr");
             }
+        }
+        // ignore errors with severity above configured level
+        if !self.filter.severe_enough(error.severity()) {
+            return
         }
         self.errors.borrow_mut().push(error);
     }
