@@ -83,7 +83,8 @@ fn main() {
 
     let context = dm::Context::default();
     let mut engine = Engine::new(&context);
-    jrpc_io::run_forever(|message| engine.handle_input(message));
+    jrpc_io::run_until_stdin_eof(|message| engine.handle_input(message));
+    engine.exit(0);
 }
 
 const VERSION: Option<jsonrpc::Version> = Some(jsonrpc::Version::V2);
@@ -142,6 +143,7 @@ struct Engine<'a> {
 
     status: InitStatus,
     parent_pid: u64,
+    threads: Vec<std::thread::JoinHandle<()>>,
     root: Option<Url>,
 
     context: &'a dm::Context,
@@ -162,6 +164,7 @@ impl<'a> Engine<'a> {
 
             status: InitStatus::Starting,
             parent_pid: 0,
+            threads: Default::default(),
             root: None,
 
             context,
@@ -740,7 +743,7 @@ impl<'a> Engine<'a> {
     fn handle_notification(&mut self, notification: jsonrpc::Notification) -> Result<(), jsonrpc::Error> {
         // "Notifications should be dropped, except for the exit notification"
         if notification.method == <lsp_types::notification::Exit as lsp_types::notification::Notification>::METHOD {
-            std::process::exit(if self.status == InitStatus::ShuttingDown { 0 } else { 1 });
+            self.exit(if self.status == InitStatus::ShuttingDown { 0 } else { 1 });
         }
         if self.status != InitStatus::Running {
             return Ok(())
@@ -753,6 +756,13 @@ impl<'a> Engine<'a> {
             eprintln!("Notify NYI: {} -> {:?}", &notification.method, params_value);
             Ok(())
         }
+    }
+
+    fn exit(&mut self, code: i32) {
+        for handle in self.threads.drain(..) {
+            let _ = handle.join();
+        }
+        std::process::exit(code);
     }
 }
 
@@ -1673,9 +1683,9 @@ handle_method_call! {
             files: self.context.clone_file_list(),
             objtree: self.objtree.clone(),
         };
-        extras::StartDebuggerResult {
-            port: debugger::start_server(params.dreamseeker_exe, db).map_err(invalid_request)?,
-        }
+        let (port, handle) = debugger::start_server(params.dreamseeker_exe, db).map_err(invalid_request)?;
+        self.threads.push(handle);
+        extras::StartDebuggerResult { port }
     }
 }
 

@@ -4,13 +4,12 @@
 
 use std::io::{self, BufRead, Write};
 
-pub fn run_forever<F: FnMut(&str)>(mut f: F) -> ! {
+pub fn run_until_stdin_eof<F: FnMut(&str)>(mut f: F) {
     let stdin = io::stdin();
     let mut stdin = stdin.lock();
     while let Some(message) = read(&mut stdin).expect("JSON-RPC read error") {
         f(&message);
     }
-    std::process::exit(0);
 }
 
 pub fn run_with_read<R: BufRead, F: FnMut(&str)>(input: &mut R, mut f: F) {

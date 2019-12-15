@@ -45,14 +45,14 @@ use self::dap_types::*;
 use self::launched::Launched;
 use self::extools::ExtoolsHolder;
 
-pub fn start_server(dreamseeker_exe: String, db: DebugDatabaseBuilder) -> std::io::Result<u16> {
+pub fn start_server(dreamseeker_exe: String, db: DebugDatabaseBuilder) -> std::io::Result<(u16, std::thread::JoinHandle<()>)> {
     use std::net::*;
 
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
     let port = listener.local_addr()?.port();
     eprintln!("listening for DAP connection on port {}", port);
 
-    std::thread::Builder::new()
+    let handle = std::thread::Builder::new()
         .name(format!("DAP listener on port {}", port))
         .spawn(move || {
             let (stream, _) = listener.accept().unwrap();
@@ -63,7 +63,7 @@ pub fn start_server(dreamseeker_exe: String, db: DebugDatabaseBuilder) -> std::i
             jrpc_io::run_with_read(&mut input, |message| debugger.handle_input(message));
         })?;
 
-    Ok(port)
+    Ok((port, handle))
 }
 
 pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
@@ -98,7 +98,7 @@ pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
         objtree,
     };
     let mut debugger = Debugger::new(dreamseeker_exe, db, Box::new(std::io::stdout()));
-    jrpc_io::run_forever(|message| debugger.handle_input(message));
+    jrpc_io::run_until_stdin_eof(|message| debugger.handle_input(message));
 }
 
 pub struct DebugDatabaseBuilder {
