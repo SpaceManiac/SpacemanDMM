@@ -41,7 +41,7 @@ pub fn save_resources(output_path: &Path) -> std::io::Result<()> {
             use std::io::Write;
             $(
                 progress.update($name);
-                create(&output_path.join($name))?.write_all(include_bytes!($name))?;
+                crate::create(&output_path.join($name))?.write_all(include_bytes!($name))?;
             )*
         }}
     }
