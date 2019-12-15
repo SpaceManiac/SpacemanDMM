@@ -318,8 +318,7 @@ handle_request! {
     }
 
     on LaunchVsc(&mut self, params) {
-        // Extools is not currently enabled on release langserver builds.
-        let debug = cfg!(debug_assertions) && !params.base.noDebug.unwrap_or(false);
+        let debug = !params.base.noDebug.unwrap_or(false);
         let port = if debug {
             let (port, extools) = ExtoolsHolder::listen(self.seq.clone())?;
             self.extools = extools;
