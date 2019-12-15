@@ -392,19 +392,30 @@ handle_extools! {
         // silent
     }
 
-    on BreakpointHit(&mut self, BreakpointHit(_hit)) {
-        debug_output!(in self.seq, "[extools] {}#{}@{} hit", _hit.proc, _hit.override_id, _hit.offset);
-        self.seq.issue_event(dap_types::StoppedEvent {
-            reason: "breakpoint".to_owned(),
-            threadId: Some(0),
-            .. Default::default()
-        });
+    on BreakpointHit(&mut self, hit) {
+        debug_output!(in self.seq, "[extools] {}#{}@{} hit", hit.proc, hit.override_id, hit.offset);
+        match hit.reason {
+            BreakpointHitReason::Step => {
+                self.seq.issue_event(dap_types::StoppedEvent {
+                    reason: dap_types::StoppedEvent::REASON_STEP.to_owned(),
+                    threadId: Some(0),
+                    .. Default::default()
+                });
+            }
+            _ => {
+                self.seq.issue_event(dap_types::StoppedEvent {
+                    reason: dap_types::StoppedEvent::REASON_BREAKPOINT.to_owned(),
+                    threadId: Some(0),
+                    .. Default::default()
+                });
+            }
+        }
     }
 
     on Runtime(&mut self, runtime) {
         debug_output!(in self.seq, "[extools] {}#{}@{} runtimed", runtime.proc, runtime.override_id, runtime.offset);
         self.seq.issue_event(dap_types::StoppedEvent {
-            reason: "exception".to_owned(),
+            reason: dap_types::StoppedEvent::REASON_EXCEPTION.to_owned(),
             text: Some(runtime.message.clone()),
             threadId: Some(0),
             .. Default::default()

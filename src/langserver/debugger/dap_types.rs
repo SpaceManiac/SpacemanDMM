@@ -233,6 +233,13 @@ pub struct StoppedEvent {
     pub allThreadsStopped: Option<bool>,
 }
 
+impl StoppedEvent {
+    pub const REASON_STEP: &'static str = "step";
+    pub const REASON_BREAKPOINT: &'static str = "breakpoint";
+    pub const REASON_EXCEPTION: &'static str = "exception";
+    pub const REASON_PAUSE: &'static str = "pause";
+}
+
 impl Event for StoppedEvent {
     const EVENT: &'static str = "stopped";
 }

@@ -368,7 +368,23 @@ impl Request for ConfigurationDone {
 
 // #define MESSAGE_BREAKPOINT_HIT "breakpoint hit" //Content is BreakpointHit
 #[derive(Serialize, Deserialize, Debug)]
-pub struct BreakpointHit(pub ProcOffset);
+pub struct BreakpointHit {
+    pub proc: String,
+    pub override_id: usize,
+    pub offset: i64,
+    // end ProcOffset
+    pub reason: BreakpointHitReason,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum BreakpointHitReason {
+    #[serde(rename = "breakpoint opcode")]
+    BreakpointOpcode,
+    #[serde(rename = "step")]
+    Step,
+    #[serde(other)]
+    Unknown,
+}
 
 impl Response for BreakpointHit {
     const TYPE: &'static str = "breakpoint hit";
