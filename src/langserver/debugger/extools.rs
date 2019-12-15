@@ -276,15 +276,18 @@ impl Extools {
         let frame_line = self.offset_to_line(&frame.proc, frame.override_id, frame.offset);
 
         self.sender.send(msg.clone());
-        while let Ok(hit) = self.step_rx.recv_timeout(RECV_TIMEOUT) {
-            // Break if current proc changed
-            if hit.proc != frame.proc || hit.override_id != hit.override_id {
-                break;
-            }
-            // Break if line number changed
-            let line = self.offset_to_line(&hit.proc, hit.override_id, hit.offset);
-            if line != frame_line {
-                break;
+        while let Ok(hit) = self.step_rx.recv() {
+            // Always keep stepping if current proc is stddef.
+            if !super::STDDEF_PROCS.contains(&hit.proc.as_str()) || hit.override_id != 0 {
+                // Break if current proc changed
+                if hit.proc != frame.proc && hit.override_id != frame.override_id {
+                    break;
+                }
+                // Break if line number changed
+                let line = self.offset_to_line(&hit.proc, hit.override_id, hit.offset);
+                if line != frame_line {
+                    break;
+                }
             }
             // Keep stepping
             self.sender.send(msg.clone());
