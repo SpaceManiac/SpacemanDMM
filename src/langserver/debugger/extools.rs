@@ -160,7 +160,7 @@ impl Extools {
         let (get_field_tx, get_field_rx) = mpsc::channel();
         let (runtime_tx, runtime_rx) = mpsc::channel();
         let (get_list_contents_tx, get_list_contents_rx) = mpsc::channel();
-        let (step_tx, step_rx) = mpsc::channel();
+        let (step_tx, step_rx) = mpsc::sync_channel(0);
 
         let extools = Extools {
             seq,
@@ -274,16 +274,19 @@ impl Extools {
         let frame_line = self.offset_to_line(&frame.proc, frame.override_id, frame.offset);
 
         self.sender.send(msg.clone());
-        while let Ok(hit) = self.step_rx.recv() {
+        let mut got_stopped = false;
+        while let Ok(hit) = self.step_rx.recv_timeout(RECV_TIMEOUT) {
             // Always keep stepping if current proc is stddef.
             if !super::STDDEF_PROCS.contains(&hit.proc.as_str()) || hit.override_id != 0 {
                 // Break if current proc changed
                 if hit.proc != frame.proc && hit.override_id != frame.override_id {
+                    got_stopped = true;
                     break;
                 }
                 // Break if line number changed
                 let line = self.offset_to_line(&hit.proc, hit.override_id, hit.offset);
                 if line != frame_line {
+                    got_stopped = true;
                     break;
                 }
             }
@@ -291,11 +294,13 @@ impl Extools {
             self.sender.send(msg.clone());
         }
 
-        self.seq.issue_event(dap_types::StoppedEvent {
-            reason: dap_types::StoppedEvent::REASON_STEP.to_owned(),
-            threadId: Some(0),
-            .. Default::default()
-        });
+        if got_stopped {
+            self.seq.issue_event(dap_types::StoppedEvent {
+                reason: dap_types::StoppedEvent::REASON_STEP.to_owned(),
+                threadId: Some(0),
+                .. Default::default()
+            });
+        }
     }
 
     pub fn step_in(&mut self, thread_id: i64) {
@@ -367,7 +372,7 @@ struct ExtoolsThread {
     get_field_tx: mpsc::Sender<GetAllFieldsResponse>,
     runtime_tx: mpsc::Sender<Runtime>,
     get_list_contents_tx: mpsc::Sender<ListContents>,
-    step_tx: mpsc::Sender<ProcOffset>,
+    step_tx: mpsc::SyncSender<ProcOffset>,
 }
 
 impl ExtoolsThread {
@@ -444,11 +449,20 @@ handle_extools! {
     on BreakpointHit(&mut self, hit) {
         match hit.reason {
             BreakpointHitReason::Step => {
-                self.queue(&self.step_tx, ProcOffset {
+                // Try to transmit the step event to step_until_line above if
+                // it's listening, but if it timed out without issuing a
+                // Stopped, do that now.
+                if self.step_tx.try_send(ProcOffset {
                     proc: hit.proc,
                     override_id: hit.override_id,
                     offset: hit.offset,
-                });
+                }).is_err() {
+                    self.seq.issue_event(dap_types::StoppedEvent {
+                        reason: dap_types::StoppedEvent::REASON_STEP.to_owned(),
+                        threadId: Some(0),
+                        .. Default::default()
+                    });
+                }
             }
             _ => {
                 debug_output!(in self.seq, "[extools] {}#{}@{} hit", hit.proc, hit.override_id, hit.offset);

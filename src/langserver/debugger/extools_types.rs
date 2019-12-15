@@ -17,12 +17,24 @@ pub struct ProcId {
     pub override_id: usize,
 }
 
+impl std::fmt::Display for ProcId {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(fmt, "{}#{}", self.proc, self.override_id)
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ProcOffset {
     pub proc: String,
     pub override_id: usize,
     // end ProcId
     pub offset: i64,
+}
+
+impl std::fmt::Display for ProcOffset {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(fmt, "{}#{}@{}", self.proc, self.override_id, self.offset)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
