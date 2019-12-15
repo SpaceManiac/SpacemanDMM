@@ -3,7 +3,7 @@
 use serde::Deserialize;
 use std::fs::File;
 use std::io::Read;
-use error::Severity;
+use crate::error::Severity;
 
 #[derive(Deserialize, Default)]
 pub struct Config {

@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use termcolor::{ColorSpec, Color};
 use serde::de::{Deserialize, Deserializer};
 
-use config::Warnings;
+use crate::config::Warnings;
 
 /// An identifier referring to a loaded file.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
