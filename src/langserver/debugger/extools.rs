@@ -140,6 +140,7 @@ pub struct Extools {
     get_field_rx: mpsc::Receiver<GetAllFieldsResponse>,
     runtime_rx: mpsc::Receiver<Runtime>,
     get_list_contents_rx: mpsc::Receiver<ListContents>,
+    step_rx: mpsc::Receiver<ProcOffset>,
     last_runtime: Option<Runtime>,
 }
 
@@ -159,6 +160,7 @@ impl Extools {
         let (get_field_tx, get_field_rx) = mpsc::channel();
         let (runtime_tx, runtime_rx) = mpsc::channel();
         let (get_list_contents_tx, get_list_contents_rx) = mpsc::channel();
+        let (step_tx, step_rx) = mpsc::channel();
 
         let extools = Extools {
             seq,
@@ -170,6 +172,7 @@ impl Extools {
             get_field_rx,
             runtime_rx,
             get_list_contents_rx,
+            step_rx,
             last_runtime: None,
         };
         let seq = extools.seq.clone();
@@ -184,6 +187,7 @@ impl Extools {
             get_field_tx,
             runtime_tx,
             get_list_contents_tx,
+            step_tx,
         };
         (extools, thread)
     }
@@ -250,12 +254,55 @@ impl Extools {
         self.sender.send(BreakpointResume);
     }
 
-    pub fn step_in(&self) {
-        self.sender.send(BreakpointStepInto);
+    fn step_until_line<T: Request + Clone>(&mut self, thread_id: i64, msg: T) {
+        let frame = {
+            let lock = self.threads.lock().unwrap();
+            guard!(let Some(thread) = lock.get(&thread_id) else {
+                debug_output!(in self.seq, "[extools] Line-step bad thread ID");
+                self.sender.send(msg);
+                return;
+            });
+            guard!(let Some(frame) = thread.call_stack.get(0) else {
+                debug_output!(in self.seq, "[extools] Line-step bad stack frame");
+                self.sender.send(msg);
+                return;
+            });
+            ProcOffset {
+                proc: frame.proc.clone(),
+                override_id: frame.override_id,
+                offset: frame.offset,
+            }
+        };
+        let frame_line = self.offset_to_line(&frame.proc, frame.override_id, frame.offset);
+
+        self.sender.send(msg.clone());
+        while let Ok(hit) = self.step_rx.recv_timeout(RECV_TIMEOUT) {
+            // Break if current proc changed
+            if hit.proc != frame.proc || hit.override_id != hit.override_id {
+                break;
+            }
+            // Break if line number changed
+            let line = self.offset_to_line(&hit.proc, hit.override_id, hit.offset);
+            if line != frame_line {
+                break;
+            }
+            // Keep stepping
+            self.sender.send(msg.clone());
+        }
+
+        self.seq.issue_event(dap_types::StoppedEvent {
+            reason: dap_types::StoppedEvent::REASON_STEP.to_owned(),
+            threadId: Some(0),
+            .. Default::default()
+        });
     }
 
-    pub fn step_over(&self) {
-        self.sender.send(BreakpointStepOver);
+    pub fn step_in(&mut self, thread_id: i64) {
+        self.step_until_line(thread_id, BreakpointStepInto);
+    }
+
+    pub fn step_over(&mut self, thread_id: i64) {
+        self.step_until_line(thread_id, BreakpointStepOver);
     }
 
     pub fn pause(&self) {
@@ -319,6 +366,7 @@ struct ExtoolsThread {
     get_field_tx: mpsc::Sender<GetAllFieldsResponse>,
     runtime_tx: mpsc::Sender<Runtime>,
     get_list_contents_tx: mpsc::Sender<ListContents>,
+    step_tx: mpsc::Sender<ProcOffset>,
 }
 
 impl ExtoolsThread {
@@ -393,16 +441,16 @@ handle_extools! {
     }
 
     on BreakpointHit(&mut self, hit) {
-        debug_output!(in self.seq, "[extools] {}#{}@{} hit", hit.proc, hit.override_id, hit.offset);
         match hit.reason {
             BreakpointHitReason::Step => {
-                self.seq.issue_event(dap_types::StoppedEvent {
-                    reason: dap_types::StoppedEvent::REASON_STEP.to_owned(),
-                    threadId: Some(0),
-                    .. Default::default()
+                self.queue(&self.step_tx, ProcOffset {
+                    proc: hit.proc,
+                    override_id: hit.override_id,
+                    offset: hit.offset,
                 });
             }
             _ => {
+                debug_output!(in self.seq, "[extools] {}#{}@{} hit", hit.proc, hit.override_id, hit.offset);
                 self.seq.issue_event(dap_types::StoppedEvent {
                     reason: dap_types::StoppedEvent::REASON_BREAKPOINT.to_owned(),
                     threadId: Some(0),

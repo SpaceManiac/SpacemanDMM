@@ -240,7 +240,7 @@ impl Response for BreakpointUnset {
 }
 
 // #define MESSAGE_BREAKPOINT_STEP_INTO "breakpoint step into" //Content is empty
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BreakpointStepInto;
 
 impl Request for BreakpointStepInto {
@@ -248,7 +248,7 @@ impl Request for BreakpointStepInto {
 }
 
 // #define MESSAGE_BREAKPOINT_STEP_OVER "breakpoint step over" //Content is empty
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BreakpointStepOver;
 
 impl Request for BreakpointStepOver {

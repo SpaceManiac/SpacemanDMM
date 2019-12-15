@@ -653,20 +653,20 @@ handle_request! {
         }
     }
 
-    on StepIn(&mut self, _params) {
+    on StepIn(&mut self, params) {
         guard!(let Some(extools) = self.extools.as_ref() else {
             return Err(Box::new(GenericError("No extools connection")));
         });
 
-        extools.step_in();
+        extools.step_in(params.threadId);
     }
 
-    on Next(&mut self, _params) {
+    on Next(&mut self, params) {
         guard!(let Some(extools) = self.extools.as_ref() else {
             return Err(Box::new(GenericError("No extools connection")));
         });
 
-        extools.step_over();
+        extools.step_over(params.threadId);
     }
 
     on Pause(&mut self, _params) {
