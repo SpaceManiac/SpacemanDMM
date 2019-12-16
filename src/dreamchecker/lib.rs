@@ -607,6 +607,7 @@ pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
 // ----------------------------------------------------------------------------
 // Procedure analyzer
 
+#[derive(Clone)]
 struct LocalVar<'o> {
     location: Location,
     analysis: Analysis<'o>,
@@ -624,7 +625,6 @@ struct AnalyzeProc<'o, 's> {
     objtree: &'o ObjectTree,
     ty: TypeRef<'o>,
     proc_ref: ProcRef<'o>,
-    local_vars: HashMap<String, LocalVar<'o>>,
     calls_parent: bool,
 }
 
@@ -632,40 +632,39 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     fn new(env: &'s mut AnalyzeObjectTree<'o>, context: &'o Context, objtree: &'o ObjectTree, proc_ref: ProcRef<'o>) -> Self {
         let ty = proc_ref.ty();
 
-        let mut local_vars = HashMap::<String, LocalVar>::new();
-        local_vars.insert(".".to_owned(), Analysis::empty().into());
-        local_vars.insert("args".to_owned(), Analysis::from_static_type(objtree.expect("/list")).into());
-        local_vars.insert("usr".to_owned(), Analysis::from_static_type(objtree.expect("/mob")).into());
-        if !ty.is_root() {
-            local_vars.insert("src".to_owned(), Analysis::from_static_type(ty).into());
-        }
-        local_vars.insert("global".to_owned(), Analysis {
-            static_ty: StaticType::Type(objtree.root()),
-            aset: assumption_set![Assumption::IsNull(false)],
-            value: None,
-            fix_hint: None,
-        }.into());
-
         AnalyzeProc {
             env,
             context,
             objtree,
             ty,
             proc_ref,
-            local_vars,
             calls_parent: false,
         }
     }
 
     pub fn run(&mut self, block: &'o [Spanned<Statement>]) {
+        let mut local_vars = HashMap::<String, LocalVar>::new();
+        local_vars.insert(".".to_owned(), Analysis::empty().into());
+        local_vars.insert("args".to_owned(), Analysis::from_static_type(self.objtree.expect("/list")).into());
+        local_vars.insert("usr".to_owned(), Analysis::from_static_type(self.objtree.expect("/mob")).into());
+        if !self.ty.is_root() {
+            local_vars.insert("src".to_owned(), Analysis::from_static_type(self.ty).into());
+        }
+        local_vars.insert("global".to_owned(), Analysis {
+            static_ty: StaticType::Type(self.objtree.root()),
+            aset: assumption_set![Assumption::IsNull(false)],
+            value: None,
+            fix_hint: None,
+        }.into());
+
         for param in self.proc_ref.get().parameters.iter() {
             let analysis = self.static_type(param.location, &param.var_type.type_path);
-            self.local_vars.insert(param.name.to_owned(), LocalVar {
+            local_vars.insert(param.name.to_owned(), LocalVar {
                 location: self.proc_ref.location,
                 analysis,
             });
         }
-        self.visit_block(block);
+        self.visit_block(block, &mut local_vars);
 
         if self.proc_ref.parent_proc().is_some() {
             if let Some((proc, must_not, location)) = self.env.must_not_override.get_self_or_parent(self.proc_ref) {
@@ -689,109 +688,118 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
     }
 
-    fn visit_block(&mut self, block: &'o [Spanned<Statement>]) {
+    fn visit_block(&mut self, block: &'o [Spanned<Statement>], local_vars: &mut HashMap<String, LocalVar<'o>>) {
         for stmt in block.iter() {
-            self.visit_statement(stmt.location, &stmt.elem);
+            self.visit_statement(stmt.location, &stmt.elem, local_vars);
         }
     }
 
-    fn visit_statement(&mut self, location: Location, statement: &'o Statement) {
+    fn visit_statement(&mut self, location: Location, statement: &'o Statement, local_vars: &mut HashMap<String, LocalVar<'o>>) {
         match statement {
-            Statement::Expr(expr) => { self.visit_expression(location, expr, None); },
+            Statement::Expr(expr) => { self.visit_expression(location, expr, None, local_vars); },
             Statement::Return(Some(expr)) => {
                 // TODO: factor in the previous return type if there was one
-                let return_type = self.visit_expression(location, expr, None);
-                self.local_vars.get_mut(".").unwrap().analysis = return_type;
+                let return_type = self.visit_expression(location, expr, None, local_vars);
+                local_vars.get_mut(".").unwrap().analysis = return_type;
                 // TODO: break out of the analysis for this branch?
             },
             Statement::Return(None) => {},
-            Statement::Throw(expr) => { self.visit_expression(location, expr, None); },
+            Statement::Throw(expr) => { self.visit_expression(location, expr, None, local_vars); },
             Statement::While { condition, block } => {
-                self.visit_expression(location, condition, None);
-                self.visit_block(block);
+                let mut scoped_locals = local_vars.clone();
+                self.visit_expression(location, condition, None, &mut scoped_locals);
+                self.visit_block(block, &mut scoped_locals);
             },
             Statement::DoWhile { block, condition } => {
-                self.visit_block(block);
-                self.visit_expression(location, condition, None);
+                let mut scoped_locals = local_vars.clone();
+                self.visit_block(block, &mut scoped_locals);
+                self.visit_expression(location, condition, None, &mut scoped_locals);
             },
             Statement::If { arms, else_arm } => {
                 for (condition, ref block) in arms.iter() {
-                    self.visit_expression(condition.location, &condition.elem, None);
-                    self.visit_block(block);
+                    let mut scoped_locals = local_vars.clone();
+                    self.visit_expression(condition.location, &condition.elem, None, &mut scoped_locals);
+                    self.visit_block(block, &mut scoped_locals);
                 }
                 if let Some(else_arm) = else_arm {
-                    self.visit_block(else_arm);
+                    self.visit_block(else_arm, &mut local_vars.clone());
                 }
             },
             Statement::ForLoop { init, test, inc, block } => {
+                let mut scoped_locals = local_vars.clone();
                 if let Some(init) = init {
-                    self.visit_statement(location, init);
+                    self.visit_statement(location, init, &mut scoped_locals);
                 }
                 if let Some(test) = test {
-                    self.visit_expression(location, test, None);
+                    self.visit_expression(location, test, None, &mut scoped_locals);
                 }
                 if let Some(inc) = inc {
-                    self.visit_statement(location, inc);
+                    self.visit_statement(location, inc, &mut scoped_locals);
                 }
-                self.visit_block(block);
+                self.visit_block(block, &mut scoped_locals);
             },
             Statement::ForList { in_list, block, var_type, name, .. } => {
+                let mut scoped_locals = local_vars.clone();
                 if let Some(in_list) = in_list {
-                    self.visit_expression(location, in_list, None);
+                    self.visit_expression(location, in_list, None, &mut scoped_locals);
                 }
                 if let Some(var_type) = var_type {
-                    self.visit_var(location, var_type, name, None);
+                    self.visit_var(location, var_type, name, None, &mut scoped_locals);
                 }
-                self.visit_block(block);
+                self.visit_block(block, &mut scoped_locals);
             },
             Statement::ForRange { var_type, name, start, end, step, block } => {
-                self.visit_expression(location, end, None);
+                let mut scoped_locals = local_vars.clone();
+                self.visit_expression(location, end, None, &mut scoped_locals);
                 if let Some(step) = step {
-                    self.visit_expression(location, step, None);
+                    self.visit_expression(location, step, None, &mut scoped_locals);
                 }
                 if let Some(var_type) = var_type {
-                    self.visit_var(location, var_type, name, Some(start));
+                    self.visit_var(location, var_type, name, Some(start), &mut scoped_locals);
                 }
-                self.visit_block(block);
+                self.visit_block(block, &mut scoped_locals);
             },
-            Statement::Var(var) => self.visit_var_stmt(location, var),
+            Statement::Var(var) => self.visit_var_stmt(location, var, local_vars),
             Statement::Vars(vars) => {
                 for each in vars.iter() {
-                    self.visit_var_stmt(location, each);
+                    self.visit_var_stmt(location, each, local_vars);
                 }
             },
             Statement::Setting { .. } => {},
             Statement::Spawn { delay, block } => {
+                let mut scoped_locals = local_vars.clone();
                 if let Some(delay) = delay {
-                    self.visit_expression(location, delay, None);
+                    self.visit_expression(location, delay, None, &mut scoped_locals);
                 }
-                self.visit_block(block);
+                self.visit_block(block, &mut scoped_locals);
             },
             Statement::Switch { input, cases, default } => {
-                self.visit_expression(location, input, None);
+                self.visit_expression(location, input, None, local_vars);
                 for &(ref case, ref block) in cases.iter() {
+                    let mut scoped_locals = local_vars.clone();
                     for case_part in case.iter() {
                         match case_part {
-                            dm::ast::Case::Exact(expr) => { self.visit_expression(location, expr, None); },
+                            dm::ast::Case::Exact(expr) => { self.visit_expression(location, expr, None, &mut scoped_locals); },
                             dm::ast::Case::Range(start, end) => {
-                                self.visit_expression(location, start, None);
-                                self.visit_expression(location, end, None);
+                                self.visit_expression(location, start, None, &mut scoped_locals);
+                                self.visit_expression(location, end, None, &mut scoped_locals);
                             }
                         }
                     }
-                    self.visit_block(block);
+                    self.visit_block(block, &mut scoped_locals);
                 }
                 if let Some(default) = default {
-                    self.visit_block(default);
+                    self.visit_block(default, &mut local_vars.clone());
                 }
             },
             Statement::TryCatch { try_block, catch_params, catch_block } => {
-                self.visit_block(try_block);
+                self.visit_block(try_block, &mut local_vars.clone());
                 if catch_params.len() > 1 {
                     error(location, format!("Expected 0 or 1 catch parameters, got {}", catch_params.len()))
                         .set_severity(Severity::Warning)
                         .register(self.context);
                 }
+                let mut catch_locals = local_vars.clone();
                 for caught in catch_params.iter() {
                     let (var_name, mut type_path) = match caught.split_last() {
                         Some(x) => x,
@@ -802,38 +810,38 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         _ => {}
                     }
                     let var_type: VarType = type_path.iter().map(ToOwned::to_owned).collect();
-                    self.visit_var(location, &var_type, var_name, None);
+                    self.visit_var(location, &var_type, var_name, None, &mut catch_locals);
                 }
-                self.visit_block(catch_block);
+                self.visit_block(catch_block, &mut catch_locals);
             },
             Statement::Continue(_) => {},
             Statement::Break(_) => {},
             Statement::Goto(_) => {},
-            Statement::Label { name: _, block } => self.visit_block(block),
-            Statement::Del(expr) => { self.visit_expression(location, expr, None); },
+            Statement::Label { name: _, block } => self.visit_block(block, &mut local_vars.clone()),
+            Statement::Del(expr) => { self.visit_expression(location, expr, None, local_vars); },
         }
     }
 
-    fn visit_var_stmt(&mut self, location: Location, var: &'o VarStatement) {
-        self.visit_var(location, &var.var_type, &var.name, var.value.as_ref())
+    fn visit_var_stmt(&mut self, location: Location, var: &'o VarStatement, local_vars: &mut HashMap<String, LocalVar<'o>>) {
+        self.visit_var(location, &var.var_type, &var.name, var.value.as_ref(), local_vars)
     }
 
-    fn visit_var(&mut self, location: Location, var_type: &VarType, name: &str, value: Option<&'o Expression>) {
+    fn visit_var(&mut self, location: Location, var_type: &VarType, name: &str, value: Option<&'o Expression>, local_vars: &mut HashMap<String, LocalVar<'o>>) {
         // Calculate type hint
         let static_type = self.env.static_type(location, &var_type.type_path);
 
         // Visit the expression if it's there
         let mut analysis = match value {
-            Some(ref expr) => self.visit_expression(location, expr, static_type.basic_type()),
+            Some(ref expr) => self.visit_expression(location, expr, static_type.basic_type(), local_vars),
             None => Analysis::null(),
         };
         analysis.static_ty = static_type;
 
         // Save var to locals
-        self.local_vars.insert(name.to_owned(), LocalVar { location, analysis });
+        local_vars.insert(name.to_owned(), LocalVar { location, analysis });
     }
 
-    fn visit_expression(&mut self, location: Location, expression: &'o Expression, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
+    fn visit_expression(&mut self, location: Location, expression: &'o Expression, type_hint: Option<TypeRef<'o>>, local_vars: &mut HashMap<String, LocalVar<'o>>) -> Analysis<'o> {
         match expression {
             Expression::Base { unary, term, follow } => {
                 let base_type_hint = if follow.is_empty() && unary.is_empty() {
@@ -841,12 +849,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 } else {
                     None
                 };
-                let mut ty = self.visit_term(term.location, &term.elem, base_type_hint);
+                let mut ty = self.visit_term(term.location, &term.elem, base_type_hint, local_vars);
                 for each in follow.iter() {
-                    ty = self.visit_follow(each.location, ty, &each.elem);
+                    ty = self.visit_follow(each.location, ty, &each.elem, local_vars);
                 }
                 for each in unary.iter().rev() {
-                    ty = self.visit_unary(ty, each, location);
+                    ty = self.visit_unary(ty, each, location, local_vars);
                 }
                 ty
             },
@@ -888,38 +896,38 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                             .register(self.context);
                     },
                 };
-                let lty = self.visit_expression(location, lhs, None);
-                let rty = self.visit_expression(location, rhs, None);
+                let lty = self.visit_expression(location, lhs, None, local_vars);
+                let rty = self.visit_expression(location, rhs, None, local_vars);
                 self.visit_binary(lty, rty, BinaryOp::In)
             },
             Expression::BinaryOp { op: BinaryOp::Or, lhs, rhs } => {
                 // It appears that DM does this in more cases than this, but
                 // this is the only case I've seen it used in the wild.
                 // ex: var/datum/cache_entry/E = cache[key] || new
-                let lty = self.visit_expression(location, lhs, type_hint);
-                let rty = self.visit_expression(location, rhs, type_hint);
+                let lty = self.visit_expression(location, lhs, type_hint, local_vars);
+                let rty = self.visit_expression(location, rhs, type_hint, local_vars);
                 self.visit_binary(lty, rty, BinaryOp::Or)
             },
             Expression::BinaryOp { op, lhs, rhs } => {
-                let lty = self.visit_expression(location, lhs, None);
-                let rty = self.visit_expression(location, rhs, None);
+                let lty = self.visit_expression(location, lhs, None, local_vars);
+                let rty = self.visit_expression(location, rhs, None, local_vars);
                 self.visit_binary(lty, rty, *op)
             },
             Expression::AssignOp { lhs, rhs, .. } => {
-                let lhs = self.visit_expression(location, lhs, None);
-                self.visit_expression(location, rhs, lhs.static_ty.basic_type())
+                let lhs = self.visit_expression(location, lhs, None, local_vars);
+                self.visit_expression(location, rhs, lhs.static_ty.basic_type(), local_vars)
             },
             Expression::TernaryOp { cond, if_, else_ } => {
                 // TODO: be sensible
-                self.visit_expression(location, cond, None);
-                let ty = self.visit_expression(location, if_, type_hint);
-                self.visit_expression(location, else_, type_hint);
+                self.visit_expression(location, cond, None, local_vars);
+                let ty = self.visit_expression(location, if_, type_hint, local_vars);
+                self.visit_expression(location, else_, type_hint, local_vars);
                 ty
             }
         }
     }
 
-    fn visit_term(&mut self, location: Location, term: &'o Term, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
+    fn visit_term(&mut self, location: Location, term: &'o Term, type_hint: Option<TypeRef<'o>>, local_vars: &mut HashMap<String, LocalVar<'o>>) -> Analysis<'o> {
         match term {
             Term::Null => Analysis::null(),
             Term::Int(number) => Analysis::from_value(self.objtree, Constant::from(*number), type_hint),
@@ -929,7 +937,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Term::As(_) => assumption_set![Assumption::IsNum(true)].into(),
 
             Term::Ident(unscoped_name) => {
-                if let Some(var) = self.local_vars.get(unscoped_name) {
+                if let Some(var) = local_vars.get(unscoped_name) {
                     return var.analysis.clone()
                         .with_fix_hint(var.location, "add additional type info here")
                 }
@@ -943,7 +951,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
             },
 
-            Term::Expr(expr) => self.visit_expression(location, expr, type_hint),
+            Term::Expr(expr) => self.visit_expression(location, expr, type_hint, local_vars),
             Term::Prefab(prefab) => {
                 if let Some(nav) = self.ty.navigate_path(&prefab.path) {
                     let ty = nav.ty();  // TODO: handle proc/verb paths here
@@ -963,7 +971,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Term::InterpString(_, parts) => {
                 for (ref expr, _) in parts.iter() {
                     if let Some(expr) = expr {
-                        self.visit_expression(location, expr, None);
+                        self.visit_expression(location, expr, None, local_vars);
                     }
                 }
                 assumption_set![Assumption::IsText(true)].into()
@@ -972,7 +980,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Term::Call(unscoped_name, args) => {
                 let src = self.ty;
                 if let Some(proc) = self.ty.get_proc(unscoped_name) {
-                    self.visit_call(location, src, proc, args, false)
+                    self.visit_call(location, src, proc, args, false, local_vars)
                 } else if unscoped_name == "SpacemanDMM_unlint" {
                     // Escape hatch for cases like `src` in macros used in
                     // global procs.
@@ -980,7 +988,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 } else if unscoped_name == "SpacemanDMM_debug" {
                     eprintln!("SpacemanDMM_debug:");
                     for arg in args {
-                        eprintln!("    {:?}", self.visit_expression(location, arg, None));
+                        eprintln!("    {:?}", self.visit_expression(location, arg, None, local_vars));
                     }
                     Analysis::empty()
                 } else {
@@ -993,7 +1001,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 let src = self.ty;
                 let proc = self.proc_ref;
                 // Self calls are exact, and won't ever call an override.
-                self.visit_call(location, src, proc, args, true)
+                self.visit_call(location, src, proc, args, true, local_vars)
             },
             Term::ParentCall(args) => {
                 self.calls_parent = true;
@@ -1001,7 +1009,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     // TODO: if args are empty, call w/ same args
                     let src = self.ty;
                     // Parent calls are exact, and won't ever call an override.
-                    self.visit_call(location, src, proc, args, true)
+                    self.visit_call(location, src, proc, args, true, local_vars)
                 } else {
                     error(location, format!("proc has no parent: {}", self.proc_ref))
                         .register(self.context);
@@ -1043,7 +1051,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                             args.as_ref().map_or(&[], |v| &v[..]),
                             // New calls are exact: `new /datum()` will always call
                             // `/datum/New()` and never an override.
-                            true);
+                            true,
+                            local_vars);
                     } else if typepath.path != "/list" {
                         error(location, format!("couldn't find {}/proc/New", typepath.path))
                             .register(self.context);
@@ -1054,14 +1063,14 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
             },
             Term::List(args) => {
-                self.visit_arguments(location, args);
+                self.visit_arguments(location, args, local_vars);
                 assumption_set![Assumption::IsType(true, self.objtree.expect("/list"))].into()
             },
             Term::Input { args, input_type, in_list } => {
                 // TODO: deal with in_list
-                self.visit_arguments(location, args);
+                self.visit_arguments(location, args, local_vars);
                 if let Some(ref expr) = in_list {
-                    self.visit_expression(location, expr, None);
+                    self.visit_expression(location, expr, None, local_vars);
                 }
 
                 let without_null = *input_type - InputType::NULL;
@@ -1089,9 +1098,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
             },
             Term::Locate { args, in_list } => {
-                self.visit_arguments(location, args);
+                self.visit_arguments(location, args, local_vars);
                 if let Some(ref expr) = in_list {
-                    self.visit_expression(location, expr, None);
+                    self.visit_expression(location, expr, None, local_vars);
                 }
 
                 if args.len() == 3 {  // X,Y,Z - it's gotta be a turf
@@ -1103,23 +1112,23 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Term::Pick(choices) => {
                 for (weight, choice) in choices.iter() {
                     if let Some(ref weight) = weight {
-                        self.visit_expression(location, weight, None);
+                        self.visit_expression(location, weight, None, local_vars);
                     }
-                    self.visit_expression(location, choice, None);
+                    self.visit_expression(location, choice, None, local_vars);
                 }
 
                 // TODO: common superset of all choices
                 Analysis::empty()
             },
             Term::DynamicCall(lhs_args, rhs_args) => {
-                self.visit_arguments(location, lhs_args);
-                self.visit_arguments(location, rhs_args);
+                self.visit_arguments(location, lhs_args, local_vars);
+                self.visit_arguments(location, rhs_args, local_vars);
                 Analysis::empty()  // TODO
             },
         }
     }
 
-    fn visit_follow(&mut self, location: Location, lhs: Analysis<'o>, rhs: &'o Follow) -> Analysis<'o> {
+    fn visit_follow(&mut self, location: Location, lhs: Analysis<'o>, rhs: &'o Follow, local_vars: &mut HashMap<String, LocalVar<'o>>) -> Analysis<'o> {
         match rhs {
             Follow::Field(IndexKind::Colon, _) => Analysis::empty(),
             Follow::Field(IndexKind::SafeColon, _) => Analysis::empty(),
@@ -1138,13 +1147,13 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                             _ => {},
                         }
                     }
-                    self.visit_expression(location, argument_value, None);
+                    self.visit_expression(location, argument_value, None, local_vars);
                 }
                 Analysis::empty()
             },
 
             Follow::Index(expr) => {
-                self.visit_expression(location, expr, None);
+                self.visit_expression(location, expr, None, local_vars);
                 // TODO: differentiate between L[1] and L[non_numeric_key]
                 match lhs.static_ty {
                     StaticType::List { keys, .. } => {
@@ -1179,7 +1188,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Follow::Call(kind, name, arguments) => {
                 if let Some(ty) = lhs.static_ty.basic_type() {
                     if let Some(proc) = ty.get_proc(name) {
-                        self.visit_call(location, ty, proc, arguments, false)
+                        self.visit_call(location, ty, proc, arguments, false, local_vars)
                     } else {
                         error(location, format!("undefined proc: {:?} on {}", name, ty))
                             .register(self.context);
@@ -1198,7 +1207,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     }
 
     // checks operatorX overloads on types
-    fn check_operator_overload(&mut self, rhs: Analysis<'o>, location: Location, operator: &str) -> Analysis<'o> {
+    fn check_operator_overload(&mut self, rhs: Analysis<'o>, location: Location, operator: &str, local_vars: &mut HashMap<String, LocalVar<'o>>) -> Analysis<'o> {
         let typeerror;
         match rhs.static_ty {
             StaticType::None => {
@@ -1207,7 +1216,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             StaticType::Type(typeref) => {
                 // Its been overloaded, assume they really know they want to do this
                 if let Some(proc) = typeref.get_proc(&format!("operator{}",operator)) {
-                    return self.visit_call(location, typeref, proc, &[], true)
+                    return self.visit_call(location, typeref, proc, &[], true, local_vars)
                 }
                 typeerror = typeref.get().pretty_path();
             },
@@ -1221,12 +1230,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         return Analysis::empty()
     }
 
-    fn visit_unary(&mut self, rhs: Analysis<'o>, op: &UnaryOp, location: Location) -> Analysis<'o> {
+    fn visit_unary(&mut self, rhs: Analysis<'o>, op: &UnaryOp, location: Location, local_vars: &mut HashMap<String, LocalVar<'o>>) -> Analysis<'o> {
         match op {
             // !x just evaluates the "truthiness" of x and negates it, returning 1 or 0
             UnaryOp::Not => Analysis::from(assumption_set![Assumption::IsNum(true)]),
-            UnaryOp::PreIncr | UnaryOp::PostIncr => self.check_operator_overload(rhs, location, "++"),
-            UnaryOp::PreDecr | UnaryOp::PostDecr => self.check_operator_overload(rhs, location, "--"),
+            UnaryOp::PreIncr | UnaryOp::PostIncr => self.check_operator_overload(rhs, location, "++", local_vars),
+            UnaryOp::PreDecr | UnaryOp::PostDecr => self.check_operator_overload(rhs, location, "--", local_vars),
             /*
             (UnaryOp::Neg, Type::Number) => Type::Number.into(),
             (UnaryOp::BitNot, Type::Number) => Type::Number.into(),
@@ -1240,7 +1249,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         Analysis::empty()
     }
 
-    fn visit_call(&mut self, location: Location, src: TypeRef<'o>, proc: ProcRef, args: &'o [Expression], is_exact: bool) -> Analysis<'o> {
+    fn visit_call(&mut self, location: Location, src: TypeRef<'o>, proc: ProcRef, args: &'o [Expression], is_exact: bool, local_vars: &mut HashMap<String, LocalVar<'o>>) -> Analysis<'o> {
         // identify and register kwargs used
         let mut any_kwargs_yet = false;
 
@@ -1303,7 +1312,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     .register(self.context);
             }
 
-            let analysis = self.visit_expression(location, argument_value, None);
+            let analysis = self.visit_expression(location, argument_value, None, local_vars);
             if let Some(kw) = this_kwarg {
                 param_name_map.insert(kw.as_str(), analysis);
             } else {
@@ -1335,7 +1344,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
     }
 
-    fn visit_arguments(&mut self, location: Location, args: &'o [Expression]) {
+    fn visit_arguments(&mut self, location: Location, args: &'o [Expression], local_vars: &mut HashMap<String, LocalVar<'o>>) {
         for arg in args {
             let mut argument_value = arg;
             if let Expression::AssignOp { op: AssignOp::Assign, lhs, rhs } = arg {
@@ -1349,7 +1358,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
             }
 
-            self.visit_expression(location, argument_value, None);
+            self.visit_expression(location, argument_value, None, local_vars);
         }
     }
 
