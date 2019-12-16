@@ -22,13 +22,6 @@ impl Default for FileId {
     }
 }
 
-impl FileId {
-    #[inline]
-    pub fn builtins() -> FileId {
-        FILEID_BUILTINS
-    }
-}
-
 /// A diagnostics context, tracking loaded files and any observed errors.
 #[derive(Debug, Default)]
 pub struct Context {
@@ -202,7 +195,7 @@ pub struct Location {
 
 impl Location {
     pub fn builtins() -> Location {
-        Location { file: FileId::builtins(), line: 1, column: 1 }
+        Location { file: FILEID_BUILTINS, line: 1, column: 1 }
     }
 
     /// Pack this Location for use in `u64`-keyed structures.
@@ -233,7 +226,7 @@ impl Location {
     }
 
     pub fn is_builtins(self) -> bool {
-        self.file == FileId::builtins()
+        self.file == FILEID_BUILTINS
     }
 }
 

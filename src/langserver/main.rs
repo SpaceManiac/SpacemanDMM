@@ -220,7 +220,7 @@ impl<'a> Engine<'a> {
     }
 
     fn location_link(&self, loc: dm::Location) -> Result<String, jsonrpc::Error> {
-        if loc.file == dm::FileId::builtins() {
+        if loc.is_builtins() {
             Ok(String::new())
         } else {
             let mut url = self.file_url(loc.file)?;
@@ -231,7 +231,7 @@ impl<'a> Engine<'a> {
 
     fn convert_location(&self, loc: dm::Location, if_builtin: &[&str]) -> Result<lsp_types::Location, jsonrpc::Error> {
         Ok(lsp_types::Location {
-            uri: if loc.file == dm::FileId::builtins() {
+            uri: if loc.is_builtins() {
                 Url::parse(&format!("dm://docs/reference.dm#{}", if_builtin.join("")))
                     .map_err(invalid_request)?
             } else {
