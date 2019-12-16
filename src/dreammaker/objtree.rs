@@ -1010,6 +1010,25 @@ impl ObjectTree {
         Ok(())
     }
 
+    pub(crate) fn add_builtin_var(
+        &mut self,
+        elems: &[&'static str],
+        value: Expression,
+    ) -> Result<(), DMError> {
+        self.add_var(
+            Location {
+                file: crate::FileId::builtins(),
+                line: 1,
+                column: 1,
+            },
+            elems.iter().copied(),
+            elems.len() + 1,
+            value,
+            Default::default(),
+            Default::default(),
+        )
+    }
+
     // an entry which is definitely a var because a value is specified
     pub fn add_var<'a, I: Iterator<Item = &'a str>>(
         &mut self,

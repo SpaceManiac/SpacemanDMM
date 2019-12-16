@@ -210,7 +210,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
                 #![allow(unreachable_code)]
                 let elems = [$(stringify!($elem)),*];
                 $(
-                    tree.add_var(location, elems.iter().cloned(), elems.len() + 1, $val, Default::default(), Default::default())?;
+                    tree.add_builtin_var(&elems, $val)?;
                     break;
                 )*
                 $(
