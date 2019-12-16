@@ -349,13 +349,13 @@ enum LoopContext {
 ///
 /// Results are accumulated into an inner `ObjectTree`. To parse an entire
 /// environment, use the `parse` or `parse_environment` functions.
-pub struct Parser<'ctx, 'an, I> {
+pub struct Parser<'ctx, 'an, 'inp> {
     context: &'ctx Context,
     annotations: Option<&'an mut AnnotationTree>,
     tree: ObjectTree,
     fatal_errored: bool,
 
-    input: I,
+    input: Box<dyn Iterator<Item=LocatedToken> + 'inp>,
     eof: bool,
     next: Option<Token>,
     location: Location,
@@ -371,25 +371,22 @@ pub struct Parser<'ctx, 'an, I> {
     procs_good: u64,
 }
 
-impl<'ctx, 'an, I> HasLocation for Parser<'ctx, 'an, I> {
+impl<'ctx, 'an, 'inp> HasLocation for Parser<'ctx, 'an, 'inp> {
     fn location(&self) -> Location {
         self.location
     }
 }
 
-impl<'ctx, 'an, I> Parser<'ctx, 'an, I>
-where
-    I: Iterator<Item=LocatedToken>,
-{
+impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     /// Construct a new parser using the given input stream.
-    pub fn new(context: &'ctx Context, input: I) -> Parser<I> {
+    pub fn new<I: IntoIterator<Item=LocatedToken> + 'inp>(context: &'ctx Context, input: I) -> Self {
         Parser {
             context,
             annotations: None,
             tree: ObjectTree::default(),
             fatal_errored: false,
 
-            input,
+            input: Box::new(input.into_iter()),
             eof: false,
             next: None,
             location: Default::default(),
@@ -851,7 +848,7 @@ where
 
                 let code = if self.procs {
                     let result = {
-                        let mut subparser: Parser<'ctx, '_, _> = Parser::new(self.context, body_tt.into_iter());
+                        let mut subparser: Parser<'ctx, '_, '_> = Parser::new(self.context, body_tt);
                         if let Some(a) = self.annotations.as_mut() {
                             subparser.annotations = Some(&mut *a);
                         }
