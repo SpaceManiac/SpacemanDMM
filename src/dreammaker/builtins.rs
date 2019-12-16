@@ -2,7 +2,7 @@
 
 use super::objtree::*;
 use super::ast::*;
-use super::{Location, FileId, DMError};
+use super::{Location, DMError};
 use super::preprocessor::{DefineMap, Define};
 
 const DM_VERSION: i32 = 513;
@@ -197,13 +197,6 @@ pub fn default_defines(defines: &mut DefineMap) {
 
 /// Register BYOND builtins into the specified object tree.
 pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
-    let location = Location {
-        file: FileId::builtins(),
-        line: 1,
-        column: 1,
-    };
-    let _context = crate::Context::default();
-
     macro_rules! entries {
         ($($($elem:ident)/ * $(($($arg:ident $(= $ignored:expr)*),*))* $(= $val:expr)*;)*) => {
             $(loop {
@@ -214,7 +207,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
                     break;
                 )*
                 $(
-                    tree.add_builtin_proc(&_context, &elems, &[$(stringify!($arg)),*])?;
+                    tree.add_builtin_proc(&elems, &[$(stringify!($arg)),*])?;
                     break;
                 )*
                 tree.add_builtin_entry(&elems)?;

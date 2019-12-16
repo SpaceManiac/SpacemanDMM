@@ -1029,11 +1029,7 @@ impl ObjectTree {
         value: Expression,
     ) -> Result<(), DMError> {
         self.add_var(
-            Location {
-                file: crate::FileId::builtins(),
-                line: 1,
-                column: 1,
-            },
+            Location::builtins(),
             elems.iter().copied(),
             elems.len() + 1,
             value,
@@ -1064,17 +1060,12 @@ impl ObjectTree {
 
     pub(crate) fn add_builtin_proc(
         &mut self,
-        context: &Context,
         elems: &[&'static str],
         params: &[&'static str],
     ) -> Result<(), DMError> {
         self.add_proc(
-            context,
-            Location {
-                file: crate::FileId::builtins(),
-                line: 1,
-                column: 1,
-            },
+            &Default::default(),
+            Location::builtins(),
             elems.iter().copied(),
             elems.len() + 1,
             params.iter().copied().map(|param| Parameter { name: param.into(), .. Default::default() }).collect(),
