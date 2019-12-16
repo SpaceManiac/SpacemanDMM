@@ -316,6 +316,10 @@ pub struct AnalyzeObjectTree<'o> {
     must_not_override: HashMap<ProcRef<'o>, (bool, Location)>,
     // Debug(ProcRef) -> KwargInfo
     used_kwargs: BTreeMap<String, KwargInfo>,
+
+    call_tree: HashMap<ProcRef<'o>, HashSet<ProcRef<'o>>>,
+
+    sleeping_procs: HashSet<ProcRef<'o>>,
 }
 
 impl<'o> AnalyzeObjectTree<'o> {
@@ -330,6 +334,8 @@ impl<'o> AnalyzeObjectTree<'o> {
             must_call_parent: Default::default(),
             must_not_override: Default::default(),
             used_kwargs: Default::default(),
+            call_tree: Default::default(),
+            sleeping_procs: Default::default(),
         }
     }
 
@@ -604,6 +610,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 analysis,
             });
         }
+
+        self.env.call_tree.insert(self.proc_ref, Default::default());
+
         self.visit_block(block);
 
         if self.proc_ref.parent_proc().is_some() {
@@ -908,6 +917,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
 
             Term::Call(unscoped_name, args) => {
+                if unscoped_name == "sleep" {
+                    self.env.sleeping_procs.insert(self.proc_ref);
+                }
                 let src = self.ty;
                 if let Some(proc) = self.ty.get_proc(unscoped_name) {
                     self.visit_call(location, src, proc, args, false)
@@ -995,6 +1007,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 assumption_set![Assumption::IsType(true, self.objtree.expect("/list"))].into()
             },
             Term::Input { args, input_type, in_list } => {
+                self.env.sleeping_procs.insert(self.proc_ref);
                 // TODO: deal with in_list
                 self.visit_arguments(location, args);
                 if let Some(ref expr) = in_list {
@@ -1133,7 +1146,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     }
 
     // checks operatorX overloads on types
-    fn check_operator_overload(&mut self, rhs: Analysis<'o>, location: Location, operator: &str) -> Analysis<'o> {
+    fn check_operator_overload(&mut self, rhs: Analysis<'o>, location: Location, operator: &'o str) -> Analysis<'o> {
         let typeerror;
         match rhs.static_ty {
             StaticType::None => {
@@ -1141,7 +1154,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             StaticType::Type(typeref) => {
                 // Its been overloaded, assume they really know they want to do this
-                if let Some(proc) = typeref.get_proc(&format!("operator{}",operator)) {
+                if let Some(proc) = typeref.get_proc(operator) {
                     return self.visit_call(location, typeref, proc, &[], true)
                 }
                 typeerror = typeref.get().pretty_path();
@@ -1150,7 +1163,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 typeerror = "list";
             },
         };
-        error(location, format!("Attempting {} on a {} which does not overload operator{}", operator, typeerror, operator))
+        error(location, format!("Attempting {} on a {} which does not overload {}", operator, typeerror, operator))
             .register(self.context);
         return Analysis::empty()
     }
@@ -1159,8 +1172,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         match op {
             // !x just evaluates the "truthiness" of x and negates it, returning 1 or 0
             UnaryOp::Not => Analysis::from(assumption_set![Assumption::IsNum(true)]),
-            UnaryOp::PreIncr | UnaryOp::PostIncr => self.check_operator_overload(rhs, location, "++"),
-            UnaryOp::PreDecr | UnaryOp::PostDecr => self.check_operator_overload(rhs, location, "--"),
+            UnaryOp::PreIncr | UnaryOp::PostIncr => self.check_operator_overload(rhs, location, "operator++"),
+            UnaryOp::PreDecr | UnaryOp::PostDecr => self.check_operator_overload(rhs, location, "operator--"),
             /*
             (UnaryOp::Neg, Type::Number) => Type::Number.into(),
             (UnaryOp::BitNot, Type::Number) => Type::Number.into(),
@@ -1174,7 +1187,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         Analysis::empty()
     }
 
-    fn visit_call(&mut self, location: Location, src: TypeRef<'o>, proc: ProcRef, args: &'o [Expression], is_exact: bool) -> Analysis<'o> {
+    fn visit_call(&mut self, location: Location, src: TypeRef<'o>, proc: ProcRef<'o>, args: &'o [Expression], is_exact: bool) -> Analysis<'o> {
+        if let Some(callhashset) = self.env.call_tree.get_mut(&self.proc_ref) {
+            callhashset.insert(proc);
+        }
         // identify and register kwargs used
         let mut any_kwargs_yet = false;
 
