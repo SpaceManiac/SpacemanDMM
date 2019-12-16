@@ -989,6 +989,19 @@ impl ObjectTree {
         Ok((len, proc.value.last_mut().unwrap()))
     }
 
+    pub(crate) fn add_builtin_entry(
+        &mut self,
+        elems: &[&'static str],
+    ) -> Result<(), DMError> {
+        self.add_entry(
+            Location::builtins(),
+            elems.iter().cloned(),
+            elems.len() + 1,
+            Default::default(),
+            Default::default(),
+        )
+    }
+
     // an entry which may be anything depending on the path
     pub fn add_entry<'a, I: Iterator<Item = &'a str>>(
         &mut self,

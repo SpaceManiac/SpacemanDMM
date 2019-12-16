@@ -217,7 +217,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
                     tree.add_builtin_proc(&_context, &elems, &[$(stringify!($arg)),*])?;
                     break;
                 )*
-                tree.add_entry(location, elems.iter().cloned(), elems.len() + 1, Default::default(), Default::default())?;
+                tree.add_builtin_entry(&elems)?;
                 break;
             })*
         }
