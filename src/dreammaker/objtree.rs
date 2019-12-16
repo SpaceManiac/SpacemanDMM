@@ -1030,6 +1030,27 @@ impl ObjectTree {
         }
     }
 
+    pub(crate) fn add_builtin_proc(
+        &mut self,
+        context: &Context,
+        elems: &[&'static str],
+        params: &[&'static str],
+    ) -> Result<(), DMError> {
+        self.add_proc(
+            context,
+            Location {
+                file: crate::FileId::builtins(),
+                line: 1,
+                column: 1,
+            },
+            elems.iter().copied(),
+            elems.len() + 1,
+            params.iter().copied().map(|param| Parameter { name: param.into(), .. Default::default() }).collect(),
+            Code::Builtin,
+        )?;
+        Ok(())
+    }
+
     // an entry which is definitely a proc because an argument list is specified
     pub fn add_proc<'a, I: Iterator<Item = &'a str>>(
         &mut self,
