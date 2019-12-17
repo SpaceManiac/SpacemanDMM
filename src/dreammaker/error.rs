@@ -230,6 +230,12 @@ impl Location {
     }
 }
 
+impl fmt::Display for Location {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+
+    }
+}
+
 /// A trait for types which may yield location information.
 pub(crate) trait HasLocation {
     /// Get the current location of this parsing stage.
