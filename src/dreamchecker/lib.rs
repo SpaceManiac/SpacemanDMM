@@ -9,7 +9,7 @@ use dm::objtree::{ObjectTree, TypeRef, ProcRef};
 use dm::constants::{Constant, ConstFn};
 use dm::ast::*;
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 mod type_expr;
 use type_expr::TypeExpr;
@@ -384,6 +384,18 @@ pub fn directive_value_to_truthy(expr: &Expression, location: Location) -> Resul
     }
 }
 
+/// An ordered chain of ProcRef calls with their location
+#[derive(Default, Clone)]
+pub struct CallStack<'o> {
+    call_stack: VecDeque<(ProcRef<'o>, Location)>,
+}
+
+impl<'o> CallStack<'o> {
+    pub fn add_step(&mut self, proc: ProcRef<'o>, location: Location) {
+        self.call_stack.push_back((proc, location));
+    }
+}
+
 /// A deeper analysis of an ObjectTree
 pub struct AnalyzeObjectTree<'o> {
     context: &'o Context,
@@ -392,10 +404,11 @@ pub struct AnalyzeObjectTree<'o> {
     return_type: HashMap<ProcRef<'o>, TypeExpr<'o>>,
     must_call_parent: ProcDirective<'o>,
     must_not_override: ProcDirective<'o>,
+    must_not_sleep: ProcDirective<'o>,
     // Debug(ProcRef) -> KwargInfo
     used_kwargs: BTreeMap<String, KwargInfo>,
 
-    call_tree: HashMap<ProcRef<'o>, HashSet<ProcRef<'o>>>,
+    call_tree: HashMap<ProcRef<'o>, Vec<(ProcRef<'o>, Location)>>,
 
     sleeping_procs: HashSet<ProcRef<'o>>,
 }
@@ -411,6 +424,7 @@ impl<'o> AnalyzeObjectTree<'o> {
             return_type,
             must_call_parent: ProcDirective::new("SpacemanDMM_should_call_parent", true),
             must_not_override: ProcDirective::new("SpacemanDMM_should_not_override", false),
+            must_not_sleep: ProcDirective::new("SpacemanDMM_should_not_sleep", false),
             used_kwargs: Default::default(),
             call_tree: Default::default(),
             sleeping_procs: Default::default(),
@@ -442,6 +456,23 @@ impl<'o> AnalyzeObjectTree<'o> {
                 }
             },
             Err(error) => self.context.register_error(error),
+        }
+    }
+
+    pub fn check_proc_call_tree(&mut self) {
+        for procref in self.must_not_sleep.iter() {
+            let mut visited = HashSet::<ProcRef<'o>>::new();
+            let mut to_visit = VecDeque::<(ProcRef<'o>, CallStack)>::new();
+            if let Some(mut procscalled) = self.call_tree.get(procref) {
+                for (proccalled, location) in procscalled {
+                    let mut callstack = CallStack::default();
+                    callstack.add_step(proccalled, location);
+                    to_visit.push_back((proccalled, callstack));
+                }
+            }
+            while !to_visit.is_empty() {
+
+            }
         }
     }
 
