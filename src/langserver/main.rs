@@ -64,6 +64,9 @@ fn main() {
         Err(e) => eprintln!("exe check failure: {}", e),
     }
     eprint!("{}", include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")));
+    #[cfg(extools_bundle)] {
+        eprintln!("extools commit hash: {}", env!("EXTOOLS_COMMIT_HASH"));
+    }
     match std::env::current_dir() {
         Ok(path) => eprintln!("directory: {}", path.display()),
         Err(e) => eprintln!("dir check failure: {}", e),
