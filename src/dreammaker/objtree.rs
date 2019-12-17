@@ -325,7 +325,7 @@ impl<'a> TypeRef<'a> {
     }
 
     /// Find another type relative to this type.
-    pub fn navigate_path<S: AsRef<str>>(self, pieces: &'a [(PathOp, S)]) -> Option<NavigatePathResult<'a>> {
+    pub fn navigate_path<S: AsRef<str>>(self, pieces: &[(PathOp, S)]) -> Option<NavigatePathResult<'a>> {
         let mut next = Some(self);
         if let Some(&(PathOp::Slash, _)) = pieces.first() {
             next = Some(self.tree.root());
@@ -385,10 +385,10 @@ impl<'a> TypeRef<'a> {
         self.get().get_var_declaration(name, self.tree)
     }
 
-    pub fn get_proc(self, name: &'a str) -> Option<ProcRef<'a>> {
+    pub fn get_proc(self, name: &str) -> Option<ProcRef<'a>> {
         let mut current: Option<TypeRef<'a>> = Some(self);
         while let Some(ty) = current {
-            if let Some(proc) = ty.get().procs.get(name) {
+            if let Some((name, proc)) = ty.get().procs.get_key_value(name) {
                 return Some(ProcRef {
                     ty,
                     list: &proc.value,

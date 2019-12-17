@@ -10,11 +10,14 @@ path = "lib.rs"
 [dependencies]
 interval-tree = { path = "../interval-tree" }
 petgraph = { version = "0.4.9", default-features = false }
-linked-hash-map = "0.5.0"
 lodepng = "2.1.5"
 bitflags = "1.0.3"
 termcolor = "1.0.4"
 ordered-float = "1.0.2"
+
+[dependencies.linked-hash-map]
+git = "https://github.com/SpaceManiac/linked-hash-map"
+branch = "get-key-value"
 
 [dev-dependencies]
 walkdir = "2.0.1"

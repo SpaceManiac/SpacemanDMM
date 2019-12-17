@@ -11,10 +11,13 @@ path = "lib.rs"
 inflate = "0.4.1"
 ndarray = "0.13.0"
 rand = "0.7.0"
-linked-hash-map = "0.5.0"
 dreammaker = { path = "../dreammaker" }
 lodepng = "2.1.5"
 bumpalo = "2.6.0"
+
+[dependencies.linked-hash-map]
+git = "https://github.com/SpaceManiac/linked-hash-map"
+branch = "get-key-value"
 
 [dependencies.png]
 version = "0.15.0"
