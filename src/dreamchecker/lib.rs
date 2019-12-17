@@ -9,7 +9,7 @@ use dm::objtree::{ObjectTree, TypeRef, ProcRef};
 use dm::constants::{Constant, ConstFn};
 use dm::ast::*;
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 mod type_expr;
 use type_expr::TypeExpr;
@@ -307,6 +307,17 @@ struct KwargInfo {
     bad_overrides_at: BTreeMap<String, BadOverride>,
 }
 
+#[derive(Default, Clone)]
+pub struct CallStack<'o> {
+    call_stack: VecDeque<(ProcRef<'o>, Location)>,
+}
+
+impl<'o> CallStack<'o> {
+    pub fn add_step(&mut self, proc: ProcRef<'o>, location: Location) {
+        self.call_stack.push_back((proc, location));
+    }
+}
+
 pub struct AnalyzeObjectTree<'o> {
     context: &'o Context,
     objtree: &'o ObjectTree,
@@ -314,10 +325,11 @@ pub struct AnalyzeObjectTree<'o> {
     return_type: HashMap<ProcRef<'o>, TypeExpr<'o>>,
     must_call_parent: HashMap<ProcRef<'o>, (bool, Location)>,
     must_not_override: HashMap<ProcRef<'o>, (bool, Location)>,
+    must_not_sleep: HashSet<ProcRef<'o>>,
     // Debug(ProcRef) -> KwargInfo
     used_kwargs: BTreeMap<String, KwargInfo>,
 
-    call_tree: HashMap<ProcRef<'o>, HashSet<ProcRef<'o>>>,
+    call_tree: HashMap<ProcRef<'o>, Vec<(ProcRef<'o>, Location)>>,
 
     sleeping_procs: HashSet<ProcRef<'o>>,
 }
@@ -333,6 +345,7 @@ impl<'o> AnalyzeObjectTree<'o> {
             return_type,
             must_call_parent: Default::default(),
             must_not_override: Default::default(),
+            must_not_sleep: Default::default(),
             used_kwargs: Default::default(),
             call_tree: Default::default(),
             sleeping_procs: Default::default(),
@@ -341,6 +354,23 @@ impl<'o> AnalyzeObjectTree<'o> {
 
     pub fn check_proc(&mut self, proc: ProcRef<'o>, code: &'o [Spanned<Statement>]) {
         AnalyzeProc::new(self, self.context, self.objtree, proc).run(code)
+    }
+
+    pub fn check_proc_call_tree(&mut self) {
+        for procref in self.must_not_sleep.iter() {
+            let mut visited = HashSet::<ProcRef<'o>>::new();
+            let mut to_visit = VecDeque::<(ProcRef<'o>, CallStack)>::new();
+            if let Some(mut procscalled) = self.call_tree.get(procref) {
+                for (proccalled, location) in procscalled {
+                    let mut callstack = CallStack::default();
+                    callstack.add_step(proccalled, location);
+                    to_visit.push_back((proccalled, callstack));
+                }
+            }
+            while !to_visit.is_empty() {
+
+            }
+        }
     }
 
     pub fn gather_settings(&mut self, proc: ProcRef<'o>, code: &'o [Spanned<Statement>]) {
@@ -366,6 +396,17 @@ impl<'o> AnalyzeObjectTree<'o> {
                         _ => None,
                     } {
                         Some(value) => { self.must_not_override.insert(proc, (value, statement.location)); },
+                        None => error(statement.location, format!("invalid value for {}: {:?}", name, value))
+                            .set_severity(Severity::Warning)
+                            .register(self.context)
+                    }
+                } else if name == "SpacemanDMM_should_not_sleep" {
+                    match match value.as_term() {
+                        Some(Term::Int(1)) => Some(true),
+                        Some(Term::Ident(i)) if i == "TRUE" => Some(true),
+                        _ => None,
+                    } {
+                        Some(_) => { self.must_not_sleep.insert(proc); },
                         None => error(statement.location, format!("invalid value for {}: {:?}", name, value))
                             .set_severity(Severity::Warning)
                             .register(self.context)
@@ -618,6 +659,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         if self.proc_ref.parent_proc().is_some() {
             let mut next = Some(self.proc_ref);
             while let Some(current) = next {
+                if let Some(_) = self.env.must_not_sleep.get(&current) {
+                    self.env.must_not_sleep.insert(self.proc_ref);
+                }
                 if let Some(&(must_not, location)) = self.env.must_not_override.get(&current) {
                     if must_not {
                         error(self.proc_ref.location, format!("proc overrides parent, prohibited by {}", current))
