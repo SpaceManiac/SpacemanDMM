@@ -10,6 +10,7 @@ use dm::constants::{Constant, ConstFn};
 use dm::ast::*;
 
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::fmt;
 
 mod type_expr;
 use type_expr::TypeExpr;
@@ -396,6 +397,15 @@ impl<'o> CallStack<'o> {
     }
 }
 
+impl<'o> fmt::Display for CallStack<'o> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for (call, location) in self.call_stack.iter() {
+            write!(f, "{} called from {:?}\n", call.name(), location)?;
+        }
+        Ok(())
+    }
+}
+
 /// A deeper analysis of an ObjectTree
 pub struct AnalyzeObjectTree<'o> {
     context: &'o Context,
@@ -461,17 +471,40 @@ impl<'o> AnalyzeObjectTree<'o> {
 
     pub fn check_proc_call_tree(&mut self) {
         for procref in self.must_not_sleep.iter() {
+            if let Some(_) = self.sleeping_procs.get(procref) {
+                error(procref.get().location, format!("should_not_sleep proc calls sleep()/input() {}", procref.name()))
+                    .register(self.context)
+            }
             let mut visited = HashSet::<ProcRef<'o>>::new();
             let mut to_visit = VecDeque::<(ProcRef<'o>, CallStack)>::new();
-            if let Some(mut procscalled) = self.call_tree.get(procref) {
+            if let Some(procscalled) = self.call_tree.get(procref) {
                 for (proccalled, location) in procscalled {
                     let mut callstack = CallStack::default();
-                    callstack.add_step(proccalled, location);
-                    to_visit.push_back((proccalled, callstack));
+                    callstack.add_step(*proccalled, *location);
+                    to_visit.push_back((*proccalled, callstack));
                 }
             }
             while !to_visit.is_empty() {
-
+                guard!(let Some((nextproc, callstack)) = to_visit.pop_front() else {
+                    break
+                });
+                if let Some(_) = visited.get(&nextproc) {
+                    continue
+                }
+                visited.insert(nextproc);
+                if let Some(_) = self.sleeping_procs.get(&nextproc) {
+                    error(procref.get().location, format!("should_not_sleep proc calls sleeping proc, {}", callstack))
+                        .register(self.context)
+                } else {
+                    guard!(let Some(calledvec) = self.call_tree.get(&nextproc) else {
+                        continue
+                    });
+                    for (proccalled, location) in calledvec.iter() {
+                        let mut newstack = callstack.clone();
+                        newstack.add_step(*proccalled, *location);
+                        to_visit.push_back((*proccalled, newstack));
+                    }
+                }
             }
         }
     }
@@ -1303,7 +1336,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
     fn visit_call(&mut self, location: Location, src: TypeRef<'o>, proc: ProcRef<'o>, args: &'o [Expression], is_exact: bool) -> Analysis<'o> {
         if let Some(callhashset) = self.env.call_tree.get_mut(&self.proc_ref) {
-            callhashset.insert(proc);
+            callhashset.push((proc, location));
         }
         // identify and register kwargs used
         let mut any_kwargs_yet = false;

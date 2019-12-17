@@ -100,6 +100,10 @@ fn main() {
     println!("Procs analyzed: {}. Errored: {}. Builtins: {}.\n", present, invalid, builtin);
 
     println!("============================================================");
+    println!("Analyzing proc call tree...\n");
+    analyzer.check_proc_call_tree();
+
+    println!("============================================================");
     println!("Analyzing proc override validity...\n");
     tree.root().recurse(&mut |ty| {
         for proc in ty.iter_self_procs() {
