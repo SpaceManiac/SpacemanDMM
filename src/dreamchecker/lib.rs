@@ -431,23 +431,23 @@ impl DMErrorExt for DMError {
 }
 
 #[derive(Default)]
-pub struct SleepingProcs<'o> {
-    sleepers: HashMap<ProcRef<'o>, Vec<(String, Location)>>,
+pub struct ViolatingProcs<'o> {
+    violators: HashMap<ProcRef<'o>, Vec<(String, Location)>>,
 }
 
-impl<'o> SleepingProcs<'o> {
-    pub fn insert_sleeper(&mut self, proc: ProcRef<'o>, builtin: &str, location: Location) {
-        if let Some(vec) = self.sleepers.get_mut(&proc) {
+impl<'o> ViolatingProcs<'o> {
+    pub fn insert_violator(&mut self, proc: ProcRef<'o>, builtin: &str, location: Location) {
+        if let Some(vec) = self.violators.get_mut(&proc) {
             vec.push((builtin.to_string(), location));
         } else {
             let mut newvec = Vec::<(String, Location)>::new();
             newvec.push((builtin.to_string(), location));
-            self.sleepers.insert(proc, newvec);
+            self.violators.insert(proc, newvec);
         }
     }
 
-    pub fn get_sleepers(&self, proc: ProcRef<'o>) -> Option<&Vec<(String, Location)>> {
-        self.sleepers.get(&proc)
+    pub fn get_violators(&self, proc: ProcRef<'o>) -> Option<&Vec<(String, Location)>> {
+        self.violators.get(&proc)
     }
 }
 
@@ -467,7 +467,7 @@ pub struct AnalyzeObjectTree<'o> {
 
     call_tree: HashMap<ProcRef<'o>, Vec<(ProcRef<'o>, Location)>>,
 
-    sleeping_procs: SleepingProcs<'o>,
+    sleeping_procs: ViolatingProcs<'o>,
     impure_procs: HashSet<ProcRef<'o>>,
     waitfor_procs: HashSet<ProcRef<'o>>,
 }
@@ -529,7 +529,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                     .register(self.context);
                 continue
             }
-            if let Some(sleepvec) = self.sleeping_procs.get_sleepers(*procref) {
+            if let Some(sleepvec) = self.sleeping_procs.get_violators(*procref) {
                 error(procref.get().location, format!("{} sets SpacemanDMM_should_not_sleep but calls blocking built-in(s)", procref))
                     .with_blocking_builtins(sleepvec)
                     .register(self.context)
@@ -557,7 +557,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                 if let Some(_) = self.sleep_exempt.get(&nextproc) {
                     continue
                 }
-                if let Some(sleepvec) = self.sleeping_procs.get_sleepers(nextproc) {
+                if let Some(sleepvec) = self.sleeping_procs.get_violators(nextproc) {
                     error(procref.get().location, format!("{} sets SpacemanDMM_should_not_sleep but calls blocking proc {}", procref, nextproc))
                         .with_callstack(callstack)
                         .with_blocking_builtins(sleepvec)
@@ -922,7 +922,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         }
                     }
                 }
-                self.visit_expression(location, expr, None); 
+                self.visit_expression(location, expr, None);
             },
             Statement::Return(Some(expr)) => {
                 // TODO: factor in the previous return type if there was one
@@ -1224,7 +1224,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Term::Call(unscoped_name, args) => {
                 if unscoped_name == "sleep" || unscoped_name == "alert" || unscoped_name == "shell" || unscoped_name == "winexists" || unscoped_name == "winget" {
                     if self.inside_newcontext == 0 {
-                        self.env.sleeping_procs.insert_sleeper(self.proc_ref, unscoped_name, location);
+                        self.env.sleeping_procs.insert_violator(self.proc_ref, unscoped_name, location);
                     }
                 }
                 let src = self.ty;
@@ -1316,7 +1316,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Term::Input { args, input_type, in_list } => {
                 if self.inside_newcontext == 0 {
-                    self.env.sleeping_procs.insert_sleeper(self.proc_ref, "input", location);
+                    self.env.sleeping_procs.insert_violator(self.proc_ref, "input", location);
                 }
                 // TODO: deal with in_list
                 self.visit_arguments(location, args);
