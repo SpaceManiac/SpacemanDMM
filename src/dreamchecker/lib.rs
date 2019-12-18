@@ -10,7 +10,6 @@ use dm::constants::{Constant, ConstFn};
 use dm::ast::*;
 
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
-use std::fmt;
 
 mod type_expr;
 use type_expr::TypeExpr;
@@ -319,12 +318,45 @@ impl<'o> CallStack<'o> {
     }
 }
 
-impl<'o> fmt::Display for CallStack<'o> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for (call, location) in self.call_stack.iter() {
-            write!(f, "{} called from {:?}\n", call.name(), location)?;
+trait DMErrorExt {
+    fn with_callstack(self, stack: CallStack) -> Self;
+    fn with_blocking_builtins(self, blockers: &Vec<(String, Location)>) -> Self;
+}
+
+impl DMErrorExt for DMError {
+    fn with_callstack(mut self, stack: CallStack) -> DMError {
+        for (procref, location) in stack.call_stack.iter() {
+            self.add_note(*location, format!("{}() called here", procref));
         }
-        Ok(())
+        self
+    }
+
+    fn with_blocking_builtins(mut self, blockers: &Vec<(String, Location)>) -> DMError {
+        for (procname, location) in blockers.iter() {
+            self.add_note(*location, format!("{}() called here", procname));
+        }
+        self
+    }
+}
+
+#[derive(Default)]
+pub struct SleepingProcs<'o> {
+    sleepers: HashMap<ProcRef<'o>, Vec<(String, Location)>>,
+}
+
+impl<'o> SleepingProcs<'o> {
+    pub fn insert_sleeper(&mut self, proc: ProcRef<'o>, builtin: &str, location: Location) {
+        if let Some(vec) = self.sleepers.get_mut(&proc) {
+            vec.push((builtin.to_string(), location));
+        } else {
+            let mut newvec = Vec::<(String, Location)>::new();
+            newvec.push((builtin.to_string(), location));
+            self.sleepers.insert(proc, newvec);
+        }
+    }
+
+    pub fn get_sleepers(&self, proc: ProcRef<'o>) -> Option<&Vec<(String, Location)>> {
+        self.sleepers.get(&proc)
     }
 }
 
@@ -336,12 +368,14 @@ pub struct AnalyzeObjectTree<'o> {
     must_call_parent: HashMap<ProcRef<'o>, (bool, Location)>,
     must_not_override: HashMap<ProcRef<'o>, (bool, Location)>,
     must_not_sleep: HashSet<ProcRef<'o>>,
+    sleep_exempt: HashSet<ProcRef<'o>>,
     // Debug(ProcRef) -> KwargInfo
     used_kwargs: BTreeMap<String, KwargInfo>,
 
     call_tree: HashMap<ProcRef<'o>, Vec<(ProcRef<'o>, Location)>>,
 
-    sleeping_procs: HashSet<ProcRef<'o>>,
+    sleeping_procs: SleepingProcs<'o>,
+    waitfor_procs: HashSet<ProcRef<'o>>,
 }
 
 impl<'o> AnalyzeObjectTree<'o> {
@@ -356,9 +390,11 @@ impl<'o> AnalyzeObjectTree<'o> {
             must_call_parent: Default::default(),
             must_not_override: Default::default(),
             must_not_sleep: Default::default(),
+            sleep_exempt: Default::default(),
             used_kwargs: Default::default(),
             call_tree: Default::default(),
             sleeping_procs: Default::default(),
+            waitfor_procs: Default::default(),
         }
     }
 
@@ -368,8 +404,14 @@ impl<'o> AnalyzeObjectTree<'o> {
 
     pub fn check_proc_call_tree(&mut self) {
         for procref in self.must_not_sleep.iter() {
-            if let Some(_) = self.sleeping_procs.get(procref) {
-                error(procref.get().location, format!("should_not_sleep proc calls sleep()/input() {}", procref.name()))
+            if let Some(_) = self.waitfor_procs.get(&procref) {
+                error(procref.get().location, format!("{} sets SpacemanDMM_should_not_sleep but also sets waitfor = 0", procref))
+                    .register(self.context);
+                continue
+            }
+            if let Some(sleepvec) = self.sleeping_procs.get_sleepers(*procref) {
+                error(procref.get().location, format!("{} sets SpacemanDMM_should_not_sleep but calls blocking built-in(s)", procref))
+                    .with_blocking_builtins(sleepvec)
                     .register(self.context)
             }
             let mut visited = HashSet::<ProcRef<'o>>::new();
@@ -389,8 +431,16 @@ impl<'o> AnalyzeObjectTree<'o> {
                     continue
                 }
                 visited.insert(nextproc);
-                if let Some(_) = self.sleeping_procs.get(&nextproc) {
-                    error(procref.get().location, format!("should_not_sleep proc calls sleeping proc, {}", callstack))
+                if let Some(_) = self.waitfor_procs.get(&nextproc) {
+                    continue
+                }
+                if let Some(_) = self.sleep_exempt.get(&nextproc) {
+                    continue
+                }
+                if let Some(sleepvec) = self.sleeping_procs.get_sleepers(nextproc) {
+                    error(procref.get().location, format!("{} sets SpacemanDMM_should_not_sleep but calls blocking proc {}", procref, nextproc))
+                        .with_callstack(callstack)
+                        .with_blocking_builtins(sleepvec)
                         .register(self.context)
                 } else {
                     guard!(let Some(calledvec) = self.call_tree.get(&nextproc) else {
@@ -440,6 +490,17 @@ impl<'o> AnalyzeObjectTree<'o> {
                         _ => None,
                     } {
                         Some(_) => { self.must_not_sleep.insert(proc); },
+                        None => error(statement.location, format!("invalid value for {}: {:?}", name, value))
+                            .set_severity(Severity::Warning)
+                            .register(self.context)
+                    }
+                } else if name == "SpacemanDMM_allowed_to_sleep" {
+                    match match value.as_term() {
+                        Some(Term::Int(1)) => Some(true),
+                        Some(Term::Ident(i)) if i == "TRUE" => Some(true),
+                        _ => None,
+                    } {
+                        Some(_) => { self.sleep_exempt.insert(proc); },
                         None => error(statement.location, format!("invalid value for {}: {:?}", name, value))
                             .set_severity(Severity::Warning)
                             .register(self.context)
@@ -645,6 +706,7 @@ struct AnalyzeProc<'o, 's> {
     proc_ref: ProcRef<'o>,
     local_vars: HashMap<String, LocalVar<'o>>,
     calls_parent: bool,
+    inside_newcontext: u32,
 }
 
 impl<'o, 's> AnalyzeProc<'o, 's> {
@@ -673,6 +735,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             proc_ref,
             local_vars,
             calls_parent: false,
+            inside_newcontext: 0,
         }
     }
 
@@ -739,8 +802,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 self.visit_block(block);
             },
             Statement::DoWhile { block, condition } => {
+                self.inside_newcontext = self.inside_newcontext.wrapping_add(1);
                 self.visit_block(block);
                 self.visit_expression(location, condition, None);
+                self.inside_newcontext = self.inside_newcontext.wrapping_sub(1);
             },
             Statement::If { arms, else_arm } => {
                 for &(ref condition, ref block) in arms.iter() {
@@ -788,12 +853,27 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     self.visit_var_stmt(location, each);
                 }
             },
+            Statement::Setting { name, mode: SettingMode::Assign, value } => {
+                if name != "waitfor" {
+                    return
+                }
+                match match value.as_term() {
+                    Some(Term::Int(0)) => Some(true),
+                    Some(Term::Ident(i)) if i == "FALSE" => Some(true),
+                    _ => None,
+                } {
+                    Some(_) => { self.env.waitfor_procs.insert(self.proc_ref); },
+                    None => (),
+                }
+            },
             Statement::Setting { .. } => {},
             Statement::Spawn { delay, block } => {
+                self.inside_newcontext = self.inside_newcontext.wrapping_add(1);
                 if let Some(delay) = delay {
                     self.visit_expression(location, delay, None);
                 }
                 self.visit_block(block);
+                self.inside_newcontext = self.inside_newcontext.wrapping_sub(1);
             },
             Statement::Switch { input, cases, default } => {
                 self.visit_expression(location, input, None);
@@ -994,8 +1074,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
 
             Term::Call(unscoped_name, args) => {
-                if unscoped_name == "sleep" {
-                    self.env.sleeping_procs.insert(self.proc_ref);
+                if unscoped_name == "sleep" || unscoped_name == "alert" || unscoped_name == "shell" || unscoped_name == "winexists" || unscoped_name == "winget" {
+                    if self.inside_newcontext == 0 {
+                        self.env.sleeping_procs.insert_sleeper(self.proc_ref, unscoped_name, location);
+                    }
                 }
                 let src = self.ty;
                 if let Some(proc) = self.ty.get_proc(unscoped_name) {
@@ -1084,7 +1166,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 assumption_set![Assumption::IsType(true, self.objtree.expect("/list"))].into()
             },
             Term::Input { args, input_type, in_list } => {
-                self.env.sleeping_procs.insert(self.proc_ref);
+                if self.inside_newcontext == 0 {
+                    self.env.sleeping_procs.insert_sleeper(self.proc_ref, "input", location);
+                }
                 // TODO: deal with in_list
                 self.visit_arguments(location, args);
                 if let Some(ref expr) = in_list {
