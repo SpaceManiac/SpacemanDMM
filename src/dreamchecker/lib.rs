@@ -912,12 +912,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         if let Some(proc) = self.ty.get_proc(call) {
                             let mut next = Some(proc);
                             while let Some(current) = next {
-                                if let Some(&(purity, loc)) = self.env.must_be_pure.get(&current) {
-                                    if purity {
-                                        error(location, format!("call to pure proc {} discards return value", call))
-                                            .with_note(loc, "prohibited by this must_be_pure annotation")
-                                            .register(self.context);
-                                    }
+                                if let Some(_) = self.env.must_be_pure.get(&current) {
+                                    error(location, format!("call to pure proc {} discards return value", call))
+                                        //.with_note(loc, "prohibited by this must_be_pure annotation")
+                                        .register(self.context);
                                 }
                                 next = current.parent_proc();
                             }
