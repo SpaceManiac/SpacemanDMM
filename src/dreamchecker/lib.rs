@@ -412,6 +412,7 @@ impl<'o> CallStack<'o> {
 trait DMErrorExt {
     fn with_callstack(self, stack: CallStack) -> Self;
     fn with_blocking_builtins(self, blockers: &Vec<(String, Location)>) -> Self;
+    fn with_impure_operations(self, impures: &Vec<(String, Location)>) -> Self;
 }
 
 impl DMErrorExt for DMError {
@@ -425,6 +426,13 @@ impl DMErrorExt for DMError {
     fn with_blocking_builtins(mut self, blockers: &Vec<(String, Location)>) -> DMError {
         for (procname, location) in blockers.iter() {
             self.add_note(*location, format!("{}() called here", procname));
+        }
+        self
+    }
+
+    fn with_impure_operations(mut self, impures: &Vec<(String, Location)>) -> DMError {
+        for (impure, location) in impures.iter() {
+            self.add_note(*location, format!("{} happens here", impure));
         }
         self
     }
@@ -468,7 +476,7 @@ pub struct AnalyzeObjectTree<'o> {
     call_tree: HashMap<ProcRef<'o>, Vec<(ProcRef<'o>, Location)>>,
 
     sleeping_procs: ViolatingProcs<'o>,
-    impure_procs: HashSet<ProcRef<'o>>,
+    impure_procs: ViolatingProcs<'o>,
     waitfor_procs: HashSet<ProcRef<'o>>,
 }
 
@@ -576,8 +584,9 @@ impl<'o> AnalyzeObjectTree<'o> {
         }
 
         for procref in self.must_be_pure.iter() {
-            if let Some(_) = self.impure_procs.get(procref) {
+            if let Some(impurevec) = self.impure_procs.get_violators(*procref) {
                 error(procref.get().location, format!("{} sets SpacemanDMM_should_be_pure but does impure operations", procref))
+                    .with_impure_operations(impurevec)
                     .register(self.context)
             }
             let mut visited = HashSet::<ProcRef<'o>>::new();
@@ -597,9 +606,10 @@ impl<'o> AnalyzeObjectTree<'o> {
                     continue
                 }
                 visited.insert(nextproc);
-                if let Some(sleepvec) = self.impure_procs.get(&nextproc) {
+                if let Some(impurevec) = self.impure_procs.get_violators(nextproc) {
                     error(procref.get().location, format!("{} sets SpacemanDMM_should_be_pure but calls a {} that does impure operations", procref, nextproc))
                         .with_callstack(callstack)
+                        .with_impure_operations(impurevec)
                         .register(self.context)
                 } else {
                     guard!(let Some(calledvec) = self.call_tree.get(&nextproc) else {
@@ -1151,7 +1161,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 let lhs = self.visit_expression(location, lhs, None);
                 if let Some(impurity) = lhs.is_impure {
                     if impurity  {
-                        self.env.impure_procs.insert(self.proc_ref);
+                        self.env.impure_procs.insert_violator(self.proc_ref, "Assignment on purity breaking expression", location);
                     }
                 }
                 self.visit_expression(location, rhs, lhs.static_ty.basic_type())
@@ -1461,7 +1471,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     fn check_operator_overload(&mut self, rhs: Analysis<'o>, location: Location, operator: &'o str) -> Analysis<'o> {
         if let Some(impurity) = rhs.is_impure {
             if impurity {
-                self.env.impure_procs.insert(self.proc_ref);
+                self.env.impure_procs.insert_violator(self.proc_ref, &format!("{} done on non-local var", operator), location);
             }
         }
         let typeerror;
