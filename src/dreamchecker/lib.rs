@@ -855,10 +855,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 self.visit_block(block);
             },
             Statement::DoWhile { block, condition } => {
-                self.inside_newcontext = self.inside_newcontext.wrapping_add(1);
                 self.visit_block(block);
                 self.visit_expression(location, condition, None);
-                self.inside_newcontext = self.inside_newcontext.wrapping_sub(1);
             },
             Statement::If { arms, else_arm } => {
                 for (condition, ref block) in arms.iter() {
