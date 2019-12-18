@@ -917,20 +917,31 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     fn visit_statement(&mut self, location: Location, statement: &'o Statement) {
         match statement {
             Statement::Expr(expr) => {
-                if let Expression::Base { unary, term, follow } = expr {
-                    if let Term::Call(call, vec) = &term.elem {
-                        if let Some(proc) = self.ty.get_proc(call) {
-                            let mut next = Some(proc);
-                            while let Some(current) = next {
-                                if let Some(_) = self.env.must_be_pure.get(&current) {
-                                    error(location, format!("call to pure proc {} discards return value", call))
-                                        //.with_note(loc, "prohibited by this must_be_pure annotation")
-                                        .register(self.context);
+                match expr {
+                    Expression::Base { unary, term, follow } => {
+                        if let Term::Call(call, vec) = &term.elem {
+                            if let Some(proc) = self.ty.get_proc(call) {
+                                let mut next = Some(proc);
+                                while let Some(current) = next {
+                                    if let Some(_) = self.env.must_be_pure.get(&current) {
+                                        error(location, format!("call to pure proc {} discards return value", call))
+                                            //.with_note(loc, "prohibited by this must_be_pure annotation")
+                                            .register(self.context);
+                                    }
+                                    next = current.parent_proc();
                                 }
-                                next = current.parent_proc();
                             }
                         }
-                    }
+                    },
+                    Expression::BinaryOp { op: BinaryOp::LShift, lhs, rhs } => {
+                        let lhsanalysis = self.visit_expression(location, lhs, None);
+                        if let Some(impurity) = lhsanalysis.is_impure {
+                            if impurity {
+                                self.env.impure_procs.insert_violator(self.proc_ref, "purity breaking << on expression", location);
+                            }
+                        }
+                    },
+                    _ => {},
                 }
                 self.visit_expression(location, expr, None);
             },
