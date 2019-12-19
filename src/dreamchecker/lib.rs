@@ -512,6 +512,9 @@ impl<'o> AnalyzeObjectTree<'o> {
         let procdirective = match directive {
             "SpacemanDMM_should_not_override" => &mut self.must_not_override,
             "SpacemanDMM_should_call_parent" => &mut self.must_call_parent,
+            "SpacemanDMM_should_not_sleep" => &mut self.must_not_sleep,
+            "SpacemanDMM_allowed_to_sleep" => &mut self.sleep_exempt,
+            "SpacemanDMM_should_be_pure" => &mut self.must_be_pure,
             other => {
                 error(location, format!("unknown linter setting {:?}", directive))
                     .with_errortype("unknown_linter_setting")
@@ -583,9 +586,10 @@ impl<'o> AnalyzeObjectTree<'o> {
             }
         }
 
-        for procref in self.must_be_pure.iter() {
+        for (procref, location) in self.must_be_pure.iter() {
             if let Some(impurevec) = self.impure_procs.get_violators(*procref) {
-                error(procref.get().location, format!("{} sets SpacemanDMM_should_be_pure but does impure operations", procref))
+                error(procref.get().location, format!("{} does impure operations", procref))
+                    .with_note(*location, "SpacemanDMM_should_be_pure set here")
                     .with_impure_operations(impurevec)
                     .register(self.context)
             }
@@ -608,6 +612,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                 visited.insert(nextproc);
                 if let Some(impurevec) = self.impure_procs.get_violators(nextproc) {
                     error(procref.get().location, format!("{} sets SpacemanDMM_should_be_pure but calls a {} that does impure operations", procref, nextproc))
+                    .with_note(*location, "SpacemanDMM_should_be_pure set here")
                         .with_callstack(callstack)
                         .with_impure_operations(impurevec)
                         .register(self.context)
