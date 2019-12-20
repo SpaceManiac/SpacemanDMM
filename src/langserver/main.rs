@@ -329,6 +329,7 @@ impl<'a> Engine<'a> {
                             message: err.to_string(),
                             .. Default::default()
                         }],
+                        version: None,
                     },
                 );
                 eprintln!("{:?}", err);
@@ -409,6 +410,7 @@ impl<'a> Engine<'a> {
                 lsp_types::PublishDiagnosticsParams {
                     uri: url,
                     diagnostics,
+                    version: None,
                 },
             );
         }
@@ -419,6 +421,7 @@ impl<'a> Engine<'a> {
                 lsp_types::PublishDiagnosticsParams {
                     uri: url.clone(),
                     diagnostics: Vec::new(),
+                    version: None,
                 },
             );
         }
@@ -540,6 +543,7 @@ impl<'a> Engine<'a> {
                         lsp_types::PublishDiagnosticsParams {
                             uri: url.to_owned(),
                             diagnostics,
+                            version: None,
                         },
                     );
 
@@ -821,13 +825,18 @@ handle_method_call! {
                 completion_provider: Some(CompletionOptions {
                     trigger_characters: Some(vec![".".to_owned(), ":".to_owned(), "/".to_owned()]),
                     resolve_provider: None,
+                    work_done_progress_options: Default::default(),
                 }),
                 signature_help_provider: Some(SignatureHelpOptions {
                     trigger_characters: Some(vec!["(".to_owned(), ",".to_owned()]),
+                    retrigger_characters: None,
+                    work_done_progress_options: Default::default(),
                 }),
                 color_provider: Some(ColorProviderCapability::Simple(true)),
                 .. Default::default()
-            }
+            },
+            // TODO: send server info
+            server_info: None,
         }
     }
 
