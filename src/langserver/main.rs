@@ -830,8 +830,10 @@ handle_method_call! {
                 color_provider: Some(ColorProviderCapability::Simple(true)),
                 .. Default::default()
             },
-            // TODO: send server info
-            server_info: None,
+            server_info: Some(ServerInfo {
+                name: "dm-langserver".to_owned(),
+                version: Some(env!("CARGO_PKG_VERSION").to_owned()),
+            }),
         }
     }
 
