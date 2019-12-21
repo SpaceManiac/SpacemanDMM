@@ -60,15 +60,11 @@ struct Context {
 
 impl Context {
     fn objtree(&mut self, opt: &Opt) {
-        let pathbuf;
-        let environment: &std::path::Path = match opt.environment {
-            Some(ref env) => env.as_ref(),
+        let environment = match opt.environment {
+            Some(ref env) => env.into(),
             None => match dm::detect_environment_default() {
-                Ok(Some(found)) => {
-                    pathbuf = found;
-                    &pathbuf
-                }
-                _ => dm::DEFAULT_ENV.as_ref(),
+                Ok(Some(found)) => found,
+                _ => dm::DEFAULT_ENV.into(),
             },
         };
         println!("parsing {}", environment.display());
@@ -77,7 +73,7 @@ impl Context {
             self.icon_cache.set_icons_root(&parent);
         }
 
-        let pp = match dm::preprocessor::Preprocessor::new(&self.dm_context, environment.to_owned()) {
+        let pp = match dm::preprocessor::Preprocessor::new(&self.dm_context, environment) {
             Ok(pp) => pp,
             Err(e) => {
                 eprintln!("i/o error opening environment:\n{}", e);
@@ -288,14 +284,15 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             let errors: RwLock<HashSet<String>> = Default::default();
 
             let perform_job = move |path: &Path| {
+                let mut filename;
                 let prefix = if parallel {
-                    let mut filename = path.file_name().unwrap().to_string_lossy().into_owned();
+                    filename = path.file_name().unwrap().to_string_lossy().into_owned();
                     filename.push_str(": ");
                     println!("{}{}", filename, path.display());
-                    filename
+                    &filename
                 } else {
                     println!("{}", path.display());
-                    "    ".to_owned()
+                    "    "
                 };
 
                 let map = match dmm::Map::from_file(path) {
