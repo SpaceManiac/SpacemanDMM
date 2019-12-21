@@ -57,6 +57,8 @@ type History = history::History<map_repr::AtomMap, Environment>;
 const RED_TEXT: &[(StyleColor, [f32; 4])] = &[(StyleColor::Text, [1.0, 0.25, 0.25, 1.0])];
 const GREEN_TEXT: &[(StyleColor, [f32; 4])] = &[(StyleColor::Text, [0.25, 1.0, 0.25, 1.0])];
 const THUMBNAIL_SIZE: u16 = 186;
+const MAX_ZOOM: f32 = 16.;
+const MIN_ZOOM: f32 = 1. / 16.;
 
 fn main() {
     support::run("SpacemanDMM".to_owned(), [0.25, 0.25, 0.5, 1.0]);
@@ -532,6 +534,14 @@ impl EditorScene {
                 MenuItem::new(im_str!("Invert order"))
                     .build_checkbox(ui, &mut self.stacked_inverted);
                 ui.separator();
+                if MenuItem::new(im_str!("Zoom in"))
+                    .enabled(self.map_renderer.zoom < MAX_ZOOM)
+                    .shortcut(im_str!("Alt+Wheel Up"))
+                    .build(ui) { self.zoom_in() }
+                if MenuItem::new(im_str!("Zoom out"))
+                    .enabled(self.map_renderer.zoom > MIN_ZOOM)
+                    .shortcut(im_str!("Alt+Wheel Down"))
+                    .build(ui) { self.zoom_out() }
                 for &zoom in [0.5, 1.0, 2.0, 4.0].iter() {
                     if MenuItem::new(&im_str!("{}%", 100.0 * zoom)).selected(self.map_renderer.zoom == zoom).build(ui) {
                         self.map_renderer.zoom = zoom;
@@ -1097,12 +1107,24 @@ impl EditorScene {
         None
     }
 
+    fn zoom_in(&mut self) {
+        if self.map_renderer.zoom < MAX_ZOOM {
+            self.map_renderer.zoom *= 2.0;
+        }
+    }
+
+    fn zoom_out(&mut self) {
+        if self.map_renderer.zoom > MIN_ZOOM {
+            self.map_renderer.zoom *= 0.5;
+        }
+    }
+
     fn mouse_wheel(&mut self, ctrl: bool, shift: bool, alt: bool, x: f32, y: f32) {
         if alt {
-            if y > 0.0 && self.map_renderer.zoom < 16.0 {
-                self.map_renderer.zoom *= 2.0;
-            } else if y < 0.0 && self.map_renderer.zoom > 0.0625 {
-                self.map_renderer.zoom *= 0.5;
+            if y > 0.0 {
+                self.zoom_in();
+            } else if y < 0.0 {
+                self.zoom_out();
             }
             self.target_tile = self.tile_under(self.last_mouse_pos);
             return;
