@@ -791,11 +791,6 @@ handle_method_call! {
                 url.set_path(&path);
             }
             self.root = Some(url);
-        } else if let Some(path) = init.root_path {
-            match Url::from_directory_path(path) {
-                Ok(url) => self.root = Some(url),
-                Err(()) => return Err(invalid_request("Root path does not correspond to a valid URL")),
-            }
         } else {
             eprintln!("preparing single file mode");
         }
