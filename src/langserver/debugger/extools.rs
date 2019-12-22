@@ -205,7 +205,7 @@ impl Extools {
             .ok_or_else(|| Box::new(super::GenericError("Getting call stack failed")) as Box<dyn Error>)
     }
 
-    fn bytecode(&mut self, proc_ref: &str, override_id: usize) -> &[DisassembledInstruction] {
+    pub fn bytecode(&mut self, proc_ref: &str, override_id: usize) -> &[DisassembledInstruction] {
         let Extools { bytecode, sender, seq: _seq, bytecode_rx, .. } = self;
         bytecode.entry((proc_ref.to_owned(), override_id)).or_insert_with(|| {
             debug_output!(in _seq, "[extools] Fetching bytecode for {}#{}", proc_ref, override_id);

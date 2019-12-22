@@ -512,6 +512,18 @@ pub struct EvaluateResponse {
     pub memoryReference: Option<String>,
 }
 
+impl From<String> for EvaluateResponse {
+    fn from(result: String) -> EvaluateResponse {
+        EvaluateResponse { result, .. Default::default() }
+    }
+}
+
+impl From<&str> for EvaluateResponse {
+    fn from(result: &str) -> EvaluateResponse {
+        EvaluateResponse { result: result.to_owned(), .. Default::default() }
+    }
+}
+
 /// Retrieves the details of the exception that caused this event to be raised.
 pub enum ExceptionInfo {}
 

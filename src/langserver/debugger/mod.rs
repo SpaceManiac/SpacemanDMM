@@ -33,6 +33,7 @@ mod extools_types;
 mod extools;
 mod local_names;
 mod extools_bundle;
+mod evaluate;
 
 use std::error::Error;
 use std::sync::{atomic, Arc, Mutex};
@@ -689,6 +690,10 @@ handle_request! {
             breakMode: ExceptionBreakMode::Always,
             details: None,
         }
+    }
+
+    on Evaluate(&mut self, params) {
+        self.evaluate(params)?
     }
 }
 
