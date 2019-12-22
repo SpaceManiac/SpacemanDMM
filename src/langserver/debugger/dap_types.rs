@@ -424,6 +424,94 @@ pub struct ContinueResponse {
     pub allThreadsContinued: Option<bool>,
 }
 
+/// Evaluates the given expression in the context of the top most stack frame.
+///
+/// The expression has access to any variables and arguments that are in scope.
+pub enum Evaluate {}
+
+impl Request for Evaluate {
+    type Params = EvaluateArguments;
+    type Result = EvaluateResponse;
+    const COMMAND: &'static str = "evaluate";
+}
+
+/// Arguments for ‘evaluate’ request.
+#[derive(Deserialize, Debug)]
+pub struct EvaluateArguments {
+    /**
+     * The expression to evaluate.
+     */
+    pub expression: String,
+
+    /**
+     * Evaluate the expression in the scope of this stack frame. If not specified, the expression is evaluated in the global scope.
+     */
+    pub frameId: Option<i64>,
+
+    /**
+     * The context in which the evaluate request is run.
+     * Values:
+     * 'watch': evaluate is run in a watch.
+     * 'repl': evaluate is run from REPL console.
+     * 'hover': evaluate is run from a data hover.
+     * etc.
+     */
+    pub context: Option<String>,
+
+    /**
+     * Specifies details on how to format the Evaluate result.
+     */
+    pub format: Option<ValueFormat>,
+}
+
+impl EvaluateArguments {
+    pub const CONTEXT_WATCH: &'static str = "watch";
+    pub const CONTEXT_REPL: &'static str = "repl";
+    pub const CONTEXT_HOVER: &'static str = "hover";
+}
+
+/// Response to ‘evaluate’ request.
+#[derive(Serialize, Debug, Default)]
+pub struct EvaluateResponse {
+    /**
+     * The result of the evaluate request.
+     */
+    pub result: String,
+
+    /**
+     * The optional type of the evaluate result.
+     */
+    #[serde(rename="type")]
+    pub type_: Option<String>,
+
+    /**
+     * Properties of a evaluate result that can be used to determine how to render the result in the UI.
+     */
+    pub presentationHint: Option<VariablePresentationHint>,
+
+    /**
+     * If variablesReference is > 0, the evaluate result is structured and its children can be retrieved by passing variablesReference to the VariablesRequest. The value should be less than or equal to 2147483647 (2^31 - 1).
+     */
+    pub variablesReference: i64,
+
+    /**
+     * The number of named child variables.
+     * The client can use this optional information to present the variables in a paged UI and fetch them in chunks. The value should be less than or equal to 2147483647 (2^31 - 1).
+     */
+    pub namedVariables: Option<usize>,
+
+    /**
+     * The number of indexed child variables.
+     * The client can use this optional information to present the variables in a paged UI and fetch them in chunks. The value should be less than or equal to 2147483647 (2^31 - 1).
+     */
+    pub indexedVariables: Option<usize>,
+
+    /**
+     * Memory reference to a location appropriate for this result. For pointer type eval results, this is generally a reference to the memory address contained in the pointer.
+     */
+    pub memoryReference: Option<String>,
+}
+
 /// Retrieves the details of the exception that caused this event to be raised.
 pub enum ExceptionInfo {}
 
