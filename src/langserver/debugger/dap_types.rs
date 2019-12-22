@@ -663,6 +663,20 @@ pub struct SetBreakpointsArguments {
     pub sourceModified: Option<bool>,
 }
 
+/// Response to ‘setBreakpoints’ request.
+///
+/// Returned is information about each breakpoint created by this request.
+/// This includes the actual code location and whether the breakpoint could be verified.
+/// The breakpoints returned are in the same order as the elements of the ‘breakpoints’
+/// (or the deprecated ‘lines’) array in the arguments.
+#[derive(Serialize, Debug)]
+pub struct SetBreakpointsResponse {
+    /**
+     * Information about the breakpoints. The array elements are in the same order as the elements of the 'breakpoints' (or the deprecated 'lines') array in the arguments.
+     */
+    pub breakpoints: Vec<Breakpoint>,
+}
+
 /// The request configures the debuggers response to thrown exceptions.
 ///
 /// If an exception is configured to break, a ‘stopped’ event is fired (with reason ‘exception’).
@@ -686,20 +700,6 @@ pub struct SetExceptionBreakpointsArguments {
      * Configuration options for selected exceptions.
      */
     pub exceptionOptions: Option<Vec<ExceptionOptions>>,
-}
-
-/// Response to ‘setBreakpoints’ request.
-///
-/// Returned is information about each breakpoint created by this request.
-/// This includes the actual code location and whether the breakpoint could be verified.
-/// The breakpoints returned are in the same order as the elements of the ‘breakpoints’
-/// (or the deprecated ‘lines’) array in the arguments.
-#[derive(Serialize, Debug)]
-pub struct SetBreakpointsResponse {
-    /**
-     * Information about the breakpoints. The array elements are in the same order as the elements of the 'breakpoints' (or the deprecated 'lines') array in the arguments.
-     */
-    pub breakpoints: Vec<Breakpoint>,
 }
 
 /// The request returns a stacktrace from the current execution state.
