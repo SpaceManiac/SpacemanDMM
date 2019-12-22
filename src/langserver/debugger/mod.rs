@@ -314,6 +314,7 @@ handle_request! {
             supportTerminateDebuggee: Some(true),
             supportsExceptionInfoRequest: Some(true),
             supportsConfigurationDoneRequest: Some(true),
+            supportsFunctionBreakpoints: Some(true),
             exceptionBreakpointFilters: Some(vec![
                 ExceptionBreakpointsFilter {
                     filter: EXCEPTION_FILTER_RUNTIMES.to_owned(),
@@ -460,6 +461,69 @@ handle_request! {
         });
 
         SetBreakpointsResponse { breakpoints }
+    }
+
+    on SetFunctionBreakpoints(&mut self, params) {
+        let file_id = FileId::default();
+
+        let inputs = params.breakpoints;
+        let mut breakpoints = Vec::new();
+
+        guard!(let Some(extools) = self.extools.as_ref() else {
+            for _ in inputs {
+                breakpoints.push(Breakpoint {
+                    message: Some("Debugging hooks not available".to_owned()),
+                    verified: false,
+                    .. Default::default()
+                });
+            }
+            return Ok(SetFunctionBreakpointsResponse { breakpoints });
+        });
+
+        let saved = self.saved_breakpoints.entry(file_id).or_default();
+        let mut keep = HashSet::new();
+
+        for sbp in inputs {
+            // parse function reference
+            let mut proc = &sbp.name[..];
+            let mut override_id = 0;
+            if let Some(idx) = sbp.name.find('#') {
+                proc = &sbp.name[..idx];
+                override_id = sbp.name[idx+1..].parse()?;
+            }
+
+            if let Some(proc_ref) = self.db.get_proc(proc, override_id) {
+                let offset = 0;
+                let tup = (proc.to_owned(), override_id, offset);
+                if saved.insert(tup.clone()) {
+                    extools.set_breakpoint(&tup.0, tup.1, tup.2);
+                }
+                keep.insert(tup);
+                breakpoints.push(Breakpoint {
+                    line: Some(proc_ref.location.line as i64),
+                    verified: true,
+                    column: Some(0),
+                    .. Default::default()
+                });
+            } else {
+                breakpoints.push(Breakpoint {
+                    message: Some(format!("Unknown proc {}#{}", proc, override_id)),
+                    verified: false,
+                    .. Default::default()
+                });
+            }
+        }
+
+        saved.retain(|k| {
+            if !keep.contains(&k) {
+                extools.unset_breakpoint(&k.0, k.1, k.2);
+                false
+            } else {
+                true
+            }
+        });
+
+        SetFunctionBreakpointsResponse { breakpoints }
     }
 
     on StackTrace(&mut self, params) {
