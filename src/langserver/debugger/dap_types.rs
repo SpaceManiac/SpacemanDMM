@@ -702,6 +702,39 @@ pub struct SetExceptionBreakpointsArguments {
     pub exceptionOptions: Option<Vec<ExceptionOptions>>,
 }
 
+/// Replaces all existing function breakpoints with new function breakpoints.
+///
+/// To clear all function breakpoints, specify an empty array.
+///
+/// When a function breakpoint is hit, a ‘stopped’ event (with reason ‘function breakpoint’) is generated.
+pub enum SetFunctionBreakpoints {}
+
+impl Request for SetFunctionBreakpoints {
+    type Params = SetFunctionBreakpointsArguments;
+    type Result = SetFunctionBreakpointsResponse;
+    const COMMAND: &'static str = "setFunctionBreakpoints";
+}
+
+/// Arguments for ‘setFunctionBreakpoints’ request.
+#[derive(Deserialize, Debug)]
+pub struct SetFunctionBreakpointsArguments {
+    /**
+     * The function names of the breakpoints.
+     */
+    pub breakpoints: Vec<FunctionBreakpoint>,
+}
+
+/// Response to ‘setFunctionBreakpoints’ request.
+///
+/// Returned is information about each breakpoint created by this request.
+#[derive(Serialize, Debug)]
+pub struct SetFunctionBreakpointsResponse {
+    /**
+     * Information about the breakpoints. The array elements correspond to the elements of the 'breakpoints' array.
+     */
+    pub breakpoints: Vec<Breakpoint>,
+}
+
 /// The request returns a stacktrace from the current execution state.
 pub enum StackTrace {}
 
@@ -1154,6 +1187,25 @@ pub struct ExceptionPathSegment {
      * Depending on the value of 'negate' the names that should match or not match.
      */
     pub names: Vec<String>,
+}
+
+/// Properties of a breakpoint passed to the setFunctionBreakpoints request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct FunctionBreakpoint {
+    /**
+     * The name of the function.
+     */
+    pub name: String,
+
+    /**
+     * An optional expression for conditional breakpoints.
+     */
+    pub condition: Option<String>,
+
+    /**
+     * An optional expression that controls how many hits of the breakpoint are ignored. The backend is expected to interpret the expression as needed.
+     */
+    pub hitCondition: Option<String>,
 }
 
 /// A structured message object. Used to return errors from requests.
