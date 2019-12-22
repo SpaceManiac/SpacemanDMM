@@ -461,9 +461,7 @@ handle_request! {
 
     on StackTrace(&mut self, params) {
         let extools = self.extools.get()?;
-        guard!(let Some(thread) = extools.get_thread(params.threadId) else {
-            return Err(Box::new(GenericError("Bad thread ID")));
-        });
+        let thread = extools.get_thread(params.threadId)?;
 
         let len = thread.call_stack.len();
         let mut frames = Vec::with_capacity(len);
@@ -509,9 +507,7 @@ handle_request! {
 
     on Scopes(&mut self, ScopesArguments { frameId }) {
         let extools = self.extools.get()?;
-        guard!(let Some(thread) = extools.get_thread(0) else {
-            return Err(Box::new(GenericError("Bad thread ID")));
-        });
+        let thread = extools.get_default_thread()?;
         guard!(let Some(frame) = thread.call_stack.get(frameId as usize) else {
             return Err(Box::new(GenericError("Stack frame out of range")));
         });
@@ -538,9 +534,6 @@ handle_request! {
 
     on Variables(&mut self, params) {
         let extools = self.extools.get()?;
-        guard!(let Some(thread) = extools.get_thread(0) else {
-            return Err(Box::new(GenericError("Bad thread ID")));
-        });
 
         if params.variablesReference >= 0x1000000 {
             let (var, ref_) = extools_types::ValueText::from_variables_reference(params.variablesReference);
@@ -598,6 +591,8 @@ handle_request! {
         let frame_idx = (params.variablesReference - 1) / 2;
         let mod2 = params.variablesReference % 2;
 
+        // TODO: variablesReference should be different based on thread ID
+        let thread = extools.get_default_thread()?;
         guard!(let Some(frame) = thread.call_stack.get(frame_idx as usize) else {
             return Err(Box::new(GenericError("Stack frame out of range")));
         });

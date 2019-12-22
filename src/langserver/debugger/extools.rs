@@ -196,8 +196,13 @@ impl Extools {
         (extools, thread)
     }
 
-    pub fn get_thread(&self, thread_id: i64) -> Option<ThreadInfo> {
+    pub fn get_default_thread(&self) -> Result<ThreadInfo, Box<dyn Error>> {
+        self.get_thread(0)
+    }
+
+    pub fn get_thread(&self, thread_id: i64) -> Result<ThreadInfo, Box<dyn Error>> {
         self.threads.lock().unwrap().get(&thread_id).cloned()
+            .ok_or_else(|| Box::new(super::GenericError("Getting call stack failed")) as Box<dyn Error>)
     }
 
     fn bytecode(&mut self, proc_ref: &str, override_id: usize) -> &[DisassembledInstruction] {
