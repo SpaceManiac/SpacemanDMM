@@ -373,10 +373,7 @@ handle_request! {
     }
 
     on ConfigurationDone(&mut self, ()) {
-        guard!(let Some(extools) = self.extools.as_ref() else {
-            return Err(Box::new(GenericError("No extools connection")));
-        });
-
+        let extools = self.extools.get()?;
         extools.configuration_done();
     }
 
@@ -463,9 +460,7 @@ handle_request! {
     }
 
     on StackTrace(&mut self, params) {
-        guard!(let Some(extools) = self.extools.as_ref() else {
-            return Err(Box::new(GenericError("No extools connection")));
-        });
+        let extools = self.extools.get()?;
         guard!(let Some(thread) = extools.get_thread(params.threadId) else {
             return Err(Box::new(GenericError("Bad thread ID")));
         });
@@ -513,9 +508,7 @@ handle_request! {
     }
 
     on Scopes(&mut self, ScopesArguments { frameId }) {
-        guard!(let Some(extools) = self.extools.as_ref() else {
-            return Err(Box::new(GenericError("No extools connection")));
-        });
+        let extools = self.extools.get()?;
         guard!(let Some(thread) = extools.get_thread(0) else {
             return Err(Box::new(GenericError("Bad thread ID")));
         });
@@ -544,9 +537,7 @@ handle_request! {
     }
 
     on Variables(&mut self, params) {
-        guard!(let Some(extools) = self.extools.as_ref() else {
-            return Err(Box::new(GenericError("No extools connection")));
-        });
+        let extools = self.extools.get()?;
         guard!(let Some(thread) = extools.get_thread(0) else {
             return Err(Box::new(GenericError("Bad thread ID")));
         });
@@ -666,10 +657,7 @@ handle_request! {
     }
 
     on Continue(&mut self, _params) {
-        guard!(let Some(extools) = self.extools.as_ref() else {
-            return Err(Box::new(GenericError("No extools connection")));
-        });
-
+        let extools = self.extools.get()?;
         extools.continue_execution();
         ContinueResponse {
             allThreadsContinued: Some(true),
@@ -677,42 +665,27 @@ handle_request! {
     }
 
     on StepIn(&mut self, params) {
-        guard!(let Some(extools) = self.extools.as_ref() else {
-            return Err(Box::new(GenericError("No extools connection")));
-        });
-
+        let extools = self.extools.get()?;
         extools.step_in(params.threadId);
     }
 
     on Next(&mut self, params) {
-        guard!(let Some(extools) = self.extools.as_ref() else {
-            return Err(Box::new(GenericError("No extools connection")));
-        });
-
+        let extools = self.extools.get()?;
         extools.step_over(params.threadId);
     }
 
     on Pause(&mut self, _params) {
-        guard!(let Some(extools) = self.extools.as_ref() else {
-            return Err(Box::new(GenericError("No extools connection")));
-        });
-
+        let extools = self.extools.get()?;
         extools.pause();
     }
 
     on SetExceptionBreakpoints(&mut self, params) {
-        guard!(let Some(extools) = self.extools.as_ref() else {
-            return Err(Box::new(GenericError("No extools connection")));
-        });
-
+        let extools = self.extools.get()?;
         extools.set_break_on_runtime(params.filters.iter().any(|x| x == EXCEPTION_FILTER_RUNTIMES));
     }
 
     on ExceptionInfo(&mut self, _params) {
-        guard!(let Some(extools) = self.extools.as_ref() else {
-            return Err(Box::new(GenericError("No extools connection")));
-        });
-
+        let extools = self.extools.get()?;
         // VSC shows exceptionId, description, stackTrace in that order.
         let message = extools.last_error_message();
         ExceptionInfoResponse {

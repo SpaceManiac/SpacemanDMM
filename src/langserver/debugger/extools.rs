@@ -104,6 +104,10 @@ impl ExtoolsHolder {
         }))
     }
 
+    pub fn get(&mut self) -> Result<&mut Extools, Box<dyn Error>> {
+        self.as_ref().ok_or_else(|| Box::new(super::GenericError("No extools connection")) as Box<dyn Error>)
+    }
+
     pub fn as_ref(&mut self) -> Option<&mut Extools> {
         match &mut self.0 {
             ExtoolsHolderInner::Listening { conn_rx, .. } |
