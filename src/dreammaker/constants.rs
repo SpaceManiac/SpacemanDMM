@@ -736,6 +736,10 @@ impl<'a> ConstantFolder<'a> {
                 "sound" => Constant::Call(ConstFn::Sound, self.arguments(args)?),
                 "file" => Constant::Call(ConstFn::File, self.arguments(args)?),
                 // constant-evaluatable functions
+                "sin" => self.trig_op(args, f32::sin)?,
+                "cos" => self.trig_op(args, f32::cos)?,
+                "arcsin" => self.trig_op(args, f32::asin)?,
+                "arccos" => self.trig_op(args, f32::acos)?,
                 "rgb" => {
                     use std::fmt::Write;
                     if args.len() != 3 && args.len() != 4 {
@@ -781,6 +785,16 @@ impl<'a> ConstantFolder<'a> {
             Term::Expr(expr) => self.expr(*expr, type_hint)?,
             _ => return Err(self.error("non-constant expression".to_owned())),
         })
+    }
+
+    fn trig_op(&mut self, mut args: Vec<Expression>, op: fn(f32) -> f32) -> Result<Constant, DMError> {
+        if args.len() != 1 {
+            Err(self.error("trig function requires exactly 1 argument"))
+        } else if let Some(f) = self.expr(args.remove(0), None)?.to_float() {
+            Ok(Constant::Float(op(f)))
+        } else {
+            Err(self.error("trig function requires numeric argument"))
+        }
     }
 
     fn prefab(&mut self, prefab: Prefab) -> Result<Pop, DMError> {
