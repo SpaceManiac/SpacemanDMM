@@ -429,6 +429,7 @@ handle_request! {
                     breakpoints.push(Breakpoint {
                         line: Some(sbp.line),
                         verified: true,
+                        column: Some(0),
                         .. Default::default()
                     });
                 } else {
