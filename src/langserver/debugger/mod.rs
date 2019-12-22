@@ -96,6 +96,7 @@ pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
         root_dir: Default::default(),
         files: ctx,
         objtree,
+        extools_dll: None,
     };
     let mut debugger = Debugger::new(dreamseeker_exe, db, Box::new(std::io::stdout()));
     jrpc_io::run_until_stdin_eof(|message| debugger.handle_input(message));
@@ -105,11 +106,12 @@ pub struct DebugDatabaseBuilder {
     pub root_dir: std::path::PathBuf,
     pub files: dm::Context,
     pub objtree: Arc<ObjectTree>,
+    pub extools_dll: Option<String>,
 }
 
 impl DebugDatabaseBuilder {
     fn build(self) -> DebugDatabase {
-        let DebugDatabaseBuilder { root_dir, files, objtree } = self;
+        let DebugDatabaseBuilder { root_dir, files, objtree, extools_dll: _ } = self;
         let mut line_numbers: HashMap<dm::FileId, Vec<(i64, String, String, usize)>> = HashMap::new();
 
         objtree.root().recurse(&mut |ty| {
@@ -209,6 +211,7 @@ impl DebugDatabase {
 
 struct Debugger {
     dreamseeker_exe: String,
+    extools_dll: Option<String>,
     db: DebugDatabase,
     launched: Option<Launched>,
     extools: ExtoolsHolder,
@@ -220,9 +223,10 @@ struct Debugger {
 }
 
 impl Debugger {
-    fn new(dreamseeker_exe: String, db: DebugDatabaseBuilder, stream: OutStream) -> Self {
+    fn new(dreamseeker_exe: String, mut db: DebugDatabaseBuilder, stream: OutStream) -> Self {
         Debugger {
             dreamseeker_exe,
+            extools_dll: db.extools_dll.take(),
             db: db.build(),
             launched: None,
             extools: ExtoolsHolder::default(),
@@ -319,6 +323,7 @@ handle_request! {
     }
 
     on LaunchVsc(&mut self, params) {
+        // Determine port number to pass if debugging is enabled.
         let debug = !params.base.noDebug.unwrap_or(false);
         let port = if debug {
             let (port, extools) = ExtoolsHolder::listen(self.seq.clone())?;
@@ -327,7 +332,25 @@ handle_request! {
         } else {
             None
         };
-        self.launched = Some(Launched::new(self.seq.clone(), &self.dreamseeker_exe, &params.dmb, port)?);
+
+        // Set EXTOOLS_DLL based on configuration or on bundle if available.
+        #[cfg(extools_bundle)]
+        let pathbuf;
+
+        #[allow(unused_mut)]
+        let mut extools_dll = self.extools_dll.as_ref().map(std::path::Path::new);
+
+        debug_output!(in self.seq, "[main] configured override: {:?}", extools_dll);
+
+        #[cfg(extools_bundle)] {
+            if extools_dll.is_none() {
+                pathbuf = self::extools_bundle::extract()?;
+                extools_dll = Some(&pathbuf);
+            }
+        }
+
+        // Launch the subprocess.
+        self.launched = Some(Launched::new(self.seq.clone(), &self.dreamseeker_exe, &params.dmb, port, extools_dll)?);
     }
 
     on AttachVsc(&mut self, params) {

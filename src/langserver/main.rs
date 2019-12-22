@@ -65,7 +65,7 @@ fn main() {
     }
     eprint!("{}", include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")));
     #[cfg(extools_bundle)] {
-        eprintln!("extools commit hash: {}", env!("EXTOOLS_COMMIT_HASH"));
+        eprintln!("extools commit: {}", env!("EXTOOLS_COMMIT_HASH"));
     }
     match std::env::current_dir() {
         Ok(path) => eprintln!("directory: {}", path.display()),
@@ -158,6 +158,7 @@ struct Engine<'a> {
     diagnostics_set: HashSet<Url>,
 
     client_caps: ClientCaps,
+    extools_dll: Option<String>,
 }
 
 impl<'a> Engine<'a> {
@@ -179,6 +180,7 @@ impl<'a> Engine<'a> {
             diagnostics_set: Default::default(),
 
             client_caps: Default::default(),
+            extools_dll: None,
         }
     }
 
@@ -1691,6 +1693,7 @@ handle_method_call! {
             root_dir,
             files: self.context.clone_file_list(),
             objtree: self.objtree.clone(),
+            extools_dll: self.extools_dll.clone(),
         };
         let (port, handle) = debugger::start_server(params.dreamseeker_exe, db).map_err(invalid_request)?;
         self.threads.push(handle);
@@ -1747,7 +1750,11 @@ handle_notification! {
         self.annotations.remove(&url);
     }
 
-    on DidChangeConfiguration(&mut self, _) {}
+    on DidChangeConfiguration(&mut self, params) {
+        if let Some(extools_dll) = params.settings["dreammaker"]["extoolsDLL"].as_str() {
+            self.extools_dll = Some(extools_dll.to_owned());
+        }
+    }
 }
 
 // ----------------------------------------------------------------------------

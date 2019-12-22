@@ -28,7 +28,7 @@ pub struct Launched {
 }
 
 impl Launched {
-    pub fn new(seq: Arc<SequenceNumber>, dreamseeker_exe: &str, dmb: &str, port: Option<u16>) -> std::io::Result<Launched> {
+    pub fn new(seq: Arc<SequenceNumber>, dreamseeker_exe: &str, dmb: &str, port: Option<u16>, extools_dll: Option<&std::path::Path>) -> std::io::Result<Launched> {
         let mut command = Command::new(dreamseeker_exe);
         command
             .arg(dmb)
@@ -36,8 +36,8 @@ impl Launched {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
-        #[cfg(extools_bundle)] {
-            command.env("EXTOOLS_DLL", super::extools_bundle::extract()?);
+        if let Some(extools_dll) = extools_dll {
+            command.env("EXTOOLS_DLL", extools_dll);
         }
         if let Some(port) = port {
             command.env("EXTOOLS_MODE", "LAUNCHED");
