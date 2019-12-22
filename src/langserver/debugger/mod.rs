@@ -615,13 +615,13 @@ handle_request! {
             let mut variables = Vec::with_capacity(2 + frame.args.len());
 
             variables.push(Variable {
-                name: "src".to_string(),
+                name: "src".to_owned(),
                 value: frame.src.to_string(),
                 variablesReference: frame.src.to_variables_reference(),
                 .. Default::default()
             });
             variables.push(Variable {
-                name: "usr".to_string(),
+                name: "usr".to_owned(),
                 value: frame.usr.to_string(),
                 variablesReference: frame.usr.to_variables_reference(),
                 .. Default::default()
@@ -639,7 +639,16 @@ handle_request! {
             VariablesResponse { variables }
         } else if mod2 == 0 {
             // locals
-            let variables = frame.locals.iter().enumerate().map(|(i, vt)| Variable {
+            let mut variables = Vec::with_capacity(1 + frame.locals.len());
+
+            variables.push(Variable {
+                name: ".".to_owned(),
+                value: frame.dot.to_string(),
+                variablesReference: frame.dot.to_variables_reference(),
+                .. Default::default()
+            });
+
+            variables.extend(frame.locals.iter().enumerate().map(|(i, vt)| Variable {
                 name: match locals.get(i) {
                     Some(local) => local.clone(),
                     None => i.to_string(),
@@ -647,7 +656,7 @@ handle_request! {
                 value: vt.to_string(),
                 variablesReference: vt.to_variables_reference(),
                 .. Default::default()
-            }).collect();
+            }));
             VariablesResponse { variables }
         } else {
             return Err(Box::new(GenericError("Bad variables reference")));
