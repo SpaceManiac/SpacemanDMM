@@ -268,7 +268,9 @@ impl Debugger {
                     body: match handled {
                         Ok(result) => Some(result),
                         Err(err) => {
-                            output!(in self.seq, "[main] Error responding to {:?}: {}", command, err);
+                            if command != Evaluate::COMMAND {
+                                output!(in self.seq, "[main] Error responding to {:?}: {}", command, err);
+                            }
                             debug_output!(in self.seq, " - {}", message);
                             None
                         },
