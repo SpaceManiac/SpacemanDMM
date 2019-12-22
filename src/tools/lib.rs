@@ -18,7 +18,6 @@ pub mod dmm;
 mod icon_cache;
 pub mod minimap;
 pub mod render_passes;
-pub mod lint;
 pub mod dmi;
 
 pub use icon_cache::IconCache;

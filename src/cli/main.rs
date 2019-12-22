@@ -168,20 +168,6 @@ enum Command {
         /// The list of maps to process.
         files: Vec<String>,
     },
-    /// Lint and automatically fix the specified maps.
-    #[structopt(name = "lint-maps")]
-    LintMaps {
-        /// Only report and do not save out changes.
-        #[structopt(short="n", long="dry-run")]
-        dry_run: bool,
-
-        /// Reformat the specified maps even if nothing was changed.
-        #[structopt(long="reformat")]
-        reformat: bool,
-
-        /// The list of maps to process.
-        files: Vec<String>,
-    },
     /// List the differing coordinates between two maps.
     #[structopt(name="diff-maps")]
     DiffMaps {
@@ -384,25 +370,6 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                 paths.into_par_iter().for_each(perform_job);
             } else {
                 paths.into_iter().for_each(perform_job);
-            }
-        },
-        // --------------------------------------------------------------------
-        Command::LintMaps {
-            dry_run, reformat, ref files,
-        } => {
-            context.objtree(opt);
-
-            for path in files.iter() {
-                let path: &std::path::Path = path.as_ref();
-                println!("{}", path.display());
-                let mut map = dmm::Map::from_file(path).unwrap();
-
-                let linted = lint::check(&context.objtree, &mut map);
-                print!("{}", linted);
-                if !dry_run && (linted.any() || reformat) {
-                    println!("    saving {}", path.display());
-                    map.to_file(path).unwrap();
-                }
             }
         },
         // --------------------------------------------------------------------
