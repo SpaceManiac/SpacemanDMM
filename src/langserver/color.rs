@@ -36,7 +36,7 @@ impl ColorFormat {
                 alpha: input.chars().filter(|&c| c == ',').count() > 2,
             });
         };
-        let single_quoted = if input.starts_with("'#") && input.ends_with("'") {
+        let single_quoted = if input.starts_with("'#") && input.ends_with('\'') {
             true
         } else if input.starts_with("\"#") && input.ends_with('"') {
             false

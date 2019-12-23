@@ -169,8 +169,7 @@ fn get_proc<'o>(objtree: &'o ObjectTree, proc_ref: &str, override_id: usize) -> 
             // Don't consider (most) builtins against the override_id count.
             return ty_proc.value.iter()
                 .skip_while(|pv| pv.location.is_builtins() && !STDDEF_PROCS.contains(&proc_ref))
-                .skip(override_id)
-                .next();
+                .nth(override_id);
         }
     }
     None
@@ -602,7 +601,7 @@ handle_request! {
     on Variables(&mut self, params) {
         let extools = self.extools.get()?;
 
-        if params.variablesReference >= 0x1000000 {
+        if params.variablesReference >= 0x01_000000 {
             let (var, ref_) = extools_types::ValueText::from_variables_reference(params.variablesReference);
             let mut variables = Vec::new();
 

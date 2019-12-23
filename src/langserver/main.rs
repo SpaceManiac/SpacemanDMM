@@ -353,7 +353,7 @@ impl<'a> Engine<'a> {
         eprintln!(
             "parsed in {}.{:03}s",
             elapsed.as_secs(),
-            elapsed.subsec_nanos() / 1_000_000
+            elapsed.subsec_millis()
         );
 
         // initial diagnostics pump
@@ -620,7 +620,7 @@ impl<'a> Engine<'a> {
             if let Some(proc) = ty.get().procs.get(proc_name) {
                 if let Some(value) = proc.value.get(idx) {
                     for param in value.parameters.iter() {
-                        if &param.name == var_name {
+                        if param.name == var_name {
                             return UnscopedVar::Parameter { ty, proc: proc_name, param };
                         }
                     }
@@ -788,7 +788,7 @@ handle_method_call! {
             self.parent_pid = id;
         }
         if let Some(mut url) = init.root_uri {
-            if !url.path().ends_with("/") {
+            if !url.path().ends_with('/') {
                 let path = format!("{}/", url.path());
                 url.set_path(&path);
             }
