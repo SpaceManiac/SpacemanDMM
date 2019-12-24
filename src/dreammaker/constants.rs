@@ -483,7 +483,7 @@ fn constant_ident_lookup(
         };
 
         let type_ = tree.graph.node_weight_mut(ty).unwrap();
-        let parent = type_.parent_type();
+        let parent = type_.parent_type_index();
         match type_.vars.get_mut(ident) {
             None => return Ok(ConstLookup::Continue(parent)),
             Some(var) => match var.value.constant.clone() {

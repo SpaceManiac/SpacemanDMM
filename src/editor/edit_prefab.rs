@@ -53,9 +53,6 @@ impl EditPrefab {
         }
         let mut search_ty = ty;
         while let Some(search) = search_ty {
-            if search.is_root() {
-                break;
-            }
             for (key, var) in search.vars.iter() {
                 if let Some(decl) = var.declaration.as_ref() {
                     if !extra_vars && !decl.var_type.is_normal() {
@@ -64,7 +61,7 @@ impl EditPrefab {
                     max_len = std::cmp::max(max_len, key.len());
                 }
             }
-            search_ty = search.parent_type();
+            search_ty = search.parent_type_without_root();
         }
         let offset = (max_len + 4) as f32 * 7.0;
 
@@ -109,9 +106,6 @@ impl EditPrefab {
         // show all the parent variables you could edit
         let mut search_ty = ty;
         while let Some(search) = search_ty {
-            if search.is_root() {
-                break;
-            }
             ui.separator();
             ui.text(im_str!("{}", &search.path));
 

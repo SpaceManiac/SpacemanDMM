@@ -131,7 +131,7 @@ pub struct Type {
 }
 
 impl Type {
-    pub fn parent_type(&self) -> Option<NodeIndex> {
+    pub fn parent_type_index(&self) -> Option<NodeIndex> {
         if self.parent_type == NodeIndex::new(BAD_NODE_INDEX) {
             None
         } else {
@@ -229,6 +229,15 @@ impl<'a> TypeRef<'a> {
     /// Find the parent **type** based on `parent_type` var, or parent path if unspecified.
     pub fn parent_type(&self) -> Option<TypeRef<'a>> {
         let idx = self.parent_type;
+        self.tree.graph.node_weight(idx).map(|_| TypeRef::new(self.tree, idx))
+    }
+
+    /// Find the parent type of this without returning root.
+    pub fn parent_type_without_root(&self) -> Option<TypeRef<'a>> {
+        let idx = self.parent_type;
+        if idx == NodeIndex::new(0) {
+            return None;
+        }
         self.tree.graph.node_weight(idx).map(|_| TypeRef::new(self.tree, idx))
     }
 

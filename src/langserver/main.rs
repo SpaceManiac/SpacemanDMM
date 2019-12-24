@@ -1138,7 +1138,7 @@ handle_method_call! {
                     results.push(self.convert_location(proc.main_value().location, &[&ty.path, "/proc/", proc_name])?);
                     break;
                 }
-                next = ignore_root(ty.parent_type());
+                next = ty.parent_type_without_root();
             }
         },
         Annotation::ScopedVar(priors, var_name) => {
@@ -1148,7 +1148,7 @@ handle_method_call! {
                     results.push(self.convert_location(var.value.location, &[&ty.path, "/var/", var_name])?);
                     break;
                 }
-                next = ignore_root(ty.parent_type());
+                next = ty.parent_type_without_root();
             }
         },
         Annotation::ParentCall => {
@@ -1226,7 +1226,7 @@ handle_method_call! {
                         break;
                     }
                 }
-                next = ignore_root(ty.parent_type());
+                next = ty.parent_type_without_root();
             }
         },
         }
@@ -1345,7 +1345,7 @@ handle_method_call! {
                         break;
                     }
                 }
-                next = ignore_root(ty.parent_type());
+                next = ty.parent_type_without_root();
             }
         },
         Annotation::ScopedVar(priors, var_name) => {
@@ -1357,7 +1357,7 @@ handle_method_call! {
                         break;
                     }
                 }
-                next = ignore_root(ty.parent_type());
+                next = ty.parent_type_without_root();
             }
         },
         // TODO: macros
@@ -1827,13 +1827,6 @@ enum UnscopedVar<'a> {
 
 fn is_constructor_name(name: &str) -> bool {
     name == "New" || name == "init" || name == "Initialize"
-}
-
-fn ignore_root(t: Option<TypeRef>) -> Option<TypeRef> {
-    match t {
-        Some(t) if t.is_root() => None,
-        other => other,
-    }
 }
 
 fn location_to_position(loc: dm::Location) -> lsp_types::Position  {
