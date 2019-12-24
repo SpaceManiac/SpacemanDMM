@@ -952,7 +952,7 @@ impl EditorScene {
                 Window::new(&im_str!("{}##{}/{:?}", base.path(), uid, inst))
                     .opened(&mut keep)
                     .position(ui.io().mouse_pos, Condition::Appearing)
-                    .size([350.0, 500.0], Condition::FirstUseEver)
+                    .size([450.0, 550.0], Condition::FirstUseEver)
                     .horizontal_scrollbar(true)
                     .menu_bar(true)
                     .build(ui, || {

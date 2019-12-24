@@ -71,6 +71,7 @@ impl EditPrefab {
         // show the instance variables - everything which is
         // actually set is right at the top
         ui.text(im_str!("Instance variables ({})", fab.vars.len()));
+        let mut remove = std::collections::HashSet::new();
         for (name, value) in fab.vars.iter() {
             if !name.contains(filter.to_str()) {
                 continue;
@@ -82,7 +83,17 @@ impl EditPrefab {
                 style.pop(ui);
             }
             ui.same_line(offset);
+            if ui.small_button(&im_str!("X##editprefab_remove_{}", name)) {
+                remove.insert(name.to_owned());
+            }
+            if ui.is_item_hovered() {
+                ui.tooltip_text("Reset");
+            }
+            ui.same_line(0.);
             ui.text(im_str!("{}", value));
+        }
+        for key in remove {
+            fab.vars.remove(&key);
         }
 
         // show the red path on error
@@ -102,7 +113,7 @@ impl EditPrefab {
                 break;
             }
             ui.separator();
-            ui.text(im_str!("{} ({})", &search.path, search.vars.len()));
+            ui.text(im_str!("{}", &search.path));
 
             for (name, var) in search.vars.iter() {
                 if !name.contains(filter.to_str()) {
@@ -116,15 +127,43 @@ impl EditPrefab {
                         }
                         prefix = "-";
                     }
-                    ui.text(im_str!("{} {}", prefix, name));
+
+                    let instance_value = self.fab.vars.get(name);
+
+                    if instance_value.is_some() {
+                        let style = ui.push_style_colors(GREEN_TEXT);
+                        ui.text(im_str!("{} {}", prefix, name));
+                        style.pop(ui);
+                    } else {
+                        ui.text(im_str!("{} {}", prefix, name));
+                    }
+
                     if prefix == "-" && ui.is_item_hovered() {
                         ui.tooltip_text("/tmp, /static, or /const");
                     }
+
                     // search_ty is seeded with ty and must be Some to get here
-                    if let Some(value) = ty.unwrap().get_value(name) {
-                        if let Some(c) = value.constant.as_ref() {
-                            ui.same_line(offset);
-                            ui.text(im_str!("{}", c));
+                    let original_value = ty.unwrap().get_value(name).and_then(|v| v.constant.as_ref());
+                    if let Some(c) = instance_value {
+                        ui.same_line(offset);
+                        let style = ui.push_style_colors(GREEN_TEXT);
+                        ui.text(im_str!(" {}    ", c));
+                        style.pop(ui);
+                        if ui.is_item_hovered() {
+                            if let Some(c) = original_value {
+                                ui.tooltip_text(im_str!("Was: {}", c));
+                            }
+                        }
+                    } else if let Some(c) = original_value {
+                        ui.same_line(offset);
+                        ui.text(im_str!(" {}    ", c));
+                        if ui.is_item_hovered() {
+                            ui.set_mouse_cursor(Some(MouseCursor::TextInput));
+                            ui.tooltip_text("Click to edit");
+                            if ui.is_mouse_clicked(MouseButton::Left) {
+                                ui.set_scroll_y(0.);
+                                self.fab.vars.insert(name.clone(), c.clone());
+                            }
                         }
                     }
                 }
