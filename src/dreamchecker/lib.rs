@@ -352,19 +352,15 @@ impl<'o> ProcDirective<'o> {
     }
 }
 
-#[inline]
 pub fn directive_value_to_truthy(expr: &Expression, location: Location) -> Result<bool, DMError> {
     // Maybe this should be using constant evaluation, but for now accept TRUE and FALSE directly.
-    match match expr.as_term() {
-        Some(Term::Int(0)) => Some(false),
-        Some(Term::Int(1)) => Some(true),
-        Some(Term::Ident(i)) if i == "FALSE" => Some(false),
-        Some(Term::Ident(i)) if i == "TRUE" => Some(true),
-        _ => None,
-    } {
-        Some(value) => Ok(value),
-        None => Err(error(location, format!("invalid value for lint directive {:?}", expr))
-            .set_severity(Severity::Warning))
+    match expr.as_term() {
+        Some(Term::Int(0)) => Ok(false),
+        Some(Term::Int(1)) => Ok(true),
+        Some(Term::Ident(i)) if i == "FALSE" => Ok(false),
+        Some(Term::Ident(i)) if i == "TRUE" => Ok(true),
+        _ => Err(error(location, format!("invalid value for lint directive {:?}", expr))
+        .set_severity(Severity::Warning)),
     }
 }
 
