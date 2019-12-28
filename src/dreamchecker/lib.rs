@@ -307,13 +307,70 @@ struct KwargInfo {
     bad_overrides_at: BTreeMap<String, BadOverride>,
 }
 
+struct ProcDirective<'o> {
+    directive: HashMap<ProcRef<'o>, (bool, Location)>,
+    can_be_disabled: bool,
+    directive_string: &'static str,
+}
+
+impl<'o> ProcDirective<'o> {
+    pub fn new(directive_string: &'static str, can_be_disabled: bool) -> ProcDirective<'o> {
+        ProcDirective {
+            directive: Default::default(),
+            directive_string,
+            can_be_disabled,
+        }
+    }
+
+    pub fn insert(&mut self, proc: ProcRef<'o>, enable: bool, location: Location) -> Result<(), DMError> {
+        if !enable && !self.can_be_disabled {
+            return Err(error(location, format!("{} sets {} false, but it cannot be disabled.", proc, self.directive_string))
+                .set_severity(Severity::Warning))
+        }
+        if let Some((_, originallocation)) = self.directive.get(&proc) {
+            return Err(error(location, format!("{} sets {} twice", proc, self.directive_string))
+                .with_note(*originallocation, "first definition here")
+                .set_severity(Severity::Warning))
+        }
+        self.directive.insert(proc, (enable, location));
+        Ok(())
+    }
+
+    pub fn get(&self, proc: ProcRef<'o>) -> Option<&(bool, Location)> {
+        self.directive.get(&proc)
+    }
+
+    pub fn get_self_or_parent(&self, proc: ProcRef<'o>) -> Option<(ProcRef<'o>, bool, Location)> {
+        let mut next = Some(proc);
+        while let Some(current) = next {
+            if let Some(&(truthy, location)) = self.get(current) {
+                return Some((current, truthy, location))
+            }
+            next = current.parent_proc();
+        }
+        None
+    }
+}
+
+pub fn directive_value_to_truthy(expr: &Expression, location: Location) -> Result<bool, DMError> {
+    // Maybe this should be using constant evaluation, but for now accept TRUE and FALSE directly.
+    match expr.as_term() {
+        Some(Term::Int(0)) => Ok(false),
+        Some(Term::Int(1)) => Ok(true),
+        Some(Term::Ident(i)) if i == "FALSE" => Ok(false),
+        Some(Term::Ident(i)) if i == "TRUE" => Ok(true),
+        _ => Err(error(location, format!("invalid value for lint directive {:?}", expr))
+        .set_severity(Severity::Warning)),
+    }
+}
+
 pub struct AnalyzeObjectTree<'o> {
     context: &'o Context,
     objtree: &'o ObjectTree,
 
     return_type: HashMap<ProcRef<'o>, TypeExpr<'o>>,
-    must_call_parent: HashMap<ProcRef<'o>, (bool, Location)>,
-    must_not_override: HashMap<ProcRef<'o>, (bool, Location)>,
+    must_call_parent: ProcDirective<'o>,
+    must_not_override: ProcDirective<'o>,
     // Debug(ProcRef) -> KwargInfo
     used_kwargs: BTreeMap<String, KwargInfo>,
 }
@@ -327,14 +384,36 @@ impl<'o> AnalyzeObjectTree<'o> {
             context,
             objtree,
             return_type,
-            must_call_parent: Default::default(),
-            must_not_override: Default::default(),
+            must_call_parent: ProcDirective::new("SpacemanDMM_should_call_parent", true),
+            must_not_override: ProcDirective::new("SpacemanDMM_should_not_override", false),
             used_kwargs: Default::default(),
         }
     }
 
     pub fn check_proc(&mut self, proc: ProcRef<'o>, code: &'o [Spanned<Statement>]) {
         AnalyzeProc::new(self, self.context, self.objtree, proc).run(code)
+    }
+
+    #[inline]
+    fn add_directive_or_error(&mut self, proc: ProcRef<'o>, directive: &str, expr: &Expression, location: Location) {
+        let procdirective = match directive {
+            "SpacemanDMM_should_not_override" => &mut self.must_not_override,
+            "SpacemanDMM_should_call_parent" => &mut self.must_call_parent,
+            other => {
+                error(location, format!("unknown linter setting {:?}", directive))
+                    .set_severity(Severity::Warning)
+                    .register(self.context);
+                return
+            }
+        };
+        match directive_value_to_truthy(expr, location) {
+            Ok(truthy) => {
+                if let Err(error) = procdirective.insert(proc, truthy, location) {
+                    self.context.register_error(error);
+                }
+            },
+            Err(error) => self.context.register_error(error),
+        }
     }
 
     pub fn gather_settings(&mut self, proc: ProcRef<'o>, code: &'o [Spanned<Statement>]) {
@@ -353,35 +432,8 @@ impl<'o> AnalyzeObjectTree<'o> {
                                 .register(self.context),
                         }
                     }
-                } else if name == "SpacemanDMM_should_not_override" {
-                    match match value.as_term() {
-                        Some(Term::Int(1)) => Some(true),
-                        Some(Term::Ident(i)) if i == "TRUE" => Some(true),
-                        _ => None,
-                    } {
-                        Some(value) => { self.must_not_override.insert(proc, (value, statement.location)); },
-                        None => error(statement.location, format!("invalid value for {}: {:?}", name, value))
-                            .set_severity(Severity::Warning)
-                            .register(self.context)
-                    }
-                } else if name == "SpacemanDMM_should_call_parent" {
-                    // Maybe this should be using constant evaluation, but for now accept TRUE and FALSE directly.
-                    match match value.as_term() {
-                        Some(Term::Int(0)) => Some(false),
-                        Some(Term::Int(1)) => Some(true),
-                        Some(Term::Ident(i)) if i == "FALSE" => Some(false),
-                        Some(Term::Ident(i)) if i == "TRUE" => Some(true),
-                        _ => None,
-                    } {
-                        Some(value) => { self.must_call_parent.insert(proc, (value, statement.location)); },
-                        None => error(statement.location, format!("invalid value for {}: {:?}", name, value))
-                            .set_severity(Severity::Warning)
-                            .register(self.context)
-                    }
                 } else if name.starts_with("SpacemanDMM_") {
-                    error(statement.location, format!("unknown linter setting {:?}", name))
-                        .set_severity(Severity::Warning)
-                        .register(self.context);
+                    self.add_directive_or_error(proc, &name.as_str(), value, statement.location);
                 } else if !KNOWN_SETTING_NAMES.contains(&name.as_str()) {
                     error(statement.location, format!("unknown setting {:?}", name))
                         .set_severity(Severity::Warning)
@@ -607,26 +659,21 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         self.visit_block(block);
 
         if self.proc_ref.parent_proc().is_some() {
-            let mut next = Some(self.proc_ref);
-            while let Some(current) = next {
-                if let Some(&(must_not, location)) = self.env.must_not_override.get(&current) {
-                    if must_not {
-                        error(self.proc_ref.location, format!("proc overrides parent, prohibited by {}", current))
-                            .with_note(location, "prohibited by this must_not_override annotation")
+            if let Some((proc, must_not, location)) = self.env.must_not_override.get_self_or_parent(self.proc_ref) {
+                if must_not && proc != self.proc_ref {
+                    error(self.proc_ref.location, format!("proc overrides parent, prohibited by {}", proc))
+                        .with_note(location, "prohibited by this must_not_override annotation")
+                        .register(self.context);
+                }
+            }
+            if !self.calls_parent {
+                if let Some((proc, must, location)) = self.env.must_call_parent.get_self_or_parent(self.proc_ref) {
+                    if must {
+                        error(self.proc_ref.location, format!("proc never calls parent, required by {}", proc))
+                            .with_note(location, "required by this must_call_parent annotation")
                             .register(self.context);
                     }
                 }
-                if !self.calls_parent {
-                    if let Some(&(must, location)) = self.env.must_call_parent.get(&current) {
-                        if must {
-                            error(self.proc_ref.location, format!("proc never calls parent, required by {}", current))
-                                .with_note(location, "required by this must_call_parent annotation")
-                                .register(self.context);
-                        }
-                        break;
-                    }
-                }
-                next = current.parent_proc();
             }
         }
     }
