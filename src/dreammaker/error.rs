@@ -87,9 +87,10 @@ impl Context {
             match self.filter.warning_level_for(errortype) {
                 WarningLevel::Disabled => { return },
                 WarningLevel::Unset => (),
-                other => {
-                    error.severity = Severity::from(other);
-                }
+                WarningLevel::Error => error.severity = Severity::Error,
+                WarningLevel::Warning => error.severity = Severity::Warning,
+                WarningLevel::Info => error.severity = Severity::Info,
+                WarningLevel::Hint => error.severity = Severity::Hint,
             };
         }
         if let Some(severity) = self.print_severity {

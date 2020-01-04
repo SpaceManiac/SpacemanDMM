@@ -39,18 +39,6 @@ impl<'de> Deserialize<'de> for WarningLevel {
     }
 }
 
-impl From<WarningLevel> for Severity {
-    fn from(warninglevel: WarningLevel) -> Self {
-        match warninglevel {
-            WarningLevel::Error => Severity::Error,
-            WarningLevel::Warning => Severity::Warning,
-            WarningLevel::Info => Severity::Info,
-            WarningLevel::Hint => Severity::Hint,
-            _ => Severity::Error,
-        }
-    }
-}
-
 #[derive(Deserialize, Default)]
 pub struct Config {
     #[serde(default)]
