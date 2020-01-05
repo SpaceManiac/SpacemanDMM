@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use termcolor::{ColorSpec, Color};
 use serde::de::{Deserialize, Deserializer};
 
-use crate::config::{Warnings, WarningLevel};
+use crate::config::Config;
 
 /// An identifier referring to a loaded file.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -34,10 +34,8 @@ pub struct Context {
     reverse_files: RefCell<HashMap<PathBuf, FileId>>,
     /// A list of errors, warnings, and other diagnostics generated.
     errors: RefCell<Vec<DMError>>,
-    /// Severity at and above which errors will be printed immediately.
-    print_severity: Option<Severity>,
-    /// Warnings/Errors that should be filtered out
-    filter: Warnings,
+    /// Warning config
+    pub config: Config,
 }
 
 impl Context {
@@ -55,10 +53,6 @@ impl Context {
         let id = FileId(len + FILEID_MIN.0);
         self.reverse_files.borrow_mut().insert(path.to_owned(), id);
         id
-    }
-
-    pub fn register_filter(&mut self, warnings: Warnings) {
-        self.filter = warnings;
     }
 
     /// Look up a file's ID by its path, without inserting it.
@@ -81,27 +75,14 @@ impl Context {
     }
 
     /// Push an error or other diagnostic to the context.
-    pub fn register_error(&self, mut error: DMError) {
-        // check if the optional errortype is in the list to ignore
-        if let Some(errortype) = error.errortype {
-            match self.filter.warning_level_for(errortype) {
-                WarningLevel::Disabled => { return },
-                WarningLevel::Unset => (),
-                WarningLevel::Error => error.severity = Severity::Error,
-                WarningLevel::Warning => error.severity = Severity::Warning,
-                WarningLevel::Info => error.severity = Severity::Info,
-                WarningLevel::Hint => error.severity = Severity::Hint,
-            };
-        }
-        if let Some(severity) = self.print_severity {
-            if error.severity <= severity {
-                let stderr = termcolor::StandardStream::stderr(termcolor::ColorChoice::Auto);
-                self.pretty_print_error(&mut stderr.lock(), &error)
-                    .expect("error writing to stderr");
-            }
+    pub fn register_error(&self, error: DMError) {
+        if self.config.printable_error(&error) {
+            let stderr = termcolor::StandardStream::stderr(termcolor::ColorChoice::Auto);
+            self.pretty_print_error(&mut stderr.lock(), &error)
+                .expect("error writing to stderr");
         }
         // ignore errors with severity above configured level
-        if !self.filter.severe_enough(error.severity()) {
+        if !self.config.registerable_error(&error) {
             return
         }
         self.errors.borrow_mut().push(error);
@@ -118,8 +99,8 @@ impl Context {
     }
 
     /// Set a severity at and above which errors will be printed immediately.
-    pub fn set_print_severity(&mut self, print_severity: Option<Severity>) {
-        self.print_severity = print_severity;
+    pub fn set_print_severity(&mut self, print_severity: Severity) {
+        self.config.display.print_level = print_severity;
     }
 
     /// Pretty-print a `DMError` to the given output.
@@ -198,8 +179,7 @@ impl Context {
             files: self.files.clone(),
             reverse_files: self.reverse_files.clone(),
             errors: Default::default(),
-            print_severity: Default::default(),
-            filter: self.filter.clone(),
+            config: self.config.clone(),
         }
     }
 }
@@ -292,6 +272,10 @@ impl Severity {
     }
     pub fn default_all() -> Severity {
         Severity::Hint
+    }
+
+    pub fn default_print() -> Severity {
+        Severity::Info
     }
 }
 
@@ -450,6 +434,11 @@ impl DMError {
     pub fn description(&self) -> &str {
         &self.description
     }
+
+    /// Get the errortype associated with this error.
+    pub fn errortype(&self) -> Option<&'static str> {
+        self.errortype
+    } 
 
     /// Deconstruct this error, returning only the description.
     pub fn into_description(self) -> String {

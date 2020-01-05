@@ -47,14 +47,11 @@ fn main() {
             .expect("error detecting .dme")
             .expect("no .dme found"));
 
-    const PRINT_SEVERITY: dm::Severity = dm::Severity::Info;
-
     let mut context = Context::default();
     if let Some(filepath) = config_file {
-        let config = read_config_toml(filepath);
-        context.register_filter(config.warnings);
+        context.config = Config::read_config_toml(filepath);
     }
-    context.set_print_severity(Some(PRINT_SEVERITY));
+
     println!("============================================================");
     println!("Parsing {}...\n", dme.display());
     let pp = dm::preprocessor::Preprocessor::new(&context, dme)
@@ -110,7 +107,7 @@ fn main() {
     analyzer.finish_check_kwargs();
 
     println!("============================================================");
-    let errors = context.errors().iter().filter(|each| each.severity() <= PRINT_SEVERITY).count();
+    let errors = context.errors().iter().filter(|each| context.config.printable_error(each)).count();
     println!("Found {} diagnostics", errors);
     std::process::exit(if errors > 0 { 1 } else { 0 });
 }

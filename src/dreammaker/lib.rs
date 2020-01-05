@@ -11,6 +11,7 @@ extern crate ordered_float;
 extern crate serde;
 extern crate serde_derive;
 extern crate toml;
+#[macro_use] extern crate guard;
 
 use std::io;
 use std::path::Path;
