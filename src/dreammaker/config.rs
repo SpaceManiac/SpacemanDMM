@@ -46,6 +46,18 @@ impl<'de> Deserialize<'de> for WarningLevel {
     }
 }*/
 
+/*
+config.toml
+[warnings]
+duplicate_includes: false
+
+[display]
+error_level: "hint"
+
+print_level: "error"
+
+*/
+
 #[derive(Deserialize, Default, Debug, Clone)]
 pub struct Config {
     #[serde(default)]
@@ -129,7 +141,7 @@ impl WarningDisplay {
         return severity <= self.error_level
     }
 }
-
+/*
 #[derive(Deserialize, Default, Debug, Clone)]
 pub struct Warnings {
     #[serde(default)]
@@ -183,4 +195,4 @@ impl Warnings {
             _ => { return WarningLevel::Unset }
         };
     }
-}
+}*/
