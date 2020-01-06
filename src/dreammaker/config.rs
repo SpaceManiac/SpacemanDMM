@@ -61,8 +61,8 @@ print_level: "error"
 #[derive(Deserialize, Default, Debug, Clone)]
 pub struct Config {
     #[serde(default)]
-    pub warnings: HashMap<String, WarningLevel>,
-    pub display: WarningDisplay,
+    warnings: HashMap<String, WarningLevel>,
+    display: WarningDisplay,
 }
 
 impl Config {
@@ -116,7 +116,10 @@ impl Config {
         guard!(let Some(sev) = self.config_severity(error) else {
             return false
         });
-        sev <= self.display.print_level
+        guard!(let Some(print_level) = self.display.print_level else {
+            return false
+        });
+        sev <= print_level
     }
 
     pub fn registerable_error(&self, error: &DMError) -> bool {
@@ -125,6 +128,10 @@ impl Config {
         });
         sev <= self.display.error_level
     }
+
+    pub fn set_print_severity(&mut self, print_severity: Option<Severity>) {
+        self.display.print_level = print_severity
+    }
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
@@ -132,15 +139,10 @@ pub struct WarningDisplay {
     #[serde(default="Severity::default_all")]
     error_level: Severity,
 
-    #[serde(default="Severity::default_print")]
-    pub print_level: Severity,
+    #[serde(default="Severity::default_disabled")]
+    print_level: Option<Severity>,
 }
 
-impl WarningDisplay {
-    pub fn severe_enough(&self, severity: Severity) -> bool {
-        return severity <= self.error_level
-    }
-}
 /*
 #[derive(Deserialize, Default, Debug, Clone)]
 pub struct Warnings {

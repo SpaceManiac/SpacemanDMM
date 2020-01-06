@@ -36,7 +36,7 @@ fn main() {
         .get_matches());
 
     let mut context = Context::default();
-    context.dm_context.set_print_severity(dm::Severity::Error);
+    context.dm_context.set_print_severity(Some(dm::Severity::Error));
     rayon::ThreadPoolBuilder::new()
         .num_threads(opt.jobs)
         .build_global()
@@ -231,7 +231,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                 "info" => dm::Severity::Info,
                 _ => dm::Severity::Hint,
             };
-            context.dm_context.set_print_severity(severity);
+            context.dm_context.set_print_severity(Some(severity));
             context.procs = procs;
             context.objtree(opt);
             *context.exit_status.get_mut() = context

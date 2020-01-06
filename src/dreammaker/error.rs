@@ -99,8 +99,8 @@ impl Context {
     }
 
     /// Set a severity at and above which errors will be printed immediately.
-    pub fn set_print_severity(&mut self, print_severity: Severity) {
-        self.config.display.print_level = print_severity;
+    pub fn set_print_severity(&mut self, print_severity: Option<Severity>) {
+        self.config.set_print_severity(print_severity)
     }
 
     /// Pretty-print a `DMError` to the given output.
@@ -274,8 +274,8 @@ impl Severity {
         Severity::Hint
     }
 
-    pub fn default_print() -> Severity {
-        Severity::Info
+    pub fn default_disabled() -> Option<Severity> {
+        None
     }
 }
 
