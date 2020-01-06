@@ -4,10 +4,11 @@ use serde::Deserialize;
 use std::fs::File;
 use std::io::Read;
 use std::collections::HashMap;
+use std::cmp::Ordering;
 use crate::error::Severity;
 use crate::DMError;
 
-#[derive(Debug, Deserialize, Clone, Copy)]
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
 #[serde(rename_all(deserialize = "lowercase"))]
 pub enum WarningLevel {
     #[serde(alias = "errors")]
@@ -28,33 +29,64 @@ impl Default for WarningLevel {
         WarningLevel::Unset
     }
 }
-/*
-impl<'de> Deserialize<'de> for WarningLevel {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?.to_lowercase();
-        match s.as_str() {
-            "error" | "errors" => Ok(WarningLevel::Error),
-            "warning" | "warnings" => Ok(WarningLevel::Warning),
-            "info" | "infos" => Ok(WarningLevel::Info),
-            "hint" | "hints" => Ok(WarningLevel::Hint),
-            "false" | "off" => Ok(WarningLevel::Disabled),
-            other => Err(serde::de::Error::custom(format!("invalid warning level value: {}", other))),
+
+impl WarningLevel {
+    fn default_all() -> WarningLevel {
+        WarningLevel::Hint
+    }
+}
+
+impl From<Severity> for WarningLevel {
+    fn from(severity: Severity) -> Self {
+        match severity {
+            Severity::Error => WarningLevel::Error,
+            Severity::Warning => WarningLevel::Warning,
+            Severity::Info => WarningLevel::Info,
+            Severity::Hint => WarningLevel::Hint,
         }
     }
-}*/
+}
+
+impl PartialEq<Severity> for WarningLevel {
+    fn eq(&self, other: &Severity) -> bool {
+        match (self, other) {
+            (WarningLevel::Error, Severity::Error) => true,
+            (WarningLevel::Warning, Severity::Warning) => true,
+            (WarningLevel::Info, Severity::Info) => true,
+            (WarningLevel::Hint, Severity::Hint) => true,
+            _ => false,
+        }
+    }
+}
+
+impl PartialOrd<Severity> for WarningLevel {
+    fn partial_cmp(&self, other: &Severity) -> Option<Ordering> {
+        match self {
+            WarningLevel::Disabled | WarningLevel::Unset => None,
+            _ => Some((*self as u8).cmp(&(*other as u8))),
+        }
+    }
+}
 
 /*
 config.toml
 [warnings]
-duplicate_includes: false
+duplicate_include = false
+should_call_parent = false
+should_not_override = false
+field_access_static_type = false
+proc_call_static_type = false
+integer_precision_loss = false
+colon_path_warning = false
+var_in_proc_paramater = false
+static_in_proc_paramater = false
+macro_redefined = false
+undefine_undefined_macro = false
 
 [display]
-error_level: "hint"
+error_level = "hint"
 
-print_level: "error"
+print_level = "error"
 
 */
 
@@ -109,10 +141,7 @@ impl Config {
                 WarningLevel::Unset => {},
             }
         }
-        guard!(let Some(print_level) = self.display.print_level else {
-            return false
-        });
-        error_sev <= print_level
+        self.display.print_level >= error_sev
     }
 
     pub fn registerable_error(&self, error: &DMError) -> bool {
@@ -127,75 +156,25 @@ impl Config {
                 WarningLevel::Unset => {},
             }
         }
-        error_sev <= self.display.error_level
+        self.display.error_level >= error_sev
     }
 
     pub fn set_print_severity(&mut self, print_severity: Option<Severity>) {
-        self.display.print_level = print_severity
+        if self.display.print_level != WarningLevel::Unset {
+            return
+        }
+        match print_severity {
+            Some(severity) => self.display.print_level = WarningLevel::from(severity),
+            None => self.display.print_level = WarningLevel::Disabled,
+        }
     }
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
 pub struct WarningDisplay {
-    #[serde(default="Severity::default_all")]
-    error_level: Severity,
+    #[serde(default="WarningLevel::default_all")]
+    error_level: WarningLevel,
 
-    #[serde(default="Severity::default_disabled")]
-    print_level: Option<Severity>,
+    #[serde(default)]
+    print_level: WarningLevel,
 }
-
-/*
-#[derive(Deserialize, Default, Debug, Clone)]
-pub struct Warnings {
-    #[serde(default)]
-    duplicate_includes: WarningLevel,
-
-    #[serde(default)]
-    should_call_parent: WarningLevel,
-
-    #[serde(default)]
-    should_not_override: WarningLevel,
-
-    #[serde(default)]
-    field_access_static_type: WarningLevel,
-
-    #[serde(default)]
-    proc_call_static_type: WarningLevel,
-
-    #[serde(default)]
-    integer_precision_loss: WarningLevel,
-
-    #[serde(default)]
-    colon_path_warning: WarningLevel,
-
-    #[serde(default)]
-    var_in_proc_paramater: WarningLevel,
-
-    #[serde(default)]
-    static_in_proc_paramater: WarningLevel,
-
-    #[serde(default)]
-    macro_redefined: WarningLevel,
-
-    #[serde(default)]
-    undefine_undefined_macro: WarningLevel,
-}
-
-impl Warnings {
-    pub fn warning_level_for(&self, errortype: &'static str) -> WarningLevel {
-        match errortype {
-            "duplicate_include" => { return self.duplicate_includes },
-            "must_call_parent" => { return self.should_call_parent },
-            "must_not_override" => { return self.should_not_override },
-            "field_access_static_type" => { return self.field_access_static_type },
-            "proc_call_static_type" => { return self.proc_call_static_type },
-            "integer_precision_loss" => { return self.integer_precision_loss },
-            "colon_path_warning" => { return self.colon_path_warning },
-            "var_in_proc_paramater" => { return self.var_in_proc_paramater },
-            "static_in_proc_parameter" => { return self.var_in_proc_paramater },
-            "macro_redefined" => { return self.macro_redefined },
-            "undefine_undefined_macro" => { return self.undefine_undefined_macro }
-            _ => { return WarningLevel::Unset }
-        };
-    }
-}*/

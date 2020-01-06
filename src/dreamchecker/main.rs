@@ -51,6 +51,7 @@ fn main() {
     if let Some(filepath) = config_file {
         context.config = Config::read_config_toml(filepath);
     }
+    context.set_print_severity(Some(dm::Severity::Info));
 
     println!("============================================================");
     println!("Parsing {}...\n", dme.display());
