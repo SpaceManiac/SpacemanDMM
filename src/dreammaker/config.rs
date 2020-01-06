@@ -86,8 +86,8 @@ impl Config {
         file.read_to_string(&mut config_toml)
                 .unwrap_or_else(|err| panic!("Error while reading config: [{}]", err));
     
-        let config: Config = toml::from_str(&config_toml).unwrap();
-        return config
+        return toml::from_str(&config_toml)
+            .unwrap_or_else(|err| panic!("TOML Error while reading config file: {}", err));
     }
 
     fn config_warninglevel(&self, error: &DMError) -> Option<&WarningLevel> {
@@ -97,7 +97,7 @@ impl Config {
         None
     }
 
-    fn config_severity(&self, error: &DMError) -> Option<Severity> {
+    pub fn printable_error(&self, error: &DMError) -> bool {
         let mut error_sev = error.severity();
         if let Some(level) = self.config_warninglevel(error) {
             match level {
@@ -105,28 +105,29 @@ impl Config {
                 WarningLevel::Warning => error_sev = Severity::Warning,
                 WarningLevel::Info => error_sev = Severity::Info,
                 WarningLevel::Hint => error_sev = Severity::Hint,
-                WarningLevel::Disabled => return None,
+                WarningLevel::Disabled => return false,
                 WarningLevel::Unset => {},
             }
         }
-        Some(error_sev)
-    }
-
-    pub fn printable_error(&self, error: &DMError) -> bool {
-        guard!(let Some(sev) = self.config_severity(error) else {
-            return false
-        });
         guard!(let Some(print_level) = self.display.print_level else {
             return false
         });
-        sev <= print_level
+        error_sev <= print_level
     }
 
     pub fn registerable_error(&self, error: &DMError) -> bool {
-        guard!(let Some(sev) = self.config_severity(error) else {
-            return false
-        });
-        sev <= self.display.error_level
+        let mut error_sev = error.severity();
+        if let Some(level) = self.config_warninglevel(error) {
+            match level {
+                WarningLevel::Error => error_sev = Severity::Error,
+                WarningLevel::Warning => error_sev = Severity::Warning,
+                WarningLevel::Info => error_sev = Severity::Info,
+                WarningLevel::Hint => error_sev = Severity::Hint,
+                WarningLevel::Disabled => return false,
+                WarningLevel::Unset => {},
+            }
+        }
+        error_sev <= self.display.error_level
     }
 
     pub fn set_print_severity(&mut self, print_severity: Option<Severity>) {
