@@ -804,6 +804,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         sound/var/y = int!(0);
         sound/var/z = int!(0);
         sound/var/falloff = int!(1);
+        sound/var/len;
         sound/New(file, repeat, wait, channel, volume);
 
         icon;
