@@ -781,7 +781,6 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         client/proc/Northeast();
         client/proc/Northwest();
         client/proc/SendPage(msg, recipient, options);
-        client/proc/SoundQuery();
         client/proc/South();
         client/proc/Southeast();
         client/proc/Southwest();
