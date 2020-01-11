@@ -102,7 +102,10 @@ impl<'o> WalkProc<'o> {
         self.visit_var(location, &var.var_type, &var.name, var.value.as_ref())
     }
 
-    fn visit_var(&mut self, _location: Location, _var_type: &VarType, name: &str, _value: Option<&'o Expression>) {
-        self.local_vars.push(name.to_owned());
+    fn visit_var(&mut self, _location: Location, var_type: &VarType, name: &str, _value: Option<&'o Expression>) {
+        // static and const vars do not exist in the stack frame
+        if !var_type.is_static && !var_type.is_const {
+            self.local_vars.push(name.to_owned());
+        }
     }
 }
