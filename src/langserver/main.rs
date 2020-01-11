@@ -252,8 +252,18 @@ impl<'a> Engine<'a> {
     fn update_objtree(&mut self) {
         if self.client_caps.object_tree {
             let root = self.recurse_objtree(self.objtree.root());
-            self.issue_notification::<extras::ObjectTree>(extras::ObjectTreeParams {
-                root,
+            // offload serialization costs to another thread
+            std::thread::spawn(move || {
+                let start = std::time::Instant::now();
+                issue_notification::<extras::ObjectTree>(extras::ObjectTreeParams {
+                    root,
+                });
+                let elapsed = start.elapsed();
+                eprintln!(
+                    "serialized objtree in {}.{:03}s",
+                    elapsed.as_secs(),
+                    elapsed.subsec_millis()
+                );
             });
         }
     }
