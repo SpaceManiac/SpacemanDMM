@@ -179,7 +179,7 @@ impl Context {
             files: self.files.clone(),
             reverse_files: self.reverse_files.clone(),
             errors: Default::default(),
-            config: self.config.clone(),
+            config: Default::default(),
         }
     }
 }
@@ -270,13 +270,6 @@ impl Severity {
         }
         spec
     }
-    pub fn default_all() -> Severity {
-        Severity::Hint
-    }
-
-    pub fn default_disabled() -> Option<Severity> {
-        None
-    }
 }
 
 impl Default for Severity {
@@ -307,7 +300,7 @@ impl<'de> Deserialize<'de> for Severity {
             "warning" | "warnings" => Ok(Severity::Warning),
             "info" | "infos" => Ok(Severity::Info),
             "hint" | "hints" => Ok(Severity::Hint),
-            _other => Ok(Severity::Hint),
+            _ => Err(serde::de::Error::invalid_value(serde::de::Unexpected::Str(&s), &"'error', 'warning', 'info', or 'hint'"))
         };
         severity
     }
@@ -438,7 +431,7 @@ impl DMError {
     /// Get the errortype associated with this error.
     pub fn errortype(&self) -> Option<&'static str> {
         self.errortype
-    } 
+    }
 
     /// Deconstruct this error, returning only the description.
     pub fn into_description(self) -> String {
