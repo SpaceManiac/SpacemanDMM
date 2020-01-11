@@ -48,10 +48,10 @@ fn read<R: BufRead>(input: &mut R) -> Result<Option<String>, Box<dyn std::error:
     Ok(Some(String::from_utf8(content)?))
 }
 
-pub fn write(output: String) {
+pub fn write(output: &str) {
     let stdout = io::stdout();
     let mut stdout_lock = stdout.lock();
-    write_to(&mut stdout_lock, &output);
+    write_to(&mut stdout_lock, output);
 }
 
 pub fn write_to<W: Write>(output: &mut W, json: &str) {
