@@ -129,34 +129,24 @@ impl Config {
         None
     }
 
+    pub fn set_configured_severity(&self, error: DMError) -> Option<DMError> {
+        let newerror = match self.config_warninglevel(&error) {
+            Some(WarningLevel::Error) => error.set_severity(Severity::Error),
+            Some(WarningLevel::Warning) => error.set_severity(Severity::Warning),
+            Some(WarningLevel::Info) => error.set_severity(Severity::Info),
+            Some(WarningLevel::Hint) => error.set_severity(Severity::Hint),
+            Some(WarningLevel::Disabled) => return None,
+            Some(_) | None => error,
+        };
+        Some(newerror)
+    }
+
     pub fn printable_error(&self, error: &DMError) -> bool {
-        let mut error_sev = error.severity();
-        if let Some(level) = self.config_warninglevel(error) {
-            match level {
-                WarningLevel::Error => error_sev = Severity::Error,
-                WarningLevel::Warning => error_sev = Severity::Warning,
-                WarningLevel::Info => error_sev = Severity::Info,
-                WarningLevel::Hint => error_sev = Severity::Hint,
-                WarningLevel::Disabled => return false,
-                WarningLevel::Unset => {},
-            }
-        }
-        self.display.print_level >= error_sev
+        self.display.print_level >= error.severity()
     }
 
     pub fn registerable_error(&self, error: &DMError) -> bool {
-        let mut error_sev = error.severity();
-        if let Some(level) = self.config_warninglevel(error) {
-            match level {
-                WarningLevel::Error => error_sev = Severity::Error,
-                WarningLevel::Warning => error_sev = Severity::Warning,
-                WarningLevel::Info => error_sev = Severity::Info,
-                WarningLevel::Hint => error_sev = Severity::Hint,
-                WarningLevel::Disabled => return false,
-                WarningLevel::Unset => {},
-            }
-        }
-        self.display.error_level >= error_sev
+        self.display.error_level >= error.severity()
     }
 
     pub fn set_print_severity(&mut self, print_severity: Option<Severity>) {

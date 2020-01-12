@@ -6,7 +6,6 @@ use std::cell::{RefCell, Ref, RefMut};
 use std::collections::HashMap;
 
 use termcolor::{ColorSpec, Color};
-use serde::de::{Deserialize, Deserializer};
 
 use crate::config::Config;
 
@@ -76,16 +75,19 @@ impl Context {
 
     /// Push an error or other diagnostic to the context.
     pub fn register_error(&self, error: DMError) {
-        if self.config.printable_error(&error) {
+        guard!(let Some(newerror) = self.config.set_configured_severity(error) else {
+            return // errortype is disabled
+        });
+        if self.config.printable_error(&newerror) {
             let stderr = termcolor::StandardStream::stderr(termcolor::ColorChoice::Auto);
-            self.pretty_print_error(&mut stderr.lock(), &error)
+            self.pretty_print_error(&mut stderr.lock(), &newerror)
                 .expect("error writing to stderr");
         }
         // ignore errors with severity above configured level
-        if !self.config.registerable_error(&error) {
+        if !self.config.registerable_error(&newerror) {
             return
         }
-        self.errors.borrow_mut().push(error);
+        self.errors.borrow_mut().push(newerror);
     }
 
     /// Access the list of diagnostics generated so far.
@@ -286,23 +288,6 @@ impl fmt::Display for Severity {
             Severity::Info => f.write_str("info"),
             Severity::Hint => f.write_str("hint"),
         }
-    }
-}
-
-impl<'de> Deserialize<'de> for Severity {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?.to_lowercase();
-        let severity = match s.as_str() {
-            "error" | "errors" => Ok(Severity::Error),
-            "warning" | "warnings" => Ok(Severity::Warning),
-            "info" | "infos" => Ok(Severity::Info),
-            "hint" | "hints" => Ok(Severity::Hint),
-            _ => Err(serde::de::Error::invalid_value(serde::de::Unexpected::Str(&s), &"'error', 'warning', 'info', or 'hint'"))
-        };
-        severity
     }
 }
 
