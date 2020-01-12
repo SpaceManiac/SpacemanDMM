@@ -113,9 +113,9 @@ impl Context {
             Err(io_error) => {
                 let file = self.register_file(toml);
                 let (line, column) = io_error.line_col().unwrap_or((1, 1));
-                let mut err = DMError::new(Location { file, line, column }, "Error reading configuration file");
-                err.cause = Some(io_error.into_boxed_error());
-                self.register_error(err);
+                DMError::new(Location { file, line, column }, "Error reading configuration file")
+                    .with_boxed_cause(io_error.into_boxed_error())
+                    .register(self);
             }
         }
     }
@@ -412,9 +412,14 @@ impl DMError {
         }
     }
 
-    pub fn with_cause<E: error::Error + Send + Sync + 'static>(mut self, cause: E) -> DMError {
-        self.cause = Some(Box::new(cause));
+    fn with_boxed_cause(mut self, cause: Box<dyn error::Error + Send + Sync>) -> DMError {
+        self.add_note(self.location, cause.to_string());
+        self.cause = Some(cause);
         self
+    }
+
+    pub fn with_cause<E: error::Error + Send + Sync + 'static>(self, cause: E) -> DMError {
+        self.with_boxed_cause(Box::new(cause))
     }
 
     pub fn set_severity(mut self, severity: Severity) -> DMError {
