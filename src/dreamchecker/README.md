@@ -61,12 +61,16 @@ be enabled:
 	#define SHOULD_CALL_PARENT(X) set SpacemanDMM_should_call_parent = X
 	#define UNLINT(X) SpacemanDMM_unlint(X)
 	#define SHOULD_NOT_OVERRIDE(X) set SpacemanDMM_should_not_override = X
+  #define SHOULD_NOT_SLEEP(X) set SpacemanDMM_should_not_sleep = X
+  #define SHOULD_BE_PURE(X) set SpacemanDMM_should_be_pure = X
 	#define VAR_FINAL var/SpacemanDMM_final
 #else
 	#define RETURN_TYPE(X)
 	#define SHOULD_CALL_PARENT(X)
 	#define UNLINT(X) X
 	#define SHOULD_NOT_OVERRIDE(X)
+  #define SHOULD_NOT_SLEEP(X)
+  #define SHOULD_BE_PURE(X)
 	#define VAR_FINAL var
 #endif
 ```
@@ -99,10 +103,31 @@ Use `set SpacemanDMM_should_not_override = 1` to raise a warning for any child
 procs that override this one, regardless of if it calls parent or not.
 This functions in a similar way to the `final` keyword in some languages.
 
+This cannot be disabled by child overrides.
+
 ### Final variables
 
-Use the above definition of VAR_FINAL to declare vars as `SpacemanDMM_final`, `var/SpacemanDMM_final/foo` such that overriding their value isn't permitted by types that inherit it.
+Use the above definition of VAR_FINAL to declare vars as `SpacemanDMM_final`, 
+`var/SpacemanDMM_final/foo` such that overriding their value isn't permitted by
+types that inherit it.
 ```
 /a/type
   VAR_FINAL/foo = somevalue
 ```
+
+### Should not sleep
+
+Use `set SpacemanDMM_should_not_sleep = 1` to raise a warning if the proc or one
+of the sub-procs it calls uses a blocking call, such as `sleep()` or `input()`
+without using `set waitfor = 0`
+
+This cannot be disabled by child overrides.
+
+### Should be pure
+
+Use `set SpacemanDMM_should_be_pure = 1` to ensure a proc is 'pure', such that
+it does not make any changes outside itself or output.
+This also checks to make sure anything using this proc doesn't invoke it without
+making use of the return value.
+
+This cannot be disabled by child overrides.

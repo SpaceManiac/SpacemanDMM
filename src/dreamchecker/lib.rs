@@ -308,6 +308,8 @@ pub fn run(context: &Context, objtree: &ObjectTree) {
         }
     });
 
+    analyzer.check_proc_call_tree();
+
     analyzer.finish_check_kwargs();
 }
 
