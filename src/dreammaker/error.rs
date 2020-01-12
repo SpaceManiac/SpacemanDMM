@@ -41,6 +41,7 @@ pub struct Context {
     errors: RefCell<Vec<DMError>>,
     /// Warning config
     config: RefCell<Config>,
+    print_severity: Option<Severity>,
 }
 
 impl FileList {
@@ -133,7 +134,7 @@ impl Context {
 
     /// Set a severity at and above which errors will be printed immediately.
     pub fn set_print_severity(&mut self, print_severity: Option<Severity>) {
-        self.config.borrow_mut().set_print_severity(print_severity)
+        self.print_severity = print_severity;
     }
 
     // ------------------------------------------------------------------------
@@ -144,14 +145,16 @@ impl Context {
         guard!(let Some(error) = self.config.borrow().set_configured_severity(error) else {
             return // errortype is disabled
         });
-        if self.config.borrow().printable_error(&error) {
-            let stderr = termcolor::StandardStream::stderr(termcolor::ColorChoice::Auto);
-            self.pretty_print_error(&mut stderr.lock(), &error)
-                .expect("error writing to stderr");
-        }
         // ignore errors with severity above configured level
         if !self.config.borrow().registerable_error(&error) {
             return
+        }
+        if let Some(print_severity) = self.print_severity {
+            if error.severity() <= print_severity {
+                let stderr = termcolor::StandardStream::stderr(termcolor::ColorChoice::Auto);
+                self.pretty_print_error(&mut stderr.lock(), &error)
+                    .expect("error writing to stderr");
+            }
         }
         self.errors.borrow_mut().push(error);
     }
@@ -159,10 +162,6 @@ impl Context {
     /// Access the list of diagnostics generated so far.
     pub fn errors(&self) -> Ref<[DMError]> {
         Ref::map(self.errors.borrow(), |x| &**x)
-    }
-
-    pub fn num_printable_errors(&self) -> usize {
-        self.errors().iter().filter(|each| self.config.borrow().printable_error(each)).count()
     }
 
     /// Mutably access the diagnostics list. Dangerous.

@@ -109,7 +109,7 @@ fn main() {
     analyzer.finish_check_kwargs();
 
     println!("============================================================");
-    let errors = context.num_printable_errors();
+    let errors = context.errors().iter().filter(|each| each.severity() <= dm::Severity::Info).count();
     println!("Found {} diagnostics", errors);
     std::process::exit(if errors > 0 { 1 } else { 0 });
 }

@@ -22,9 +22,6 @@ pub struct Config {
 pub struct WarningDisplay {
     #[serde(default)]
     error_level: WarningLevel,
-
-    #[serde(default="WarningLevel::disabled")]
-    print_level: WarningLevel,
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
@@ -74,30 +71,12 @@ impl Config {
         })
     }
 
-    pub fn printable_error(&self, error: &DMError) -> bool {
-        self.display.print_level.applies_to(error.severity())
-    }
-
     pub fn registerable_error(&self, error: &DMError) -> bool {
         self.display.error_level.applies_to(error.severity())
-    }
-
-    pub fn set_print_severity(&mut self, print_severity: Option<Severity>) {
-        if self.display.print_level != WarningLevel::Unset {
-            return
-        }
-        match print_severity {
-            Some(severity) => self.display.print_level = WarningLevel::from(severity),
-            None => self.display.print_level = WarningLevel::Disabled,
-        }
     }
 }
 
 impl WarningLevel {
-    fn disabled() -> WarningLevel {
-        WarningLevel::Disabled
-    }
-
     fn applies_to(self, severity: Severity) -> bool {
         match self {
             WarningLevel::Disabled => false,
