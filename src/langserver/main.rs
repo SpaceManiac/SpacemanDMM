@@ -390,6 +390,7 @@ impl<'a> Engine<'a> {
                 severity: Some(convert_severity(error.severity())),
                 range: location_to_range(loc),
                 source: component_to_source(error.component()),
+                code: convert_errorcode(error.errortype()),
                 related_information,
                 .. Default::default()
             };
@@ -531,6 +532,7 @@ impl<'a> Engine<'a> {
                             severity: Some(convert_severity(error.severity())),
                             range: location_to_range(loc),
                             source: component_to_source(error.component()),
+                            code: convert_errorcode(error.errortype()),
                             related_information,
                             .. Default::default()
                         };
@@ -1816,6 +1818,10 @@ fn convert_severity(severity: dm::Severity) -> lsp_types::DiagnosticSeverity {
         dm::Severity::Info => lsp_types::DiagnosticSeverity::Information,
         dm::Severity::Hint => lsp_types::DiagnosticSeverity::Hint,
     }
+}
+
+fn convert_errorcode(errortype: Option<&'static str>) -> Option<lsp_types::NumberOrString> {
+    errortype.map(|x| lsp_types::NumberOrString::String(x.to_owned()))
 }
 
 enum UnscopedVar<'a> {
