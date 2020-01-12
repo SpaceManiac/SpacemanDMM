@@ -357,7 +357,9 @@ impl<'a> Engine<'a> {
         }
         self.update_objtree();
         self.references_table = Some(find_references::ReferencesTable::new(&self.objtree));
-        // TODO: run dreamchecker here if enabled
+        if ctx.config().langserver.dreamchecker {
+            dreamchecker::run(&self.context, &self.objtree);
+        }
         self.defines = Some(pp.finalize());
         self.issue_notification::<extras::WindowStatus>(Default::default());
         let elapsed = start.elapsed();

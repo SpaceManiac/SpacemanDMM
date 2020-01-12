@@ -16,6 +16,7 @@ const CONFIG_FILENAME: &str = "SpacemanDMM.toml";
 #[serde(default)]
 pub struct Config {
     display: WarningDisplay,
+    pub langserver: Langserver,
     diagnostics: HashMap<String, WarningLevel>,
 }
 
@@ -26,6 +27,11 @@ pub struct WarningDisplay {
 
     #[serde(default="WarningLevel::disabled")]
     print_level: WarningLevel,
+}
+
+#[derive(Deserialize, Default, Debug, Clone)]
+pub struct Langserver {
+    pub dreamchecker: bool,
 }
 
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
