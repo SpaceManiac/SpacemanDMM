@@ -440,7 +440,6 @@ impl<'o> AnalyzeObjectTree<'o> {
                     self.add_directive_or_error(proc, &name.as_str(), value, statement.location);
                 } else if !KNOWN_SETTING_NAMES.contains(&name.as_str()) {
                     error(statement.location, format!("unknown setting {:?}", name))
-                        .with_errortype("unknown_setting")
                         .set_severity(Severity::Warning)
                         .register(self.context);
                 }

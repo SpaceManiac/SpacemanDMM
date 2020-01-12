@@ -40,6 +40,24 @@ DreamCheckers's whole-program analysis can find problems such as:
     of `L[1].name` will not generate a warning.
   * Proc calls will obey the [return type](#return-type) annotation if present.
 
+## Configuration
+
+DreamChecker can be run with the -c switch to specify a TOML configuration file.
+
+```toml
+[warnings]
+duplicate_include = "error"
+
+[display]
+error_level = "hint"
+
+print_level = "error"
+```
+
+For the full list of options see the [config README].
+
+[config README]: ../dreammaker/configREADME.md
+
 ## Extensions
 
 DreamChecker also adds additional typing features to the language through a

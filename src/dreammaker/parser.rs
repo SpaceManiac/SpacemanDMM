@@ -638,7 +638,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 spurious_lead = true;
                 self.error(format!("path started by '{}', should be unprefixed", p))
                     .set_severity(Severity::Warning)
-                    .with_errortype("colon_path_warning")
                     .register(self.context);
             }
             t => { self.put_back(t); }
@@ -1026,7 +1025,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             // in case it is out of order
             if let Some(()) = self.exact_ident("as")? {
                 self.error("'as' clause should precede 'in' clause, and is being ignored")
-                    .with_errortype("as_precedes_in")
+                    .with_errortype("in_precedes_as")
                     .set_severity(Severity::Warning)
                     .register(self.context);
                 let _ = require!(self.input_type());
