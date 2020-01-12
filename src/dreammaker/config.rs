@@ -1,10 +1,11 @@
-// various config options
+//! Configuration file for diagnostics.
 
-use serde::Deserialize;
 use std::fs::File;
 use std::io::Read;
 use std::collections::HashMap;
-use std::cmp::Ordering;
+
+use serde::Deserialize;
+
 use crate::error::Severity;
 use crate::DMError;
 
@@ -13,15 +14,15 @@ pub struct Config {
     display: WarningDisplay,
 
     #[serde(default)]
-    warnings: HashMap<String, WarningLevel>,
+    diagnostics: HashMap<String, WarningLevel>,
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
 pub struct WarningDisplay {
-    #[serde(default="WarningLevel::default_all")]
+    #[serde(default)]
     error_level: WarningLevel,
 
-    #[serde(default)]
+    #[serde(default="WarningLevel::disabled")]
     print_level: WarningLevel,
 }
 
@@ -59,29 +60,28 @@ impl Config {
 
     fn config_warninglevel(&self, error: &DMError) -> Option<&WarningLevel> {
         if let Some(errortype) = error.errortype() {
-            return self.warnings.get(errortype)
+            return self.diagnostics.get(errortype)
         }
         None
     }
 
     pub fn set_configured_severity(&self, error: DMError) -> Option<DMError> {
-        let newerror = match self.config_warninglevel(&error) {
+        Some(match self.config_warninglevel(&error) {
             Some(WarningLevel::Error) => error.set_severity(Severity::Error),
             Some(WarningLevel::Warning) => error.set_severity(Severity::Warning),
             Some(WarningLevel::Info) => error.set_severity(Severity::Info),
             Some(WarningLevel::Hint) => error.set_severity(Severity::Hint),
             Some(WarningLevel::Disabled) => return None,
-            Some(_) | None => error,
-        };
-        Some(newerror)
+            Some(WarningLevel::Unset) | None => error,
+        })
     }
 
     pub fn printable_error(&self, error: &DMError) -> bool {
-        self.display.print_level >= error.severity()
+        self.display.print_level.applies_to(error.severity())
     }
 
     pub fn registerable_error(&self, error: &DMError) -> bool {
-        self.display.error_level >= error.severity()
+        self.display.error_level.applies_to(error.severity())
     }
 
     pub fn set_print_severity(&mut self, print_severity: Option<Severity>) {
@@ -96,8 +96,19 @@ impl Config {
 }
 
 impl WarningLevel {
-    fn default_all() -> WarningLevel {
-        WarningLevel::Hint
+    fn disabled() -> WarningLevel {
+        WarningLevel::Disabled
+    }
+
+    fn applies_to(self, severity: Severity) -> bool {
+        match self {
+            WarningLevel::Disabled => false,
+            WarningLevel::Error => severity <= Severity::Error,
+            WarningLevel::Warning => severity <= Severity::Warning,
+            WarningLevel::Info => severity <= Severity::Info,
+            WarningLevel::Hint => severity <= Severity::Hint,
+            WarningLevel::Unset => true,
+        }
     }
 }
 
@@ -126,15 +137,6 @@ impl PartialEq<Severity> for WarningLevel {
             (WarningLevel::Info, Severity::Info) => true,
             (WarningLevel::Hint, Severity::Hint) => true,
             _ => false,
-        }
-    }
-}
-
-impl PartialOrd<Severity> for WarningLevel {
-    fn partial_cmp(&self, other: &Severity) -> Option<Ordering> {
-        match self {
-            WarningLevel::Disabled | WarningLevel::Unset => None,
-            _ => Some((*self as u8).cmp(&(*other as u8))),
         }
     }
 }

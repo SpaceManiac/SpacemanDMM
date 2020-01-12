@@ -17,7 +17,7 @@ All of these options can be set to the following:
 * `disabled`, `false`, `off` - Disables it completely
 * `unset`, not present in the config file - Uses the default
 
-### Warnings
+### Diagnostics
 
 The `[warnings]` section has the following options:
 
@@ -67,11 +67,10 @@ If `error_level` has a higher threshold than `print_level`, the error will still
 ## Example
 
 ```toml
-[warnings]
-duplicate_include = "error"
-
 [display]
 error_level = "hint"
-
 print_level = "error"
+
+[diagnostics]
+duplicate_include = "error"
 ```
