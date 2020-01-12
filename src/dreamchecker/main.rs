@@ -49,7 +49,7 @@ fn main() {
 
     let mut context = Context::default();
     if let Some(filepath) = config_file {
-        context.config = Config::read_config_toml(filepath);
+        context.config = Config::read_config_toml(filepath).expect("failed to read config file");
     }
     context.set_print_severity(Some(dm::Severity::Info));
 
