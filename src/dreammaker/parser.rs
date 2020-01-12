@@ -357,6 +357,7 @@ pub struct Parser<'ctx, 'an, 'inp> {
 
     input: Box<dyn Iterator<Item=LocatedToken> + 'inp>,
     eof: bool,
+    possible_indentation_error: bool,
     next: Option<Token>,
     location: Location,
     expected: Vec<Cow<'static, str>>,
@@ -388,6 +389,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
             input: Box::new(input.into_iter()),
             eof: false,
+            possible_indentation_error: false,
             next: None,
             location: Default::default(),
             expected: Vec::new(),
@@ -470,7 +472,15 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Ok(got) => {
                 let message = format!("got '{}', expected one of: {}", got, expected);
                 self.put_back(got);
-                self.error(message)
+                let mut e = self.error(message);
+                if self.possible_indentation_error {
+                    let mut loc = e.location();
+                    loc.line += 1;
+                    loc.column = 1;
+                    e.add_note(loc, "check for extra indentation at the start of the next line");
+                    self.possible_indentation_error = false;
+                }
+                e
             }
             Err(err) => self
                 .error(format!("i/o error, expected one of: {}", expected))
@@ -1360,12 +1370,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         match self.next("';'")? {
             Token::Punct(Punctuation::Semicolon) => SUCCESS,
             p @ Token::Punct(Punctuation::RBrace) => {
-                //eprintln!("{:?} instead of semicolon, rbrace (soft)", self.location);
                 self.put_back(p);
                 SUCCESS
             }
+            p @ Token::Punct(Punctuation::LBrace) => {
+                self.possible_indentation_error = true;
+                self.try_another(p)
+            }
             other => {
-                //eprintln!("{:?} instead of semicolon, {:?}", self.location, other);
                 self.try_another(other)
             }
         }
