@@ -68,28 +68,6 @@ impl PartialOrd<Severity> for WarningLevel {
     }
 }
 
-/*
-config.toml
-[warnings]
-duplicate_include = false
-should_call_parent = false
-should_not_override = false
-field_access_static_type = false
-proc_call_static_type = false
-integer_precision_loss = false
-colon_path_warning = false
-var_in_proc_paramater = false
-static_in_proc_paramater = false
-macro_redefined = false
-undefine_undefined_macro = false
-
-[display]
-error_level = "hint"
-
-print_level = "error"
-
-*/
-
 #[derive(Deserialize, Default, Debug, Clone)]
 pub struct Config {
     #[serde(default)]
