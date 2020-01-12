@@ -534,7 +534,7 @@ impl<'o> AnalyzeObjectTree<'o> {
     }
 
     pub fn check_proc_call_tree(&mut self) {
-        for procref in self.must_not_sleep.iter() {
+        for (procref, (bool, location)) in self.must_not_sleep.directive.iter() {
             if let Some(_) = self.waitfor_procs.get(&procref) {
                 error(procref.get().location, format!("{} sets SpacemanDMM_should_not_sleep but also sets waitfor = 0", procref))
                     .register(self.context);
@@ -565,7 +565,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                 if let Some(_) = self.waitfor_procs.get(&nextproc) {
                     continue
                 }
-                if let Some(_) = self.sleep_exempt.get(&nextproc) {
+                if let Some(_) = self.sleep_exempt.get(nextproc) {
                     continue
                 }
                 if let Some(sleepvec) = self.sleeping_procs.get_violators(nextproc) {
@@ -586,7 +586,7 @@ impl<'o> AnalyzeObjectTree<'o> {
             }
         }
 
-        for (procref, location) in self.must_be_pure.iter() {
+        for (procref, (_, location)) in self.must_be_pure.directive.iter() {
             if let Some(impurevec) = self.impure_procs.get_violators(*procref) {
                 error(procref.get().location, format!("{} does impure operations", procref))
                     .with_note(*location, "SpacemanDMM_should_be_pure set here")
@@ -926,14 +926,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     Expression::Base { unary, term, follow } => {
                         if let Term::Call(call, vec) = &term.elem {
                             if let Some(proc) = self.ty.get_proc(call) {
-                                let mut next = Some(proc);
-                                while let Some(current) = next {
-                                    if let Some(_) = self.env.must_be_pure.get(&current) {
-                                        error(location, format!("call to pure proc {} discards return value", call))
-                                            //.with_note(loc, "prohibited by this must_be_pure annotation")
-                                            .register(self.context);
-                                    }
-                                    next = current.parent_proc();
+                                if let Some((_, _, loc)) = self.env.must_be_pure.get_self_or_parent(proc) {
+                                    error(location, format!("call to pure proc {} discards return value", call))
+                                        .with_note(loc, "prohibited by this must_be_pure annotation")
+                                        .register(self.context);
                                 }
                             }
                         }
@@ -1118,6 +1114,20 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
                 ty
             },
+            Expression::BinaryOp { op: BinaryOp::LShift, lhs, rhs } => {
+                let lty = self.visit_expression(location, lhs, None);
+
+                if lty.static_ty == StaticType::Type(self.objtree.expect("/mob")) {
+                    self.env.impure_procs.insert_violator(self.proc_ref, "LShift onto mob", location);
+                } else if lty.static_ty == StaticType::Type(self.objtree.expect("/savefile")) {
+                    self.env.impure_procs.insert_violator(self.proc_ref, "LShift onto savefile", location);
+                } else if lty.static_ty == StaticType::Type(self.objtree.expect("/list")) {
+                    self.env.impure_procs.insert_violator(self.proc_ref, "LShift onto list", location);
+                }
+
+                let rty = self.visit_expression(location, rhs, None);
+                self.visit_binary(lty, rty, BinaryOp::LShift)
+            },
             Expression::BinaryOp { op: BinaryOp::In, lhs, rhs } => {
                 // check for incorrect/ambiguous in statements
                 match &**lhs {
@@ -1175,10 +1185,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Expression::AssignOp { lhs, rhs, .. } => {
                 let lhs = self.visit_expression(location, lhs, None);
-                if let Some(impurity) = lhs.is_impure {
-                    if impurity  {
-                        self.env.impure_procs.insert_violator(self.proc_ref, "Assignment on purity breaking expression", location);
-                    }
+                if let Some(true) = lhs.is_impure {
+                    self.env.impure_procs.insert_violator(self.proc_ref, "Assignment on purity breaking expression", location);
                 }
                 self.visit_expression(location, rhs, lhs.static_ty.basic_type())
             },
