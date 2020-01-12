@@ -75,19 +75,19 @@ impl Context {
 
     /// Push an error or other diagnostic to the context.
     pub fn register_error(&self, error: DMError) {
-        guard!(let Some(newerror) = self.config.set_configured_severity(error) else {
+        guard!(let Some(error) = self.config.set_configured_severity(error) else {
             return // errortype is disabled
         });
-        if self.config.printable_error(&newerror) {
+        if self.config.printable_error(&error) {
             let stderr = termcolor::StandardStream::stderr(termcolor::ColorChoice::Auto);
-            self.pretty_print_error(&mut stderr.lock(), &newerror)
+            self.pretty_print_error(&mut stderr.lock(), &error)
                 .expect("error writing to stderr");
         }
         // ignore errors with severity above configured level
-        if !self.config.registerable_error(&newerror) {
+        if !self.config.registerable_error(&error) {
             return
         }
-        self.errors.borrow_mut().push(newerror);
+        self.errors.borrow_mut().push(error);
     }
 
     /// Access the list of diagnostics generated so far.
