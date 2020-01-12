@@ -107,13 +107,23 @@ impl Context {
     // ------------------------------------------------------------------------
     // Configuration
 
-    pub fn force_config(&self, toml: &Path) -> Result<(), Box<dyn std::error::Error>> {
-        *self.config.borrow_mut() = Config::read_config_toml(toml)?;
-        Ok(())
+    pub fn force_config(&self, toml: &Path) {
+        match Config::read_toml(toml) {
+            Ok(config) => *self.config.borrow_mut() = config,
+            Err(io_error) => {
+                let file = self.register_file(toml);
+                let mut err = DMError::new(Location { file, line: 1, column: 1 }, "Error reading configuration file");
+                err.cause = Some(io_error);
+                self.register_error(err);
+            }
+        }
     }
 
     pub fn autodetect_config(&self, dme: &Path) {
-        *self.config.borrow_mut() = Config::autodetect(dme);
+        let toml = dme.parent().unwrap().join("SpacemanDMM.toml");
+        if toml.exists() {
+            self.force_config(&toml);
+        }
     }
 
     pub fn config(&self) -> Ref<Config> {

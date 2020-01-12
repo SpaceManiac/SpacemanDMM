@@ -10,8 +10,6 @@ use serde::Deserialize;
 use crate::error::Severity;
 use crate::DMError;
 
-const CONFIG_FILENAME: &str = "SpacemanDMM.toml";
-
 #[derive(Deserialize, Default, Debug, Clone)]
 #[serde(default)]
 pub struct Config {
@@ -51,16 +49,8 @@ pub enum WarningLevel {
 }
 
 impl Config {
-    pub fn autodetect(dme: &Path) -> Config {
-        Config::read_config_toml(&dme.parent().unwrap().join(CONFIG_FILENAME)).ok().unwrap_or_default()
-    }
-
-    pub fn read_config_toml(path: &Path) -> Result<Config, Box<dyn std::error::Error>> {
-        let mut file = match File::open(&path) {
-            Ok(file) => file,
-            Err(_)  => return Ok(Config::default()),
-        };
-
+    pub fn read_toml(path: &Path) -> Result<Config, Box<dyn std::error::Error + Send + Sync>> {
+        let mut file = File::open(path)?;
         let mut config_toml = String::new();
         file.read_to_string(&mut config_toml)?;
         Ok(toml::from_str(&config_toml)?)

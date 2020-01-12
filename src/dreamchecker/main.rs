@@ -48,7 +48,7 @@ fn main() {
 
     let mut context = Context::default();
     if let Some(filepath) = config_file {
-        context.force_config(filepath.as_ref()).expect("failed to read config file");
+        context.force_config(filepath.as_ref());
     } else {
         context.autodetect_config(&dme);
     }
