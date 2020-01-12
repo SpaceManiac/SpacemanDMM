@@ -19,7 +19,7 @@ All of these options can be set to the following:
 
 ### Diagnostics
 
-The `[warnings]` section has the following options:
+The `[diagnostics]` section has the following options:
 
 Raised by DreamChecker:
 
@@ -64,13 +64,22 @@ The `[display]` section has the following options:
 
 If `error_level` has a higher threshold than `print_level`, the error will still be printed but it won't be considered for overall success.
 
+### Language server
+
+The `[langserver]` section has the following options:
+
+* `dreamchecker` - Set to `true` to run dreamchecker within the language server.
+
 ## Example
 
 ```toml
 [display]
 error_level = "hint"
-print_level = "error"
+
+[langserver]
+dreamchecker = true
 
 [diagnostics]
 duplicate_include = "error"
+macro_redefined = "off"
 ```

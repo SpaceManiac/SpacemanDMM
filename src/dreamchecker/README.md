@@ -42,21 +42,10 @@ DreamCheckers's whole-program analysis can find problems such as:
 
 ## Configuration
 
-DreamChecker can be run with the -c switch to specify a TOML configuration file.
+DreamChecker can be run with the `-c` switch to specify a TOML configuration
+file. For the full list of options see the [configuration docs].
 
-```toml
-[warnings]
-duplicate_include = "error"
-
-[display]
-error_level = "hint"
-
-print_level = "error"
-```
-
-For the full list of options see the [config README].
-
-[config README]: ../dreammaker/configREADME.md
+[configuration docs]: ../../CONFIGURING.md
 
 ## Extensions
 
