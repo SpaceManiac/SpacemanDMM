@@ -536,7 +536,7 @@ impl<'o> AnalyzeObjectTree<'o> {
     }
 
     pub fn check_proc_call_tree(&mut self) {
-        for (procref, (bool, location)) in self.must_not_sleep.directive.iter() {
+        for (procref, (_, location)) in self.must_not_sleep.directive.iter() {
             if let Some(_) = self.waitfor_procs.get(&procref) {
                 error(procref.get().location, format!("{} sets SpacemanDMM_should_not_sleep but also sets waitfor = 0", procref))
                     .register(self.context);
