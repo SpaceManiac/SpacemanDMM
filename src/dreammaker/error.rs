@@ -112,8 +112,9 @@ impl Context {
             Ok(config) => *self.config.borrow_mut() = config,
             Err(io_error) => {
                 let file = self.register_file(toml);
-                let mut err = DMError::new(Location { file, line: 1, column: 1 }, "Error reading configuration file");
-                err.cause = Some(io_error);
+                let (line, column) = io_error.line_col().unwrap_or((1, 1));
+                let mut err = DMError::new(Location { file, line, column }, "Error reading configuration file");
+                err.cause = Some(io_error.into_boxed_error());
                 self.register_error(err);
             }
         }

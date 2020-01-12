@@ -49,7 +49,7 @@ pub enum WarningLevel {
 }
 
 impl Config {
-    pub fn read_toml(path: &Path) -> Result<Config, Box<dyn std::error::Error + Send + Sync>> {
+    pub fn read_toml(path: &Path) -> Result<Config, Error> {
         let mut file = File::open(path)?;
         let mut config_toml = String::new();
         file.read_to_string(&mut config_toml)?;
@@ -136,5 +136,39 @@ impl PartialEq<Severity> for WarningLevel {
             (WarningLevel::Hint, Severity::Hint) => true,
             _ => false,
         }
+    }
+}
+
+#[derive(Debug)]
+pub enum Error {
+    Io(std::io::Error),
+    Toml(toml::de::Error),
+}
+
+impl Error {
+    pub fn line_col(&self) -> Option<(u32, u16)> {
+        match self {
+            Error::Io(_) => None,
+            Error::Toml(toml) => toml.line_col().map(|(l, c)| (l as u32 + 1, c as u16 + 1)),
+        }
+    }
+
+    pub fn into_boxed_error(self) -> Box<dyn std::error::Error + Send + Sync> {
+        match self {
+            Error::Io(err) => Box::new(err),
+            Error::Toml(err) => Box::new(err),
+        }
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Error {
+        Error::Io(err)
+    }
+}
+
+impl From<toml::de::Error> for Error {
+    fn from(err: toml::de::Error) -> Error {
+        Error::Toml(err)
     }
 }
