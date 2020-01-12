@@ -595,13 +595,11 @@ impl Term {
                 }
                 if let Some(stepexp) = step {
                     if let Some(stepterm) = stepexp.as_term() {
-                        if let Term::Int(s) = stepterm {
-                            if *s < 0 {
-                                return Some(*i >= *o)
-                            } else if *s == 0 {
-                                return Some(false)
-                            }
+                        if let Term::Int(_s) = stepterm {
+                            return Some(true)
                         }
+                    } else {
+                        return Some(true)
                     }
                 }
                 return Some(*i <= *o)
