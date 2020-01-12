@@ -850,7 +850,7 @@ impl<'a> ConstantFolder<'a> {
             }
             let tree = self.tree.as_mut().unwrap();
             match constant_ident_lookup(tree, ty, &ident, must_be_const)
-                .map_err(|e| DMError::new(location, e.into_description()))?
+                .map_err(|e| e.with_location(location))?
             {
                 ConstLookup::Found(_, v) => return Ok(v),
                 ConstLookup::Continue(i) => idx = i,

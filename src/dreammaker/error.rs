@@ -443,6 +443,11 @@ impl DMError {
         self
     }
 
+    pub fn with_location(mut self, location: Location) -> DMError {
+        self.location = location;
+        self
+    }
+
     #[inline]
     pub fn register(self, context: &Context) {
         context.register_error(self)
@@ -471,11 +476,6 @@ impl DMError {
     /// Get the errortype associated with this error.
     pub fn errortype(&self) -> Option<&'static str> {
         self.errortype
-    }
-
-    /// Deconstruct this error, returning only the description.
-    pub fn into_description(self) -> String {
-        self.description
     }
 
     /// Get the additional notes associated with this error.
