@@ -930,12 +930,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             path.remove(0);
             DMError::new(leading_loc, "'var/' is unnecessary here")
                 .set_severity(Severity::Hint)
+                .with_errortype("var_in_proc_paramater")
                 .register(self.context);
         }
         let mut var_type: VarType = path.into_iter().collect();
         if var_type.is_static {
             DMError::new(leading_loc, "'static/' has no effect here")
                 .set_severity(Severity::Warning)
+                .with_errortype("static_in_proc_parameter")
                 .register(self.context);
         }
         let location = self.location;
@@ -1023,6 +1025,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             // in case it is out of order
             if let Some(()) = self.exact_ident("as")? {
                 self.error("'as' clause should precede 'in' clause, and is being ignored")
+                    .with_errortype("in_precedes_as")
                     .set_severity(Severity::Warning)
                     .register(self.context);
                 let _ = require!(self.input_type());
@@ -1398,11 +1401,13 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 if var_type.is_tmp {
                     DMError::new(type_path_start, "var/tmp has no effect here")
                         .set_severity(Severity::Warning)
+                        .with_errortype("tmp_no_effect")
                         .register(self.context);
                 }
                 if var_type.is_final {
                     DMError::new(type_path_start, "var/final has no effect here")
                         .set_severity(Severity::Warning)
+                        .with_errortype("final_no_effect")
                         .register(self.context);
                 }
                 let var_suffix = require!(self.var_suffix());
@@ -1425,6 +1430,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 if !input_types.is_empty() || in_list.is_some() {
                     self.error("'as' clause has no effect on local variables")
                         .set_severity(Severity::Warning)
+                        .with_errortype("as_local_var")
                         .register(self.context);
                 }
 

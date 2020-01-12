@@ -325,11 +325,13 @@ impl<'o> ProcDirective<'o> {
     pub fn insert(&mut self, proc: ProcRef<'o>, enable: bool, location: Location) -> Result<(), DMError> {
         if !enable && !self.can_be_disabled {
             return Err(error(location, format!("{} sets {} false, but it cannot be disabled.", proc, self.directive_string))
+                .with_errortype("disabled_directive")
                 .set_severity(Severity::Warning))
         }
         if let Some((_, originallocation)) = self.directive.get(&proc) {
             return Err(error(location, format!("{} sets {} twice", proc, self.directive_string))
                 .with_note(*originallocation, "first definition here")
+                .with_errortype("sets_directive_twice")
                 .set_severity(Severity::Warning))
         }
         self.directive.insert(proc, (enable, location));
@@ -360,6 +362,7 @@ pub fn directive_value_to_truthy(expr: &Expression, location: Location) -> Resul
         Some(Term::Ident(i)) if i == "FALSE" => Ok(false),
         Some(Term::Ident(i)) if i == "TRUE" => Ok(true),
         _ => Err(error(location, format!("invalid value for lint directive {:?}", expr))
+        .with_errortype("invalid_lint_directive_value")
         .set_severity(Severity::Warning)),
     }
 }
@@ -401,6 +404,7 @@ impl<'o> AnalyzeObjectTree<'o> {
             "SpacemanDMM_should_call_parent" => &mut self.must_call_parent,
             other => {
                 error(location, format!("unknown linter setting {:?}", directive))
+                    .with_errortype("unknown_linter_setting")
                     .set_severity(Severity::Warning)
                     .register(self.context);
                 return
@@ -482,7 +486,8 @@ impl<'o> AnalyzeObjectTree<'o> {
                 1 => format!("an override of {} is missing keyword args", base_procname),
                 len => format!("{} overrides of {} are missing keyword args", len, base_procname),
             };
-            let mut error = error(kwarg_info.location, msg);
+            let mut error = error(kwarg_info.location, msg)
+                .with_errortype("override_missing_keyword_arg");
             let mut missing = HashSet::new();
             for (child_procname, bad_override) in kwarg_info.bad_overrides_at.iter() {
                 error.add_note(bad_override.location, format!("{} is missing \"{}\"",
@@ -663,6 +668,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 if must_not && proc != self.proc_ref {
                     error(self.proc_ref.location, format!("proc overrides parent, prohibited by {}", proc))
                         .with_note(location, "prohibited by this must_not_override annotation")
+                        .with_errortype("must_not_override")
                         .register(self.context);
                 }
             }
@@ -671,6 +677,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     if must {
                         error(self.proc_ref.location, format!("proc never calls parent, required by {}", proc))
                             .with_note(location, "required by this must_call_parent annotation")
+                            .with_errortype("must_call_parent")
                             .register(self.context);
                     }
                 }
@@ -846,6 +853,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         if unary.len() > 0 {
                             error(location, format!("ambiguous `{}` on left side of an `in`", unary[0].name()))
                                 .set_severity(Severity::Warning)
+                                .with_errortype("ambiguous_in_lhs")
                                 .with_note(location, format!("add parentheses to fix: `{}`", unary[0].around("(a in b)")))
                                 .with_note(location, format!("add parentheses to disambiguate: `({}) in b`", unary[0].around("a")))
                                 .register(self.context);
@@ -854,6 +862,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     Expression::BinaryOp { op, lhs, rhs } => {
                         error(location, format!("ambiguous `{}` on left side of an `in`", op))
                             .set_severity(Severity::Warning)
+                            .with_errortype("ambiguous_in_lhs")
                             .with_note(location, format!("add parentheses to fix: `a {} (b in c)`", op))
                             .with_note(location, format!("add parentheses to disambiguate: `(a {} b) in c`", op))
                             .register(self.context);
@@ -861,15 +870,17 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     Expression::AssignOp { op, lhs, rhs } => {
                         error(location, format!("ambiguous `{}` on left side of an `in`", op))
                             .set_severity(Severity::Warning)
+                            .with_errortype("ambiguous_in_lhs")
                             .with_note(location, format!("add parentheses to fix: `a {} (b in c)`", op))
                             .with_note(location, format!("add parentheses to disambiguate: `(a {} b) in c`", op))
                             .register(self.context);
                     },
                     Expression::TernaryOp { cond, if_, else_ } => {
                         error(location, format!("ambiguous ternary on left side of an `in`"))
+                            .set_severity(Severity::Warning)
+                            .with_errortype("ambiguous_in_lhs")
                             .with_note(location, "add parentheses to fix: `a ? b : (c in d)`")
                             .with_note(location, "add parentheses to disambiguate: `(a ? b : c) in d`")
-                            .set_severity(Severity::Warning)
                             .register(self.context);
                     },
                 };
@@ -1001,6 +1012,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         Some(hint)
                     } else {
                         error(location, "no type hint available on implicit new()")
+                            .with_errortype("no_typehint_implicit_new")
                             .register(self.context);
                         None
                     },
@@ -1154,6 +1166,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 } else {
                     error(location, format!("field access requires static type: {:?}", name))
                         .set_severity(Severity::Warning)
+                        .with_errortype("field_access_static_type")
                         .with_fix_hint(&lhs)
                         .register(self.context);
                     Analysis::empty()
@@ -1171,6 +1184,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 } else {
                     error(location, format!("proc call requires static type: {:?}", name))
                         .set_severity(Severity::Warning)
+                        .with_errortype("proc_call_static_type")
                         .with_fix_hint(&lhs)
                         .register(self.context);
                     Analysis::empty()
@@ -1198,6 +1212,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
         };
         error(location, format!("Attempting {} on a {} which does not overload operator{}", operator, typeerror, operator))
+            .with_errortype("no_operator_overload")
             .register(self.context);
         return Analysis::empty()
     }

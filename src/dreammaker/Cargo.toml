@@ -14,6 +14,10 @@ lodepng = "2.1.5"
 bitflags = "1.0.3"
 termcolor = "1.0.4"
 ordered-float = "1.0.2"
+serde = { version = "1.0.103", features = ["derive"] }
+serde_derive = "1.0.103"
+toml = "0.5.5"
+guard = "0.5.0"
 
 [dependencies.linked-hash-map]
 git = "https://github.com/SpaceManiac/linked-hash-map"

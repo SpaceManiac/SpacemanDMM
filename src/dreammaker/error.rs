@@ -7,6 +7,8 @@ use std::collections::HashMap;
 
 use termcolor::{ColorSpec, Color};
 
+use crate::config::Config;
+
 /// An identifier referring to a loaded file.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct FileId(u16);
@@ -31,8 +33,8 @@ pub struct Context {
     reverse_files: RefCell<HashMap<PathBuf, FileId>>,
     /// A list of errors, warnings, and other diagnostics generated.
     errors: RefCell<Vec<DMError>>,
-    /// Severity at and above which errors will be printed immediately.
-    print_severity: Option<Severity>,
+    /// Warning config
+    pub config: Config,
 }
 
 impl Context {
@@ -73,14 +75,19 @@ impl Context {
 
     /// Push an error or other diagnostic to the context.
     pub fn register_error(&self, error: DMError) {
-        if let Some(severity) = self.print_severity {
-            if error.severity <= severity {
-                let stderr = termcolor::StandardStream::stderr(termcolor::ColorChoice::Auto);
-                self.pretty_print_error(&mut stderr.lock(), &error)
-                    .expect("error writing to stderr");
-            }
+        guard!(let Some(newerror) = self.config.set_configured_severity(error) else {
+            return // errortype is disabled
+        });
+        if self.config.printable_error(&newerror) {
+            let stderr = termcolor::StandardStream::stderr(termcolor::ColorChoice::Auto);
+            self.pretty_print_error(&mut stderr.lock(), &newerror)
+                .expect("error writing to stderr");
         }
-        self.errors.borrow_mut().push(error);
+        // ignore errors with severity above configured level
+        if !self.config.registerable_error(&newerror) {
+            return
+        }
+        self.errors.borrow_mut().push(newerror);
     }
 
     /// Access the list of diagnostics generated so far.
@@ -95,7 +102,7 @@ impl Context {
 
     /// Set a severity at and above which errors will be printed immediately.
     pub fn set_print_severity(&mut self, print_severity: Option<Severity>) {
-        self.print_severity = print_severity;
+        self.config.set_print_severity(print_severity)
     }
 
     /// Pretty-print a `DMError` to the given output.
@@ -174,7 +181,7 @@ impl Context {
             files: self.files.clone(),
             reverse_files: self.reverse_files.clone(),
             errors: Default::default(),
-            print_severity: Default::default(),
+            config: Default::default(),
         }
     }
 }
@@ -325,6 +332,7 @@ pub struct DMError {
     description: String,
     notes: Vec<DiagnosticNote>,
     cause: Option<Box<dyn error::Error + Send + Sync>>,
+    errortype: Option<&'static str>,
 }
 
 /// An additional note attached to an error, at some other location.
@@ -344,6 +352,7 @@ impl DMError {
             description: desc.into(),
             notes: Vec::new(),
             cause: None,
+            errortype: None,
         }
     }
 
@@ -374,6 +383,11 @@ impl DMError {
         self
     }
 
+    pub fn with_errortype(mut self, errortype: &'static str) -> DMError {
+        self.errortype = Some(errortype);
+        self
+    }
+
     #[inline]
     pub fn register(self, context: &Context) {
         context.register_error(self)
@@ -397,6 +411,11 @@ impl DMError {
     /// Get the description associated with this error.
     pub fn description(&self) -> &str {
         &self.description
+    }
+
+    /// Get the errortype associated with this error.
+    pub fn errortype(&self) -> Option<&'static str> {
+        self.errortype
     }
 
     /// Deconstruct this error, returning only the description.
@@ -435,6 +454,7 @@ impl Clone for DMError {
             description: self.description.clone(),
             notes: self.notes.clone(),
             cause: None,  // not trivially cloneable
+            errortype: self.errortype,
         }
     }
 }

@@ -6,8 +6,12 @@ extern crate linked_hash_map;
 extern crate interval_tree;
 extern crate lodepng;
 #[macro_use] extern crate bitflags;
+#[macro_use] extern crate guard;
 extern crate termcolor;
 extern crate ordered_float;
+extern crate serde;
+extern crate serde_derive;
+extern crate toml;
 
 use std::io;
 use std::path::Path;
@@ -38,6 +42,7 @@ pub mod objtree;
 mod builtins;
 pub mod constants;
 pub mod dmi;
+pub mod config;
 
 impl Context {
     /// Run the parsing suite on a given `.dme` file, producing an object tree.
