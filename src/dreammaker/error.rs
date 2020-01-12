@@ -40,7 +40,7 @@ pub struct Context {
     /// A list of errors, warnings, and other diagnostics generated.
     errors: RefCell<Vec<DMError>>,
     /// Warning config
-    pub config: Config,
+    config: RefCell<Config>,
 }
 
 impl FileList {
@@ -81,6 +81,9 @@ impl FileList {
 }
 
 impl Context {
+    // ------------------------------------------------------------------------
+    // Files
+
     /// Add a new file to the context and return its index.
     pub fn register_file(&self, path: &Path) -> FileId {
         self.files.register(path)
@@ -96,18 +99,43 @@ impl Context {
         self.files.get_path(file)
     }
 
+    /// Clone the file list of this Context but not its error list.
+    pub fn clone_file_list(&self) -> FileList {
+        self.files.clone()
+    }
+
+    // ------------------------------------------------------------------------
+    // Configuration
+
+    pub fn force_config(&self, toml: &Path) -> Result<(), Box<dyn std::error::Error>> {
+        *self.config.borrow_mut() = Config::read_config_toml(toml)?;
+        Ok(())
+    }
+
+    pub fn autodetect_config(&self, dme: &Path) {
+        *self.config.borrow_mut() = Config::autodetect(dme);
+    }
+
+    /// Set a severity at and above which errors will be printed immediately.
+    pub fn set_print_severity(&mut self, print_severity: Option<Severity>) {
+        self.config.borrow_mut().set_print_severity(print_severity)
+    }
+
+    // ------------------------------------------------------------------------
+    // Errors
+
     /// Push an error or other diagnostic to the context.
     pub fn register_error(&self, error: DMError) {
-        guard!(let Some(error) = self.config.set_configured_severity(error) else {
+        guard!(let Some(error) = self.config.borrow().set_configured_severity(error) else {
             return // errortype is disabled
         });
-        if self.config.printable_error(&error) {
+        if self.config.borrow().printable_error(&error) {
             let stderr = termcolor::StandardStream::stderr(termcolor::ColorChoice::Auto);
             self.pretty_print_error(&mut stderr.lock(), &error)
                 .expect("error writing to stderr");
         }
         // ignore errors with severity above configured level
-        if !self.config.registerable_error(&error) {
+        if !self.config.borrow().registerable_error(&error) {
             return
         }
         self.errors.borrow_mut().push(error);
@@ -118,14 +146,14 @@ impl Context {
         Ref::map(self.errors.borrow(), |x| &**x)
     }
 
-    /// Mutably access the diagnostics list. Dangerous.
-    pub fn errors_mut(&self) -> RefMut<Vec<DMError>> {
-        self.errors.borrow_mut()
+    pub fn num_printable_errors(&self) -> usize {
+        self.errors().iter().filter(|each| self.config.borrow().printable_error(each)).count()
     }
 
-    /// Set a severity at and above which errors will be printed immediately.
-    pub fn set_print_severity(&mut self, print_severity: Option<Severity>) {
-        self.config.set_print_severity(print_severity)
+    /// Mutably access the diagnostics list. Dangerous.
+    #[doc(hidden)]
+    pub fn errors_mut(&self) -> RefMut<Vec<DMError>> {
+        self.errors.borrow_mut()
     }
 
     /// Pretty-print a `DMError` to the given output.
@@ -196,11 +224,6 @@ impl Context {
         if self.print_all_errors(Severity::Info) {
             panic!("there were parse errors");
         }
-    }
-
-    /// Clone the file list of this Context but not its error list.
-    pub fn clone_file_list(&self) -> FileList {
-        self.files.clone()
     }
 }
 

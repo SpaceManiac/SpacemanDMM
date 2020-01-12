@@ -8,7 +8,6 @@ use dm::Context;
 use dm::objtree::Code;
 
 use dreamchecker::*;
-use dm::config::*;
 
 // ----------------------------------------------------------------------------
 // Command-line interface
@@ -49,7 +48,9 @@ fn main() {
 
     let mut context = Context::default();
     if let Some(filepath) = config_file {
-        context.config = Config::read_config_toml(filepath).expect("failed to read config file");
+        context.force_config(filepath.as_ref()).expect("failed to read config file");
+    } else {
+        context.autodetect_config(&dme);
     }
     context.set_print_severity(Some(dm::Severity::Info));
 
@@ -108,7 +109,7 @@ fn main() {
     analyzer.finish_check_kwargs();
 
     println!("============================================================");
-    let errors = context.errors().iter().filter(|each| context.config.printable_error(each)).count();
+    let errors = context.num_printable_errors();
     println!("Found {} diagnostics", errors);
     std::process::exit(if errors > 0 { 1 } else { 0 });
 }

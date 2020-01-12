@@ -331,6 +331,7 @@ impl<'a> Engine<'a> {
         }
 
         let ctx = self.context;
+        ctx.autodetect_config(&environment);
         let mut pp = match dm::preprocessor::Preprocessor::new(ctx, environment.clone()) {
             Ok(pp) => pp,
             Err(err) => {

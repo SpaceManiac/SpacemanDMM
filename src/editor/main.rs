@@ -1218,6 +1218,7 @@ impl EditorScene {
             use dm::constants::Constant;
 
             let context = dm::Context::default();
+            context.autodetect_config(&path);
             let objtree = context.parse_environment(&path)?;
 
             let (mut turf, mut area) = ("/turf".to_owned(), "/area".to_owned());

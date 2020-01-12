@@ -2,6 +2,7 @@
 
 use std::fs::File;
 use std::io::Read;
+use std::path::Path;
 use std::collections::HashMap;
 
 use serde::Deserialize;
@@ -9,11 +10,12 @@ use serde::Deserialize;
 use crate::error::Severity;
 use crate::DMError;
 
+const CONFIG_FILENAME: &str = "SpacemanDMM.toml";
+
 #[derive(Deserialize, Default, Debug, Clone)]
+#[serde(default)]
 pub struct Config {
     display: WarningDisplay,
-
-    #[serde(default)]
     diagnostics: HashMap<String, WarningLevel>,
 }
 
@@ -43,11 +45,11 @@ pub enum WarningLevel {
 }
 
 impl Config {
-    pub fn new() -> Config {
-        Config::default()
+    pub fn autodetect(dme: &Path) -> Config {
+        Config::read_config_toml(&dme.parent().unwrap().join(CONFIG_FILENAME)).ok().unwrap_or_default()
     }
 
-    pub fn read_config_toml(path: String) -> Result<Config, Box<dyn std::error::Error>> {
+    pub fn read_config_toml(path: &Path) -> Result<Config, Box<dyn std::error::Error>> {
         let mut file = match File::open(&path) {
             Ok(file) => file,
             Err(_)  => return Ok(Config::default()),

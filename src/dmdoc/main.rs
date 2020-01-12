@@ -107,6 +107,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("parsing {}", environment.display());
 
     let mut context = dm::Context::default();
+    context.autodetect_config(&environment);
     context.set_print_severity(Some(dm::Severity::Error));
     let mut pp = dm::preprocessor::Preprocessor::new(&context, environment.clone())?;
     let (objtree, module_docs) = {
