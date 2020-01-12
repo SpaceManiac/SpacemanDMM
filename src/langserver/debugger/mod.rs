@@ -95,7 +95,7 @@ pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
 
     let db = DebugDatabaseBuilder {
         root_dir: Default::default(),
-        files: ctx,
+        files: ctx.clone_file_list(),
         objtree,
         extools_dll: None,
     };
@@ -105,7 +105,7 @@ pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
 
 pub struct DebugDatabaseBuilder {
     pub root_dir: std::path::PathBuf,
-    pub files: dm::Context,
+    pub files: dm::FileList,
     pub objtree: Arc<ObjectTree>,
     pub extools_dll: Option<String>,
 }
@@ -149,7 +149,7 @@ impl DebugDatabaseBuilder {
 
 pub struct DebugDatabase {
     root_dir: std::path::PathBuf,
-    files: dm::Context,
+    files: dm::FileList,
     objtree: Arc<ObjectTree>,
     line_numbers: HashMap<dm::FileId, Vec<(i64, String, String, usize)>>,
     local_names: HashMap<(String, usize), Option<Vec<String>>>,
@@ -194,7 +194,7 @@ impl DebugDatabase {
 
     fn file_id(&self, file_path: &str) -> Option<FileId> {
         let path = std::path::Path::new(file_path);
-        self.files.get_file(path.strip_prefix(&self.root_dir).unwrap_or(path))
+        self.files.get_id(path.strip_prefix(&self.root_dir).unwrap_or(path))
     }
 
     fn location_to_proc_ref(&self, file_id: FileId, line: i64) -> Option<(&str, &str, usize)> {
@@ -541,7 +541,7 @@ handle_request! {
             if let Some(proc) = self.db.get_proc(&ex_frame.proc, ex_frame.override_id) {
                 // `stddef.dm` procs will show as "Unknown source" which is fine for now.
                 if !proc.location.is_builtins() {
-                    let path = self.db.files.file_path(proc.location.file);
+                    let path = self.db.files.get_path(proc.location.file);
 
                     dap_frame.source = Some(Source {
                         name: Some(path.file_name()

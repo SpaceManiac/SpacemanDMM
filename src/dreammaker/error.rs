@@ -24,22 +24,28 @@ impl Default for FileId {
     }
 }
 
-/// A diagnostics context, tracking loaded files and any observed errors.
-#[derive(Debug, Default)]
-pub struct Context {
+/// A registry mapping between file names and file IDs.
+#[derive(Debug, Default, Clone)]
+pub struct FileList {
     /// The list of loaded files.
     files: RefCell<Vec<PathBuf>>,
     /// Reverse mapping from paths to file numbers.
     reverse_files: RefCell<HashMap<PathBuf, FileId>>,
+}
+
+/// A diagnostics context, tracking loaded files and any observed errors.
+#[derive(Debug, Default)]
+pub struct Context {
+    files: FileList,
     /// A list of errors, warnings, and other diagnostics generated.
     errors: RefCell<Vec<DMError>>,
     /// Warning config
     pub config: Config,
 }
 
-impl Context {
+impl FileList {
     /// Add a new file to the context and return its index.
-    pub fn register_file(&self, path: &Path) -> FileId {
+    pub fn register(&self, path: &Path) -> FileId {
         if let Some(id) = self.reverse_files.borrow().get(path).cloned() {
             return id;
         }
@@ -55,12 +61,12 @@ impl Context {
     }
 
     /// Look up a file's ID by its path, without inserting it.
-    pub fn get_file(&self, path: &Path) -> Option<FileId> {
+    pub fn get_id(&self, path: &Path) -> Option<FileId> {
         self.reverse_files.borrow().get(path).cloned()
     }
 
     /// Look up a file path by its index returned from `register_file`.
-    pub fn file_path(&self, file: FileId) -> PathBuf {
+    pub fn get_path(&self, file: FileId) -> PathBuf {
         if file == FILEID_BUILTINS {
             return "(builtins)".into();
         }
@@ -71,6 +77,23 @@ impl Context {
         } else {
             files[idx].to_owned()
         }
+    }
+}
+
+impl Context {
+    /// Add a new file to the context and return its index.
+    pub fn register_file(&self, path: &Path) -> FileId {
+        self.files.register(path)
+    }
+
+    /// Look up a file's ID by its path, without inserting it.
+    pub fn get_file(&self, path: &Path) -> Option<FileId> {
+        self.files.get_id(path)
+    }
+
+    /// Look up a file path by its index returned from `register_file`.
+    pub fn file_path(&self, file: FileId) -> PathBuf {
+        self.files.get_path(file)
     }
 
     /// Push an error or other diagnostic to the context.
@@ -176,13 +199,8 @@ impl Context {
     }
 
     /// Clone the file list of this Context but not its error list.
-    pub fn clone_file_list(&self) -> Context {
-        Context {
-            files: self.files.clone(),
-            reverse_files: self.reverse_files.clone(),
-            errors: Default::default(),
-            config: Default::default(),
-        }
+    pub fn clone_file_list(&self) -> FileList {
+        self.files.clone()
     }
 }
 
