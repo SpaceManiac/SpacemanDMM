@@ -535,7 +535,7 @@ impl<I: Iterator<Item=io::Result<u8>>> Iterator for LocationTracker<I> {
                 }
                 Some(Ok(ch))
             }
-            Some(Err(e)) => Some(Err(DMError::new(self.location, "i/o error").set_cause(e))),
+            Some(Err(e)) => Some(Err(DMError::new(self.location, "i/o error").with_cause(e))),
         }
     }
 }

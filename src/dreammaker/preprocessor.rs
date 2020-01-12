@@ -616,7 +616,7 @@ impl<'ctx> Preprocessor<'ctx> {
         // Attempt to open the file.
         let read = io::BufReader::new(File::open(&path).map_err(|e|
             DMError::new(self.last_input_loc, format!("failed to open file: #include {:?}", path))
-                .set_cause(e))?);
+                .with_cause(e))?);
 
         // Get the path relative to the environment root, for easy lookup later.
         let register = path.strip_prefix(self.env_file.parent().unwrap()).unwrap_or(&path);

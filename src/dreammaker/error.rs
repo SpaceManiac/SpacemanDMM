@@ -411,7 +411,7 @@ impl DMError {
         }
     }
 
-    pub fn set_cause<E: error::Error + Send + Sync + 'static>(mut self, cause: E) -> DMError {
+    pub fn with_cause<E: error::Error + Send + Sync + 'static>(mut self, cause: E) -> DMError {
         self.cause = Some(Box::new(cause));
         self
     }

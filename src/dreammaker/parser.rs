@@ -474,7 +474,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             }
             Err(err) => self
                 .error(format!("i/o error, expected one of: {}", expected))
-                .set_cause(err),
+                .with_cause(err),
         }
     }
 
