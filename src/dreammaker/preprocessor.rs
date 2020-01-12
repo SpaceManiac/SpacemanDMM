@@ -894,6 +894,7 @@ impl<'ctx> Preprocessor<'ctx> {
                             self.move_to_history(define_name, previous);
                         } else {
                             DMError::new(define_name_loc, format!("macro undefined while not defined: {}", define_name))
+                                .with_errortype("macro_undefined_no_definition")
                                 .set_severity(Severity::Warning)
                                 .register(self.context);
                         }

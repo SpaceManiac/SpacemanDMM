@@ -735,7 +735,7 @@ impl fmt::Display for VarType {
             fmt.write_str("tmp/")?;
         }
         if self.is_final {
-            fmt.write_str("final/")?;
+            fmt.write_str("SpacemanDMM_final/")?;
         }
         for bit in self.type_path.iter() {
             fmt.write_str(bit)?;

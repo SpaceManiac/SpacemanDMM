@@ -94,7 +94,7 @@ This functions in a similar way to the `final` keyword in some languages.
 
 ### Final variables
 
-Use the above definition of VAR_FINAL to declare vars as `final`, `var/final/foo` such that overriding their value isn't permitted by types that inherit it.
+Use the above definition of VAR_FINAL to declare vars as `SpacemanDMM_final`, `var/SpacemanDMM_final/foo` such that overriding their value isn't permitted by types that inherit it.
 ```
 /a/type
   VAR_FINAL/foo = somevalue

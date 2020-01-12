@@ -669,7 +669,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 Token::Punct(p @ Punctuation::Colon) => {
                     self.error(format!("path separated by '{}', should be '/'", p))
                         .set_severity(Severity::Warning)
-                        .with_errortype("colon_path_warning")
                         .register(self.context);
                 }
                 t => { self.put_back(t); break; }
@@ -1027,6 +1026,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             // in case it is out of order
             if let Some(()) = self.exact_ident("as")? {
                 self.error("'as' clause should precede 'in' clause, and is being ignored")
+                    .with_errortype("as_precedes_in")
                     .set_severity(Severity::Warning)
                     .register(self.context);
                 let _ = require!(self.input_type());
@@ -1402,11 +1402,13 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 if var_type.is_tmp {
                     DMError::new(type_path_start, "var/tmp has no effect here")
                         .set_severity(Severity::Warning)
+                        .with_errortype("tmp_no_effect")
                         .register(self.context);
                 }
                 if var_type.is_final {
                     DMError::new(type_path_start, "var/final has no effect here")
                         .set_severity(Severity::Warning)
+                        .with_errortype("final_no_effect")
                         .register(self.context);
                 }
                 let var_suffix = require!(self.var_suffix());
@@ -1429,6 +1431,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 if !input_types.is_empty() || in_list.is_some() {
                     self.error("'as' clause has no effect on local variables")
                         .set_severity(Severity::Warning)
+                        .with_errortype("as_local_var")
                         .register(self.context);
                 }
 
