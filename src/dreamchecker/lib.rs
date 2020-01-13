@@ -539,11 +539,13 @@ impl<'o> AnalyzeObjectTree<'o> {
         for (procref, (_, location)) in self.must_not_sleep.directive.iter() {
             if let Some(_) = self.waitfor_procs.get(&procref) {
                 error(procref.get().location, format!("{} sets SpacemanDMM_should_not_sleep but also sets waitfor = 0", procref))
+                    .with_errortype("must_not_sleep")
                     .register(self.context);
                 continue
             }
             if let Some(sleepvec) = self.sleeping_procs.get_violators(*procref) {
                 error(procref.get().location, format!("{} sets SpacemanDMM_should_not_sleep but calls blocking built-in(s)", procref))
+                    .with_errortype("must_not_sleep")
                     .with_blocking_builtins(sleepvec)
                     .register(self.context)
             }
@@ -572,6 +574,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                 }
                 if let Some(sleepvec) = self.sleeping_procs.get_violators(nextproc) {
                     error(procref.get().location, format!("{} sets SpacemanDMM_should_not_sleep but calls blocking proc {}", procref, nextproc))
+                        .with_errortype("must_not_sleep")
                         .with_callstack(callstack)
                         .with_blocking_builtins(sleepvec)
                         .register(self.context)
@@ -591,6 +594,7 @@ impl<'o> AnalyzeObjectTree<'o> {
         for (procref, (_, location)) in self.must_be_pure.directive.iter() {
             if let Some(impurevec) = self.impure_procs.get_violators(*procref) {
                 error(procref.get().location, format!("{} does impure operations", procref))
+                    .with_errortype("must_be_pure")
                     .with_note(*location, "SpacemanDMM_should_be_pure set here")
                     .with_impure_operations(impurevec)
                     .register(self.context)
@@ -614,7 +618,8 @@ impl<'o> AnalyzeObjectTree<'o> {
                 visited.insert(nextproc);
                 if let Some(impurevec) = self.impure_procs.get_violators(nextproc) {
                     error(procref.get().location, format!("{} sets SpacemanDMM_should_be_pure but calls a {} that does impure operations", procref, nextproc))
-                    .with_note(*location, "SpacemanDMM_should_be_pure set here")
+                        .with_note(*location, "SpacemanDMM_should_be_pure set here")
+                        .with_errortype("must_be_pure")
                         .with_callstack(callstack)
                         .with_impure_operations(impurevec)
                         .register(self.context)
