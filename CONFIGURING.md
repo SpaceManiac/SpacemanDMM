@@ -4,7 +4,7 @@ All 'opinionated' errors in the suite have an associated configuration option to
 
 Errors that would fail to compile in the DM compiler or will always cause a runtime cannot be disabled (eg: bad keyword arguments).
 
-As of writing, only DreamChecker and Langserver have the functionality to accept a configuration file.  They default to using `SpacemanDMM.toml`.
+As of writing, all front ends have the functionality to accept a configuration file.  They default to using `SpacemanDMM.toml` located in the same directory as the `.dme` file.
 
 ## Configuration Options
 
