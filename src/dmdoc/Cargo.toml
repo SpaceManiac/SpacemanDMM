@@ -19,7 +19,7 @@ walkdir = "2.2.0"
 git2 = { version = "0.11", default-features = false }
 
 [dev-dependencies]
-walkdir = "2.0.1"
+walkdir = "2.2.0"
 
 [build-dependencies]
 chrono = "0.4.0"

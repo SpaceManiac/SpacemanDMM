@@ -9,7 +9,7 @@ path = "lib.rs"
 
 [dependencies]
 interval-tree = { path = "../interval-tree" }
-petgraph = { version = "0.4.9", default-features = false }
+petgraph = { version = "0.5.0", default-features = false }
 lodepng = "2.1.5"
 bitflags = "1.0.3"
 termcolor = "1.0.4"
