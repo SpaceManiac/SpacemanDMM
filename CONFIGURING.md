@@ -4,7 +4,7 @@ All 'opinionated' errors in the suite have an associated configuration option to
 
 Errors that would fail to compile in the DM compiler or will always cause a runtime cannot be disabled (eg: bad keyword arguments).
 
-As of writing, only DreamChecker has the functionality to accept a configuration file.
+As of writing, all front ends have the functionality to accept a configuration file.  They default to using `SpacemanDMM.toml` located in the same directory as the `.dme` file.
 
 ## Configuration Options
 
@@ -60,9 +60,6 @@ Raised by PreProcessor:
 The `[display]` section has the following options:
 
 * `error_level` - Sets the level at which errors are registered instead of being ignored
-* `print_level` - Sets the level at which errors are printed as they are raised.
-
-If `error_level` has a higher threshold than `print_level`, the error will still be printed but it won't be considered for overall success.
 
 ### Language server
 
