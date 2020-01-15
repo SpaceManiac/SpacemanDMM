@@ -16,6 +16,7 @@ pub struct Config {
     display: WarningDisplay,
     pub langserver: Langserver,
     diagnostics: HashMap<String, WarningLevel>,
+    dmdoc: DMDoc,
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
@@ -27,6 +28,11 @@ pub struct WarningDisplay {
 #[derive(Deserialize, Default, Debug, Clone)]
 pub struct Langserver {
     pub dreamchecker: bool,
+}
+
+#[derive(Deserialize, Default, Debug, Clone)]
+pub struct DMDoc {
+    pub use_typepath_names: bool,
 }
 
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
@@ -73,6 +79,10 @@ impl Config {
 
     pub fn registerable_error(&self, error: &DMError) -> bool {
         self.display.error_level.applies_to(error.severity())
+    }
+
+    pub fn use_typepath_names(&self) -> bool {
+        self.dmdoc.use_typepath_names
     }
 }
 

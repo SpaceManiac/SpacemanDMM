@@ -67,6 +67,12 @@ The `[langserver]` section has the following options:
 
 * `dreamchecker` - Set to `true` to run dreamchecker within the language server.
 
+### DM Doc
+
+The '`[dmdoc]` section has the following options:
+
+* `use_typepath_names` - Set to `true` to have dmdoc use the true typepath name instead of the value of the `name` var for types
+
 ## Example
 
 ```toml
