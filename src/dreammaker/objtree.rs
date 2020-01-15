@@ -12,7 +12,7 @@ use linked_hash_map::LinkedHashMap;
 use super::ast::{Expression, VarType, VarSuffix, PathOp, Parameter, Block, ProcDeclKind};
 use super::constants::{Constant, Pop};
 use super::docs::DocCollection;
-use super::{DMError, Location, Context};
+use super::{DMError, Location, Context, Severity};
 
 // ----------------------------------------------------------------------------
 // Symbol IDs
@@ -994,7 +994,18 @@ impl ObjectTree {
         // implementing, so abusers of it will have to put up with some
         // incorrect analyses for now. http://www.byond.com/forum/post/2441385
         let len = proc.value.len();
-        proc.value.push(value);
+        if declaration.is_some() && !proc.value.is_empty() {
+            // Show the error now, make up for it by putting the original
+            // at the beginning of the list (so `..()` finds it).
+            DMError::new(proc.value[0].location, "procedure override precedes definition")
+                .set_severity(Severity::Warning)
+                .with_errortype("override_precedes_definition")
+                .with_note(location, "definition is here")
+                .register(context);
+            proc.value.insert(0, value);
+        } else {
+            proc.value.push(value);
+        }
         Ok((len, proc.value.last_mut().unwrap()))
     }
 
