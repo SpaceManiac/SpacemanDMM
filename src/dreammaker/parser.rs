@@ -9,7 +9,7 @@ use linked_hash_map::LinkedHashMap;
 
 use super::{DMError, Location, HasLocation, Context, Severity, FileId};
 use super::lexer::{LocatedToken, Token, Punctuation};
-use super::objtree::ObjectTree;
+use super::objtree::{ObjectTree, EntryType};
 use super::annotation::*;
 use super::ast::*;
 use super::docs::*;
@@ -797,8 +797,16 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         match self.next("contents")? {
             t @ Punct(LBrace) => {
                 // `thing{` - block
-                if let Err(e) = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), Default::default(), var_suffix) {
-                    self.context.register_error(e);
+                match self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), Default::default(), var_suffix) {
+                    Ok(EntryType::Subtype) => {
+                        if !absolute && self.context.config().code_standards().disallow_relative_type_definitions {
+                            DMError::new(self.location, "relatively pathed type defined here")
+                                .set_severity(Severity::Warning)
+                                .register(self.context);
+                        }
+                    },
+                    Ok(_) => {},
+                    Err(e) => self.context.register_error(e),
                 }
                 self.put_back(t);
                 let start = self.updated_location();
@@ -891,6 +899,11 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         if let Some(dest) = self.annotations.as_mut() {
                             dest.insert(entry_start..body_start, Annotation::ProcHeader(new_stack.to_vec(), idx));
                             dest.insert(body_start..self.location, Annotation::ProcBody(new_stack.to_vec(), idx));
+                        }
+                        if !absolute && self.context.config().code_standards().disallow_relative_proc_definitions {
+                            DMError::new(location, "relatively pathed proc defined here")
+                                .set_severity(Severity::Warning)
+                                .register(self.context);
                         }
                     }
                     Err(e) => self.context.register_error(e),
