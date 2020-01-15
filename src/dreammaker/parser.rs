@@ -1105,7 +1105,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         if let Some(()) = self.exact_ident("if")? {
             // statement :: 'if' '(' expression ')' block ('else' 'if' '(' expression ')' block)* ('else' block)?
             require!(self.exact(Token::Punct(Punctuation::LParen)));
-            let expr = require!(self.expression());
+            let expr = Spanned::new(self.location(), require!(self.expression()));
             require!(self.exact(Token::Punct(Punctuation::RParen)));
             let block = require!(self.block(loop_ctx));
             let mut arms = vec![(expr, block)];
@@ -1115,7 +1115,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             while let Some(()) = self.exact_ident("else")? {
                 if let Some(()) = self.exact_ident("if")? {
                     require!(self.exact(Token::Punct(Punctuation::LParen)));
-                    let expr = require!(self.expression());
+                    let expr = Spanned::new(self.location(), require!(self.expression()));
                     require!(self.exact(Token::Punct(Punctuation::RParen)));
                     let block = require!(self.block(loop_ctx));
                     arms.push((expr, block));

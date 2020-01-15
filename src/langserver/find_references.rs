@@ -205,8 +205,8 @@ impl<'o> WalkProc<'o> {
                 self.visit_expression(location, condition, None);
             },
             Statement::If { arms, else_arm } => {
-                for &(ref condition, ref block) in arms.iter() {
-                    self.visit_expression(location, condition, None);
+                for (condition, ref block) in arms.iter() {
+                    self.visit_expression(condition.location, &condition.elem, None);
                     self.visit_block(block);
                 }
                 if let Some(else_arm) = else_arm {

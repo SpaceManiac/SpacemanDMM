@@ -790,7 +790,7 @@ pub enum Statement {
         condition: Expression,
     },
     If {
-        arms: Vec<(Expression, Block)>,
+        arms: Vec<(Spanned<Expression>, Block)>,
         else_arm: Option<Block>
     },
     ForLoop {
