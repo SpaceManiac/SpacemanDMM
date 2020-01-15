@@ -990,9 +990,7 @@ impl ObjectTree {
         // TODO: resolve the "procedure override precedes definition" problem.
         // DM really does reorder the declaration to appear before the override,
         // but only when a `/proc` block appeared somewhere prior to the
-        // override. This logic is too much of a corner case to bother
-        // implementing, so abusers of it will have to put up with some
-        // incorrect analyses for now. http://www.byond.com/forum/post/2441385
+        // override. http://www.byond.com/forum/post/2441385
         let len = proc.value.len();
         if declaration.is_some() && !proc.value.is_empty() {
             // Show the error now, make up for it by putting the original
