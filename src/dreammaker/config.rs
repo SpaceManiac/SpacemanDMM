@@ -2,7 +2,7 @@
 
 use std::fs::File;
 use std::io::Read;
-use std::path::Path;
+use std::path::{PathBuf, Path};
 use std::collections::HashMap;
 
 use serde::Deserialize;
@@ -16,6 +16,7 @@ pub struct Config {
     display: WarningDisplay,
     pub langserver: Langserver,
     diagnostics: HashMap<String, WarningLevel>,
+    directories: Directories,
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
@@ -27,6 +28,11 @@ pub struct WarningDisplay {
 #[derive(Deserialize, Default, Debug, Clone)]
 pub struct Langserver {
     pub dreamchecker: bool,
+}
+
+#[derive(Deserialize, Default, Debug, Clone)]
+pub struct Directories {
+    ignore_dirs_or_files: Vec<PathBuf>,
 }
 
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
@@ -73,6 +79,20 @@ impl Config {
 
     pub fn registerable_error(&self, error: &DMError) -> bool {
         self.display.error_level.applies_to(error.severity())
+    }
+
+    pub fn is_ignored_file(&self, file: PathBuf) -> bool {
+        for ignore in self.directories.ignore_dirs_or_files.iter() {
+            if !ignore.exists() {
+                continue
+            }
+            for pathslice in file.ancestors() {
+                if ignore == pathslice {
+                    return true
+                }
+            }
+        }
+        false
     }
 }
 

@@ -145,6 +145,9 @@ impl Context {
         guard!(let Some(error) = self.config.borrow().set_configured_severity(error) else {
             return // errortype is disabled
         });
+        if self.config.borrow().is_ignored_file(self.files.get_path(error.location().file)) {
+            return // ignore this error
+        }
         // ignore errors with severity above configured level
         if !self.config.borrow().registerable_error(&error) {
             return

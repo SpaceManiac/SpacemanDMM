@@ -67,6 +67,12 @@ The `[langserver]` section has the following options:
 
 * `dreamchecker` - Set to `true` to run dreamchecker within the language server.
 
+### Directories
+
+The `[directories] section has the following options:
+
+* `ignore_dirs_or_files` - A list of files or directories in which errors won't be raised
+
 ## Example
 
 ```toml
@@ -79,4 +85,7 @@ dreamchecker = true
 [diagnostics]
 duplicate_include = "error"
 macro_redefined = "off"
+
+[directories]
+ignore_dirs_or_files = [ "some/path/", "foo.dm", "another/path/bar.dm" ]
 ```
