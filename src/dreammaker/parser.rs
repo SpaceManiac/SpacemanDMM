@@ -1804,6 +1804,21 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         fields.push(item);
                     }
                     NewType::MiniExpr { ident, fields }
+                } else if self.exact(Token::Punct(Punctuation::Dot)).is_ok() {
+                    self.put_back(Token::Punct(Punctuation::Dot));
+                    let mut z = NewType::Implicit;
+                    if let Some(path) = self.prefab()? {
+                        if let Some((_, last)) = path.path.last() {
+                            if last == "PARSE_ERROR" {
+                                let ident = ".".to_string();
+                                let fields = Vec::new();
+                                z = NewType::MiniExpr { ident, fields };
+                            } else {
+                                z = NewType::Prefab(path);
+                            }
+                        }
+                    }
+                    z
                 } else if let Some(path) = self.prefab()? {
                     NewType::Prefab(path)
                 } else {
