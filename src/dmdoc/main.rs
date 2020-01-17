@@ -218,7 +218,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         progress.update(&ty.path);
 
         let mut parsed_type = ParsedType::default();
-        if context.config().use_typepath_names() {
+        if context.config().dmdoc.use_typepath_names {
             parsed_type.name = ty
                 .get()
                 .name

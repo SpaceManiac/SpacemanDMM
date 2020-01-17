@@ -16,7 +16,7 @@ pub struct Config {
     display: WarningDisplay,
     pub langserver: Langserver,
     diagnostics: HashMap<String, WarningLevel>,
-    dmdoc: DMDoc,
+    pub dmdoc: DMDoc,
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
@@ -79,10 +79,6 @@ impl Config {
 
     pub fn registerable_error(&self, error: &DMError) -> bool {
         self.display.error_level.applies_to(error.severity())
-    }
-
-    pub fn use_typepath_names(&self) -> bool {
-        self.dmdoc.use_typepath_names
     }
 }
 
