@@ -1308,6 +1308,48 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             }
         }
 
+        println!("{:#?}", param_name_map);
+/*
+        size,   // blur, outline, drop_shadow, wave
+        color,  // outline, drop_shadow
+        x, y,   // drop_shadow, motion_blur, wave
+        offset, // drop_shadow, wave
+        flags,  // wave
+        border, // drop_shadow, possibly bugged,
+        render_source*/
+
+/*
+    x
+        Horizontal center of effect, in pixels, relative to image center
+    y
+        Vertical center of effect, in pixels, relative to image center
+    size
+        Amount of blur (defaults to 1)
+        */
+
+        // filter call checking
+        if proc.name() == "filter" {
+            if let Some(typename) = param_name_map.get("type") {
+                if let Some(Constant::String(typevalue)) = &typename.value {
+                    if VALID_FILTER_TYPES.contains_key(typevalue.as_str()) {
+                        
+                    } else {
+                        error(location, format!("filter() called with invalid type parameter value {}", typevalue))
+                            .register(self.context);
+                    }
+                                       // error(location, format!("filter(type=\"alpha\") called with invalid kwarg {}", other))
+                                         //   .register(self.context);
+
+                } else {
+                    error(location, format!("filter() called with non-string type parameter value {:?}", typename.value))
+                        .register(self.context);
+                }
+            } else {
+                error(location, "filter() called without mandatory parameter 'type'")
+                    .register(self.context);
+            }
+        }
+
         if let Some(return_type) = self.env.return_type.get(&proc) {
             let ec = type_expr::TypeExprContext {
                 objtree: self.objtree,
