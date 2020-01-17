@@ -192,6 +192,14 @@ pub fn default_defines(defines: &mut DefineMap) {
         VIS_INHERIT_ID = Int(32);
         VIS_UNDERLAY = Int(64);
         VIS_HIDE = Int(128);
+
+        // world.Profile()
+        PROFILE_STOP = Int(1);
+        PROFILE_CLEAR = Int(2);
+        PROFILE_AVERAGE = Int(4);
+        PROFILE_START = Int(8);
+        PROFILE_REFRESH = Int(16);
+        PROFILE_RESTART = Int(32);
     }
 }
 
@@ -690,24 +698,25 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         world/var/version = int!(0);
         world/var/view = int!(5);
         world/var/visibility = int!(1);
-        world/proc/AddCredits();
-        world/proc/ClearMedal();
-        world/proc/Export();
-        world/proc/GetConfig();
-        world/proc/GetCredits();
-        world/proc/GetMedal();
-        world/proc/GetScores();
+        world/proc/AddCredits(player, credits, note);
+        world/proc/ClearMedal(medal, player);
+        world/proc/Export(Addr, File, Persist, Clients);
+        world/proc/GetConfig(config_set, param);
+        world/proc/GetCredits(player);
+        world/proc/GetMedal(medal, player);
+        world/proc/GetScores(key, fields, count, skip);
         world/proc/Import();
-        world/proc/IsBanned();
-        world/proc/IsSubscribed();
-        world/proc/OpenPort();
-        world/proc/PayCredits();
-        world/proc/Reboot();
+        world/proc/IsBanned(key, address, computer_id, type);
+        world/proc/IsSubscribed(player);
+        world/proc/OpenPort(port);
+        world/proc/PayCredits(player, credits, note);
+        world/proc/Profile(command, format);
+        world/proc/Reboot(reason);
         world/proc/Repop();
-        world/proc/SetConfig();
-        world/proc/SetMedal();
-        world/proc/SetScores();
-        world/proc/Error();
+        world/proc/SetConfig(config_set, param, value);
+        world/proc/SetMedal(medal, player);
+        world/proc/SetScores(key, fields);
+        world/proc/Error(exception);
 
         client;
         client/var/const/type;
