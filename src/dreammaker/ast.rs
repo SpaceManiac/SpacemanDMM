@@ -3,7 +3,7 @@
 //! Most AST types can be pretty-printed using the `Display` trait.
 use std::fmt;
 use std::iter::FromIterator;
-use phf::{phf_map, phf_set, Set};
+use phf::phf_map;
 
 use linked_hash_map::LinkedHashMap;
 
@@ -899,11 +899,8 @@ pub const KNOWN_SETTING_NAMES: &[&str] = &[
     "waitfor",
 ];
 
-pub static VALID_FILTER_TYPES: phf::Map<&'static str, Set<&'static str>> = phf_map! {
-    "alpha" => { phf_set! { "x", "y", "icon", "render_source", "flags" } },
-
-};
-/*
+pub static VALID_FILTER_TYPES: phf::Map<&'static str, &[&str]> = phf_map! {
+    "alpha" => &[ "x", "y", "icon", "render_source", "flags" ],
     "angular_blur" => &[ "x", "y", "size" ],
     "color" => &[ "color", "space" ],
     "displace" => &[ "x", "y", "size", "icon", "render_source" ],
@@ -916,4 +913,4 @@ pub static VALID_FILTER_TYPES: phf::Map<&'static str, Set<&'static str>> = phf_m
     "rays" => &[ "x", "y", "size", "color", "offset", "density", "threshold", "factor", "flags" ],
     "ripple" => &[ "x", "y", "size", "repeat", "radius", "falloff", "flags" ],
     "wave" => &[ "x", "y", "size", "offset", "flags" ],
-};*/
+};

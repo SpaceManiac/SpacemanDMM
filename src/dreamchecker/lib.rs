@@ -1308,38 +1308,26 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             }
         }
 
-        println!("{:#?}", param_name_map);
-/*
-        size,   // blur, outline, drop_shadow, wave
-        color,  // outline, drop_shadow
-        x, y,   // drop_shadow, motion_blur, wave
-        offset, // drop_shadow, wave
-        flags,  // wave
-        border, // drop_shadow, possibly bugged,
-        render_source*/
-
-/*
-    x
-        Horizontal center of effect, in pixels, relative to image center
-    y
-        Vertical center of effect, in pixels, relative to image center
-    size
-        Amount of blur (defaults to 1)
-        */
-
         // filter call checking
+        // TODO: check flags for valid values
+        //  eg "wave" type "flags" param only works with WAVE_SIDEWAYS, WAVE_BOUND
+        // also some filters have limits for their numerical params
+        //  eg "rays" type "threshold" param defaults to 0.5, can be 0 to 1
         if proc.name() == "filter" {
             if let Some(typename) = param_name_map.get("type") {
                 if let Some(Constant::String(typevalue)) = &typename.value {
-                    if VALID_FILTER_TYPES.contains_key(typevalue.as_str()) {
-                        
+                    if let Some(arglist) = VALID_FILTER_TYPES.get(typevalue.as_str()) {
+                        let mut validiter = arglist.iter();
+                        for arg in param_name_map.keys() {
+                            if *arg != "type" && validiter.position(|&x| x == *arg).is_none() {
+                                error(location, format!("filter(type=\"{}\") called with invalid kwarg {}", typevalue, arg))
+                                    .register(self.context);
+                            }
+                        }
                     } else {
                         error(location, format!("filter() called with invalid type parameter value {}", typevalue))
                             .register(self.context);
                     }
-                                       // error(location, format!("filter(type=\"alpha\") called with invalid kwarg {}", other))
-                                         //   .register(self.context);
-
                 } else {
                     error(location, format!("filter() called with non-string type parameter value {:?}", typename.value))
                         .register(self.context);
