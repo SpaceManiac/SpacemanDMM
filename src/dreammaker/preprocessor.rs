@@ -957,8 +957,8 @@ impl<'ctx> Preprocessor<'ctx> {
 
                 // special case for inside a defined() call
                 if let Some(Token::Punct(Punctuation::LParen)) = self.output.back() {
-                    if self.output.len().checked_sub(2).is_some() {
-                        if let Some(Token::Ident(identname, _)) = self.output.get(self.output.len() - 2) {
+                    if let Some(idx) = self.output.len().checked_sub(2) {
+                        if let Some(Token::Ident(identname, _)) = self.output.get(idx) {
                             if identname.as_str() == "defined" {
                                 self.output.push_back(Token::Ident(ident.to_owned(), whitespace));
                                 return Ok(());
