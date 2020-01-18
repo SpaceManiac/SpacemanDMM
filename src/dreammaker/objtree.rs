@@ -992,19 +992,23 @@ impl ObjectTree {
         // but only when a `/proc` block appeared somewhere prior to the
         // override. http://www.byond.com/forum/post/2441385
         let len = proc.value.len();
-        if declaration.is_some() && !proc.value.is_empty() {
-            // Show the error now, make up for it by putting the original
-            // at the beginning of the list (so `..()` finds it).
-            DMError::new(proc.value[0].location, "procedure override precedes definition")
-                .set_severity(Severity::Warning)
-                .with_errortype("override_precedes_definition")
-                .with_note(location, "definition is here")
-                .register(context);
-            proc.value.insert(0, value);
-        } else {
-            proc.value.push(value);
+        match declaration {
+            Some(decl) if !proc.value.is_empty() => {
+                // Show the error now, make up for it by putting the original
+                // at the beginning of the list (so `..()` finds it).
+                DMError::new(proc.value[0].location, format!("override of {}/{} precedes definition", node.path, name))
+                    .set_severity(Severity::Warning)
+                    .with_errortype("override_precedes_definition")
+                    .with_note(location, format!("{}/{}/{} is defined here", node.path, decl, name))
+                    .register(context);
+                proc.value.insert(0, value);
+                Ok((len, proc.value.first_mut().unwrap()))
+            },
+            _ => {
+                proc.value.push(value);
+                Ok((len, proc.value.last_mut().unwrap()))
+            }
         }
-        Ok((len, proc.value.last_mut().unwrap()))
     }
 
     pub(crate) fn add_builtin_entry(
