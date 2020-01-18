@@ -1314,27 +1314,29 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         // also some filters have limits for their numerical params
         //  eg "rays" type "threshold" param defaults to 0.5, can be 0 to 1
         if proc.name() == "filter" {
-            if let Some(typename) = param_name_map.get("type") {
-                if let Some(Constant::String(typevalue)) = &typename.value {
-                    if let Some(arglist) = VALID_FILTER_TYPES.get(typevalue.as_str()) {
-                        let mut validiter = arglist.iter();
-                        for arg in param_name_map.keys() {
-                            if *arg != "type" && validiter.position(|&x| x == *arg).is_none() {
-                                error(location, format!("filter(type=\"{}\") called with invalid kwarg {}", typevalue, arg))
-                                    .register(self.context);
-                            }
-                        }
-                    } else {
-                        error(location, format!("filter() called with invalid type parameter value {}", typevalue))
-                            .register(self.context);
-                    }
-                } else {
-                    error(location, format!("filter() called with non-string type parameter value {:?}", typename.value))
+            guard!(let Some(typename) = param_name_map.get("type") else {
+                error(location, "filter() called without mandatory keyword parameter 'type'")
+                    .register(self.context);
+                return Analysis::empty()
+            });
+            guard!(let Some(Constant::String(typevalue)) = &typename.value else {
+                error(location, format!("filter() called with non-string type keyword parameter value '{:?}'", typename.value))
+                    .register(self.context);
+                return Analysis::empty()
+            });
+            guard!(let Some(arglist) = VALID_FILTER_TYPES.get(typevalue.as_str()) else {
+                error(location, format!("filter() called with invalid type keyword parameter value '{}'", typevalue))
+                    .register(self.context);
+                return Analysis::empty()
+            });
+            let mut validiter = arglist.iter();
+            for arg in param_name_map.keys() {
+                if *arg != "type" && validiter.position(|&x| x == *arg).is_none() {
+                    error(location, format!("filter(type=\"{}\") called with invalid keyword parameter '{}'", typevalue, arg))
+                        // luckily lummox has made the anchor url match the type= value for each filter
+                        .with_note(location, format!("See: http://www.byond.com/docs/ref/#/{{notes}}/filters/{} for the permitted arguments", typevalue))
                         .register(self.context);
                 }
-            } else {
-                error(location, "filter() called without mandatory parameter 'type'")
-                    .register(self.context);
             }
         }
 
