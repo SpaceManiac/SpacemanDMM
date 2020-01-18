@@ -55,6 +55,10 @@ Raised by PreProcessor:
 * `macro_redefined` - Raised where a macro is defined a second time
 * `macro_undefined_no_definition` - Raised where a macro is undefined where no such macro is defined
 
+Raised by Object Tree:
+
+* `override_precedes_definition` - Raised where a proc is overridden prior to its definition in the include order, see: http://www.byond.com/forum/post/2441385
+
 ### Display
 
 The `[display]` section has the following options:
