@@ -987,17 +987,20 @@ impl ObjectTree {
             code
         };
 
-        // TODO: resolve the "procedure override precedes definition" problem.
         // DM really does reorder the declaration to appear before the override,
         // but only when a `/proc` block appeared somewhere prior to the
         // override. http://www.byond.com/forum/post/2441385
+        // Correctly implementing the "existence of a /proc block" check would
+        // be too onerous, so let's assume the user wrote something that they
+        // expect DM to compile.
         let len = proc.value.len();
         match declaration {
             Some(decl) if !proc.value.is_empty() => {
-                // Show the error now, make up for it by putting the original
+                // Show the hint now, make up for it by putting the original
                 // at the beginning of the list (so `..()` finds it).
+                // Configuration can be used to upgrade this above a hint.
                 DMError::new(proc.value[0].location, format!("override of {}/{} precedes definition", node.path, name))
-                    .set_severity(Severity::Warning)
+                    .set_severity(Severity::Hint)
                     .with_errortype("override_precedes_definition")
                     .with_note(location, format!("{}/{}/{} is defined here", node.path, decl, name))
                     .register(context);
