@@ -16,3 +16,5 @@ fn after_kwarg() {
 "##.trim();
     check_errors_match(code, AFTER_KWARG_ERRORS);
 }
+
+//TODO: test filter() stuff when that PR is merged

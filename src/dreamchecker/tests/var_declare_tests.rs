@@ -34,3 +34,21 @@ fn var_final() {
 "##.trim();
     check_errors_match(code, VAR_FINAL_ERRORS);
 }
+
+pub const VAR_UNDECL_ERRORS: &[(u32, u16, &str)] = &[
+    (6, 5, "undefined var: \"bar\""),
+];
+
+#[test]
+fn var_undecl() {
+    let code = r##"
+/mob
+    var/foo = 0
+    
+/mob/proc/test()
+    foo++
+    bar++
+"##.trim();
+    check_errors_match(code, VAR_UNDECL_ERRORS);
+}
+

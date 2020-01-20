@@ -27,6 +27,8 @@ fn call_parent() {
     
 /mob/subtype/test()
     return
+/mob/anothertype/test()
+    ..()
 "##.trim();
     check_errors_match(code, TRUE_SUB_ERRORS);
 }
