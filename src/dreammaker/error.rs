@@ -82,14 +82,6 @@ impl FileList {
 }
 
 impl Context {
-    pub fn unit_test_default() -> Context {
-        Context {
-            files: FileList::default(),
-            errors: RefCell::<Vec<DMError>>::default(),
-            config: RefCell::<Config>::default(),
-            print_severity: None,
-        }
-    }
     // ------------------------------------------------------------------------
     // Files
 
