@@ -62,7 +62,9 @@ pub fn check_errors_match<S: Into<Cow<'static, str>>>(buffer: S, errorlist: &[(u
     for (line, column, desc) in errorlist {
         let nexterror = iter.next().unwrap();
         if nexterror.location().line != *line || nexterror.location().column != *column || nexterror.description() != *desc {
-            panic!("possible feature regression in dreamchecker");
+            panic!(format!("possible feature regression in dreamchecker, expected {}:{}:{}, found {}:{}:{}", 
+                *line, *column, *desc, 
+                nexterror.location().line, nexterror.location().column, nexterror.description()));
         }
     }
     if iter.next().is_some() {

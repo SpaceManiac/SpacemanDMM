@@ -4,7 +4,7 @@ extern crate dreamchecker as dc;
 use dc::test_helpers::*;
 
 pub const VAR_DEC_ERRORS: &[(u32, u16, &str)] = &[
-    (6, 1, "/mob/subtype redeclares var \"foo\""),
+    (5, 12, "/mob/subtype redeclares var \"foo\""),
 ];
 
 #[test]
