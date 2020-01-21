@@ -1313,7 +1313,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         //  eg "wave" type "flags" param only works with WAVE_SIDEWAYS, WAVE_BOUND
         // also some filters have limits for their numerical params
         //  eg "rays" type "threshold" param defaults to 0.5, can be 0 to 1
-        if src.is_root() && proc.name() == "filter" {
+        if proc.ty().is_root() && proc.name() == "filter" {
             guard!(let Some(typename) = param_name_map.get("type") else {
                 error(location, "filter() called without mandatory keyword parameter 'type'")
                     .register(self.context);
