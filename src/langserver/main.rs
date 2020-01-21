@@ -989,10 +989,13 @@ handle_method_call! {
                                     declaration.push_str("/tmp");
                                 }
                                 if decl.var_type.is_final {
-                                    declaration.push_str("/final");
+                                    declaration.push_str("/SpacemanDMM_final");
                                 }
                                 if decl.var_type.is_private {
-                                    declaration.push_str("/private");
+                                    declaration.push_str("/SpacemanDMM_private");
+                                }
+                                if decl.var_type.is_protected {
+                                    declaration.push_str("/SpacemanDMM_protected");
                                 }
                                 for bit in decl.var_type.type_path.iter() {
                                     declaration.push('/');

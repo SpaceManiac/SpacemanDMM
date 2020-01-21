@@ -1443,7 +1443,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         .register(self.context);
                 }
                 if var_type.is_private {
-                    DMError::new(type_path_start, "var/private has no effect here")
+                    DMError::new(type_path_start, "var/SpacemanDMM_private has no effect here")
+                        .with_errortype("private_var")
+                        .set_severity(Severity::Warning)
+                        .register(self.context);
+                }
+                if var_type.is_protected {
+                    DMError::new(type_path_start, "var/SpacemanDMM_protected has no effect here")
+                        .with_errortype("protected_var")
                         .set_severity(Severity::Warning)
                         .register(self.context);
                 }

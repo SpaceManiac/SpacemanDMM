@@ -325,20 +325,26 @@ struct ProcDirective<'o> {
     directive: HashMap<ProcRef<'o>, (bool, Location)>,
     can_be_disabled: bool,
     set_at_definition: bool,
+    can_be_global: bool,
     directive_string: &'static str,
 }
 
 impl<'o> ProcDirective<'o> {
-    pub fn new(directive_string: &'static str, can_be_disabled: bool, set_at_definition: bool) -> ProcDirective<'o> {
+    pub fn new(directive_string: &'static str, can_be_disabled: bool, set_at_definition: bool, can_be_global: bool) -> ProcDirective<'o> {
         ProcDirective {
             directive: Default::default(),
             directive_string,
             can_be_disabled,
             set_at_definition,
+            can_be_global,
         }
     }
 
     pub fn insert(&mut self, proc: ProcRef<'o>, enable: bool, location: Location) -> Result<(), DMError> {
+        if proc.ty().is_root() && !self.can_be_global {
+            return Err(error(location, format!("{} sets {}, which cannot be set on global procs", proc, self.directive_string))
+                .with_errortype("incompatible_directive"))
+        }
         if !enable && !self.can_be_disabled {
             return Err(error(location, format!("{} sets {} false, but it cannot be disabled.", proc, self.directive_string))
                 .with_errortype("disabled_directive")
@@ -395,6 +401,7 @@ pub struct AnalyzeObjectTree<'o> {
     must_call_parent: ProcDirective<'o>,
     must_not_override: ProcDirective<'o>,
     private: ProcDirective<'o>,
+    protected: ProcDirective<'o>,
     // Debug(ProcRef) -> KwargInfo
     used_kwargs: BTreeMap<String, KwargInfo>,
 }
@@ -408,9 +415,10 @@ impl<'o> AnalyzeObjectTree<'o> {
             context,
             objtree,
             return_type,
-            must_call_parent: ProcDirective::new("SpacemanDMM_should_call_parent", true, false),
-            must_not_override: ProcDirective::new("SpacemanDMM_should_not_override", false, false),
-            private: ProcDirective::new("SpacemanDMM_private_proc", false, true),
+            must_call_parent: ProcDirective::new("SpacemanDMM_should_call_parent", true, false, false),
+            must_not_override: ProcDirective::new("SpacemanDMM_should_not_override", false, false, false),
+            private: ProcDirective::new("SpacemanDMM_private_proc", false, true, false),
+            protected: ProcDirective::new("SpacemanDMM_protected_proc", false, true, false),
             used_kwargs: Default::default(),
         }
     }
@@ -426,6 +434,7 @@ impl<'o> AnalyzeObjectTree<'o> {
             "SpacemanDMM_should_not_override" => &mut self.must_not_override,
             "SpacemanDMM_should_call_parent" => &mut self.must_call_parent,
             "SpacemanDMM_private_proc" => &mut self.private,
+            "SpacemanDMM_protected_proc" => &mut self.protected,
             other => {
                 error(location, format!("unknown linter setting {:?}", directive))
                     .with_errortype("unknown_linter_setting")
@@ -566,7 +575,7 @@ impl<'o> AnalyzeObjectTree<'o> {
 }
 
 fn static_type<'o>(objtree: &'o ObjectTree, location: Location, mut of: &[String]) -> Result<StaticType<'o>, DMError> {
-    while !of.is_empty() && ["static", "global", "const", "tmp", "SpacemanDMM_final", "SpacemanDMM_private"].contains(&&*of[0]) {
+    while !of.is_empty() && ["static", "global", "const", "tmp", "SpacemanDMM_final", "SpacemanDMM_private", "SpacemanDMM_protected"].contains(&&*of[0]) {
         of = &of[1..];
     }
 
@@ -705,6 +714,14 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         self.visit_block(block);
 
         if self.proc_ref.parent_proc().is_some() {
+            if let Some((proc, true, location)) = self.env.private.get_self_or_parent(self.proc_ref) {
+                if proc != self.proc_ref {
+                    error(self.proc_ref.location, format!("proc overrides private parent, prohibited by {}", proc))
+                    .with_note(location, "prohibited by this private_proc annotation")
+                    .with_errortype("private_proc")
+                    .register(self.context);
+                }
+            }
             if let Some((proc, true, location)) = self.env.must_not_override.get_self_or_parent(self.proc_ref) {
                 if proc != self.proc_ref {
                     error(self.proc_ref.location, format!("proc overrides parent, prohibited by {}", proc))
@@ -1200,6 +1217,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                                 .set_severity(Severity::Warning)
                                 .with_note(decl.location, "definition is here")
                                 .register(self.context);
+                        } else if !self.ty.is_subtype_of(ty.get()) && decl.var_type.is_protected {
+                            error(location, format!("field {:?} on {} is declared as protected", name, ty))
+                                .with_errortype("protected_var")
+                                .set_severity(Severity::Warning)
+                                .with_note(decl.location, "definition is here")
+                                .register(self.context);
                         }
                         self.static_type(location, &decl.var_type.type_path)
                             .with_fix_hint(decl.location, "add additional type info here")
@@ -1220,11 +1243,19 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Follow::Call(kind, name, arguments) => {
                 if let Some(ty) = lhs.static_ty.basic_type() {
                     if let Some(proc) = ty.get_proc(name) {
-                        if let Some((privateproc, is_private, decllocation)) = self.env.private.get_self_or_parent(proc) {
-                            if is_private {
-                                error(location, format!("attempting to call private proc {} on {}", name, ty))
+                        if let Some((privateproc, true, decllocation)) = self.env.private.get_self_or_parent(proc) {
+                            if ty != privateproc.ty() {
+                                error(location, format!("{}/{} attempting to call private proc {} on {}, types do not match", self.ty, self.proc_ref, name, ty))
                                     .with_errortype("private_proc")
                                     .with_note(decllocation, "prohibited by this private_proc annotation")
+                                    .register(self.context);
+                            }
+                        }
+                        if let Some((protectedproc, true, decllocation)) = self.env.protected.get_self_or_parent(proc) {
+                            if !ty.is_subtype_of(protectedproc.ty().get()) {
+                                error(location, format!("{}/{} attempting to call protected proc {} on {}", self.ty, self.proc_ref, name, ty))
+                                    .with_errortype("protected_proc")
+                                    .with_note(decllocation, "prohibited by this protected_proc annotation")
                                     .register(self.context);
                             }
                         }

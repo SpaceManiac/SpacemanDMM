@@ -36,8 +36,8 @@ DreamCheckers's whole-program analysis can find problems such as:
 * Calling the parent proc `..()` when no such parent exists.
 * Accesses like `L[1].foo` and `foo().bar` wherein `.` acts like `:` instead.
   * List accesses perform lookups according to the type appended to `/list`,
-    e.g. with `var/list/obj/L`, the type of `L[1]` will be `/obj` and a lookup
-    of `L[1].name` will not generate a warning.
+	e.g. with `var/list/obj/L`, the type of `L[1]` will be `/obj` and a lookup
+	of `L[1].name` will not generate a warning.
   * Proc calls will obey the [return type](#return-type) annotation if present.
 
 ## Configuration
@@ -62,12 +62,16 @@ be enabled:
 	#define UNLINT(X) SpacemanDMM_unlint(X)
 	#define SHOULD_NOT_OVERRIDE(X) set SpacemanDMM_should_not_override = X
 	#define VAR_FINAL var/SpacemanDMM_final
+	#define VAR_PRIVATE var/SpacemanDMM_private
+	#define VAR_PROTECTED var/SpacemanDMM_protected
 #else
 	#define RETURN_TYPE(X)
 	#define SHOULD_CALL_PARENT(X)
 	#define UNLINT(X) X
 	#define SHOULD_NOT_OVERRIDE(X)
 	#define VAR_FINAL var
+	#define VAR_PRIVATE var
+	#define VAR_PROTECTED var
 #endif
 ```
 
@@ -106,3 +110,17 @@ Use the above definition of VAR_FINAL to declare vars as `SpacemanDMM_final`, `v
 /a/type
   VAR_FINAL/foo = somevalue
 ```
+
+### Private / Protected procs
+
+Use `set SpacemanDMM_private_proc = 1` and `set SpacemanDMM_protected_proc = 1` to set procs as private and protected respectively.
+
+* Private procs can only be called by things of exactly the same type
+* Protected procs can only be call by things of the same type of subtypes
+
+Additionally, Private procs cannot be overridden.
+
+### Private / Protected vars
+
+Use the above definitions of VAR_PRIVATE and VAR_PROTECTED to declare vars as `SpacemanDMM_private`/`SpacemanDMM_protected`.
+These function the same way as the proc versions.
