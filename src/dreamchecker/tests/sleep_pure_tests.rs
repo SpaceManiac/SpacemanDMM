@@ -64,7 +64,7 @@ fn pure() {
     check_errors_match(code, PURE_ERRORS);
 }
 
-// these tests are separate because the ordering the errors are reported in aren't determinate and I CBF figuring out why -spookydonut Jan 2020
+// these tests are separate because the ordering the errors are reported in isn't determinate and I CBF figuring out why -spookydonut Jan 2020
 // TODO: find out why
 pub const PURE2_ERRORS: &[(u32, u16, &str)] = &[
     (5, 5, "call to pure proc test discards return value"),
