@@ -899,6 +899,7 @@ pub const KNOWN_SETTING_NAMES: &[&str] = &[
     "waitfor",
 ];
 
+// TODO: maybe put this somewhere more suitable?
 pub static VALID_FILTER_TYPES: phf::Map<&'static str, &[&str]> = phf_map! {
     "alpha" => &[ "x", "y", "icon", "render_source", "flags" ],
     "angular_blur" => &[ "x", "y", "size" ],
