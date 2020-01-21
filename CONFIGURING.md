@@ -31,6 +31,8 @@ Raised by DreamChecker:
 * `must_not_override` - `SpacemanDMM_should_not_override` directive
 * `must_call_parent` - `SpacemanDMM_should_call_parent` directive
 * `final_var` - `SpacemanDMM_final` var type
+* `private_proc` - `SpacemanDMM_private_proc` directive
+* `private_var` - `SpacemanDMM_private` var type
 * `ambiguous_in_lhs` - Raised on ambiguous operations on the left hand side of an `in` operation
 * `no_typehint_implicit_new` - Raised on the use of `new` where no typehint is avaliable
 * `field_access_static_type` - Raised on using `.field_name` on a variable with no typehint

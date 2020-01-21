@@ -1196,6 +1196,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     if let Some(decl) = ty.get_var_declaration(name) {
                         if ty != self.ty && decl.var_type.is_private {
                             error(location, format!("field {:?} on {} is declared as private", name, ty))
+                                .with_errortype("private_var")
                                 .set_severity(Severity::Warning)
                                 .with_note(decl.location, "definition is here")
                                 .register(self.context);
@@ -1222,6 +1223,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         if let Some((privateproc, is_private, decllocation)) = self.env.private.get_self_or_parent(proc) {
                             if is_private {
                                 error(location, format!("attempting to call private proc {} on {}", name, ty))
+                                    .with_errortype("private_proc")
                                     .with_note(decllocation, "prohibited by this private_proc annotation")
                                     .register(self.context);
                             }
