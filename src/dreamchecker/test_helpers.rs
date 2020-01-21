@@ -1,10 +1,8 @@
-
-extern crate dreammaker as dm;
 use dm::Context;
 use dm::objtree::Code;
 use std::borrow::Cow;
 
-use crate::{AnalyzeObjectTree,check_var_defs};
+use crate::{AnalyzeObjectTree, check_var_defs};
 
 pub const NO_ERRORS: &[(u32, u16, &str)] = &[];
 
