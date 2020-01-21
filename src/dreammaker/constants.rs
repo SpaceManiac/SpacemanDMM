@@ -743,7 +743,7 @@ impl<'a> ConstantFolder<'a> {
                 "rgb" => {
                     use std::fmt::Write;
                     if args.len() != 3 && args.len() != 4 {
-                        return Err(self.error("malformed rgb() call"));
+                        return Err(self.error(format!("malformed rgb() call, must have 3 or 4 arguments and instead has {}", args.len())));
                     }
                     let mut result = String::with_capacity(7);
                     result.push_str("#");
@@ -752,7 +752,7 @@ impl<'a> ConstantFolder<'a> {
                             let clamped = std::cmp::max(::std::cmp::min(i, 255), 0);
                             let _ = write!(result, "{:02x}", clamped);
                         } else {
-                            return Err(self.error("malformed rgb() call"));
+                            return Err(self.error("malformed rgb() call, argument wasn't an int"));
                         }
                     }
                     Constant::String(result)
@@ -760,7 +760,7 @@ impl<'a> ConstantFolder<'a> {
                 "defined" if self.defines.is_some() => {
                     let defines = self.defines.unwrap();  // annoying, but keeps the match clean
                     if args.len() != 1 {
-                        return Err(self.error("malformed defined() call"));
+                        return Err(self.error(format!("malformed defined() call, must have 1 argument and instead has {}", args.len())));
                     }
                     match args[0] {
                         Expression::Base {
@@ -770,7 +770,7 @@ impl<'a> ConstantFolder<'a> {
                         } if unary.is_empty() && follow.is_empty() => {
                             Constant::Int(if defines.contains_key(ident) { 1 } else { 0 })
                         },
-                        _ => return Err(self.error("malformed defined() call")),
+                        _ => return Err(self.error("malformed defined() call, argument given isn't an Ident.")),
                     }
                 }
                 // other functions are no-goes
@@ -789,7 +789,7 @@ impl<'a> ConstantFolder<'a> {
 
     fn trig_op(&mut self, mut args: Vec<Expression>, op: fn(f32) -> f32) -> Result<Constant, DMError> {
         if args.len() != 1 {
-            Err(self.error("trig function requires exactly 1 argument"))
+            Err(self.error(format!("trig function requires exactly 1 argument, instead found {}", args.len())))
         } else if let Some(f) = self.expr(args.remove(0), None)?.to_float() {
             Ok(Constant::Float(op(f)))
         } else {

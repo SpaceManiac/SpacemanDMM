@@ -14,6 +14,9 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 mod type_expr;
 use type_expr::TypeExpr;
 
+#[doc(hidden)]  // Intended for the tests only.
+pub mod test_helpers;
+
 // ----------------------------------------------------------------------------
 // Helper structures
 
@@ -592,6 +595,7 @@ pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
 
                 if decl.var_type.is_final {
                     DMError::new(typevar.value.location, format!("{} overrides final var {:?}", path, varname))
+                        .with_errortype("final_var")
                         .with_note(decl.location, format!("declared final on {} here", parent.path))
                         .register(context);
                 }
