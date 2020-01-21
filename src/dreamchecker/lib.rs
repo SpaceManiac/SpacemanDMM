@@ -868,7 +868,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 for (condition, ref block) in arms.iter() {
                     self.visit_control_condition(condition.location, &condition.elem);
                     if alwaystrue {
-                        error(location,"unreachable if block, preceeding if/elseif condition(s) are always true")
+                        error(condition.location,"unreachable if block, preceeding if/elseif condition(s) are always true")
                             .register(self.context);
                     }
                     self.visit_expression(condition.location, &condition.elem, None);
@@ -876,13 +876,13 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     //println!("if arm {:#?}", state);
                     match condition.elem.is_truthy() {
                         Some(true) => {
-                            error(location,"if condition is always true")
+                            error(condition.location,"if condition is always true")
                                 .register(self.context);
                             allterm.merge_false(state);
                             alwaystrue = true;
                         },
                         Some(false) => {
-                            error(location,"if condition is always false")
+                            error(condition.location,"if condition is always false")
                                 .register(self.context);
                         },
                         None => allterm.merge_false(state)
@@ -891,6 +891,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
                 if let Some(else_arm) = else_arm {
                     if alwaystrue {
+                        // TODO: fix location for else blocks
                         error(location,"unreachable else block, preceeding if/elseif condition(s) are always true")
                             .register(self.context);
                     }
