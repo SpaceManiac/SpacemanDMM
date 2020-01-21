@@ -59,11 +59,11 @@ impl<'o> StaticType<'o> {
     }
 
     fn plain_list(tree: &'o ObjectTree) -> StaticType<'o> {
-        StaticType::List{ list: tree.expect("/list"), keys: Box::new(StaticType::None) }
+        StaticType::List { list: tree.expect("/list"), keys: Box::new(StaticType::None) }
     }
 
     fn list_of_type(tree: &'o ObjectTree, of: &str) -> StaticType<'o> {
-        StaticType::List{ list: tree.expect("/list"), keys: Box::new(StaticType::Type(tree.expect(of))) }
+        StaticType::List { list: tree.expect("/list"), keys: Box::new(StaticType::Type(tree.expect(of))) }
     }
 }
 
@@ -1302,7 +1302,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     }
 
     fn global_builtin_returntype(&mut self, proc: ProcRef) -> StaticType<'o> {
-        return match proc.name() {
+        match proc.name() {
             "argslist" => StaticType::plain_list(self.objtree),
             "block" => StaticType::list_of_type(self.objtree, "/turf"),
             "bounds" => StaticType::list_of_type(self.objtree, "/atom"),
@@ -1324,8 +1324,6 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             "view" => StaticType::list_of_type(self.objtree, "/atom"),
             "viewers" => StaticType::list_of_type(self.objtree, "/mob"),
             _ => StaticType::None,
-        };
+        }
     }
-
-
 }

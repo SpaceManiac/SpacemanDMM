@@ -521,22 +521,19 @@ impl<'a> ProcRef<'a> {
     pub fn tree(self) -> &'a ObjectTree {
         self.ty.tree()
     }
-    
+
     /// check for builtin procs
     #[inline]
     pub fn is_builtin(self) -> bool {
         if let Some(decl) = self.get_declaration() {
-            return decl.location.is_builtins()
+            return decl.location.is_builtins();
         }
         false
     }
 
     #[inline]
     pub fn is_builtin_global(self) -> bool {
-        if self.is_builtin() {
-            return self.ty().get().name == ""
-        }
-        false
+        self.is_builtin() && self.ty.is_root()
     }
 
     /// Look up the immediate parent, `..()`.
