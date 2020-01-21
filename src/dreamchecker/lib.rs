@@ -1,7 +1,6 @@
 //! DreamChecker, a robust static analysis and typechecking engine for
 //! DreamMaker.
 #![allow(dead_code, unused_variables)]
-#[macro_use] extern crate guard;
 
 extern crate dreammaker as dm;
 use dm::{Context, DMError, Location, Severity};
@@ -307,6 +306,7 @@ struct KwargInfo {
     bad_overrides_at: BTreeMap<String, BadOverride>,
 }
 
+/// Struct for SpacemanDMM_* directives
 struct ProcDirective<'o> {
     directive: HashMap<ProcRef<'o>, (bool, Location)>,
     can_be_disabled: bool,
@@ -338,10 +338,12 @@ impl<'o> ProcDirective<'o> {
         Ok(())
     }
 
+    /// Check if this specific ProcRef has this directive
     pub fn get(&self, proc: ProcRef<'o>) -> Option<&(bool, Location)> {
         self.directive.get(&proc)
     }
 
+    /// Check if this ProcRef or its parents have this directive
     pub fn get_self_or_parent(&self, proc: ProcRef<'o>) -> Option<(ProcRef<'o>, bool, Location)> {
         let mut next = Some(proc);
         while let Some(current) = next {
@@ -354,6 +356,7 @@ impl<'o> ProcDirective<'o> {
     }
 }
 
+/// Helper evaluation for directive true/false setting
 pub fn directive_value_to_truthy(expr: &Expression, location: Location) -> Result<bool, DMError> {
     // Maybe this should be using constant evaluation, but for now accept TRUE and FALSE directly.
     match expr.as_term() {
@@ -551,56 +554,6 @@ fn error<S: Into<String>>(location: Location, desc: S) -> DMError {
 }
 
 // ----------------------------------------------------------------------------
-// Variable analyzer
-
-pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
-    for (path, _) in objtree.types.iter() {
-        guard!(let Some(typeref) = objtree.find(path)
-            else { continue });
-
-        for parent in typeref.iter_parent_types() {
-            if parent.is_root() {
-                break;
-            }
-
-            if &parent.path == path {
-                continue;
-            }
-
-            for (varname, typevar) in typeref.vars.iter() {
-                if varname == "vars" {
-                    continue;
-                }
-                if path == "/client" && varname == "parent_type" {
-                    continue;
-                }
-
-                guard!(let Some(parentvar) = parent.vars.get(varname)
-                    else { continue });
-
-                guard!(let Some(decl) = &parentvar.declaration
-                    else { continue });
-
-                if let Some(mydecl) = &typevar.declaration {
-                    if typevar.value.location.is_builtins() {
-                        continue;
-                    }
-                    DMError::new(mydecl.location, format!("{} redeclares var {:?}", path, varname))
-                        .with_note(decl.location, format!("declared on {} here", parent.path))
-                        .register(context);
-                }
-
-                if decl.var_type.is_final {
-                    DMError::new(typevar.value.location, format!("{} overrides final var {:?}", path, varname))
-                        .with_note(decl.location, format!("declared final on {} here", parent.path))
-                        .register(context);
-                }
-            }
-        }
-    }
-}
-
-// ----------------------------------------------------------------------------
 // Procedure analyzer
 
 struct LocalVar<'o> {
@@ -664,8 +617,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         self.visit_block(block);
 
         if self.proc_ref.parent_proc().is_some() {
-            if let Some((proc, must_not, location)) = self.env.must_not_override.get_self_or_parent(self.proc_ref) {
-                if must_not && proc != self.proc_ref {
+            if let Some((proc, true, location)) = self.env.must_not_override.get_self_or_parent(self.proc_ref) {
+                if proc != self.proc_ref {
                     error(self.proc_ref.location, format!("proc overrides parent, prohibited by {}", proc))
                         .with_note(location, "prohibited by this must_not_override annotation")
                         .with_errortype("must_not_override")
@@ -673,13 +626,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
             }
             if !self.calls_parent {
-                if let Some((proc, must, location)) = self.env.must_call_parent.get_self_or_parent(self.proc_ref) {
-                    if must {
-                        error(self.proc_ref.location, format!("proc never calls parent, required by {}", proc))
-                            .with_note(location, "required by this must_call_parent annotation")
-                            .with_errortype("must_call_parent")
-                            .register(self.context);
-                    }
+                if let Some((proc, true, location)) = self.env.must_call_parent.get_self_or_parent(self.proc_ref) {
+                    error(self.proc_ref.location, format!("proc never calls parent, required by {}", proc))
+                        .with_note(location, "required by this must_call_parent annotation")
+                        .with_errortype("must_call_parent")
+                        .register(self.context);
                 }
             }
         }

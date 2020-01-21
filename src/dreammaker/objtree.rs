@@ -1140,6 +1140,57 @@ impl ObjectTree {
             }
         }
     }
+
+    // ----------------------------------------------------------------------------
+    // Variable analyzer
+
+    /// Checks for var declaration issues
+    pub fn check_var_defs(&self, context: &Context) {
+        for (path, _) in self.types.iter() {
+            guard!(let Some(typeref) = self.find(path)
+                else { continue });
+
+            for parent in typeref.iter_parent_types() {
+                if parent.is_root() {
+                    break;
+                }
+
+                if &parent.path == path {
+                    continue;
+                }
+
+                for (varname, typevar) in typeref.vars.iter() {
+                    if varname == "vars" {
+                        continue;
+                    }
+                    if path == "/client" && varname == "parent_type" {
+                        continue;
+                    }
+
+                    guard!(let Some(parentvar) = parent.vars.get(varname)
+                        else { continue });
+
+                    guard!(let Some(decl) = &parentvar.declaration
+                        else { continue });
+
+                    if let Some(mydecl) = &typevar.declaration {
+                        if typevar.value.location.is_builtins() {
+                            continue;
+                        }
+                        DMError::new(mydecl.location, format!("{} redeclares var {:?}", path, varname))
+                            .with_note(decl.location, format!("declared on {} here", parent.path))
+                            .register(context);
+                    }
+
+                    if decl.var_type.is_final {
+                        DMError::new(typevar.value.location, format!("{} overrides final var {:?}", path, varname))
+                            .with_note(decl.location, format!("declared final on {} here", parent.path))
+                            .register(context);
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[inline]
