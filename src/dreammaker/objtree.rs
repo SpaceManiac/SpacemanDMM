@@ -12,7 +12,7 @@ use linked_hash_map::LinkedHashMap;
 use super::ast::{Expression, VarType, VarSuffix, PathOp, Parameter, Block, ProcDeclKind};
 use super::constants::{Constant, Pop};
 use super::docs::DocCollection;
-use super::{DMError, Location, Context};
+use super::{DMError, Location, Context, Severity};
 
 // ----------------------------------------------------------------------------
 // Symbol IDs
@@ -987,15 +987,31 @@ impl ObjectTree {
             code
         };
 
-        // TODO: resolve the "procedure override precedes definition" problem.
         // DM really does reorder the declaration to appear before the override,
         // but only when a `/proc` block appeared somewhere prior to the
-        // override. This logic is too much of a corner case to bother
-        // implementing, so abusers of it will have to put up with some
-        // incorrect analyses for now. http://www.byond.com/forum/post/2441385
+        // override. http://www.byond.com/forum/post/2441385
+        // Correctly implementing the "existence of a /proc block" check would
+        // be too onerous, so let's assume the user wrote something that they
+        // expect DM to compile.
         let len = proc.value.len();
-        proc.value.push(value);
-        Ok((len, proc.value.last_mut().unwrap()))
+        match declaration {
+            Some(decl) if !proc.value.is_empty() => {
+                // Show the hint now, make up for it by putting the original
+                // at the beginning of the list (so `..()` finds it).
+                // Configuration can be used to upgrade this above a hint.
+                DMError::new(proc.value[0].location, format!("override of {}/{} precedes definition", node.path, name))
+                    .set_severity(Severity::Hint)
+                    .with_errortype("override_precedes_definition")
+                    .with_note(location, format!("{}/{}/{} is defined here", node.path, decl, name))
+                    .register(context);
+                proc.value.insert(0, value);
+                Ok((len, proc.value.first_mut().unwrap()))
+            },
+            _ => {
+                proc.value.push(value);
+                Ok((len, proc.value.last_mut().unwrap()))
+            }
+        }
     }
 
     pub(crate) fn add_builtin_entry(

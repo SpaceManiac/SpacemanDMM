@@ -930,7 +930,7 @@ impl<'ctx> Preprocessor<'ctx> {
             // anything other than directives may be ifdef'd out
             _ if disabled => return Ok(()),
             // identifiers may be macros
-            Token::Ident(ref ident, _) => {
+            Token::Ident(ref ident, whitespace) => {
                 self.flush_docs();
 
                 // lint for BYOND bug
@@ -953,6 +953,18 @@ impl<'ctx> Preprocessor<'ctx> {
                     self.annotate_macro(ident, Location::builtins());
                     self.output.push_back(Token::Int(self.last_input_loc.line as i32));
                     return Ok(());
+                }
+
+                // special case for inside a defined() call
+                if let Some(Token::Punct(Punctuation::LParen)) = self.output.back() {
+                    if let Some(idx) = self.output.len().checked_sub(2) {
+                        if let Some(Token::Ident(identname, _)) = self.output.get(idx) {
+                            if identname.as_str() == "defined" {
+                                self.output.push_back(Token::Ident(ident.to_owned(), whitespace));
+                                return Ok(());
+                            }
+                        }
+                    }
                 }
 
                 // if it's a define, perform the substitution
