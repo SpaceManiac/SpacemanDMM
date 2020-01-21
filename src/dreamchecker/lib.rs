@@ -1333,9 +1333,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     .register(self.context);
                 return Analysis::empty()
             });
-            let mut validiter = arglist.iter();
             for arg in param_name_map.keys() {
-                if *arg != "type" && validiter.position(|&x| x == *arg).is_none() {
+                if *arg != "type" && arglist.iter().position(|&x| x == *arg).is_none() {
                     error(location, format!("filter(type=\"{}\") called with invalid keyword parameter '{}'", typevalue, arg))
                         // luckily lummox has made the anchor url match the type= value for each filter
                         .with_note(location, format!("See: http://www.byond.com/docs/ref/#/{{notes}}/filters/{} for the permitted arguments", typevalue))
