@@ -645,6 +645,13 @@ pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
                         .with_note(decl.location, format!("declared final on {} here", parent.path))
                         .register(context);
                 }
+
+                if decl.var_type.is_private {
+                    DMError::new(typevar.value.location, format!("{} overrides private var {:?}", path, varname))
+                        .with_errortype("private_var")
+                        .with_note(decl.location, format!("declared private on {} here", parent.path))
+                        .register(context);
+                }
             }
         }
     }
