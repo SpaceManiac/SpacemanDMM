@@ -1254,7 +1254,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             }
         }
 
-        if proc.is_builtin_global() {
+        if proc.ty().is_root() && proc.is_builtin() {
             Analysis::from(self.global_builtin_returntype(proc))
         } else if let Some(return_type) = self.env.return_type.get(&proc) {
             let ec = type_expr::TypeExprContext {
