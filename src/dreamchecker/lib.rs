@@ -1252,15 +1252,16 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     if let Some(proc) = ty.get_proc(name) {
                         if let Some((privateproc, true, decllocation)) = self.env.private.get_self_or_parent(proc) {
                             if ty != privateproc.ty() {
-                                error(location, format!("{}/{} attempting to call private proc {} on {}, types do not match", self.ty, self.proc_ref, name, ty))
+                                error(location, format!("{} attempting to call private proc {}, types do not match", self.proc_ref, privateproc))
                                     .with_errortype("private_proc")
                                     .with_note(decllocation, "prohibited by this private_proc annotation")
                                     .register(self.context);
+                                return Analysis::empty() // dont double up with visit_call()
                             }
                         }
                         if let Some((protectedproc, true, decllocation)) = self.env.protected.get_self_or_parent(proc) {
-                            if !ty.is_subtype_of(protectedproc.ty().get()) {
-                                error(location, format!("{}/{} attempting to call protected proc {} on {}", self.ty, self.proc_ref, name, ty))
+                            if !self.ty.is_subtype_of(protectedproc.ty().get()) {
+                                error(location, format!("{} attempting to call protected proc {}", self.proc_ref, protectedproc))
                                     .with_errortype("protected_proc")
                                     .with_note(decllocation, "prohibited by this protected_proc annotation")
                                     .register(self.context);
@@ -1328,6 +1329,16 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     }
 
     fn visit_call(&mut self, location: Location, src: TypeRef<'o>, proc: ProcRef, args: &'o [Expression], is_exact: bool) -> Analysis<'o> {
+
+        if let Some((privateproc, true, decllocation)) = self.env.private.get_self_or_parent(proc) {
+            if self.ty != privateproc.ty() {
+                error(location, format!("{} attempting to call private proc {}, types do not match", self.proc_ref, privateproc))
+                    .with_errortype("private_proc")
+                    .with_note(decllocation, "prohibited by this private_proc annotation")
+                    .register(self.context);
+            }
+        }
+
         // identify and register kwargs used
         let mut any_kwargs_yet = false;
 
