@@ -64,6 +64,8 @@ pub enum Constant {
     Int(i32),
     /// A floating-point literal.
     Float(f32),
+    /// Built-in flag
+    Flag(String),
 }
 
 // Manual Hash and Eq impls using OrderedFloat, so that we get the desired
@@ -81,6 +83,7 @@ impl std::hash::Hash for Constant {
             Constant::Resource(s) => s.hash(state),
             Constant::Int(i) => i.hash(state),
             Constant::Float(f) => OrderedFloat(*f).hash(state),
+            Constant::Flag(f) => f.hash(state),
         }
     }
 }
@@ -366,6 +369,7 @@ impl fmt::Display for Constant {
             },
             Constant::Prefab(ref val) => write!(f, "{}", val),
             Constant::String(ref val) => crate::lexer::Quote(val).fmt(f),
+            Constant::Flag(ref val) => crate::lexer::Quote(val).fmt(f),
             Constant::Resource(ref val) => write!(f, "'{}'", val),
             Constant::Int(val) => crate::lexer::FormatFloat(val as f32).fmt(f),
             Constant::Float(val) => crate::lexer::FormatFloat(val).fmt(f),

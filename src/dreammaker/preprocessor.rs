@@ -11,6 +11,7 @@ use super::{DMError, Location, HasLocation, FileId, Context, Severity};
 use super::lexer::*;
 use super::docs::{DocComment, DocTarget, DocCollection};
 use super::annotation::*;
+use super::ast::*;
 
 /// The maximum recursion depth of macro expansion.
 const MAX_RECURSION_DEPTH: usize = 32;
@@ -968,6 +969,10 @@ impl<'ctx> Preprocessor<'ctx> {
                 }
 
                 // if it's a define, perform the substitution
+                if FILTER_FLAGS.contains(&ident.as_str()) {
+                    self.output.push_back(Token::Flag(ident.to_owned()));
+                    return Ok(());
+                }
                 let mut expansion = self.defines.get(ident).cloned();  // TODO: don't clone?
                 if expansion.is_some() && self.include_stack.stack.len() > MAX_RECURSION_DEPTH {
                     self.error(format!("expanding {:?} would exceed max recursion depth of {} levels",

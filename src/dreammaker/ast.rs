@@ -423,6 +423,8 @@ pub enum Term {
     Resource(String),
     /// An `as()` call, with an input type. Undocumented.
     As(InputType),
+    /// A built-in flag
+    Flag(String),
 
     // Non-function calls with recursive contents -----------------------------
     /// An expression contained in a term.
@@ -898,6 +900,29 @@ pub const KNOWN_SETTING_NAMES: &[&str] = &[
     // undocumented
     "waitfor",
 ];
+
+pub const FILTER_FLAGS: &[&str] = &[
+    "MASK_INVERSE",
+    "MASK_SWAP",
+    "FILTER_COLOR_RGB",
+    "FILTER_COLOR_HSV",
+    "FILTER_COLOR_HSL",
+    "FILTER_COLOR_HCY",
+    "FLAG_OVERLAY",
+    "FLAG_UNDERLAY",
+    "WAVE_SIDEWAYS",
+    "WAVE_BOUND",
+];
+
+// filter type => (flag field name, exclusive, can_be_0, valid flag values)
+pub static VALID_FILTER_FLAGS: phf::Map<&'static str, (&str, bool, bool, &[&str])> = phf_map! {
+    "alpha" => ("flags", false, true, &[ "MASK_INVERSE", "MASK_SWAP" ]),
+    "color" => ("space", true, false, &[ "FILTER_COLOR_RGB", "FILTER_COLOR_HSV", "FILTER_COLOR_HSL", "FILTER_COLOR_HCY" ]),
+    "layer" => ("flags", true, true, &[ "FLAG_OVERLAY", "FLAG_UNDERLAY" ]),
+    "rays" => ("flags", false, true, &[ "FLAG_OVERLAY", "FLAG_UNDERLAY" ]),
+    "ripple" => ("flags", false, true, &[ "WAVE_BOUND" ]),
+    "wave" => ("flags", false, true, &[ "WAVE_SIDEWAYS", "WAVE_BOUND" ]),
+};
 
 // TODO: maybe put this somewhere more suitable?
 pub static VALID_FILTER_TYPES: phf::Map<&'static str, &[&str]> = phf_map! {

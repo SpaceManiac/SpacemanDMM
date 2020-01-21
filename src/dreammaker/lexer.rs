@@ -232,6 +232,8 @@ pub enum Token {
     Punct(Punctuation),
     /// A raw identifier or keyword. Indicates whether it is followed by whitespace.
     Ident(String, bool),
+    ///
+    Flag(String),
     /// A string literal with no interpolation.
     String(String),
     /// The opening portion of an interpolated string. Followed by an expression.
@@ -346,6 +348,7 @@ impl fmt::Display for Token {
             Int(i) => FormatFloat(i as f32).fmt(f),
             Float(i) => FormatFloat(i).fmt(f),
             DocComment(ref c) => write!(f, "{}", c),
+            Flag(ref i) => Quote(i).fmt(f),
         }
     }
 }

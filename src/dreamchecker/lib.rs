@@ -116,6 +116,7 @@ impl<'o> AssumptionSet<'o> {
         match constant {
             Constant::Null(_) => assumption_set![Assumption::IsNull(true), Assumption::Truthy(false)],
             Constant::String(val) => assumption_set![Assumption::IsText(true), Assumption::Truthy(!val.is_empty())],
+            Constant::Flag(_) => assumption_set![Assumption::IsNum(true), Assumption::Truthy(true)],
             Constant::Resource(_) => assumption_set![Assumption::Truthy(true)],
             Constant::Int(val) => assumption_set![Assumption::IsNum(true), Assumption::Truthy(*val != 0)],
             Constant::Float(val) => assumption_set![Assumption::IsNum(true), Assumption::Truthy(*val != 0.0)],
@@ -925,6 +926,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Term::Int(number) => Analysis::from_value(self.objtree, Constant::from(*number), type_hint),
             Term::Float(number) => Analysis::from_value(self.objtree, Constant::from(*number), type_hint),
             Term::String(text) => Analysis::from_value(self.objtree, Constant::String(text.to_owned()), type_hint),
+            Term::Flag(name) => Analysis::from_value(self.objtree, Constant::Flag(name.to_owned()), type_hint),
             Term::Resource(text) => Analysis::from_value(self.objtree, Constant::Resource(text.to_owned()), type_hint),
             Term::As(_) => assumption_set![Assumption::IsNum(true)].into(),
 
@@ -1240,12 +1242,29 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         Analysis::empty()
     }
 
+    fn check_filter_flag(&mut self, term: &'o Term, can_be_zero: bool, location: Location, typevalue: &str, valid_flags: &[&str], flagfieldname: &str) {
+        match term {
+            Term::Flag(flagname) => {
+                if valid_flags.iter().position(|&x| x == flagname).is_none() {
+                    error(location, format!("filter(type=\"{}\") called with invalid '{}' flag '{}'", typevalue, flagfieldname, flagname))
+                        .register(self.context);
+                }
+            },
+            Term::Int(0) if can_be_zero => {},
+            other => {
+                error(location, format!("filter(type=\"{}\") called with invalid '{}' value '{:?}'", typevalue, flagfieldname, other))
+                    .register(self.context);
+            },
+        }
+    }
+
     fn visit_call(&mut self, location: Location, src: TypeRef<'o>, proc: ProcRef, args: &'o [Expression], is_exact: bool) -> Analysis<'o> {
         // identify and register kwargs used
         let mut any_kwargs_yet = false;
 
         let mut param_name_map = HashMap::new();
         let mut param_idx_map = HashMap::new();
+        let mut param_expr_map = HashMap::new();
         let mut param_idx = 0;
 
         for arg in args {
@@ -1302,9 +1321,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 error(location, format!("proc called with non-kwargs after kwargs: {}()", proc.name()))
                     .register(self.context);
             }
-
+            //println!("{:#?}", argument_value);
             let analysis = self.visit_expression(location, argument_value, None);
             if let Some(kw) = this_kwarg {
+                param_expr_map.insert(kw.as_str(), argument_value);
                 param_name_map.insert(kw.as_str(), analysis);
             } else {
                 param_idx_map.insert(param_idx, analysis);
@@ -1318,6 +1338,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         // also some filters have limits for their numerical params
         //  eg "rays" type "threshold" param defaults to 0.5, can be 0 to 1
         if proc.ty().is_root() && proc.name() == "filter" {
+            //println!("{:#?}", param_name_map);
             guard!(let Some(typename) = param_name_map.get("type") else {
                 error(location, "filter() called without mandatory keyword parameter 'type'")
                     .register(self.context);
@@ -1339,6 +1360,42 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         // luckily lummox has made the anchor url match the type= value for each filter
                         .with_note(location, format!("See: http://www.byond.com/docs/ref/#/{{notes}}/filters/{} for the permitted arguments", typevalue))
                         .register(self.context);
+                }
+            }
+            if let Some((flagfieldname, exclusive, can_be_zero, valid_flags)) = VALID_FILTER_FLAGS.get(typevalue.as_str()) {
+                if let Some(flagsvalue) = param_expr_map.get(flagfieldname) {
+                    match flagsvalue {
+                        Expression::BinaryOp{ op: BinaryOp::BitOr, lhs, rhs } => {
+                            if *exclusive {
+                                error(location, format!("filter(type=\"{}\") '{}' parameter must have one value, found bitwise OR", typevalue, flagfieldname))
+                                    .register(self.context);
+                                return Analysis::empty()
+                            }
+                            guard!(let Some(lhsterm) = lhs.as_term() else {
+                                error(location, "filter() flag fields cannot have more than two bitwise OR'd flags")
+                                    .register(self.context);
+                                return Analysis::empty()
+                            });
+                            guard!(let Some(rhsterm) = rhs.as_term() else {
+                                error(location, "filter() flag fields cannot have more than two bitwise OR'd flags")
+                                    .register(self.context);
+                                return Analysis::empty()
+                            });
+                            self.check_filter_flag(lhsterm, *can_be_zero, location, typevalue, valid_flags, flagfieldname);
+                            self.check_filter_flag(rhsterm, *can_be_zero, location, typevalue, valid_flags, flagfieldname);
+                        },
+                        Expression::Base{ unary, term, follow: _ } => {
+                            if unary.len() > 0 {
+                                error(location, "filter() flag fields cannot have unary ops")
+                                    .register(self.context);
+                            }
+                            self.check_filter_flag(&term.elem, *can_be_zero, location, typevalue, valid_flags, flagfieldname);
+                        },
+                        _ => {
+                            error(location, format!("filter(type=\"{}\"), extremely invalid value passed to '{}' field", typevalue, flagfieldname))
+                                .register(self.context);
+                        }
+                    }
                 }
             }
         }

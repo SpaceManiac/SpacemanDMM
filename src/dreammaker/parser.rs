@@ -1882,6 +1882,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
             Token::Ident(ref i, _) if i == "null" => Term::Null,
 
+            Token::Flag(ref i) => Term::Flag(i.to_owned()),
+
             // term :: 'as' '(' input_type ')'
             Token::Ident(ref i, _) if i == "as" => {
                 require!(self.exact(Token::Punct(Punctuation::LParen)));
