@@ -69,7 +69,7 @@ The `[langserver]` section has the following options:
 
 ### DM Doc
 
-The '`[dmdoc]` section has the following options:
+The `[dmdoc]` section has the following options:
 
 * `use_typepath_names` - Set to `true` to have dmdoc use the true typepath name instead of the value of the `name` var for types
 
