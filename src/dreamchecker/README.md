@@ -116,7 +116,7 @@ Use the above definition of VAR_FINAL to declare vars as `SpacemanDMM_final`, `v
 Use `set SpacemanDMM_private_proc = 1` and `set SpacemanDMM_protected_proc = 1` to set procs as private and protected respectively.
 
 * Private procs can only be called by things of exactly the same type
-* Protected procs can only be call by things of the same type of subtypes
+* Protected procs can only be call by things of the same type or subtypes
 
 Additionally, Private procs cannot be overridden.
 
