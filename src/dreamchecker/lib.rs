@@ -791,7 +791,6 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 return term // stop evaluating
             }
             let state = self.visit_statement(stmt.location, &stmt.elem);
-            //println!("{:#?} {:#?}", stmt, state);
             term.merge(state);
         }
         return term
@@ -835,18 +834,15 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false }
             },
             Statement::Return(None) => { return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false } },
-            Statement::Crash(expr) => { 
+            Statement::Crash(expr) => {
                 self.visit_expression(location, expr, None);
                 return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false }
             },
             Statement::Throw(expr) => { self.visit_expression(location, expr, None); },
             Statement::While { condition, block } => {
-                //self.loop_condition_check(location, condition);
                 self.visit_expression(location, condition, None);
                 let mut state = self.visit_block(block);
-                //println!("end of while {:#?}", state);
                 state.end_loop();
-                //println!("after endloop {:#?}", state);
                 return state
             },
             Statement::DoWhile { block, condition } => {
@@ -856,9 +852,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         .register(self.context);
                     return state
                 }
-                //self.loop_condition_check(location, condition);
                 self.visit_expression(location, condition, None);
-                
+
                 state.end_loop();
                 return state
             },
@@ -873,7 +868,6 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     }
                     self.visit_expression(condition.location, &condition.elem, None);
                     let state = self.visit_block(block);
-                    //println!("if arm {:#?}", state);
                     match condition.elem.is_truthy() {
                         Some(true) => {
                             error(condition.location,"if condition is always true")
@@ -887,7 +881,6 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         },
                         None => allterm.merge_false(state)
                     };
-                    //println!("after merge {:#?}", allterm);
                 }
                 if let Some(else_arm) = else_arm {
                     if alwaystrue {
@@ -896,16 +889,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                             .register(self.context);
                     }
                     let state = self.visit_block(else_arm);
-                    //println!("else arm {:#?}", state);
                     allterm.merge_false(state);
-                    //println!("after merge {:#?}", allterm);
                 } else {
                     allterm.no_else();
                     return allterm
                 }
-                //println!("end of if {:#?}", allterm);
                 allterm.finalize();
-                //println!("after finalize {:#?}", allterm);
                 return allterm
             },
             Statement::ForLoop { init, test, inc, block } => {
