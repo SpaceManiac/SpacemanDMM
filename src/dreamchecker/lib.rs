@@ -879,14 +879,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                             .with_note(location, format!("add parentheses to disambiguate: `(a {} b) in c`", op))
                             .register(self.context);
                     },
-                    Expression::TernaryOp { cond, if_, else_ } => {
-                        error(location, format!("ambiguous ternary on left side of an `in`"))
-                            .set_severity(Severity::Warning)
-                            .with_errortype("ambiguous_in_lhs")
-                            .with_note(location, "add parentheses to fix: `a ? b : (c in d)`")
-                            .with_note(location, "add parentheses to disambiguate: `(a ? b : c) in d`")
-                            .register(self.context);
-                    },
+                    // This is checked in the parser
+                    Expression::TernaryOp { cond, if_, else_ } => {},
                 };
                 let lty = self.visit_expression(location, lhs, None);
                 let rty = self.visit_expression(location, rhs, None);
