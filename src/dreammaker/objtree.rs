@@ -1014,7 +1014,8 @@ impl ObjectTree {
             elems.len() + 1,
             Default::default(),
             Default::default(),
-        ).and(Ok(()))
+        )?;
+        Ok(())
     }
 
     // an entry which may be anything depending on the path
@@ -1028,7 +1029,8 @@ impl ObjectTree {
     ) -> Result<EntryType, DMError> {
         let (parent, child) = self.get_from_path(location, &mut path, len)?;
         if is_var_decl(child) {
-            self.register_var(location, parent, "var", path, comment, suffix).and(Ok(EntryType::VarDecl))
+            self.register_var(location, parent, "var", path, comment, suffix)?;
+            Ok(EntryType::VarDecl)
         } else if is_proc_decl(child) {
             Ok(EntryType::ProcDecl)
             // proc{} block, children will be procs

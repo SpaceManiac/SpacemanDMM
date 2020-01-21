@@ -799,7 +799,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 // `thing{` - block
                 match self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), Default::default(), var_suffix) {
                     Ok(EntryType::Subtype) => {
-                        if !absolute && self.context.config().code_standards().disallow_relative_type_definitions {
+                        if !absolute && self.context.config().code_standards.disallow_relative_type_definitions {
                             DMError::new(self.location, "relatively pathed type defined here")
                                 .set_severity(Severity::Warning)
                                 .register(self.context);
@@ -900,7 +900,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                             dest.insert(entry_start..body_start, Annotation::ProcHeader(new_stack.to_vec(), idx));
                             dest.insert(body_start..self.location, Annotation::ProcBody(new_stack.to_vec(), idx));
                         }
-                        if !absolute && self.context.config().code_standards().disallow_relative_proc_definitions {
+                        if !absolute && self.context.config().code_standards.disallow_relative_proc_definitions {
                             DMError::new(location, "relatively pathed proc defined here")
                                 .set_severity(Severity::Warning)
                                 .register(self.context);

@@ -16,7 +16,7 @@ pub struct Config {
     display: WarningDisplay,
     pub langserver: Langserver,
     diagnostics: HashMap<String, WarningLevel>,
-    code_standards: CodeStandards,
+    pub code_standards: CodeStandards,
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
@@ -31,8 +31,8 @@ pub struct Langserver {
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
+#[serde(default)]
 pub struct CodeStandards {
-    #[serde(default)]
     pub disallow_relative_proc_definitions: bool,
     pub disallow_relative_type_definitions: bool,
 }
@@ -82,10 +82,6 @@ impl Config {
 
     pub fn registerable_error(&self, error: &DMError) -> bool {
         self.display.error_level.applies_to(error.severity())
-    }
-
-    pub fn code_standards(&self) -> &CodeStandards {
-        &self.code_standards
     }
 }
 
