@@ -592,6 +592,7 @@ pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
 
                 if decl.var_type.is_final {
                     DMError::new(typevar.value.location, format!("{} overrides final var {:?}", path, varname))
+                        .with_errortype("final_var")
                         .with_note(decl.location, format!("declared final on {} here", parent.path))
                         .register(context);
                 }
