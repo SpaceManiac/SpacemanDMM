@@ -594,7 +594,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     }
 
     fn dot(&mut self) -> Status<()> {
-        match self.next("dot")? {
+        match self.next("'.'")? {
             Token::Punct(Punctuation::Dot) => Ok(Some(())),
             other => self.try_another(other),
         }
@@ -1813,7 +1813,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         // bare dot
                         let fields = Vec::new();
                         let ident = ".".to_owned();
-                        NewType::MiniExpr { ident , fields }
+                        NewType::MiniExpr { ident, fields }
                     }
                 } else if let Some(ident) = self.ident()? {
                     let mut fields = Vec::new();
