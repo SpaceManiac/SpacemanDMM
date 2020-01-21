@@ -36,8 +36,8 @@ DreamCheckers's whole-program analysis can find problems such as:
 * Calling the parent proc `..()` when no such parent exists.
 * Accesses like `L[1].foo` and `foo().bar` wherein `.` acts like `:` instead.
   * List accesses perform lookups according to the type appended to `/list`,
-	e.g. with `var/list/obj/L`, the type of `L[1]` will be `/obj` and a lookup
-	of `L[1].name` will not generate a warning.
+    e.g. with `var/list/obj/L`, the type of `L[1]` will be `/obj` and a lookup
+    of `L[1].name` will not generate a warning.
   * Proc calls will obey the [return type](#return-type) annotation if present.
 
 ## Configuration
