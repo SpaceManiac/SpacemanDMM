@@ -14,7 +14,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 mod type_expr;
 use type_expr::TypeExpr;
 
-//#[cfg(test)]
+#[doc(hidden)]  // Intended for the tests only.
 pub mod test_helpers;
 
 // ----------------------------------------------------------------------------
