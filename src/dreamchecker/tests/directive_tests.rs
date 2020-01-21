@@ -12,7 +12,7 @@ fn true_substitution() {
     let code = r##"
 /mob/proc/test()
     set SpacemanDMM_should_call_parent = TRUE
-    
+
 /mob/subtype/test()
     return
 "##.trim();
@@ -24,7 +24,7 @@ fn call_parent() {
     let code = r##"
 /mob/proc/test()
     set SpacemanDMM_should_call_parent = 1
-    
+
 /mob/subtype/test()
     return
 /mob/anothertype/test()
@@ -38,7 +38,7 @@ fn call_parent_disable() {
     let code = r##"
 /mob/proc/test()
     set SpacemanDMM_should_call_parent = 1
-    
+
 /mob/subtype/test()
     set SpacemanDMM_should_call_parent = 0
     return
@@ -55,7 +55,7 @@ fn no_override() {
     let code = r##"
 /mob/proc/test()
     set SpacemanDMM_should_not_override = 1
-    
+
 /mob/subtype/test()
     return
 "##.trim();
@@ -72,7 +72,7 @@ fn no_override_disable() {
     let code = r##"
 /mob/proc/test()
     set SpacemanDMM_should_not_override = 1
-    
+
 /mob/subtype/test()
     set SpacemanDMM_should_not_override = 0
     return

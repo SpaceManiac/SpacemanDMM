@@ -12,7 +12,7 @@ fn var_redec() {
     let code = r##"
 /mob
     var/foo
-    
+
 /mob/subtype
     var/foo
 "##.trim();
@@ -28,7 +28,7 @@ fn var_final() {
     let code = r##"
 /mob
     var/SpacemanDMM_final/foo = 0
-    
+
 /mob/subtype
     foo = 1
 "##.trim();
@@ -44,7 +44,7 @@ fn var_undecl() {
     let code = r##"
 /mob
     var/foo = 0
-    
+
 /mob/proc/test()
     foo++
     bar++
