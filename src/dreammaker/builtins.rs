@@ -163,25 +163,18 @@ pub fn default_defines(defines: &mut DefineMap) {
         MASK_SWAP = Int(2);
 
         // rgb filter
-        FILTER_COLOR_RGB = Int(1);
-        FILTER_COLOR_HSV = Int(2);
-        FILTER_COLOR_HSL = Int(4);
-        FILTER_COLOR_HCY = Int(8);
+        FILTER_COLOR_RGB = Int(0);
+        FILTER_COLOR_HSV = Int(1);
+        FILTER_COLOR_HSL = Int(2);
+        FILTER_COLOR_HCY = Int(3);
 
-        // layering
+        // layering / ray filter
         FILTER_OVERLAY = Int(1);
         FILTER_UNDERLAY = Int(2);
 
-        // ray filter
-        FLAG_OVERLAY = Int(1);
-        FLAG_UNDERLAY = Int(2);
-
-        // ripple filter
-        //WAVE_BOUND = Int(2);
-
-        // wave filter
+        // wave filter / ripple filter
         WAVE_SIDEWAYS = Int(1);
-        WAVE_BOUND = Int(2);
+        WAVE_BOUNDED = Int(2);
 
         // vis_flags
         VIS_INHERIT_ICON = Int(1);
@@ -197,9 +190,9 @@ pub fn default_defines(defines: &mut DefineMap) {
         PROFILE_STOP = Int(1);
         PROFILE_CLEAR = Int(2);
         PROFILE_AVERAGE = Int(4);
-        PROFILE_START = Int(8);
-        PROFILE_REFRESH = Int(16);
-        PROFILE_RESTART = Int(32);
+        PROFILE_START = Int(0);
+        PROFILE_REFRESH = Int(0);
+        PROFILE_RESTART = Int(2);
     }
 }
 
