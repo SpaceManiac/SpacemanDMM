@@ -16,6 +16,7 @@ pub struct Config {
     display: WarningDisplay,
     pub langserver: Langserver,
     diagnostics: HashMap<String, WarningLevel>,
+    pub code_standards: CodeStandards,
     pub dmdoc: DMDoc,
 }
 
@@ -28,6 +29,13 @@ pub struct WarningDisplay {
 #[derive(Deserialize, Default, Debug, Clone)]
 pub struct Langserver {
     pub dreamchecker: bool,
+}
+
+#[derive(Deserialize, Default, Debug, Clone)]
+#[serde(default)]
+pub struct CodeStandards {
+    pub disallow_relative_proc_definitions: bool,
+    pub disallow_relative_type_definitions: bool,
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]

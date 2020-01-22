@@ -72,6 +72,15 @@ The `[langserver]` section has the following options:
 
 * `dreamchecker` - Set to `true` to run dreamchecker within the language server.
 
+### Code standards
+
+These are extremely opinionated lint warnings and as such default to disabled
+
+The `[code_standards]` section has the following options:
+
+* `disallow_relative_proc_definitions` - Raised on relative pathed proc definitions
+* `disallow_relative_type_definitions` - Raised on relative pathed subtype defintions
+
 ### DM Doc
 
 The `[dmdoc]` section has the following options:
