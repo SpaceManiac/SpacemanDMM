@@ -17,6 +17,7 @@ use type_expr::TypeExpr;
 // ----------------------------------------------------------------------------
 // Helper structures
 
+/// Analysis result for checking type safety
 #[derive(Debug, PartialEq, Clone)]
 pub enum StaticType<'o> {
     None,
@@ -255,9 +256,10 @@ impl<'o> From<StaticType<'o>> for Analysis<'o> {
 }
 
 // ----------------------------------------------------------------------------
-// Shortcut entry point
-
+/// Shortcut entry point to run DreamChecker
 pub fn run(context: &Context, objtree: &ObjectTree) {
+    check_var_defs(&objtree, &context);
+
     let mut analyzer = AnalyzeObjectTree::new(context, objtree);
 
     objtree.root().recurse(&mut |ty| {
@@ -371,6 +373,7 @@ pub fn directive_value_to_truthy(expr: &Expression, location: Location) -> Resul
     }
 }
 
+/// A deeper analysis of an ObjectTree
 pub struct AnalyzeObjectTree<'o> {
     context: &'o Context,
     objtree: &'o ObjectTree,
@@ -397,6 +400,7 @@ impl<'o> AnalyzeObjectTree<'o> {
         }
     }
 
+    /// Analyze a specific proc
     pub fn check_proc(&mut self, proc: ProcRef<'o>, code: &'o [Spanned<Statement>]) {
         AnalyzeProc::new(self, self.context, self.objtree, proc).run(code)
     }
@@ -424,6 +428,7 @@ impl<'o> AnalyzeObjectTree<'o> {
         }
     }
 
+    /// Gather and store set directives for the given proc using the provided code body
     pub fn gather_settings(&mut self, proc: ProcRef<'o>, code: &'o [Spanned<Statement>]) {
         for statement in code.iter() {
             if let Statement::Setting { ref name, ref value, .. } = statement.elem {
@@ -453,6 +458,7 @@ impl<'o> AnalyzeObjectTree<'o> {
         }
     }
 
+    /// Check and build a list of bad overrides of kwargs for a ProcRef
     pub fn check_kwargs(&mut self, proc: ProcRef) {
         let param_names: HashSet<&String> = proc.parameters.iter().map(|p| &p.name).collect();
 
@@ -479,6 +485,7 @@ impl<'o> AnalyzeObjectTree<'o> {
         }
     }
 
+    /// Finish analyzing kwargs for missing overrides
     pub fn finish_check_kwargs(&self) {
         for (base_procname, kwarg_info) in self.used_kwargs.iter() {
             if kwarg_info.bad_overrides_at.is_empty() {
@@ -557,6 +564,7 @@ fn error<S: Into<String>>(location: Location, desc: S) -> DMError {
 // ----------------------------------------------------------------------------
 // Variable analyzer
 
+/// Examines an ObjectTree for var definitions that are invalid
 pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
     for (path, _) in objtree.types.iter() {
         guard!(let Some(typeref) = objtree.find(path)
