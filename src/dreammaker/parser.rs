@@ -593,6 +593,13 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }
     }
 
+    fn dot(&mut self) -> Status<()> {
+        match self.next("'.'")? {
+            Token::Punct(Punctuation::Dot) => Ok(Some(())),
+            other => self.try_another(other),
+        }
+    }
+
     fn ident_in_seq(&mut self, idx: usize) -> Status<Ident> {
         let start = self.updated_location();
         match self.next("identifier")? {
@@ -1810,7 +1817,18 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 // The following is what seems a reasonable approximation.
 
                 // try to read an ident or path
-                let t = if let Some(ident) = self.ident()? {
+                let t = if self.dot()?.is_some() {
+                    if let Some(ident) = self.ident()? {
+                        // prefab
+                        // TODO: arrange for this ident to end up in the prefab's annotation
+                        NewType::Prefab(require!(self.prefab_ex(vec![(PathOp::Dot, ident)])))
+                    } else {
+                        // bare dot
+                        let fields = Vec::new();
+                        let ident = ".".to_owned();
+                        NewType::MiniExpr { ident, fields }
+                    }
+                } else if let Some(ident) = self.ident()? {
                     let mut fields = Vec::new();
                     let mut belongs_to = vec![ident.clone()];
                     while let Some(item) = self.index_or_field(&mut belongs_to, false)? {

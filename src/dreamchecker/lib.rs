@@ -14,6 +14,9 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 mod type_expr;
 use type_expr::TypeExpr;
 
+#[doc(hidden)]  // Intended for the tests only.
+pub mod test_helpers;
+
 // ----------------------------------------------------------------------------
 // Helper structures
 
@@ -592,6 +595,7 @@ pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
 
                 if decl.var_type.is_final {
                     DMError::new(typevar.value.location, format!("{} overrides final var {:?}", path, varname))
+                        .with_errortype("final_var")
                         .with_note(decl.location, format!("declared final on {} here", parent.path))
                         .register(context);
                 }
@@ -1243,54 +1247,65 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         let mut param_name_map = HashMap::new();
         let mut param_idx_map = HashMap::new();
         let mut param_idx = 0;
+        let mut arglist_used = false;
 
         for arg in args {
             let mut argument_value = arg;
             let mut this_kwarg = None;
-            if let Expression::AssignOp { op: AssignOp::Assign, lhs, rhs } = arg {
-                match lhs.as_term() {
-                    Some(Term::Ident(name)) |
-                    Some(Term::String(name)) => {
-                        // Don't visit_expression the kwarg key.
-                        any_kwargs_yet = true;
-                        this_kwarg = Some(name);
-                        argument_value = rhs;
+            match arg {
+                Expression::AssignOp { op: AssignOp::Assign, lhs, rhs } => {
+                    match lhs.as_term() {
+                        Some(Term::Ident(name)) |
+                        Some(Term::String(name)) => {
+                            // Don't visit_expression the kwarg key.
+                            any_kwargs_yet = true;
+                            this_kwarg = Some(name);
+                            argument_value = rhs;
 
-                        // Check that that kwarg actually exists.
-                        if !proc.parameters.iter().any(|p| p.name == *name) {
-                            // Search for a child proc that does have this keyword argument.
-                            let mut error = error(location,
-                                format!("bad keyword argument {:?} to {}", name, proc));
-                            proc.recurse_children(&mut |child_proc| {
-                                if child_proc.ty() == proc.ty() { return }
-                                if child_proc.parameters.iter().any(|p| p.name == *name) {
-                                    error.add_note(child_proc.location, format!("an override has this parameter: {}", child_proc));
-                                }
-                            });
-                            error.register(self.context);
-                        } else if !is_exact {
-                            // If it does, mark it as "used".
-                            // Format with src/proc/foo here, rather than the
-                            // type the proc actually appears on, so that
-                            // calling /datum/foo() on a /datum/A won't
-                            // complain about /datum/B/foo().
-                            self.env.used_kwargs.entry(format!("{}/proc/{}", src, proc.name()))
-                                .or_insert_with(|| KwargInfo {
-                                    location: proc.location,
-                                    .. Default::default()
-                                })
-                                .called_at
-                                // TODO: use a more accurate location
-                                .entry(name.clone())
-                                .and_modify(|ca| ca.others += 1)
-                                .or_insert(CalledAt {
-                                    location: location,
-                                    others: 0,
+                            // Check that that kwarg actually exists.
+                            if !proc.parameters.iter().any(|p| p.name == *name) {
+                                // Search for a child proc that does have this keyword argument.
+                                let mut error = error(location,
+                                    format!("bad keyword argument {:?} to {}", name, proc));
+                                proc.recurse_children(&mut |child_proc| {
+                                    if child_proc.ty() == proc.ty() { return }
+                                    if child_proc.parameters.iter().any(|p| p.name == *name) {
+                                        error.add_note(child_proc.location, format!("an override has this parameter: {}", child_proc));
+                                    }
                                 });
+                                error.register(self.context);
+                            } else if !is_exact {
+                                // If it does, mark it as "used".
+                                // Format with src/proc/foo here, rather than the
+                                // type the proc actually appears on, so that
+                                // calling /datum/foo() on a /datum/A won't
+                                // complain about /datum/B/foo().
+                                self.env.used_kwargs.entry(format!("{}/proc/{}", src, proc.name()))
+                                    .or_insert_with(|| KwargInfo {
+                                        location: proc.location,
+                                        .. Default::default()
+                                    })
+                                    .called_at
+                                    // TODO: use a more accurate location
+                                    .entry(name.clone())
+                                    .and_modify(|ca| ca.others += 1)
+                                    .or_insert(CalledAt {
+                                        location: location,
+                                        others: 0,
+                                    });
+                            }
+                        }
+                        _ => {}
+                    }
+                },
+                expr => {
+                    if let Some(Term::Call(callname, _)) = expr.as_term() {
+                        // only interested in the first expression being arglist
+                        if callname.as_str() == "arglist" && param_name_map.len() == 0 && param_idx == 0 {
+                            arglist_used = true;
                         }
                     }
-                    _ => {}
-                }
+                },
             }
 
             if any_kwargs_yet && this_kwarg.is_none() && !(proc.ty().is_root() && proc.name() == "animate") {
@@ -1305,6 +1320,39 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             } else {
                 param_idx_map.insert(param_idx, analysis);
                 param_idx += 1;
+            }
+        }
+
+        // filter call checking
+        // TODO: check flags for valid values
+        //  eg "wave" type "flags" param only works with WAVE_SIDEWAYS, WAVE_BOUND
+        // also some filters have limits for their numerical params
+        //  eg "rays" type "threshold" param defaults to 0.5, can be 0 to 1
+        if proc.ty().is_root() && proc.name() == "filter" {
+            guard!(let Some(typename) = param_name_map.get("type") else {
+                if !arglist_used {
+                    error(location, "filter() called without mandatory keyword parameter 'type'")
+                        .register(self.context);
+                } // regardless, we're done here
+                return Analysis::empty()
+            });
+            guard!(let Some(Constant::String(typevalue)) = &typename.value else {
+                error(location, format!("filter() called with non-string type keyword parameter value '{:?}'", typename.value))
+                    .register(self.context);
+                return Analysis::empty()
+            });
+            guard!(let Some(arglist) = VALID_FILTER_TYPES.get(typevalue.as_str()) else {
+                error(location, format!("filter() called with invalid type keyword parameter value '{}'", typevalue))
+                    .register(self.context);
+                return Analysis::empty()
+            });
+            for arg in param_name_map.keys() {
+                if *arg != "type" && arglist.iter().position(|&x| x == *arg).is_none() {
+                    error(location, format!("filter(type=\"{}\") called with invalid keyword parameter '{}'", typevalue, arg))
+                        // luckily lummox has made the anchor url match the type= value for each filter
+                        .with_note(location, format!("See: http://www.byond.com/docs/ref/#/{{notes}}/filters/{} for the permitted arguments", typevalue))
+                        .register(self.context);
+                }
             }
         }
 

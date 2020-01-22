@@ -17,6 +17,7 @@ pub struct Config {
     pub langserver: Langserver,
     diagnostics: HashMap<String, WarningLevel>,
     pub code_standards: CodeStandards,
+    pub dmdoc: DMDoc,
 }
 
 #[derive(Deserialize, Default, Debug, Clone)]
@@ -37,6 +38,10 @@ pub struct CodeStandards {
     pub disallow_relative_type_definitions: bool,
 }
 
+#[derive(Deserialize, Default, Debug, Clone)]
+pub struct DMDoc {
+    pub use_typepath_names: bool,
+}
 
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
 #[serde(rename_all(deserialize = "lowercase"))]

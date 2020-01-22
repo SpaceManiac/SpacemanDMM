@@ -18,6 +18,7 @@ serde = { version = "1.0.103", features = ["derive"] }
 serde_derive = "1.0.103"
 toml = "0.5.5"
 guard = "0.5.0"
+phf = { version = "0.8.0", features = ["macros"] }
 
 [dependencies.linked-hash-map]
 git = "https://github.com/SpaceManiac/linked-hash-map"
