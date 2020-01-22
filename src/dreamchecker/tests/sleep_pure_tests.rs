@@ -4,8 +4,7 @@ extern crate dreamchecker as dc;
 use dc::test_helpers::check_errors_match;
 
 pub const SLEEP_ERRORS: &[(u32, u16, &str)] = &[
-    (19, 16, "/mob/proc/test3 sets SpacemanDMM_should_not_sleep but calls blocking proc /proc/sleepingproc"),
-    (13, 15, "/mob/proc/test sets SpacemanDMM_should_not_sleep but calls blocking proc /proc/sleepingproc"),
+    (16, 16, "/mob/proc/test3 sets SpacemanDMM_should_not_sleep but calls blocking proc /proc/sleepingproc"),
 ];
 
 #[test]
@@ -23,9 +22,6 @@ fn sleep() {
     sleepingproc()
 /proc/bar()
     waitforproc()
-/mob/proc/test()
-    set SpacemanDMM_should_not_sleep = TRUE
-    sleepingproc()
 /mob/proc/test2()
     set SpacemanDMM_should_not_sleep = TRUE
     waitforproc()
