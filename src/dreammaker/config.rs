@@ -17,6 +17,8 @@ pub struct Config {
     display: WarningDisplay,
     pub langserver: Langserver,
     diagnostics: HashMap<String, WarningLevel>,
+    pub code_standards: CodeStandards,
+    pub dmdoc: DMDoc,
 }
 
 /// General error display options
@@ -30,6 +32,20 @@ pub struct WarningDisplay {
 #[derive(Deserialize, Default, Debug, Clone)]
 pub struct Langserver {
     pub dreamchecker: bool,
+}
+
+/// Extremely opinionated linter config options
+#[derive(Deserialize, Default, Debug, Clone)]
+#[serde(default)]
+pub struct CodeStandards {
+    pub disallow_relative_proc_definitions: bool,
+    pub disallow_relative_type_definitions: bool,
+}
+
+/// DMDoc config options
+#[derive(Deserialize, Default, Debug, Clone)]
+pub struct DMDoc {
+    pub use_typepath_names: bool,
 }
 
 /// Severity overrides from configuration

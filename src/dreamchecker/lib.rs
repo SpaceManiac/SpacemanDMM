@@ -14,6 +14,9 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 mod type_expr;
 use type_expr::TypeExpr;
 
+#[doc(hidden)]  // Intended for the tests only.
+pub mod test_helpers;
+
 // ----------------------------------------------------------------------------
 // Helper structures
 
@@ -57,6 +60,14 @@ impl<'o> StaticType<'o> {
             self = self.strip_list();
         }
         self
+    }
+
+    fn plain_list(tree: &'o ObjectTree) -> StaticType<'o> {
+        StaticType::List { list: tree.expect("/list"), keys: Box::new(StaticType::None) }
+    }
+
+    fn list_of_type(tree: &'o ObjectTree, of: &str) -> StaticType<'o> {
+        StaticType::List { list: tree.expect("/list"), keys: Box::new(StaticType::Type(tree.expect(of))) }
     }
 }
 
@@ -604,6 +615,7 @@ pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
 
                 if decl.var_type.is_final {
                     DMError::new(typevar.value.location, format!("{} overrides final var {:?}", path, varname))
+                        .with_errortype("final_var")
                         .with_note(decl.location, format!("declared final on {} here", parent.path))
                         .register(context);
                 }
@@ -1253,54 +1265,65 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         let mut param_name_map = HashMap::new();
         let mut param_idx_map = HashMap::new();
         let mut param_idx = 0;
+        let mut arglist_used = false;
 
         for arg in args {
             let mut argument_value = arg;
             let mut this_kwarg = None;
-            if let Expression::AssignOp { op: AssignOp::Assign, lhs, rhs } = arg {
-                match lhs.as_term() {
-                    Some(Term::Ident(name)) |
-                    Some(Term::String(name)) => {
-                        // Don't visit_expression the kwarg key.
-                        any_kwargs_yet = true;
-                        this_kwarg = Some(name);
-                        argument_value = rhs;
+            match arg {
+                Expression::AssignOp { op: AssignOp::Assign, lhs, rhs } => {
+                    match lhs.as_term() {
+                        Some(Term::Ident(name)) |
+                        Some(Term::String(name)) => {
+                            // Don't visit_expression the kwarg key.
+                            any_kwargs_yet = true;
+                            this_kwarg = Some(name);
+                            argument_value = rhs;
 
-                        // Check that that kwarg actually exists.
-                        if !proc.parameters.iter().any(|p| p.name == *name) {
-                            // Search for a child proc that does have this keyword argument.
-                            let mut error = error(location,
-                                format!("bad keyword argument {:?} to {}", name, proc));
-                            proc.recurse_children(&mut |child_proc| {
-                                if child_proc.ty() == proc.ty() { return }
-                                if child_proc.parameters.iter().any(|p| p.name == *name) {
-                                    error.add_note(child_proc.location, format!("an override has this parameter: {}", child_proc));
-                                }
-                            });
-                            error.register(self.context);
-                        } else if !is_exact {
-                            // If it does, mark it as "used".
-                            // Format with src/proc/foo here, rather than the
-                            // type the proc actually appears on, so that
-                            // calling /datum/foo() on a /datum/A won't
-                            // complain about /datum/B/foo().
-                            self.env.used_kwargs.entry(format!("{}/proc/{}", src, proc.name()))
-                                .or_insert_with(|| KwargInfo {
-                                    location: proc.location,
-                                    .. Default::default()
-                                })
-                                .called_at
-                                // TODO: use a more accurate location
-                                .entry(name.clone())
-                                .and_modify(|ca| ca.others += 1)
-                                .or_insert(CalledAt {
-                                    location: location,
-                                    others: 0,
+                            // Check that that kwarg actually exists.
+                            if !proc.parameters.iter().any(|p| p.name == *name) {
+                                // Search for a child proc that does have this keyword argument.
+                                let mut error = error(location,
+                                    format!("bad keyword argument {:?} to {}", name, proc));
+                                proc.recurse_children(&mut |child_proc| {
+                                    if child_proc.ty() == proc.ty() { return }
+                                    if child_proc.parameters.iter().any(|p| p.name == *name) {
+                                        error.add_note(child_proc.location, format!("an override has this parameter: {}", child_proc));
+                                    }
                                 });
+                                error.register(self.context);
+                            } else if !is_exact {
+                                // If it does, mark it as "used".
+                                // Format with src/proc/foo here, rather than the
+                                // type the proc actually appears on, so that
+                                // calling /datum/foo() on a /datum/A won't
+                                // complain about /datum/B/foo().
+                                self.env.used_kwargs.entry(format!("{}/proc/{}", src, proc.name()))
+                                    .or_insert_with(|| KwargInfo {
+                                        location: proc.location,
+                                        .. Default::default()
+                                    })
+                                    .called_at
+                                    // TODO: use a more accurate location
+                                    .entry(name.clone())
+                                    .and_modify(|ca| ca.others += 1)
+                                    .or_insert(CalledAt {
+                                        location: location,
+                                        others: 0,
+                                    });
+                            }
+                        }
+                        _ => {}
+                    }
+                },
+                expr => {
+                    if let Some(Term::Call(callname, _)) = expr.as_term() {
+                        // only interested in the first expression being arglist
+                        if callname.as_str() == "arglist" && param_name_map.len() == 0 && param_idx == 0 {
+                            arglist_used = true;
                         }
                     }
-                    _ => {}
-                }
+                },
             }
 
             if any_kwargs_yet && this_kwarg.is_none() && !(proc.ty().is_root() && proc.name() == "animate") {
@@ -1318,7 +1341,42 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             }
         }
 
-        if let Some(return_type) = self.env.return_type.get(&proc) {
+        // filter call checking
+        // TODO: check flags for valid values
+        //  eg "wave" type "flags" param only works with WAVE_SIDEWAYS, WAVE_BOUND
+        // also some filters have limits for their numerical params
+        //  eg "rays" type "threshold" param defaults to 0.5, can be 0 to 1
+        if proc.ty().is_root() && proc.name() == "filter" {
+            guard!(let Some(typename) = param_name_map.get("type") else {
+                if !arglist_used {
+                    error(location, "filter() called without mandatory keyword parameter 'type'")
+                        .register(self.context);
+                } // regardless, we're done here
+                return Analysis::empty()
+            });
+            guard!(let Some(Constant::String(typevalue)) = &typename.value else {
+                error(location, format!("filter() called with non-string type keyword parameter value '{:?}'", typename.value))
+                    .register(self.context);
+                return Analysis::empty()
+            });
+            guard!(let Some(arglist) = VALID_FILTER_TYPES.get(typevalue.as_str()) else {
+                error(location, format!("filter() called with invalid type keyword parameter value '{}'", typevalue))
+                    .register(self.context);
+                return Analysis::empty()
+            });
+            for arg in param_name_map.keys() {
+                if *arg != "type" && arglist.iter().position(|&x| x == *arg).is_none() {
+                    error(location, format!("filter(type=\"{}\") called with invalid keyword parameter '{}'", typevalue, arg))
+                        // luckily lummox has made the anchor url match the type= value for each filter
+                        .with_note(location, format!("See: http://www.byond.com/docs/ref/#/{{notes}}/filters/{} for the permitted arguments", typevalue))
+                        .register(self.context);
+                }
+            }
+        }
+
+        if proc.ty().is_root() && proc.is_builtin() {
+            Analysis::from(self.global_builtin_returntype(proc))
+        } else if let Some(return_type) = self.env.return_type.get(&proc) {
             let ec = type_expr::TypeExprContext {
                 objtree: self.objtree,
                 param_name_map,
@@ -1361,5 +1419,31 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
     fn static_type(&mut self, location: Location, of: &[String]) -> Analysis<'o> {
         Analysis::from(self.env.static_type(location, of))
+    }
+
+    fn global_builtin_returntype(&mut self, proc: ProcRef) -> StaticType<'o> {
+        match proc.name() {
+            "argslist" => StaticType::plain_list(self.objtree),
+            "block" => StaticType::list_of_type(self.objtree, "/turf"),
+            "bounds" => StaticType::list_of_type(self.objtree, "/atom"),
+            "flist" => StaticType::plain_list(self.objtree),
+            "get_step" => StaticType::Type(self.objtree.expect("/turf")),
+            "hearers" => StaticType::list_of_type(self.objtree, "/mob"),
+            "icon" => StaticType::Type(self.objtree.expect("/icon")),
+            "icon_states" => StaticType::plain_list(self.objtree),
+            "matrix" => StaticType::Type(self.objtree.expect("/matrix")),
+            "obounds" => StaticType::list_of_type(self.objtree, "/atom"),
+            "ohearers" => StaticType::list_of_type(self.objtree, "/mob"),
+            "orange" => StaticType::list_of_type(self.objtree, "/atom"),
+            "oview" => StaticType::list_of_type(self.objtree, "/atom"),
+            "oviewers" => StaticType::list_of_type(self.objtree, "/mob"),
+            "range" => StaticType::list_of_type(self.objtree, "/atom"),
+            "regex" => StaticType::Type(self.objtree.expect("/regex")),
+            "splittext" => StaticType::plain_list(self.objtree),
+            "typesof" => StaticType::plain_list(self.objtree),
+            "view" => StaticType::list_of_type(self.objtree, "/atom"),
+            "viewers" => StaticType::list_of_type(self.objtree, "/mob"),
+            _ => StaticType::None,
+        }
     }
 }

@@ -531,6 +531,12 @@ impl<'a> ProcRef<'a> {
         self.ty.tree()
     }
 
+    /// Check if the target ProcValue is a builtin.
+    #[inline]
+    pub fn is_builtin(self) -> bool {
+        self.get().location.is_builtins()
+    }
+
     /// Look up the immediate parent, `..()`.
     pub fn parent_proc(self) -> Option<ProcRef<'a>> {
         if let Some(idx) = self.idx.checked_sub(1) {
@@ -644,6 +650,12 @@ impl Default for ObjectTree {
         });
         tree
     }
+}
+
+pub enum EntryType {
+    ProcDecl,
+    Subtype,
+    VarDecl,
 }
 
 impl ObjectTree {
@@ -1024,7 +1036,8 @@ impl ObjectTree {
             elems.len() + 1,
             Default::default(),
             Default::default(),
-        )
+        )?;
+        Ok(())
     }
 
     // an entry which may be anything depending on the path
@@ -1035,17 +1048,19 @@ impl ObjectTree {
         len: usize,
         comment: DocCollection,
         suffix: VarSuffix,
-    ) -> Result<(), DMError> {
+    ) -> Result<EntryType, DMError> {
         let (parent, child) = self.get_from_path(location, &mut path, len)?;
         if is_var_decl(child) {
             self.register_var(location, parent, "var", path, comment, suffix)?;
+            Ok(EntryType::VarDecl)
         } else if is_proc_decl(child) {
+            Ok(EntryType::ProcDecl)
             // proc{} block, children will be procs
         } else {
             let idx = self.subtype_or_add(location, parent, child, len);
             self.graph.node_weight_mut(idx).unwrap().docs.extend(comment);
+            Ok(EntryType::Subtype)
         }
-        Ok(())
     }
 
     pub(crate) fn add_builtin_var(

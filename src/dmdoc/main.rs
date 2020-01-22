@@ -218,14 +218,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         progress.update(&ty.path);
 
         let mut parsed_type = ParsedType::default();
-        parsed_type.name = ty
-            .get()
-            .vars
-            .get("name")
-            .and_then(|v| v.value.constant.as_ref())
-            .and_then(|c| c.as_str())
-            .unwrap_or("")
-            .into();
+        if context.config().dmdoc.use_typepath_names {
+            parsed_type.name = ty
+                .get()
+                .name
+                .as_str()
+                .into();
+        } else {
+            parsed_type.name = ty
+                .get()
+                .vars
+                .get("name")
+                .and_then(|v| v.value.constant.as_ref())
+                .and_then(|c| c.as_str())
+                .unwrap_or("")
+                .into();
+        }
 
         let mut anything = false;
         let mut substance = false;

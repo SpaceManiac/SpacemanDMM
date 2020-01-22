@@ -363,14 +363,24 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         proc/file(Path);
         proc/file2text(File);
         proc/filter(type,
-            // TODO: check the validity of these kwargs based on "type"
-            size,   // blur, outline, drop_shadow, wave
-            color,  // outline, drop_shadow
-            x, y,   // drop_shadow, motion_blur, wave
-            offset, // drop_shadow, wave
-            flags,  // wave
-            border, // drop_shadow, possibly bugged,
-            render_source
+            // see ast.rs for VALID_FILTER_TYPES
+            size,
+            color,
+            x, y,
+            offset,
+            flags,
+            border,
+            render_source,
+            icon,
+            space,
+            transform,
+            blend_mode,
+            density,
+            threshold,
+            factor,
+            repeat,
+            radius,
+            falloff
         );
         proc/findlasttext(Haystack,Needle,Start=0,End=1);
         proc/findlasttextEx(Haystack,Needle,Start=0,End=1);
