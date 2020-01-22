@@ -60,6 +60,14 @@ impl<'o> StaticType<'o> {
         }
         self
     }
+
+    fn plain_list(tree: &'o ObjectTree) -> StaticType<'o> {
+        StaticType::List { list: tree.expect("/list"), keys: Box::new(StaticType::None) }
+    }
+
+    fn list_of_type(tree: &'o ObjectTree, of: &str) -> StaticType<'o> {
+        StaticType::List { list: tree.expect("/list"), keys: Box::new(StaticType::Type(tree.expect(of))) }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -1356,7 +1364,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             }
         }
 
-        if let Some(return_type) = self.env.return_type.get(&proc) {
+        if proc.ty().is_root() && proc.is_builtin() {
+            Analysis::from(self.global_builtin_returntype(proc))
+        } else if let Some(return_type) = self.env.return_type.get(&proc) {
             let ec = type_expr::TypeExprContext {
                 objtree: self.objtree,
                 param_name_map,
@@ -1399,5 +1409,31 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
     fn static_type(&mut self, location: Location, of: &[String]) -> Analysis<'o> {
         Analysis::from(self.env.static_type(location, of))
+    }
+
+    fn global_builtin_returntype(&mut self, proc: ProcRef) -> StaticType<'o> {
+        match proc.name() {
+            "argslist" => StaticType::plain_list(self.objtree),
+            "block" => StaticType::list_of_type(self.objtree, "/turf"),
+            "bounds" => StaticType::list_of_type(self.objtree, "/atom"),
+            "flist" => StaticType::plain_list(self.objtree),
+            "get_step" => StaticType::Type(self.objtree.expect("/turf")),
+            "hearers" => StaticType::list_of_type(self.objtree, "/mob"),
+            "icon" => StaticType::Type(self.objtree.expect("/icon")),
+            "icon_states" => StaticType::plain_list(self.objtree),
+            "matrix" => StaticType::Type(self.objtree.expect("/matrix")),
+            "obounds" => StaticType::list_of_type(self.objtree, "/atom"),
+            "ohearers" => StaticType::list_of_type(self.objtree, "/mob"),
+            "orange" => StaticType::list_of_type(self.objtree, "/atom"),
+            "oview" => StaticType::list_of_type(self.objtree, "/atom"),
+            "oviewers" => StaticType::list_of_type(self.objtree, "/mob"),
+            "range" => StaticType::list_of_type(self.objtree, "/atom"),
+            "regex" => StaticType::Type(self.objtree.expect("/regex")),
+            "splittext" => StaticType::plain_list(self.objtree),
+            "typesof" => StaticType::plain_list(self.objtree),
+            "view" => StaticType::list_of_type(self.objtree, "/atom"),
+            "viewers" => StaticType::list_of_type(self.objtree, "/mob"),
+            _ => StaticType::None,
+        }
     }
 }

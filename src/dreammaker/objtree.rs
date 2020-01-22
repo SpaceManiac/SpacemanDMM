@@ -531,6 +531,12 @@ impl<'a> ProcRef<'a> {
         self.ty.tree()
     }
 
+    /// Check if the target ProcValue is a builtin.
+    #[inline]
+    pub fn is_builtin(self) -> bool {
+        self.get().location.is_builtins()
+    }
+
     /// Look up the immediate parent, `..()`.
     pub fn parent_proc(self) -> Option<ProcRef<'a>> {
         if let Some(idx) = self.idx.checked_sub(1) {
