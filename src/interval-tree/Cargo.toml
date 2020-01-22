@@ -12,5 +12,4 @@ edition = "2018"
 path = "lib.rs"
 
 [dev-dependencies]
-time = "0.1.*"
 rand = "0.7.0"

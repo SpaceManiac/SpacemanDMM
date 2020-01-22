@@ -33,6 +33,7 @@ mod extools_types;
 mod extools;
 mod local_names;
 mod extools_bundle;
+mod evaluate;
 
 use std::error::Error;
 use std::sync::{atomic, Arc, Mutex};
@@ -94,8 +95,9 @@ pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
 
     let db = DebugDatabaseBuilder {
         root_dir: Default::default(),
-        files: ctx,
+        files: ctx.clone_file_list(),
         objtree,
+        extools_dll: None,
     };
     let mut debugger = Debugger::new(dreamseeker_exe, db, Box::new(std::io::stdout()));
     jrpc_io::run_until_stdin_eof(|message| debugger.handle_input(message));
@@ -103,13 +105,14 @@ pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
 
 pub struct DebugDatabaseBuilder {
     pub root_dir: std::path::PathBuf,
-    pub files: dm::Context,
+    pub files: dm::FileList,
     pub objtree: Arc<ObjectTree>,
+    pub extools_dll: Option<String>,
 }
 
 impl DebugDatabaseBuilder {
     fn build(self) -> DebugDatabase {
-        let DebugDatabaseBuilder { root_dir, files, objtree } = self;
+        let DebugDatabaseBuilder { root_dir, files, objtree, extools_dll: _ } = self;
         let mut line_numbers: HashMap<dm::FileId, Vec<(i64, String, String, usize)>> = HashMap::new();
 
         objtree.root().recurse(&mut |ty| {
@@ -146,7 +149,7 @@ impl DebugDatabaseBuilder {
 
 pub struct DebugDatabase {
     root_dir: std::path::PathBuf,
-    files: dm::Context,
+    files: dm::FileList,
     objtree: Arc<ObjectTree>,
     line_numbers: HashMap<dm::FileId, Vec<(i64, String, String, usize)>>,
     local_names: HashMap<(String, usize), Option<Vec<String>>>,
@@ -166,8 +169,7 @@ fn get_proc<'o>(objtree: &'o ObjectTree, proc_ref: &str, override_id: usize) -> 
             // Don't consider (most) builtins against the override_id count.
             return ty_proc.value.iter()
                 .skip_while(|pv| pv.location.is_builtins() && !STDDEF_PROCS.contains(&proc_ref))
-                .skip(override_id)
-                .next();
+                .nth(override_id);
         }
     }
     None
@@ -192,7 +194,7 @@ impl DebugDatabase {
 
     fn file_id(&self, file_path: &str) -> Option<FileId> {
         let path = std::path::Path::new(file_path);
-        self.files.get_file(path.strip_prefix(&self.root_dir).unwrap_or(path))
+        self.files.get_id(path.strip_prefix(&self.root_dir).unwrap_or(path))
     }
 
     fn location_to_proc_ref(&self, file_id: FileId, line: i64) -> Option<(&str, &str, usize)> {
@@ -209,6 +211,7 @@ impl DebugDatabase {
 
 struct Debugger {
     dreamseeker_exe: String,
+    extools_dll: Option<String>,
     db: DebugDatabase,
     launched: Option<Launched>,
     extools: ExtoolsHolder,
@@ -220,9 +223,10 @@ struct Debugger {
 }
 
 impl Debugger {
-    fn new(dreamseeker_exe: String, db: DebugDatabaseBuilder, stream: OutStream) -> Self {
+    fn new(dreamseeker_exe: String, mut db: DebugDatabaseBuilder, stream: OutStream) -> Self {
         Debugger {
             dreamseeker_exe,
+            extools_dll: db.extools_dll.take(),
             db: db.build(),
             launched: None,
             extools: ExtoolsHolder::default(),
@@ -263,7 +267,9 @@ impl Debugger {
                     body: match handled {
                         Ok(result) => Some(result),
                         Err(err) => {
-                            output!(in self.seq, "[main] Error responding to {:?}: {}", command, err);
+                            if command != Evaluate::COMMAND {
+                                output!(in self.seq, "[main] Error responding to {:?}: {}", command, err);
+                            }
                             debug_output!(in self.seq, " - {}", message);
                             None
                         },
@@ -307,6 +313,7 @@ handle_request! {
             supportTerminateDebuggee: Some(true),
             supportsExceptionInfoRequest: Some(true),
             supportsConfigurationDoneRequest: Some(true),
+            supportsFunctionBreakpoints: Some(true),
             exceptionBreakpointFilters: Some(vec![
                 ExceptionBreakpointsFilter {
                     filter: EXCEPTION_FILTER_RUNTIMES.to_owned(),
@@ -319,6 +326,7 @@ handle_request! {
     }
 
     on LaunchVsc(&mut self, params) {
+        // Determine port number to pass if debugging is enabled.
         let debug = !params.base.noDebug.unwrap_or(false);
         let port = if debug {
             let (port, extools) = ExtoolsHolder::listen(self.seq.clone())?;
@@ -327,7 +335,25 @@ handle_request! {
         } else {
             None
         };
-        self.launched = Some(Launched::new(self.seq.clone(), &self.dreamseeker_exe, &params.dmb, port)?);
+
+        // Set EXTOOLS_DLL based on configuration or on bundle if available.
+        #[cfg(extools_bundle)]
+        let pathbuf;
+
+        #[allow(unused_mut)]
+        let mut extools_dll = self.extools_dll.as_ref().map(std::path::Path::new);
+
+        debug_output!(in self.seq, "[main] configured override: {:?}", extools_dll);
+
+        #[cfg(extools_bundle)] {
+            if extools_dll.is_none() {
+                pathbuf = self::extools_bundle::extract()?;
+                extools_dll = Some(&pathbuf);
+            }
+        }
+
+        // Launch the subprocess.
+        self.launched = Some(Launched::new(self.seq.clone(), &self.dreamseeker_exe, &params.dmb, port, extools_dll)?);
     }
 
     on AttachVsc(&mut self, params) {
@@ -350,10 +376,7 @@ handle_request! {
     }
 
     on ConfigurationDone(&mut self, ()) {
-        guard!(let Some(extools) = self.extools.as_ref() else {
-            return Err(Box::new(GenericError("No extools connection")));
-        });
-
+        let extools = self.extools.get()?;
         extools.configuration_done();
     }
 
@@ -406,6 +429,7 @@ handle_request! {
                     breakpoints.push(Breakpoint {
                         line: Some(sbp.line),
                         verified: true,
+                        column: Some(0),
                         .. Default::default()
                     });
                 } else {
@@ -438,13 +462,72 @@ handle_request! {
         SetBreakpointsResponse { breakpoints }
     }
 
-    on StackTrace(&mut self, params) {
+    on SetFunctionBreakpoints(&mut self, params) {
+        let file_id = FileId::default();
+
+        let inputs = params.breakpoints;
+        let mut breakpoints = Vec::new();
+
         guard!(let Some(extools) = self.extools.as_ref() else {
-            return Err(Box::new(GenericError("No extools connection")));
+            for _ in inputs {
+                breakpoints.push(Breakpoint {
+                    message: Some("Debugging hooks not available".to_owned()),
+                    verified: false,
+                    .. Default::default()
+                });
+            }
+            return Ok(SetFunctionBreakpointsResponse { breakpoints });
         });
-        guard!(let Some(thread) = extools.get_thread(params.threadId) else {
-            return Err(Box::new(GenericError("Bad thread ID")));
+
+        let saved = self.saved_breakpoints.entry(file_id).or_default();
+        let mut keep = HashSet::new();
+
+        for sbp in inputs {
+            // parse function reference
+            let mut proc = &sbp.name[..];
+            let mut override_id = 0;
+            if let Some(idx) = sbp.name.find('#') {
+                proc = &sbp.name[..idx];
+                override_id = sbp.name[idx+1..].parse()?;
+            }
+
+            if let Some(proc_ref) = self.db.get_proc(proc, override_id) {
+                let offset = 0;
+                let tup = (proc.to_owned(), override_id, offset);
+                if saved.insert(tup.clone()) {
+                    extools.set_breakpoint(&tup.0, tup.1, tup.2);
+                }
+                keep.insert(tup);
+                breakpoints.push(Breakpoint {
+                    line: Some(proc_ref.location.line as i64),
+                    verified: true,
+                    column: Some(0),
+                    .. Default::default()
+                });
+            } else {
+                breakpoints.push(Breakpoint {
+                    message: Some(format!("Unknown proc {}#{}", proc, override_id)),
+                    verified: false,
+                    .. Default::default()
+                });
+            }
+        }
+
+        saved.retain(|k| {
+            if !keep.contains(&k) {
+                extools.unset_breakpoint(&k.0, k.1, k.2);
+                false
+            } else {
+                true
+            }
         });
+
+        SetFunctionBreakpointsResponse { breakpoints }
+    }
+
+    on StackTrace(&mut self, params) {
+        let extools = self.extools.get()?;
+        let thread = extools.get_thread(params.threadId)?;
 
         let len = thread.call_stack.len();
         let mut frames = Vec::with_capacity(len);
@@ -458,7 +541,7 @@ handle_request! {
             if let Some(proc) = self.db.get_proc(&ex_frame.proc, ex_frame.override_id) {
                 // `stddef.dm` procs will show as "Unknown source" which is fine for now.
                 if !proc.location.is_builtins() {
-                    let path = self.db.files.file_path(proc.location.file);
+                    let path = self.db.files.get_path(proc.location.file);
 
                     dap_frame.source = Some(Source {
                         name: Some(path.file_name()
@@ -489,12 +572,8 @@ handle_request! {
     }
 
     on Scopes(&mut self, ScopesArguments { frameId }) {
-        guard!(let Some(extools) = self.extools.as_ref() else {
-            return Err(Box::new(GenericError("No extools connection")));
-        });
-        guard!(let Some(thread) = extools.get_thread(0) else {
-            return Err(Box::new(GenericError("Bad thread ID")));
-        });
+        let extools = self.extools.get()?;
+        let thread = extools.get_default_thread()?;
         guard!(let Some(frame) = thread.call_stack.get(frameId as usize) else {
             return Err(Box::new(GenericError("Stack frame out of range")));
         });
@@ -520,14 +599,9 @@ handle_request! {
     }
 
     on Variables(&mut self, params) {
-        guard!(let Some(extools) = self.extools.as_ref() else {
-            return Err(Box::new(GenericError("No extools connection")));
-        });
-        guard!(let Some(thread) = extools.get_thread(0) else {
-            return Err(Box::new(GenericError("Bad thread ID")));
-        });
+        let extools = self.extools.get()?;
 
-        if params.variablesReference >= 0x1000000 {
+        if params.variablesReference >= 0x01_000000 {
             let (var, ref_) = extools_types::ValueText::from_variables_reference(params.variablesReference);
             let mut variables = Vec::new();
 
@@ -583,6 +657,8 @@ handle_request! {
         let frame_idx = (params.variablesReference - 1) / 2;
         let mod2 = params.variablesReference % 2;
 
+        // TODO: variablesReference should be different based on thread ID
+        let thread = extools.get_default_thread()?;
         guard!(let Some(frame) = thread.call_stack.get(frame_idx as usize) else {
             return Err(Box::new(GenericError("Stack frame out of range")));
         });
@@ -602,13 +678,13 @@ handle_request! {
             let mut variables = Vec::with_capacity(2 + frame.args.len());
 
             variables.push(Variable {
-                name: "src".to_string(),
+                name: "src".to_owned(),
                 value: frame.src.to_string(),
                 variablesReference: frame.src.to_variables_reference(),
                 .. Default::default()
             });
             variables.push(Variable {
-                name: "usr".to_string(),
+                name: "usr".to_owned(),
                 value: frame.usr.to_string(),
                 variablesReference: frame.usr.to_variables_reference(),
                 .. Default::default()
@@ -626,7 +702,16 @@ handle_request! {
             VariablesResponse { variables }
         } else if mod2 == 0 {
             // locals
-            let variables = frame.locals.iter().enumerate().map(|(i, vt)| Variable {
+            let mut variables = Vec::with_capacity(1 + frame.locals.len());
+
+            variables.push(Variable {
+                name: ".".to_owned(),
+                value: frame.dot.to_string(),
+                variablesReference: frame.dot.to_variables_reference(),
+                .. Default::default()
+            });
+
+            variables.extend(frame.locals.iter().enumerate().map(|(i, vt)| Variable {
                 name: match locals.get(i) {
                     Some(local) => local.clone(),
                     None => i.to_string(),
@@ -634,7 +719,7 @@ handle_request! {
                 value: vt.to_string(),
                 variablesReference: vt.to_variables_reference(),
                 .. Default::default()
-            }).collect();
+            }));
             VariablesResponse { variables }
         } else {
             return Err(Box::new(GenericError("Bad variables reference")));
@@ -642,10 +727,7 @@ handle_request! {
     }
 
     on Continue(&mut self, _params) {
-        guard!(let Some(extools) = self.extools.as_ref() else {
-            return Err(Box::new(GenericError("No extools connection")));
-        });
-
+        let extools = self.extools.get()?;
         extools.continue_execution();
         ContinueResponse {
             allThreadsContinued: Some(true),
@@ -653,42 +735,27 @@ handle_request! {
     }
 
     on StepIn(&mut self, params) {
-        guard!(let Some(extools) = self.extools.as_ref() else {
-            return Err(Box::new(GenericError("No extools connection")));
-        });
-
+        let extools = self.extools.get()?;
         extools.step_in(params.threadId);
     }
 
     on Next(&mut self, params) {
-        guard!(let Some(extools) = self.extools.as_ref() else {
-            return Err(Box::new(GenericError("No extools connection")));
-        });
-
+        let extools = self.extools.get()?;
         extools.step_over(params.threadId);
     }
 
     on Pause(&mut self, _params) {
-        guard!(let Some(extools) = self.extools.as_ref() else {
-            return Err(Box::new(GenericError("No extools connection")));
-        });
-
+        let extools = self.extools.get()?;
         extools.pause();
     }
 
     on SetExceptionBreakpoints(&mut self, params) {
-        guard!(let Some(extools) = self.extools.as_ref() else {
-            return Err(Box::new(GenericError("No extools connection")));
-        });
-
+        let extools = self.extools.get()?;
         extools.set_break_on_runtime(params.filters.iter().any(|x| x == EXCEPTION_FILTER_RUNTIMES));
     }
 
     on ExceptionInfo(&mut self, _params) {
-        guard!(let Some(extools) = self.extools.as_ref() else {
-            return Err(Box::new(GenericError("No extools connection")));
-        });
-
+        let extools = self.extools.get()?;
         // VSC shows exceptionId, description, stackTrace in that order.
         let message = extools.last_error_message();
         ExceptionInfoResponse {
@@ -697,6 +764,10 @@ handle_request! {
             breakMode: ExceptionBreakMode::Always,
             details: None,
         }
+    }
+
+    on Evaluate(&mut self, params) {
+        self.evaluate(params)?
     }
 }
 

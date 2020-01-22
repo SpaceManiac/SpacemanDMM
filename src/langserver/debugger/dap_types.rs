@@ -424,6 +424,106 @@ pub struct ContinueResponse {
     pub allThreadsContinued: Option<bool>,
 }
 
+/// Evaluates the given expression in the context of the top most stack frame.
+///
+/// The expression has access to any variables and arguments that are in scope.
+pub enum Evaluate {}
+
+impl Request for Evaluate {
+    type Params = EvaluateArguments;
+    type Result = EvaluateResponse;
+    const COMMAND: &'static str = "evaluate";
+}
+
+/// Arguments for ‘evaluate’ request.
+#[derive(Deserialize, Debug)]
+pub struct EvaluateArguments {
+    /**
+     * The expression to evaluate.
+     */
+    pub expression: String,
+
+    /**
+     * Evaluate the expression in the scope of this stack frame. If not specified, the expression is evaluated in the global scope.
+     */
+    pub frameId: Option<i64>,
+
+    /**
+     * The context in which the evaluate request is run.
+     * Values:
+     * 'watch': evaluate is run in a watch.
+     * 'repl': evaluate is run from REPL console.
+     * 'hover': evaluate is run from a data hover.
+     * etc.
+     */
+    pub context: Option<String>,
+
+    /**
+     * Specifies details on how to format the Evaluate result.
+     */
+    pub format: Option<ValueFormat>,
+}
+
+impl EvaluateArguments {
+    pub const CONTEXT_WATCH: &'static str = "watch";
+    pub const CONTEXT_REPL: &'static str = "repl";
+    pub const CONTEXT_HOVER: &'static str = "hover";
+}
+
+/// Response to ‘evaluate’ request.
+#[derive(Serialize, Debug, Default)]
+pub struct EvaluateResponse {
+    /**
+     * The result of the evaluate request.
+     */
+    pub result: String,
+
+    /**
+     * The optional type of the evaluate result.
+     */
+    #[serde(rename="type")]
+    pub type_: Option<String>,
+
+    /**
+     * Properties of a evaluate result that can be used to determine how to render the result in the UI.
+     */
+    pub presentationHint: Option<VariablePresentationHint>,
+
+    /**
+     * If variablesReference is > 0, the evaluate result is structured and its children can be retrieved by passing variablesReference to the VariablesRequest. The value should be less than or equal to 2147483647 (2^31 - 1).
+     */
+    pub variablesReference: i64,
+
+    /**
+     * The number of named child variables.
+     * The client can use this optional information to present the variables in a paged UI and fetch them in chunks. The value should be less than or equal to 2147483647 (2^31 - 1).
+     */
+    pub namedVariables: Option<usize>,
+
+    /**
+     * The number of indexed child variables.
+     * The client can use this optional information to present the variables in a paged UI and fetch them in chunks. The value should be less than or equal to 2147483647 (2^31 - 1).
+     */
+    pub indexedVariables: Option<usize>,
+
+    /**
+     * Memory reference to a location appropriate for this result. For pointer type eval results, this is generally a reference to the memory address contained in the pointer.
+     */
+    pub memoryReference: Option<String>,
+}
+
+impl From<String> for EvaluateResponse {
+    fn from(result: String) -> EvaluateResponse {
+        EvaluateResponse { result, .. Default::default() }
+    }
+}
+
+impl From<&str> for EvaluateResponse {
+    fn from(result: &str) -> EvaluateResponse {
+        EvaluateResponse { result: result.to_owned(), .. Default::default() }
+    }
+}
+
 /// Retrieves the details of the exception that caused this event to be raised.
 pub enum ExceptionInfo {}
 
@@ -563,6 +663,20 @@ pub struct SetBreakpointsArguments {
     pub sourceModified: Option<bool>,
 }
 
+/// Response to ‘setBreakpoints’ request.
+///
+/// Returned is information about each breakpoint created by this request.
+/// This includes the actual code location and whether the breakpoint could be verified.
+/// The breakpoints returned are in the same order as the elements of the ‘breakpoints’
+/// (or the deprecated ‘lines’) array in the arguments.
+#[derive(Serialize, Debug)]
+pub struct SetBreakpointsResponse {
+    /**
+     * Information about the breakpoints. The array elements are in the same order as the elements of the 'breakpoints' (or the deprecated 'lines') array in the arguments.
+     */
+    pub breakpoints: Vec<Breakpoint>,
+}
+
 /// The request configures the debuggers response to thrown exceptions.
 ///
 /// If an exception is configured to break, a ‘stopped’ event is fired (with reason ‘exception’).
@@ -588,16 +702,35 @@ pub struct SetExceptionBreakpointsArguments {
     pub exceptionOptions: Option<Vec<ExceptionOptions>>,
 }
 
-/// Response to ‘setBreakpoints’ request.
+/// Replaces all existing function breakpoints with new function breakpoints.
+///
+/// To clear all function breakpoints, specify an empty array.
+///
+/// When a function breakpoint is hit, a ‘stopped’ event (with reason ‘function breakpoint’) is generated.
+pub enum SetFunctionBreakpoints {}
+
+impl Request for SetFunctionBreakpoints {
+    type Params = SetFunctionBreakpointsArguments;
+    type Result = SetFunctionBreakpointsResponse;
+    const COMMAND: &'static str = "setFunctionBreakpoints";
+}
+
+/// Arguments for ‘setFunctionBreakpoints’ request.
+#[derive(Deserialize, Debug)]
+pub struct SetFunctionBreakpointsArguments {
+    /**
+     * The function names of the breakpoints.
+     */
+    pub breakpoints: Vec<FunctionBreakpoint>,
+}
+
+/// Response to ‘setFunctionBreakpoints’ request.
 ///
 /// Returned is information about each breakpoint created by this request.
-/// This includes the actual code location and whether the breakpoint could be verified.
-/// The breakpoints returned are in the same order as the elements of the ‘breakpoints’
-/// (or the deprecated ‘lines’) array in the arguments.
 #[derive(Serialize, Debug)]
-pub struct SetBreakpointsResponse {
+pub struct SetFunctionBreakpointsResponse {
     /**
-     * Information about the breakpoints. The array elements are in the same order as the elements of the 'breakpoints' (or the deprecated 'lines') array in the arguments.
+     * Information about the breakpoints. The array elements correspond to the elements of the 'breakpoints' array.
      */
     pub breakpoints: Vec<Breakpoint>,
 }
@@ -1054,6 +1187,25 @@ pub struct ExceptionPathSegment {
      * Depending on the value of 'negate' the names that should match or not match.
      */
     pub names: Vec<String>,
+}
+
+/// Properties of a breakpoint passed to the setFunctionBreakpoints request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct FunctionBreakpoint {
+    /**
+     * The name of the function.
+     */
+    pub name: String,
+
+    /**
+     * An optional expression for conditional breakpoints.
+     */
+    pub condition: Option<String>,
+
+    /**
+     * An optional expression that controls how many hits of the breakpoint are ignored. The backend is expected to interpret the expression as needed.
+     */
+    pub hitCondition: Option<String>,
 }
 
 /// A structured message object. Used to return errors from requests.

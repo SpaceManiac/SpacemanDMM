@@ -104,6 +104,10 @@ impl ExtoolsHolder {
         }))
     }
 
+    pub fn get(&mut self) -> Result<&mut Extools, Box<dyn Error>> {
+        self.as_ref().ok_or_else(|| Box::new(super::GenericError("No extools connection")) as Box<dyn Error>)
+    }
+
     pub fn as_ref(&mut self) -> Option<&mut Extools> {
         match &mut self.0 {
             ExtoolsHolderInner::Listening { conn_rx, .. } |
@@ -192,11 +196,16 @@ impl Extools {
         (extools, thread)
     }
 
-    pub fn get_thread(&self, thread_id: i64) -> Option<ThreadInfo> {
-        self.threads.lock().unwrap().get(&thread_id).cloned()
+    pub fn get_default_thread(&self) -> Result<ThreadInfo, Box<dyn Error>> {
+        self.get_thread(0)
     }
 
-    fn bytecode(&mut self, proc_ref: &str, override_id: usize) -> &[DisassembledInstruction] {
+    pub fn get_thread(&self, thread_id: i64) -> Result<ThreadInfo, Box<dyn Error>> {
+        self.threads.lock().unwrap().get(&thread_id).cloned()
+            .ok_or_else(|| Box::new(super::GenericError("Getting call stack failed")) as Box<dyn Error>)
+    }
+
+    pub fn bytecode(&mut self, proc_ref: &str, override_id: usize) -> &[DisassembledInstruction] {
         let Extools { bytecode, sender, seq: _seq, bytecode_rx, .. } = self;
         bytecode.entry((proc_ref.to_owned(), override_id)).or_insert_with(|| {
             debug_output!(in _seq, "[extools] Fetching bytecode for {}#{}", proc_ref, override_id);

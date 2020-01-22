@@ -616,7 +616,7 @@ impl<'ctx> Preprocessor<'ctx> {
         // Attempt to open the file.
         let read = io::BufReader::new(File::open(&path).map_err(|e|
             DMError::new(self.last_input_loc, format!("failed to open file: #include {:?}", path))
-                .set_cause(e))?);
+                .with_cause(e))?);
 
         // Get the path relative to the environment root, for easy lookup later.
         let register = path.strip_prefix(self.env_file.parent().unwrap()).unwrap_or(&path);
@@ -627,7 +627,8 @@ impl<'ctx> Preprocessor<'ctx> {
         if let Some(&loc) = self.include_locations.get(&file_id) {
             Err(DMError::new(self.last_input_loc, format!("duplicate #include {:?}", path))
                 .set_severity(Severity::Warning)
-                .with_note(loc, "previously included here"))
+                .with_note(loc, "previously included here")
+                .with_errortype("duplicate_include"))
         } else {
             self.include_locations.insert(file_id, self.last_input_loc);
             Ok(Include::File {
@@ -877,6 +878,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                     DMError::new(define_name_loc, format!("macro redefined: {}", define_name))
                                         .set_severity(Severity::Warning)
                                         .with_note(previous_loc, format!("previous definition of {}", define_name))
+                                        .with_errortype("macro_redefined")
                                         .register(self.context);
                                 }
                             }
@@ -892,6 +894,7 @@ impl<'ctx> Preprocessor<'ctx> {
                             self.move_to_history(define_name, previous);
                         } else {
                             DMError::new(define_name_loc, format!("macro undefined while not defined: {}", define_name))
+                                .with_errortype("macro_undefined_no_definition")
                                 .set_severity(Severity::Warning)
                                 .register(self.context);
                         }
@@ -927,7 +930,7 @@ impl<'ctx> Preprocessor<'ctx> {
             // anything other than directives may be ifdef'd out
             _ if disabled => return Ok(()),
             // identifiers may be macros
-            Token::Ident(ref ident, _) => {
+            Token::Ident(ref ident, whitespace) => {
                 self.flush_docs();
 
                 // lint for BYOND bug
@@ -950,6 +953,18 @@ impl<'ctx> Preprocessor<'ctx> {
                     self.annotate_macro(ident, Location::builtins());
                     self.output.push_back(Token::Int(self.last_input_loc.line as i32));
                     return Ok(());
+                }
+
+                // special case for inside a defined() call
+                if let Some(Token::Punct(Punctuation::LParen)) = self.output.back() {
+                    if let Some(idx) = self.output.len().checked_sub(2) {
+                        if let Some(Token::Ident(identname, _)) = self.output.get(idx) {
+                            if identname.as_str() == "defined" {
+                                self.output.push_back(Token::Ident(ident.to_owned(), whitespace));
+                                return Ok(());
+                            }
+                        }
+                    }
                 }
 
                 // if it's a define, perform the substitution

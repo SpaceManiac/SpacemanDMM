@@ -535,7 +535,7 @@ impl<I: Iterator<Item=io::Result<u8>>> Iterator for LocationTracker<I> {
                 }
                 Some(Ok(ch))
             }
-            Some(Err(e)) => Some(Err(DMError::new(self.location, "i/o error").set_cause(e))),
+            Some(Err(e)) => Some(Err(DMError::new(self.location, "i/o error").with_cause(e))),
         }
     }
 }
@@ -798,6 +798,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
                     if val_str != buf {
                         self.error(format!("precision loss of integer constant: \"{}\" to {}", buf, val))
                             .set_severity(Severity::Warning)
+                            .with_errortype("integer_precision_loss")
                             .register(self.context);
                     }
                     return Token::Float(val)

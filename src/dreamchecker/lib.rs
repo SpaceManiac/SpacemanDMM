@@ -14,6 +14,9 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 mod type_expr;
 use type_expr::TypeExpr;
 
+#[doc(hidden)]  // Intended for the tests only.
+pub mod test_helpers;
+
 // ----------------------------------------------------------------------------
 // Helper structures
 
@@ -315,13 +318,73 @@ struct KwargInfo {
     bad_overrides_at: BTreeMap<String, BadOverride>,
 }
 
+struct ProcDirective<'o> {
+    directive: HashMap<ProcRef<'o>, (bool, Location)>,
+    can_be_disabled: bool,
+    directive_string: &'static str,
+}
+
+impl<'o> ProcDirective<'o> {
+    pub fn new(directive_string: &'static str, can_be_disabled: bool) -> ProcDirective<'o> {
+        ProcDirective {
+            directive: Default::default(),
+            directive_string,
+            can_be_disabled,
+        }
+    }
+
+    pub fn insert(&mut self, proc: ProcRef<'o>, enable: bool, location: Location) -> Result<(), DMError> {
+        if !enable && !self.can_be_disabled {
+            return Err(error(location, format!("{} sets {} false, but it cannot be disabled.", proc, self.directive_string))
+                .with_errortype("disabled_directive")
+                .set_severity(Severity::Warning))
+        }
+        if let Some((_, originallocation)) = self.directive.get(&proc) {
+            return Err(error(location, format!("{} sets {} twice", proc, self.directive_string))
+                .with_note(*originallocation, "first definition here")
+                .with_errortype("sets_directive_twice")
+                .set_severity(Severity::Warning))
+        }
+        self.directive.insert(proc, (enable, location));
+        Ok(())
+    }
+
+    pub fn get(&self, proc: ProcRef<'o>) -> Option<&(bool, Location)> {
+        self.directive.get(&proc)
+    }
+
+    pub fn get_self_or_parent(&self, proc: ProcRef<'o>) -> Option<(ProcRef<'o>, bool, Location)> {
+        let mut next = Some(proc);
+        while let Some(current) = next {
+            if let Some(&(truthy, location)) = self.get(current) {
+                return Some((current, truthy, location))
+            }
+            next = current.parent_proc();
+        }
+        None
+    }
+}
+
+pub fn directive_value_to_truthy(expr: &Expression, location: Location) -> Result<bool, DMError> {
+    // Maybe this should be using constant evaluation, but for now accept TRUE and FALSE directly.
+    match expr.as_term() {
+        Some(Term::Int(0)) => Ok(false),
+        Some(Term::Int(1)) => Ok(true),
+        Some(Term::Ident(i)) if i == "FALSE" => Ok(false),
+        Some(Term::Ident(i)) if i == "TRUE" => Ok(true),
+        _ => Err(error(location, format!("invalid value for lint directive {:?}", expr))
+        .with_errortype("invalid_lint_directive_value")
+        .set_severity(Severity::Warning)),
+    }
+}
+
 pub struct AnalyzeObjectTree<'o> {
     context: &'o Context,
     objtree: &'o ObjectTree,
 
     return_type: HashMap<ProcRef<'o>, TypeExpr<'o>>,
-    must_call_parent: HashMap<ProcRef<'o>, (bool, Location)>,
-    must_not_override: HashMap<ProcRef<'o>, (bool, Location)>,
+    must_call_parent: ProcDirective<'o>,
+    must_not_override: ProcDirective<'o>,
     // Debug(ProcRef) -> KwargInfo
     used_kwargs: BTreeMap<String, KwargInfo>,
 }
@@ -335,14 +398,37 @@ impl<'o> AnalyzeObjectTree<'o> {
             context,
             objtree,
             return_type,
-            must_call_parent: Default::default(),
-            must_not_override: Default::default(),
+            must_call_parent: ProcDirective::new("SpacemanDMM_should_call_parent", true),
+            must_not_override: ProcDirective::new("SpacemanDMM_should_not_override", false),
             used_kwargs: Default::default(),
         }
     }
 
     pub fn check_proc(&mut self, proc: ProcRef<'o>, code: &'o [Spanned<Statement>]) {
         AnalyzeProc::new(self, self.context, self.objtree, proc).run(code)
+    }
+
+    #[inline]
+    fn add_directive_or_error(&mut self, proc: ProcRef<'o>, directive: &str, expr: &Expression, location: Location) {
+        let procdirective = match directive {
+            "SpacemanDMM_should_not_override" => &mut self.must_not_override,
+            "SpacemanDMM_should_call_parent" => &mut self.must_call_parent,
+            other => {
+                error(location, format!("unknown linter setting {:?}", directive))
+                    .with_errortype("unknown_linter_setting")
+                    .set_severity(Severity::Warning)
+                    .register(self.context);
+                return
+            }
+        };
+        match directive_value_to_truthy(expr, location) {
+            Ok(truthy) => {
+                if let Err(error) = procdirective.insert(proc, truthy, location) {
+                    self.context.register_error(error);
+                }
+            },
+            Err(error) => self.context.register_error(error),
+        }
     }
 
     pub fn gather_settings(&mut self, proc: ProcRef<'o>, code: &'o [Spanned<Statement>]) {
@@ -361,35 +447,8 @@ impl<'o> AnalyzeObjectTree<'o> {
                                 .register(self.context),
                         }
                     }
-                } else if name == "SpacemanDMM_should_not_override" {
-                    match match value.as_term() {
-                        Some(Term::Int(1)) => Some(true),
-                        Some(Term::Ident(i)) if i == "TRUE" => Some(true),
-                        _ => None,
-                    } {
-                        Some(value) => { self.must_not_override.insert(proc, (value, statement.location)); },
-                        None => error(statement.location, format!("invalid value for {}: {:?}", name, value))
-                            .set_severity(Severity::Warning)
-                            .register(self.context)
-                    }
-                } else if name == "SpacemanDMM_should_call_parent" {
-                    // Maybe this should be using constant evaluation, but for now accept TRUE and FALSE directly.
-                    match match value.as_term() {
-                        Some(Term::Int(0)) => Some(false),
-                        Some(Term::Int(1)) => Some(true),
-                        Some(Term::Ident(i)) if i == "FALSE" => Some(false),
-                        Some(Term::Ident(i)) if i == "TRUE" => Some(true),
-                        _ => None,
-                    } {
-                        Some(value) => { self.must_call_parent.insert(proc, (value, statement.location)); },
-                        None => error(statement.location, format!("invalid value for {}: {:?}", name, value))
-                            .set_severity(Severity::Warning)
-                            .register(self.context)
-                    }
                 } else if name.starts_with("SpacemanDMM_") {
-                    error(statement.location, format!("unknown linter setting {:?}", name))
-                        .set_severity(Severity::Warning)
-                        .register(self.context);
+                    self.add_directive_or_error(proc, &name.as_str(), value, statement.location);
                 } else if !KNOWN_SETTING_NAMES.contains(&name.as_str()) {
                     error(statement.location, format!("unknown setting {:?}", name))
                         .set_severity(Severity::Warning)
@@ -438,7 +497,8 @@ impl<'o> AnalyzeObjectTree<'o> {
                 1 => format!("an override of {} is missing keyword args", base_procname),
                 len => format!("{} overrides of {} are missing keyword args", len, base_procname),
             };
-            let mut error = error(kwarg_info.location, msg);
+            let mut error = error(kwarg_info.location, msg)
+                .with_errortype("override_missing_keyword_arg");
             let mut missing = HashSet::new();
             for (child_procname, bad_override) in kwarg_info.bad_overrides_at.iter() {
                 error.add_note(bad_override.location, format!("{} is missing \"{}\"",
@@ -543,6 +603,7 @@ pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
 
                 if decl.var_type.is_final {
                     DMError::new(typevar.value.location, format!("{} overrides final var {:?}", path, varname))
+                        .with_errortype("final_var")
                         .with_note(decl.location, format!("declared final on {} here", parent.path))
                         .register(context);
                 }
@@ -615,26 +676,23 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         self.visit_block(block);
 
         if self.proc_ref.parent_proc().is_some() {
-            let mut next = Some(self.proc_ref);
-            while let Some(current) = next {
-                if let Some(&(must_not, location)) = self.env.must_not_override.get(&current) {
-                    if must_not {
-                        error(self.proc_ref.location, format!("proc overrides parent, prohibited by {}", current))
-                            .with_note(location, "prohibited by this must_not_override annotation")
+            if let Some((proc, must_not, location)) = self.env.must_not_override.get_self_or_parent(self.proc_ref) {
+                if must_not && proc != self.proc_ref {
+                    error(self.proc_ref.location, format!("proc overrides parent, prohibited by {}", proc))
+                        .with_note(location, "prohibited by this must_not_override annotation")
+                        .with_errortype("must_not_override")
+                        .register(self.context);
+                }
+            }
+            if !self.calls_parent {
+                if let Some((proc, must, location)) = self.env.must_call_parent.get_self_or_parent(self.proc_ref) {
+                    if must {
+                        error(self.proc_ref.location, format!("proc never calls parent, required by {}", proc))
+                            .with_note(location, "required by this must_call_parent annotation")
+                            .with_errortype("must_call_parent")
                             .register(self.context);
                     }
                 }
-                if !self.calls_parent {
-                    if let Some(&(must, location)) = self.env.must_call_parent.get(&current) {
-                        if must {
-                            error(self.proc_ref.location, format!("proc never calls parent, required by {}", current))
-                                .with_note(location, "required by this must_call_parent annotation")
-                                .register(self.context);
-                        }
-                        break;
-                    }
-                }
-                next = current.parent_proc();
             }
         }
     }
@@ -665,8 +723,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 self.visit_expression(location, condition, None);
             },
             Statement::If { arms, else_arm } => {
-                for &(ref condition, ref block) in arms.iter() {
-                    self.visit_expression(location, condition, None);
+                for (condition, ref block) in arms.iter() {
+                    self.visit_expression(condition.location, &condition.elem, None);
                     self.visit_block(block);
                 }
                 if let Some(else_arm) = else_arm {
@@ -807,6 +865,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         if unary.len() > 0 {
                             error(location, format!("ambiguous `{}` on left side of an `in`", unary[0].name()))
                                 .set_severity(Severity::Warning)
+                                .with_errortype("ambiguous_in_lhs")
                                 .with_note(location, format!("add parentheses to fix: `{}`", unary[0].around("(a in b)")))
                                 .with_note(location, format!("add parentheses to disambiguate: `({}) in b`", unary[0].around("a")))
                                 .register(self.context);
@@ -815,6 +874,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     Expression::BinaryOp { op, lhs, rhs } => {
                         error(location, format!("ambiguous `{}` on left side of an `in`", op))
                             .set_severity(Severity::Warning)
+                            .with_errortype("ambiguous_in_lhs")
                             .with_note(location, format!("add parentheses to fix: `a {} (b in c)`", op))
                             .with_note(location, format!("add parentheses to disambiguate: `(a {} b) in c`", op))
                             .register(self.context);
@@ -822,15 +882,17 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     Expression::AssignOp { op, lhs, rhs } => {
                         error(location, format!("ambiguous `{}` on left side of an `in`", op))
                             .set_severity(Severity::Warning)
+                            .with_errortype("ambiguous_in_lhs")
                             .with_note(location, format!("add parentheses to fix: `a {} (b in c)`", op))
                             .with_note(location, format!("add parentheses to disambiguate: `(a {} b) in c`", op))
                             .register(self.context);
                     },
                     Expression::TernaryOp { cond, if_, else_ } => {
                         error(location, format!("ambiguous ternary on left side of an `in`"))
+                            .set_severity(Severity::Warning)
+                            .with_errortype("ambiguous_in_lhs")
                             .with_note(location, "add parentheses to fix: `a ? b : (c in d)`")
                             .with_note(location, "add parentheses to disambiguate: `(a ? b : c) in d`")
-                            .set_severity(Severity::Warning)
                             .register(self.context);
                     },
                 };
@@ -962,6 +1024,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         Some(hint)
                     } else {
                         error(location, "no type hint available on implicit new()")
+                            .with_errortype("no_typehint_implicit_new")
                             .register(self.context);
                         None
                     },
@@ -1115,6 +1178,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 } else {
                     error(location, format!("field access requires static type: {:?}", name))
                         .set_severity(Severity::Warning)
+                        .with_errortype("field_access_static_type")
                         .with_fix_hint(&lhs)
                         .register(self.context);
                     Analysis::empty()
@@ -1132,6 +1196,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 } else {
                     error(location, format!("proc call requires static type: {:?}", name))
                         .set_severity(Severity::Warning)
+                        .with_errortype("proc_call_static_type")
                         .with_fix_hint(&lhs)
                         .register(self.context);
                     Analysis::empty()
@@ -1159,6 +1224,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
         };
         error(location, format!("Attempting {} on a {} which does not overload operator{}", operator, typeerror, operator))
+            .with_errortype("no_operator_overload")
             .register(self.context);
         return Analysis::empty()
     }
@@ -1189,54 +1255,65 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         let mut param_name_map = HashMap::new();
         let mut param_idx_map = HashMap::new();
         let mut param_idx = 0;
+        let mut arglist_used = false;
 
         for arg in args {
             let mut argument_value = arg;
             let mut this_kwarg = None;
-            if let Expression::AssignOp { op: AssignOp::Assign, lhs, rhs } = arg {
-                match lhs.as_term() {
-                    Some(Term::Ident(name)) |
-                    Some(Term::String(name)) => {
-                        // Don't visit_expression the kwarg key.
-                        any_kwargs_yet = true;
-                        this_kwarg = Some(name);
-                        argument_value = rhs;
+            match arg {
+                Expression::AssignOp { op: AssignOp::Assign, lhs, rhs } => {
+                    match lhs.as_term() {
+                        Some(Term::Ident(name)) |
+                        Some(Term::String(name)) => {
+                            // Don't visit_expression the kwarg key.
+                            any_kwargs_yet = true;
+                            this_kwarg = Some(name);
+                            argument_value = rhs;
 
-                        // Check that that kwarg actually exists.
-                        if !proc.parameters.iter().any(|p| p.name == *name) {
-                            // Search for a child proc that does have this keyword argument.
-                            let mut error = error(location,
-                                format!("bad keyword argument {:?} to {}", name, proc));
-                            proc.recurse_children(&mut |child_proc| {
-                                if child_proc.ty() == proc.ty() { return }
-                                if child_proc.parameters.iter().any(|p| p.name == *name) {
-                                    error.add_note(child_proc.location, format!("an override has this parameter: {}", child_proc));
-                                }
-                            });
-                            error.register(self.context);
-                        } else if !is_exact {
-                            // If it does, mark it as "used".
-                            // Format with src/proc/foo here, rather than the
-                            // type the proc actually appears on, so that
-                            // calling /datum/foo() on a /datum/A won't
-                            // complain about /datum/B/foo().
-                            self.env.used_kwargs.entry(format!("{}/proc/{}", src, proc.name()))
-                                .or_insert_with(|| KwargInfo {
-                                    location: proc.location,
-                                    .. Default::default()
-                                })
-                                .called_at
-                                // TODO: use a more accurate location
-                                .entry(name.clone())
-                                .and_modify(|ca| ca.others += 1)
-                                .or_insert(CalledAt {
-                                    location: location,
-                                    others: 0,
+                            // Check that that kwarg actually exists.
+                            if !proc.parameters.iter().any(|p| p.name == *name) {
+                                // Search for a child proc that does have this keyword argument.
+                                let mut error = error(location,
+                                    format!("bad keyword argument {:?} to {}", name, proc));
+                                proc.recurse_children(&mut |child_proc| {
+                                    if child_proc.ty() == proc.ty() { return }
+                                    if child_proc.parameters.iter().any(|p| p.name == *name) {
+                                        error.add_note(child_proc.location, format!("an override has this parameter: {}", child_proc));
+                                    }
                                 });
+                                error.register(self.context);
+                            } else if !is_exact {
+                                // If it does, mark it as "used".
+                                // Format with src/proc/foo here, rather than the
+                                // type the proc actually appears on, so that
+                                // calling /datum/foo() on a /datum/A won't
+                                // complain about /datum/B/foo().
+                                self.env.used_kwargs.entry(format!("{}/proc/{}", src, proc.name()))
+                                    .or_insert_with(|| KwargInfo {
+                                        location: proc.location,
+                                        .. Default::default()
+                                    })
+                                    .called_at
+                                    // TODO: use a more accurate location
+                                    .entry(name.clone())
+                                    .and_modify(|ca| ca.others += 1)
+                                    .or_insert(CalledAt {
+                                        location: location,
+                                        others: 0,
+                                    });
+                            }
+                        }
+                        _ => {}
+                    }
+                },
+                expr => {
+                    if let Some(Term::Call(callname, _)) = expr.as_term() {
+                        // only interested in the first expression being arglist
+                        if callname.as_str() == "arglist" && param_name_map.len() == 0 && param_idx == 0 {
+                            arglist_used = true;
                         }
                     }
-                    _ => {}
-                }
+                },
             }
 
             if any_kwargs_yet && this_kwarg.is_none() && !(proc.ty().is_root() && proc.name() == "animate") {
@@ -1251,6 +1328,39 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             } else {
                 param_idx_map.insert(param_idx, analysis);
                 param_idx += 1;
+            }
+        }
+
+        // filter call checking
+        // TODO: check flags for valid values
+        //  eg "wave" type "flags" param only works with WAVE_SIDEWAYS, WAVE_BOUND
+        // also some filters have limits for their numerical params
+        //  eg "rays" type "threshold" param defaults to 0.5, can be 0 to 1
+        if proc.ty().is_root() && proc.name() == "filter" {
+            guard!(let Some(typename) = param_name_map.get("type") else {
+                if !arglist_used {
+                    error(location, "filter() called without mandatory keyword parameter 'type'")
+                        .register(self.context);
+                } // regardless, we're done here
+                return Analysis::empty()
+            });
+            guard!(let Some(Constant::String(typevalue)) = &typename.value else {
+                error(location, format!("filter() called with non-string type keyword parameter value '{:?}'", typename.value))
+                    .register(self.context);
+                return Analysis::empty()
+            });
+            guard!(let Some(arglist) = VALID_FILTER_TYPES.get(typevalue.as_str()) else {
+                error(location, format!("filter() called with invalid type keyword parameter value '{}'", typevalue))
+                    .register(self.context);
+                return Analysis::empty()
+            });
+            for arg in param_name_map.keys() {
+                if *arg != "type" && arglist.iter().position(|&x| x == *arg).is_none() {
+                    error(location, format!("filter(type=\"{}\") called with invalid keyword parameter '{}'", typevalue, arg))
+                        // luckily lummox has made the anchor url match the type= value for each filter
+                        .with_note(location, format!("See: http://www.byond.com/docs/ref/#/{{notes}}/filters/{} for the permitted arguments", typevalue))
+                        .register(self.context);
+                }
             }
         }
 

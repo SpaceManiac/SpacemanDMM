@@ -40,6 +40,13 @@ DreamCheckers's whole-program analysis can find problems such as:
     of `L[1].name` will not generate a warning.
   * Proc calls will obey the [return type](#return-type) annotation if present.
 
+## Configuration
+
+DreamChecker can be run with the `-c` switch to specify a TOML configuration
+file. For the full list of options see the [configuration docs].
+
+[configuration docs]: ../../CONFIGURING.md
+
 ## Extensions
 
 DreamChecker also adds additional typing features to the language through a
@@ -94,7 +101,7 @@ This functions in a similar way to the `final` keyword in some languages.
 
 ### Final variables
 
-Use the above definition of VAR_FINAL to declare vars as `final`, `var/final/foo` such that overriding their value isn't permitted by types that inherit it.
+Use the above definition of VAR_FINAL to declare vars as `SpacemanDMM_final`, `var/SpacemanDMM_final/foo` such that overriding their value isn't permitted by types that inherit it.
 ```
 /a/type
   VAR_FINAL/foo = somevalue

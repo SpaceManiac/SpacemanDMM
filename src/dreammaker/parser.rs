@@ -357,6 +357,7 @@ pub struct Parser<'ctx, 'an, 'inp> {
 
     input: Box<dyn Iterator<Item=LocatedToken> + 'inp>,
     eof: bool,
+    possible_indentation_error: bool,
     next: Option<Token>,
     location: Location,
     expected: Vec<Cow<'static, str>>,
@@ -388,6 +389,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
             input: Box::new(input.into_iter()),
             eof: false,
+            possible_indentation_error: false,
             next: None,
             location: Default::default(),
             expected: Vec::new(),
@@ -470,11 +472,19 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Ok(got) => {
                 let message = format!("got '{}', expected one of: {}", got, expected);
                 self.put_back(got);
-                self.error(message)
+                let mut e = self.error(message);
+                if self.possible_indentation_error {
+                    let mut loc = e.location();
+                    loc.line += 1;
+                    loc.column = 1;
+                    e.add_note(loc, "check for extra indentation at the start of the next line");
+                    self.possible_indentation_error = false;
+                }
+                e
             }
             Err(err) => self
                 .error(format!("i/o error, expected one of: {}", expected))
-                .set_cause(err),
+                .with_cause(err),
         }
     }
 
@@ -579,6 +589,13 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     fn ident(&mut self) -> Status<Ident> {
         match self.next("identifier")? {
             Token::Ident(i, _) => Ok(Some(i)),
+            other => self.try_another(other),
+        }
+    }
+
+    fn dot(&mut self) -> Status<()> {
+        match self.next("'.'")? {
+            Token::Punct(Punctuation::Dot) => Ok(Some(())),
             other => self.try_another(other),
         }
     }
@@ -930,12 +947,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             path.remove(0);
             DMError::new(leading_loc, "'var/' is unnecessary here")
                 .set_severity(Severity::Hint)
+                .with_errortype("var_in_proc_paramater")
                 .register(self.context);
         }
         let mut var_type: VarType = path.into_iter().collect();
         if var_type.is_static {
             DMError::new(leading_loc, "'static/' has no effect here")
                 .set_severity(Severity::Warning)
+                .with_errortype("static_in_proc_parameter")
                 .register(self.context);
         }
         let location = self.location;
@@ -1023,6 +1042,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             // in case it is out of order
             if let Some(()) = self.exact_ident("as")? {
                 self.error("'as' clause should precede 'in' clause, and is being ignored")
+                    .with_errortype("in_precedes_as")
                     .set_severity(Severity::Warning)
                     .register(self.context);
                 let _ = require!(self.input_type());
@@ -1092,7 +1112,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         if let Some(()) = self.exact_ident("if")? {
             // statement :: 'if' '(' expression ')' block ('else' 'if' '(' expression ')' block)* ('else' block)?
             require!(self.exact(Token::Punct(Punctuation::LParen)));
-            let expr = require!(self.expression());
+            let expr = Spanned::new(self.location(), require!(self.expression()));
             require!(self.exact(Token::Punct(Punctuation::RParen)));
             let block = require!(self.block(loop_ctx));
             let mut arms = vec![(expr, block)];
@@ -1102,7 +1122,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             while let Some(()) = self.exact_ident("else")? {
                 if let Some(()) = self.exact_ident("if")? {
                     require!(self.exact(Token::Punct(Punctuation::LParen)));
-                    let expr = require!(self.expression());
+                    let expr = Spanned::new(self.location(), require!(self.expression()));
                     require!(self.exact(Token::Punct(Punctuation::RParen)));
                     let block = require!(self.block(loop_ctx));
                     arms.push((expr, block));
@@ -1357,12 +1377,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         match self.next("';'")? {
             Token::Punct(Punctuation::Semicolon) => SUCCESS,
             p @ Token::Punct(Punctuation::RBrace) => {
-                //eprintln!("{:?} instead of semicolon, rbrace (soft)", self.location);
                 self.put_back(p);
                 SUCCESS
             }
+            p @ Token::Punct(Punctuation::LBrace) => {
+                self.possible_indentation_error = true;
+                self.try_another(p)
+            }
             other => {
-                //eprintln!("{:?} instead of semicolon, {:?}", self.location, other);
                 self.try_another(other)
             }
         }
@@ -1398,11 +1420,13 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 if var_type.is_tmp {
                     DMError::new(type_path_start, "var/tmp has no effect here")
                         .set_severity(Severity::Warning)
+                        .with_errortype("tmp_no_effect")
                         .register(self.context);
                 }
                 if var_type.is_final {
                     DMError::new(type_path_start, "var/final has no effect here")
                         .set_severity(Severity::Warning)
+                        .with_errortype("final_no_effect")
                         .register(self.context);
                 }
                 let var_suffix = require!(self.var_suffix());
@@ -1425,6 +1449,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 if !input_types.is_empty() || in_list.is_some() {
                     self.error("'as' clause has no effect on local variables")
                         .set_severity(Severity::Warning)
+                        .with_errortype("as_local_var")
                         .register(self.context);
                 }
 
@@ -1779,7 +1804,18 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 // The following is what seems a reasonable approximation.
 
                 // try to read an ident or path
-                let t = if let Some(ident) = self.ident()? {
+                let t = if self.dot()?.is_some() {
+                    if let Some(ident) = self.ident()? {
+                        // prefab
+                        // TODO: arrange for this ident to end up in the prefab's annotation
+                        NewType::Prefab(require!(self.prefab_ex(vec![(PathOp::Dot, ident)])))
+                    } else {
+                        // bare dot
+                        let fields = Vec::new();
+                        let ident = ".".to_owned();
+                        NewType::MiniExpr { ident, fields }
+                    }
+                } else if let Some(ident) = self.ident()? {
                     let mut fields = Vec::new();
                     let mut belongs_to = vec![ident.clone()];
                     while let Some(item) = self.index_or_field(&mut belongs_to, false)? {

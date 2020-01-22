@@ -483,7 +483,7 @@ fn constant_ident_lookup(
         };
 
         let type_ = tree.graph.node_weight_mut(ty).unwrap();
-        let parent = type_.parent_type();
+        let parent = type_.parent_type_index();
         match type_.vars.get_mut(ident) {
             None => return Ok(ConstLookup::Continue(parent)),
             Some(var) => match var.value.constant.clone() {
@@ -736,10 +736,14 @@ impl<'a> ConstantFolder<'a> {
                 "sound" => Constant::Call(ConstFn::Sound, self.arguments(args)?),
                 "file" => Constant::Call(ConstFn::File, self.arguments(args)?),
                 // constant-evaluatable functions
+                "sin" => self.trig_op(args, f32::sin)?,
+                "cos" => self.trig_op(args, f32::cos)?,
+                "arcsin" => self.trig_op(args, f32::asin)?,
+                "arccos" => self.trig_op(args, f32::acos)?,
                 "rgb" => {
                     use std::fmt::Write;
                     if args.len() != 3 && args.len() != 4 {
-                        return Err(self.error("malformed rgb() call"));
+                        return Err(self.error(format!("malformed rgb() call, must have 3 or 4 arguments and instead has {}", args.len())));
                     }
                     let mut result = String::with_capacity(7);
                     result.push_str("#");
@@ -748,7 +752,7 @@ impl<'a> ConstantFolder<'a> {
                             let clamped = std::cmp::max(::std::cmp::min(i, 255), 0);
                             let _ = write!(result, "{:02x}", clamped);
                         } else {
-                            return Err(self.error("malformed rgb() call"));
+                            return Err(self.error("malformed rgb() call, argument wasn't an int"));
                         }
                     }
                     Constant::String(result)
@@ -756,7 +760,7 @@ impl<'a> ConstantFolder<'a> {
                 "defined" if self.defines.is_some() => {
                     let defines = self.defines.unwrap();  // annoying, but keeps the match clean
                     if args.len() != 1 {
-                        return Err(self.error("malformed defined() call"));
+                        return Err(self.error(format!("malformed defined() call, must have 1 argument and instead has {}", args.len())));
                     }
                     match args[0] {
                         Expression::Base {
@@ -766,7 +770,7 @@ impl<'a> ConstantFolder<'a> {
                         } if unary.is_empty() && follow.is_empty() => {
                             Constant::Int(if defines.contains_key(ident) { 1 } else { 0 })
                         },
-                        _ => return Err(self.error("malformed defined() call")),
+                        _ => return Err(self.error("malformed defined() call, argument given isn't an Ident.")),
                     }
                 }
                 // other functions are no-goes
@@ -781,6 +785,16 @@ impl<'a> ConstantFolder<'a> {
             Term::Expr(expr) => self.expr(*expr, type_hint)?,
             _ => return Err(self.error("non-constant expression".to_owned())),
         })
+    }
+
+    fn trig_op(&mut self, mut args: Vec<Expression>, op: fn(f32) -> f32) -> Result<Constant, DMError> {
+        if args.len() != 1 {
+            Err(self.error(format!("trig function requires exactly 1 argument, instead found {}", args.len())))
+        } else if let Some(f) = self.expr(args.remove(0), None)?.to_float() {
+            Ok(Constant::Float(op(f)))
+        } else {
+            Err(self.error("trig function requires numeric argument"))
+        }
     }
 
     fn prefab(&mut self, prefab: Prefab) -> Result<Pop, DMError> {
@@ -836,7 +850,7 @@ impl<'a> ConstantFolder<'a> {
             }
             let tree = self.tree.as_mut().unwrap();
             match constant_ident_lookup(tree, ty, &ident, must_be_const)
-                .map_err(|e| DMError::new(location, e.into_description()))?
+                .map_err(|e| e.with_location(location))?
             {
                 ConstLookup::Found(_, v) => return Ok(v),
                 ConstLookup::Continue(i) => idx = i,

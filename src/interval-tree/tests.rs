@@ -1,6 +1,5 @@
 use std::cmp;
 use std::collections::BTreeSet;
-use time::PreciseTime;
 use crate::RangeInclusive;
 
 type IntervalTree<V> = crate::IntervalTree<u64, V>;
@@ -64,36 +63,6 @@ fn test_remove(){
     assert!(!t.contains(RangeInclusive::new(2,2)));
     assert!(!t.contains(RangeInclusive::new(3,3)));
     assert!(t.is_empty());
-}
-
-#[test]
-#[ignore]
-fn test_performance(){
-    let mut t = IntervalTree::<i32>::new();
-    let data = 1337;
-    let start = PreciseTime::now();
-    for _ in 1..10000 {
-        t.insert(RangeInclusive::new(1,1), data);
-        t.insert(RangeInclusive::new(20000,20000), data+1);
-        t.remove(RangeInclusive::new(1,1));
-        t.remove(RangeInclusive::new(20000,20000));
-    }
-    let end = PreciseTime::now();
-    let diff_simple = start.to(end).num_milliseconds();
-    for x in 5..2000 {
-        t.insert(RangeInclusive::new(x,x), data);
-    }
-
-    let start_2 = PreciseTime::now();
-    for _ in 1..10000 {
-        t.insert(RangeInclusive::new(1,1), data);
-        t.insert(RangeInclusive::new(20000,20000), data+1);
-        t.remove(RangeInclusive::new(1,1));
-        t.remove(RangeInclusive::new(20000,20000));
-    }
-    let end_2 = PreciseTime::now();
-    let diff_full = start_2.to(end_2).num_milliseconds();
-    assert!(diff_full < diff_simple * 13); //log time
 }
 
 #[test]

@@ -159,7 +159,7 @@ impl Map {
             grid: Array3::default((1, 1, 1)),
         };
         read::parse_map(&mut map, File::open(path).map_err(|e| {
-            DMError::new(Location::default(), "i/o error").set_cause(e)
+            DMError::new(Location::default(), "i/o error").with_cause(e)
         })?)?;
         Ok(map)
     }

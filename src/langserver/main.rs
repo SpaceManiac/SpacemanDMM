@@ -65,7 +65,7 @@ fn main() {
     }
     eprint!("{}", include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")));
     #[cfg(extools_bundle)] {
-        eprintln!("extools commit hash: {}", env!("EXTOOLS_COMMIT_HASH"));
+        eprintln!("extools commit: {}", env!("EXTOOLS_COMMIT_HASH"));
     }
     match std::env::current_dir() {
         Ok(path) => eprintln!("directory: {}", path.display()),
@@ -158,6 +158,7 @@ struct Engine<'a> {
     diagnostics_set: HashSet<Url>,
 
     client_caps: ClientCaps,
+    extools_dll: Option<String>,
 }
 
 impl<'a> Engine<'a> {
@@ -179,6 +180,7 @@ impl<'a> Engine<'a> {
             diagnostics_set: Default::default(),
 
             client_caps: Default::default(),
+            extools_dll: None,
         }
     }
 
@@ -250,8 +252,18 @@ impl<'a> Engine<'a> {
     fn update_objtree(&mut self) {
         if self.client_caps.object_tree {
             let root = self.recurse_objtree(self.objtree.root());
-            self.issue_notification::<extras::ObjectTree>(extras::ObjectTreeParams {
-                root,
+            // offload serialization costs to another thread
+            std::thread::spawn(move || {
+                let start = std::time::Instant::now();
+                issue_notification::<extras::ObjectTree>(extras::ObjectTreeParams {
+                    root,
+                });
+                let elapsed = start.elapsed();
+                eprintln!(
+                    "serialized objtree in {}.{:03}s",
+                    elapsed.as_secs(),
+                    elapsed.subsec_millis()
+                );
             });
         }
     }
@@ -319,6 +331,7 @@ impl<'a> Engine<'a> {
         }
 
         let ctx = self.context;
+        ctx.autodetect_config(&environment);
         let mut pp = match dm::preprocessor::Preprocessor::new(ctx, environment.clone()) {
             Ok(pp) => pp,
             Err(err) => {
@@ -329,6 +342,7 @@ impl<'a> Engine<'a> {
                             message: err.to_string(),
                             .. Default::default()
                         }],
+                        version: None,
                     },
                 );
                 eprintln!("{:?}", err);
@@ -343,14 +357,16 @@ impl<'a> Engine<'a> {
         }
         self.update_objtree();
         self.references_table = Some(find_references::ReferencesTable::new(&self.objtree));
-        // TODO: run dreamchecker here if enabled
+        if ctx.config().langserver.dreamchecker {
+            dreamchecker::run(&self.context, &self.objtree);
+        }
         self.defines = Some(pp.finalize());
         self.issue_notification::<extras::WindowStatus>(Default::default());
         let elapsed = start.elapsed();
         eprintln!(
             "parsed in {}.{:03}s",
             elapsed.as_secs(),
-            elapsed.subsec_nanos() / 1_000_000
+            elapsed.subsec_millis()
         );
 
         // initial diagnostics pump
@@ -377,6 +393,7 @@ impl<'a> Engine<'a> {
                 severity: Some(convert_severity(error.severity())),
                 range: location_to_range(loc),
                 source: component_to_source(error.component()),
+                code: convert_errorcode(error.errortype()),
                 related_information,
                 .. Default::default()
             };
@@ -409,6 +426,7 @@ impl<'a> Engine<'a> {
                 lsp_types::PublishDiagnosticsParams {
                     uri: url,
                     diagnostics,
+                    version: None,
                 },
             );
         }
@@ -419,6 +437,7 @@ impl<'a> Engine<'a> {
                 lsp_types::PublishDiagnosticsParams {
                     uri: url.clone(),
                     diagnostics: Vec::new(),
+                    version: None,
                 },
             );
         }
@@ -516,6 +535,7 @@ impl<'a> Engine<'a> {
                             severity: Some(convert_severity(error.severity())),
                             range: location_to_range(loc),
                             source: component_to_source(error.component()),
+                            code: convert_errorcode(error.errortype()),
                             related_information,
                             .. Default::default()
                         };
@@ -540,6 +560,7 @@ impl<'a> Engine<'a> {
                         lsp_types::PublishDiagnosticsParams {
                             uri: url.to_owned(),
                             diagnostics,
+                            version: None,
                         },
                     );
 
@@ -614,7 +635,7 @@ impl<'a> Engine<'a> {
             if let Some(proc) = ty.get().procs.get(proc_name) {
                 if let Some(value) = proc.value.get(idx) {
                     for param in value.parameters.iter() {
-                        if &param.name == var_name {
+                        if param.name == var_name {
                             return UnscopedVar::Parameter { ty, proc: proc_name, param };
                         }
                     }
@@ -700,7 +721,7 @@ impl<'a> Engine<'a> {
             _ => Response::Batch(outputs),
         };
 
-        jrpc_io::write(serde_json::to_string(&response).expect("response bad to_string"));
+        jrpc_io::write(&serde_json::to_string(&response).expect("response bad to_string"));
     }
 
     fn handle_call(&mut self, call: Call) -> Option<Output> {
@@ -782,16 +803,11 @@ handle_method_call! {
             self.parent_pid = id;
         }
         if let Some(mut url) = init.root_uri {
-            if !url.path().ends_with("/") {
+            if !url.path().ends_with('/') {
                 let path = format!("{}/", url.path());
                 url.set_path(&path);
             }
             self.root = Some(url);
-        } else if let Some(path) = init.root_path {
-            match Url::from_directory_path(path) {
-                Ok(url) => self.root = Some(url),
-                Err(()) => return Err(invalid_request("Root path does not correspond to a valid URL")),
-            }
         } else {
             eprintln!("preparing single file mode");
         }
@@ -821,13 +837,20 @@ handle_method_call! {
                 completion_provider: Some(CompletionOptions {
                     trigger_characters: Some(vec![".".to_owned(), ":".to_owned(), "/".to_owned()]),
                     resolve_provider: None,
+                    work_done_progress_options: Default::default(),
                 }),
                 signature_help_provider: Some(SignatureHelpOptions {
                     trigger_characters: Some(vec!["(".to_owned(), ",".to_owned()]),
+                    retrigger_characters: None,
+                    work_done_progress_options: Default::default(),
                 }),
                 color_provider: Some(ColorProviderCapability::Simple(true)),
                 .. Default::default()
-            }
+            },
+            server_info: Some(ServerInfo {
+                name: "dm-langserver".to_owned(),
+                version: Some(env!("CARGO_PKG_VERSION").to_owned()),
+            }),
         }
     }
 
@@ -1130,7 +1153,7 @@ handle_method_call! {
                     results.push(self.convert_location(proc.main_value().location, &[&ty.path, "/proc/", proc_name])?);
                     break;
                 }
-                next = ignore_root(ty.parent_type());
+                next = ty.parent_type_without_root();
             }
         },
         Annotation::ScopedVar(priors, var_name) => {
@@ -1140,7 +1163,7 @@ handle_method_call! {
                     results.push(self.convert_location(var.value.location, &[&ty.path, "/var/", var_name])?);
                     break;
                 }
-                next = ignore_root(ty.parent_type());
+                next = ty.parent_type_without_root();
             }
         },
         Annotation::ParentCall => {
@@ -1218,7 +1241,7 @@ handle_method_call! {
                         break;
                     }
                 }
-                next = ignore_root(ty.parent_type());
+                next = ty.parent_type_without_root();
             }
         },
         }
@@ -1337,7 +1360,7 @@ handle_method_call! {
                         break;
                     }
                 }
-                next = ignore_root(ty.parent_type());
+                next = ty.parent_type_without_root();
             }
         },
         Annotation::ScopedVar(priors, var_name) => {
@@ -1349,7 +1372,7 @@ handle_method_call! {
                         break;
                     }
                 }
-                next = ignore_root(ty.parent_type());
+                next = ty.parent_type_without_root();
             }
         },
         // TODO: macros
@@ -1685,6 +1708,7 @@ handle_method_call! {
             root_dir,
             files: self.context.clone_file_list(),
             objtree: self.objtree.clone(),
+            extools_dll: self.extools_dll.clone(),
         };
         let (port, handle) = debugger::start_server(params.dreamseeker_exe, db).map_err(invalid_request)?;
         self.threads.push(handle);
@@ -1741,7 +1765,11 @@ handle_notification! {
         self.annotations.remove(&url);
     }
 
-    on DidChangeConfiguration(&mut self, _) {}
+    on DidChangeConfiguration(&mut self, params) {
+        if let Some(extools_dll) = params.settings["dreammaker"]["extoolsDLL"].as_str() {
+            self.extools_dll = Some(extools_dll.to_owned());
+        }
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -1795,6 +1823,10 @@ fn convert_severity(severity: dm::Severity) -> lsp_types::DiagnosticSeverity {
     }
 }
 
+fn convert_errorcode(errortype: Option<&'static str>) -> Option<lsp_types::NumberOrString> {
+    errortype.map(|x| lsp_types::NumberOrString::String(x.to_owned()))
+}
+
 enum UnscopedVar<'a> {
     Parameter {
         ty: TypeRef<'a>,
@@ -1814,13 +1846,6 @@ enum UnscopedVar<'a> {
 
 fn is_constructor_name(name: &str) -> bool {
     name == "New" || name == "init" || name == "Initialize"
-}
-
-fn ignore_root(t: Option<TypeRef>) -> Option<TypeRef> {
-    match t {
-        Some(t) if t.is_root() => None,
-        other => other,
-    }
 }
 
 fn location_to_position(loc: dm::Location) -> lsp_types::Position  {
@@ -1850,7 +1875,7 @@ where
         method: T::METHOD.to_owned(),
         params: value_to_params(params),
     }));
-    jrpc_io::write(serde_json::to_string(&request).expect("notification bad to_string"))
+    jrpc_io::write(&serde_json::to_string(&request).expect("notification bad to_string"))
 }
 
 fn component_to_source(component: dm::Component) -> Option<String> {

@@ -16,7 +16,7 @@ impl Query {
         if !any_alphanumeric(query) {
             return None;
         }
-        Some(if query.starts_with("#") {
+        Some(if query.starts_with('#') {
             Query::Define(query[1..].to_lowercase())
         } else if query.starts_with("var/") {
             let query = &query["var/".len()..];
@@ -30,7 +30,7 @@ impl Query {
                 return None;
             }
             Query::Proc(query.to_lowercase())
-        } else if query.contains("/") {
+        } else if query.contains('/') {
             Query::Type(query.to_lowercase())
         } else {
             Query::Anything(query.to_lowercase())

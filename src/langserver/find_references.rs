@@ -168,6 +168,9 @@ impl<'o> WalkProc<'o> {
         for param in proc.get().parameters.iter() {
             let ty = self.static_type(param.location, &param.var_type.type_path);
             self.use_type(param.location, &ty);
+            if let Some(expr) = &param.default {
+                self.visit_expression(param.location, expr, None);
+            }
             self.local_vars.insert(param.name.to_owned(), Local {
                 ty,
                 symbol: self.tab.new_symbol(param.location)
@@ -202,8 +205,8 @@ impl<'o> WalkProc<'o> {
                 self.visit_expression(location, condition, None);
             },
             Statement::If { arms, else_arm } => {
-                for &(ref condition, ref block) in arms.iter() {
-                    self.visit_expression(location, condition, None);
+                for (condition, ref block) in arms.iter() {
+                    self.visit_expression(condition.location, &condition.elem, None);
                     self.visit_block(block);
                 }
                 if let Some(else_arm) = else_arm {

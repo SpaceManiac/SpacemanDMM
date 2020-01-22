@@ -84,8 +84,8 @@ impl DocumentStore {
             return Ok(Cow::Owned(text));
         }
 
-        return Err(io::Error::new(io::ErrorKind::NotFound,
-            format!("URL not opened and schema is not 'file': {}", url)));
+        Err(io::Error::new(io::ErrorKind::NotFound,
+            format!("URL not opened and schema is not 'file': {}", url)))
     }
 
     pub fn read(&self, url: &Url) -> io::Result<Box<dyn io::Read>> {
@@ -98,8 +98,8 @@ impl DocumentStore {
             return Ok(Box::new(file) as Box<dyn io::Read>);
         }
 
-        return Err(io::Error::new(io::ErrorKind::NotFound,
-            format!("URL not opened and schema is not 'file': {}", url)));
+        Err(io::Error::new(io::ErrorKind::NotFound,
+            format!("URL not opened and schema is not 'file': {}", url)))
     }
 }
 
@@ -142,7 +142,7 @@ fn line_offset(text: &str, line_number: u64) -> Result<usize, jsonrpc::Error> {
     // Hopefully this logic isn't too far off.
     let mut start_pos = 0;
     for _ in 0..line_number {
-        match text[start_pos..].find("\n") {
+        match text[start_pos..].find('\n') {
             Some(next_pos) => start_pos += next_pos + 1,
             None => return Err(invalid_request("line number apparently out of range")),
         }
@@ -170,7 +170,7 @@ pub fn offset_to_position(text: &str, offset: usize) -> lsp_types::Position {
     let mut line = 0;
     let mut line_start = 0;
     loop {
-        match text[line_start..].find("\n") {
+        match text[line_start..].find('\n') {
             Some(next_pos) if line_start + next_pos < offset => line_start += next_pos + 1,
             _ => break,
         }

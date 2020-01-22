@@ -7,6 +7,8 @@ use std::collections::HashMap;
 
 use termcolor::{ColorSpec, Color};
 
+use crate::config::Config;
+
 /// An identifier referring to a loaded file.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct FileId(u16);
@@ -22,22 +24,29 @@ impl Default for FileId {
     }
 }
 
-/// A diagnostics context, tracking loaded files and any observed errors.
-#[derive(Debug, Default)]
-pub struct Context {
+/// A registry mapping between file names and file IDs.
+#[derive(Debug, Default, Clone)]
+pub struct FileList {
     /// The list of loaded files.
     files: RefCell<Vec<PathBuf>>,
     /// Reverse mapping from paths to file numbers.
     reverse_files: RefCell<HashMap<PathBuf, FileId>>,
+}
+
+/// A diagnostics context, tracking loaded files and any observed errors.
+#[derive(Debug, Default)]
+pub struct Context {
+    files: FileList,
     /// A list of errors, warnings, and other diagnostics generated.
     errors: RefCell<Vec<DMError>>,
-    /// Severity at and above which errors will be printed immediately.
+    /// Warning config
+    config: RefCell<Config>,
     print_severity: Option<Severity>,
 }
 
-impl Context {
+impl FileList {
     /// Add a new file to the context and return its index.
-    pub fn register_file(&self, path: &Path) -> FileId {
+    pub fn register(&self, path: &Path) -> FileId {
         if let Some(id) = self.reverse_files.borrow().get(path).cloned() {
             return id;
         }
@@ -53,12 +62,12 @@ impl Context {
     }
 
     /// Look up a file's ID by its path, without inserting it.
-    pub fn get_file(&self, path: &Path) -> Option<FileId> {
+    pub fn get_id(&self, path: &Path) -> Option<FileId> {
         self.reverse_files.borrow().get(path).cloned()
     }
 
     /// Look up a file path by its index returned from `register_file`.
-    pub fn file_path(&self, file: FileId) -> PathBuf {
+    pub fn get_path(&self, file: FileId) -> PathBuf {
         if file == FILEID_BUILTINS {
             return "(builtins)".into();
         }
@@ -70,11 +79,78 @@ impl Context {
             files[idx].to_owned()
         }
     }
+}
+
+impl Context {
+    // ------------------------------------------------------------------------
+    // Files
+
+    /// Add a new file to the context and return its index.
+    pub fn register_file(&self, path: &Path) -> FileId {
+        self.files.register(path)
+    }
+
+    /// Look up a file's ID by its path, without inserting it.
+    pub fn get_file(&self, path: &Path) -> Option<FileId> {
+        self.files.get_id(path)
+    }
+
+    /// Look up a file path by its index returned from `register_file`.
+    pub fn file_path(&self, file: FileId) -> PathBuf {
+        self.files.get_path(file)
+    }
+
+    /// Clone the file list of this Context but not its error list.
+    pub fn clone_file_list(&self) -> FileList {
+        self.files.clone()
+    }
+
+    // ------------------------------------------------------------------------
+    // Configuration
+
+    pub fn force_config(&self, toml: &Path) {
+        match Config::read_toml(toml) {
+            Ok(config) => *self.config.borrow_mut() = config,
+            Err(io_error) => {
+                let file = self.register_file(toml);
+                let (line, column) = io_error.line_col().unwrap_or((1, 1));
+                DMError::new(Location { file, line, column }, "Error reading configuration file")
+                    .with_boxed_cause(io_error.into_boxed_error())
+                    .register(self);
+            }
+        }
+    }
+
+    pub fn autodetect_config(&self, dme: &Path) {
+        let toml = dme.parent().unwrap().join("SpacemanDMM.toml");
+        if toml.exists() {
+            self.force_config(&toml);
+        }
+    }
+
+    pub fn config(&self) -> Ref<Config> {
+        self.config.borrow()
+    }
+
+    /// Set a severity at and above which errors will be printed immediately.
+    pub fn set_print_severity(&mut self, print_severity: Option<Severity>) {
+        self.print_severity = print_severity;
+    }
+
+    // ------------------------------------------------------------------------
+    // Errors
 
     /// Push an error or other diagnostic to the context.
     pub fn register_error(&self, error: DMError) {
-        if let Some(severity) = self.print_severity {
-            if error.severity <= severity {
+        guard!(let Some(error) = self.config.borrow().set_configured_severity(error) else {
+            return // errortype is disabled
+        });
+        // ignore errors with severity above configured level
+        if !self.config.borrow().registerable_error(&error) {
+            return
+        }
+        if let Some(print_severity) = self.print_severity {
+            if error.severity() <= print_severity {
                 let stderr = termcolor::StandardStream::stderr(termcolor::ColorChoice::Auto);
                 self.pretty_print_error(&mut stderr.lock(), &error)
                     .expect("error writing to stderr");
@@ -89,13 +165,9 @@ impl Context {
     }
 
     /// Mutably access the diagnostics list. Dangerous.
+    #[doc(hidden)]
     pub fn errors_mut(&self) -> RefMut<Vec<DMError>> {
         self.errors.borrow_mut()
-    }
-
-    /// Set a severity at and above which errors will be printed immediately.
-    pub fn set_print_severity(&mut self, print_severity: Option<Severity>) {
-        self.print_severity = print_severity;
     }
 
     /// Pretty-print a `DMError` to the given output.
@@ -165,16 +237,6 @@ impl Context {
     pub fn assert_success(&self) {
         if self.print_all_errors(Severity::Info) {
             panic!("there were parse errors");
-        }
-    }
-
-    /// Clone the file list of this Context but not its error list.
-    pub fn clone_file_list(&self) -> Context {
-        Context {
-            files: self.files.clone(),
-            reverse_files: self.reverse_files.clone(),
-            errors: Default::default(),
-            print_severity: Default::default(),
         }
     }
 }
@@ -325,6 +387,7 @@ pub struct DMError {
     description: String,
     notes: Vec<DiagnosticNote>,
     cause: Option<Box<dyn error::Error + Send + Sync>>,
+    errortype: Option<&'static str>,
 }
 
 /// An additional note attached to an error, at some other location.
@@ -344,12 +407,18 @@ impl DMError {
             description: desc.into(),
             notes: Vec::new(),
             cause: None,
+            errortype: None,
         }
     }
 
-    pub fn set_cause<E: error::Error + Send + Sync + 'static>(mut self, cause: E) -> DMError {
-        self.cause = Some(Box::new(cause));
+    fn with_boxed_cause(mut self, cause: Box<dyn error::Error + Send + Sync>) -> DMError {
+        self.add_note(self.location, cause.to_string());
+        self.cause = Some(cause);
         self
+    }
+
+    pub fn with_cause<E: error::Error + Send + Sync + 'static>(self, cause: E) -> DMError {
+        self.with_boxed_cause(Box::new(cause))
     }
 
     pub fn set_severity(mut self, severity: Severity) -> DMError {
@@ -371,6 +440,16 @@ impl DMError {
 
     pub fn with_component(mut self, component: Component) -> DMError {
         self.component = component;
+        self
+    }
+
+    pub fn with_errortype(mut self, errortype: &'static str) -> DMError {
+        self.errortype = Some(errortype);
+        self
+    }
+
+    pub fn with_location(mut self, location: Location) -> DMError {
+        self.location = location;
         self
     }
 
@@ -399,9 +478,9 @@ impl DMError {
         &self.description
     }
 
-    /// Deconstruct this error, returning only the description.
-    pub fn into_description(self) -> String {
-        self.description
+    /// Get the errortype associated with this error.
+    pub fn errortype(&self) -> Option<&'static str> {
+        self.errortype
     }
 
     /// Get the additional notes associated with this error.
@@ -435,6 +514,7 @@ impl Clone for DMError {
             description: self.description.clone(),
             notes: self.notes.clone(),
             cause: None,  // not trivially cloneable
+            errortype: self.errortype,
         }
     }
 }

@@ -60,15 +60,11 @@ struct Context {
 
 impl Context {
     fn objtree(&mut self, opt: &Opt) {
-        let pathbuf;
-        let environment: &std::path::Path = match opt.environment {
-            Some(ref env) => env.as_ref(),
+        let environment = match opt.environment {
+            Some(ref env) => env.into(),
             None => match dm::detect_environment_default() {
-                Ok(Some(found)) => {
-                    pathbuf = found;
-                    &pathbuf
-                }
-                _ => dm::DEFAULT_ENV.as_ref(),
+                Ok(Some(found)) => found,
+                _ => dm::DEFAULT_ENV.into(),
             },
         };
         println!("parsing {}", environment.display());
@@ -77,7 +73,8 @@ impl Context {
             self.icon_cache.set_icons_root(&parent);
         }
 
-        let pp = match dm::preprocessor::Preprocessor::new(&self.dm_context, environment.to_owned()) {
+        self.dm_context.autodetect_config(&environment);
+        let pp = match dm::preprocessor::Preprocessor::new(&self.dm_context, environment) {
             Ok(pp) => pp,
             Err(e) => {
                 eprintln!("i/o error opening environment:\n{}", e);
@@ -168,20 +165,6 @@ enum Command {
         /// Run output through optipng automatically. Requires optipng.
         #[structopt(long="optipng")]
         optipng: bool,
-
-        /// The list of maps to process.
-        files: Vec<String>,
-    },
-    /// Lint and automatically fix the specified maps.
-    #[structopt(name = "lint-maps")]
-    LintMaps {
-        /// Only report and do not save out changes.
-        #[structopt(short="n", long="dry-run")]
-        dry_run: bool,
-
-        /// Reformat the specified maps even if nothing was changed.
-        #[structopt(long="reformat")]
-        reformat: bool,
 
         /// The list of maps to process.
         files: Vec<String>,
@@ -288,14 +271,15 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             let errors: RwLock<HashSet<String>> = Default::default();
 
             let perform_job = move |path: &Path| {
+                let mut filename;
                 let prefix = if parallel {
-                    let mut filename = path.file_name().unwrap().to_string_lossy().into_owned();
+                    filename = path.file_name().unwrap().to_string_lossy().into_owned();
                     filename.push_str(": ");
                     println!("{}{}", filename, path.display());
-                    filename
+                    &filename
                 } else {
                     println!("{}", path.display());
-                    "    ".to_owned()
+                    "    "
                 };
 
                 let map = match dmm::Map::from_file(path) {
@@ -387,25 +371,6 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                 paths.into_par_iter().for_each(perform_job);
             } else {
                 paths.into_iter().for_each(perform_job);
-            }
-        },
-        // --------------------------------------------------------------------
-        Command::LintMaps {
-            dry_run, reformat, ref files,
-        } => {
-            context.objtree(opt);
-
-            for path in files.iter() {
-                let path: &std::path::Path = path.as_ref();
-                println!("{}", path.display());
-                let mut map = dmm::Map::from_file(path).unwrap();
-
-                let linted = lint::check(&context.objtree, &mut map);
-                print!("{}", linted);
-                if !dry_run && (linted.any() || reformat) {
-                    println!("    saving {}", path.display());
-                    map.to_file(path).unwrap();
-                }
             }
         },
         // --------------------------------------------------------------------

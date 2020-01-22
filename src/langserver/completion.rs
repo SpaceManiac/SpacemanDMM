@@ -8,7 +8,7 @@ use dm::ast::PathOp;
 use dm::annotation::Annotation;
 use dm::objtree::{TypeRef, TypeVar, TypeProc, ProcValue};
 
-use crate::{Engine, Span, is_constructor_name, ignore_root};
+use crate::{Engine, Span, is_constructor_name};
 use crate::symbol_search::contains;
 
 pub fn item_var(ty: TypeRef, name: &str, var: &TypeVar) -> CompletionItem {
@@ -215,9 +215,9 @@ impl<'a> Engine<'a> {
             }
         }
 
-        let mut next = Some(ty);
+        let mut next = Some(ty).filter(|ty| !ty.is_root());
         let mut skip = HashSet::new();
-        while let Some(ty) = ignore_root(next) {
+        while let Some(ty) = next {
             // override a parent's var
             for (name, var) in ty.get().vars.iter() {
                 if !skip.insert(("var", name)) {
@@ -329,7 +329,7 @@ impl<'a> Engine<'a> {
                             results.push(item_proc(ty, name, proc));
                         }
                     }
-                    next = ignore_root(ty.parent_type());
+                    next = ty.parent_type_without_root();
                 }
             },
             _ => {}
@@ -426,7 +426,7 @@ impl<'a> Engine<'a> {
         let mut skip = HashSet::new();
         while let Some(ty) = next {
             items_ty(results, &mut skip, ty, query);
-            next = ignore_root(ty.parent_type());
+            next = ty.parent_type_without_root();
         }
     }
 }

@@ -15,6 +15,7 @@ use dreamchecker::*;
 fn main() {
     // command-line args
     let mut environment = None;
+    let mut config_file = None;
 
     let mut args = std::env::args();
     let _ = args.next();  // skip executable name
@@ -31,6 +32,8 @@ fn main() {
             return;
         } else if arg == "-e" {
             environment = Some(args.next().expect("must specify a value for -e"));
+        } else if arg == "-c" {
+            config_file = Some(args.next().expect("must specify a file for -c"));
         } else {
             eprintln!("unknown argument: {}", arg);
             return;
@@ -43,10 +46,14 @@ fn main() {
             .expect("error detecting .dme")
             .expect("no .dme found"));
 
-    const PRINT_SEVERITY: dm::Severity = dm::Severity::Info;
-
     let mut context = Context::default();
-    context.set_print_severity(Some(PRINT_SEVERITY));
+    if let Some(filepath) = config_file {
+        context.force_config(filepath.as_ref());
+    } else {
+        context.autodetect_config(&dme);
+    }
+    context.set_print_severity(Some(dm::Severity::Info));
+
     println!("============================================================");
     println!("Parsing {}...\n", dme.display());
     let pp = dm::preprocessor::Preprocessor::new(&context, dme)
@@ -102,7 +109,7 @@ fn main() {
     analyzer.finish_check_kwargs();
 
     println!("============================================================");
-    let errors = context.errors().iter().filter(|each| each.severity() <= PRINT_SEVERITY).count();
+    let errors = context.errors().iter().filter(|each| each.severity() <= dm::Severity::Info).count();
     println!("Found {} diagnostics", errors);
     std::process::exit(if errors > 0 { 1 } else { 0 });
 }

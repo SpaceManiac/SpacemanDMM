@@ -62,6 +62,7 @@ pub struct StackFrame {
     // end ProcOffset
     pub usr: ValueText,
     pub src: ValueText,
+    pub dot: ValueText,
     pub locals: Vec<ValueText>,
     pub args: Vec<ValueText>,
 }
