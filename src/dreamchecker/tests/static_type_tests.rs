@@ -31,3 +31,18 @@ fn proc_call() {
 "##.trim();
     check_errors_match(code, PROC_CALL_ERRORS);
 }
+
+pub const RETURN_TYPE_ERRORS: &[(u32, u16, &str)] = &[
+    (3, 16, "undefined proc: \"foo\" on /atom"),
+];
+
+#[test]
+fn return_type() {
+    let code = r##"
+/mob/proc/test()
+    viewers()[1].foo()
+    orange()[1].foo()
+/mob/proc/foo()
+"##.trim();
+    check_errors_match(code, RETURN_TYPE_ERRORS);
+}
