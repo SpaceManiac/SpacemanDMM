@@ -879,7 +879,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                             .with_note(location, format!("add parentheses to disambiguate: `(a {} b) in c`", op))
                             .register(self.context);
                     },
-                    // This is checked in the parser
+                    // This is checked below
                     Expression::TernaryOp { cond, if_, else_ } => {},
                 };
                 let lty = self.visit_expression(location, lhs, None);

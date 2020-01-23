@@ -4,10 +4,10 @@ extern crate dreamchecker as dc;
 use dc::test_helpers::check_errors_match;
 
 pub const IN_AMBIG_ERRORS: &[(u32, u16, &str)] = &[
-    (15, 27, "ambiguous ternary on left side of an `in`"),
     (2, 7, "ambiguous `!` on left side of an `in`"),
     (6, 7, "ambiguous `&&` on left side of an `in`"),
     (11, 7, "ambiguous `=` on left side of an `in`"),
+    (15, 7, "ambiguous `in` on right side of a ternary"),
 ];
 
 #[test]
