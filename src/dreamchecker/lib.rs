@@ -20,6 +20,7 @@ pub mod test_helpers;
 // ----------------------------------------------------------------------------
 // Helper structures
 
+/// Analysis result for checking type safety
 #[derive(Debug, PartialEq, Clone)]
 pub enum StaticType<'o> {
     None,
@@ -266,9 +267,10 @@ impl<'o> From<StaticType<'o>> for Analysis<'o> {
 }
 
 // ----------------------------------------------------------------------------
-// Shortcut entry point
-
+/// Shortcut entry point to run DreamChecker
 pub fn run(context: &Context, objtree: &ObjectTree) {
+    check_var_defs(&objtree, &context);
+
     let mut analyzer = AnalyzeObjectTree::new(context, objtree);
 
     objtree.root().recurse(&mut |ty| {
@@ -318,6 +320,7 @@ struct KwargInfo {
     bad_overrides_at: BTreeMap<String, BadOverride>,
 }
 
+/// Struct for SpacemanDMM_* directives
 struct ProcDirective<'o> {
     directive: HashMap<ProcRef<'o>, (bool, Location)>,
     can_be_disabled: bool,
@@ -349,10 +352,12 @@ impl<'o> ProcDirective<'o> {
         Ok(())
     }
 
+    /// Check if this specific ProcRef has this directive
     pub fn get(&self, proc: ProcRef<'o>) -> Option<&(bool, Location)> {
         self.directive.get(&proc)
     }
 
+    /// Check if this ProcRef or its parents have this directive
     pub fn get_self_or_parent(&self, proc: ProcRef<'o>) -> Option<(ProcRef<'o>, bool, Location)> {
         let mut next = Some(proc);
         while let Some(current) = next {
@@ -365,6 +370,7 @@ impl<'o> ProcDirective<'o> {
     }
 }
 
+/// Helper evaluation for directive true/false setting
 pub fn directive_value_to_truthy(expr: &Expression, location: Location) -> Result<bool, DMError> {
     // Maybe this should be using constant evaluation, but for now accept TRUE and FALSE directly.
     match expr.as_term() {
@@ -378,6 +384,7 @@ pub fn directive_value_to_truthy(expr: &Expression, location: Location) -> Resul
     }
 }
 
+/// A deeper analysis of an ObjectTree
 pub struct AnalyzeObjectTree<'o> {
     context: &'o Context,
     objtree: &'o ObjectTree,
@@ -404,6 +411,7 @@ impl<'o> AnalyzeObjectTree<'o> {
         }
     }
 
+    /// Analyze a specific proc
     pub fn check_proc(&mut self, proc: ProcRef<'o>, code: &'o [Spanned<Statement>]) {
         AnalyzeProc::new(self, self.context, self.objtree, proc).run(code)
     }
@@ -431,6 +439,7 @@ impl<'o> AnalyzeObjectTree<'o> {
         }
     }
 
+    /// Gather and store set directives for the given proc using the provided code body
     pub fn gather_settings(&mut self, proc: ProcRef<'o>, code: &'o [Spanned<Statement>]) {
         for statement in code.iter() {
             if let Statement::Setting { ref name, ref value, .. } = statement.elem {
@@ -460,6 +469,7 @@ impl<'o> AnalyzeObjectTree<'o> {
         }
     }
 
+    /// Check and build a list of bad overrides of kwargs for a ProcRef
     pub fn check_kwargs(&mut self, proc: ProcRef) {
         let param_names: HashSet<&String> = proc.parameters.iter().map(|p| &p.name).collect();
 
@@ -486,6 +496,7 @@ impl<'o> AnalyzeObjectTree<'o> {
         }
     }
 
+    /// Finish analyzing kwargs for missing overrides
     pub fn finish_check_kwargs(&self) {
         for (base_procname, kwarg_info) in self.used_kwargs.iter() {
             if kwarg_info.bad_overrides_at.is_empty() {
@@ -564,6 +575,7 @@ fn error<S: Into<String>>(location: Location, desc: S) -> DMError {
 // ----------------------------------------------------------------------------
 // Variable analyzer
 
+/// Examines an ObjectTree for var definitions that are invalid
 pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
     for (path, _) in objtree.types.iter() {
         guard!(let Some(typeref) = objtree.find(path)
@@ -676,8 +688,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         self.visit_block(block);
 
         if self.proc_ref.parent_proc().is_some() {
-            if let Some((proc, must_not, location)) = self.env.must_not_override.get_self_or_parent(self.proc_ref) {
-                if must_not && proc != self.proc_ref {
+            if let Some((proc, true, location)) = self.env.must_not_override.get_self_or_parent(self.proc_ref) {
+                if proc != self.proc_ref {
                     error(self.proc_ref.location, format!("proc overrides parent, prohibited by {}", proc))
                         .with_note(location, "prohibited by this must_not_override annotation")
                         .with_errortype("must_not_override")
@@ -685,13 +697,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
             }
             if !self.calls_parent {
-                if let Some((proc, must, location)) = self.env.must_call_parent.get_self_or_parent(self.proc_ref) {
-                    if must {
-                        error(self.proc_ref.location, format!("proc never calls parent, required by {}", proc))
-                            .with_note(location, "required by this must_call_parent annotation")
-                            .with_errortype("must_call_parent")
-                            .register(self.context);
-                    }
+                if let Some((proc, true, location)) = self.env.must_call_parent.get_self_or_parent(self.proc_ref) {
+                    error(self.proc_ref.location, format!("proc never calls parent, required by {}", proc))
+                        .with_note(location, "required by this must_call_parent annotation")
+                        .with_errortype("must_call_parent")
+                        .register(self.context);
                 }
             }
         }
