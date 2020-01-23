@@ -907,6 +907,14 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 // TODO: be sensible
                 self.visit_expression(location, cond, None);
                 let ty = self.visit_expression(location, if_, type_hint);
+                if let Expression::BinaryOp{ op: BinaryOp::In, lhs: _, rhs: _ } = **else_ {
+                    error(location, format!("ambiguous `in` on right side of a ternary"))
+                        .set_severity(Severity::Warning)
+                        .with_errortype("ambiguous_in_lhs")
+                        .with_note(location, "add parentheses to fix: `a ? b : (c in d)`")
+                        .with_note(location, "add parentheses to disambiguate: `(a ? b : c) in d`")
+                        .register(self.context);
+                }
                 self.visit_expression(location, else_, type_hint);
                 ty
             }

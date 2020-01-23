@@ -1691,14 +1691,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         Expression::from(Term::Null)
                     }
                 };
-                if let Expression::BinaryOp{ op: BinaryOp::In, lhs: _, rhs: _ } = else_ {
-                    self.error(format!("ambiguous ternary on left side of an `in`"))
-                        .set_severity(Severity::Warning)
-                        .with_errortype("ambiguous_in_lhs")
-                        .with_note(self.location, "add parentheses to fix: `a ? b : (c in d)`")
-                        .with_note(self.location, "add parentheses to disambiguate: `(a ? b : c) in d`")
-                        .register(self.context);
-                }
                 // Compose the result.
                 result = Expression::TernaryOp {
                     cond: Box::new(lhs),
