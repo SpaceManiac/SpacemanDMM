@@ -5,7 +5,7 @@
 
 extern crate dreammaker as dm;
 use dm::{Context, DMError, Location, Severity};
-use dm::objtree::{ObjectTree, TypeRef, ProcRef};
+use dm::objtree::{ObjectTree, TypeRef, ProcRef, Code};
 use dm::constants::{Constant, ConstFn};
 use dm::ast::*;
 
@@ -267,28 +267,66 @@ impl<'o> From<StaticType<'o>> for Analysis<'o> {
 }
 
 // ----------------------------------------------------------------------------
-/// Shortcut entry point to run DreamChecker
+// Entry points
+
+/// Run DreamChecker, registering diagnostics to the context.
 pub fn run(context: &Context, objtree: &ObjectTree) {
+    run_inner(context, objtree, false)
+}
+
+/// Run DreamChecker, registering diagnostics and printing progress to stdout.
+pub fn run_cli(context: &Context, objtree: &ObjectTree) {
+    run_inner(context, objtree, true)
+}
+
+fn run_inner(context: &Context, objtree: &ObjectTree, cli: bool) {
+    macro_rules! cli_println {
+        ($($rest:tt)*) => {
+            if cli { println!($($rest)*) }
+        }
+    }
+
+    cli_println!("============================================================");
+    cli_println!("Analyzing variables...\n");
+
     check_var_defs(&objtree, &context);
 
     let mut analyzer = AnalyzeObjectTree::new(context, objtree);
 
+    let mut present = 0;
+    let mut invalid = 0;
+    let mut builtin = 0;
+
+    cli_println!("============================================================");
+    cli_println!("Gathering proc settings...\n");
     objtree.root().recurse(&mut |ty| {
         for proc in ty.iter_self_procs() {
-            if let dm::objtree::Code::Present(ref code) = proc.get().code {
+            if let Code::Present(ref code) = proc.get().code {
                 analyzer.gather_settings(proc, code);
             }
         }
     });
 
+    cli_println!("============================================================");
+    cli_println!("Analyzing proc bodies...\n");
     objtree.root().recurse(&mut |ty| {
         for proc in ty.iter_self_procs() {
-            if let dm::objtree::Code::Present(ref code) = proc.get().code {
-                analyzer.check_proc(proc, code);
+            match proc.get().code {
+                Code::Present(ref code) => {
+                    present += 1;
+                    analyzer.check_proc(proc, code);
+                }
+                Code::Invalid(_) => invalid += 1,
+                Code::Builtin => builtin += 1,
+                Code::Disabled => panic!("proc parsing was enabled, but also disabled. this is a bug"),
             }
         }
     });
 
+    cli_println!("Procs analyzed: {}. Errored: {}. Builtins: {}.\n", present, invalid, builtin);
+
+    cli_println!("============================================================");
+    cli_println!("Analyzing proc override validity...\n");
     objtree.root().recurse(&mut |ty| {
         for proc in ty.iter_self_procs() {
             analyzer.check_kwargs(proc);
