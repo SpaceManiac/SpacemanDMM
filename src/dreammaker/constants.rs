@@ -673,12 +673,13 @@ impl<'a> ConstantFolder<'a> {
         numeric!(Greater >);
         numeric!(GreaterEq >=);
         match (op, lhs, rhs) {
-            (BinaryOp::Pow, Int(lhs), Int(rhs)) if rhs >= 0 => {
-                // protect against panics from out-of-bounds pow, by converting to float
-                if rhs >= 2 && (i32::max_value() as f32).log(lhs as f32) < rhs as f32 {
-                    return Ok(Constant::from((lhs as f32).powf(rhs as f32)));
+            (BinaryOp::Pow, Int(lhs), Int(rhs)) => {
+                if rhs >= 0 {
+                    if let Some(result) = lhs.checked_pow(rhs as u32) {
+                        return Ok(Constant::from(result));
+                    }
                 }
-                return Ok(Constant::from(lhs.pow(rhs as u32)));
+                return Ok(Constant::from((lhs as f32).powf(rhs as f32)));
             }
             (BinaryOp::Pow, Int(lhs), Float(rhs)) => return Ok(Constant::from((lhs as f32).powf(rhs))),
             (BinaryOp::Pow, Float(lhs), Int(rhs)) => return Ok(Constant::from(lhs.powi(rhs))),
