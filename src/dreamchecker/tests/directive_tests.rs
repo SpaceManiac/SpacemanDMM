@@ -79,3 +79,24 @@ fn no_override_disable() {
 "##.trim();
     check_errors_match(code, NO_OVERRIDE_DISABLE_ERRORS);
 }
+
+pub const CALL_PARENT_RESULT_ERRORS: &[(u32, u16, &str)] = &[
+    (9, 5, "proc calls parent without storing to `.`, required by /mob/proc/test"),
+    (7, 5, "proc calls parent without storing to `.`, required by /mob/proc/test"),
+];
+
+#[test]
+fn call_parent_result() {
+    let code = r##"
+/mob/proc/test()
+    set SpacemanDMM_should_use_parent_result = 1
+
+/mob/subtype/test()
+    . = ..()
+/mob/foo/test()
+    ..()
+/mob/bar/test()
+    var/foo = ..()
+"##.trim();
+    check_errors_match(code, CALL_PARENT_RESULT_ERRORS);
+}
