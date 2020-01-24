@@ -61,12 +61,14 @@ be enabled:
 	#define SHOULD_CALL_PARENT(X) set SpacemanDMM_should_call_parent = X
 	#define UNLINT(X) SpacemanDMM_unlint(X)
 	#define SHOULD_NOT_OVERRIDE(X) set SpacemanDMM_should_not_override = X
+	#define SHOULD_USE_PARENT(X) set SpacemanDMM_should_use_parent_result = X
 	#define VAR_FINAL var/SpacemanDMM_final
 #else
 	#define RETURN_TYPE(X)
 	#define SHOULD_CALL_PARENT(X)
 	#define UNLINT(X) X
 	#define SHOULD_NOT_OVERRIDE(X)
+	#define SHOULD_USE_PARENT(X)
 	#define VAR_FINAL var
 #endif
 ```
@@ -92,6 +94,13 @@ of the proc it is set on which do not contain any `..()` parent calls. This can
 help with finding situations where a signal or other important handling in the
 parent proc is being skipped. Child procs may set this setting to `0` instead
 to override the check.
+
+### Should use parent result
+
+Use `set SpacemanDMM_should_use_parent_result = 1` to enable a diagnostic on
+children of the proc it is set on which call `..()` but do not store the result
+to the `.` local var.  This does not imply "Should call parent".
+Child procs may disable this.
 
 ### Should not override
 

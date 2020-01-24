@@ -429,6 +429,7 @@ pub struct AnalyzeObjectTree<'o> {
 
     return_type: HashMap<ProcRef<'o>, TypeExpr<'o>>,
     must_call_parent: ProcDirective<'o>,
+    must_use_parent_result: ProcDirective<'o>,
     must_not_override: ProcDirective<'o>,
     // Debug(ProcRef) -> KwargInfo
     used_kwargs: BTreeMap<String, KwargInfo>,
@@ -444,6 +445,7 @@ impl<'o> AnalyzeObjectTree<'o> {
             objtree,
             return_type,
             must_call_parent: ProcDirective::new("SpacemanDMM_should_call_parent", true),
+            must_use_parent_result: ProcDirective::new("SpacemanDMM_should_use_parent_result", true),
             must_not_override: ProcDirective::new("SpacemanDMM_should_not_override", false),
             used_kwargs: Default::default(),
         }
@@ -458,6 +460,7 @@ impl<'o> AnalyzeObjectTree<'o> {
     fn add_directive_or_error(&mut self, proc: ProcRef<'o>, directive: &str, expr: &Expression, location: Location) {
         let procdirective = match directive {
             "SpacemanDMM_should_not_override" => &mut self.must_not_override,
+            "SpacemanDMM_should_use_parent_result" => &mut self.must_use_parent_result,
             "SpacemanDMM_should_call_parent" => &mut self.must_call_parent,
             other => {
                 error(location, format!("unknown linter setting {:?}", directive))
@@ -753,7 +756,32 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
     fn visit_statement(&mut self, location: Location, statement: &'o Statement) {
         match statement {
-            Statement::Expr(expr) => { self.visit_expression(location, expr, None); },
+            Statement::Expr(expr) => {
+                let parentcalled = self.calls_parent;
+                self.visit_expression(location, expr, None);
+                if !parentcalled && self.calls_parent {
+                    if let Some((proc, true, loc)) = self.env.must_use_parent_result.get_self_or_parent(self.proc_ref) {
+                        match expr {
+                            Expression::AssignOp{ op: _, lhs, rhs: _ } => {
+                                if let Some(Term::Ident(identname)) = lhs.as_term() {
+                                    if identname != "." {
+                                        error(location, format!("proc calls parent without storing to `.`, required by {}", proc))
+                                            .with_errortype("must_use_parent_result")
+                                            .with_note(loc, "required by this must_use_parent_result annotation")
+                                            .register(self.context);
+                                    }
+                                }
+                            },
+                            _ => {
+                                error(location, format!("proc calls parent without storing to `.`, required by {}", proc))
+                                    .with_errortype("must_use_parent_result")
+                                    .with_note(loc, "required by this must_use_parent_result annotation")
+                                    .register(self.context);
+                            }
+                        }
+                    }
+                }
+            },
             Statement::Return(Some(expr)) => {
                 // TODO: factor in the previous return type if there was one
                 let return_type = self.visit_expression(location, expr, None);
@@ -810,7 +838,18 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
                 self.visit_block(block);
             },
-            Statement::Var(var) => self.visit_var_stmt(location, var),
+            Statement::Var(var) => {
+                let parentcalled = self.calls_parent;
+                self.visit_var_stmt(location, var);
+                if !parentcalled && self.calls_parent {
+                    if let Some((proc, true, loc)) = self.env.must_use_parent_result.get_self_or_parent(self.proc_ref) {
+                        error(location, format!("proc calls parent without storing to `.`, required by {}", proc))
+                            .with_errortype("must_use_parent_result")
+                            .with_note(loc, "required by this must_use_parent_result annotation")
+                            .register(self.context);
+                    }
+                }
+            },
             Statement::Vars(vars) => {
                 for each in vars.iter() {
                     self.visit_var_stmt(location, each);
