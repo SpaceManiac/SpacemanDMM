@@ -1296,11 +1296,51 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         Analysis::empty()
     }
 
+    fn check_filter_flag(&mut self, expr: &'o Expression, can_be_zero: bool, location: Location, typevalue: &str, valid_flags: &[&str], flagfieldname: &str, exclusive: bool) {
+        match expr {
+            Expression::BinaryOp{ op: BinaryOp::BitOr, lhs, rhs } => {
+                if exclusive {
+                    error(location, format!("filter(type=\"{}\") '{}' parameter must have one value, found bitwise OR", typevalue, flagfieldname))
+                        .register(self.context);
+                    return
+                }
+                // recurse
+                self.check_filter_flag(lhs, can_be_zero, location, typevalue, valid_flags, flagfieldname, exclusive);
+                self.check_filter_flag(rhs, can_be_zero, location, typevalue, valid_flags, flagfieldname, exclusive);
+            },
+            Expression::Base{ unary, term, follow: _ } => {
+                if unary.len() > 0 {
+                    error(location, "filter() flag fields cannot have unary ops")
+                        .register(self.context);
+                }
+                match &term.elem {
+                    Term::Ident(flagname) => {
+                        if valid_flags.iter().position(|&x| x == flagname).is_none() {
+                            error(location, format!("filter(type=\"{}\") called with invalid '{}' flag '{}'", typevalue, flagfieldname, flagname))
+                                .register(self.context);
+                        }
+                    },
+                    Term::Int(0) if can_be_zero => {},
+                    other => {
+                        error(location, format!("filter(type=\"{}\") called with invalid '{}' value '{:?}'", typevalue, flagfieldname, other))
+                            .register(self.context);
+                    },
+                }
+            },
+            _ => {
+                error(location, format!("filter(type=\"{}\"), extremely invalid value passed to '{}' field", typevalue, flagfieldname))
+                    .register(self.context);
+            }
+        }
+
+    }
+
     fn visit_call(&mut self, location: Location, src: TypeRef<'o>, proc: ProcRef, args: &'o [Expression], is_exact: bool) -> Analysis<'o> {
         // identify and register kwargs used
         let mut any_kwargs_yet = false;
 
         let mut param_name_map = HashMap::new();
+        let mut param_expr_map = HashMap::new();
         let mut param_idx_map = HashMap::new();
         let mut param_idx = 0;
         let mut arglist_used = false;
@@ -1373,6 +1413,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             let analysis = self.visit_expression(location, argument_value, None);
             if let Some(kw) = this_kwarg {
                 param_name_map.insert(kw.as_str(), analysis);
+                param_expr_map.insert(kw.as_str(), argument_value);
             } else {
                 param_idx_map.insert(param_idx, analysis);
                 param_idx += 1;
@@ -1408,6 +1449,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         // luckily lummox has made the anchor url match the type= value for each filter
                         .with_note(location, format!("See: http://www.byond.com/docs/ref/#/{{notes}}/filters/{} for the permitted arguments", typevalue))
                         .register(self.context);
+                }
+            }
+            if let Some((flagfieldname, exclusive, can_be_zero, valid_flags)) = VALID_FILTER_FLAGS.get(typevalue.as_str()) {
+                if let Some(flagsvalue) = param_expr_map.get(flagfieldname) {
+                    self.check_filter_flag(flagsvalue, *can_be_zero, location, typevalue, valid_flags, flagfieldname, *exclusive);
                 }
             }
         }

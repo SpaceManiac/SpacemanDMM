@@ -915,3 +915,13 @@ pub static VALID_FILTER_TYPES: phf::Map<&'static str, &[&str]> = phf_map! {
     "ripple" => &[ "x", "y", "size", "repeat", "radius", "falloff", "flags" ],
     "wave" => &[ "x", "y", "size", "offset", "flags" ],
 };
+
+// filter type => (flag field name, exclusive, can_be_0, valid flag values)
+pub static VALID_FILTER_FLAGS: phf::Map<&'static str, (&str, bool, bool, &[&str])> = phf_map! {
+    "alpha" => ("flags", false, true, &[ "MASK_INVERSE", "MASK_SWAP" ]),
+    "color" => ("space", true, false, &[ "FILTER_COLOR_RGB", "FILTER_COLOR_HSV", "FILTER_COLOR_HSL", "FILTER_COLOR_HCY" ]),
+    "layer" => ("flags", true, true, &[ "FLAG_OVERLAY", "FLAG_UNDERLAY" ]),
+    "rays" => ("flags", false, true, &[ "FLAG_OVERLAY", "FLAG_UNDERLAY" ]),
+    "ripple" => ("flags", false, true, &[ "WAVE_BOUND" ]),
+    "wave" => ("flags", false, true, &[ "WAVE_SIDEWAYS", "WAVE_BOUND" ]),
+};
