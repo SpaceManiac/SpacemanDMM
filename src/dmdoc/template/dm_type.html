@@ -11,11 +11,11 @@
 <h1>{% if path == "(global)" -%}
     (global)
 {%- elif details.name -%}
-    {{ details.name }} <aside>{{ path | safe | linkify_type }}</aside>
+    {{ details.name }} <aside>{{ path | linkify_type | safe }}</aside>
 {%- else -%}
-    {{ path | safe | linkify_type }}
+    {{ path | linkify_type | safe }}
 {%- endif %}
-{%- if details.parent_type %}<aside> inherits {{ details.parent_type | safe | linkify_type }}</aside>{% endif -%}
+{%- if details.parent_type %}<aside> inherits {{ details.parent_type | linkify_type | safe }}</aside>{% endif -%}
 {{ macros::git_link(env=env, item=details) }}</h1>
 
 {% if details.docs %}{{ details.docs.html | safe }}{% endif %}
@@ -50,7 +50,7 @@
             <aside>&ndash; {% if var.type.is_static %}/static{% endif -%}
                 {%- if var.type.is_const %}/const{% endif -%}
                 {%- if var.type.is_tmp %}/tmp{% endif -%}
-                {{ var.type.path | safe | linkify_type }}</aside>
+                {{ var.type.path | linkify_type | safe }}</aside>
         {%- endif -%}
         {{ macros::git_link(env=env, item=var) }}</h3>
         {{ var.docs.html | safe }}
@@ -67,7 +67,7 @@
             <a name="proc/{{ name }}">{{ name }}</a><aside>(
             {%- for param in proc.params -%}
                 {% if not loop.first %}, {% endif -%}
-                {% if param.type_path %}{{ param.type_path | safe | linkify_type }}/{% endif %}{{ param.name }}
+                {% if param.type_path %}{{ param.type_path | linkify_type | safe }}/{% endif %}{{ param.name }}
             {%- endfor -%}
             ) {{ macros::git_link(env=env, item=proc) }}</aside>
         </h3>
