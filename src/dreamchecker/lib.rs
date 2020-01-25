@@ -9,6 +9,7 @@ use dm::objtree::{ObjectTree, TypeRef, ProcRef, Code};
 use dm::constants::{Constant, ConstFn};
 use dm::ast::*;
 
+use std::fmt;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 mod type_expr;
@@ -29,6 +30,17 @@ pub enum StaticType<'o> {
         list: TypeRef<'o>,
         keys: Box<StaticType<'o>>,
     },
+}
+
+impl<'o> fmt::Display for StaticType<'o> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            StaticType::None => write!(f, "(none)")?,
+            StaticType::Type(typeref) => write!(f, "{}", typeref)?,
+            StaticType::List{list, keys: _} => write!(f, "{}", list)?,
+        }
+        Ok(())
+    }
 }
 
 impl<'o> StaticType<'o> {
@@ -68,6 +80,19 @@ impl<'o> StaticType<'o> {
 
     fn list_of_type(tree: &'o ObjectTree, of: &str) -> StaticType<'o> {
         StaticType::List { list: tree.expect("/list"), keys: Box::new(StaticType::Type(tree.expect(of))) }
+    }
+
+    fn is_subtype_of(&self, other: &StaticType<'o>) -> bool {
+        match (self, other) {
+            (StaticType::Type(selftype), StaticType::Type(othertype)) => {
+                selftype.is_subtype_of(othertype.get())
+            },
+            (StaticType::List{list: selflist, keys: _}, StaticType::List{list: otherlist, keys: _}) => {
+                selflist.is_subtype_of(otherlist.get())
+            },
+            (_, StaticType::None) => true,
+            _ => false,
+        }
     }
 }
 
@@ -726,6 +751,22 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         self.visit_block(block);
 
         if self.proc_ref.parent_proc().is_some() {
+            // Check parameter typehints
+            for (i, param) in self.proc_ref.parent_proc().unwrap().get().parameters.iter().enumerate() {
+                if let Some(myparam) = self.proc_ref.get().parameters.get(i) {
+                    let myparamanalysis = self.static_type(myparam.location, &myparam.var_type.type_path);
+                    let parentanalysis = self.static_type(param.location, &param.var_type.type_path);
+                    if !parentanalysis.static_ty.is_subtype_of(&myparamanalysis.static_ty)  {
+                        error(self.proc_ref.location, format!("proc parameter '{}' with type '{}' is not a parent-type of parent parameter type '{}'", myparam.name, myparamanalysis.static_ty, parentanalysis.static_ty))
+                            .set_severity(Severity::Hint)
+                            .with_note(self.proc_ref.parent_proc().unwrap().get().location, "parent proc defined here")
+                            .with_errortype("parameter_type_mismatch")
+                            .register(self.context);
+                    }
+                }
+            }
+
+            // Check directives
             if let Some((proc, true, location)) = self.env.must_not_override.get_self_or_parent(self.proc_ref) {
                 if proc != self.proc_ref {
                     error(self.proc_ref.location, format!("proc overrides parent, prohibited by {}", proc))
