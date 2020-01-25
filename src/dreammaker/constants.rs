@@ -674,8 +674,9 @@ impl<'a> ConstantFolder<'a> {
         numeric!(GreaterEq >=);
         match (op, lhs, rhs) {
             (BinaryOp::Pow, Int(lhs), Int(rhs)) => {
-                if rhs >= 0 {
-                    if let Some(result) = lhs.checked_pow(rhs as u32) {
+                use std::convert::TryFrom;
+                if let Ok(rhs2) = u32::try_from(rhs) {
+                    if let Some(result) = lhs.checked_pow(rhs2) {
                         return Ok(Constant::from(result));
                     }
                 }
