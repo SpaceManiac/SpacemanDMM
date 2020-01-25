@@ -6,7 +6,7 @@ use super::{Location, DMError};
 use super::preprocessor::{DefineMap, Define};
 
 const DM_VERSION: i32 = 513;
-const DM_BUILD: i32 = 1501;
+const DM_BUILD: i32 = 1508;
 
 /// Register BYOND builtin macros to the given define map.
 pub fn default_defines(defines: &mut DefineMap) {
@@ -321,6 +321,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         var/const/BLEND_ADD = int!(2);
         var/const/BLEND_SUBTRACT = int!(3);
         var/const/BLEND_MULTIPLY = int!(4);
+        var/const/BLEND_INSET_OVERLAY = int!(5);
 
         // global procs
         proc/abs(A);
