@@ -10,11 +10,13 @@ extern crate walkdir;
 mod markdown;
 mod template;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::cell::RefCell;
 use std::io::{self, Write};
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
+
+use tera::Value;
 
 use dm::docs::*;
 
@@ -66,32 +68,41 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut tera = template::builtin()?;
 
     // register tera extensions
-    tera.register_filter("linkify_type", |input, _opts| match input {
-        tera::Value::String(s) => Ok(linkify_type(s.split("/").skip_while(|b| b.is_empty())).into()),
-        tera::Value::Array(a) => Ok(linkify_type(a.iter().filter_map(|v| v.as_str())).into()),
-        _ => Err("linkify_type() input must be string".into()),
-    });
-    tera.register_filter("length", |input, _opts| match input {
-        tera::Value::String(s) => Ok(s.len().into()),
-        tera::Value::Array(a) => Ok(a.len().into()),
-        tera::Value::Object(o) => Ok(o.len().into()),
-        _ => Ok(0.into()),
-    });
-    tera.register_filter("substring", |input, opts| match input {
-        tera::Value::String(s) => {
-            let start = opts.get("start").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-            let mut end = opts
-                .get("end")
-                .and_then(|v| v.as_u64())
-                .map(|s| s as usize)
-                .unwrap_or(s.len());
-            if end > s.len() {
-                end = s.len();
-            }
-            Ok(s[start..end].into())
+    fn tera_linkify_type(value: &Value, _: &HashMap<String, Value>) -> tera::Result<Value> {
+        match *value {
+            tera::Value::String(ref s) => Ok(linkify_type(s.split("/").skip_while(|b| b.is_empty())).into()),
+            tera::Value::Array(ref a) => Ok(linkify_type(a.iter().filter_map(|v| v.as_str())).into()),
+            _ => Err("linkify_type() input must be string".into()),
         }
-        _ => Err("substring() input must be string".into()),
-    });
+    }
+    fn length(value: &Value, _: &HashMap<String, Value>) -> tera::Result<Value> {
+        match *value {
+            tera::Value::String(ref s) => Ok(s.len().into()),
+            tera::Value::Array(ref a) => Ok(a.len().into()),
+            tera::Value::Object(ref o) => Ok(o.len().into()),
+            _ => Ok(0.into()),
+        }
+    }
+    fn substring(value: &Value, opts: &HashMap<String, Value>) -> tera::Result<Value> {
+        match *value {
+            tera::Value::String(ref s) => {
+                let start = opts.get("start").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+                let mut end = opts
+                    .get("end")
+                    .and_then(|v| v.as_u64())
+                    .map(|s| s as usize)
+                    .unwrap_or(s.len());
+                if end > s.len() {
+                    end = s.len();
+                }
+                Ok(s[start..end].into())
+            }
+            _ => Err("substring() input must be string".into()),
+        }
+    }
+    tera.register_filter("linkify_type", tera_linkify_type);
+    tera.register_filter("length", length);
+    tera.register_filter("substring", substring);
 
     // parse environment
     let environment = match environment {
@@ -457,7 +468,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         progress.update("index.html");
         let mut index = create(&output_path.join("index.html"))?;
-        index.write_all(tera.render("dm_index.html", &Index {
+        index.write_all(tera.render("dm_index.html", &tera::Context::from_serialize(Index {
             env,
             html: index_docs.as_ref().map(|(_, docs)| &docs.html[..]),
             modules: build_index_tree(modules.iter().map(|(_path, module)| IndexTree {
@@ -483,7 +494,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 no_substance: !ty.substance,
                 children: Vec::new(),
             })),
-        })?.as_bytes())?;
+        })?)?.as_bytes())?;
     }
 
     for (path, details) in modules.iter() {
@@ -504,12 +515,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         let mut f = create(&output_path.join(&fname))?;
-        f.write_all(tera.render("dm_module.html", &ModuleArgs {
+        f.write_all(tera.render("dm_module.html", &tera::Context::from_serialize(ModuleArgs {
             env,
             base_href: &base,
             path,
             details,
-        })?.as_bytes())?;
+        })?)?.as_bytes())?;
     }
 
     for (path, details) in types_with_docs.iter() {
@@ -535,13 +546,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         let mut f = create(&output_path.join(&fname))?;
-        f.write_all(tera.render("dm_type.html", &Type {
+        f.write_all(tera.render("dm_type.html", &tera::Context::from_serialize(Type {
             env,
             base_href: &base,
             path,
             details,
             types: &types_with_docs,
-        })?.as_bytes())?;
+        })?)?.as_bytes())?;
     }
     drop(progress);
 
