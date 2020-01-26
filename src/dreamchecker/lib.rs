@@ -416,8 +416,7 @@ pub fn directive_value_to_truthy(expr: &Expression, location: Location) -> Resul
         Some(Term::Int(1)) => Ok(true),
         Some(Term::Ident(i)) if i == "FALSE" => Ok(false),
         Some(Term::Ident(i)) if i == "TRUE" => Ok(true),
-        _ => Err(error(location, format!("invalid value for lint directive {:?}", expr))
-        .with_errortype("invalid_lint_directive_value")
+        _ => Err(error(location, format!("invalid value for set {:?}", expr))
         .set_severity(Severity::Warning)),
     }
 }
@@ -473,7 +472,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                     self.context.register_error(error);
                 }
             },
-            Err(error) => self.context.register_error(error),
+            Err(error) => self.context.register_error(error.with_errortype("invalid_lint_directive_value")),
         }
     }
 
@@ -500,6 +499,45 @@ impl<'o> AnalyzeObjectTree<'o> {
                     error(statement.location, format!("unknown setting {:?}", name))
                         .set_severity(Severity::Warning)
                         .register(self.context);
+                } else {
+                    match name.as_str() {
+                        "background" | "waitfor" | "hidden" | "instant" | "popup_menu" => {
+                            if let Err(_) = directive_value_to_truthy(value, statement.location) {
+                                error(statement.location, format!("set {} must be 0/1/TRUE/FALSE", name.as_str()))
+                                    .set_severity(Severity::Warning)
+                                    .with_errortype("invalid_set_value")
+                                    .register(self.context);
+                            }
+                        },
+                        "name" | "category" | "desc" => {
+                            if let Some(term) = value.as_term() {
+                                match term {
+                                    // TODO: detect procs-as-verbs here
+                                    Term::String(_) | Term::InterpString(_, _) => {},
+                                    // category can be set null to hide it
+                                    Term::Null if name.as_str() == "category" => {},
+                                    other => {
+                                        error(statement.location, format!("set {} must have a string value", name.as_str()))
+                                            .set_severity(Severity::Warning)
+                                            .with_errortype("invalid_set_value")
+                                            .register(self.context);
+                                    },
+                                }
+                            }
+                        },
+                        "invisibility" => {
+                            if let Some(Term::Int(i)) = value.as_term() {
+                                if *i >= 0 && *i <= 100 {
+                                    continue;
+                                }
+                            }
+                            error(statement.location, "set invisibility must be 0-100")
+                                .set_severity(Severity::Warning)
+                                .with_errortype("invalid_set_value")
+                                .register(self.context);
+                        },
+                        _ => {},
+                    }
                 }
             } else {
                 break;
