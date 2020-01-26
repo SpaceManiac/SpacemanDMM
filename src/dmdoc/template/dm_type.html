@@ -44,6 +44,8 @@
         <h3>
         {%- if var.decl -%}
             <aside class="declaration">{{ var.decl }} </aside>
+        {%- elif var.parent -%}
+            <aside class="parent"><a title="/{{ var.parent | safe }}" href="{{ var.parent | safe }}.html#var/{{ name }}">&uarr;</a></aside>
         {%- endif -%}
         <a name="var/{{ name }}">{{ name }}</a>
         {%- if var.type %}
@@ -63,6 +65,8 @@
         <h3>
             {%- if proc.decl -%}
                 <aside class="declaration">{{ proc.decl }} </aside>
+            {%- elif proc.parent -%}
+            <aside class="parent"><a title="/{{ proc.parent | safe }}" href="{{ proc.parent | safe }}.html#proc/{{ name }}">&uarr;</a></aside>
             {%- endif -%}
             <a name="proc/{{ name }}">{{ name }}</a><aside>(
             {%- for param in proc.params -%}

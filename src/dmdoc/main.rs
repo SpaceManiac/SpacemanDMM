@@ -274,6 +274,19 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
 
         for (name, var) in ty.get().vars.iter() {
             if !var.value.docs.is_empty() {
+                // determine if there is a documented parent we can link to
+                let mut parent = None;
+                let mut next = ty.parent_type();
+                while let Some(current) = next {
+                    if let Some(entry) = current.vars.get(name) {
+                        if !entry.value.docs.is_empty() {
+                            parent = Some(current.path[1..].to_owned());
+                            break;
+                        }
+                    }
+                    next = current.parent_type();
+                }
+
                 let block = DocBlock::parse(&var.value.docs.text());
                 // `type` is pulled from the parent if necessary
                 let type_ = ty.get_var_declaration(name).map(|decl| VarType {
@@ -290,6 +303,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                     decl: if var.declaration.is_some() { "var" } else { "" },
                     file: context.file_path(var.value.location.file),
                     line: var.value.location.line,
+                    parent,
                 });
                 anything = true;
                 substance = true;
@@ -297,8 +311,22 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         for (name, proc) in ty.get().procs.iter() {
+            // TODO: integrate docs from non-main procs
             let proc_value = proc.main_value();
             if !proc_value.docs.is_empty() {
+                // determine if there is a documented parent we can link to
+                let mut parent = None;
+                let mut next = ty.parent_type();
+                while let Some(current) = next {
+                    if let Some(entry) = current.procs.get(name) {
+                        if !entry.main_value().docs.is_empty() {
+                            parent = Some(current.path[1..].to_owned());
+                            break;
+                        }
+                    }
+                    next = current.parent_type();
+                }
+
                 let block = DocBlock::parse(&proc_value.docs.text());
                 parsed_type.procs.insert(name, Proc {
                     docs: block,
@@ -312,6 +340,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                     },
                     file: context.file_path(proc_value.location.file),
                     line: proc_value.location.line,
+                    parent,
                 });
                 anything = true;
                 substance = true;
@@ -898,6 +927,7 @@ struct Var<'a> {
     type_: Option<VarType<'a>>,
     file: PathBuf,
     line: u32,
+    parent: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -916,6 +946,7 @@ struct Proc {
     params: Vec<Param>,
     file: PathBuf,
     line: u32,
+    parent: Option<String>,
 }
 
 #[derive(Serialize)]
