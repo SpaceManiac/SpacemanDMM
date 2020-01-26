@@ -339,6 +339,15 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // collate all hrefable entities to use in autolinking
+    let all_type_names: Arc<BTreeSet<_>> = Arc::new(types_with_docs.iter()
+        .filter(|(_, v)| v.substance)
+        .map(|(&t, _)| t.to_owned())
+        .collect());
+    ALL_TYPE_NAMES.with(|all| {
+        all.borrow_mut().clone_from(&all_type_names);
+    });
+
     // finalize modules
     let modules: BTreeMap<_, _> = modules1.into_iter().map(|(key, module1)| {
         let Module1 {
@@ -420,15 +429,6 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             (types_with_docs.len() * 1000 / count) as f32 / 10.
         );
     }
-
-    // collate all hrefable entities to use in autolinking
-    let all_type_names: Arc<BTreeSet<_>> = Arc::new(types_with_docs.iter()
-        .filter(|(_, v)| v.substance)
-        .map(|(&t, _)| t.to_owned())
-        .collect());
-    ALL_TYPE_NAMES.with(|all| {
-        all.borrow_mut().clone_from(&all_type_names);
-    });
 
     // load tera templates
     println!("loading templates");
