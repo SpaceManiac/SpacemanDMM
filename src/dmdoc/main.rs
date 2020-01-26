@@ -91,7 +91,6 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     let define_history = pp.finalize();
 
     println!("collating documented types");
-    let mut types_with_docs = BTreeMap::new();
 
     // collate modules which have docs
     let mut modules1 = BTreeMap::new();
@@ -183,6 +182,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     // collate types which have docs
     let mut count = 0;
     let mut substance_count = 0;
+    let mut type_docs = BTreeMap::new();
     objtree.root().recurse(&mut |ty| {
         count += 1;
 
@@ -323,7 +323,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                     parsed_type.htmlname = &ty.get().path[1..];
                 }
             }
-            types_with_docs.insert(ty.get().pretty_path(), parsed_type);
+            type_docs.insert(ty.get().pretty_path(), parsed_type);
             if substance {
                 substance_count += 1;
             }
@@ -331,7 +331,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // collate all hrefable entities to use in autolinking
-    let all_type_names: Arc<BTreeSet<_>> = Arc::new(types_with_docs.iter()
+    let all_type_names: Arc<BTreeSet<_>> = Arc::new(type_docs.iter()
         .filter(|(_, v)| v.substance)
         .map(|(&t, _)| t.to_owned())
         .collect());
@@ -354,10 +354,11 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         if !best.is_empty() {
-            Some((format!("{}.html", &best[1..]), best))
-        } else {
-            None
+            return Some((format!("{}.html", &best[1..]), best));
         }
+
+        eprintln!("unable to find target for link [{}]", reference);
+        None
     };
 
     // finalize modules
@@ -434,9 +435,9 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         println!(
             "{}/{}/{} types ({}%)",
             substance_count,
-            types_with_docs.len(),
+            type_docs.len(),
             count,
-            (types_with_docs.len() * 1000 / count) as f32 / 10.
+            (type_docs.len() * 1000 / count) as f32 / 10.
         );
     }
 
@@ -514,7 +515,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             macros_documented: macro_count,
             macros_all,
             types_detailed: substance_count,
-            types_documented: types_with_docs.len(),
+            types_documented: type_docs.len(),
             types_all: count,
         },
         git,
@@ -544,7 +545,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                 no_substance: false,
                 children: Vec::new(),
             })),
-            types: build_index_tree(types_with_docs.iter().map(|(path, ty)| IndexTree {
+            types: build_index_tree(type_docs.iter().map(|(path, ty)| IndexTree {
                 htmlname: &ty.htmlname,
                 full_name: path,
                 self_name: if ty.name.is_empty() {
@@ -584,7 +585,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         })?)?.as_bytes())?;
     }
 
-    for (path, details) in types_with_docs.iter() {
+    for (path, details) in type_docs.iter() {
         if !details.substance {
             continue;
         }
@@ -611,7 +612,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             base_href: &base,
             path,
             details,
-            types: &types_with_docs,
+            types: &type_docs,
         })?)?.as_bytes())?;
     }
 
