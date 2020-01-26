@@ -117,7 +117,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         if own_docs || !var_docs.is_empty() || !proc_docs.is_empty() {
-            types_with_docs.insert(&ty.get().path, TypeHasDocs {
+            types_with_docs.insert(ty.get().path.as_str(), TypeHasDocs {
                 var_docs,
                 proc_docs,
             });
@@ -155,10 +155,10 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
 
         let mut progress = String::new();
         let mut best = 0;
-        for bit in reference2.split("/").skip_while(|s| s.is_empty()) {
-            progress.push_str("/");
-            progress.push_str(bit);
-            if let Some(info) = types_with_docs.get(&progress) {
+
+        if reference2.is_empty() {
+            progress.push_str("/global");
+            if let Some(info) = types_with_docs.get("") {
                 if let Some(proc_name) = proc_name {
                     if info.proc_docs.contains(proc_name) {
                         best = progress.len();
@@ -169,6 +169,24 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 } else {
                     best = progress.len();
+                }
+            }
+        } else {
+            for bit in reference2.trim_start_matches('/').split('/') {
+                progress.push_str("/");
+                progress.push_str(bit);
+                if let Some(info) = types_with_docs.get(progress.as_str()) {
+                    if let Some(proc_name) = proc_name {
+                        if info.proc_docs.contains(proc_name) {
+                            best = progress.len();
+                        }
+                    } else if let Some(var_name) = var_name {
+                        if info.var_docs.contains(var_name) {
+                            best = progress.len();
+                        }
+                    } else {
+                        best = progress.len();
+                    }
                 }
             }
         }
