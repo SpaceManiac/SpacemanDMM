@@ -614,6 +614,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         git,
     };
 
+    println!("rendering html");
     {
         #[derive(Serialize)]
         struct Index<'a> {

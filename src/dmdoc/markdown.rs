@@ -159,6 +159,5 @@ fn slugify(input: &str) -> String {
     }
     let len = output.trim_end_matches('-').len();
     output.truncate(len);
-    eprintln!("slugify {:?} = {:?}", input, output);
     output
 }
