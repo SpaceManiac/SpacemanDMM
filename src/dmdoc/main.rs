@@ -100,13 +100,13 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     let mut progress = Progress::default();
 
     // collate modules which have docs
-    let mut modules = BTreeMap::new();
+    let mut modules1 = BTreeMap::new();
     let mut macro_count = 0;
     let mut macros_all = 0;
     for (file, comment_vec) in module_docs {
         let file_path = context.file_path(file);
         progress.update(&file_path.display().to_string());
-        let module = module_entry(&mut modules, &file_path);
+        let module = module_entry(&mut modules1, &file_path);
         for (line, doc) in comment_vec {
             module.items_wip.push((line, ModuleItem::DocComment(doc)));
         }
@@ -141,7 +141,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             continue;
         }
         let docs = DocBlock::parse(&docs.text());
-        let module = module_entry(&mut modules, &context.file_path(range.start.file));
+        let module = module_entry(&mut modules1, &context.file_path(range.start.file));
         module.items_wip.push((
             range.start.line,
             ModuleItem::Define {
@@ -179,7 +179,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         if path == modules_path.join("README.md") {
             index_docs = Some(DocBlock::parse_with_title(&buf));
         } else {
-            let module = module_entry(&mut modules, &path);
+            let module = module_entry(&mut modules1, &path);
             module.items_wip.push((0, ModuleItem::DocComment(DocComment {
                 kind: CommentKind::Block,
                 target: DocTarget::EnclosingItem,
@@ -309,7 +309,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
 
         // file the type under its module as well
         if let Some(ref block) = parsed_type.docs {
-            if let Some(module) = modules.get_mut(&module_path(&context.file_path(ty.location.file))) {
+            if let Some(module) = modules1.get_mut(&module_path(&context.file_path(ty.location.file))) {
                 module.items_wip.push((
                     ty.location.line,
                     ModuleItem::Type {
@@ -340,8 +340,23 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // finalize modules
-    for (_, module) in modules.iter_mut() {
-        module.items_wip.sort_by_key(|&(line, _)| line);
+    let modules: BTreeMap<_, _> = modules1.into_iter().map(|(key, module1)| {
+        let Module1 {
+            htmlname,
+            orig_filename,
+            name,
+            teaser,
+            mut items_wip,
+            defines,
+        } = module1;
+        let mut module = Module {
+            htmlname,
+            orig_filename,
+            name,
+            teaser,
+            items: Vec::new(),
+            defines,
+        };
 
         let mut docs = DocCollection::default();
         let mut _first = true;
@@ -361,7 +376,8 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         }}
 
         let mut last_line = 0;
-        for (line, item) in module.items_wip.drain(..) {
+        items_wip.sort_by_key(|&(line, _)| line);
+        for (line, item) in items_wip.drain(..) {
             match item {
                 ModuleItem::DocComment(doc) => {
                     if line > last_line + 1 {
@@ -377,7 +393,8 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         push_docs!();
-    }
+        (key, module)
+    }).collect();
 
     drop(progress);
 
@@ -404,6 +421,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
+    // collate all hrefable entities to use in autolinking
     let all_type_names: Arc<BTreeSet<_>> = Arc::new(types_with_docs.iter()
         .filter(|(_, v)| v.substance)
         .map(|(&t, _)| t.to_owned())
@@ -603,9 +621,9 @@ fn module_path(path: &Path) -> String {
     path.with_extension("").display().to_string().replace("\\", "/")
 }
 
-fn module_entry<'a, 'b>(modules: &'a mut BTreeMap<String, Module<'b>>, path: &Path) -> &'a mut Module<'b> {
+fn module_entry<'a, 'b>(modules: &'a mut BTreeMap<String, Module1<'b>>, path: &Path) -> &'a mut Module1<'b> {
     modules.entry(module_path(path)).or_insert_with(|| {
-        let mut module = Module::default();
+        let mut module = Module1::default();
         module.htmlname = module_path(path);
         module.orig_filename = path.display().to_string().replace("\\", "/");
         module
@@ -956,6 +974,18 @@ struct Param {
     type_path: String,
 }
 
+/// In-construction Module step 1.
+#[derive(Default)]
+struct Module1<'a> {
+    htmlname: String,
+    orig_filename: String,
+    name: Option<String>,
+    teaser: String,
+    items_wip: Vec<(u32, ModuleItem<'a>)>,
+    defines: BTreeMap<&'a str, Define<'a>>,
+}
+
+/// Module struct exposed to templates.
 #[derive(Default, Serialize)]
 struct Module<'a> {
     htmlname: String,
@@ -963,7 +993,6 @@ struct Module<'a> {
     name: Option<String>,
     teaser: String,
     items: Vec<ModuleItem<'a>>,
-    items_wip: Vec<(u32, ModuleItem<'a>)>,
     defines: BTreeMap<&'a str, Define<'a>>,
 }
 
