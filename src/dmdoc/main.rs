@@ -15,6 +15,7 @@ use std::cell::RefCell;
 use std::io::{self, Write};
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use tera::Value;
 
@@ -34,7 +35,7 @@ const BUILD_INFO: &str = concat!(
 // Driver
 
 thread_local! {
-    static ALL_TYPE_NAMES: RefCell<BTreeSet<String>> = Default::default();
+    static ALL_TYPE_NAMES: RefCell<Arc<BTreeSet<String>>> = Default::default();
 }
 
 fn main() {
@@ -403,10 +404,12 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
+    let all_type_names: Arc<BTreeSet<_>> = Arc::new(types_with_docs.iter()
+        .filter(|(_, v)| v.substance)
+        .map(|(&t, _)| t.to_owned())
+        .collect());
     ALL_TYPE_NAMES.with(|all| {
-        all.borrow_mut().extend(types_with_docs.iter()
-            .filter(|(_, v)| v.substance)
-            .map(|(&t, _)| t.to_owned()));
+        all.borrow_mut().clone_from(&all_type_names);
     });
 
     // load tera templates
@@ -414,10 +417,11 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     let mut tera = template::builtin()?;
 
     // register tera extensions
-    tera.register_filter("linkify_type", |value: &Value, _: &HashMap<String, Value>| {
+    let linkify_typenames = all_type_names.clone();
+    tera.register_filter("linkify_type", move |value: &Value, _: &HashMap<String, Value>| {
         match *value {
-            tera::Value::String(ref s) => Ok(linkify_type(s.split("/").skip_while(|b| b.is_empty())).into()),
-            tera::Value::Array(ref a) => Ok(linkify_type(a.iter().filter_map(|v| v.as_str())).into()),
+            tera::Value::String(ref s) => Ok(linkify_type(&linkify_typenames, s.split("/").skip_while(|b| b.is_empty())).into()),
+            tera::Value::Array(ref a) => Ok(linkify_type(&linkify_typenames, a.iter().filter_map(|v| v.as_str())).into()),
             _ => Err("linkify_type() input must be string".into()),
         }
     });
@@ -623,7 +627,7 @@ fn format_type_path(vec: &[String]) -> String {
     }
 }
 
-fn linkify_type<'a, I: Iterator<Item=&'a str>>(iter: I) -> String {
+fn linkify_type<'a, I: Iterator<Item=&'a str>>(all_type_names: &BTreeSet<String>, iter: I) -> String {
     let mut output = String::new();
     let mut all_progress = String::new();
     let mut progress = String::new();
@@ -632,7 +636,7 @@ fn linkify_type<'a, I: Iterator<Item=&'a str>>(iter: I) -> String {
         all_progress.push_str(bit);
         progress.push_str("/");
         progress.push_str(bit);
-        if ALL_TYPE_NAMES.with(|t| t.borrow().contains(&all_progress)) {
+        if all_type_names.contains(&all_progress) {
             use std::fmt::Write;
             let _ = write!(
                 output,
