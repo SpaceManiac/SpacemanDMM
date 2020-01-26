@@ -11,7 +11,6 @@ mod markdown;
 mod template;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::cell::RefCell;
 use std::io::{self, Write};
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
@@ -33,10 +32,6 @@ const BUILD_INFO: &str = concat!(
 
 // ----------------------------------------------------------------------------
 // Driver
-
-thread_local! {
-    static ALL_TYPE_NAMES: RefCell<Arc<BTreeSet<String>>> = Default::default();
-}
 
 fn main() {
     if let Err(e) = main2() {
@@ -140,7 +135,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         if docs.is_empty() {
             continue;
         }
-        let docs = DocBlock::parse(&docs.text());
+        let docs = DocBlock::parse(&docs.text(), None);
         let module = module_entry(&mut modules1, &context.file_path(range.start.file));
         module.items_wip.push((
             range.start.line,
@@ -177,7 +172,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         let mut buf = String::new();
         File::open(path)?.read_to_string(&mut buf)?;
         if path == modules_path.join("README.md") {
-            index_docs = Some(DocBlock::parse_with_title(&buf));
+            index_docs = Some(DocBlock::parse_with_title(&buf, None));
         } else {
             let module = module_entry(&mut modules1, &path);
             module.items_wip.push((0, ModuleItem::DocComment(DocComment {
@@ -216,7 +211,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         let mut anything = false;
         let mut substance = false;
         if !ty.docs.is_empty() {
-            let (title, block) = DocBlock::parse_with_title(&ty.docs.text());
+            let (title, block) = DocBlock::parse_with_title(&ty.docs.text(), None);
             if let Some(title) = title {
                 parsed_type.name = title.into();
             }
@@ -247,7 +242,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                     next = current.parent_type();
                 }
 
-                let block = DocBlock::parse(&var.value.docs.text());
+                let block = DocBlock::parse(&var.value.docs.text(), None);
                 // `type` is pulled from the parent if necessary
                 let type_ = ty.get_var_declaration(name).map(|decl| VarType {
                     is_static: decl.var_type.is_static,
@@ -287,7 +282,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                     next = current.parent_type();
                 }
 
-                let block = DocBlock::parse(&proc_value.docs.text());
+                let block = DocBlock::parse(&proc_value.docs.text(), None);
                 parsed_type.procs.insert(name, Proc {
                     docs: block,
                     params: proc_value.parameters.iter().map(|p| Param {
@@ -344,9 +339,25 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         .filter(|(_, v)| v.substance)
         .map(|(&t, _)| t.to_owned())
         .collect());
-    ALL_TYPE_NAMES.with(|all| {
-        all.borrow_mut().clone_from(&all_type_names);
-    });
+
+    // (normalized, reference) -> (href, tooltip)
+    let broken_link_callback = &|_: &str, reference: &str| -> Option<(String, String)> {
+        // TODO: allow performing relative searches, find vars and procs too
+        let mut progress = String::new();
+        let mut best = String::new();
+        for bit in reference.split("/").skip_while(|s| s.is_empty()) {
+            progress.push_str("/");
+            progress.push_str(bit);
+            if all_type_names.contains(&progress) {
+                best.clone_from(&progress);
+            }
+        }
+        if !best.is_empty() {
+            Some((format!("{}.html", &best[1..]), best))
+        } else {
+            None
+        }
+    };
 
     // finalize modules
     let modules: BTreeMap<_, _> = modules1.into_iter().map(|(key, module1)| {
@@ -374,12 +385,12 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                 let doc = std::mem::replace(&mut docs, Default::default());
                 if _first {
                     _first = false;
-                    let (title, block) = DocBlock::parse_with_title(&doc.text());
+                    let (title, block) = DocBlock::parse_with_title(&doc.text(), Some(broken_link_callback));
                     module.name = title;
                     module.teaser = block.teaser().to_owned();
                     module.items.push(ModuleItem::Docs(block.html));
                 } else {
-                    module.items.push(ModuleItem::Docs(markdown::render(&doc.text())));
+                    module.items.push(ModuleItem::Docs(markdown::render(&doc.text(), Some(broken_link_callback))));
                 }
             }
         }}
@@ -667,25 +678,6 @@ fn linkify_type<'a, I: Iterator<Item=&'a str>>(all_type_names: &BTreeSet<String>
     }
     output.push_str(&progress);
     output
-}
-
-// (normalized, reference) -> (href, tooltip)
-fn handle_crosslink(_: &str, reference: &str) -> Option<(String, String)> {
-    // TODO: allow performing relative searches, find vars and procs too
-    let mut progress = String::new();
-    let mut best = String::new();
-    for bit in reference.split("/").skip_while(|s| s.is_empty()) {
-        progress.push_str("/");
-        progress.push_str(bit);
-        if ALL_TYPE_NAMES.with(|t| t.borrow().contains(&progress)) {
-            best = progress.clone();
-        }
-    }
-    if !best.is_empty() {
-        Some((format!("{}.html", &best[1..]), best))
-    } else {
-        None
-    }
 }
 
 /// Create the parent dirs of a file and then itself.

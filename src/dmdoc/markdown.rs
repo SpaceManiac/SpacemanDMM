@@ -4,9 +4,11 @@ use std::ops::Range;
 
 use pulldown_cmark::{self, Parser, Tag, Event};
 
-pub fn render(markdown: &str) -> String {
+pub type BrokenLinkCallback<'a> = Option<&'a dyn Fn(&str, &str) -> Option<(String, String)>>;
+
+pub fn render(markdown: &str, broken_link_callback: BrokenLinkCallback) -> String {
     let mut buf = String::new();
-    push_html(&mut buf, parser(markdown));
+    push_html(&mut buf, parser(markdown, broken_link_callback));
     buf
 }
 
@@ -19,12 +21,12 @@ pub struct DocBlock {
 }
 
 impl DocBlock {
-    pub fn parse(markdown: &str) -> Self {
-        parse_main(parser(markdown).peekable())
+    pub fn parse(markdown: &str, broken_link_callback: BrokenLinkCallback) -> Self {
+        parse_main(parser(markdown, broken_link_callback).peekable())
     }
 
-    pub fn parse_with_title(markdown: &str) -> (Option<String>, Self) {
-        let mut parser = parser(markdown).peekable();
+    pub fn parse_with_title(markdown: &str, broken_link_callback: BrokenLinkCallback) -> (Option<String>, Self) {
+        let mut parser = parser(markdown, broken_link_callback).peekable();
         (
             if let Some(&Event::Start(Tag::Heading(1))) = parser.peek() {
                 parser.next();
@@ -51,11 +53,11 @@ impl DocBlock {
     }
 }
 
-fn parser(markdown: &str) -> Parser {
+fn parser<'a>(markdown: &'a str, broken_link_callback: BrokenLinkCallback<'a>) -> Parser<'a> {
     Parser::new_with_broken_link_callback(
         markdown,
         pulldown_cmark::Options::ENABLE_TABLES | pulldown_cmark::Options::ENABLE_STRIKETHROUGH,
-        Some(&crate::handle_crosslink),
+        broken_link_callback
     )
 }
 
