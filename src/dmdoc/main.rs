@@ -106,6 +106,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // if macros have docs, that counts as a module too
+    let mut macro_to_module_map = BTreeMap::new();
     for (range, (name, define)) in define_history.iter() {
         let (docs, has_params, params, is_variadic);
         match define {
@@ -133,6 +134,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         }
         let docs = DocBlock::parse(&docs.text(), None);
         let module = module_entry(&mut modules1, &context.file_path(range.start.file));
+        macro_to_module_map.insert(name.clone(), module.htmlname.clone());
         module.items_wip.push((
             range.start.line,
             ModuleItem::Define {
@@ -336,6 +338,11 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
 
     // (normalized, reference) -> (href, tooltip)
     let broken_link_callback = &|_: &str, reference: &str| -> Option<(String, String)> {
+        // macros
+        if let Some(module) = macro_to_module_map.get(reference) {
+            return Some((format!("{}.html#define/{}", module, reference), reference.to_owned()));
+        }
+
         // TODO: allow performing relative searches, find vars and procs too
         let mut progress = String::new();
         let mut best = String::new();
@@ -834,6 +841,20 @@ fn last_element(path: &str) -> &str {
 }
 
 // ----------------------------------------------------------------------------
+// Pre-templating helper structs
+
+/// In-construction Module step 1.
+#[derive(Default)]
+struct Module1<'a> {
+    htmlname: String,
+    orig_filename: String,
+    name: Option<String>,
+    teaser: String,
+    items_wip: Vec<(u32, ModuleItem<'a>)>,
+    defines: BTreeMap<&'a str, Define<'a>>,
+}
+
+// ----------------------------------------------------------------------------
 // Templating structs
 
 #[derive(Serialize)]
@@ -919,17 +940,6 @@ struct Proc {
 struct Param {
     name: String,
     type_path: String,
-}
-
-/// In-construction Module step 1.
-#[derive(Default)]
-struct Module1<'a> {
-    htmlname: String,
-    orig_filename: String,
-    name: Option<String>,
-    teaser: String,
-    items_wip: Vec<(u32, ModuleItem<'a>)>,
-    defines: BTreeMap<&'a str, Define<'a>>,
 }
 
 /// Module struct exposed to templates.
