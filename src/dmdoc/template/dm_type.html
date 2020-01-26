@@ -39,15 +39,15 @@
 {%- endif -%}
 
 {% if details.vars %}
-    <h2><a name="var">Var Details</a></h2>
+    <h2 id="var">Var Details</h2>
     {%- for name, var in details.vars -%}
-        <h3>
+        <h3 id="var/{{ name }}">
         {%- if var.decl -%}
             <aside class="declaration">{{ var.decl }} </aside>
         {%- elif var.parent -%}
             <aside class="parent"><a title="/{{ var.parent | safe }}" href="{{ var.parent | safe }}.html#var/{{ name }}">&uarr;</a></aside>
         {%- endif -%}
-        <a name="var/{{ name }}">{{ name }}</a>
+        {{ name }}
         {%- if var.type %}
             <aside>&ndash; {% if var.type.is_static %}/static{% endif -%}
                 {%- if var.type.is_const %}/const{% endif -%}
@@ -60,15 +60,15 @@
 {% endif %}
 
 {%- if details.procs -%}
-    <h2><a name="proc">Proc Details</a></h2>
+    <h2 id="proc">Proc Details</h2>
     {%- for name, proc in details.procs -%}
-        <h3>
+        <h3 id="proc/{{ name }}">
             {%- if proc.decl -%}
                 <aside class="declaration">{{ proc.decl }} </aside>
             {%- elif proc.parent -%}
             <aside class="parent"><a title="/{{ proc.parent | safe }}" href="{{ proc.parent | safe }}.html#proc/{{ name }}">&uarr;</a></aside>
             {%- endif -%}
-            <a name="proc/{{ name }}">{{ name }}</a><aside>(
+            {{ name }}<aside>(
             {%- for param in proc.params -%}
                 {% if not loop.first %}, {% endif -%}
                 {% if param.type_path %}{{ param.type_path | linkify_type | safe }}/{% endif %}{{ param.name }}
