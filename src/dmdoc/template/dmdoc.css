@@ -55,7 +55,7 @@ table.summary th, table.summary td {
 .no-substance {
     color: #888888;
 }
-a:target {
+:target {
     background-color: white;
     border-radius: 5px;
     padding: 0 3px;

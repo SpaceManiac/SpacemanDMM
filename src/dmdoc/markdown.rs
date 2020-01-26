@@ -1,6 +1,7 @@
-//! Parser for
+//! Parser for "doc-block" markdown documents.
 
 use std::ops::Range;
+use std::collections::VecDeque;
 
 use pulldown_cmark::{self, Parser, Tag, Event};
 
@@ -88,10 +89,76 @@ fn parse_main(mut parser: std::iter::Peekable<Parser>) -> DocBlock {
 }
 
 fn push_html<'a, I: IntoIterator<Item=Event<'a>>>(buf: &mut String, iter: I) {
-    pulldown_cmark::html::push_html(buf, iter.into_iter());
+    pulldown_cmark::html::push_html(buf, HeadingLinker {
+        inner: iter.into_iter(),
+        output: Default::default(),
+    });
 }
 
 fn trim_right(buf: &mut String) {
     let len = buf.trim_end().len();
     buf.truncate(len);
+}
+
+/// Iterator adapter which replaces Start(Heading) tags with HTML including
+/// an anchor.
+struct HeadingLinker<'a, I> {
+    inner: I,
+    output: VecDeque<Event<'a>>,
+}
+
+impl<'a, I: Iterator<Item=Event<'a>>> Iterator for HeadingLinker<'a, I> {
+    type Item = Event<'a>;
+
+    fn next(&mut self) -> Option<Event<'a>> {
+        if let Some(output) = self.output.pop_front() {
+            return Some(output);
+        }
+
+        let original = self.inner.next();
+        if let Some(Event::Start(Tag::Heading(heading))) = original {
+            let mut text_buf = String::new();
+
+            while let Some(event) = self.inner.next() {
+                if let Event::Text(ref text) = event {
+                    text_buf.push_str(text.as_ref());
+                }
+
+                if let Event::End(Tag::Heading(_)) = event {
+                    break;
+                }
+
+                self.output.push_back(event);
+            }
+
+            self.output.push_back(Event::Html(format!("</h{}>", heading).into()));
+            return Some(Event::Html(format!("<h{} id=\"{}\">", heading, slugify(&text_buf)).into()));
+        }
+        original
+    }
+}
+
+fn slugify(input: &str) -> String {
+    let mut output = String::new();
+    let mut want_dash = false;
+    for ch in input.chars() {
+        if ch == '\'' {
+            continue;
+        }
+        for ch in ch.to_lowercase() {
+            if !ch.is_alphanumeric() {
+                if want_dash {
+                    output.push('-');
+                    want_dash = false;
+                }
+            } else {
+                output.push(ch);
+                want_dash = true;
+            }
+        }
+    }
+    let len = output.trim_end_matches('-').len();
+    output.truncate(len);
+    eprintln!("slugify {:?} = {:?}", input, output);
+    output
 }
