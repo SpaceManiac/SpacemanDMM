@@ -92,6 +92,38 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("collating documented types");
 
+    // get a read on which types *have* docs
+    let mut types_with_docs = BTreeMap::new();
+    objtree.root().recurse(&mut |ty| {
+        // TODO: it would be nice if this was not a duplicate of below
+        let mut own_docs = false;
+        if !ty.docs.is_empty() {
+            own_docs = DocBlock::parse_with_title(&ty.docs.text(), None).1.has_description;
+        }
+
+        let mut var_docs = BTreeSet::new();
+        for (name, var) in ty.get().vars.iter() {
+            if !var.value.docs.is_empty() {
+                var_docs.insert(name.as_str());
+            }
+        }
+
+        let mut proc_docs = BTreeSet::new();
+        for (name, proc) in ty.get().procs.iter() {
+            // TODO: integrate docs from non-main procs
+            if !proc.main_value().docs.is_empty() {
+                proc_docs.insert(name.as_str());
+            }
+        }
+
+        if own_docs || !var_docs.is_empty() || !proc_docs.is_empty() {
+            types_with_docs.insert(&ty.get().path, TypeHasDocs {
+                var_docs,
+                proc_docs,
+            });
+        }
+    });
+
     // collate modules which have docs
     let mut modules1 = BTreeMap::new();
     let mut macro_count = 0;
@@ -349,7 +381,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         for bit in reference.split("/").skip_while(|s| s.is_empty()) {
             progress.push_str("/");
             progress.push_str(bit);
-            if all_type_names.contains(&progress) {
+            if types_with_docs.contains_key(&progress) {
                 best.clone_from(&progress);
             }
         }
@@ -843,6 +875,12 @@ fn last_element(path: &str) -> &str {
 
 // ----------------------------------------------------------------------------
 // Pre-templating helper structs
+
+#[derive(Default)]
+struct TypeHasDocs<'a> {
+    var_docs: BTreeSet<&'a str>,
+    proc_docs: BTreeSet<&'a str>,
+}
 
 /// In-construction Module step 1.
 #[derive(Default)]
