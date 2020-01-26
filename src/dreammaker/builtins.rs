@@ -323,6 +323,9 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         var/const/BLEND_MULTIPLY = int!(4);
         var/const/BLEND_INSET_OVERLAY = int!(5);
 
+        // this is just a procstyle syntax wrapper for \ref[foo]
+        proc/ref(A);
+
         // global procs
         proc/abs(A);
         proc/addtext(Arg1, Arg2/*, ...*/);
