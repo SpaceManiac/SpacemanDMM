@@ -138,21 +138,59 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             return Some((format!("{}.html#define/{}", module, reference), reference.to_owned()));
         }
 
-        // TODO: allow performing relative searches, find vars and procs too
-        let mut progress = String::new();
-        let mut best = String::new();
-        for bit in reference.split("/").skip_while(|s| s.is_empty()) {
-            progress.push_str("/");
-            progress.push_str(bit);
-            if types_with_docs.contains_key(&progress) {
-                best.clone_from(&progress);
-            }
-        }
-        if !best.is_empty() {
-            return Some((format!("{}.html", &best[1..]), best));
+        // parse "proc" or "var" reference out
+        let mut reference2 = reference;
+        let mut proc_name = None;
+        let mut var_name = None;
+        if let Some(idx) = reference.find("/proc/") {
+            proc_name = Some(&reference[idx + "/proc/".len()..]);
+            reference2 = &reference[..idx];
+        } else if let Some(idx) = reference.find("/verb/") {
+            proc_name = Some(&reference[idx + "/verb/".len()..]);
+            reference2 = &reference[..idx];
+        } else if let Some(idx) = reference.find("/var/") {
+            var_name = Some(&reference[idx + "/var/".len()..]);
+            reference2 = &reference[..idx];
         }
 
-        eprintln!("unable to find target for link [{}]", reference);
+        let mut progress = String::new();
+        let mut best = 0;
+        for bit in reference2.split("/").skip_while(|s| s.is_empty()) {
+            progress.push_str("/");
+            progress.push_str(bit);
+            if let Some(info) = types_with_docs.get(&progress) {
+                if let Some(proc_name) = proc_name {
+                    if info.proc_docs.contains(proc_name) {
+                        best = progress.len();
+                    }
+                } else if let Some(var_name) = var_name {
+                    if info.var_docs.contains(var_name) {
+                        best = progress.len();
+                    }
+                } else {
+                    best = progress.len();
+                }
+            }
+        }
+
+        if best > 0 {
+            use std::fmt::Write;
+
+            if best < progress.len() {
+                eprintln!("crosslink [{}] approximating to [{}]", reference, &progress[..best]);
+                progress.truncate(best);
+            }
+
+            let mut href = format!("{}.html", &progress[1..]);
+            if let Some(proc_name) = proc_name {
+                let _ = write!(href, "#proc/{}", proc_name);
+            } else if let Some(var_name) = var_name {
+                let _ = write!(href, "#var/{}", var_name);
+            }
+            return Some((href, progress));
+        }
+
+        eprintln!("crosslink [{}] unknown", reference);
         None
     };
 
