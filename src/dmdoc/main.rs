@@ -124,6 +124,38 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    let mut macro_to_module_map = BTreeMap::new();
+    for (range, (name, define)) in define_history.iter() {
+        if !define.docs().is_empty() {
+            macro_to_module_map.insert(name.clone(), module_path(&context.file_path(range.start.file)));
+        }
+    }
+
+    // (normalized, reference) -> (href, tooltip)
+    let broken_link_callback = &|_: &str, reference: &str| -> Option<(String, String)> {
+        // macros
+        if let Some(module) = macro_to_module_map.get(reference) {
+            return Some((format!("{}.html#define/{}", module, reference), reference.to_owned()));
+        }
+
+        // TODO: allow performing relative searches, find vars and procs too
+        let mut progress = String::new();
+        let mut best = String::new();
+        for bit in reference.split("/").skip_while(|s| s.is_empty()) {
+            progress.push_str("/");
+            progress.push_str(bit);
+            if types_with_docs.contains_key(&progress) {
+                best.clone_from(&progress);
+            }
+        }
+        if !best.is_empty() {
+            return Some((format!("{}.html", &best[1..]), best));
+        }
+
+        eprintln!("unable to find target for link [{}]", reference);
+        None
+    };
+
     // collate modules which have docs
     let mut modules1 = BTreeMap::new();
     let mut macro_count = 0;
@@ -137,7 +169,6 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // if macros have docs, that counts as a module too
-    let mut macro_to_module_map = BTreeMap::new();
     for (range, (name, define)) in define_history.iter() {
         let (docs, has_params, params, is_variadic);
         match define {
@@ -163,9 +194,8 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         if docs.is_empty() {
             continue;
         }
-        let docs = DocBlock::parse(&docs.text(), None);
+        let docs = DocBlock::parse(&docs.text(), Some(broken_link_callback));
         let module = module_entry(&mut modules1, &context.file_path(range.start.file));
-        macro_to_module_map.insert(name.clone(), module.htmlname.clone());
         module.items_wip.push((
             range.start.line,
             ModuleItem::Define {
@@ -200,7 +230,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         let mut buf = String::new();
         File::open(path)?.read_to_string(&mut buf)?;
         if path == modules_path.join("README.md") {
-            index_docs = Some(DocBlock::parse_with_title(&buf, None));
+            index_docs = Some(DocBlock::parse_with_title(&buf, Some(broken_link_callback)));
         } else {
             let module = module_entry(&mut modules1, &path);
             module.items_wip.push((0, ModuleItem::DocComment(DocComment {
@@ -239,7 +269,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         let mut anything = false;
         let mut substance = false;
         if !ty.docs.is_empty() {
-            let (title, block) = DocBlock::parse_with_title(&ty.docs.text(), None);
+            let (title, block) = DocBlock::parse_with_title(&ty.docs.text(), Some(broken_link_callback));
             if let Some(title) = title {
                 parsed_type.name = title.into();
             }
@@ -270,7 +300,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                     next = current.parent_type();
                 }
 
-                let block = DocBlock::parse(&var.value.docs.text(), None);
+                let block = DocBlock::parse(&var.value.docs.text(), Some(broken_link_callback));
                 // `type` is pulled from the parent if necessary
                 let type_ = ty.get_var_declaration(name).map(|decl| VarType {
                     is_static: decl.var_type.is_static,
@@ -310,7 +340,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                     next = current.parent_type();
                 }
 
-                let block = DocBlock::parse(&proc_value.docs.text(), None);
+                let block = DocBlock::parse(&proc_value.docs.text(), Some(broken_link_callback));
                 parsed_type.procs.insert(name, Proc {
                     docs: block,
                     params: proc_value.parameters.iter().map(|p| Param {
@@ -367,31 +397,6 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         .filter(|(_, v)| v.substance)
         .map(|(&t, _)| t.to_owned())
         .collect());
-
-    // (normalized, reference) -> (href, tooltip)
-    let broken_link_callback = &|_: &str, reference: &str| -> Option<(String, String)> {
-        // macros
-        if let Some(module) = macro_to_module_map.get(reference) {
-            return Some((format!("{}.html#define/{}", module, reference), reference.to_owned()));
-        }
-
-        // TODO: allow performing relative searches, find vars and procs too
-        let mut progress = String::new();
-        let mut best = String::new();
-        for bit in reference.split("/").skip_while(|s| s.is_empty()) {
-            progress.push_str("/");
-            progress.push_str(bit);
-            if types_with_docs.contains_key(&progress) {
-                best.clone_from(&progress);
-            }
-        }
-        if !best.is_empty() {
-            return Some((format!("{}.html", &best[1..]), best));
-        }
-
-        eprintln!("unable to find target for link [{}]", reference);
-        None
-    };
 
     // finalize modules
     let modules: BTreeMap<_, _> = modules1.into_iter().map(|(key, module1)| {
