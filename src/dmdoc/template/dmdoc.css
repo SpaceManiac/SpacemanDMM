@@ -12,6 +12,9 @@ pre, code {
     tab-size: 4;
     -moz-tab-size: 4;
 }
+pre {
+    padding: 8px;
+}
 a {
     color: #333333;
 }
@@ -90,7 +93,7 @@ img[src="git.png"] {
     .no-substance {
         color: #bbbbbb;
     }
-    pre, code {
+    pre, code, :target {
         background-color: #252530;
     }
     img[src="git.png"] {
