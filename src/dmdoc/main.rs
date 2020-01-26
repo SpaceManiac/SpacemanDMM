@@ -92,7 +92,6 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("collating documented types");
     let mut types_with_docs = BTreeMap::new();
-    let mut progress = Progress::default();
 
     // collate modules which have docs
     let mut modules1 = BTreeMap::new();
@@ -100,7 +99,6 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     let mut macros_all = 0;
     for (file, comment_vec) in module_docs {
         let file_path = context.file_path(file);
-        progress.update(&file_path.display().to_string());
         let module = module_entry(&mut modules1, &file_path);
         for (line, doc) in comment_vec {
             module.items_wip.push((line, ModuleItem::DocComment(doc)));
@@ -109,8 +107,6 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
 
     // if macros have docs, that counts as a module too
     for (range, (name, define)) in define_history.iter() {
-        progress.update(&format!("#define {}", name));
-
         let (docs, has_params, params, is_variadic);
         match define {
             dm::preprocessor::Define::Constant { docs: dc, .. } => {
@@ -167,7 +163,6 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         if path.extension() != Some("md".as_ref()) {
             continue;
         }
-        progress.update(&path.display().to_string());
 
         let mut buf = String::new();
         File::open(path)?.read_to_string(&mut buf)?;
@@ -188,7 +183,6 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     let mut substance_count = 0;
     objtree.root().recurse(&mut |ty| {
         count += 1;
-        progress.update(&ty.path);
 
         let mut parsed_type = ParsedType::default();
         if context.config().dmdoc.use_typepath_names {
@@ -416,8 +410,6 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         (key, module)
     }).collect();
 
-    drop(progress);
-
     print!("documenting {} modules, ", modules.len());
     if macros_all == 0 {
         print!("0 macros, ");
@@ -521,8 +513,6 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         git,
     };
 
-    progress = Progress::default();
-    progress.println("rendering html");
     {
         #[derive(Serialize)]
         struct Index<'a> {
@@ -532,7 +522,6 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             types: Vec<IndexTree<'a>>,
         }
 
-        progress.update("index.html");
         let mut index = create(&output_path.join("index.html"))?;
         index.write_all(tera.render("dm_index.html", &tera::Context::from_serialize(Index {
             env,
@@ -573,7 +562,6 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         let fname = format!("{}.html", details.htmlname);
-        progress.update(&fname);
 
         let mut base = String::new();
         for _ in fname.chars().filter(|&x| x == '/') {
@@ -604,7 +592,6 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         let fname = format!("{}.html", details.htmlname);
-        progress.update(&fname);
 
         let mut base = String::new();
         for _ in fname.chars().filter(|&x| x == '/') {
@@ -620,7 +607,6 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             types: &types_with_docs,
         })?)?.as_bytes())?;
     }
-    drop(progress);
 
     Ok(())
 }
@@ -757,37 +743,6 @@ fn git_info(git: &mut Git) -> Result<(), git2::Error> {
         }
     }
     Ok(())
-}
-
-/// Helper for printing progress information.
-#[derive(Default)]
-struct Progress {
-    last_len: usize,
-}
-
-impl Progress {
-    fn update(&mut self, msg: &str) {
-        print!("\r{}", msg);
-        for _ in msg.len()..self.last_len {
-            print!(" ");
-        }
-        self.last_len = msg.len();
-    }
-
-    fn println(&mut self, msg: &str) {
-        print!("\r");
-        for _ in 0..self.last_len {
-            print!(" ");
-        }
-        println!("\r{}", msg);
-    }
-}
-
-impl Drop for Progress {
-    fn drop(&mut self) {
-        self.update("");
-        print!("\r");
-    }
 }
 
 // ----------------------------------------------------------------------------
