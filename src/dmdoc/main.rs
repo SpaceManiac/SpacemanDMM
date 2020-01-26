@@ -414,22 +414,22 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     let mut tera = template::builtin()?;
 
     // register tera extensions
-    fn tera_linkify_type(value: &Value, _: &HashMap<String, Value>) -> tera::Result<Value> {
+    tera.register_filter("linkify_type", |value: &Value, _: &HashMap<String, Value>| {
         match *value {
             tera::Value::String(ref s) => Ok(linkify_type(s.split("/").skip_while(|b| b.is_empty())).into()),
             tera::Value::Array(ref a) => Ok(linkify_type(a.iter().filter_map(|v| v.as_str())).into()),
             _ => Err("linkify_type() input must be string".into()),
         }
-    }
-    fn length(value: &Value, _: &HashMap<String, Value>) -> tera::Result<Value> {
+    });
+    tera.register_filter("length", |value: &Value, _: &HashMap<String, Value>| {
         match *value {
             tera::Value::String(ref s) => Ok(s.len().into()),
             tera::Value::Array(ref a) => Ok(a.len().into()),
             tera::Value::Object(ref o) => Ok(o.len().into()),
             _ => Ok(0.into()),
         }
-    }
-    fn substring(value: &Value, opts: &HashMap<String, Value>) -> tera::Result<Value> {
+    });
+    tera.register_filter("substring", |value: &Value, opts: &HashMap<String, Value>| {
         match *value {
             tera::Value::String(ref s) => {
                 let start = opts.get("start").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
@@ -445,10 +445,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             }
             _ => Err("substring() input must be string".into()),
         }
-    }
-    tera.register_filter("linkify_type", tera_linkify_type);
-    tera.register_filter("length", length);
-    tera.register_filter("substring", substring);
+    });
 
     // render
     println!("saving static resources");
