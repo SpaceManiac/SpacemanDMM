@@ -20,7 +20,7 @@ fn main() {
     while let Some(arg) = args.next() {
         if arg == "-V" || arg == "--version" {
             println!(
-                "dreamchecker {}  Copyright (C) 2017-2019  Tad Hardesty",
+                "dreamchecker {}  Copyright (C) 2017-2020  Tad Hardesty",
                 env!("CARGO_PKG_VERSION")
             );
             println!("{}", include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")));
