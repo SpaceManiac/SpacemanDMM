@@ -26,6 +26,7 @@ Raised by DreamChecker:
 * `disabled_directive` - Raised when attempting to disable a `set SpacemanDMM_*` directive that cannot be disabled
 * `sets_directive_twice` - Raised when a directive is set twice in the same proc
 * `invalid_lint_directive_value` - Raised when attempting to set a directive value to something other than `1`, `0`, `TRUE`, `FALSE`
+* `invalid_set_value` - Raised on invalid values used with builtin set directives
 * `unknown_linter_setting` - Raised when setting a `SpacemanDMM_*` directive that DreamChecker doesn't implement
 * `override_missing_keyword_arg` - Raised when proc overrides are missing keyword arguments
 * `must_not_override` - `SpacemanDMM_should_not_override` directive
