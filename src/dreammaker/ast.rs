@@ -895,7 +895,6 @@ pub const KNOWN_SETTING_NAMES: &[&str] = &[
     "invisibility",
     "src",
     "background",
-    // undocumented
     "waitfor",
 ];
 
