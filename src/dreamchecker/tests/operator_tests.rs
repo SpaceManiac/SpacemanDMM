@@ -37,7 +37,7 @@ fn in_ambig() {
 }
 
 pub const OP_OVERLOAD_ERRORS: &[(u32, u16, &str)] = &[
-    (6, 5, "Attempting ++ on a /mob which does not overload operator++"),
+    (6, 5, "Attempting operator++ on a /mob which does not overload operator++"),
 ];
 
 #[test]
