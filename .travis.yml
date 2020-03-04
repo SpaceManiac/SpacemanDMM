@@ -5,9 +5,12 @@ branches:
   only:
     - master
 cache: cargo
+before_cache:
+  - cargo-cache
 install:
   - rustc -Vv
   - cargo -V
+  - cargo install cargo-cache --no-default-features --features ci-autoclean cargo-cache
 script:
   - cargo build --verbose --all
   - cargo test --verbose --all
