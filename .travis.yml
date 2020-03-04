@@ -8,8 +8,8 @@ cache:
     - cargo
     - target
 install:
-  - rustc -Vv
-  - cargo -V
+  - travis_wait rustc -Vv
+  - travis_wait cargo -V
 script:
-  - cargo build --verbose --all
-  - cargo test --verbose --all
+  - travis_wait cargo build --verbose --all
+  - travis_wait cargo test --verbose --all
