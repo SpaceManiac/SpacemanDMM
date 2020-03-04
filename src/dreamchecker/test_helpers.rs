@@ -43,6 +43,8 @@ pub fn parse_a_file_for_test<S: Into<Cow<'static, str>>>(buffer: S) -> Context {
         }
     });
 
+    analyzer.check_proc_call_tree();
+
     tree.root().recurse(&mut |ty| {
         for proc in ty.iter_self_procs() {
             analyzer.check_kwargs(proc);

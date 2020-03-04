@@ -1350,7 +1350,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             };
             let value = require!(self.expression());
             require!(self.statement_terminator());
-            // TODO: warn on weird values for these
             spanned(Statement::Setting { name, mode, value })
         } else if let Some(()) = self.exact_ident("break")? {
             let label = self.ident()?;
@@ -1440,6 +1439,18 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     DMError::new(type_path_start, "var/final has no effect here")
                         .set_severity(Severity::Warning)
                         .with_errortype("final_no_effect")
+                        .register(self.context);
+                }
+                if var_type.is_private {
+                    DMError::new(type_path_start, "var/SpacemanDMM_private has no effect here")
+                        .with_errortype("private_var")
+                        .set_severity(Severity::Warning)
+                        .register(self.context);
+                }
+                if var_type.is_protected {
+                    DMError::new(type_path_start, "var/SpacemanDMM_protected has no effect here")
+                        .with_errortype("protected_var")
+                        .set_severity(Severity::Warning)
                         .register(self.context);
                 }
                 let var_suffix = require!(self.var_suffix());
