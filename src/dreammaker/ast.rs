@@ -671,6 +671,8 @@ pub struct VarType {
     pub is_const: bool,
     pub is_tmp: bool,
     pub is_final: bool,
+    pub is_private: bool,
+    pub is_protected: bool,
     pub type_path: TreePath,
 }
 
@@ -694,7 +696,7 @@ impl VarType {
 
 impl FromIterator<String> for VarType {
     fn from_iter<T: IntoIterator<Item=String>>(iter: T) -> Self {
-        let (mut is_static, mut is_const, mut is_tmp, mut is_final) = (false, false, false, false);
+        let (mut is_static, mut is_const, mut is_tmp, mut is_final, mut is_private, mut is_protected) = (false, false, false, false, false, false);
         let type_path = iter
             .into_iter()
             .skip_while(|p| {
@@ -703,6 +705,12 @@ impl FromIterator<String> for VarType {
                     true
                 } else if p == "SpacemanDMM_final" {
                     is_final = true;
+                    true
+                } else if p == "SpacemanDMM_private" {
+                    is_private = true;
+                    true
+                } else if p == "SpacemanDMM_protected" {
+                    is_protected = true;
                     true
                 } else if p == "const" {
                     is_const = true;
@@ -719,6 +727,8 @@ impl FromIterator<String> for VarType {
             is_const,
             is_tmp,
             is_final,
+            is_private,
+            is_protected,
             type_path,
         }
     }
@@ -737,6 +747,12 @@ impl fmt::Display for VarType {
         }
         if self.is_final {
             fmt.write_str("SpacemanDMM_final/")?;
+        }
+        if self.is_private {
+            fmt.write_str("SpacemanDMM_private/")?;
+        }
+        if self.is_protected {
+            fmt.write_str("SpacemanDMM_protected/")?;
         }
         for bit in self.type_path.iter() {
             fmt.write_str(bit)?;

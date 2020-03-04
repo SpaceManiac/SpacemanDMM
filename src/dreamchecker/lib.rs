@@ -381,19 +381,27 @@ struct KwargInfo {
 struct ProcDirective<'o> {
     directive: HashMap<ProcRef<'o>, (bool, Location)>,
     can_be_disabled: bool,
+    set_at_definition: bool,
+    can_be_global: bool,
     directive_string: &'static str,
 }
 
 impl<'o> ProcDirective<'o> {
-    pub fn new(directive_string: &'static str, can_be_disabled: bool) -> ProcDirective<'o> {
+    pub fn new(directive_string: &'static str, can_be_disabled: bool, set_at_definition: bool, can_be_global: bool) -> ProcDirective<'o> {
         ProcDirective {
             directive: Default::default(),
             directive_string,
             can_be_disabled,
+            set_at_definition,
+            can_be_global,
         }
     }
 
     pub fn insert(&mut self, proc: ProcRef<'o>, enable: bool, location: Location) -> Result<(), DMError> {
+        if proc.ty().is_root() && !self.can_be_global {
+            return Err(error(location, format!("{} sets {}, which cannot be set on global procs", proc, self.directive_string))
+                .with_errortype("incompatible_directive"))
+        }
         if !enable && !self.can_be_disabled {
             return Err(error(location, format!("{} sets {} false, but it cannot be disabled.", proc, self.directive_string))
                 .with_errortype("disabled_directive")
@@ -510,6 +518,8 @@ pub struct AnalyzeObjectTree<'o> {
     return_type: HashMap<ProcRef<'o>, TypeExpr<'o>>,
     must_call_parent: ProcDirective<'o>,
     must_not_override: ProcDirective<'o>,
+    private: ProcDirective<'o>,
+    protected: ProcDirective<'o>,
     must_not_sleep: ProcDirective<'o>,
     sleep_exempt: ProcDirective<'o>,
     must_be_pure: ProcDirective<'o>,
@@ -532,11 +542,13 @@ impl<'o> AnalyzeObjectTree<'o> {
             context,
             objtree,
             return_type,
-            must_call_parent: ProcDirective::new("SpacemanDMM_should_call_parent", true),
-            must_not_override: ProcDirective::new("SpacemanDMM_should_not_override", false),
-            must_not_sleep: ProcDirective::new("SpacemanDMM_should_not_sleep", false),
-            sleep_exempt: ProcDirective::new("SpacemanDMM_allowed_to_sleep", false),
-            must_be_pure: ProcDirective::new("SpacemanDMM_should_be_pure", false),
+            must_call_parent: ProcDirective::new("SpacemanDMM_should_call_parent", true, false, false),
+            must_not_override: ProcDirective::new("SpacemanDMM_should_not_override", false, false, false),
+            private: ProcDirective::new("SpacemanDMM_private_proc", false, true, false),
+            protected: ProcDirective::new("SpacemanDMM_protected_proc", false, true, false),
+            must_not_sleep: ProcDirective::new("SpacemanDMM_should_not_sleep", false, true, true),
+            sleep_exempt: ProcDirective::new("SpacemanDMM_allowed_to_sleep", false, true, true),
+            must_be_pure: ProcDirective::new("SpacemanDMM_should_be_pure", false, true, true),
             used_kwargs: Default::default(),
             call_tree: Default::default(),
             sleeping_procs: Default::default(),
@@ -555,6 +567,8 @@ impl<'o> AnalyzeObjectTree<'o> {
         let procdirective = match directive {
             "SpacemanDMM_should_not_override" => &mut self.must_not_override,
             "SpacemanDMM_should_call_parent" => &mut self.must_call_parent,
+            "SpacemanDMM_private_proc" => &mut self.private,
+            "SpacemanDMM_protected_proc" => &mut self.protected,
             "SpacemanDMM_should_not_sleep" => &mut self.must_not_sleep,
             "SpacemanDMM_allowed_to_sleep" => &mut self.sleep_exempt,
             "SpacemanDMM_should_be_pure" => &mut self.must_be_pure,
@@ -566,6 +580,18 @@ impl<'o> AnalyzeObjectTree<'o> {
                 return
             }
         };
+
+        if procdirective.set_at_definition {
+            if let Some(procdef) = &mut proc.get_declaration() {
+                if procdef.location != proc.get().location {
+                    error(location, format!("Can't define procs {} outside their initial definition", directive))
+                        .set_severity(Severity::Warning)
+                        .register(self.context);
+                    return
+                }
+            }
+        }
+
         match directive_value_to_truthy(expr, location) {
             Ok(truthy) => {
                 if let Err(error) = procdirective.insert(proc, truthy, location) {
@@ -827,7 +853,7 @@ impl<'o> AnalyzeObjectTree<'o> {
 }
 
 fn static_type<'o>(objtree: &'o ObjectTree, location: Location, mut of: &[String]) -> Result<StaticType<'o>, DMError> {
-    while !of.is_empty() && ["static", "global", "const", "tmp", "SpacemanDMM_final"].contains(&&*of[0]) {
+    while !of.is_empty() && ["static", "global", "const", "tmp", "SpacemanDMM_final", "SpacemanDMM_private", "SpacemanDMM_protected"].contains(&&*of[0]) {
         of = &of[1..];
     }
 
@@ -895,6 +921,13 @@ pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
                     DMError::new(typevar.value.location, format!("{} overrides final var {:?}", path, varname))
                         .with_errortype("final_var")
                         .with_note(decl.location, format!("declared final on {} here", parent.path))
+                        .register(context);
+                }
+
+                if decl.var_type.is_private {
+                    DMError::new(typevar.value.location, format!("{} overrides private var {:?}", path, varname))
+                        .with_errortype("private_var")
+                        .with_note(decl.location, format!("declared private on {} here", parent.path))
                         .register(context);
                 }
             }
@@ -975,6 +1008,14 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         //println!("purity {}", self.is_pure);
 
         if self.proc_ref.parent_proc().is_some() {
+            if let Some((proc, true, location)) = self.env.private.get_self_or_parent(self.proc_ref) {
+                if proc != self.proc_ref {
+                    error(self.proc_ref.location, format!("proc overrides private parent, prohibited by {}", proc))
+                    .with_note(location, "prohibited by this private_proc annotation")
+                    .with_errortype("private_proc")
+                    .register(self.context);
+                }
+            }
             if let Some((proc, true, location)) = self.env.must_not_override.get_self_or_parent(self.proc_ref) {
                 if proc != self.proc_ref {
                     error(self.proc_ref.location, format!("proc overrides parent, prohibited by {}", proc))
@@ -1174,7 +1215,6 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     fn visit_var(&mut self, location: Location, var_type: &VarType, name: &str, value: Option<&'o Expression>, local_vars: &mut HashMap<String, LocalVar<'o>>) {
         // Calculate type hint
         let static_type = self.env.static_type(location, &var_type.type_path);
-
         // Visit the expression if it's there
         let mut analysis = match value {
             Some(ref expr) => self.visit_expression(location, expr, static_type.basic_type(), local_vars),
@@ -1543,6 +1583,19 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Follow::Field(kind, name) => {
                 if let Some(ty) = lhs.static_ty.basic_type() {
                     if let Some(decl) = ty.get_var_declaration(name) {
+                        if ty != self.ty && decl.var_type.is_private {
+                            error(location, format!("field {:?} on {} is declared as private", name, ty))
+                                .with_errortype("private_var")
+                                .set_severity(Severity::Warning)
+                                .with_note(decl.location, "definition is here")
+                                .register(self.context);
+                        } else if !self.ty.is_subtype_of(ty.get()) && decl.var_type.is_protected {
+                            error(location, format!("field {:?} on {} is declared as protected", name, ty))
+                                .with_errortype("protected_var")
+                                .set_severity(Severity::Warning)
+                                .with_note(decl.location, "definition is here")
+                                .register(self.context);
+                        }
                         self.static_type(location, &decl.var_type.type_path)
                             .with_fix_hint(decl.location, "add additional type info here")
                     } else {
@@ -1562,6 +1615,23 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Follow::Call(kind, name, arguments) => {
                 if let Some(ty) = lhs.static_ty.basic_type() {
                     if let Some(proc) = ty.get_proc(name) {
+                        if let Some((privateproc, true, decllocation)) = self.env.private.get_self_or_parent(proc) {
+                            if ty != privateproc.ty() {
+                                error(location, format!("{} attempting to call private proc {}, types do not match", self.proc_ref, privateproc))
+                                    .with_errortype("private_proc")
+                                    .with_note(decllocation, "prohibited by this private_proc annotation")
+                                    .register(self.context);
+                                return Analysis::empty() // dont double up with visit_call()
+                            }
+                        }
+                        if let Some((protectedproc, true, decllocation)) = self.env.protected.get_self_or_parent(proc) {
+                            if !self.ty.is_subtype_of(protectedproc.ty().get()) {
+                                error(location, format!("{} attempting to call protected proc {}", self.proc_ref, protectedproc))
+                                    .with_errortype("protected_proc")
+                                    .with_note(decllocation, "prohibited by this protected_proc annotation")
+                                    .register(self.context);
+                            }
+                        }
                         self.visit_call(location, ty, proc, arguments, false, local_vars)
                     } else {
                         error(location, format!("undefined proc: {:?} on {}", name, ty))
@@ -1635,6 +1705,15 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         if let Some(callhashset) = self.env.call_tree.get_mut(&self.proc_ref) {
             callhashset.push((proc, location));
         }
+        if let Some((privateproc, true, decllocation)) = self.env.private.get_self_or_parent(proc) {
+            if self.ty != privateproc.ty() {
+                error(location, format!("{} attempting to call private proc {}, types do not match", self.proc_ref, privateproc))
+                    .with_errortype("private_proc")
+                    .with_note(decllocation, "prohibited by this private_proc annotation")
+                    .register(self.context);
+            }
+        }
+
         // identify and register kwargs used
         let mut any_kwargs_yet = false;
 

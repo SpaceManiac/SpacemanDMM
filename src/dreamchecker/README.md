@@ -64,6 +64,8 @@ be enabled:
 	#define SHOULD_NOT_SLEEP(X) set SpacemanDMM_should_not_sleep = X
 	#define SHOULD_BE_PURE(X) set SpacemanDMM_should_be_pure = X
 	#define VAR_FINAL var/SpacemanDMM_final
+	#define VAR_PRIVATE var/SpacemanDMM_private
+	#define VAR_PROTECTED var/SpacemanDMM_protected
 #else
 	#define RETURN_TYPE(X)
 	#define SHOULD_CALL_PARENT(X)
@@ -72,6 +74,8 @@ be enabled:
 	#define SHOULD_NOT_SLEEP(X)
 	#define SHOULD_BE_PURE(X)
 	#define VAR_FINAL var
+	#define VAR_PRIVATE var
+	#define VAR_PROTECTED var
 #endif
 ```
 
@@ -107,13 +111,27 @@ This cannot be disabled by child overrides.
 
 ### Final variables
 
-Use the above definition of VAR_FINAL to declare vars as `SpacemanDMM_final`, 
+Use the above definition of VAR_FINAL to declare vars as `SpacemanDMM_final`,
 `var/SpacemanDMM_final/foo` such that overriding their value isn't permitted by
 types that inherit it.
 ```
 /a/type
 	VAR_FINAL/foo = somevalue
 ```
+
+### Private / Protected procs
+
+Use `set SpacemanDMM_private_proc = 1` and `set SpacemanDMM_protected_proc = 1` to set procs as private and protected respectively.
+
+* Private procs can only be called by things of exactly the same type
+* Protected procs can only be call by things of the same type or subtypes
+
+Additionally, Private procs cannot be overridden.
+
+### Private / Protected vars
+
+Use the above definitions of VAR_PRIVATE and VAR_PROTECTED to declare vars as `SpacemanDMM_private`/`SpacemanDMM_protected`.
+These function the same way as the proc versions.
 
 ### Should not sleep
 

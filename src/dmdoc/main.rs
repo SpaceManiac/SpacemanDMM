@@ -363,6 +363,8 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                     is_const: decl.var_type.is_const,
                     is_tmp: decl.var_type.is_tmp,
                     is_final: decl.var_type.is_final,
+                    is_private: decl.var_type.is_private,
+                    is_protected: decl.var_type.is_protected,
                     path: &decl.var_type.type_path,
                 });
                 parsed_type.vars.insert(name, Var {
@@ -1024,6 +1026,8 @@ struct VarType<'a> {
     is_const: bool,
     is_tmp: bool,
     is_final: bool,
+    is_private: bool,
+    is_protected: bool,
     path: &'a [String],
 }
 
