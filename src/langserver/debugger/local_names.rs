@@ -24,6 +24,7 @@ impl<'o> WalkProc<'o> {
         match statement {
             Statement::Expr(_) => {},
             Statement::Return(_) => {},
+            Statement::Crash(_) => {},
             Statement::Throw(_) => {},
             Statement::While { block, .. } => self.visit_block(block),
             Statement::DoWhile { block, .. } => self.visit_block(block),

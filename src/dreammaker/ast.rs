@@ -390,6 +390,91 @@ impl Expression {
             _ => None,
         }
     }
+
+    pub fn is_const_eval(&self) -> bool {
+        match self {
+            Expression::BinaryOp { op, lhs, rhs } => {
+                guard!(let Some(lhterm) = lhs.as_term() else {
+                    return false
+                });
+                guard!(let Some(rhterm) = rhs.as_term() else {
+                    return false
+                });
+                if !lhterm.is_static() {
+                    return false
+                }
+                if !rhterm.is_static() {
+                    return false
+                }
+                match op {
+                    BinaryOp::Eq |
+                    BinaryOp::NotEq |
+                    BinaryOp::Less |
+                    BinaryOp::Greater |
+                    BinaryOp::LessEq |
+                    BinaryOp::GreaterEq |
+                    BinaryOp::And |
+                    BinaryOp::Or => return true,
+                    _ => return false,
+                }
+            },
+            _ => false,
+        }
+    }
+
+    pub fn is_truthy(&self) -> Option<bool> {
+        match self {
+            Expression::Base { unary, term, follow: _ } => {
+                guard!(let Some(truthy) = term.elem.is_truthy() else {
+                    return None
+                });
+                let mut negation = false;
+                for u in unary {
+                    if let UnaryOp::Not = u {
+                        negation = !negation;
+                    }
+                }
+                if negation {
+                    return Some(!truthy)
+                } else {
+                    return Some(truthy)
+                }
+            },
+            Expression::BinaryOp { op, lhs, rhs } => {
+                guard!(let Some(lhtruth) = lhs.is_truthy() else {
+                    return None
+                });
+                guard!(let Some(rhtruth) = rhs.is_truthy() else {
+                    return None
+                });
+                return match op {
+                    BinaryOp::And => Some(lhtruth && rhtruth),
+                    BinaryOp::Or => Some(lhtruth || rhtruth),
+                    _ => None,
+                }
+            },
+            Expression::AssignOp { op, lhs: _, rhs } => {
+                if let AssignOp::Assign = op {
+                    return match rhs.as_term() {
+                        Some(term) => term.is_truthy(),
+                        _ => None,
+                    }
+                } else {
+                    return None
+                }
+            },
+            Expression::TernaryOp { cond, if_, else_ } => {
+                guard!(let Some(condtruth) = cond.is_truthy() else {
+                    return None
+                });
+                if condtruth {
+                    return if_.is_truthy()
+                } else {
+                    return else_.is_truthy()
+                }
+            }
+        }
+    }
 }
 
 impl From<Term> for Expression {
@@ -463,6 +548,65 @@ pub enum Term {
     Pick(Vec<(Option<Expression>, Expression)>),
     /// A use of the `call()()` primitive.
     DynamicCall(Vec<Expression>, Vec<Expression>),
+}
+
+impl Term {
+    pub fn is_static(&self) -> bool {
+        return match self {
+            Term::Null |
+            Term::Int(_) |
+            Term::Float(_) |
+            Term::String(_) |
+            Term::Prefab(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_truthy(&self) -> Option<bool> {
+        return match self {
+            // null is always false
+            Term::Null => Some(false),
+            // number literals are false if they're 0
+            Term::Int(i) => Some(*i != 0),
+            Term::Float(i) => Some(*i != 0f32),
+            // empty strings are false
+            Term::String(s) => Some(s.len() > 0),
+            // recurse
+            Term::Expr(e) => e.is_truthy(),
+            // paths/prefabs are true
+            Term::Prefab(_) => Some(true),
+            // these always have a length therefore true
+            Term::InterpString(_, _) => Some(true),
+            // new is true if it succeeds, assume it does
+            Term::New{type_: _, args: _} => Some(true),
+            // since it returns a reference its true
+            Term::List(_) => Some(true),
+
+            _ => None,
+        };
+    }
+
+    pub fn valid_for_range(&self, other: &Term, step: &Option<Expression>) -> Option<bool> {
+        if let Term::Int(i) = self {
+            if let Term::Int(o) = other {
+                // edge case
+                if *i == 0 && *o == 0 {
+                    return Some(false)
+                }
+                if let Some(stepexp) = step {
+                    if let Some(stepterm) = stepexp.as_term() {
+                        if let Term::Int(_s) = stepterm {
+                            return Some(true)
+                        }
+                    } else {
+                        return Some(true)
+                    }
+                }
+                return Some(*i <= *o)
+            }
+        }
+        None
+    }
 }
 
 impl From<Expression> for Term {
@@ -862,6 +1006,7 @@ pub enum Statement {
         block: Block,
     },
     Del(Expression),
+    Crash(Expression),
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -949,6 +949,91 @@ pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
 
 // ----------------------------------------------------------------------------
 // Procedure analyzer
+#[derive(Debug)]
+pub struct ControlFlow {
+    pub returns: bool,
+    pub continues: bool,
+    pub breaks: bool,
+    pub fuzzy: bool,
+}
+
+impl ControlFlow {
+    pub fn alltrue() -> ControlFlow {
+        ControlFlow {
+            returns: true,
+            continues: true,
+            breaks: true,
+            fuzzy: false,
+        }
+    }
+    pub fn allfalse() -> ControlFlow {
+        ControlFlow {
+            returns: false,
+            continues: false,
+            breaks: false,
+            fuzzy: false,
+        }
+    }
+    pub fn terminates(&self) -> bool {
+        return !self.fuzzy && ( self.returns || self.continues || self.breaks )
+    }
+
+    pub fn terminates_loop(&self) -> bool {
+        return !self.fuzzy && ( self.returns || self.breaks )
+    }
+
+    pub fn no_else(&mut self) {
+        self.returns = false;
+        self.continues = false;
+        self.breaks = false;
+    }
+
+    pub fn merge(&mut self, other: ControlFlow) {
+        if !self.fuzzy && other.returns {
+            self.returns = true;
+        }
+        if other.fuzzy {
+            self.returns = false;
+        }
+        if other.continues {
+            self.continues = true;
+        }
+        if other.breaks {
+            self.breaks = true;
+        }
+        if other.fuzzy {
+            self.fuzzy = true;
+        }
+    }
+
+    pub fn merge_false(&mut self, other: ControlFlow) {
+        if !other.returns {
+            self.returns = false;
+        }
+        if !other.continues {
+            self.continues = false;
+        }
+        if !other.breaks {
+            self.breaks = false;
+        }
+        if other.fuzzy {
+            self.fuzzy = true;
+        }
+    }
+
+    pub fn finalize(&mut self) {
+        if self.returns || self.breaks || self.continues {
+            self.fuzzy = false;
+        }
+    }
+
+    pub fn end_loop(&mut self) {
+        self.returns = false;
+        self.continues = false;
+        self.breaks = false;
+        self.fuzzy = false;
+    }
+}
 
 #[derive(Debug, Clone)]
 struct LocalVar<'o> {
@@ -1047,13 +1132,48 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
     }
 
-    fn visit_block(&mut self, block: &'o [Spanned<Statement>], local_vars: &mut HashMap<String, LocalVar<'o>>) {
+    fn visit_block(&mut self, block: &'o [Spanned<Statement>], local_vars: &mut HashMap<String, LocalVar<'o>>) -> ControlFlow {
+        let mut term = ControlFlow::allfalse();
         for stmt in block.iter() {
-            self.visit_statement(stmt.location, &stmt.elem, local_vars);
+            if term.terminates() {
+                error(stmt.location,"possible unreachable code here")
+                    .register(self.context);
+                return term // stop evaluating
+            }
+            let state = self.visit_statement(stmt.location, &stmt.elem, local_vars);
+            term.merge(state);
+        }
+        return term
+    }
+
+    fn loop_condition_check(&mut self, location: Location, expression: &'o Expression) {
+        match expression.is_truthy() {
+            Some(true) => {
+                error(location,"loop condition is always true")
+                    .register(self.context);
+            },
+            Some(false) => {
+                error(location,"loop condition is always false")
+                    .register(self.context);
+            }
+            _ => ()
+        };
+    }
+
+    fn visit_control_condition(&mut self, location: Location, expression: &'o Expression) {
+        if expression.is_const_eval() {
+            error(location,"control flow condition is a constant evalutation")
+                    .register(self.context);
+        }
+        else if let Some(term) = expression.as_term() {
+            if term.is_static() {
+                error(location,"control flow condition is a static term")
+                    .register(self.context);
+            }
         }
     }
 
-    fn visit_statement(&mut self, location: Location, statement: &'o Statement, local_vars: &mut HashMap<String, LocalVar<'o>>) {
+    fn visit_statement(&mut self, location: Location, statement: &'o Statement, local_vars: &mut HashMap<String, LocalVar<'o>>) -> ControlFlow {
         match statement {
             Statement::Expr(expr) => {
                 match expr {
@@ -1085,28 +1205,74 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 let return_type = self.visit_expression(location, expr, None, local_vars);
                 local_vars.get_mut(".").unwrap().analysis = return_type;
                 // TODO: break out of the analysis for this branch?
+                return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false }
             },
-            Statement::Return(None) => {},
+            Statement::Return(None) => { return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false } },
+            Statement::Crash(expr) => {
+                self.visit_expression(location, expr, None, local_vars);
+                return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false }
+            },
             Statement::Throw(expr) => { self.visit_expression(location, expr, None, local_vars); },
             Statement::While { condition, block } => {
                 let mut scoped_locals = local_vars.clone();
                 self.visit_expression(location, condition, None, &mut scoped_locals);
-                self.visit_block(block, &mut scoped_locals);
+                let mut state = self.visit_block(block, &mut scoped_locals);
+                state.end_loop();
+                return state
             },
             Statement::DoWhile { block, condition } => {
                 let mut scoped_locals = local_vars.clone();
-                self.visit_block(block, &mut scoped_locals);
+                let mut state = self.visit_block(block, &mut scoped_locals);
+                if state.terminates_loop() {
+                    error(location,"do while terminates without ever reaching condition")
+                        .register(self.context);
+                    return state
+                }
                 self.visit_expression(location, condition, None, &mut scoped_locals);
+
+                state.end_loop();
+                return state
             },
             Statement::If { arms, else_arm } => {
+                let mut allterm = ControlFlow::alltrue();
+                let mut alwaystrue = false;
                 for (condition, ref block) in arms.iter() {
                     let mut scoped_locals = local_vars.clone();
+                    self.visit_control_condition(condition.location, &condition.elem);
+                    if alwaystrue {
+                        error(condition.location,"unreachable if block, preceeding if/elseif condition(s) are always true")
+                            .register(self.context);
+                    }
                     self.visit_expression(condition.location, &condition.elem, None, &mut scoped_locals);
-                    self.visit_block(block, &mut scoped_locals);
+                    let state = self.visit_block(block, &mut scoped_locals);
+                    match condition.elem.is_truthy() {
+                        Some(true) => {
+                            error(condition.location,"if condition is always true")
+                                .register(self.context);
+                            allterm.merge_false(state);
+                            alwaystrue = true;
+                        },
+                        Some(false) => {
+                            error(condition.location,"if condition is always false")
+                                .register(self.context);
+                        },
+                        None => allterm.merge_false(state)
+                    };
                 }
                 if let Some(else_arm) = else_arm {
-                    self.visit_block(else_arm, &mut local_vars.clone());
+                    if alwaystrue {
+                        // TODO: fix location for else blocks
+                        error(location,"unreachable else block, preceeding if/elseif condition(s) are always true")
+                            .register(self.context);
+                    }
+                    let state = self.visit_block(else_arm, &mut local_vars.clone());
+                    allterm.merge_false(state);
+                } else {
+                    allterm.no_else();
+                    return allterm
                 }
+                allterm.finalize();
+                return allterm
             },
             Statement::ForLoop { init, test, inc, block } => {
                 let mut scoped_locals = local_vars.clone();
@@ -1114,12 +1280,16 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     self.visit_statement(location, init, &mut scoped_locals);
                 }
                 if let Some(test) = test {
+                    self.loop_condition_check(location, test);
+                    self.visit_control_condition(location, test);
                     self.visit_expression(location, test, None, &mut scoped_locals);
                 }
                 if let Some(inc) = inc {
                     self.visit_statement(location, inc, &mut scoped_locals);
                 }
-                self.visit_block(block, &mut scoped_locals);
+                let mut state = self.visit_block(block, &mut scoped_locals);
+                state.end_loop();
+                return state
             },
             Statement::ForList { in_list, block, var_type, name, .. } => {
                 let mut scoped_locals = local_vars.clone();
@@ -1129,7 +1299,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 if let Some(var_type) = var_type {
                     self.visit_var(location, var_type, name, None, &mut scoped_locals);
                 }
-                self.visit_block(block, &mut scoped_locals);
+                let mut state = self.visit_block(block, &mut scoped_locals);
+                state.end_loop();
+                return state
             },
             Statement::ForRange { var_type, name, start, end, step, block } => {
                 let mut scoped_locals = local_vars.clone();
@@ -1140,7 +1312,21 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 if let Some(var_type) = var_type {
                     self.visit_var(location, var_type, name, Some(start), &mut scoped_locals);
                 }
-                self.visit_block(block, &mut scoped_locals);
+                let mut state = self.visit_block(block, &mut scoped_locals);
+                if let Some(startterm) = start.as_term() {
+                    if let Some(endterm) = end.as_term() {
+                        if let Some(validity) = startterm.valid_for_range(endterm, step) {
+                            if !validity {
+                                error(location,"for range loop body is never reached due to invalid range")
+                                    .register(self.context);
+                            } else {
+                                return state
+                            }
+                        }
+                    }
+                }
+                state.end_loop();
+                return state
             },
             Statement::Var(var) => self.visit_var_stmt(location, var, local_vars),
             Statement::Vars(vars) => {
@@ -1150,7 +1336,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Statement::Setting { name, mode: SettingMode::Assign, value } => {
                 if name != "waitfor" {
-                    return
+                    return ControlFlow::allfalse()
                 }
                 match match value.as_term() {
                     Some(Term::Int(0)) => Some(true),
@@ -1172,6 +1358,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 self.inside_newcontext = self.inside_newcontext.wrapping_sub(1);
             },
             Statement::Switch { input, cases, default } => {
+                let mut allterm = ControlFlow::alltrue();
+                self.visit_control_condition(location, input);
                 self.visit_expression(location, input, None, local_vars);
                 for &(ref case, ref block) in cases.iter() {
                     let mut scoped_locals = local_vars.clone();
@@ -1184,11 +1372,18 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                             }
                         }
                     }
-                    self.visit_block(block, &mut scoped_locals);
+                    let state = self.visit_block(block, &mut scoped_locals);
+                    allterm.merge_false(state);
                 }
                 if let Some(default) = default {
-                    self.visit_block(default, &mut local_vars.clone());
+                    let state = self.visit_block(default, &mut local_vars.clone());
+                    allterm.merge_false(state);
+                } else {
+                    allterm.no_else();
+                    return allterm
                 }
+                allterm.finalize();
+                return allterm
             },
             Statement::TryCatch { try_block, catch_params, catch_block } => {
                 self.visit_block(try_block, &mut local_vars.clone());
@@ -1212,12 +1407,13 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
                 self.visit_block(catch_block, &mut catch_locals);
             },
-            Statement::Continue(_) => {},
-            Statement::Break(_) => {},
+            Statement::Continue(_) => { return ControlFlow { returns: false, continues: true, breaks: false, fuzzy: true } },
+            Statement::Break(_) => { return ControlFlow { returns: false, continues: false, breaks: true, fuzzy: true } },
             Statement::Goto(_) => {},
-            Statement::Label { name: _, block } => self.visit_block(block, &mut local_vars.clone()),
+            Statement::Label { name: _, block } => { self.visit_block(block, &mut local_vars.clone()); },
             Statement::Del(expr) => { self.visit_expression(location, expr, None, local_vars); },
         }
+        return ControlFlow::allfalse()
     }
 
     fn visit_var_stmt(&mut self, location: Location, var: &'o VarStatement, local_vars: &mut HashMap<String, LocalVar<'o>>) {

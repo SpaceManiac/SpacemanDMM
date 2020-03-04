@@ -1491,6 +1491,11 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             // statement :: 'return' expression ';'
             let expression = self.expression()?;
             success(Statement::Return(expression))
+        } else if let Some(()) = self.exact_ident("CRASH")? {
+            require!(self.exact(Token::Punct(Punctuation::LParen)));
+            let expression = require!(self.expression());
+            require!(self.exact(Token::Punct(Punctuation::RParen)));
+            success(Statement::Crash(expression))
         } else if let Some(()) = self.exact_ident("throw")? {
             // statement :: 'throw' expression ';'
             let expression = require!(self.expression());
