@@ -6,20 +6,11 @@ branches:
     - master
 cache: cargo
 before_cache:
-  - rm -rfv target/debug/incremental/{dm_langserver,dmdoc,dmm_tools,dreamchecker,editor,build_script_build}-*
-  - rm -rfv target/debug/.fingerprint/{dm_langserver,dmdoc,dmm_tools,dreamchecker,editor,build_script_build}-*
-  - rm -rfv target/debug/build/{dm_langserver,dmdoc,dmm_tools,dreamchecker,editor,build_script_build}-*
-  - rm -rfv target/debug/deps/{dm_langserver,dmdoc,dmm_tools,dreamchecker,editor,build_script_build}-*
-  - rm -rfv target/debug/deps/lib{dm_langserver,dmdoc,dmm_tools,dreamchecker,editor,build_script_build}-*
-  - rm -rfv target/debug/{dm_langserver,dmdoc,dmm_tools,dreamchecker,editor,build_script_build}.d
-  - cargo clean -p dm_langserver
-  - cargo clean -p dmdoc
-  - cargo clean -p dmm_tools
-  - cargo clean -p dreamchecker
-  - cargo clean -p editor
+  - cargo-cache
 install:
   - rustc -Vv
   - cargo -V
+  - cargo install (--git git://github.com/matthiaskrgr/cargo-cache OR cargo-cache) --no-default-features --features ci-autoclean cargo-cache
 script:
   - cargo build --verbose --all
   - cargo test --verbose --all
