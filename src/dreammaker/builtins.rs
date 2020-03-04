@@ -6,7 +6,7 @@ use super::{Location, DMError};
 use super::preprocessor::{DefineMap, Define};
 
 const DM_VERSION: i32 = 513;
-const DM_BUILD: i32 = 1501;
+const DM_BUILD: i32 = 1508;
 
 /// Register BYOND builtin macros to the given define map.
 pub fn default_defines(defines: &mut DefineMap) {
@@ -158,30 +158,6 @@ pub fn default_defines(defines: &mut DefineMap) {
         DATABASE_ROW_LIST = Int(18);
 
         // 513 stuff
-        // alpha mask filter
-        MASK_INVERSE = Int(1);
-        MASK_SWAP = Int(2);
-
-        // rgb filter
-        FILTER_COLOR_RGB = Int(1);
-        FILTER_COLOR_HSV = Int(2);
-        FILTER_COLOR_HSL = Int(4);
-        FILTER_COLOR_HCY = Int(8);
-
-        // layering
-        FILTER_OVERLAY = Int(1);
-        FILTER_UNDERLAY = Int(2);
-
-        // ray filter
-        FLAG_OVERLAY = Int(1);
-        FLAG_UNDERLAY = Int(2);
-
-        // ripple filter
-        //WAVE_BOUND = Int(2);
-
-        // wave filter
-        WAVE_SIDEWAYS = Int(1);
-        WAVE_BOUND = Int(2);
 
         // vis_flags
         VIS_INHERIT_ICON = Int(1);
@@ -197,9 +173,9 @@ pub fn default_defines(defines: &mut DefineMap) {
         PROFILE_STOP = Int(1);
         PROFILE_CLEAR = Int(2);
         PROFILE_AVERAGE = Int(4);
-        PROFILE_START = Int(8);
-        PROFILE_REFRESH = Int(16);
-        PROFILE_RESTART = Int(32);
+        PROFILE_START = Int(0);
+        PROFILE_REFRESH = Int(0);
+        PROFILE_RESTART = Int(2);
     }
 }
 
@@ -328,6 +304,28 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         var/const/BLEND_ADD = int!(2);
         var/const/BLEND_SUBTRACT = int!(3);
         var/const/BLEND_MULTIPLY = int!(4);
+        var/const/BLEND_INSET_OVERLAY = int!(5);
+
+        // this is just a procstyle syntax wrapper for \ref[foo]
+        proc/ref(A);
+
+        // alpha mask filter
+        var/const/MASK_INVERSE = int!(1);
+        var/const/MASK_SWAP = int!(2);
+
+        // rgb filter
+        var/const/FILTER_COLOR_RGB = int!(0);
+        var/const/FILTER_COLOR_HSV = int!(1);
+        var/const/FILTER_COLOR_HSL = int!(2);
+        var/const/FILTER_COLOR_HCY = int!(3);
+
+        // layering / ray filter
+        var/const/FILTER_OVERLAY = int!(1);
+        var/const/FILTER_UNDERLAY = int!(2);
+
+        // wave filter / ripple filter
+        var/const/WAVE_SIDEWAYS = int!(1);
+        var/const/WAVE_BOUNDED = int!(2);
 
         // global procs
         proc/abs(A);

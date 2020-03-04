@@ -10,6 +10,7 @@ use serde::Deserialize;
 use crate::error::Severity;
 use crate::DMError;
 
+/// Struct for deserializing from a config TOML
 #[derive(Deserialize, Default, Debug, Clone)]
 #[serde(default)]
 pub struct Config {
@@ -20,17 +21,20 @@ pub struct Config {
     pub dmdoc: DMDoc,
 }
 
+/// General error display options
 #[derive(Deserialize, Default, Debug, Clone)]
 pub struct WarningDisplay {
     #[serde(default)]
     error_level: WarningLevel,
 }
 
+/// Langserver config options
 #[derive(Deserialize, Default, Debug, Clone)]
 pub struct Langserver {
     pub dreamchecker: bool,
 }
 
+/// Extremely opinionated linter config options
 #[derive(Deserialize, Default, Debug, Clone)]
 #[serde(default)]
 pub struct CodeStandards {
@@ -38,11 +42,13 @@ pub struct CodeStandards {
     pub disallow_relative_type_definitions: bool,
 }
 
+/// DMDoc config options
 #[derive(Deserialize, Default, Debug, Clone)]
 pub struct DMDoc {
     pub use_typepath_names: bool,
 }
 
+/// Severity overrides from configuration
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
 #[serde(rename_all(deserialize = "lowercase"))]
 pub enum WarningLevel {
@@ -60,6 +66,9 @@ pub enum WarningLevel {
 }
 
 impl Config {
+    /// Read a config TOML and generate a [`Config`] struct
+    ///
+    /// [`Config`]: struct.Config.html
     pub fn read_toml(path: &Path) -> Result<Config, Error> {
         let mut file = File::open(path)?;
         let mut config_toml = String::new();
@@ -74,6 +83,11 @@ impl Config {
         None
     }
 
+    /// Return a new [`DMError`] with the configured [`Severity`] or [`None`] if disabled
+    ///
+    /// [`DMError`]: ../struct.DMError.html
+    /// [`Severity`]: ../enum.Severity.html
+    /// [`None`]: ../../std/option/enum.Option.html#variant.None
     pub fn set_configured_severity(&self, error: DMError) -> Option<DMError> {
         Some(match self.config_warninglevel(&error) {
             Some(WarningLevel::Error) => error.set_severity(Severity::Error),
@@ -85,6 +99,7 @@ impl Config {
         })
     }
 
+    /// Test the error against the configured error level threshold
     pub fn registerable_error(&self, error: &DMError) -> bool {
         self.display.error_level.applies_to(error.severity())
     }
@@ -132,6 +147,7 @@ impl PartialEq<Severity> for WarningLevel {
     }
 }
 
+/// Config parse error
 #[derive(Debug)]
 pub enum Error {
     Io(std::io::Error),

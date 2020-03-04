@@ -11,11 +11,11 @@
 <h1>{% if path == "(global)" -%}
     (global)
 {%- elif details.name -%}
-    {{ details.name }} <aside>{{ path | safe | linkify_type }}</aside>
+    {{ details.name }} <aside>{{ path | linkify_type | safe }}</aside>
 {%- else -%}
-    {{ path | safe | linkify_type }}
+    {{ path | linkify_type | safe }}
 {%- endif %}
-{%- if details.parent_type %}<aside> inherits {{ details.parent_type | safe | linkify_type }}</aside>{% endif -%}
+{%- if details.parent_type %}<aside> inherits {{ details.parent_type | linkify_type | safe }}</aside>{% endif -%}
 {{ macros::git_link(env=env, item=details) }}</h1>
 
 {% if details.docs %}{{ details.docs.html | safe }}{% endif %}
@@ -39,18 +39,20 @@
 {%- endif -%}
 
 {% if details.vars %}
-    <h2><a name="var">Var Details</a></h2>
+    <h2 id="var">Var Details</h2>
     {%- for name, var in details.vars -%}
-        <h3>
+        <h3 id="var/{{ name }}">
         {%- if var.decl -%}
             <aside class="declaration">{{ var.decl }} </aside>
+        {%- elif var.parent -%}
+            <aside class="parent"><a title="/{{ var.parent | safe }}" href="{{ var.parent | safe }}.html#var/{{ name }}">&uarr;</a></aside>
         {%- endif -%}
-        <a name="var/{{ name }}">{{ name }}</a>
+        {{ name }}
         {%- if var.type %}
             <aside>&ndash; {% if var.type.is_static %}/static{% endif -%}
                 {%- if var.type.is_const %}/const{% endif -%}
                 {%- if var.type.is_tmp %}/tmp{% endif -%}
-                {{ var.type.path | safe | linkify_type }}</aside>
+                {{ var.type.path | linkify_type | safe }}</aside>
         {%- endif -%}
         {{ macros::git_link(env=env, item=var) }}</h3>
         {{ var.docs.html | safe }}
@@ -58,16 +60,18 @@
 {% endif %}
 
 {%- if details.procs -%}
-    <h2><a name="proc">Proc Details</a></h2>
+    <h2 id="proc">Proc Details</h2>
     {%- for name, proc in details.procs -%}
-        <h3>
+        <h3 id="proc/{{ name }}">
             {%- if proc.decl -%}
                 <aside class="declaration">{{ proc.decl }} </aside>
+            {%- elif proc.parent -%}
+            <aside class="parent"><a title="/{{ proc.parent | safe }}" href="{{ proc.parent | safe }}.html#proc/{{ name }}">&uarr;</a></aside>
             {%- endif -%}
-            <a name="proc/{{ name }}">{{ name }}</a><aside>(
+            {{ name }}<aside>(
             {%- for param in proc.params -%}
                 {% if not loop.first %}, {% endif -%}
-                {% if param.type_path %}{{ param.type_path | safe | linkify_type }}/{% endif %}{{ param.name }}
+                {% if param.type_path %}{{ param.type_path | linkify_type | safe }}/{% endif %}{{ param.name }}
             {%- endfor -%}
             ) {{ macros::git_link(env=env, item=proc) }}</aside>
         </h3>
