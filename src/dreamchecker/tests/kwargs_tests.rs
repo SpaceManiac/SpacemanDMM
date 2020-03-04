@@ -18,6 +18,7 @@ fn after_kwarg() {
 }
 
 pub const FILTER_KWARGS_ERRORS: &[(u32, u16, &str)] = &[
+    (4, 5, "filter(type=\"color\") called with invalid 'space' value 'Null'"),
     (15, 5, "filter(type=\"alpha\") called with invalid keyword parameter 'color'"),
     (16, 5, "filter(type=\"blur\") called with invalid keyword parameter 'x'"),
     (17, 5, "filter() called with invalid type keyword parameter value 'fakename'"),
@@ -47,7 +48,7 @@ fn filter_kwarg() {
     filter(type="blur", x=1)
     filter(type="fakename", x=3)
     filter(x=4)
-    filter("alpha", x=1)
+    filter("alpha", x=1, flags=MASK_INVERSE|MASK_INVERSE|MASK_INVERSE|MASK_INVERSE|MASK_INVERSE|MASK_INVERSE)
     filter(type="wave", color=null)
 "##.trim();
     check_errors_match(code, FILTER_KWARGS_ERRORS);

@@ -158,23 +158,6 @@ pub fn default_defines(defines: &mut DefineMap) {
         DATABASE_ROW_LIST = Int(18);
 
         // 513 stuff
-        // alpha mask filter
-        MASK_INVERSE = Int(1);
-        MASK_SWAP = Int(2);
-
-        // rgb filter
-        FILTER_COLOR_RGB = Int(0);
-        FILTER_COLOR_HSV = Int(1);
-        FILTER_COLOR_HSL = Int(2);
-        FILTER_COLOR_HCY = Int(3);
-
-        // layering / ray filter
-        FILTER_OVERLAY = Int(1);
-        FILTER_UNDERLAY = Int(2);
-
-        // wave filter / ripple filter
-        WAVE_SIDEWAYS = Int(1);
-        WAVE_BOUNDED = Int(2);
 
         // vis_flags
         VIS_INHERIT_ICON = Int(1);
@@ -325,6 +308,24 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
 
         // this is just a procstyle syntax wrapper for \ref[foo]
         proc/ref(A);
+
+        // alpha mask filter
+        var/const/MASK_INVERSE = int!(1);
+        var/const/MASK_SWAP = int!(2);
+
+        // rgb filter
+        var/const/FILTER_COLOR_RGB = int!(0);
+        var/const/FILTER_COLOR_HSV = int!(1);
+        var/const/FILTER_COLOR_HSL = int!(2);
+        var/const/FILTER_COLOR_HCY = int!(3);
+
+        // layering / ray filter
+        var/const/FILTER_OVERLAY = int!(1);
+        var/const/FILTER_UNDERLAY = int!(2);
+
+        // wave filter / ripple filter
+        var/const/WAVE_SIDEWAYS = int!(1);
+        var/const/WAVE_BOUNDED = int!(2);
 
         // global procs
         proc/abs(A);
