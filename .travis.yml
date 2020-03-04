@@ -4,7 +4,9 @@ rust:
 branches:
   only:
     - master
-cache: cargo
+cache:
+    - cargo
+    - target
 install:
   - rustc -Vv
   - cargo -V
