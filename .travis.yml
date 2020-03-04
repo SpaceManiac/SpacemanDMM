@@ -10,7 +10,7 @@ before_cache:
 install:
   - rustc -Vv
   - cargo -V
-  - cargo install (--git git://github.com/matthiaskrgr/cargo-cache OR cargo-cache) --no-default-features --features ci-autoclean cargo-cache
+  - cargo install cargo-cache --no-default-features --features ci-autoclean cargo-cache
 script:
   - cargo build --verbose --all
   - cargo test --verbose --all
