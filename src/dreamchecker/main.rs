@@ -3,11 +3,8 @@
 
 extern crate dreammaker as dm;
 extern crate dreamchecker;
-
-use dm::Context;
-use dm::objtree::Code;
-
-use dreamchecker::*;
+#[macro_use]
+extern crate serde_json;
 
 // ----------------------------------------------------------------------------
 // Command-line interface
@@ -16,13 +13,14 @@ fn main() {
     // command-line args
     let mut environment = None;
     let mut config_file = None;
+    let mut json = false;
 
     let mut args = std::env::args();
     let _ = args.next();  // skip executable name
     while let Some(arg) = args.next() {
         if arg == "-V" || arg == "--version" {
             println!(
-                "dreamchecker {}  Copyright (C) 2017-2019  Tad Hardesty",
+                "dreamchecker {}  Copyright (C) 2017-2020  Tad Hardesty",
                 env!("CARGO_PKG_VERSION")
             );
             println!("{}", include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")));
@@ -34,6 +32,8 @@ fn main() {
             environment = Some(args.next().expect("must specify a value for -e"));
         } else if arg == "-c" {
             config_file = Some(args.next().expect("must specify a file for -c"));
+        } else if arg == "--json" {
+            json = true;
         } else {
             eprintln!("unknown argument: {}", arg);
             return;
@@ -46,7 +46,7 @@ fn main() {
             .expect("error detecting .dme")
             .expect("no .dme found"));
 
-    let mut context = Context::default();
+    let mut context = dm::Context::default();
     if let Some(filepath) = config_file {
         context.force_config(filepath.as_ref());
     } else {
@@ -63,53 +63,20 @@ fn main() {
     parser.enable_procs();
     let tree = parser.parse_object_tree();
 
-    check_var_defs(&tree, &context);
-
-    let mut present = 0;
-    let mut invalid = 0;
-    let mut builtin = 0;
-
-    let mut analyzer = AnalyzeObjectTree::new(&context, &tree);
-
-    println!("============================================================");
-    println!("Gathering proc settings...\n");
-    tree.root().recurse(&mut |ty| {
-        for proc in ty.iter_self_procs() {
-            if let Code::Present(ref code) = proc.get().code {
-                analyzer.gather_settings(proc, code);
-            }
-        }
-    });
-
-    println!("============================================================");
-    println!("Analyzing proc bodies...\n");
-    tree.root().recurse(&mut |ty| {
-        for proc in ty.iter_self_procs() {
-            match proc.get().code {
-                Code::Present(ref code) => {
-                    present += 1;
-                    analyzer.check_proc(proc, code);
-                }
-                Code::Invalid(_) => invalid += 1,
-                Code::Builtin => builtin += 1,
-                Code::Disabled => panic!("proc parsing was enabled, but also disabled. this is a bug"),
-            }
-        }
-    });
-
-    println!("Procs analyzed: {}. Errored: {}. Builtins: {}.\n", present, invalid, builtin);
-
-    println!("============================================================");
-    println!("Analyzing proc override validity...\n");
-    tree.root().recurse(&mut |ty| {
-        for proc in ty.iter_self_procs() {
-            analyzer.check_kwargs(proc);
-        }
-    });
-    analyzer.finish_check_kwargs();
+    dreamchecker::run_cli(&context, &tree);
 
     println!("============================================================");
     let errors = context.errors().iter().filter(|each| each.severity() <= dm::Severity::Info).count();
     println!("Found {} diagnostics", errors);
+
+    if json {
+        serde_json::to_writer(std::io::stdout().lock(), &json! {{
+            "hint": context.errors().iter().filter(|each| each.severity() == dm::Severity::Hint).count(),
+            "info": context.errors().iter().filter(|each| each.severity() == dm::Severity::Info).count(),
+            "warning": context.errors().iter().filter(|each| each.severity() == dm::Severity::Warning).count(),
+            "error": context.errors().iter().filter(|each| each.severity() == dm::Severity::Error).count(),
+        }}).unwrap();
+    }
+
     std::process::exit(if errors > 0 { 1 } else { 0 });
 }

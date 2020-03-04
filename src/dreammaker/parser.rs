@@ -1350,7 +1350,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             };
             let value = require!(self.expression());
             require!(self.statement_terminator());
-            // TODO: warn on weird values for these
             spanned(Statement::Setting { name, mode, value })
         } else if let Some(()) = self.exact_ident("break")? {
             let label = self.ident()?;

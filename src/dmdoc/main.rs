@@ -10,18 +10,20 @@ extern crate walkdir;
 mod markdown;
 mod template;
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::{self, Write};
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use tera::Value;
 
 use dm::docs::*;
 
 use markdown::DocBlock;
 
 const BUILD_INFO: &str = concat!(
-    "dmdoc ", env!("CARGO_PKG_VERSION"), "  Copyright (C) 2017-2019  Tad Hardesty\n",
+    "dmdoc ", env!("CARGO_PKG_VERSION"), "  Copyright (C) 2017-2020  Tad Hardesty\n",
     include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")), "\n",
     "This program comes with ABSOLUTELY NO WARRANTY. This is free software,\n",
     "and you are welcome to redistribute it under the conditions of the GNU\n",
@@ -31,11 +33,14 @@ const BUILD_INFO: &str = concat!(
 // ----------------------------------------------------------------------------
 // Driver
 
-thread_local! {
-    static ALL_TYPE_NAMES: RefCell<BTreeSet<String>> = Default::default();
+fn main() {
+    if let Err(e) = main2() {
+        eprintln!("{}", e);
+        std::process::exit(1);
+    }
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main2() -> Result<(), Box<dyn std::error::Error>> {
     // command-line args
     let mut environment = None;
     let mut output_path = "dmdoc".to_owned();
@@ -60,38 +65,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let output_path: &Path = output_path.as_ref();
     let modules_path: &Path = modules_path.as_ref();
-
-    // load tera templates
-    println!("loading templates");
-    let mut tera = template::builtin()?;
-
-    // register tera extensions
-    tera.register_filter("linkify_type", |input, _opts| match input {
-        tera::Value::String(s) => Ok(linkify_type(s.split("/").skip_while(|b| b.is_empty())).into()),
-        tera::Value::Array(a) => Ok(linkify_type(a.iter().filter_map(|v| v.as_str())).into()),
-        _ => Err("linkify_type() input must be string".into()),
-    });
-    tera.register_filter("length", |input, _opts| match input {
-        tera::Value::String(s) => Ok(s.len().into()),
-        tera::Value::Array(a) => Ok(a.len().into()),
-        tera::Value::Object(o) => Ok(o.len().into()),
-        _ => Ok(0.into()),
-    });
-    tera.register_filter("substring", |input, opts| match input {
-        tera::Value::String(s) => {
-            let start = opts.get("start").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-            let mut end = opts
-                .get("end")
-                .and_then(|v| v.as_u64())
-                .map(|s| s as usize)
-                .unwrap_or(s.len());
-            if end > s.len() {
-                end = s.len();
-            }
-            Ok(s[start..end].into())
-        }
-        _ => Err("substring() input must be string".into()),
-    });
 
     // parse environment
     let environment = match environment {
@@ -118,17 +91,134 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let define_history = pp.finalize();
 
     println!("collating documented types");
+
+    // get a read on which types *have* docs
     let mut types_with_docs = BTreeMap::new();
-    let mut progress = Progress::default();
+    objtree.root().recurse(&mut |ty| {
+        // TODO: it would be nice if this was not a duplicate of below
+        let mut own_docs = false;
+        if !ty.docs.is_empty() {
+            own_docs = DocBlock::parse_with_title(&ty.docs.text(), None).1.has_description;
+        }
+
+        let mut var_docs = BTreeSet::new();
+        for (name, var) in ty.get().vars.iter() {
+            if !var.value.docs.is_empty() {
+                var_docs.insert(name.as_str());
+            }
+        }
+
+        let mut proc_docs = BTreeSet::new();
+        for (name, proc) in ty.get().procs.iter() {
+            // TODO: integrate docs from non-main procs
+            if !proc.main_value().docs.is_empty() {
+                proc_docs.insert(name.as_str());
+            }
+        }
+
+        if own_docs || !var_docs.is_empty() || !proc_docs.is_empty() {
+            types_with_docs.insert(ty.get().path.as_str(), TypeHasDocs {
+                var_docs,
+                proc_docs,
+            });
+        }
+    });
+
+    let mut macro_to_module_map = BTreeMap::new();
+    for (range, (name, define)) in define_history.iter() {
+        if !define.docs().is_empty() {
+            macro_to_module_map.insert(name.clone(), module_path(&context.file_path(range.start.file)));
+        }
+    }
+
+    // (normalized, reference) -> (href, tooltip)
+    let broken_link_callback = &|_: &str, reference: &str| -> Option<(String, String)> {
+        // macros
+        if let Some(module) = macro_to_module_map.get(reference) {
+            return Some((format!("{}.html#define/{}", module, reference), reference.to_owned()));
+        }
+
+        // parse "proc" or "var" reference out
+        let mut reference2 = reference;
+        let mut proc_name = None;
+        let mut var_name = None;
+        if let Some(idx) = reference.find("/proc/") {
+            proc_name = Some(&reference[idx + "/proc/".len()..]);
+            reference2 = &reference[..idx];
+        } else if let Some(idx) = reference.find("/verb/") {
+            proc_name = Some(&reference[idx + "/verb/".len()..]);
+            reference2 = &reference[..idx];
+        } else if let Some(idx) = reference.find("/var/") {
+            var_name = Some(&reference[idx + "/var/".len()..]);
+            reference2 = &reference[..idx];
+        }
+
+        let mut progress = String::new();
+        let mut best = 0;
+
+        if reference2.is_empty() {
+            progress.push_str("/global");
+            if let Some(info) = types_with_docs.get("") {
+                if let Some(proc_name) = proc_name {
+                    if info.proc_docs.contains(proc_name) {
+                        best = progress.len();
+                    }
+                } else if let Some(var_name) = var_name {
+                    if info.var_docs.contains(var_name) {
+                        best = progress.len();
+                    }
+                } else {
+                    best = progress.len();
+                }
+            }
+        } else {
+            for bit in reference2.trim_start_matches('/').split('/') {
+                progress.push_str("/");
+                progress.push_str(bit);
+                if let Some(info) = types_with_docs.get(progress.as_str()) {
+                    if let Some(proc_name) = proc_name {
+                        if info.proc_docs.contains(proc_name) {
+                            best = progress.len();
+                        }
+                    } else if let Some(var_name) = var_name {
+                        if info.var_docs.contains(var_name) {
+                            best = progress.len();
+                        }
+                    } else {
+                        best = progress.len();
+                    }
+                }
+            }
+        }
+
+        if best > 0 {
+            use std::fmt::Write;
+
+            if best < progress.len() {
+                eprintln!("crosslink [{}] approximating to [{}]", reference, &progress[..best]);
+                progress.truncate(best);
+            }
+
+            let mut href = format!("{}.html", &progress[1..]);
+            if let Some(proc_name) = proc_name {
+                let _ = write!(href, "#proc/{}", proc_name);
+            } else if let Some(var_name) = var_name {
+                let _ = write!(href, "#var/{}", var_name);
+            }
+            return Some((href, progress));
+        }
+
+        eprintln!("crosslink [{}] unknown", reference);
+        None
+    };
 
     // collate modules which have docs
-    let mut modules = BTreeMap::new();
+    let mut modules1 = BTreeMap::new();
     let mut macro_count = 0;
     let mut macros_all = 0;
     for (file, comment_vec) in module_docs {
         let file_path = context.file_path(file);
-        progress.update(&file_path.display().to_string());
-        let module = module_entry(&mut modules, &file_path);
+        let module = module_entry(&mut modules1, &file_path);
         for (line, doc) in comment_vec {
             module.items_wip.push((line, ModuleItem::DocComment(doc)));
         }
@@ -136,8 +226,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // if macros have docs, that counts as a module too
     for (range, (name, define)) in define_history.iter() {
-        progress.update(&format!("#define {}", name));
-
         let (docs, has_params, params, is_variadic);
         match define {
             dm::preprocessor::Define::Constant { docs: dc, .. } => {
@@ -162,8 +250,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if docs.is_empty() {
             continue;
         }
-        let docs = DocBlock::parse(&docs.text());
-        let module = module_entry(&mut modules, &context.file_path(range.start.file));
+        let docs = DocBlock::parse(&docs.text(), Some(broken_link_callback));
+        let module = module_entry(&mut modules1, &context.file_path(range.start.file));
         module.items_wip.push((
             range.start.line,
             ModuleItem::Define {
@@ -194,14 +282,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if path.extension() != Some("md".as_ref()) {
             continue;
         }
-        progress.update(&path.display().to_string());
 
         let mut buf = String::new();
         File::open(path)?.read_to_string(&mut buf)?;
         if path == modules_path.join("README.md") {
-            index_docs = Some(DocBlock::parse_with_title(&buf));
+            index_docs = Some(DocBlock::parse_with_title(&buf, Some(broken_link_callback)));
         } else {
-            let module = module_entry(&mut modules, &path);
+            let module = module_entry(&mut modules1, &path);
             module.items_wip.push((0, ModuleItem::DocComment(DocComment {
                 kind: CommentKind::Block,
                 target: DocTarget::EnclosingItem,
@@ -213,9 +300,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // collate types which have docs
     let mut count = 0;
     let mut substance_count = 0;
+    let mut type_docs = BTreeMap::new();
     objtree.root().recurse(&mut |ty| {
         count += 1;
-        progress.update(&ty.path);
 
         let mut parsed_type = ParsedType::default();
         if context.config().dmdoc.use_typepath_names {
@@ -238,7 +325,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut anything = false;
         let mut substance = false;
         if !ty.docs.is_empty() {
-            let (title, block) = DocBlock::parse_with_title(&ty.docs.text());
+            let (title, block) = DocBlock::parse_with_title(&ty.docs.text(), Some(broken_link_callback));
             if let Some(title) = title {
                 parsed_type.name = title.into();
             }
@@ -256,7 +343,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         for (name, var) in ty.get().vars.iter() {
             if !var.value.docs.is_empty() {
-                let block = DocBlock::parse(&var.value.docs.text());
+                // determine if there is a documented parent we can link to
+                let mut parent = None;
+                let mut next = ty.parent_type();
+                while let Some(current) = next {
+                    if let Some(entry) = current.vars.get(name) {
+                        if !entry.value.docs.is_empty() {
+                            parent = Some(current.path[1..].to_owned());
+                            break;
+                        }
+                    }
+                    next = current.parent_type();
+                }
+
+                let block = DocBlock::parse(&var.value.docs.text(), Some(broken_link_callback));
                 // `type` is pulled from the parent if necessary
                 let type_ = ty.get_var_declaration(name).map(|decl| VarType {
                     is_static: decl.var_type.is_static,
@@ -274,6 +374,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     decl: if var.declaration.is_some() { "var" } else { "" },
                     file: context.file_path(var.value.location.file),
                     line: var.value.location.line,
+                    parent,
                 });
                 anything = true;
                 substance = true;
@@ -281,9 +382,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         for (name, proc) in ty.get().procs.iter() {
+            // TODO: integrate docs from non-main procs
             let proc_value = proc.main_value();
             if !proc_value.docs.is_empty() {
-                let block = DocBlock::parse(&proc_value.docs.text());
+                // determine if there is a documented parent we can link to
+                let mut parent = None;
+                let mut next = ty.parent_type();
+                while let Some(current) = next {
+                    if let Some(entry) = current.procs.get(name) {
+                        if !entry.main_value().docs.is_empty() {
+                            parent = Some(current.path[1..].to_owned());
+                            break;
+                        }
+                    }
+                    next = current.parent_type();
+                }
+
+                let block = DocBlock::parse(&proc_value.docs.text(), Some(broken_link_callback));
                 parsed_type.procs.insert(name, Proc {
                     docs: block,
                     params: proc_value.parameters.iter().map(|p| Param {
@@ -296,6 +411,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     },
                     file: context.file_path(proc_value.location.file),
                     line: proc_value.location.line,
+                    parent,
                 });
                 anything = true;
                 substance = true;
@@ -304,7 +420,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // file the type under its module as well
         if let Some(ref block) = parsed_type.docs {
-            if let Some(module) = modules.get_mut(&module_path(&context.file_path(ty.location.file))) {
+            if let Some(module) = modules1.get_mut(&module_path(&context.file_path(ty.location.file))) {
                 module.items_wip.push((
                     ty.location.line,
                     ModuleItem::Type {
@@ -327,16 +443,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     parsed_type.htmlname = &ty.get().path[1..];
                 }
             }
-            types_with_docs.insert(ty.get().pretty_path(), parsed_type);
+            type_docs.insert(ty.get().pretty_path(), parsed_type);
             if substance {
                 substance_count += 1;
             }
         }
     });
 
+    // collate all hrefable entities to use in autolinking
+    let all_type_names: Arc<BTreeSet<_>> = Arc::new(type_docs.iter()
+        .filter(|(_, v)| v.substance)
+        .map(|(&t, _)| t.to_owned())
+        .collect());
+
     // finalize modules
-    for (_, module) in modules.iter_mut() {
-        module.items_wip.sort_by_key(|&(line, _)| line);
+    let modules: BTreeMap<_, _> = modules1.into_iter().map(|(key, module1)| {
+        let Module1 {
+            htmlname,
+            orig_filename,
+            name,
+            teaser,
+            mut items_wip,
+            defines,
+        } = module1;
+        let mut module = Module {
+            htmlname,
+            orig_filename,
+            name,
+            teaser,
+            items: Vec::new(),
+            defines,
+        };
 
         let mut docs = DocCollection::default();
         let mut _first = true;
@@ -345,18 +482,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let doc = std::mem::replace(&mut docs, Default::default());
                 if _first {
                     _first = false;
-                    let (title, block) = DocBlock::parse_with_title(&doc.text());
+                    let (title, block) = DocBlock::parse_with_title(&doc.text(), Some(broken_link_callback));
                     module.name = title;
                     module.teaser = block.teaser().to_owned();
                     module.items.push(ModuleItem::Docs(block.html));
                 } else {
-                    module.items.push(ModuleItem::Docs(markdown::render(&doc.text())));
+                    module.items.push(ModuleItem::Docs(markdown::render(&doc.text(), Some(broken_link_callback))));
                 }
             }
         }}
 
         let mut last_line = 0;
-        for (line, item) in module.items_wip.drain(..) {
+        items_wip.sort_by_key(|&(line, _)| line);
+        for (line, item) in items_wip.drain(..) {
             match item {
                 ModuleItem::DocComment(doc) => {
                     if line > last_line + 1 {
@@ -372,9 +510,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         push_docs!();
-    }
-
-    drop(progress);
+        (key, module)
+    }).collect();
 
     print!("documenting {} modules, ", modules.len());
     if macros_all == 0 {
@@ -393,16 +530,49 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!(
             "{}/{}/{} types ({}%)",
             substance_count,
-            types_with_docs.len(),
+            type_docs.len(),
             count,
-            (types_with_docs.len() * 1000 / count) as f32 / 10.
+            (type_docs.len() * 1000 / count) as f32 / 10.
         );
     }
 
-    ALL_TYPE_NAMES.with(|all| {
-        all.borrow_mut().extend(types_with_docs.iter()
-            .filter(|(_, v)| v.substance)
-            .map(|(&t, _)| t.to_owned()));
+    // load tera templates
+    println!("loading templates");
+    let mut tera = template::builtin()?;
+
+    // register tera extensions
+    let linkify_typenames = all_type_names.clone();
+    tera.register_filter("linkify_type", move |value: &Value, _: &HashMap<String, Value>| {
+        match *value {
+            tera::Value::String(ref s) => Ok(linkify_type(&linkify_typenames, s.split("/").skip_while(|b| b.is_empty())).into()),
+            tera::Value::Array(ref a) => Ok(linkify_type(&linkify_typenames, a.iter().filter_map(|v| v.as_str())).into()),
+            _ => Err("linkify_type() input must be string".into()),
+        }
+    });
+    tera.register_filter("length", |value: &Value, _: &HashMap<String, Value>| {
+        match *value {
+            tera::Value::String(ref s) => Ok(s.len().into()),
+            tera::Value::Array(ref a) => Ok(a.len().into()),
+            tera::Value::Object(ref o) => Ok(o.len().into()),
+            _ => Ok(0.into()),
+        }
+    });
+    tera.register_filter("substring", |value: &Value, opts: &HashMap<String, Value>| {
+        match *value {
+            tera::Value::String(ref s) => {
+                let start = opts.get("start").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+                let mut end = opts
+                    .get("end")
+                    .and_then(|v| v.as_u64())
+                    .map(|s| s as usize)
+                    .unwrap_or(s.len());
+                if end > s.len() {
+                    end = s.len();
+                }
+                Ok(s[start..end].into())
+            }
+            _ => Err("substring() input must be string".into()),
+        }
     });
 
     // render
@@ -440,14 +610,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             macros_documented: macro_count,
             macros_all,
             types_detailed: substance_count,
-            types_documented: types_with_docs.len(),
+            types_documented: type_docs.len(),
             types_all: count,
         },
         git,
     };
 
-    progress = Progress::default();
-    progress.println("rendering html");
+    println!("rendering html");
     {
         #[derive(Serialize)]
         struct Index<'a> {
@@ -457,9 +626,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             types: Vec<IndexTree<'a>>,
         }
 
-        progress.update("index.html");
         let mut index = create(&output_path.join("index.html"))?;
-        index.write_all(tera.render("dm_index.html", &Index {
+        index.write_all(tera.render("dm_index.html", &tera::Context::from_serialize(Index {
             env,
             html: index_docs.as_ref().map(|(_, docs)| &docs.html[..]),
             modules: build_index_tree(modules.iter().map(|(_path, module)| IndexTree {
@@ -473,7 +641,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 no_substance: false,
                 children: Vec::new(),
             })),
-            types: build_index_tree(types_with_docs.iter().map(|(path, ty)| IndexTree {
+            types: build_index_tree(type_docs.iter().map(|(path, ty)| IndexTree {
                 htmlname: &ty.htmlname,
                 full_name: path,
                 self_name: if ty.name.is_empty() {
@@ -485,7 +653,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 no_substance: !ty.substance,
                 children: Vec::new(),
             })),
-        })?.as_bytes())?;
+        })?)?.as_bytes())?;
     }
 
     for (path, details) in modules.iter() {
@@ -498,7 +666,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         let fname = format!("{}.html", details.htmlname);
-        progress.update(&fname);
 
         let mut base = String::new();
         for _ in fname.chars().filter(|&x| x == '/') {
@@ -506,15 +673,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         let mut f = create(&output_path.join(&fname))?;
-        f.write_all(tera.render("dm_module.html", &ModuleArgs {
+        f.write_all(tera.render("dm_module.html", &tera::Context::from_serialize(ModuleArgs {
             env,
             base_href: &base,
             path,
             details,
-        })?.as_bytes())?;
+        })?)?.as_bytes())?;
     }
 
-    for (path, details) in types_with_docs.iter() {
+    for (path, details) in type_docs.iter() {
         if !details.substance {
             continue;
         }
@@ -529,7 +696,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         let fname = format!("{}.html", details.htmlname);
-        progress.update(&fname);
 
         let mut base = String::new();
         for _ in fname.chars().filter(|&x| x == '/') {
@@ -537,15 +703,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         let mut f = create(&output_path.join(&fname))?;
-        f.write_all(tera.render("dm_type.html", &Type {
+        f.write_all(tera.render("dm_type.html", &tera::Context::from_serialize(Type {
             env,
             base_href: &base,
             path,
             details,
-            types: &types_with_docs,
-        })?.as_bytes())?;
+            types: &type_docs,
+        })?)?.as_bytes())?;
     }
-    drop(progress);
 
     Ok(())
 }
@@ -557,9 +722,9 @@ fn module_path(path: &Path) -> String {
     path.with_extension("").display().to_string().replace("\\", "/")
 }
 
-fn module_entry<'a, 'b>(modules: &'a mut BTreeMap<String, Module<'b>>, path: &Path) -> &'a mut Module<'b> {
+fn module_entry<'a, 'b>(modules: &'a mut BTreeMap<String, Module1<'b>>, path: &Path) -> &'a mut Module1<'b> {
     modules.entry(module_path(path)).or_insert_with(|| {
-        let mut module = Module::default();
+        let mut module = Module1::default();
         module.htmlname = module_path(path);
         module.orig_filename = path.display().to_string().replace("\\", "/");
         module
@@ -581,7 +746,7 @@ fn format_type_path(vec: &[String]) -> String {
     }
 }
 
-fn linkify_type<'a, I: Iterator<Item=&'a str>>(iter: I) -> String {
+fn linkify_type<'a, I: Iterator<Item=&'a str>>(all_type_names: &BTreeSet<String>, iter: I) -> String {
     let mut output = String::new();
     let mut all_progress = String::new();
     let mut progress = String::new();
@@ -590,7 +755,7 @@ fn linkify_type<'a, I: Iterator<Item=&'a str>>(iter: I) -> String {
         all_progress.push_str(bit);
         progress.push_str("/");
         progress.push_str(bit);
-        if ALL_TYPE_NAMES.with(|t| t.borrow().contains(&all_progress)) {
+        if all_type_names.contains(&all_progress) {
             use std::fmt::Write;
             let _ = write!(
                 output,
@@ -603,25 +768,6 @@ fn linkify_type<'a, I: Iterator<Item=&'a str>>(iter: I) -> String {
     }
     output.push_str(&progress);
     output
-}
-
-// (normalized, reference) -> (href, tooltip)
-fn handle_crosslink(_: &str, reference: &str) -> Option<(String, String)> {
-    // TODO: allow performing relative searches, find vars and procs too
-    let mut progress = String::new();
-    let mut best = String::new();
-    for bit in reference.split("/").skip_while(|s| s.is_empty()) {
-        progress.push_str("/");
-        progress.push_str(bit);
-        if ALL_TYPE_NAMES.with(|t| t.borrow().contains(&progress)) {
-            best = progress.clone();
-        }
-    }
-    if !best.is_empty() {
-        Some((format!("{}.html", &best[1..]), best))
-    } else {
-        None
-    }
 }
 
 /// Create the parent dirs of a file and then itself.
@@ -701,37 +847,6 @@ fn git_info(git: &mut Git) -> Result<(), git2::Error> {
         }
     }
     Ok(())
-}
-
-/// Helper for printing progress information.
-#[derive(Default)]
-struct Progress {
-    last_len: usize,
-}
-
-impl Progress {
-    fn update(&mut self, msg: &str) {
-        print!("\r{}", msg);
-        for _ in msg.len()..self.last_len {
-            print!(" ");
-        }
-        self.last_len = msg.len();
-    }
-
-    fn println(&mut self, msg: &str) {
-        print!("\r");
-        for _ in 0..self.last_len {
-            print!(" ");
-        }
-        println!("\r{}", msg);
-    }
-}
-
-impl Drop for Progress {
-    fn drop(&mut self) {
-        self.update("");
-        print!("\r");
-    }
 }
 
 // ----------------------------------------------------------------------------
@@ -823,6 +938,26 @@ fn last_element(path: &str) -> &str {
 }
 
 // ----------------------------------------------------------------------------
+// Pre-templating helper structs
+
+#[derive(Default)]
+struct TypeHasDocs<'a> {
+    var_docs: BTreeSet<&'a str>,
+    proc_docs: BTreeSet<&'a str>,
+}
+
+/// In-construction Module step 1.
+#[derive(Default)]
+struct Module1<'a> {
+    htmlname: String,
+    orig_filename: String,
+    name: Option<String>,
+    teaser: String,
+    items_wip: Vec<(u32, ModuleItem<'a>)>,
+    defines: BTreeMap<&'a str, Define<'a>>,
+}
+
+// ----------------------------------------------------------------------------
 // Templating structs
 
 #[derive(Serialize)]
@@ -882,6 +1017,7 @@ struct Var<'a> {
     type_: Option<VarType<'a>>,
     file: PathBuf,
     line: u32,
+    parent: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -902,6 +1038,7 @@ struct Proc {
     params: Vec<Param>,
     file: PathBuf,
     line: u32,
+    parent: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -910,6 +1047,7 @@ struct Param {
     type_path: String,
 }
 
+/// Module struct exposed to templates.
 #[derive(Default, Serialize)]
 struct Module<'a> {
     htmlname: String,
@@ -917,7 +1055,6 @@ struct Module<'a> {
     name: Option<String>,
     teaser: String,
     items: Vec<ModuleItem<'a>>,
-    items_wip: Vec<(u32, ModuleItem<'a>)>,
     defines: BTreeMap<&'a str, Define<'a>>,
 }
 
