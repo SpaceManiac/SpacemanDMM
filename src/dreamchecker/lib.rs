@@ -362,8 +362,6 @@ fn run_inner(context: &Context, objtree: &ObjectTree, cli: bool) {
         }
     });
 
-    analyzer.check_proc_call_tree();
-
     analyzer.finish_check_kwargs();
 }
 
@@ -718,6 +716,17 @@ impl<'o> AnalyzeObjectTree<'o> {
 
     /// Gather and store set directives for the given proc using the provided code body
     pub fn gather_settings(&mut self, proc: ProcRef<'o>, code: &'o [Spanned<Statement>]) {
+        if let Some((_, true, loc)) = self.must_not_sleep.get_self_or_parent(proc) {
+            if let Err(error) = self.must_not_sleep.insert(proc, true, loc) {
+                self.context.register_error(error);
+            }
+        }
+        if let Some((_, true, loc)) = self.must_be_pure.get_self_or_parent(proc) {
+            if let Err(error) = self.must_be_pure.insert(proc, true, loc) {
+                self.context.register_error(error);
+            }
+        }
+
         for statement in code.iter() {
             if let Statement::Setting { ref name, ref value, .. } = statement.elem {
                 if name == "SpacemanDMM_return_type" {
