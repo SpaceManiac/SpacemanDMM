@@ -958,7 +958,7 @@ pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
 
 // ----------------------------------------------------------------------------
 // Procedure analyzer
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ControlFlow {
     pub returns: bool,
     pub continues: bool,
@@ -975,13 +975,22 @@ impl ControlFlow {
             fuzzy: false,
         }
     }
-    pub fn allfalse() -> ControlFlow {
-        ControlFlow {
-            returns: false,
-            continues: false,
-            breaks: false,
-            fuzzy: false,
-        }
+    pub fn returns() -> ControlFlow {
+        let mut cf = ControlFlow::default();
+        cf.returns = true;
+        cf
+    }
+    pub fn continues() -> ControlFlow {
+        let mut cf = ControlFlow::default();
+        cf.continues = true;
+        cf.fuzzy = true;
+        cf
+    }
+    pub fn breaks() -> ControlFlow {
+        let mut cf = ControlFlow::default();
+        cf.breaks = true;
+        cf.fuzzy = true;
+        cf
     }
     pub fn terminates(&self) -> bool {
         return !self.fuzzy && ( self.returns || self.continues || self.breaks )
@@ -1064,6 +1073,7 @@ struct AnalyzeProc<'o, 's> {
     proc_ref: ProcRef<'o>,
     calls_parent: bool,
     inside_newcontext: u32,
+    parent_calls: u32,
 }
 
 impl<'o, 's> AnalyzeProc<'o, 's> {
@@ -1078,6 +1088,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             proc_ref,
             calls_parent: false,
             inside_newcontext: 0,
+            parent_calls: 0,
         }
     }
 
@@ -1142,16 +1153,24 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     }
 
     fn visit_block(&mut self, block: &'o [Spanned<Statement>], local_vars: &mut HashMap<String, LocalVar<'o>>) -> ControlFlow {
-        let mut term = ControlFlow::allfalse();
+        let mut term = ControlFlow::default();
+        let preblockparentcalls = self.parent_calls;
         for stmt in block.iter() {
             if term.terminates() {
                 error(stmt.location,"possible unreachable code here")
+                    .with_errortype("unreachable_code")
                     .register(self.context);
                 return term // stop evaluating
             }
             let state = self.visit_statement(stmt.location, &stmt.elem, local_vars);
+            if self.parent_calls > 1 && self.parent_calls > preblockparentcalls {
+                error(stmt.location, format!("double parent_call detected in {}", self.proc_ref))
+                    .with_errortype("double_parent_call")
+                    .register(self.context);
+            }
             term.merge(state);
         }
+        self.parent_calls = preblockparentcalls;
         return term
     }
 
@@ -1159,10 +1178,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         match expression.is_truthy() {
             Some(true) => {
                 error(location,"loop condition is always true")
+                    .with_errortype("constant_conditional")
                     .register(self.context);
             },
             Some(false) => {
                 error(location,"loop condition is always false")
+                    .with_errortype("constant_conditional")
                     .register(self.context);
             }
             _ => ()
@@ -1172,11 +1193,13 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     fn visit_control_condition(&mut self, location: Location, expression: &'o Expression) {
         if expression.is_const_eval() {
             error(location,"control flow condition is a constant evalutation")
-                    .register(self.context);
+                .with_errortype("constant_conditional")
+                .register(self.context);
         }
         else if let Some(term) = expression.as_term() {
             if term.is_static() {
                 error(location,"control flow condition is a static term")
+                    .with_errortype("constant_conditional")
                     .register(self.context);
             }
         }
@@ -1191,6 +1214,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                             if let Some(proc) = self.ty.get_proc(call) {
                                 if let Some((_, _, loc)) = self.env.must_be_pure.get_self_or_parent(proc) {
                                     error(location, format!("call to pure proc {} discards return value", call))
+                                        .with_errortype("pure_return_discarded")
                                         .with_note(loc, "prohibited by this must_be_pure annotation")
                                         .register(self.context);
                                 }
@@ -1213,13 +1237,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 // TODO: factor in the previous return type if there was one
                 let return_type = self.visit_expression(location, expr, None, local_vars);
                 local_vars.get_mut(".").unwrap().analysis = return_type;
-                // TODO: break out of the analysis for this branch?
-                return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false }
+                return ControlFlow::returns()
             },
-            Statement::Return(None) => { return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false } },
+            Statement::Return(None) => { return ControlFlow::returns() },
             Statement::Crash(expr) => {
                 self.visit_expression(location, expr, None, local_vars);
-                return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false }
+                return ControlFlow::returns()
             },
             Statement::Throw(expr) => { self.visit_expression(location, expr, None, local_vars); },
             Statement::While { condition, block } => {
@@ -1234,6 +1257,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 let mut state = self.visit_block(block, &mut scoped_locals);
                 if state.terminates_loop() {
                     error(location,"do while terminates without ever reaching condition")
+                        .with_errortype("unreachable_code")
                         .register(self.context);
                     return state
                 }
@@ -1250,6 +1274,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     self.visit_control_condition(condition.location, &condition.elem);
                     if alwaystrue {
                         error(condition.location,"unreachable if block, preceeding if/elseif condition(s) are always true")
+                            .with_errortype("unreachable_code")
                             .register(self.context);
                     }
                     self.visit_expression(condition.location, &condition.elem, None, &mut scoped_locals);
@@ -1257,12 +1282,14 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     match condition.elem.is_truthy() {
                         Some(true) => {
                             error(condition.location,"if condition is always true")
+                                .with_errortype("constant_conditional")
                                 .register(self.context);
                             allterm.merge_false(state);
                             alwaystrue = true;
                         },
                         Some(false) => {
                             error(condition.location,"if condition is always false")
+                                .with_errortype("constant_conditional")
                                 .register(self.context);
                         },
                         None => allterm.merge_false(state)
@@ -1272,6 +1299,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     if alwaystrue {
                         // TODO: fix location for else blocks
                         error(location,"unreachable else block, preceeding if/elseif condition(s) are always true")
+                            .with_errortype("unreachable_code")
                             .register(self.context);
                     }
                     let state = self.visit_block(else_arm, &mut local_vars.clone());
@@ -1327,6 +1355,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         if let Some(validity) = startterm.valid_for_range(endterm, step) {
                             if !validity {
                                 error(location,"for range loop body is never reached due to invalid range")
+                                    .with_errortype("unreachable_code")
                                     .register(self.context);
                             } else {
                                 return state
@@ -1345,7 +1374,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Statement::Setting { name, mode: SettingMode::Assign, value } => {
                 if name != "waitfor" {
-                    return ControlFlow::allfalse()
+                    return ControlFlow::default()
                 }
                 match match value.as_term() {
                     Some(Term::Int(0)) => Some(true),
@@ -1416,13 +1445,13 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
                 self.visit_block(catch_block, &mut catch_locals);
             },
-            Statement::Continue(_) => { return ControlFlow { returns: false, continues: true, breaks: false, fuzzy: true } },
-            Statement::Break(_) => { return ControlFlow { returns: false, continues: false, breaks: true, fuzzy: true } },
+            Statement::Continue(_) => { return ControlFlow::continues() },
+            Statement::Break(_) => { return ControlFlow::breaks() },
             Statement::Goto(_) => {},
             Statement::Label { name: _, block } => { self.visit_block(block, &mut local_vars.clone()); },
             Statement::Del(expr) => { self.visit_expression(location, expr, None, local_vars); },
         }
-        return ControlFlow::allfalse()
+        return ControlFlow::default()
     }
 
     fn visit_var_stmt(&mut self, location: Location, var: &'o VarStatement, local_vars: &mut HashMap<String, LocalVar<'o>>) {
@@ -1633,6 +1662,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Term::ParentCall(args) => {
                 self.calls_parent = true;
+                match self.parent_calls.checked_add(1) {
+                    Some(incr) => self.parent_calls = incr,
+                    None => panic!("per-proc parentcall limit of {} exceeded", self.proc_ref),
+                }
                 if let Some(proc) = self.proc_ref.parent_proc() {
                     // TODO: if args are empty, call w/ same args
                     let src = self.ty;

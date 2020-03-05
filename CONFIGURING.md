@@ -37,12 +37,16 @@ Raised by DreamChecker:
 * `private_var` - `SpacemanDMM_private` var type
 * `protected_var` - `SpacemanDMM_protected` var type
 * `must_be_pure` - `SpacemanDMM_should_be_pure` directive
+* `pure_return_discarded` - Raised on `SpacemanDMM_should_be_pure` procs called without using the return result
 * `must_not_sleep` - `SpacemanDMM_should_not_sleep` directive
 * `ambiguous_in_lhs` - Raised on ambiguous operations on the left hand side of an `in` operation
 * `no_typehint_implicit_new` - Raised on the use of `new` where no typehint is avaliable
 * `field_access_static_type` - Raised on using `.field_name` on a variable with no typehint
 * `proc_call_static_type` - Raised on using `.proc_name()` on a variable with no typehint
 * `no_operator_overload` - Raised on using a unary operator on a non-primative that doesn't define it's own override, eg `somemob++`
+* `double_parent_call` - Raised when detecting two or more `..()` calls in a row
+* `unreachable_code` - Raised on finding code that can never be executed
+* `constant_conditional` - Raised on finding a conditional control statement that will always evaluate in the same way
 
 Raised by Lexer:
 
