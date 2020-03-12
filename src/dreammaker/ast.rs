@@ -1082,6 +1082,6 @@ pub static VALID_FILTER_FLAGS: phf::Map<&'static str, (&str, bool, bool, &[&str]
     "color" => ("space", true, false, &[ "FILTER_COLOR_RGB", "FILTER_COLOR_HSV", "FILTER_COLOR_HSL", "FILTER_COLOR_HCY" ]),
     "layer" => ("flags", true, true, &[ "FLAG_OVERLAY", "FLAG_UNDERLAY" ]),
     "rays" => ("flags", false, true, &[ "FLAG_OVERLAY", "FLAG_UNDERLAY" ]),
-    "ripple" => ("flags", false, true, &[ "WAVE_BOUND" ]),
-    "wave" => ("flags", false, true, &[ "WAVE_SIDEWAYS", "WAVE_BOUND" ]),
+    "ripple" => ("flags", false, true, &[ "WAVE_BOUNDED" ]),
+    "wave" => ("flags", false, true, &[ "WAVE_SIDEWAYS", "WAVE_BOUNDED" ]),
 };
