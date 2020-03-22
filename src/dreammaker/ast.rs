@@ -1069,7 +1069,7 @@ pub static VALID_FILTER_TYPES: phf::Map<&'static str, &[&str]> = phf_map! {
     "blur" => &[ "size" ],
     "layer" => &[ "x", "y", "icon", "render_source", "flags", "color", "transform", "blend_mode" ],
     "motion_blur" => &[ "x", "y" ],
-    "outline" => &[ "size", "color" ],
+    "outline" => &[ "size", "color", "flags" ],
     "radial_blur" => &[ "x", "y", "size" ],
     "rays" => &[ "x", "y", "size", "color", "offset", "density", "threshold", "factor", "flags" ],
     "ripple" => &[ "x", "y", "size", "repeat", "radius", "falloff", "flags" ],
@@ -1082,6 +1082,7 @@ pub static VALID_FILTER_FLAGS: phf::Map<&'static str, (&str, bool, bool, &[&str]
     "color" => ("space", true, false, &[ "FILTER_COLOR_RGB", "FILTER_COLOR_HSV", "FILTER_COLOR_HSL", "FILTER_COLOR_HCY" ]),
     "layer" => ("flags", true, true, &[ "FLAG_OVERLAY", "FLAG_UNDERLAY" ]),
     "rays" => ("flags", false, true, &[ "FLAG_OVERLAY", "FLAG_UNDERLAY" ]),
+    "outline" => ("flags", false, true, &[ "OUTLINE_SHARP", "OUTLINE_SQUARE" ]),
     "ripple" => ("flags", false, true, &[ "WAVE_BOUNDED" ]),
     "wave" => ("flags", false, true, &[ "WAVE_SIDEWAYS", "WAVE_BOUNDED" ]),
 };

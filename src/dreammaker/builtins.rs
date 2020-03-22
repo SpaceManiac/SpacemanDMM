@@ -6,7 +6,7 @@ use super::{Location, DMError};
 use super::preprocessor::{DefineMap, Define};
 
 const DM_VERSION: i32 = 513;
-const DM_BUILD: i32 = 1508;
+const DM_BUILD: i32 = 1514;
 
 /// Register BYOND builtin macros to the given define map.
 pub fn default_defines(defines: &mut DefineMap) {
@@ -435,7 +435,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         proc/new/*Type*/(Args);  // special form
         proc/newlist(A,B,C/*,...*/);
         proc/nonspantext(Haystack,Needles,Start=1);
-        proc/num2text(N,SigFig=6);
+        proc/num2text(N,SigFig=6, Radix); // +1 form, (N,SigFig) (N, Digits, Radix)
         proc/obounds(Ref=src, Dist=0);  // +1 form
         proc/ohearers(Depth=world.view,Center=usr);
         proc/orange(Dist,Center=usr);
@@ -478,7 +478,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         proc/text(FormatText,Args);
         proc/text2ascii(T,pos=1);
         proc/text2file(Text,File);
-        proc/text2num(T);
+        proc/text2num(T, Radix);
         proc/text2path(T);
         proc/time2text(timestamp,format);
         proc/turn(Dir,Angle);  // +2 forms
