@@ -697,6 +697,130 @@ impl<'a> Engine<'a> {
         next
     }
 
+    fn symbol_id_at(&mut self, text_document_position: lsp_types::TextDocumentPositionParams) -> Result<Option<dm::objtree::SymbolId>, jsonrpc::Error> {
+        let (_, file_id, annotations) = self.get_annotations(&text_document_position.text_document.uri)?;
+        let location = dm::Location {
+            file: file_id,
+            line: text_document_position.position.line as u32 + 1,
+            column: text_document_position.position.character as u16 + 1,
+        };
+
+        let mut symbol_id = None;
+
+        let iter = annotations.get_location(location);
+        match_annotation! { iter;
+        Annotation::Variable(path) => {
+            let mut current = self.objtree.root();
+            let (var_name, most) = path.split_last().unwrap();
+            for part in most {
+                if part == "var" { break }
+                if let Some(child) = current.child(part) {
+                    current = child;
+                } else {
+                    break;
+                }
+            }
+
+            if let Some(decl) = current.get_var_declaration(var_name) {
+                symbol_id = Some(decl.id);
+            }
+        },
+        Annotation::ProcHeader(parts, _) => {
+            let mut current = self.objtree.root();
+            let (proc_name, most) = parts.split_last().unwrap();
+            for part in most {
+                if part == "proc" || part == "verb" { break }
+                if let Some(child) = current.child(part) {
+                    current = child;
+                } else {
+                    break;
+                }
+            }
+
+            if let Some(decl) = current.get_proc_declaration(proc_name) {
+                symbol_id = Some(decl.id);
+            }
+        },
+        Annotation::TreePath(absolute, parts) => {
+            if let Some(ty) = self.objtree.type_by_path(completion::combine_tree_path(&iter, *absolute, parts)) {
+                symbol_id = Some(ty.id);
+            }
+        },
+        Annotation::TypePath(parts) => {
+            match self.follow_type_path(&iter, parts) {
+                // '/datum/proc/foo'
+                Some(completion::TypePathResult { ty, decl: _, proc: Some((proc_name, _)) }) => {
+                    if let Some(decl) = ty.get_proc_declaration(proc_name) {
+                        symbol_id = Some(decl.id);
+                    }
+                },
+                // 'datum/bar'
+                Some(completion::TypePathResult { ty, decl: None, proc: None }) => {
+                    symbol_id = Some(ty.id);
+                },
+                _ => {}
+            }
+        },
+        Annotation::UnscopedCall(proc_name) => {
+            let (ty, _) = self.find_type_context(&iter);
+            let mut next = ty.or(Some(self.objtree.root()));
+            while let Some(ty) = next {
+                if let Some(proc) = ty.procs.get(proc_name) {
+                    if let Some(ref decl) = proc.declaration {
+                        symbol_id = Some(decl.id);
+                        break;
+                    }
+                }
+                next = ty.parent_type();
+            }
+        },
+        Annotation::UnscopedVar(var_name) => {
+            let (ty, proc_name) = self.find_type_context(&iter);
+            match self.find_unscoped_var(&iter, ty, proc_name, var_name) {
+                UnscopedVar::Parameter { .. } => {
+                    // TODO
+                },
+                UnscopedVar::Variable { ty, .. } => {
+                    if let Some(decl) = ty.get_var_declaration(var_name) {
+                        symbol_id = Some(decl.id);
+                    }
+                },
+                UnscopedVar::Local { .. } => {
+                    // TODO
+                },
+                UnscopedVar::None => {}
+            }
+        },
+        Annotation::ScopedCall(priors, proc_name) => {
+            let mut next = self.find_scoped_type(&iter, priors);
+            while let Some(ty) = next {
+                if let Some(proc) = ty.procs.get(proc_name) {
+                    if let Some(ref decl) = proc.declaration {
+                        symbol_id = Some(decl.id);
+                        break;
+                    }
+                }
+                next = ty.parent_type_without_root();
+            }
+        },
+        Annotation::ScopedVar(priors, var_name) => {
+            let mut next = self.find_scoped_type(&iter, priors);
+            while let Some(ty) = next {
+                if let Some(var) = ty.vars.get(var_name) {
+                    if let Some(ref decl) = var.declaration {
+                        symbol_id = Some(decl.id);
+                        break;
+                    }
+                }
+                next = ty.parent_type_without_root();
+            }
+        },
+        // TODO: macros
+        }
+
+        Ok(symbol_id)
+    }
+
     // ------------------------------------------------------------------------
     // Driver
 
@@ -828,6 +952,7 @@ handle_method_call! {
                 hover_provider: Some(true),
                 document_symbol_provider: Some(true),
                 references_provider: Some(true),
+                implementation_provider: Some(ImplementationProviderCapability::Simple(true)),
                 type_definition_provider: Some(TypeDefinitionProviderCapability::Simple(true)),
                 text_document_sync: Some(TextDocumentSyncCapability::Options(TextDocumentSyncOptions {
                     open_close: Some(true),
@@ -1264,125 +1389,7 @@ handle_method_call! {
 
     on References(&mut self, params) {
         // Like GotoDefinition, but looks up references instead
-        let (_, file_id, annotations) = self.get_annotations(&params.text_document_position.text_document.uri)?;
-        let location = dm::Location {
-            file: file_id,
-            line: params.text_document_position.position.line as u32 + 1,
-            column: params.text_document_position.position.character as u16 + 1,
-        };
-
-        let mut symbol_id = None;
-
-        let iter = annotations.get_location(location);
-        match_annotation! { iter;
-        Annotation::Variable(path) => {
-            let mut current = self.objtree.root();
-            let (var_name, most) = path.split_last().unwrap();
-            for part in most {
-                if part == "var" { break }
-                if let Some(child) = current.child(part) {
-                    current = child;
-                } else {
-                    break;
-                }
-            }
-
-            if let Some(decl) = current.get_var_declaration(var_name) {
-                symbol_id = Some(decl.id);
-            }
-        },
-        Annotation::ProcHeader(parts, _) => {
-            let mut current = self.objtree.root();
-            let (proc_name, most) = parts.split_last().unwrap();
-            for part in most {
-                if part == "proc" || part == "verb" { break }
-                if let Some(child) = current.child(part) {
-                    current = child;
-                } else {
-                    break;
-                }
-            }
-
-            if let Some(decl) = current.get_proc_declaration(proc_name) {
-                symbol_id = Some(decl.id);
-            }
-        },
-        Annotation::TreePath(absolute, parts) => {
-            if let Some(ty) = self.objtree.type_by_path(completion::combine_tree_path(&iter, *absolute, parts)) {
-                symbol_id = Some(ty.id);
-            }
-        },
-        Annotation::TypePath(parts) => {
-            match self.follow_type_path(&iter, parts) {
-                // '/datum/proc/foo'
-                Some(completion::TypePathResult { ty, decl: _, proc: Some((proc_name, _)) }) => {
-                    if let Some(decl) = ty.get_proc_declaration(proc_name) {
-                        symbol_id = Some(decl.id);
-                    }
-                },
-                // 'datum/bar'
-                Some(completion::TypePathResult { ty, decl: None, proc: None }) => {
-                    symbol_id = Some(ty.id);
-                },
-                _ => {}
-            }
-        },
-        Annotation::UnscopedCall(proc_name) => {
-            let (ty, _) = self.find_type_context(&iter);
-            let mut next = ty.or(Some(self.objtree.root()));
-            while let Some(ty) = next {
-                if let Some(proc) = ty.procs.get(proc_name) {
-                    if let Some(ref decl) = proc.declaration {
-                        symbol_id = Some(decl.id);
-                        break;
-                    }
-                }
-                next = ty.parent_type();
-            }
-        },
-        Annotation::UnscopedVar(var_name) => {
-            let (ty, proc_name) = self.find_type_context(&iter);
-            match self.find_unscoped_var(&iter, ty, proc_name, var_name) {
-                UnscopedVar::Parameter { .. } => {
-                    // TODO
-                },
-                UnscopedVar::Variable { ty, .. } => {
-                    if let Some(decl) = ty.get_var_declaration(var_name) {
-                        symbol_id = Some(decl.id);
-                    }
-                },
-                UnscopedVar::Local { .. } => {
-                    // TODO
-                },
-                UnscopedVar::None => {}
-            }
-        },
-        Annotation::ScopedCall(priors, proc_name) => {
-            let mut next = self.find_scoped_type(&iter, priors);
-            while let Some(ty) = next {
-                if let Some(proc) = ty.procs.get(proc_name) {
-                    if let Some(ref decl) = proc.declaration {
-                        symbol_id = Some(decl.id);
-                        break;
-                    }
-                }
-                next = ty.parent_type_without_root();
-            }
-        },
-        Annotation::ScopedVar(priors, var_name) => {
-            let mut next = self.find_scoped_type(&iter, priors);
-            while let Some(ty) = next {
-                if let Some(var) = ty.vars.get(var_name) {
-                    if let Some(ref decl) = var.declaration {
-                        symbol_id = Some(decl.id);
-                        break;
-                    }
-                }
-                next = ty.parent_type_without_root();
-            }
-        },
-        // TODO: macros
-        }
+        let symbol_id = self.symbol_id_at(params.text_document_position)?;
 
         let mut result = &[][..];
         if let Some(id) = symbol_id {
@@ -1398,6 +1405,26 @@ handle_method_call! {
                 output.push(self.convert_location(*each, &[])?);
             }
             Some(output)
+        }
+    }
+
+    on GotoImplementation(&mut self, params) {
+        let symbol_id = self.symbol_id_at(params)?;
+
+        let mut result = &[][..];
+        if let Some(id) = symbol_id {
+            if let Some(ref table) = self.references_table {
+                result = table.find_implementations(id);
+            }
+        }
+        if result.is_empty() {
+            None
+        } else {
+            let mut output = Vec::new();
+            for each in result {
+                output.push(self.convert_location(*each, &[])?);
+            }
+            Some(GotoDefinitionResponse::Array(output))
         }
     }
 

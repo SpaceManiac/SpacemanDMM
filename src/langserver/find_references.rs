@@ -7,8 +7,14 @@ use dm::objtree::*;
 use dm::ast::*;
 
 pub struct ReferencesTable {
-    uses: HashMap<SymbolId, Vec<Location>>,
+    uses: HashMap<SymbolId, References>,
     symbols: SymbolIdSource,
+}
+
+#[derive(Default)]
+struct References {
+    references: Vec<Location>,
+    implementations: Vec<Location>,
 }
 
 impl ReferencesTable {
@@ -20,15 +26,18 @@ impl ReferencesTable {
 
         // Insert the "definition" locations for the types and such
         objtree.root().recurse(&mut |ty| {
-            tab.uses.insert(ty.id, vec![ty.location]);
+            tab.uses.insert(ty.id, References {
+                references: vec![ty.location],
+                implementations: vec![],
+            });
             for (name, var) in ty.vars.iter() {
                 if let Some(decl) = ty.get_var_declaration(name) {
-                    tab.use_symbol(decl.id, var.value.location);
+                    tab.impl_symbol(decl.id, var.value.location);
                 }
             }
             for (name, proc) in ty.procs.iter() {
                 if let Some(decl) = ty.get_proc_declaration(name) {
-                    tab.use_symbol(decl.id, proc.value.first().unwrap().location);
+                    tab.impl_symbol(decl.id, proc.value.first().unwrap().location);
                 }
             }
         });
@@ -54,27 +63,43 @@ impl ReferencesTable {
 
         // Sublime Text client does not sort these itself, so sort them here.
         for value in tab.uses.values_mut() {
-            value.sort();
+            value.references.sort();
+            value.implementations.sort();
         }
 
         tab
     }
 
-    pub fn find_references(&self, symbol: SymbolId, _declaration: bool) -> &[Location] {
+    pub fn find_references(&self, symbol: SymbolId, declaration: bool) -> &[Location] {
         match self.uses.get(&symbol) {
             None => &[],
-            Some(list) => list,
+            Some(list) if declaration => &list.references[1..],
+            Some(list) => &list.references,
+        }
+    }
+
+    pub fn find_implementations(&self, symbol: SymbolId) -> &[Location] {
+        match self.uses.get(&symbol) {
+            None => &[],
+            Some(list) => &list.implementations,
         }
     }
 
     fn new_symbol(&mut self, location: Location) -> SymbolId {
         let id = self.symbols.allocate();
-        self.uses.insert(id, vec![location]);
+        self.uses.insert(id, References {
+            references: vec![location],
+            implementations: vec![],
+        });
         id
     }
 
     fn use_symbol(&mut self, symbol: SymbolId, location: Location) {
-        self.uses.entry(symbol).or_default().push(location);
+        self.uses.entry(symbol).or_default().references.push(location);
+    }
+
+    fn impl_symbol(&mut self, symbol: SymbolId, location: Location) {
+        self.uses.entry(symbol).or_default().implementations.push(location);
     }
 }
 
