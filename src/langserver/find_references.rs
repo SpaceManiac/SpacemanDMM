@@ -70,10 +70,9 @@ impl ReferencesTable {
         tab
     }
 
-    pub fn find_references(&self, symbol: SymbolId, declaration: bool) -> &[Location] {
+    pub fn find_references(&self, symbol: SymbolId, _declaration: bool) -> &[Location] {
         match self.uses.get(&symbol) {
             None => &[],
-            Some(list) if declaration => &list.references[1..],
             Some(list) => &list.references,
         }
     }
