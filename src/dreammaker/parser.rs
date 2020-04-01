@@ -1160,7 +1160,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             self.skip_phantom_semicolons()?;
             require!(self.exact_ident("while"));
             require!(self.exact(Token::Punct(Punctuation::LParen)));
-            let condition = require!(self.expression());
+            let condition = Spanned::new(self.location(), require!(self.expression()));
             require!(self.exact(Token::Punct(Punctuation::RParen)));
             require!(self.statement_terminator());
             spanned(Statement::DoWhile { block, condition })

@@ -226,7 +226,7 @@ impl<'o> WalkProc<'o> {
             },
             Statement::DoWhile { block, condition } => {
                 self.visit_block(block);
-                self.visit_expression(location, condition, None);
+                self.visit_expression(condition.location, &condition.elem, None);
             },
             Statement::If { arms, else_arm } => {
                 for (condition, ref block) in arms.iter() {

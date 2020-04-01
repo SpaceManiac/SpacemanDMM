@@ -948,7 +948,7 @@ pub enum Statement {
     },
     DoWhile {
         block: Block,
-        condition: Expression,
+        condition: Spanned<Expression>,
     },
     If {
         arms: Vec<(Spanned<Expression>, Block)>,

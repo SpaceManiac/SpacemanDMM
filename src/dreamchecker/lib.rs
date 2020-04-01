@@ -1237,7 +1237,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         .register(self.context);
                     return state
                 }
-                self.visit_expression(location, condition, None, &mut scoped_locals);
+                self.visit_expression(condition.location, &condition.elem, None, &mut scoped_locals);
 
                 state.end_loop();
                 return state
