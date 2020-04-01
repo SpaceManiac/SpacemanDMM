@@ -97,6 +97,8 @@ impl std::cmp::PartialEq for Constant {
             (Constant::Resource(s1), Constant::Resource(s2)) => s1 == s2,
             (Constant::Int(i1), Constant::Int(i2)) => i1 == i2,
             (Constant::Float(f1), Constant::Float(f2)) => OrderedFloat(*f1) == OrderedFloat(*f2),
+            (Constant::Int(i), Constant::Float(f)) |
+            (Constant::Float(f), Constant::Int(i)) => OrderedFloat(*f) == OrderedFloat(*i as f32),
             _ => false,
         }
     }
