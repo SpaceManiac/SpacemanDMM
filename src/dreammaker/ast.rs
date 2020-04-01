@@ -990,7 +990,7 @@ pub enum Statement {
     },
     Switch {
         input: Expression,
-        cases: Vec<(Vec<Case>, Block)>,
+        cases: Vec<(Spanned<Vec<Case>>, Block)>,
         default: Option<Block>,
     },
     TryCatch {
