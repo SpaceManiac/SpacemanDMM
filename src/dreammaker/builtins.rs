@@ -632,7 +632,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         atom/movable/var/step_x = int!(0);
         atom/movable/var/step_y = int!(0);
         atom/movable/var/list/vis_contents;
-        atom/movable/var/tmp/list/vis_locs;
+        atom/movable/var/tmp/list/atom/vis_locs; // technically this can never be an /area but this is close enough
         atom/movable/proc/Bump(/*atom*/Obstacle);
         atom/movable/proc/Move(NewLoc, Dir/*=0*/, step_x/*=0*/, step_y/*=0*/);
 
@@ -643,7 +643,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         turf/parent_type = path!(/atom);
         turf/layer = int!(2);
         turf/var/list/vis_contents;
-        turf/var/tmp/list/vis_locs;
+        turf/var/tmp/list/atom/vis_locs; // technically this can never be an /area but this is close enough
 
         obj/parent_type = path!(/atom/movable);
         obj/layer = int!(3);
