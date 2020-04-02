@@ -336,7 +336,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
             alpha, color, infra_luminosity, layer, maptext_width, maptext_height,
             maptext_x, maptext_y, luminosity, pixel_x, pixel_y, pixel_w, pixel_z,
             transform, dir, icon, icon_state, invisibility, maptext, suffix, appearance,
-            dir,
+            dir, radius,
             // filters only
             size, x, y, offset, flags);
         proc/arccos(X);
