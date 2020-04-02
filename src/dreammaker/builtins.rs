@@ -981,7 +981,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         atom/var/render_source;
         atom/var/vis_flags;
 
-        client/proc/MeasureText(Text, Style, Width/*=0*/);
+        client/proc/MeasureText(text, style, width/*=0*/);
         client/proc/SoundQuery();
 
         regex/proc/Find_char(text, start, end);
