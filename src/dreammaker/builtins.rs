@@ -904,6 +904,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         image/var/appearance_flags;
         image/var/blend_mode;
         image/var/color;
+        image/var/desc;
         image/var/icon/icon;
         image/var/icon_state;
         image/var/text;
@@ -922,6 +923,9 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         image/var/pixel_w;
         image/var/pixel_z;
         image/var/plane;
+        image/var/render_source;
+        image/var/render_target;
+        image/var/invisibility; // undocumented
         image/var/x;
         image/var/y;
         image/var/z;
