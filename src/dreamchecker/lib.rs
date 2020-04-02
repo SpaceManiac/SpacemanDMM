@@ -1177,6 +1177,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         else if let Some(term) = expression.as_term() {
             if term.is_static() {
                 error(location,"control flow condition is a static term")
+                    .with_errortype("control_condition_static")
                     .register(self.context);
             }
         }
@@ -1257,12 +1258,14 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     match condition.elem.is_truthy() {
                         Some(true) => {
                             error(condition.location,"if condition is always true")
+                                .with_errortype("if_condition_determinate")
                                 .register(self.context);
                             allterm.merge_false(state);
                             alwaystrue = true;
                         },
                         Some(false) => {
                             error(condition.location,"if condition is always false")
+                                .with_errortype("if_condition_determinate")
                                 .register(self.context);
                         },
                         None => allterm.merge_false(state)
