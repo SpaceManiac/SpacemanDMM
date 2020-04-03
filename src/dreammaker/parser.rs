@@ -1310,7 +1310,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     self.context.register_error(self.error("switch case cannot be empty"));
                 }
                 let block = require!(self.block(loop_ctx));
-                cases.push((what, block));
+                cases.push((Spanned::new(self.location(), what), block));
             }
             let default = if let Some(()) = self.exact_ident("else")? {
                 Some(require!(self.block(loop_ctx)))

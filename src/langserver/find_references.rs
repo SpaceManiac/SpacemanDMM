@@ -283,13 +283,13 @@ impl<'o> WalkProc<'o> {
             },
             Statement::Switch { input, cases, default } => {
                 self.visit_expression(location, input, None);
-                for &(ref case, ref block) in cases.iter() {
-                    for case_part in case.iter() {
+                for (case, ref block) in cases.iter() {
+                    for case_part in case.elem.iter() {
                         match case_part {
-                            dm::ast::Case::Exact(expr) => { self.visit_expression(location, expr, None); },
+                            dm::ast::Case::Exact(expr) => { self.visit_expression(case.location, expr, None); },
                             dm::ast::Case::Range(start, end) => {
-                                self.visit_expression(location, start, None);
-                                self.visit_expression(location, end, None);
+                                self.visit_expression(case.location, start, None);
+                                self.visit_expression(case.location, end, None);
                             }
                         }
                     }

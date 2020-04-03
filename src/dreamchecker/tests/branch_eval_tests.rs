@@ -41,7 +41,7 @@ pub const IF_ARMS_ERRORS: &[(u32, u16, &str)] = &[
     (2, 7, "if condition is always true"),
     (4, 12, "unreachable if block, preceeding if/elseif condition(s) are always true"),
     // TODO: fix location reporting on this
-    (2, 5, "unreachable else block, preceeding if/elseif condition(s) are always true"),
+    (7, 9, "unreachable else block, preceeding if/elseif condition(s) are always true"),
 ];
 
 #[test]

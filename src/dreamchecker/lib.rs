@@ -1214,7 +1214,6 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 // TODO: factor in the previous return type if there was one
                 let return_type = self.visit_expression(location, expr, None, local_vars);
                 local_vars.get_mut(".").unwrap().analysis = return_type;
-                // TODO: break out of the analysis for this branch?
                 return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false }
             },
             Statement::Return(None) => { return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false } },
@@ -1273,9 +1272,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
                 if let Some(else_arm) = else_arm {
                     if alwaystrue {
-                        // TODO: fix location for else blocks
-                        error(location,"unreachable else block, preceeding if/elseif condition(s) are always true")
-                            .register(self.context);
+                        if let Some(else_expr) = else_arm.first() {
+                            error(else_expr.location ,"unreachable else block, preceeding if/elseif condition(s) are always true")
+                                .register(self.context);
+                        }
                     }
                     let state = self.visit_block(else_arm, &mut local_vars.clone());
                     allterm.merge_false(state);
@@ -1373,14 +1373,14 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 let mut allterm = ControlFlow::alltrue();
                 self.visit_control_condition(location, input);
                 self.visit_expression(location, input, None, local_vars);
-                for &(ref case, ref block) in cases.iter() {
+                for (case, ref block) in cases.iter() {
                     let mut scoped_locals = local_vars.clone();
-                    for case_part in case.iter() {
+                    for case_part in case.elem.iter() {
                         match case_part {
-                            dm::ast::Case::Exact(expr) => { self.visit_expression(location, expr, None, &mut scoped_locals); },
+                            dm::ast::Case::Exact(expr) => { self.visit_expression(case.location, expr, None, &mut scoped_locals); },
                             dm::ast::Case::Range(start, end) => {
-                                self.visit_expression(location, start, None, &mut scoped_locals);
-                                self.visit_expression(location, end, None, &mut scoped_locals);
+                                self.visit_expression(case.location, start, None, &mut scoped_locals);
+                                self.visit_expression(case.location, end, None, &mut scoped_locals);
                             }
                         }
                     }
