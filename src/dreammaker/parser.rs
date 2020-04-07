@@ -980,6 +980,15 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             None
         };
         let (input_type, in_list) = require!(self.input_specifier());
+
+        // Allow a trailing `;` since BYOND accepts it, but this is dumb
+        if let Some(()) = self.exact(Punct(Semicolon))? {
+            DMError::new(self.updated_location(), "Extraneous ';' in proc parameter")
+                .set_severity(Severity::Warning)
+                .with_errortype("semicolon_in_proc_parameter")
+                .register(self.context);
+        }
+
         success(Parameter {
             var_type,
             name,

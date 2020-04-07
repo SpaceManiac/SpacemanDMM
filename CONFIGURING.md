@@ -54,6 +54,7 @@ Raised by Parser:
 
 * `var_in_proc_parameter` - Raised where `var/` is used in proc arguments
 * `static_in_proc_parameter` - Raised where `static/` is used in proc arguments
+* `semicolon_in_proc_parameter` - Raised where `;` is used in proc arguments
 * `in_precedes_as` - Raised where `input()` calls are using `as` after `in` which DM silently ignores
 * `tmp_no_effect` - Raised where local vars are defined as `tmp` which has no effect
 * `final_no_effect` - Raised where local vars are defined as `SpacemanDMM_final` which has no effect
