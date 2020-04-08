@@ -22,7 +22,7 @@ fn check_semicolon_in_proc_parameters() {
 #define DEF1 0x01;
 #define DEF2 \"asdf\" as text;
 
-/proc/fuck(foo = DEF1, bar = DEF2, anotherarg = 1)
+/proc/darn(foo = DEF1, bar = DEF2, anotherarg = 1)
 ", |context, _| {
         let errors = context.errors();
         assert_eq!(errors.len(), 2);
