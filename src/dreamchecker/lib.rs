@@ -461,12 +461,12 @@ pub fn directive_value_to_truthy(expr: &Expression, location: Location) -> Resul
 /// An ordered chain of ProcRef calls with their location
 #[derive(Default, Clone)]
 pub struct CallStack<'o> {
-    call_stack: VecDeque<(ProcRef<'o>, Location)>,
+    call_stack: VecDeque<(ProcRef<'o>, Location, bool)>,
 }
 
 impl<'o> CallStack<'o> {
-    pub fn add_step(&mut self, proc: ProcRef<'o>, location: Location) {
-        self.call_stack.push_back((proc, location));
+    pub fn add_step(&mut self, proc: ProcRef<'o>, location: Location, new_context: bool) {
+        self.call_stack.push_back((proc, location, new_context));
     }
 }
 
@@ -478,7 +478,7 @@ trait DMErrorExt {
 
 impl DMErrorExt for DMError {
     fn with_callstack(mut self, stack: CallStack) -> DMError {
-        for (procref, location) in stack.call_stack.iter() {
+        for (procref, location, new_context) in stack.call_stack.iter() {
             self.add_note(*location, format!("{}() called here", procref));
         }
         self
@@ -536,7 +536,7 @@ pub struct AnalyzeObjectTree<'o> {
     // Debug(ProcRef) -> KwargInfo
     used_kwargs: BTreeMap<String, KwargInfo>,
 
-    call_tree: HashMap<ProcRef<'o>, Vec<(ProcRef<'o>, Location)>>,
+    call_tree: HashMap<ProcRef<'o>, Vec<(ProcRef<'o>, Location, bool)>>,
 
     sleeping_procs: ViolatingProcs<'o>,
     impure_procs: ViolatingProcs<'o>,
@@ -627,16 +627,16 @@ impl<'o> AnalyzeObjectTree<'o> {
                     .register(self.context)
             }
             let mut visited = HashSet::<ProcRef<'o>>::new();
-            let mut to_visit = VecDeque::<(ProcRef<'o>, CallStack)>::new();
+            let mut to_visit = VecDeque::<(ProcRef<'o>, CallStack, bool)>::new();
             if let Some(procscalled) = self.call_tree.get(procref) {
-                for (proccalled, location) in procscalled {
+                for (proccalled, location, new_context) in procscalled {
                     let mut callstack = CallStack::default();
-                    callstack.add_step(*proccalled, *location);
-                    to_visit.push_back((*proccalled, callstack));
+                    callstack.add_step(*proccalled, *location, *new_context);
+                    to_visit.push_back((*proccalled, callstack, *new_context));
                 }
             }
             while !to_visit.is_empty() {
-                guard!(let Some((nextproc, callstack)) = to_visit.pop_front() else {
+                guard!(let Some((nextproc, callstack, new_context)) = to_visit.pop_front() else {
                     break
                 });
                 if let Some(_) = visited.get(&nextproc) {
@@ -649,6 +649,9 @@ impl<'o> AnalyzeObjectTree<'o> {
                 if let Some(_) = self.sleep_exempt.get(nextproc) {
                     continue
                 }
+                if new_context {
+                    continue
+                }
                 if let Some(sleepvec) = self.sleeping_procs.get_violators(nextproc) {
                     error(procref.get().location, format!("{} sets SpacemanDMM_should_not_sleep but calls blocking proc {}", procref, nextproc))
                         .with_errortype("must_not_sleep")
@@ -659,10 +662,10 @@ impl<'o> AnalyzeObjectTree<'o> {
                     guard!(let Some(calledvec) = self.call_tree.get(&nextproc) else {
                         continue
                     });
-                    for (proccalled, location) in calledvec.iter() {
+                    for (proccalled, location, new_context) in calledvec.iter() {
                         let mut newstack = callstack.clone();
-                        newstack.add_step(*proccalled, *location);
-                        to_visit.push_back((*proccalled, newstack));
+                        newstack.add_step(*proccalled, *location, *new_context);
+                        to_visit.push_back((*proccalled, newstack, *new_context));
                     }
                 }
             }
@@ -679,9 +682,9 @@ impl<'o> AnalyzeObjectTree<'o> {
             let mut visited = HashSet::<ProcRef<'o>>::new();
             let mut to_visit = VecDeque::<(ProcRef<'o>, CallStack)>::new();
             if let Some(procscalled) = self.call_tree.get(procref) {
-                for (proccalled, location) in procscalled {
+                for (proccalled, location, new_context) in procscalled {
                     let mut callstack = CallStack::default();
-                    callstack.add_step(*proccalled, *location);
+                    callstack.add_step(*proccalled, *location, *new_context);
                     to_visit.push_back((*proccalled, callstack));
                 }
             }
@@ -704,9 +707,9 @@ impl<'o> AnalyzeObjectTree<'o> {
                     guard!(let Some(calledvec) = self.call_tree.get(&nextproc) else {
                         continue
                     });
-                    for (proccalled, location) in calledvec.iter() {
+                    for (proccalled, location, new_context) in calledvec.iter() {
                         let mut newstack = callstack.clone();
-                        newstack.add_step(*proccalled, *location);
+                        newstack.add_step(*proccalled, *location, *new_context);
                         to_visit.push_back((*proccalled, newstack));
                     }
                 }
@@ -1966,7 +1969,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
     fn visit_call(&mut self, location: Location, src: TypeRef<'o>, proc: ProcRef<'o>, args: &'o [Expression], is_exact: bool, local_vars: &mut HashMap<String, LocalVar<'o>>) -> Analysis<'o> {
         if let Some(callhashset) = self.env.call_tree.get_mut(&self.proc_ref) {
-            callhashset.push((proc, location));
+            callhashset.push((proc, location, self.inside_newcontext != 0));
         }
         if let Some((privateproc, true, decllocation)) = self.env.private.get_self_or_parent(proc) {
             if self.ty != privateproc.ty() {
