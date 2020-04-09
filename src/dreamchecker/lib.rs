@@ -458,7 +458,7 @@ pub fn directive_value_to_truthy(expr: &Expression, location: Location) -> Resul
     }
 }
 
-/// An ordered chain of ProcRef calls with their location
+/// An ordered chain of ProcRef calls with their location and whether or not they are in a new context
 #[derive(Default, Clone)]
 pub struct CallStack<'o> {
     call_stack: VecDeque<(ProcRef<'o>, Location, bool)>,
