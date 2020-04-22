@@ -936,7 +936,9 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         image/var/name;  // undocumented
         image/var/mouse_opacity;  // undocumented
         image/New(icon, loc, icon_state, layer, dir);
+
         mutable_appearance/parent_type = path!(/image);
+        mutable_appearance/var/opacity;  // inherited from /mob according to the docs
 
         savefile;
         savefile/var/const/type;
