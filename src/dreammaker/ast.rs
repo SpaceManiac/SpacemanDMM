@@ -564,31 +564,40 @@ impl Term {
 
     pub fn is_truthy(&self) -> Option<bool> {
         return match self {
-            // null is always false
+            // `null`, `0`, and empty strings are falsey.
             Term::Null => Some(false),
-            // number literals are false if they're 0
             Term::Int(i) => Some(*i != 0),
             Term::Float(i) => Some(*i != 0f32),
-            // empty strings are false
             Term::String(s) => Some(s.len() > 0),
-            // recurse
-            Term::Expr(e) => e.is_truthy(),
-            // paths/prefabs are true
+
+            // Paths/prefabs are truthy.
             Term::Prefab(_) => Some(true),
-            // new is true if it succeeds, assume it does
+            // `new()` and `list()` return the newly-created reference.
             Term::New{type_: _, args: _} => Some(true),
-            // since it returns a reference its true
             Term::List(_) => Some(true),
+
+            // Truthy if any of the literal parts are non-empty.
+            // Otherwise, don't try to determine the content of the parts.
+            Term::InterpString(first, parts) => {
+                if !first.is_empty() || parts.iter().any(|(_, p)| !p.is_empty()) {
+                    Some(true)
+                } else {
+                    None
+                }
+            },
+
+            // Recurse.
+            Term::Expr(e) => e.is_truthy(),
 
             _ => None,
         };
     }
 
     pub fn valid_for_range(&self, other: &Term, step: &Option<Expression>) -> Option<bool> {
-        if let Term::Int(i) = self {
-            if let Term::Int(o) = other {
+        if let &Term::Int(i) = self {
+            if let &Term::Int(o) = other {
                 // edge case
-                if *i == 0 && *o == 0 {
+                if i == 0 && o == 0 {
                     return Some(false)
                 }
                 if let Some(stepexp) = step {
@@ -600,7 +609,7 @@ impl Term {
                         return Some(true)
                     }
                 }
-                return Some(*i <= *o)
+                return Some(i <= o)
             }
         }
         None
