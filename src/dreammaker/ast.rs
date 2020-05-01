@@ -575,8 +575,6 @@ impl Term {
             Term::Expr(e) => e.is_truthy(),
             // paths/prefabs are true
             Term::Prefab(_) => Some(true),
-            // these always have a length therefore true
-            Term::InterpString(_, _) => Some(true),
             // new is true if it succeeds, assume it does
             Term::New{type_: _, args: _} => Some(true),
             // since it returns a reference its true
