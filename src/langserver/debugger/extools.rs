@@ -13,7 +13,7 @@ use super::extools_types::*;
 
 pub const DEFAULT_PORT: u16 = 2448;
 
-const RECV_TIMEOUT: Duration = Duration::from_secs(1);
+const RECV_TIMEOUT: Duration = Duration::from_secs(3);
 
 // ----------------------------------------------------------------------------
 // Data structures
