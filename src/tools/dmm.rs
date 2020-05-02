@@ -7,7 +7,7 @@ use std::fmt;
 use ndarray::{self, Array3, Axis};
 use linked_hash_map::LinkedHashMap;
 
-use dm::{DMError, Location};
+use dm::DMError;
 use dm::constants::Constant;
 use crate::dmi::Dir;
 
@@ -158,9 +158,7 @@ impl Map {
             dictionary: Default::default(),
             grid: Array3::default((1, 1, 1)),
         };
-        read::parse_map(&mut map, File::open(path).map_err(|e| {
-            DMError::new(Location::default(), "i/o error").with_cause(e)
-        })?)?;
+        read::parse_map(&mut map, path)?;
         Ok(map)
     }
 

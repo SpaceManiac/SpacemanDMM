@@ -471,7 +471,7 @@ impl<'a> Engine<'a> {
                         None => (FileId::default(), defines.branch_at_end(&self.context)),
                     };
                     let contents = self.docs.read(url).map_err(invalid_request)?;
-                    let file_id = preprocessor.push_file(stripped.to_owned(), contents);
+                    let file_id = preprocessor.push_file(stripped.to_owned(), contents).map_err(invalid_request)?;
                     preprocessor.enable_annotations();
                     let mut annotations = AnnotationTree::default();
                     {

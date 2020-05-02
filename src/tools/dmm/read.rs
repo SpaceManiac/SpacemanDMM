@@ -1,7 +1,5 @@
 //! Map parser, supporting standard DMM or TGM-format files.
 use std::collections::BTreeMap;
-use std::fs::File;
-use std::io::{Read, BufReader};
 use std::cmp::max;
 
 use ndarray::Array3;
@@ -16,8 +14,9 @@ fn take<T: Default>(t: &mut T) -> T {
     std::mem::replace(t, T::default())
 }
 
-pub fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
-    let mut chars = LocationTracker::new(Default::default(), BufReader::new(f).bytes());
+pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
+    let file_id = Default::default();
+    let mut chars = LocationTracker::new(file_id, dm::lexer::buffer_file(file_id, path)?.into());
 
     let mut in_comment_line = false;
     let mut comment_trigger = false;
@@ -39,7 +38,6 @@ pub fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
     let mut skip_whitespace = false;
 
     while let Some(ch) = chars.next() {
-        let ch = ch?;
         if ch == b'\n' || ch == b'\r' {
             in_comment_line = false;
             comment_trigger = false;
@@ -178,7 +176,6 @@ pub fn parse_map(map: &mut Map, f: File) -> Result<(), DMError> {
     let mut adjust_y = true;
 
     while let Some(ch) = chars.next() {
-        let ch = ch?;
         if in_coord_block {
             if ch == b',' {
                 if reading_coord == Coord::X {

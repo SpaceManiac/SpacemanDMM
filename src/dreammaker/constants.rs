@@ -394,11 +394,12 @@ impl fmt::Display for ConstFn {
 pub fn evaluate_str(location: Location, input: &[u8]) -> Result<Constant, DMError> {
     use super::lexer::{Lexer, from_utf8_or_latin1_borrowed};
 
-    let mut bytes = input.iter().map(|&x| Ok(x));
     let ctx = Context::default();
-    let expr = crate::parser::parse_expression(&ctx, location, Lexer::new(&ctx, location.file, &mut bytes))?;
-    if bytes.next().is_some() {
-        return Err(DMError::new(location, format!("leftover: {:?} {}", from_utf8_or_latin1_borrowed(&input), bytes.len())));
+    let mut lexer = Lexer::new(&ctx, location.file, input);
+    let expr = crate::parser::parse_expression(&ctx, location, &mut lexer)?;
+    let leftover = lexer.remaining();
+    if !leftover.is_empty() {
+        return Err(DMError::new(location, format!("leftover: {:?} {}", from_utf8_or_latin1_borrowed(&input), leftover.len())));
     }
     expr.simple_evaluate(location)
 }
