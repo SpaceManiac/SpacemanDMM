@@ -387,17 +387,25 @@ impl<'ctx> HasLocation for Preprocessor<'ctx> {
     }
 }
 
+fn buffer_file(path: &Path) -> io::Result<Vec<u8>> {
+    use std::io::Read;
+
+    let mut buffer = if let Ok(metadata) = std::fs::metadata(path) {
+        Vec::with_capacity(metadata.len() as usize)
+    } else {
+        Vec::new()
+    };
+    let mut file = File::open(path)?;
+    file.read_to_end(&mut buffer)?;
+    Ok(buffer)
+}
+
 impl<'ctx> Preprocessor<'ctx> {
     /// Create a new preprocessor from the given Context and environment file.
     pub fn new(context: &'ctx Context, env_file: PathBuf) -> io::Result<Self> {
         // Buffer the entire environment file. Large environments take a while
         // to load and locking it for the whole time is somewhat inconvenient.
-        let mut buffer = Vec::new();
-        {
-            use std::io::Read;
-            let mut file = File::open(&env_file)?;
-            file.read_to_end(&mut buffer)?;
-        }
+        let buffer = buffer_file(&env_file)?;
         let include = Include::from_read(context, env_file.clone(), Box::new(io::Cursor::new(buffer)));
 
         Ok(Preprocessor {
