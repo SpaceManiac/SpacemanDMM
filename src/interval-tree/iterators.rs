@@ -106,11 +106,11 @@ fn intersect<T: Ord>(start: &Bound<T>, end: &Bound<T>, range: &RangeInclusive<T>
         Bound::Included(ref start) => range.end >= *start,
         Bound::Excluded(ref start) => range.end > *start,
         Bound::Unbounded => true,
-    } && match *end {
+    }) && match *end {
         Bound::Included(ref end) => range.start <= *end,
         Bound::Excluded(ref end) => range.start < *end,
         Bound::Unbounded => true,
-    })
+    }
 }
 
 pub struct IntoIter<K, V> {
