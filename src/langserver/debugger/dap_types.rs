@@ -564,6 +564,66 @@ pub struct ExceptionInfoResponse {
     pub details: Option<ExceptionDetails>,
 }
 
+/// The request sets the location where the debuggee will continue to run.
+pub enum Goto {}
+
+impl Request for Goto {
+    type Params = GotoArguments;
+    type Result = ();
+    const COMMAND: &'static str = "goto";
+}
+
+/// Arguments for ‘goto’ request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GotoArguments {
+    /**
+     * Set the goto target for this thread.
+     */
+    pub threadId: i64,
+
+    /**
+     * The location where the debuggee will continue to run.
+     */
+    pub targetId: i64,
+}
+
+/// This request retrieves the possible goto targets for the specified source location.
+pub enum GotoTargets {}
+
+impl Request for GotoTargets {
+    type Params = GotoTargetsArguments;
+    type Result = GotoTargetsResponse;
+    const COMMAND: &'static str = "gotoTargets";
+}
+
+/// Arguments for ‘gotoTargets’ request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GotoTargetsArguments {
+    /**
+     * The source location for which the goto targets are determined.
+     */
+    pub source: Source,
+
+    /**
+     * The line location for which the goto targets are determined.
+     */
+    pub line: i64,
+
+    /**
+     * An optional column location for which the goto targets are determined.
+     */
+    pub column: Option<i64>,
+}
+
+/// Response to ‘gotoTargets’ request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GotoTargetsResponse {
+    /**
+     * The possible goto targets of the specified location.
+     */
+    pub targets: Vec<GotoTarget>,
+}
+
 /// The request starts the debuggee to run again for one step.
 ///
 /// The debug adapter first sends the response and then a ‘stopped’ event (with reason ‘step’) after the step has completed.
@@ -1206,6 +1266,45 @@ pub struct FunctionBreakpoint {
      * An optional expression that controls how many hits of the breakpoint are ignored. The backend is expected to interpret the expression as needed.
      */
     pub hitCondition: Option<String>,
+}
+
+/// A GotoTarget describes a code location that can be used as a target in the ‘goto’ request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GotoTarget {
+    /**
+     * Unique identifier for a goto target. This is used in the goto request.
+     */
+    pub id: i64,
+
+    /**
+     * The name of the goto target (shown in the UI).
+     */
+    pub label: String,
+
+    /**
+     * The line of the goto target.
+     */
+    pub line: i64,
+
+    /**
+     * An optional column of the goto target.
+     */
+    pub column: Option<i64>,
+
+    /**
+     * An optional end line of the range covered by the goto target.
+     */
+    pub endLine: Option<i64>,
+
+    /**
+     * An optional end column of the range covered by the goto target.
+     */
+    pub endColumn: Option<i64>,
+
+    /**
+     * Optional memory reference for the instruction pointer value represented by this target.
+     */
+    pub instructionPointerReference: Option<String>,
 }
 
 /// A structured message object. Used to return errors from requests.
