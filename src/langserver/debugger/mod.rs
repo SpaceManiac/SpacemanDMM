@@ -314,6 +314,7 @@ handle_request! {
             supportsExceptionInfoRequest: Some(true),
             supportsConfigurationDoneRequest: Some(true),
             supportsFunctionBreakpoints: Some(true),
+            supportsDisassembleRequest: Some(true),
             exceptionBreakpointFilters: Some(vec![
                 ExceptionBreakpointsFilter {
                     filter: EXCEPTION_FILTER_RUNTIMES.to_owned(),
@@ -535,6 +536,7 @@ handle_request! {
             let mut dap_frame = StackFrame {
                 name: ex_frame.proc.clone(),
                 id: i as i64,
+                instructionPointerReference: Some(format!("{}@{}#{}", ex_frame.proc, ex_frame.override_id, ex_frame.offset)),
                 .. Default::default()
             };
 
@@ -774,6 +776,35 @@ handle_request! {
     on Evaluate(&mut self, params) {
         self.evaluate(params)?
     }
+
+    on Disassemble(&mut self, params) {
+        guard!(let Some(captures) = MEMORY_REFERENCE_REGEX.captures(&params.memoryReference) else {
+            return Err(Box::new(GenericError("Invalid memory reference")));
+        });
+        let proc = &captures[1];
+        let override_id: usize = captures[2].parse()?;
+        //let offset: i64 = captures[3].parse()?;
+
+        let extools = self.extools.get()?;
+        let mut result = Vec::new();
+        for instr in extools.bytecode(proc, override_id) {
+            result.push(DisassembledInstruction {
+                address: format!("{}#{}@{}", proc, override_id, instr.offset),
+                instructionBytes: Some(instr.bytes.clone()),
+                instruction: format!("{}  {}", instr.mnemonic, instr.comment),
+                .. Default::default()
+            });
+        }
+
+        DisassembleResponse {
+            instructions: result
+        }
+    }
+}
+
+lazy_static! {
+    // `/proc#override@offset`
+    static ref MEMORY_REFERENCE_REGEX: regex::Regex = regex::Regex::new(r"^([^#]+)#(\d+)@(\d+)$").unwrap();
 }
 
 #[derive(Default, Debug)]
