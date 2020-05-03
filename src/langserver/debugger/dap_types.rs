@@ -424,6 +424,54 @@ pub struct ContinueResponse {
     pub allThreadsContinued: Option<bool>,
 }
 
+/// Disassembles code stored at the provided location.
+pub enum Disassemble {}
+
+impl Request for Disassemble {
+    type Params = DisassembleArguments;
+    type Result = DisassembleResponse;
+    const COMMAND: &'static str = "disassemble";
+}
+
+/// Arguments for ‘disassemble’ request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DisassembleArguments {
+    /**
+     * Memory reference to the base location containing the instructions to disassemble.
+     */
+    pub memoryReference: String,
+
+    /**
+     * Optional offset (in bytes) to be applied to the reference location before disassembling. Can be negative.
+     */
+    pub offset: Option<i64>,
+
+    /**
+     * Optional offset (in instructions) to be applied after the byte offset (if any) before disassembling. Can be negative.
+     */
+    pub instructionOffset: Option<i64>,
+
+    /**
+     * Number of instructions to disassemble starting at the specified location and offset.
+     * An adapter must return exactly this number of instructions - any unavailable instructions should be replaced with an implementation-defined 'invalid instruction' value.
+     */
+    pub instructionCount: i64,
+
+    /**
+     * If true, the adapter should attempt to resolve memory addresses and other values to symbolic names.
+     */
+    pub resolveSymbols: Option<bool>,
+}
+
+/// Response to ‘disassemble’ request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DisassembleResponse {
+    /**
+     * The list of disassembled instructions.
+     */
+    pub instructions: Vec<DisassembledInstruction>,
+}
+
 /// Evaluates the given expression in the context of the top most stack frame.
 ///
 /// The expression has access to any variables and arguments that are in scope.
@@ -1147,6 +1195,57 @@ pub struct Capabilities {
      * The debug adapter supports the 'breakpointLocations' request.
      */
     pub supportsBreakpointLocationsRequest: Option<bool>,
+}
+
+/// Represents a single disassembled instruction.
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct DisassembledInstruction {
+    /**
+     * The address of the instruction. Treated as a hex value if prefixed with '0x', or as a decimal value otherwise.
+     */
+    pub address: String,
+
+    /**
+     * Optional raw bytes representing the instruction and its operands, in an implementation-defined format.
+     */
+    pub instructionBytes: Option<String>,
+
+    /**
+     * Text representing the instruction and its operands, in an implementation-defined format.
+     */
+    pub instruction: String,
+
+    /**
+     * Name of the symbol that corresponds with the location of this instruction, if any.
+     */
+    pub symbol: Option<String>,
+
+    /**
+     * Source location that corresponds to this instruction, if any.
+     * Should always be set (if available) on the first instruction returned,
+     * but can be omitted afterwards if this instruction maps to the same source file as the previous instruction.
+     */
+    pub location: Option<Source>,
+
+    /**
+     * The line within the source location that corresponds to this instruction, if any.
+     */
+    pub line: Option<i64>,
+
+    /**
+     * The column within the line that corresponds to this instruction, if any.
+     */
+    pub column: Option<i64>,
+
+    /**
+     * The end line of the range that corresponds to this instruction, if any.
+     */
+    pub endLine: Option<i64>,
+
+    /**
+     * The end column of the range that corresponds to this instruction, if any.
+     */
+    pub endColumn: Option<i64>,
 }
 
 /// This enumeration defines all possible conditions when a thrown exception should result in a break.
