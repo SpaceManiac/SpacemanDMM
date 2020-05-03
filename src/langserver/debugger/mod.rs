@@ -581,6 +581,11 @@ handle_request! {
         ScopesResponse {
             scopes: vec![
                 Scope {
+                    name: "Globals".to_owned(),
+                    variablesReference: 0x0e_000001,
+                    .. Default::default()
+                },
+                Scope {
                     name: "Arguments".to_owned(),
                     presentationHint: Some("arguments".to_owned()),
                     variablesReference: frameId * 2 + 1,
