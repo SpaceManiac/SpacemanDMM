@@ -843,6 +843,47 @@ pub struct SetFunctionBreakpointsResponse {
     pub breakpoints: Vec<Breakpoint>,
 }
 
+impl Request for Source {
+    type Params = SourceArguments;
+    type Result = SourceResponse;
+    const COMMAND: &'static str = "source";
+}
+
+/// Arguments for ‘source’ request.
+#[derive(Deserialize, Debug)]
+pub struct SourceArguments {
+    /**
+     * Specifies the source content to load. Either source.path or source.sourceReference must be specified.
+     */
+    pub source: Option<Source>,
+
+    /**
+     * The reference to the source. This is the same as source.sourceReference.
+     * This is provided for backward compatibility since old backends do not understand the 'source' attribute.
+     */
+    pub sourceReference: i64,
+}
+
+/// Response to ‘source’ request.
+#[derive(Serialize, Debug)]
+pub struct SourceResponse {
+    /**
+     * Content of the source reference.
+     */
+    pub content: String,
+
+    /**
+     * Optional content type (mime type) of the source.
+     */
+    pub mimeType: Option<String>,
+}
+
+impl From<String> for SourceResponse {
+    fn from(content: String) -> SourceResponse {
+        SourceResponse { content, mimeType: None }
+    }
+}
+
 /// The request returns a stacktrace from the current execution state.
 pub enum StackTrace {}
 
