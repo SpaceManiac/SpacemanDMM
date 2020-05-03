@@ -94,6 +94,8 @@ pub enum Literal {
     Typepath(String),
     #[serde(rename = "resource")]
     Resource(String),
+    #[serde(rename = "proc")]
+    Proc(String),
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -161,6 +163,12 @@ impl std::fmt::Display for Literal {
             Literal::String(s) => write!(fmt, "{:?}", s),
             Literal::Typepath(t) => write!(fmt, "{}", t),
             Literal::Resource(f) => write!(fmt, "'{}'", f),
+            Literal::Proc(p) => {
+                match p.rfind('/') {
+                    Some(idx) => write!(fmt, "{}/proc/{}", &p[..idx], &p[idx + 1..]),
+                    None => write!(fmt, "{}", p),
+                }
+            }
         }
     }
 }
