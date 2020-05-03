@@ -541,8 +541,15 @@ handle_request! {
             };
 
             if let Some(proc) = self.db.get_proc(&ex_frame.proc, ex_frame.override_id) {
-                // `stddef.dm` procs will show as "Unknown source" which is fine for now.
-                if !proc.location.is_builtins() {
+                if proc.location.is_builtins() {
+                    // `stddef.dm` proc.
+                    dap_frame.source = Some(Source {
+                        name: Some("stddef.dm".to_owned()),
+                        sourceReference: Some(STDDEF_SOURCE_REFERENCE),
+                        .. Default::default()
+                    });
+                } else {
+                    // Normal proc.
                     let path = self.db.files.get_path(proc.location.file);
 
                     dap_frame.source = Some(Source {
@@ -777,6 +784,23 @@ handle_request! {
         self.evaluate(params)?
     }
 
+    on Source(&mut self, params) {
+        let mut source_reference = params.sourceReference;
+        if let Some(source) = params.source {
+            if let Some(reference) = source.sourceReference {
+                source_reference = reference;
+            }
+        }
+
+        if source_reference != STDDEF_SOURCE_REFERENCE {
+            return Err(Box::new(GenericError("Unknown source reference")));
+        }
+
+        let extools = self.extools.get()?;
+        let body = extools.get_source("stddef.dm".to_owned())?;
+        SourceResponse::from(body)
+    }
+
     on Disassemble(&mut self, params) {
         guard!(let Some(captures) = MEMORY_REFERENCE_REGEX.captures(&params.memoryReference) else {
             return Err(Box::new(GenericError("Invalid memory reference")));
@@ -998,3 +1022,5 @@ const STDDEF_PROCS: &[&str] = &[
     "/regex/Find",
     "/regex/Replace"
 ];
+
+const STDDEF_SOURCE_REFERENCE: i64 = 1;

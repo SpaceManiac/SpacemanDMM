@@ -350,6 +350,17 @@ impl Response for ListContents {
     const TYPE: &'static str = "get list contents";
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GetSource(pub String);
+
+impl Request for GetSource {
+    const TYPE: &'static str = "get source";
+}
+
+impl Response for GetSource {
+    const TYPE: &'static str = "get source";
+}
+
 // #define MESSAGE_GET_TYPE "get type" //Request content is Datum, response content is a string
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GetType(pub Ref);
