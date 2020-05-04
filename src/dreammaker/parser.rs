@@ -420,6 +420,12 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         self.finalize_object_tree()
     }
 
+    #[doc(hidden)]
+    pub fn parse_object_tree_without_builtins(mut self) -> ObjectTree {
+        self.run();
+        self.tree
+    }
+
     pub fn parse_with_module_docs(mut self) -> (ObjectTree, BTreeMap<FileId, Vec<(u32, DocComment)>>) {
         self.tree.register_builtins();
         self.run();

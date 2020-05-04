@@ -426,7 +426,7 @@ impl<'ctx> Preprocessor<'ctx> {
         })
     }
 
-    pub fn from_buffer<S: Into<Cow<'static, str>>>(context: &'ctx Context, env_file: PathBuf, buffer: S) -> Self {
+    pub fn from_buffer<S: Into<Cow<'ctx, str>>>(context: &'ctx Context, env_file: PathBuf, buffer: S) -> Self {
         let cow_u8 = match buffer.into() {
             Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
             Cow::Owned(s) => Cow::Owned(s.into_bytes()),

@@ -220,6 +220,7 @@ struct Debugger {
     client_caps: ClientCaps,
 
     saved_breakpoints: HashMap<FileId, HashSet<(String, usize, i64)>>,
+    stddef_dm_info: Option<StddefDmInfo>,
 }
 
 impl Debugger {
@@ -235,6 +236,7 @@ impl Debugger {
             client_caps: Default::default(),
 
             saved_breakpoints: Default::default(),
+            stddef_dm_info: None,
         }
     }
 
@@ -378,6 +380,10 @@ handle_request! {
 
     on ConfigurationDone(&mut self, ()) {
         let extools = self.extools.get()?;
+
+        let text = extools.get_source("stddef.dm".to_owned())?;
+        self.stddef_dm_info = Some(StddefDmInfo::new(text));
+
         extools.configuration_done();
     }
 
@@ -543,11 +549,17 @@ handle_request! {
             if let Some(proc) = self.db.get_proc(&ex_frame.proc, ex_frame.override_id) {
                 if proc.location.is_builtins() {
                     // `stddef.dm` proc.
-                    dap_frame.source = Some(Source {
-                        name: Some("stddef.dm".to_owned()),
-                        sourceReference: Some(STDDEF_SOURCE_REFERENCE),
-                        .. Default::default()
-                    });
+                    if let Some(stddef_dm_info) = self.stddef_dm_info.as_ref() {
+                        if let Some(proc) = get_proc(&stddef_dm_info.objtree, &ex_frame.proc, ex_frame.override_id) {
+                            dap_frame.source = Some(Source {
+                                name: Some("stddef.dm".to_owned()),
+                                sourceReference: Some(STDDEF_SOURCE_REFERENCE),
+                                .. Default::default()
+                            });
+                            dap_frame.line = i64::from(proc.location.line);
+                            dap_frame.column = i64::from(proc.location.column);
+                        }
+                    }
                 } else {
                     // Normal proc.
                     let path = self.db.files.get_path(proc.location.file);
@@ -796,9 +808,11 @@ handle_request! {
             return Err(Box::new(GenericError("Unknown source reference")));
         }
 
-        let extools = self.extools.get()?;
-        let body = extools.get_source("stddef.dm".to_owned())?;
-        SourceResponse::from(body)
+        if let Some(info) = self.stddef_dm_info.as_ref() {
+            SourceResponse::from(info.text.clone())
+        } else {
+            return Err(Box::new(GenericError("stddef.dm not available")));
+        }
     }
 
     on Disassemble(&mut self, params) {
@@ -1024,3 +1038,21 @@ const STDDEF_PROCS: &[&str] = &[
 ];
 
 const STDDEF_SOURCE_REFERENCE: i64 = 1;
+
+struct StddefDmInfo {
+    text: String,
+    objtree: ObjectTree,
+}
+
+impl StddefDmInfo {
+    fn new(text: String) -> StddefDmInfo {
+        let context = dm::Context::default();
+        let pp = dm::preprocessor::Preprocessor::from_buffer(&context, "stddef.dm".into(), &text);
+        let parser = dm::parser::Parser::new(&context, dm::indents::IndentProcessor::new(&context, pp));
+        let objtree = parser.parse_object_tree_without_builtins();
+        StddefDmInfo {
+            text,
+            objtree,
+        }
+    }
+}
