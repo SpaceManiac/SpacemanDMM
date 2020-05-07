@@ -905,9 +905,8 @@ fn error<S: Into<String>>(location: Location, desc: S) -> DMError {
 
 /// Examines an ObjectTree for var definitions that are invalid
 pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
-    for (path, _) in objtree.types.iter() {
-        guard!(let Some(typeref) = objtree.find(path)
-            else { continue });
+    for typeref in objtree.iter_types() {
+        let path = &typeref.path;
 
         for parent in typeref.iter_parent_types() {
             if parent.is_root() {

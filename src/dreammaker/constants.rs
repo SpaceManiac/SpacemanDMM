@@ -622,8 +622,8 @@ impl<'a> ConstantFolder<'a> {
                     full_path.push('/');
                     full_path.push_str(&each);
                 }
-                match self.tree.as_mut().and_then(|t| t.types.get(&full_path)) {
-                    Some(&idx) => self.recursive_lookup(idx, &field_name, true),
+                match self.tree.as_mut().and_then(|t| t.find(&full_path)).map(|t| t.index()) {
+                    Some(idx) => self.recursive_lookup(idx, &field_name, true),
                     None => Err(self.error(format!("unknown typepath {}", full_path))),
                 }
             }

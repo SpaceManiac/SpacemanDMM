@@ -218,6 +218,10 @@ impl<'a> TypeRef<'a> {
         self.tree
     }
 
+    pub fn index(self) -> NodeIndex {
+        self.idx
+    }
+
     /// Find the parent **path**, without taking `parent_type` into account.
     pub fn parent_path(&self) -> Option<TypeRef<'a>> {
         self.tree
@@ -627,7 +631,7 @@ impl<'a> std::hash::Hash for ProcRef<'a> {
 #[derive(Debug)]
 pub struct ObjectTree {
     graph: Graph<Type, ()>,
-    pub types: BTreeMap<String, NodeIndex>,
+    types: BTreeMap<String, NodeIndex>,
     symbols: SymbolIdSource,
 }
 
@@ -677,9 +681,8 @@ impl ObjectTree {
         self.graph.node_indices()
     }
 
-    pub fn node_references<'a>(&'a self) -> impl Iterator<Item=(NodeIndex, &'a Type)> {
-        use petgraph::visit::IntoNodeReferences;
-        self.graph.node_references()
+    pub fn iter_types<'a>(&'a self) -> impl Iterator<Item=TypeRef<'a>> + 'a {
+        self.graph.node_indices().map(move |ix| TypeRef::new(self, ix))
     }
 
     pub fn root(&self) -> TypeRef {

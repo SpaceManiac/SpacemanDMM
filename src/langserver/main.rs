@@ -1006,8 +1006,8 @@ handle_method_call! {
             }
         }
 
-        for (idx, ty) in self.objtree.node_references() {
-            if query.matches_type(&ty.name, &ty.path) && idx.index() != 0 {
+        for ty in self.objtree.iter_types() {
+            if query.matches_type(&ty.name, &ty.path) && !ty.is_root() {
                 results.push(SymbolInformation {
                     name: ty.name.clone(),
                     kind: SymbolKind::Class,
@@ -1039,7 +1039,7 @@ handle_method_call! {
                     if query.matches_proc(&proc_name, decl.kind) {
                         results.push(SymbolInformation {
                             name: proc_name.clone(),
-                            kind: if idx.index() == 0 {
+                            kind: if ty.is_root() {
                                 SymbolKind::Function
                             } else if is_constructor_name(proc_name.as_str()) {
                                 SymbolKind::Constructor
