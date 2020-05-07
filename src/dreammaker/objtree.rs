@@ -3,10 +3,9 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-pub use petgraph::graph::NodeIndex;
+pub(crate) use petgraph::graph::NodeIndex;
 use petgraph::graph::Graph;
 use petgraph::visit::EdgeRef;
-use petgraph::Direction;
 use linked_hash_map::LinkedHashMap;
 
 use super::ast::{Expression, VarType, VarSuffix, PathOp, Parameter, Block, ProcDeclKind};
@@ -223,7 +222,7 @@ impl<'a> TypeRef<'a> {
     pub fn parent_path(&self) -> Option<TypeRef<'a>> {
         self.tree
             .graph
-            .neighbors_directed(self.idx, Direction::Incoming)
+            .neighbors_directed(self.idx, petgraph::Direction::Incoming)
             .next()
             .map(|i| TypeRef::new(self.tree, i))
     }
@@ -627,7 +626,7 @@ impl<'a> std::hash::Hash for ProcRef<'a> {
 
 #[derive(Debug)]
 pub struct ObjectTree {
-    pub graph: Graph<Type, ()>,
+    graph: Graph<Type, ()>,
     pub types: BTreeMap<String, NodeIndex>,
     symbols: SymbolIdSource,
 }
@@ -673,6 +672,15 @@ impl ObjectTree {
 
     // ------------------------------------------------------------------------
     // Access
+
+    pub fn node_indices(&self) -> impl Iterator<Item=NodeIndex> {
+        self.graph.node_indices()
+    }
+
+    pub fn node_references<'a>(&'a self) -> impl Iterator<Item=(NodeIndex, &'a Type)> {
+        use petgraph::visit::IntoNodeReferences;
+        self.graph.node_references()
+    }
 
     pub fn root(&self) -> TypeRef {
         TypeRef::new(self, NodeIndex::new(0))
@@ -1162,6 +1170,20 @@ impl ObjectTree {
                 }
             }
         }
+    }
+}
+
+impl std::ops::Index<NodeIndex> for ObjectTree {
+    type Output = Type;
+
+    fn index(&self, ix: NodeIndex) -> &Type {
+        self.graph.node_weight(ix).expect("node index out of range")
+    }
+}
+
+impl std::ops::IndexMut<NodeIndex> for ObjectTree {
+    fn index_mut(&mut self, ix: NodeIndex) -> &mut Type {
+        self.graph.node_weight_mut(ix).expect("node index out of range")
     }
 }
 

@@ -11,7 +11,6 @@ extern crate url;
 extern crate serde;
 extern crate serde_json;
 #[macro_use] extern crate serde_derive;
-extern crate petgraph;
 extern crate interval_tree;
 extern crate lsp_types;
 extern crate jsonrpc_core as jsonrpc;
@@ -42,7 +41,6 @@ use std::rc::Rc;
 use url::Url;
 use jsonrpc::{Request, Call, Response, Output};
 use lsp_types::MessageType;
-use petgraph::visit::IntoNodeReferences;
 
 use dm::FileId;
 use dm::annotation::{Annotation, AnnotationTree};
@@ -1008,7 +1006,7 @@ handle_method_call! {
             }
         }
 
-        for (idx, ty) in self.objtree.graph.node_references() {
+        for (idx, ty) in self.objtree.node_references() {
             if query.matches_type(&ty.name, &ty.path) && idx.index() != 0 {
                 results.push(SymbolInformation {
                     name: ty.name.clone(),
