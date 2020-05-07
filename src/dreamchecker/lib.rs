@@ -1143,15 +1143,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             }
         }
 
-        if let Some(parent) = self.proc_ref.parent_proc() {
-            if !parent.is_builtin() && self.proc_ref.ty() == parent.ty() {
-                let can_be_redefined = match self.env.can_be_redefined.get(parent) {
-                    Some(x) => x.0,
-                    None => false
-                };
-
-                if !can_be_redefined {
-                    let error = error(self.proc_ref.location, format!("redefining proc {}/{}", self.ty, self.proc_ref.name()))
+        if self.env.can_be_redefined.get_self_or_parent(self.proc_ref).is_none() {
+            if let Some(parent) = self.proc_ref.parent_proc() {
+                if !parent.is_builtin() && self.proc_ref.ty() == parent.ty() {
+                    error(self.proc_ref.location, format!("redefining proc {}/{}", self.ty, self.proc_ref.name()))
                         .with_errortype("redefined_proc")
                         .with_note(parent.location, "previous definition is here")
                         .register(self.context);
