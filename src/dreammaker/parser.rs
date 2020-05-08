@@ -794,82 +794,10 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 self.annotate(entry_start, || Annotation::Variable(new_stack.to_vec()));
                 SUCCESS
             }
-            Punct(LParen) => {
-                use crate::objtree::Code;
-
+            t @ Punct(LParen) => {
                 // `something(` - proc
-                let location = self.location;
-                let parameters = require!(self.separated(Comma, RParen, None, Parser::proc_parameter));
-
-                // split off a subparser so we can keep parsing the objtree
-                // even when the proc body doesn't parse
-                let mut body_start = self.location;
-                let mut body_tt = Vec::new();
-                // check that it doesn't end immediately (empty body)
-                let (comment, ()) = require!(self.doc_comment(|this| {
-                    body_start = this.updated_location();
-                    if let Some(()) = this.statement_terminator()? {
-                        body_tt.push(LocatedToken::new(this.location, Punct(Semicolon)));
-                    } else {
-                        // read an initial token tree
-                        require!(this.read_any_tt(&mut body_tt));
-                        // if the first token is not an LBrace, it's on one line
-                        if body_tt[0].token != Punct(LBrace) {
-                            while this.statement_terminator()?.is_none() {
-                                require!(this.read_any_tt(&mut body_tt));
-                            }
-                            body_tt.push(LocatedToken::new(this.location, Punct(Semicolon)));
-                        }
-                    }
-                    SUCCESS
-                }));
-
-                let code = if self.procs {
-                    let result = {
-                        let mut subparser: Parser<'ctx, '_, '_> = Parser::new(self.context, body_tt);
-                        if let Some(a) = self.annotations.as_mut() {
-                            subparser.annotations = Some(&mut *a);
-                        }
-                        let block = subparser.block(&LoopContext::None);
-                        subparser.require(block)
-                    };
-                    if result.is_ok() {
-                        self.procs_good += 1;
-                    } else {
-                        self.procs_bad += 1;
-                    }
-                    match result {
-                        Err(err) => {
-                            let err2 = err.clone();
-                            self.context.register_error(err);
-                            Code::Invalid(err2)
-                        },
-                        Ok(code) => {
-                            Code::Present(code)
-                        }
-                    }
-                } else {
-                    Code::Disabled
-                };
-
-                match self.tree.add_proc(self.context, location, new_stack.iter(), new_stack.len(), parameters, code) {
-                    Ok((idx, proc)) => {
-                        proc.docs.extend(comment);
-                        // manually performed for borrowck reasons
-                        if let Some(dest) = self.annotations.as_mut() {
-                            dest.insert(entry_start..body_start, Annotation::ProcHeader(new_stack.to_vec(), idx));
-                            dest.insert(body_start..self.location, Annotation::ProcBody(new_stack.to_vec(), idx));
-                        }
-                        if !absolute && self.context.config().code_standards.disallow_relative_proc_definitions {
-                            DMError::new(location, "relatively pathed proc defined here")
-                                .set_severity(Severity::Warning)
-                                .register(self.context);
-                        }
-                    }
-                    Err(e) => self.context.register_error(e),
-                };
-
-                SUCCESS
+                self.put_back(t);
+                self.proc_params_and_body(new_stack, entry_start, absolute)
             }
             other => {
                 // usually `thing;` - a contentless declaration
@@ -885,6 +813,87 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 SUCCESS
             }
         }
+    }
+
+    fn proc_params_and_body(&mut self, new_stack: PathStack, entry_start: Location, absolute: bool) -> Status<()> {
+        use super::lexer::Token::*;
+        use super::lexer::Punctuation::*;
+        use super::objtree::Code;
+
+        leading!(self.exact(Punct(LParen)));
+
+        let location = self.location;
+        let parameters = require!(self.separated(Comma, RParen, None, Parser::proc_parameter));
+
+        // split off a subparser so we can keep parsing the objtree
+        // even when the proc body doesn't parse
+        let mut body_start = self.location;
+        let mut body_tt = Vec::new();
+        // check that it doesn't end immediately (empty body)
+        let (comment, ()) = require!(self.doc_comment(|this| {
+            body_start = this.updated_location();
+            if let Some(()) = this.statement_terminator()? {
+                body_tt.push(LocatedToken::new(this.location, Punct(Semicolon)));
+            } else {
+                // read an initial token tree
+                require!(this.read_any_tt(&mut body_tt));
+                // if the first token is not an LBrace, it's on one line
+                if body_tt[0].token != Punct(LBrace) {
+                    while this.statement_terminator()?.is_none() {
+                        require!(this.read_any_tt(&mut body_tt));
+                    }
+                    body_tt.push(LocatedToken::new(this.location, Punct(Semicolon)));
+                }
+            }
+            SUCCESS
+        }));
+
+        let code = if self.procs {
+            let result = {
+                let mut subparser: Parser<'ctx, '_, '_> = Parser::new(self.context, body_tt);
+                if let Some(a) = self.annotations.as_mut() {
+                    subparser.annotations = Some(&mut *a);
+                }
+                let block = subparser.block(&LoopContext::None);
+                subparser.require(block)
+            };
+            if result.is_ok() {
+                self.procs_good += 1;
+            } else {
+                self.procs_bad += 1;
+            }
+            match result {
+                Err(err) => {
+                    let err2 = err.clone();
+                    self.context.register_error(err);
+                    Code::Invalid(err2)
+                },
+                Ok(code) => {
+                    Code::Present(code)
+                }
+            }
+        } else {
+            Code::Disabled
+        };
+
+        match self.tree.add_proc(self.context, location, new_stack.iter(), new_stack.len(), parameters, code) {
+            Ok((idx, proc)) => {
+                proc.docs.extend(comment);
+                // manually performed for borrowck reasons
+                if let Some(dest) = self.annotations.as_mut() {
+                    dest.insert(entry_start..body_start, Annotation::ProcHeader(new_stack.to_vec(), idx));
+                    dest.insert(body_start..self.location, Annotation::ProcBody(new_stack.to_vec(), idx));
+                }
+                if !absolute && self.context.config().code_standards.disallow_relative_proc_definitions {
+                    DMError::new(location, "relatively pathed proc defined here")
+                        .set_severity(Severity::Warning)
+                        .register(self.context);
+                }
+            }
+            Err(e) => self.context.register_error(e),
+        };
+
+        SUCCESS
     }
 
     fn try_read_operator_name(&mut self, last_part: &mut String) -> Status<()> {
