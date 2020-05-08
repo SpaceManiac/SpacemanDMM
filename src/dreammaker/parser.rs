@@ -644,7 +644,43 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     }
 
     // ------------------------------------------------------------------------
-    // Object tree
+    // Object tree - root
+
+    fn root(&mut self) -> Status<()> {
+        let root = PathStack {
+            parent: None,
+            parts: &[]
+        };
+        self.tree_entries(root, Token::Eof)
+    }
+
+    fn tree_block(&mut self, parent: PathStack) -> Status<()> {
+        leading!(self.exact(Token::Punct(Punctuation::LBrace)));
+        Ok(Some(require!(
+            self.tree_entries(parent, Token::Punct(Punctuation::RBrace))
+        )))
+    }
+
+    fn tree_entries(&mut self, parent: PathStack, terminator: Token) -> Status<()> {
+        loop {
+            let message: Cow<'static, str> = match terminator {
+                Token::Eof => "newline".into(),
+                ref other => format!("newline, '{}'", other).into(),
+            };
+            let next = self.next(message)?;
+            if next == terminator || next == Token::Eof {
+                break;
+            } else if next == Token::Punct(Punctuation::Semicolon) {
+                continue;
+            }
+            self.put_back(next);
+            require!(self.tree_entry(parent));
+        }
+        SUCCESS
+    }
+
+    // ------------------------------------------------------------------------
+    // Object tree - types
 
     fn tree_path(&mut self) -> Status<(bool, Vec<Ident>)> {
         // path :: '/'? ident ('/' ident?)*
@@ -815,6 +851,81 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }
     }
 
+    // ------------------------------------------------------------------------
+    // Object tree - Vars
+
+    // ------------------------------------------------------------------------
+    // Object tree - Procs
+
+    fn try_read_operator_name(&mut self, last_part: &mut String) -> Status<()> {
+        use super::lexer::Token::Punct;
+        use super::lexer::Punctuation::*;
+
+        if self.exact(Punct(Mod))?.is_some() {
+            last_part.push('%');
+        } else if self.exact(Punct(ModAssign))?.is_some() {
+            last_part.push_str("%=");
+        } else if self.exact(Punct(BitAnd))?.is_some() {
+            last_part.push('&');
+        } else if self.exact(Punct(BitAndAssign))?.is_some() {
+            last_part.push_str("&=");
+        } else if self.exact(Punct(Mul))?.is_some() {
+            last_part.push('*');
+        } else if self.exact(Punct(Pow))?.is_some() {
+            last_part.push_str("**");
+        } else if self.exact(Punct(MulAssign))?.is_some() {
+            last_part.push_str("*=");
+        } else if self.exact(Punct(Add))?.is_some() {
+            last_part.push('+');
+        } else if self.exact(Punct(PlusPlus))?.is_some() {
+            last_part.push_str("++");
+        } else if self.exact(Punct(AddAssign))?.is_some() {
+            last_part.push_str("+=");
+        } else if self.exact(Punct(Sub))?.is_some() {
+            last_part.push('-');
+        } else if self.exact(Punct(MinusMinus))?.is_some() {
+            last_part.push_str("--");
+        } else if self.exact(Punct(SubAssign))?.is_some() {
+            last_part.push_str("-=");
+        } else if self.exact(Punct(Less))?.is_some() {
+            last_part.push('<');
+        } else if self.exact(Punct(LShift))?.is_some() {
+            last_part.push_str("<<");
+        } else if self.exact(Punct(LShiftAssign))?.is_some() {
+            last_part.push_str("<<=");
+        } else if self.exact(Punct(LessEq))?.is_some() {
+            last_part.push_str("<=")
+        } else if self.exact(Punct(Greater))?.is_some() {
+            last_part.push('>');
+        } else if self.exact(Punct(GreaterEq))?.is_some() {
+            last_part.push_str(">=");
+        } else if self.exact(Punct(RShift))?.is_some() {
+            last_part.push_str(">>");
+        } else if self.exact(Punct(RShiftAssign))?.is_some() {
+            last_part.push_str(">>=");
+        } else if self.exact(Punct(BitXor))?.is_some() {
+            last_part.push('^');
+        } else if self.exact(Punct(BitXorAssign))?.is_some() {
+            last_part.push_str("^=");
+        } else if self.exact(Punct(BitOr))?.is_some() {
+            last_part.push('|');
+        } else if self.exact(Punct(BitOrAssign))?.is_some() {
+            last_part.push_str("|=");
+        } else if self.exact(Punct(BitNot))?.is_some() {
+            last_part.push('~');
+        } else if self.exact(Punct(Equiv))?.is_some() {
+            last_part.push_str("~=");
+        } else if self.exact(Punct(LBracket))?.is_some() {
+            require!(self.exact(Punct(RBracket)));
+            if self.exact(Punct(Assign))?.is_some() {
+                last_part.push_str("[]=");
+            } else {
+                last_part.push_str("[]");
+            }
+        }
+        SUCCESS
+    }
+
     fn proc_params_and_body(&mut self, new_stack: PathStack, entry_start: Location, absolute: bool) -> Status<()> {
         use super::lexer::Token::*;
         use super::lexer::Punctuation::*;
@@ -896,75 +1007,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         SUCCESS
     }
 
-    fn try_read_operator_name(&mut self, last_part: &mut String) -> Status<()> {
-        use super::lexer::Token::Punct;
-        use super::lexer::Punctuation::*;
-
-        if self.exact(Punct(Mod))?.is_some() {
-            last_part.push('%');
-        } else if self.exact(Punct(ModAssign))?.is_some() {
-            last_part.push_str("%=");
-        } else if self.exact(Punct(BitAnd))?.is_some() {
-            last_part.push('&');
-        } else if self.exact(Punct(BitAndAssign))?.is_some() {
-            last_part.push_str("&=");
-        } else if self.exact(Punct(Mul))?.is_some() {
-            last_part.push('*');
-        } else if self.exact(Punct(Pow))?.is_some() {
-            last_part.push_str("**");
-        } else if self.exact(Punct(MulAssign))?.is_some() {
-            last_part.push_str("*=");
-        } else if self.exact(Punct(Add))?.is_some() {
-            last_part.push('+');
-        } else if self.exact(Punct(PlusPlus))?.is_some() {
-            last_part.push_str("++");
-        } else if self.exact(Punct(AddAssign))?.is_some() {
-            last_part.push_str("+=");
-        } else if self.exact(Punct(Sub))?.is_some() {
-            last_part.push('-');
-        } else if self.exact(Punct(MinusMinus))?.is_some() {
-            last_part.push_str("--");
-        } else if self.exact(Punct(SubAssign))?.is_some() {
-            last_part.push_str("-=");
-        } else if self.exact(Punct(Less))?.is_some() {
-            last_part.push('<');
-        } else if self.exact(Punct(LShift))?.is_some() {
-            last_part.push_str("<<");
-        } else if self.exact(Punct(LShiftAssign))?.is_some() {
-            last_part.push_str("<<=");
-        } else if self.exact(Punct(LessEq))?.is_some() {
-            last_part.push_str("<=")
-        } else if self.exact(Punct(Greater))?.is_some() {
-            last_part.push('>');
-        } else if self.exact(Punct(GreaterEq))?.is_some() {
-            last_part.push_str(">=");
-        } else if self.exact(Punct(RShift))?.is_some() {
-            last_part.push_str(">>");
-        } else if self.exact(Punct(RShiftAssign))?.is_some() {
-            last_part.push_str(">>=");
-        } else if self.exact(Punct(BitXor))?.is_some() {
-            last_part.push('^');
-        } else if self.exact(Punct(BitXorAssign))?.is_some() {
-            last_part.push_str("^=");
-        } else if self.exact(Punct(BitOr))?.is_some() {
-            last_part.push('|');
-        } else if self.exact(Punct(BitOrAssign))?.is_some() {
-            last_part.push_str("|=");
-        } else if self.exact(Punct(BitNot))?.is_some() {
-            last_part.push('~');
-        } else if self.exact(Punct(Equiv))?.is_some() {
-            last_part.push_str("~=");
-        } else if self.exact(Punct(LBracket))?.is_some() {
-            require!(self.exact(Punct(RBracket)));
-            if self.exact(Punct(Assign))?.is_some() {
-                last_part.push_str("[]=");
-            } else {
-                last_part.push_str("[]");
-            }
-        }
-        SUCCESS
-    }
-
     fn proc_parameter(&mut self) -> Status<Parameter> {
         use super::lexer::Token::*;
         use super::lexer::Punctuation::*;
@@ -1028,39 +1070,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             in_list,
             location,
         })
-    }
-
-    fn tree_entries(&mut self, parent: PathStack, terminator: Token) -> Status<()> {
-        loop {
-            let message: Cow<'static, str> = match terminator {
-                Token::Eof => "newline".into(),
-                ref other => format!("newline, '{}'", other).into(),
-            };
-            let next = self.next(message)?;
-            if next == terminator || next == Token::Eof {
-                break;
-            } else if next == Token::Punct(Punctuation::Semicolon) {
-                continue;
-            }
-            self.put_back(next);
-            require!(self.tree_entry(parent));
-        }
-        SUCCESS
-    }
-
-    fn tree_block(&mut self, parent: PathStack) -> Status<()> {
-        leading!(self.exact(Token::Punct(Punctuation::LBrace)));
-        Ok(Some(require!(
-            self.tree_entries(parent, Token::Punct(Punctuation::RBrace))
-        )))
-    }
-
-    fn root(&mut self) -> Status<()> {
-        let root = PathStack {
-            parent: None,
-            parts: &[],
-        };
-        self.tree_entries(root, Token::Eof)
     }
 
     // ------------------------------------------------------------------------
