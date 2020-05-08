@@ -986,7 +986,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 .register(self.context);
         }
         let mut var_type: VarType = path.into_iter().collect();
-        if var_type.is_static {
+        if var_type.flags.is_static() {
             DMError::new(leading_loc, "'static/' has no effect here")
                 .set_severity(Severity::Warning)
                 .with_errortype("static_in_proc_parameter")
@@ -1460,25 +1460,25 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 };
 
                 let mut var_type = tree_path.into_iter().collect::<VarType>();
-                if var_type.is_tmp {
+                if var_type.flags.is_tmp() {
                     DMError::new(type_path_start, "var/tmp has no effect here")
                         .set_severity(Severity::Warning)
                         .with_errortype("tmp_no_effect")
                         .register(self.context);
                 }
-                if var_type.is_final {
+                if var_type.flags.is_final() {
                     DMError::new(type_path_start, "var/final has no effect here")
                         .set_severity(Severity::Warning)
                         .with_errortype("final_no_effect")
                         .register(self.context);
                 }
-                if var_type.is_private {
+                if var_type.flags.is_private() {
                     DMError::new(type_path_start, "var/SpacemanDMM_private has no effect here")
                         .with_errortype("private_var")
                         .set_severity(Severity::Warning)
                         .register(self.context);
                 }
-                if var_type.is_protected {
+                if var_type.flags.is_protected() {
                     DMError::new(type_path_start, "var/SpacemanDMM_protected has no effect here")
                         .with_errortype("protected_var")
                         .set_severity(Severity::Warning)

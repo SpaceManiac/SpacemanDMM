@@ -359,12 +359,12 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                 let block = DocBlock::parse(&var.value.docs.text(), Some(broken_link_callback));
                 // `type` is pulled from the parent if necessary
                 let type_ = ty.get_var_declaration(name).map(|decl| VarType {
-                    is_static: decl.var_type.is_static,
-                    is_const: decl.var_type.is_const,
-                    is_tmp: decl.var_type.is_tmp,
-                    is_final: decl.var_type.is_final,
-                    is_private: decl.var_type.is_private,
-                    is_protected: decl.var_type.is_protected,
+                    is_static: decl.var_type.flags.is_static(),
+                    is_const: decl.var_type.flags.is_const(),
+                    is_tmp: decl.var_type.flags.is_tmp(),
+                    is_final: decl.var_type.flags.is_final(),
+                    is_private: decl.var_type.flags.is_private(),
+                    is_protected: decl.var_type.flags.is_protected(),
                     path: &decl.var_type.type_path,
                 });
                 parsed_type.vars.insert(name, Var {

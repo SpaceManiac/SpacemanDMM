@@ -919,7 +919,9 @@ impl ObjectTree {
     where
         I: Iterator<Item=&'a str>,
     {
-        let (mut is_declaration, mut is_static, mut is_const, mut is_tmp, mut is_final, mut is_private, mut is_protected) = (false, false, false, false, false, false, false);
+        use super::ast::VarTypeFlags;
+        let mut is_declaration = false;
+        let mut flags = VarTypeFlags::default();
 
         if is_var_decl(prev) {
             is_declaration = true;
@@ -927,14 +929,9 @@ impl ObjectTree {
                 Some(name) => name,
                 None => return Ok(None), // var{} block, children will be real vars
             };
-            while prev == "global" || prev == "static" || prev == "tmp" || prev == "const" || prev == "SpacemanDMM_final" || prev == "SpacemanDMM_private" || prev == "SpacemanDMM_protected" {
+            while let Some(flag) = VarTypeFlags::from_name(prev) {
                 if let Some(name) = rest.next() {
-                    is_static |= prev == "global" || prev == "static";
-                    is_const |= prev == "const";
-                    is_tmp |= prev == "tmp";
-                    is_final |= prev == "SpacemanDMM_final";
-                    is_private |= prev == "SpacemanDMM_private";
-                    is_protected |= prev == "SpacemanDMM_protected";
+                    flags |= flag;
                     prev = name;
                 } else {
                     return Ok(None); // var/const{} block, children will be real vars
@@ -950,12 +947,7 @@ impl ObjectTree {
             prev = each;
         }
         let mut var_type = VarType {
-            is_static,
-            is_const,
-            is_tmp,
-            is_final,
-            is_private,
-            is_protected,
+            flags,
             type_path,
         };
         var_type.suffix(&suffix);

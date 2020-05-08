@@ -815,27 +815,117 @@ type_table! {
     "color",        COLOR,        1 << 17;
 }
 
+bitflags! {
+    #[derive(Default)]
+    pub struct VarTypeFlags: u8 {
+        // DM flags
+        const STATIC = 1 << 0;
+        const CONST = 1 << 2;
+        const TMP = 1 << 3;
+        // SpacemanDMM flags
+        const FINAL = 1 << 4;
+        const PRIVATE = 1 << 5;
+        const PROTECTED = 1 << 6;
+    }
+}
+
+impl VarTypeFlags {
+    pub fn from_name(name: &str) -> Option<VarTypeFlags> {
+        match name {
+            // DM flags
+            "global" | "static" => Some(VarTypeFlags::STATIC),
+            "const" => Some(VarTypeFlags::CONST),
+            "tmp" => Some(VarTypeFlags::TMP),
+            // SpacemanDMM flags
+            "SpacemanDMM_final" => Some(VarTypeFlags::FINAL),
+            "SpacemanDMM_private" => Some(VarTypeFlags::PRIVATE),
+            "SpacemanDMM_protected" => Some(VarTypeFlags::PROTECTED),
+            // Fallback
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub fn is_static(&self) -> bool {
+        self.contains(VarTypeFlags::STATIC)
+    }
+
+    #[inline]
+    pub fn is_const(&self) -> bool {
+        self.contains(VarTypeFlags::CONST)
+    }
+
+    #[inline]
+    pub fn is_tmp(&self) -> bool {
+        self.contains(VarTypeFlags::TMP)
+    }
+
+    #[inline]
+    pub fn is_final(&self) -> bool {
+        self.contains(VarTypeFlags::FINAL)
+    }
+
+    #[inline]
+    pub fn is_private(&self) -> bool {
+        self.contains(VarTypeFlags::PRIVATE)
+    }
+
+    #[inline]
+    pub fn is_protected(&self) -> bool {
+        self.contains(VarTypeFlags::PROTECTED)
+    }
+
+    #[inline]
+    pub fn is_const_evaluable(&self) -> bool {
+        self.contains(VarTypeFlags::CONST) || !self.intersects(VarTypeFlags::STATIC | VarTypeFlags::PROTECTED)
+    }
+
+    #[inline]
+    pub fn is_normal(&self) -> bool {
+        !self.intersects(VarTypeFlags::CONST | VarTypeFlags::STATIC | VarTypeFlags::PROTECTED)
+    }
+}
+
+impl fmt::Display for VarTypeFlags {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        if self.is_static() {
+            fmt.write_str("static/")?;
+        }
+        if self.is_const() {
+            fmt.write_str("const/")?;
+        }
+        if self.is_tmp() {
+            fmt.write_str("tmp/")?;
+        }
+        if self.is_final() {
+            fmt.write_str("SpacemanDMM_final/")?;
+        }
+        if self.is_private() {
+            fmt.write_str("SpacemanDMM_private/")?;
+        }
+        if self.is_protected() {
+            fmt.write_str("SpacemanDMM_protected/")?;
+        }
+        Ok(())
+    }
+}
+
 /// A type which may be ascribed to a `var`.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct VarType {
-    pub is_static: bool,
-    pub is_const: bool,
-    pub is_tmp: bool,
-    pub is_final: bool,
-    pub is_private: bool,
-    pub is_protected: bool,
+    pub flags: VarTypeFlags,
     pub type_path: TreePath,
 }
 
 impl VarType {
     #[inline]
     pub fn is_const_evaluable(&self) -> bool {
-        self.is_const || (!self.is_static && !self.is_tmp)
+        self.flags.is_const_evaluable()
     }
 
     #[inline]
     pub fn is_normal(&self) -> bool {
-        !(self.is_static || self.is_const || self.is_tmp)
+        self.flags.is_normal()
     }
 
     pub fn suffix(&mut self, suffix: &VarSuffix) {
@@ -847,39 +937,19 @@ impl VarType {
 
 impl FromIterator<String> for VarType {
     fn from_iter<T: IntoIterator<Item=String>>(iter: T) -> Self {
-        let (mut is_static, mut is_const, mut is_tmp, mut is_final, mut is_private, mut is_protected) = (false, false, false, false, false, false);
+        let mut flags = VarTypeFlags::default();
         let type_path = iter
             .into_iter()
             .skip_while(|p| {
-                if p == "global" || p == "static" {
-                    is_static = true;
-                    true
-                } else if p == "SpacemanDMM_final" {
-                    is_final = true;
-                    true
-                } else if p == "SpacemanDMM_private" {
-                    is_private = true;
-                    true
-                } else if p == "SpacemanDMM_protected" {
-                    is_protected = true;
-                    true
-                } else if p == "const" {
-                    is_const = true;
-                    true
-                } else if p == "tmp" {
-                    is_tmp = true;
+                if let Some(flag) = VarTypeFlags::from_name(p) {
+                    flags |= flag;
                     true
                 } else {
                     false
                 }
             }).collect();
         VarType {
-            is_static,
-            is_const,
-            is_tmp,
-            is_final,
-            is_private,
-            is_protected,
+            flags,
             type_path,
         }
     }
@@ -887,24 +957,7 @@ impl FromIterator<String> for VarType {
 
 impl fmt::Display for VarType {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        if self.is_static {
-            fmt.write_str("static/")?;
-        }
-        if self.is_const {
-            fmt.write_str("const/")?;
-        }
-        if self.is_tmp {
-            fmt.write_str("tmp/")?;
-        }
-        if self.is_final {
-            fmt.write_str("SpacemanDMM_final/")?;
-        }
-        if self.is_private {
-            fmt.write_str("SpacemanDMM_private/")?;
-        }
-        if self.is_protected {
-            fmt.write_str("SpacemanDMM_protected/")?;
-        }
+        self.flags.fmt(fmt)?;
         for bit in self.type_path.iter() {
             fmt.write_str(bit)?;
             fmt.write_str("/")?;

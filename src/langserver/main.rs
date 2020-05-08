@@ -1102,22 +1102,22 @@ handle_method_call! {
                             if let Some(ref decl) = var.declaration {
                                 let mut declaration = String::new();
                                 declaration.push_str("var");
-                                if decl.var_type.is_static {
+                                if decl.var_type.flags.is_static() {
                                     declaration.push_str("/static");
                                 }
-                                if decl.var_type.is_const {
+                                if decl.var_type.flags.is_const() {
                                     declaration.push_str("/const");
                                 }
-                                if decl.var_type.is_tmp {
+                                if decl.var_type.flags.is_tmp() {
                                     declaration.push_str("/tmp");
                                 }
-                                if decl.var_type.is_final {
+                                if decl.var_type.flags.is_final() {
                                     declaration.push_str("/SpacemanDMM_final");
                                 }
-                                if decl.var_type.is_private {
+                                if decl.var_type.flags.is_private() {
                                     declaration.push_str("/SpacemanDMM_private");
                                 }
-                                if decl.var_type.is_protected {
+                                if decl.var_type.flags.is_protected() {
                                     declaration.push_str("/SpacemanDMM_protected");
                                 }
                                 for bit in decl.var_type.type_path.iter() {

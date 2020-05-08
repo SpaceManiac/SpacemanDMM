@@ -940,14 +940,14 @@ pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
                         .register(context);
                 }
 
-                if decl.var_type.is_final {
+                if decl.var_type.flags.is_final() {
                     DMError::new(typevar.value.location, format!("{} overrides final var {:?}", path, varname))
                         .with_errortype("final_var")
                         .with_note(decl.location, format!("declared final on {} here", parent.path))
                         .register(context);
                 }
 
-                if decl.var_type.is_private {
+                if decl.var_type.flags.is_private() {
                     DMError::new(typevar.value.location, format!("{} overrides private var {:?}", path, varname))
                         .with_errortype("private_var")
                         .with_note(decl.location, format!("declared private on {} here", parent.path))
@@ -1812,13 +1812,13 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Follow::Field(kind, name) => {
                 if let Some(ty) = lhs.static_ty.basic_type() {
                     if let Some(decl) = ty.get_var_declaration(name) {
-                        if ty != self.ty && decl.var_type.is_private {
+                        if ty != self.ty && decl.var_type.flags.is_private() {
                             error(location, format!("field {:?} on {} is declared as private", name, ty))
                                 .with_errortype("private_var")
                                 .set_severity(Severity::Warning)
                                 .with_note(decl.location, "definition is here")
                                 .register(self.context);
-                        } else if !self.ty.is_subtype_of(ty.get()) && decl.var_type.is_protected {
+                        } else if !self.ty.is_subtype_of(ty.get()) && decl.var_type.flags.is_protected() {
                             error(location, format!("field {:?} on {} is declared as protected", name, ty))
                                 .with_errortype("protected_var")
                                 .set_severity(Severity::Warning)

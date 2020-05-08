@@ -434,7 +434,7 @@ pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree) {
             if !tree[ty]
                 .get_var_declaration(&key, tree)
                 .map_or(true, |x| {
-                    x.var_type.is_const_evaluable() && (x.var_type.is_const || ty != NodeIndex::new(0))
+                    x.var_type.is_const_evaluable() && (x.var_type.flags.is_const() || ty != NodeIndex::new(0))
                 })
             {
                 continue;  // skip non-constant-evaluable vars
@@ -497,7 +497,7 @@ fn constant_ident_lookup(
                                 var.value.location,
                                 format!("non-const-evaluable variable: {}", ident),
                             ));
-                        } else if !decl.var_type.is_const && must_be_const {
+                        } else if !decl.var_type.flags.is_const() && must_be_const {
                             return Err(DMError::new(
                                 var.value.location,
                                 format!("non-const variable: {}", ident),
