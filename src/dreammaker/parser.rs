@@ -684,16 +684,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }
         // followed by ('/' ident)*
         loop {
-            match self.next("'/'")? {
-                Token::Punct(Punctuation::Slash) => {}
-                Token::Punct(p @ Punctuation::Dot) |
-                Token::Punct(p @ Punctuation::CloseColon) |
-                Token::Punct(p @ Punctuation::Colon) => {
-                    self.error(format!("path separated by '{}', should be '/'", p))
-                        .set_severity(Severity::Warning)
-                        .register(self.context);
-                }
-                t => { self.put_back(t); break; }
+            if self.slash()?.is_none() {
+                break;
             }
             let mut slash_loc = self.location;
             if let Some(i) = self.ident_in_seq(parts.len())? {
@@ -708,6 +700,22 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
         self.annotate(start, || Annotation::TreePath(absolute, parts.clone()));
         success((absolute, parts))
+    }
+
+    // Look for a `/`, and complain but continue if we see a `.` or `:`.
+    fn slash(&mut self) -> Status<()> {
+        match self.next("'/'")? {
+            Token::Punct(Punctuation::Slash) => SUCCESS,
+            Token::Punct(p @ Punctuation::Dot) |
+            Token::Punct(p @ Punctuation::CloseColon) |
+            Token::Punct(p @ Punctuation::Colon) => {
+                self.error(format!("path separated by '{}', should be '/'", p))
+                    .set_severity(Severity::Warning)
+                    .register(self.context);
+                SUCCESS
+            }
+            t => { self.put_back(t); Ok(None) }
+        }
     }
 
     fn tree_entry(&mut self, parent: PathStack) -> Status<()> {
