@@ -684,23 +684,10 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     fn tree_path(&mut self) -> Status<(bool, Vec<Ident>)> {
         // path :: '/'? ident ('/' ident?)*
-        let mut absolute = false;
-        let mut spurious_lead = false;
-        let start = self.updated_location();
 
         // handle leading slash
-        match self.next("'/'")? {
-            Token::Punct(Punctuation::Slash) => absolute = true,
-            Token::Punct(p @ Punctuation::Dot) |
-            Token::Punct(p @ Punctuation::CloseColon) |
-            Token::Punct(p @ Punctuation::Colon) => {
-                spurious_lead = true;
-                self.error(format!("path started by '{}', should be unprefixed", p))
-                    .set_severity(Severity::Warning)
-                    .register(self.context);
-            }
-            t => { self.put_back(t); }
-        }
+        let start = self.updated_location();
+        let (absolute, spurious_lead) = self.possible_leading_slash()?;
         let mut slash_loc = self.location;
 
         // 2 is ~66.0%, 4 is ~83.4%, 8 is ~99.9%
@@ -736,6 +723,24 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
         self.annotate(start, || Annotation::TreePath(absolute, parts.clone()));
         success((absolute, parts))
+    }
+
+    fn possible_leading_slash(&mut self) -> Result<(bool, bool), DMError> {
+        match self.next("'/'")? {
+            Token::Punct(Punctuation::Slash) => Ok((true, false)),
+            Token::Punct(p @ Punctuation::Dot) |
+            Token::Punct(p @ Punctuation::CloseColon) |
+            Token::Punct(p @ Punctuation::Colon) => {
+                self.error(format!("path started by '{}', should be unprefixed", p))
+                    .set_severity(Severity::Warning)
+                    .register(self.context);
+                Ok((false, true))
+            }
+            t => {
+                self.put_back(t);
+                Ok((false, false))
+            }
+        }
     }
 
     // Look for a `/`, and complain but continue if we see a `.` or `:`.
