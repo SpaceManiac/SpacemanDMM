@@ -1116,7 +1116,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
         //println!("purity {}", self.is_pure);
 
-        if self.proc_ref.parent_proc().is_some() {
+        if let Some(parent) = self.proc_ref.parent_proc() {
             if let Some((proc, true, location)) = self.env.private.get_self_or_parent(self.proc_ref) {
                 if proc != self.proc_ref {
                     error(self.proc_ref.location, format!("proc overrides private parent, prohibited by {}", proc))
@@ -1141,21 +1141,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         .register(self.context);
                 }
             }
-        }
-
-        if let Some(parent) = self.proc_ref.parent_proc() {
-            if !parent.is_builtin() && self.proc_ref.ty() == parent.ty() {
-                let can_be_redefined = match self.env.can_be_redefined.get(parent) {
-                    Some(x) => x.0,
-                    None => false
-                };
-
-                if !can_be_redefined {
-                    let error = error(self.proc_ref.location, format!("redefining proc {}/{}", self.ty, self.proc_ref.name()))
-                        .with_errortype("redefined_proc")
-                        .with_note(parent.location, "previous definition is here")
-                        .register(self.context);
-                }
+            if !parent.is_builtin() && self.proc_ref.ty() == parent.ty()
+                && self.env.can_be_redefined.get_self_or_parent(self.proc_ref).is_none() {
+                error(self.proc_ref.location, format!("redefining proc {}/{}", self.ty, self.proc_ref.name()))
+                    .with_errortype("redefined_proc")
+                    .with_note(parent.location, "previous definition is here")
+                    .register(self.context);
             }
         }
     }
