@@ -533,6 +533,7 @@ pub struct AnalyzeObjectTree<'o> {
     must_not_sleep: ProcDirective<'o>,
     sleep_exempt: ProcDirective<'o>,
     must_be_pure: ProcDirective<'o>,
+    can_be_redefined: ProcDirective<'o>,
     // Debug(ProcRef) -> KwargInfo
     used_kwargs: BTreeMap<String, KwargInfo>,
 
@@ -559,6 +560,7 @@ impl<'o> AnalyzeObjectTree<'o> {
             must_not_sleep: ProcDirective::new("SpacemanDMM_should_not_sleep", false, true, true),
             sleep_exempt: ProcDirective::new("SpacemanDMM_allowed_to_sleep", false, true, true),
             must_be_pure: ProcDirective::new("SpacemanDMM_should_be_pure", false, true, true),
+            can_be_redefined: ProcDirective::new("SpacemanDMM_can_be_redefined", false, false, false),
             used_kwargs: Default::default(),
             call_tree: Default::default(),
             sleeping_procs: Default::default(),
@@ -582,6 +584,7 @@ impl<'o> AnalyzeObjectTree<'o> {
             "SpacemanDMM_should_not_sleep" => &mut self.must_not_sleep,
             "SpacemanDMM_allowed_to_sleep" => &mut self.sleep_exempt,
             "SpacemanDMM_should_be_pure" => &mut self.must_be_pure,
+            "SpacemanDMM_can_be_redefined" => &mut self.can_be_redefined,
             other => {
                 error(location, format!("unknown linter setting {:?}", directive))
                     .with_errortype("unknown_linter_setting")
@@ -1113,7 +1116,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
         //println!("purity {}", self.is_pure);
 
-        if self.proc_ref.parent_proc().is_some() {
+        if let Some(parent) = self.proc_ref.parent_proc() {
             if let Some((proc, true, location)) = self.env.private.get_self_or_parent(self.proc_ref) {
                 if proc != self.proc_ref {
                     error(self.proc_ref.location, format!("proc overrides private parent, prohibited by {}", proc))
@@ -1137,6 +1140,13 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         .with_errortype("must_call_parent")
                         .register(self.context);
                 }
+            }
+            if !parent.is_builtin() && self.proc_ref.ty() == parent.ty()
+                && self.env.can_be_redefined.get_self_or_parent(self.proc_ref).is_none() {
+                error(self.proc_ref.location, format!("redefining proc {}/{}", self.ty, self.proc_ref.name()))
+                    .with_errortype("redefined_proc")
+                    .with_note(parent.location, "previous definition is here")
+                    .register(self.context);
             }
         }
     }

@@ -65,6 +65,7 @@ be enabled:
 	#define SHOULD_BE_PURE(X) set SpacemanDMM_should_be_pure = X
 	#define PRIVATE_PROC(X) set SpacemanDMM_private_proc = X
 	#define PROTECTED_PROC(X) set SpacemanDMM_protected_proc = X
+	#define CAN_BE_REDEFINED(X) set SpacemanDMM_can_be_redefined = X
 	#define VAR_FINAL var/SpacemanDMM_final
 	#define VAR_PRIVATE var/SpacemanDMM_private
 	#define VAR_PROTECTED var/SpacemanDMM_protected
@@ -77,6 +78,7 @@ be enabled:
 	#define SHOULD_BE_PURE(X)
 	#define PRIVATE_PROC(X)
 	#define PROTECTED_PROC(X)
+	#define CAN_BE_REDEFINED(X)
 	#define VAR_FINAL var
 	#define VAR_PRIVATE var
 	#define VAR_PROTECTED var
@@ -153,3 +155,8 @@ This also checks to make sure anything using this proc doesn't invoke it without
 making use of the return value.
 
 This cannot be disabled by child overrides.
+
+## Proc redefinitions
+
+Multiple definitions of a proc in the same type-path will raise a warning.
+Use `set SpacemanDMM_can_be_redefined = 1` to allow a proc to be redefined.
