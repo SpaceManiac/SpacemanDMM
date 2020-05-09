@@ -758,13 +758,12 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 self.put_back(t);
                 traverse_tree!(last_part);
                 let start = self.updated_location();
-                let (comment, ()) = require!(self.doc_comment(|this| this.tree_block(current, proc_kind, var_type.clone())));
 
-                if !comment.is_empty() {
-                    if proc_kind.is_some() || var_type.is_some() {
-                        self.error("docs attached to `var/` or `proc/` block")
-                            .register(self.context);
-                    }
+                if proc_kind.is_some() || var_type.is_some() {
+                    // Can't apply docs to `var/` or `proc/` blocks.
+                    require!(self.tree_block(current, proc_kind, var_type.clone()));
+                } else {
+                    let (comment, ()) = require!(self.doc_comment(|this| this.tree_block(current, proc_kind, var_type.clone())));
                     self.tree[current].docs.extend(comment);
                 }
 
