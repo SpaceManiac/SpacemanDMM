@@ -882,6 +882,69 @@ impl ObjectTree {
         node
     }
 
+    fn insert_var(
+        &mut self,
+        ty: NodeIndex,
+        name: &str,
+        value: VarValue,
+        declaration: Option<VarDeclaration>,
+    ) -> &mut TypeVar {
+        // TODO: warn and merge docs for repeats
+        match self[ty].vars.entry(name.to_owned()) {
+            linked_hash_map::Entry::Vacant(slot) => {
+                slot.insert(TypeVar { value, declaration })
+            },
+            linked_hash_map::Entry::Occupied(slot) => {
+                let type_var = slot.into_mut();
+                if let Some(declaration) = declaration {
+                    type_var.declaration = Some(declaration);
+                }
+                type_var.value = value;
+                type_var
+            },
+        }
+    }
+
+    pub(crate) fn declare_var(
+        &mut self,
+        ty: NodeIndex,
+        name: &str,
+        location: Location,
+        docs: DocCollection,
+        var_type: VarType,
+        expression: Option<Expression>,
+    ) -> &mut TypeVar {
+        let id = self.symbols.allocate();
+        self.insert_var(ty, name, VarValue {
+            location,
+            expression,
+            docs,
+            constant: None,
+            being_evaluated: false,
+        }, Some(VarDeclaration {
+            var_type,
+            location,
+            id,
+        }))
+    }
+
+    pub(crate) fn override_var(
+        &mut self,
+        ty: NodeIndex,
+        name: &str,
+        location: Location,
+        docs: DocCollection,
+        expression: Expression,
+    ) -> &mut TypeVar {
+        self.insert_var(ty, name, VarValue {
+            location,
+            expression: Some(expression),
+            docs,
+            constant: None,
+            being_evaluated: false,
+        }, None)
+    }
+
     fn get_from_path<'a, I: Iterator<Item=&'a str>>(
         &mut self,
         location: Location,
