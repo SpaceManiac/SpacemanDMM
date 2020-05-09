@@ -1115,7 +1115,7 @@ impl ObjectTree {
     }
 
     // an entry which may be anything depending on the path
-    pub fn add_entry<'a, I: Iterator<Item = &'a str>>(
+    fn add_entry<'a, I: Iterator<Item = &'a str>>(
         &mut self,
         location: Location,
         mut path: I,
@@ -1153,7 +1153,7 @@ impl ObjectTree {
     }
 
     // an entry which is definitely a var because a value is specified
-    pub fn add_var<'a, I: Iterator<Item = &'a str>>(
+    fn add_var<'a, I: Iterator<Item = &'a str>>(
         &mut self,
         location: Location,
         mut path: I,
@@ -1189,7 +1189,7 @@ impl ObjectTree {
     }
 
     // an entry which is definitely a proc because an argument list is specified
-    pub fn add_proc<'a, I: Iterator<Item = &'a str>>(
+    fn add_proc<'a, I: Iterator<Item = &'a str>>(
         &mut self,
         context: &Context,
         location: Location,
