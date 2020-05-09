@@ -851,7 +851,7 @@ impl ObjectTree {
     // ------------------------------------------------------------------------
     // Parsing
 
-    fn subtype_or_add(&mut self, location: Location, parent: NodeIndex, child: &str, len: usize) -> NodeIndex {
+    pub(crate) fn subtype_or_add(&mut self, location: Location, parent: NodeIndex, child: &str, len: usize) -> NodeIndex {
         let mut neighbors = self.graph.neighbors(parent).detach();
         while let Some(target) = neighbors.next_node(&self.graph) {
             let node = self.graph.node_weight_mut(target).unwrap();
@@ -1038,7 +1038,7 @@ impl ObjectTree {
         })))
     }
 
-    fn register_proc(
+    pub(crate) fn register_proc(
         &mut self,
         context: &Context,
         location: Location,

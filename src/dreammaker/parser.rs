@@ -9,7 +9,7 @@ use linked_hash_map::LinkedHashMap;
 
 use super::{DMError, Location, HasLocation, Context, Severity, FileId};
 use super::lexer::{LocatedToken, Token, Punctuation};
-use super::objtree::{ObjectTree, EntryType};
+use super::objtree::{ObjectTree, EntryType, NodeIndex};
 use super::annotation::*;
 use super::ast::*;
 use super::docs::*;
@@ -651,17 +651,17 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             parent: None,
             parts: &[]
         };
-        self.tree_entries(root, Token::Eof)
+        self.tree_entries(self.tree.root().index(), None, None, Token::Eof)
     }
 
-    fn tree_block(&mut self, parent: PathStack) -> Status<()> {
+    fn tree_block(&mut self, current: NodeIndex, proc_kind: Option<ProcDeclKind>, var_type: Option<VarType>) -> Status<()> {
         leading!(self.exact(Token::Punct(Punctuation::LBrace)));
         Ok(Some(require!(
-            self.tree_entries(parent, Token::Punct(Punctuation::RBrace))
+            self.tree_entries(current, proc_kind, var_type, Token::Punct(Punctuation::RBrace))
         )))
     }
 
-    fn tree_entries(&mut self, parent: PathStack, terminator: Token) -> Status<()> {
+    fn tree_entries(&mut self, current: NodeIndex, proc_kind: Option<ProcDeclKind>, var_type: Option<VarType>, terminator: Token) -> Status<()> {
         loop {
             let message: Cow<'static, str> = match terminator {
                 Token::Eof => "newline".into(),
@@ -674,7 +674,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 continue;
             }
             self.put_back(next);
-            require!(self.tree_entry(parent));
+            require!(self.tree_entry(current, proc_kind, var_type.clone()));
         }
         SUCCESS
     }
@@ -759,7 +759,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }
     }
 
-    fn tree_entry(&mut self, parent: PathStack) -> Status<()> {
+    fn tree_entry(&mut self, mut current: NodeIndex, mut proc_kind: Option<ProcDeclKind>, mut var_type: Option<VarType>) -> Status<()> {
         // tree_entry :: path ';'
         // tree_entry :: path tree_block
         // tree_entry :: path '=' expression ';'
@@ -774,83 +774,138 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         // read and calculate the current path
         let (absolute, mut path) = leading!(self.tree_path());
 
-        // parse operator overloading definitions
-        if let Some(last_part) = path.last_mut() {
-            if *last_part == "operator" {
-                self.try_read_operator_name(last_part)?;
+        if absolute && current != self.tree.root().index() {
+            DMError::new(entry_start, format!("nested absolute path inside {}", &self.tree[current].path))
+                .set_severity(Severity::Warning)
+                .register(self.context);
+            current = self.tree.root().index();
+        }
+
+        let (last_part, traverse) = match path.split_last_mut() {
+            Some(x) => x,
+            None => {
+                self.error("what?")
+                    .register(self.context);
+                return SUCCESS;
+            }
+        };
+
+        macro_rules! traverse_tree {
+            ($what:expr) => {
+                let each = $what;
+                if each == "var" {
+                    var_type = Some(VarType::default());
+                } else if let Some(var_type) = var_type.as_mut() {
+                    if let Some(flag) = VarTypeFlags::from_name(each) {
+                        var_type.flags |= flag;
+                    } else {
+                        var_type.type_path.push(each.to_owned());
+                    }
+                } else if let Some(kind) = ProcDeclKind::from_name(each) {
+                    proc_kind = Some(kind);
+                } else if proc_kind.is_some() {
+                    self.error("cannot have sub-blocks of `proc/` block")
+                        .register(self.context);
+                } else {
+                    current = self.tree.subtype_or_add(self.location, current, each, /* TODO */ 0);
+                }
             }
         }
 
-        let new_stack = PathStack {
-            parent: if absolute { None } else { Some(&parent) },
-            parts: &path,
-        };
-
-        if absolute && parent.parent.is_some() {
-            self.error(format!("nested absolute path: {} inside {}", new_stack, parent))
-                .set_severity(Severity::Warning)
-                .register(self.context);
+        for each in traverse {
+            traverse_tree!(each);
         }
 
-        let var_suffix = require!(self.var_suffix());
+        // parse operator overloading definitions
+        if last_part == "operator" {
+            self.try_read_operator_name(last_part)?;
+        }
+
+        let var_suffix = if var_type.is_some() {
+            require!(self.var_suffix())
+        } else {
+            Default::default()
+        };
 
         // read the contents for real
         match self.next("contents")? {
             t @ Punct(LBrace) => {
                 // `thing{` - block
-                match self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), Default::default(), var_suffix) {
-                    Ok(EntryType::Subtype) => {
-                        if !absolute && self.context.config().code_standards.disallow_relative_type_definitions {
-                            DMError::new(self.location, "relatively pathed type defined here")
-                                .set_severity(Severity::Warning)
-                                .register(self.context);
-                        }
-                    },
-                    Ok(_) => {},
-                    Err(e) => self.context.register_error(e),
-                }
                 self.put_back(t);
+                traverse_tree!(last_part);
                 let start = self.updated_location();
-                let (comment, ()) = require!(self.doc_comment(|this| this.tree_block(new_stack)));
-                // TODO: make this duplicate less work?
+                let var_type_is_some = var_type.is_some();
+                let (comment, ()) = require!(self.doc_comment(|this| this.tree_block(current, proc_kind, var_type)));
+
                 if !comment.is_empty() {
-                    let _ = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), comment, Default::default());
+                    if proc_kind.is_some() || var_type_is_some {
+                        self.error("docs attached to `var/` or `proc/` block")
+                            .register(self.context);
+                    }
+                    self.tree[current].docs.extend(comment);
                 }
-                self.annotate(start, || Annotation::TreeBlock(new_stack.to_vec()));
+
+                // TODO: self.annotate(start, || Annotation::TreeBlock(new_stack.to_vec()));
                 SUCCESS
             }
             Punct(Assign) => {
                 // `something=` - var
                 let location = self.location;
                 // kind of goofy, but allows "enclosing" doc comments at the end of the line
-                let (comment, expr) = require!(self.doc_comment(|this| {
+                let (docs, expression) = require!(self.doc_comment(|this| {
                     let expr = require!(this.expression());
                     let _ = require!(this.input_specifier());
                     require!(this.statement_terminator());
                     success(expr)
                 }));
-                if let Err(e) = self.tree.add_var(location, new_stack.iter(), new_stack.len(), expr, comment, var_suffix) {
-                    self.context.register_error(e);
+
+                if let Some(mut var_type) = var_type {
+                    var_type.suffix(&var_suffix);
+                    self.tree.declare_var(current, last_part, location, docs, var_type, Some(expression));
+                } else {
+                    self.tree.override_var(current, last_part, location, docs, expression);
                 }
-                self.annotate(entry_start, || Annotation::Variable(new_stack.to_vec()));
+
+                // TODO: self.annotate(entry_start, || Annotation::Variable(new_stack.to_vec()));
                 SUCCESS
             }
             t @ Punct(LParen) => {
                 // `something(` - proc
                 self.put_back(t);
-                self.proc_params_and_body(new_stack, entry_start, absolute)
+                require!(self.proc_params_and_body(current, proc_kind, last_part, entry_start, absolute));
+                SUCCESS
             }
             other => {
                 // usually `thing;` - a contentless declaration
                 // TODO: allow enclosing-targeting docs here somehow?
-                let comment = std::mem::replace(&mut self.docs_following, Default::default());
-                if let Err(e) = self.tree.add_entry(self.location, new_stack.iter(), new_stack.len(), comment, var_suffix) {
-                    self.context.register_error(e);
-                }
                 self.put_back(other);
-                if new_stack.contains("var") {
-                    self.annotate(entry_start, || Annotation::Variable(new_stack.to_vec()));
+
+                if last_part == "var" {
+                    //var_type = Some(VarType::default());
+                    self.error("`var;` statement has no effect")
+                        .register(self.context);
+                } else if let Some(mut var_type) = var_type.as_mut() {
+                    if let Some(flag) = VarTypeFlags::from_name(last_part) {
+                        //var_type.flags |= flag;
+                    } else {
+                        let docs = std::mem::take(&mut self.docs_following);
+                        var_type.suffix(&var_suffix);
+                        self.tree.declare_var(current, last_part, self.location, docs, std::mem::take(var_type), var_suffix.into_initializer());
+                        // TODO: self.annotate(entry_start, || Annotation::Variable(new_stack.to_vec()));
+                    }
+                } else if let Some(kind) = ProcDeclKind::from_name(last_part) {
+                    //proc_kind = Some(kind);
+                    self.error("`proc;` statement has no effect")
+                        .register(self.context);
+                } else if proc_kind.is_some() {
+                    self.error("child of `proc/` without body")
+                        .register(self.context);
+                } else {
+                    let docs = std::mem::take(&mut self.docs_following);
+                    current = self.tree.subtype_or_add(self.location, current, last_part, /* TODO */ 0);
+                    self.tree[current].docs.extend(docs);
                 }
+
                 SUCCESS
             }
         }
@@ -931,7 +986,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         SUCCESS
     }
 
-    fn proc_params_and_body(&mut self, new_stack: PathStack, entry_start: Location, absolute: bool) -> Status<()> {
+    fn proc_params_and_body(&mut self, current: NodeIndex, proc_kind: Option<ProcDeclKind>, name: &str, entry_start: Location, absolute: bool) -> Status<()> {
         use super::lexer::Token::*;
         use super::lexer::Punctuation::*;
         use super::objtree::Code;
@@ -992,13 +1047,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Code::Disabled
         };
 
-        match self.tree.add_proc(self.context, location, new_stack.iter(), new_stack.len(), parameters, code) {
+        match self.tree.register_proc(self.context, location, current, name, proc_kind, parameters, code) {
             Ok((idx, proc)) => {
                 proc.docs.extend(comment);
                 // manually performed for borrowck reasons
                 if let Some(dest) = self.annotations.as_mut() {
-                    dest.insert(entry_start..body_start, Annotation::ProcHeader(new_stack.to_vec(), idx));
-                    dest.insert(body_start..self.location, Annotation::ProcBody(new_stack.to_vec(), idx));
+                    // TODO
+                    //dest.insert(entry_start..body_start, Annotation::ProcHeader(new_stack.to_vec(), idx));
+                    //dest.insert(body_start..self.location, Annotation::ProcBody(new_stack.to_vec(), idx));
                 }
                 if !absolute && self.context.config().code_standards.disallow_relative_proc_definitions {
                     DMError::new(location, "relatively pathed proc defined here")
