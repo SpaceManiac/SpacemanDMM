@@ -703,6 +703,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             current = self.tree.root().index();
         }
 
+        let path_len = path.len();
         let (last_part, traverse) = match path.split_last_mut() {
             Some(x) => x,
             None => {
@@ -729,7 +730,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     self.error("cannot have sub-blocks of `proc/` block")
                         .register(self.context);
                 } else {
-                    current = self.tree.subtype_or_add(self.location, current, each, /* TODO */ 0);
+                    let len = self.tree[current].path.chars().filter(|&c| c == '/').count() + path_len;
+                    current = self.tree.subtype_or_add(self.location, current, each, len);
                 }
             }
         }
@@ -829,7 +831,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         .register(self.context);
                 } else {
                     let docs = std::mem::take(&mut self.docs_following);
-                    current = self.tree.subtype_or_add(self.location, current, last_part, /* TODO */ 0);
+                    let len = self.tree[current].path.chars().filter(|&c| c == '/').count() + path_len;
+                    current = self.tree.subtype_or_add(self.location, current, last_part, len);
                     self.tree[current].docs.extend(docs);
                 }
 
