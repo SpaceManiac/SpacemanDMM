@@ -884,6 +884,17 @@ impl VarTypeFlags {
     pub fn is_normal(&self) -> bool {
         !self.intersects(VarTypeFlags::CONST | VarTypeFlags::STATIC | VarTypeFlags::PROTECTED)
     }
+
+    pub fn to_vec(&self) -> Vec<&'static str> {
+        let mut v = Vec::new();
+        if self.is_static() { v.push("static"); }
+        if self.is_const() { v.push("const"); }
+        if self.is_tmp() { v.push("tmp"); }
+        if self.is_final() { v.push("SpacemanDMM_final"); }
+        if self.is_private() { v.push("SpacemanDMM_private"); }
+        if self.is_protected() { v.push("SpacemanDMM_protected"); }
+        v
+    }
 }
 
 impl fmt::Display for VarTypeFlags {

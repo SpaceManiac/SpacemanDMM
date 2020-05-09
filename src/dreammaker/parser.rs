@@ -756,18 +756,18 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 self.put_back(t);
                 traverse_tree!(last_part);
                 let start = self.updated_location();
-                let var_type_is_some = var_type.is_some();
-                let (comment, ()) = require!(self.doc_comment(|this| this.tree_block(current, proc_kind, var_type)));
+                let (comment, ()) = require!(self.doc_comment(|this| this.tree_block(current, proc_kind, var_type.clone())));
 
                 if !comment.is_empty() {
-                    if proc_kind.is_some() || var_type_is_some {
+                    if proc_kind.is_some() || var_type.is_some() {
                         self.error("docs attached to `var/` or `proc/` block")
                             .register(self.context);
                     }
                     self.tree[current].docs.extend(comment);
                 }
 
-                // TODO: self.annotate(start, || Annotation::TreeBlock(new_stack.to_vec()));
+                let node = self.tree[current].path.to_owned();
+                self.annotate(start, || Annotation::TreeBlock(reconstruct_path(&node, proc_kind, var_type.as_ref(), "")));
                 SUCCESS
             }
             Punct(Assign) => {
@@ -781,6 +781,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     success(expr)
                 }));
 
+                let node = self.tree[current].path.to_owned();
+                self.annotate(entry_start, || Annotation::Variable(reconstruct_path(&node, proc_kind, var_type.as_ref(), last_part)));
+
                 if let Some(mut var_type) = var_type {
                     var_type.suffix(&var_suffix);
                     self.tree.declare_var(current, last_part, location, docs, var_type, Some(expression));
@@ -788,7 +791,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     self.tree.override_var(current, last_part, location, docs, expression);
                 }
 
-                // TODO: self.annotate(entry_start, || Annotation::Variable(new_stack.to_vec()));
                 SUCCESS
             }
             t @ Punct(LParen) => {
@@ -804,19 +806,23 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
                 if last_part == "var" {
                     self.error("`var;` item has no effect")
+                        .set_severity(Severity::Warning)
                         .register(self.context);
-                } else if let Some(var_type) = var_type.as_mut() {
-                    if let Some(flag) = VarTypeFlags::from_name(last_part) {
-                        self.error(format!("`{};` item has no effect", last_part))
+                } else if let Some(mut var_type) = var_type.take() {
+                    if VarTypeFlags::from_name(last_part).is_some() {
+                        self.error(format!("`var/{};` item has no effect", last_part))
+                            .set_severity(Severity::Warning)
                             .register(self.context);
                     } else {
                         let docs = std::mem::take(&mut self.docs_following);
                         var_type.suffix(&var_suffix);
-                        self.tree.declare_var(current, last_part, self.location, docs, std::mem::take(var_type), var_suffix.into_initializer());
-                        // TODO: self.annotate(entry_start, || Annotation::Variable(new_stack.to_vec()));
+                        let node = self.tree[current].path.to_owned();
+                        self.annotate(entry_start, || Annotation::Variable(reconstruct_path(&node, proc_kind, Some(&var_type), last_part)));
+                        self.tree.declare_var(current, last_part, self.location, docs, var_type, var_suffix.into_initializer());
                     }
-                } else if let Some(kind) = ProcDeclKind::from_name(last_part) {
+                } else if ProcDeclKind::from_name(last_part).is_some() {
                     self.error("`proc;` item has no effect")
+                        .set_severity(Severity::Warning)
                         .register(self.context);
                 } else if proc_kind.is_some() {
                     self.error("child of `proc/` without body")
@@ -973,9 +979,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 proc.docs.extend(comment);
                 // manually performed for borrowck reasons
                 if let Some(dest) = self.annotations.as_mut() {
-                    // TODO
-                    //dest.insert(entry_start..body_start, Annotation::ProcHeader(new_stack.to_vec(), idx));
-                    //dest.insert(body_start..self.location, Annotation::ProcBody(new_stack.to_vec(), idx));
+                    let new_stack = reconstruct_path(&self.tree[current].path, proc_kind, None, name);
+                    dest.insert(entry_start..body_start, Annotation::ProcHeader(new_stack.to_vec(), idx));
+                    dest.insert(body_start..self.location, Annotation::ProcBody(new_stack.to_vec(), idx));
                 }
                 if !absolute && self.context.config().code_standards.disallow_relative_proc_definitions {
                     DMError::new(location, "relatively pathed proc defined here")
@@ -1063,7 +1069,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         use super::lexer::Punctuation::*;
 
         let mut list = Vec::new();
-        // TODO: parse the declarations as expressions rather than giving up
         while let Some(()) = self.exact(Punct(LBracket))? {
             list.push(self.expression()?);
             require!(self.exact(Punct(RBracket)));
@@ -2262,4 +2267,22 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             }
         }
     }
+}
+
+fn reconstruct_path(node: &str, proc_kind: Option<ProcDeclKind>, var_type: Option<&VarType>, last: &str) -> Vec<String> {
+    let mut result = Vec::new();
+    for entry in node.split('/').skip(1) {
+        result.push(entry.to_owned());
+    }
+    if let Some(kind) = proc_kind {
+        result.push(kind.to_string());
+    }
+    if let Some(var) = var_type {
+        result.extend(var.flags.to_vec().into_iter().map(ToOwned::to_owned));
+        result.extend(var.type_path.iter().cloned());
+    }
+    if !last.is_empty() {
+        result.push(last.to_owned());
+    }
+    result
 }
