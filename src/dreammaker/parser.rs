@@ -3,13 +3,12 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::ops::Range;
-use std::fmt;
 
 use linked_hash_map::LinkedHashMap;
 
 use super::{DMError, Location, HasLocation, Context, Severity, FileId};
 use super::lexer::{LocatedToken, Token, Punctuation};
-use super::objtree::{ObjectTree, EntryType, NodeIndex};
+use super::objtree::{ObjectTree, NodeIndex};
 use super::annotation::*;
 use super::ast::*;
 use super::docs::*;
@@ -73,79 +72,6 @@ where
     let mut parser = Parser::new(context, iter.into_iter());
     parser.location = location;
     Ok(require!(parser.expression()))
-}
-
-// ----------------------------------------------------------------------------
-// Path stack and iterator over parts so far
-
-#[derive(Debug, Copy, Clone)]
-struct PathStack<'a> {
-    parent: Option<&'a PathStack<'a>>,
-    parts: &'a [String],
-}
-
-impl<'a> PathStack<'a> {
-    fn iter(&self) -> PathStackIter<'a> {
-        let mut rest = Vec::new();
-        let mut current = Some(self);
-        while let Some(c) = current {
-            rest.push(c.parts);
-            current = c.parent;
-        }
-        PathStackIter {
-            current: &[],
-            rest,
-        }
-    }
-
-    fn contains(&self, keyword: &str) -> bool {
-        self.iter().any(|x| x == keyword)
-    }
-
-    fn len(&self) -> usize {
-        self.parts.len() + self.parent.as_ref().map_or(0, |p| p.len())
-    }
-
-    fn to_vec(&self) -> Vec<String> {
-        self.iter().map(|t| t.to_owned()).collect()
-    }
-}
-
-impl<'a> fmt::Display for PathStack<'a> {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        if let Some(ref parent) = self.parent {
-            write!(fmt, "{}", parent)?;
-        }
-        for part in self.parts {
-            fmt.write_str("/")?;
-            fmt.write_str(part)?;
-        }
-        Ok(())
-    }
-}
-
-struct PathStackIter<'a> {
-    current: &'a [String],
-    rest: Vec<&'a [String]>,
-}
-
-impl<'a> Iterator for PathStackIter<'a> {
-    type Item = &'a str;
-
-    fn next(&mut self) -> Option<&'a str> {
-        loop {
-            match { self.current }.split_first() {
-                Some((first, rest)) => {
-                    self.current = rest;
-                    return Some(first);
-                }
-                None => match self.rest.pop() {
-                    Some(c) => self.current = c,
-                    None => return None,
-                },
-            }
-        }
-    }
 }
 
 // ----------------------------------------------------------------------------
@@ -647,10 +573,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     // Object tree - root
 
     fn root(&mut self) -> Status<()> {
-        let root = PathStack {
-            parent: None,
-            parts: &[]
-        };
         self.tree_entries(self.tree.root().index(), None, None, Token::Eof)
     }
 
@@ -881,12 +803,12 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 self.put_back(other);
 
                 if last_part == "var" {
-                    //var_type = Some(VarType::default());
-                    self.error("`var;` statement has no effect")
+                    self.error("`var;` item has no effect")
                         .register(self.context);
-                } else if let Some(mut var_type) = var_type.as_mut() {
+                } else if let Some(var_type) = var_type.as_mut() {
                     if let Some(flag) = VarTypeFlags::from_name(last_part) {
-                        //var_type.flags |= flag;
+                        self.error(format!("`{};` item has no effect", last_part))
+                            .register(self.context);
                     } else {
                         let docs = std::mem::take(&mut self.docs_following);
                         var_type.suffix(&var_suffix);
@@ -894,8 +816,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         // TODO: self.annotate(entry_start, || Annotation::Variable(new_stack.to_vec()));
                     }
                 } else if let Some(kind) = ProcDeclKind::from_name(last_part) {
-                    //proc_kind = Some(kind);
-                    self.error("`proc;` statement has no effect")
+                    self.error("`proc;` item has no effect")
                         .register(self.context);
                 } else if proc_kind.is_some() {
                     self.error("child of `proc/` without body")
