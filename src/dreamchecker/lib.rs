@@ -1145,6 +1145,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 error(self.proc_ref.location, format!("redefining proc {}/{}", self.ty, self.proc_ref.name()))
                     .with_errortype("redefined_proc")
                     .with_note(parent.location, "previous definition is here")
+                    .set_severity(Severity::Hint)
                     .register(self.context);
             }
         }
