@@ -317,7 +317,8 @@ impl<'a> Engine<'a> {
 
     fn parse_environment(&mut self, environment: PathBuf) -> Result<(), jsonrpc::Error> {
         // handle the parsing
-        let start = std::time::Instant::now();
+        let original_start = std::time::Instant::now();
+        let mut start = original_start;
         eprintln!("environment: {}", environment.display());
         if let Some(stem) = environment.file_stem() {
             self.issue_notification::<extras::WindowStatus>(extras::WindowStatusParams {
@@ -348,24 +349,34 @@ impl<'a> Engine<'a> {
             }
         };
 
+        let elapsed = start.elapsed(); start += elapsed;
+        eprint!("setup {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+
         {
             let mut parser = dm::parser::Parser::new(ctx, dm::indents::IndentProcessor::new(ctx, &mut pp));
             parser.enable_procs();
             self.objtree = Arc::new(parser.parse_object_tree());
         }
-        self.update_objtree();
+        let elapsed = start.elapsed(); start += elapsed;
+        eprint!(" - parse {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+
+        if self.client_caps.object_tree {
+            self.update_objtree();
+            let elapsed = start.elapsed(); start += elapsed;
+            eprint!(" - object tree {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+        }
+
         self.references_table = Some(find_references::ReferencesTable::new(&self.objtree));
+        let elapsed = start.elapsed(); start += elapsed;
+        eprint!(" - references {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+
         if ctx.config().langserver.dreamchecker {
             dreamchecker::run(&self.context, &self.objtree);
+            let elapsed = start.elapsed(); start += elapsed;
+            eprint!(" - dreamchecker {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
         }
         self.defines = Some(pp.finalize());
         self.issue_notification::<extras::WindowStatus>(Default::default());
-        let elapsed = start.elapsed();
-        eprintln!(
-            "parsed in {}.{:03}s",
-            elapsed.as_secs(),
-            elapsed.subsec_millis()
-        );
 
         // initial diagnostics pump
         let mut map: HashMap<_, Vec<_>> = HashMap::new();
@@ -440,9 +451,15 @@ impl<'a> Engine<'a> {
             );
         }
 
+        let elapsed = start.elapsed(); start += elapsed;
+        eprint!(" - diagnostics {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+
         /*if let Some(objtree) = Arc::get_mut(&mut self.objtree) {
             objtree.drop_code();
         }*/
+
+        let elapsed = original_start.elapsed();
+        eprintln!(" - total {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
 
         Ok(())
     }
@@ -929,9 +946,10 @@ handle_method_call! {
                 let path = format!("{}/", url.path());
                 url.set_path(&path);
             }
+            eprintln!("workspace root: {}", url);
             self.root = Some(url);
         } else {
-            eprintln!("preparing single file mode");
+            eprintln!("single file mode");
         }
 
         // Extract relevant client capabilities.
@@ -942,6 +960,7 @@ handle_method_call! {
         } else {
             eprintln!("client capabilities: {}", debug);
         }
+        eprintln!();
 
         InitializeResult {
             capabilities: ServerCapabilities {
@@ -1751,10 +1770,6 @@ handle_notification! {
     // ------------------------------------------------------------------------
     // basic setup
     on Initialized(&mut self, _) {
-        if let Some(ref root) = self.root {
-            eprintln!("workspace root: {}", root);
-        }
-
         let mut environment = None;
         if let Some(ref root) = self.root {
             // TODO: support non-files here
@@ -1773,6 +1788,7 @@ handle_notification! {
     }
 
     on Reparse(&mut self, _p) {
+        eprintln!();
         eprintln!("reparsing by request...");
         self.context.errors_mut().clear();
         return self.Initialized(_p);

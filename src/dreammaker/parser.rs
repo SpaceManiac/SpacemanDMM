@@ -378,7 +378,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     fn finalize_object_tree(mut self) -> ObjectTree {
         let procs_total = self.procs_good + self.procs_bad;
-        if procs_total > 0 {
+        if self.procs_bad > 0 {
             eprintln!(
                 "parsed {}/{} proc bodies ({}%)",
                 self.procs_good,
