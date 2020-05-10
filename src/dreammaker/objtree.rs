@@ -211,7 +211,7 @@ impl<'a> TypeRef<'a> {
 
     #[inline]
     pub fn get(self) -> &'a Type {
-        self.tree.graph.node_weight(self.idx).unwrap()
+        &self.tree[self.idx]
     }
 
     pub fn tree(self) -> &'a ObjectTree {
@@ -767,7 +767,7 @@ impl ObjectTree {
 
     fn assign_parent_types(&mut self, context: &Context) {
         for (path, &type_idx) in self.types.iter() {
-            let mut location = self.graph.node_weight(type_idx).unwrap().location;
+            let mut location = self.graph[type_idx].location;
             let idx = if path == "/datum" || path == "/list" || path == "/savefile" || path == "/world" {
                 // These types have no parent and cannot have one added. In the official compiler:
                 // - setting list or savefile/parent_type is denied with the same error as setting something's parent type to them;
@@ -775,7 +775,7 @@ impl ObjectTree {
                 // - setting world/parent_type compiles but has no runtime effect.
 
                 // Here, let's try to error if anything is set.
-                if let Some(var) = self.graph.node_weight(type_idx).unwrap().vars.get("parent_type") {
+                if let Some(var) = self[type_idx].vars.get("parent_type") {
                     // This check won't catch invalid redeclarations like `/datum/var/parent_type`, but that's fine for now.
                     if var.value.expression.is_some() {
                         context.register_error(DMError::new(
@@ -800,7 +800,7 @@ impl ObjectTree {
                         0 => "/datum",
                         idx => &path[..idx],
                     };
-                    if let Some(var) = self.graph.node_weight(type_idx).unwrap().vars.get("parent_type") {
+                    if let Some(var) = self[type_idx].vars.get("parent_type") {
                         location = var.value.location;
                         if let Some(expr) = var.value.expression.clone() {
                             match expr.simple_evaluate(var.value.location) {
@@ -842,9 +842,7 @@ impl ObjectTree {
                 }
             };
 
-            self.graph.node_weight_mut(type_idx)
-                .unwrap()
-                .parent_type = idx;
+            self.graph[type_idx].parent_type = idx;
         }
     }
 
@@ -1016,7 +1014,7 @@ impl ObjectTree {
         var_type.suffix(&suffix);
 
         let symbols = &mut self.symbols;
-        let node = self.graph.node_weight_mut(parent).unwrap();
+        let node = &mut self.graph[parent];
         // TODO: warn and merge docs for repeats
         Ok(Some(node.vars.entry(prev.to_owned()).or_insert_with(|| TypeVar {
             value: VarValue {
@@ -1048,7 +1046,7 @@ impl ObjectTree {
         parameters: Vec<Parameter>,
         code: Code,
     ) -> Result<(usize, &mut ProcValue), DMError> {
-        let node = self.graph.node_weight_mut(parent).unwrap();
+        let node = &mut self.graph[parent];
         let proc = node.procs.entry(name.to_owned()).or_insert_with(Default::default);
         if let Some(kind) = declaration {
             if let Some(ref decl) = proc.declaration {
@@ -1132,7 +1130,7 @@ impl ObjectTree {
             // proc{} block, children will be procs
         } else {
             let idx = self.subtype_or_add(location, parent, child, len);
-            self.graph.node_weight_mut(idx).unwrap().docs.extend(comment);
+            self[idx].docs.extend(comment);
             Ok(EntryType::Subtype)
         }
     }
