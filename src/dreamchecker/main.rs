@@ -14,6 +14,7 @@ fn main() {
     let mut environment = None;
     let mut config_file = None;
     let mut json = false;
+    let mut parse_only = false;
 
     let mut args = std::env::args();
     let _ = args.next();  // skip executable name
@@ -34,6 +35,8 @@ fn main() {
             config_file = Some(args.next().expect("must specify a file for -c"));
         } else if arg == "--json" {
             json = true;
+        } else if arg == "--parse-only" {
+            parse_only = true;
         } else {
             eprintln!("unknown argument: {}", arg);
             return;
@@ -63,7 +66,9 @@ fn main() {
     parser.enable_procs();
     let tree = parser.parse_object_tree();
 
-    dreamchecker::run_cli(&context, &tree);
+    if !parse_only {
+        dreamchecker::run_cli(&context, &tree);
+    }
 
     println!("============================================================");
     let errors = context.errors().iter().filter(|each| each.severity() <= dm::Severity::Info).count();
