@@ -506,13 +506,7 @@ pub struct ViolatingProcs<'o> {
 
 impl<'o> ViolatingProcs<'o> {
     pub fn insert_violator(&mut self, proc: ProcRef<'o>, builtin: &str, location: Location) {
-        if let Some(vec) = self.violators.get_mut(&proc) {
-            vec.push((builtin.to_string(), location));
-        } else {
-            let mut newvec = Vec::<(String, Location)>::new();
-            newvec.push((builtin.to_string(), location));
-            self.violators.insert(proc, newvec);
-        }
+        self.violators.entry(proc).or_default().push((builtin.to_string(), location));
     }
 
     pub fn get_violators(&self, proc: ProcRef<'o>) -> Option<&Vec<(String, Location)>> {
@@ -640,14 +634,10 @@ impl<'o> AnalyzeObjectTree<'o> {
                     to_visit.push_back((*proccalled, callstack));
                 }
             }
-            while !to_visit.is_empty() {
-                guard!(let Some((nextproc, callstack)) = to_visit.pop_front() else {
-                    break
-                });
-                if let Some(_) = visited.get(&nextproc) {
+            while let Some((nextproc, callstack)) = to_visit.pop_front() {
+                if !visited.insert(nextproc) {
                     continue
                 }
-                visited.insert(nextproc);
                 if let Some(_) = self.waitfor_procs.get(&nextproc) {
                     continue
                 }
@@ -661,10 +651,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                         .with_callstack(callstack)
                         .with_blocking_builtins(sleepvec)
                         .register(self.context)
-                } else {
-                    guard!(let Some(calledvec) = self.call_tree.get(&nextproc) else {
-                        continue
-                    });
+                } else if let Some(calledvec) = self.call_tree.get(&nextproc) {
                     for (proccalled, location) in calledvec.iter() {
                         let mut newstack = callstack.clone();
                         newstack.add_step(*proccalled, *location);
@@ -691,14 +678,10 @@ impl<'o> AnalyzeObjectTree<'o> {
                     to_visit.push_back((*proccalled, callstack));
                 }
             }
-            while !to_visit.is_empty() {
-                guard!(let Some((nextproc, callstack)) = to_visit.pop_front() else {
-                    break
-                });
-                if let Some(_) = visited.get(&nextproc) {
+            while let Some((nextproc, callstack)) = to_visit.pop_front() {
+                if !visited.insert(nextproc) {
                     continue
                 }
-                visited.insert(nextproc);
                 if let Some(impurevec) = self.impure_procs.get_violators(nextproc) {
                     error(procref.get().location, format!("{} sets SpacemanDMM_should_be_pure but calls a {} that does impure operations", procref, nextproc))
                         .with_note(*location, "SpacemanDMM_should_be_pure set here")
@@ -706,10 +689,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                         .with_callstack(callstack)
                         .with_impure_operations(impurevec)
                         .register(self.context)
-                } else {
-                    guard!(let Some(calledvec) = self.call_tree.get(&nextproc) else {
-                        continue
-                    });
+                } else if let Some(calledvec) = self.call_tree.get(&nextproc) {
                     for (proccalled, location) in calledvec.iter() {
                         let mut newstack = callstack.clone();
                         newstack.add_step(*proccalled, *location);
@@ -1111,8 +1091,6 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             });
             //println!("adding parameters {:#?}", self.local_vars);
         }
-
-        self.env.call_tree.insert(self.proc_ref, Default::default());
 
         self.visit_block(block, &mut local_vars);
 
@@ -1978,9 +1956,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     }
 
     fn visit_call(&mut self, location: Location, src: TypeRef<'o>, proc: ProcRef<'o>, args: &'o [Expression], is_exact: bool, local_vars: &mut HashMap<String, LocalVar<'o>>) -> Analysis<'o> {
-        if let Some(callhashset) = self.env.call_tree.get_mut(&self.proc_ref) {
-            callhashset.push((proc, location));
-        }
+        self.env.call_tree.entry(self.proc_ref).or_default().push((proc, location));
         if let Some((privateproc, true, decllocation)) = self.env.private.get_self_or_parent(proc) {
             if self.ty != privateproc.ty() {
                 error(location, format!("{} attempting to call private proc {}, types do not match", self.proc_ref, privateproc))
