@@ -443,6 +443,16 @@ impl<'o> ProcDirective<'o> {
         }
         None
     }
+
+    fn try_copy_from_parent(&mut self, proc: ProcRef<'o>) {
+        if self.directive.get(&proc).is_none() {
+            if let Some(parent) = proc.parent_proc() {
+                if let Some((_, true, location)) = self.get_self_or_parent(parent) {
+                    let _ = self.insert(proc, true, location);
+                }
+            }
+        }
+    }
 }
 
 /// Helper evaluation for directive true/false setting
@@ -565,6 +575,9 @@ impl<'o> AnalyzeObjectTree<'o> {
 
     /// Analyze a specific proc
     pub fn check_proc(&mut self, proc: ProcRef<'o>, code: &'o [Spanned<Statement>]) {
+        self.must_not_sleep.try_copy_from_parent(proc);
+        self.must_be_pure.try_copy_from_parent(proc);
+
         AnalyzeProc::new(self, self.context, self.objtree, proc).run(code)
     }
 
@@ -702,17 +715,6 @@ impl<'o> AnalyzeObjectTree<'o> {
 
     /// Gather and store set directives for the given proc using the provided code body
     pub fn gather_settings(&mut self, proc: ProcRef<'o>, code: &'o [Spanned<Statement>]) {
-        if let Some((_, true, loc)) = self.must_not_sleep.get_self_or_parent(proc) {
-            if let Err(error) = self.must_not_sleep.insert(proc, true, loc) {
-                self.context.register_error(error);
-            }
-        }
-        if let Some((_, true, loc)) = self.must_be_pure.get_self_or_parent(proc) {
-            if let Err(error) = self.must_be_pure.insert(proc, true, loc) {
-                self.context.register_error(error);
-            }
-        }
-
         for statement in code.iter() {
             if let Statement::Setting { ref name, ref value, .. } = statement.elem {
                 if name == "SpacemanDMM_return_type" {
