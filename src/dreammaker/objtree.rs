@@ -4,8 +4,6 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 pub(crate) use petgraph::graph::NodeIndex;
-use petgraph::graph::Graph;
-use petgraph::visit::EdgeRef;
 use linked_hash_map::LinkedHashMap;
 
 use super::ast::{Expression, VarType, VarSuffix, PathOp, Parameter, Block, ProcDeclKind};
@@ -126,9 +124,11 @@ pub struct Type {
     pub vars: LinkedHashMap<String, TypeVar>,
     /// Procs and verbs which this type has declarations or overrides for.
     pub procs: LinkedHashMap<String, TypeProc>,
+    parent_path: NodeIndex,
     parent_type: NodeIndex,
     pub docs: DocCollection,
     pub id: SymbolId,
+    children: BTreeMap<String, NodeIndex>,
 }
 
 impl Type {
@@ -224,17 +224,17 @@ impl<'a> TypeRef<'a> {
 
     /// Find the parent **path**, without taking `parent_type` into account.
     pub fn parent_path(&self) -> Option<TypeRef<'a>> {
-        self.tree
-            .graph
-            .neighbors_directed(self.idx, petgraph::Direction::Incoming)
-            .next()
-            .map(|i| TypeRef::new(self.tree, i))
+        if self.is_root() {
+            None
+        } else {
+            Some(TypeRef::new(self.tree, self.parent_path))
+        }
     }
 
     /// Find the parent **type** based on `parent_type` var, or parent path if unspecified.
     pub fn parent_type(&self) -> Option<TypeRef<'a>> {
         let idx = self.parent_type;
-        self.tree.graph.node_weight(idx).map(|_| TypeRef::new(self.tree, idx))
+        self.tree.graph.get(idx.index()).map(|_| TypeRef::new(self.tree, idx))
     }
 
     /// Find the parent type of this without returning root.
@@ -243,23 +243,17 @@ impl<'a> TypeRef<'a> {
         if idx == NodeIndex::new(0) {
             return None;
         }
-        self.tree.graph.node_weight(idx).map(|_| TypeRef::new(self.tree, idx))
+        self.tree.graph.get(idx.index()).map(|_| TypeRef::new(self.tree, idx))
     }
 
     /// Find a child **path** with the given name, if it exists.
     pub fn child(&self, name: &str) -> Option<TypeRef<'a>> {
-        for idx in self.tree.graph.neighbors(self.idx) {
-            let ty = self.tree.graph.node_weight(idx).unwrap();
-            if ty.name == name {
-                return Some(TypeRef::new(self.tree, idx));
-            }
-        }
-        None
+        self.children.get(name).map(|&idx| TypeRef::new(self.tree, idx))
     }
 
     /// Iterate over all child **paths**.
-    pub fn children(self) -> impl Iterator<Item=TypeRef<'a>> + 'a {
-        self.tree.graph.neighbors(self.idx).map(move |idx| TypeRef::new(self.tree, idx))
+    pub fn children<'b>(&'b self) -> impl Iterator<Item=TypeRef<'a>> + 'b {
+        self.children.values().map(move |&idx| TypeRef::new(self.tree, idx))
     }
 
     /// Recursively visit this and all child **paths**.
@@ -326,7 +320,7 @@ impl<'a> TypeRef<'a> {
                 if let Some(child) = self.child(name) {
                     return Some(child);
                 }
-                for idx in self.tree.graph.neighbors(self.idx) {
+                for &idx in self.children.values() {
                     if let Some(child) = TypeRef::new(self.tree, idx).navigate(PathOp::Colon, name) {
                         // Yes, simply returning the first thing that matches
                         // is the correct behavior.
@@ -630,7 +624,7 @@ impl<'a> std::hash::Hash for ProcRef<'a> {
 
 #[derive(Debug)]
 pub struct ObjectTree {
-    graph: Graph<Type, ()>,
+    graph: Vec<Type>,
     types: BTreeMap<String, NodeIndex>,
     symbols: SymbolIdSource,
 }
@@ -642,7 +636,7 @@ impl Default for ObjectTree {
             types: Default::default(),
             symbols: SymbolIdSource::new(SymbolIdCategory::ObjectTree),
         };
-        tree.graph.add_node(Type {
+        tree.graph.push(Type {
             name: String::new(),
             path: String::new(),
             location: Default::default(),
@@ -652,6 +646,9 @@ impl Default for ObjectTree {
             parent_type: NodeIndex::new(BAD_NODE_INDEX),
             docs: Default::default(),
             id: tree.symbols.allocate(),
+
+            children: Default::default(),
+            parent_path: NodeIndex::new(BAD_NODE_INDEX),
         });
         tree
     }
@@ -678,11 +675,11 @@ impl ObjectTree {
     // Access
 
     pub fn node_indices(&self) -> impl Iterator<Item=NodeIndex> {
-        self.graph.node_indices()
+        (0..self.graph.len()).map(NodeIndex::new)
     }
 
     pub fn iter_types<'a>(&'a self) -> impl Iterator<Item=TypeRef<'a>> + 'a {
-        self.graph.node_indices().map(move |ix| TypeRef::new(self, ix))
+        self.node_indices().map(move |idx| TypeRef::new(self, idx))
     }
 
     pub fn root(&self) -> TypeRef {
@@ -704,7 +701,7 @@ impl ObjectTree {
     }
 
     pub fn parent_of(&self, type_: &Type) -> Option<&Type> {
-        self.graph.node_weight(type_.parent_type)
+        self.graph.get(type_.parent_type.index())
     }
 
     pub fn type_by_path<I>(&self, path: I) -> Option<TypeRef>
@@ -728,22 +725,19 @@ impl ObjectTree {
         let mut current = NodeIndex::new(0);
         let mut first = true;
         'outer: for each in path {
-            let each = each.as_ref();
+            let each: &str = each.as_ref();
 
-            for edge in self.graph.edges(current) {
-                let target = edge.target();
-                if self.graph.node_weight(target).unwrap().name == each {
-                    current = target;
-                    if each == "list" && first {
-                        // any lookup under list/ is list/
-                        break 'outer;
-                    }
-                    first = false;
-                    continue 'outer;
+            if let Some(&target) = self[current].children.get(each) {
+                current = target;
+                if each == "list" && first {
+                    // any lookup under list/ is list/
+                    break 'outer;
                 }
+                first = false;
+                continue 'outer;
             }
             return (false, TypeRef::new(self, current));
-    }
+        }
         (true, TypeRef::new(self, current))
     }
 
@@ -767,7 +761,7 @@ impl ObjectTree {
 
     fn assign_parent_types(&mut self, context: &Context) {
         for (path, &type_idx) in self.types.iter() {
-            let mut location = self.graph[type_idx].location;
+            let mut location = self.graph[type_idx.index()].location;
             let idx = if path == "/datum" || path == "/list" || path == "/savefile" || path == "/world" {
                 // These types have no parent and cannot have one added. In the official compiler:
                 // - setting list or savefile/parent_type is denied with the same error as setting something's parent type to them;
@@ -842,7 +836,7 @@ impl ObjectTree {
                 }
             };
 
-            self.graph[type_idx].parent_type = idx;
+            self.graph[type_idx.index()].parent_type = idx;
         }
     }
 
@@ -850,21 +844,19 @@ impl ObjectTree {
     // Parsing
 
     pub(crate) fn subtype_or_add(&mut self, location: Location, parent: NodeIndex, child: &str, len: usize) -> NodeIndex {
-        let mut neighbors = self.graph.neighbors(parent).detach();
-        while let Some(target) = neighbors.next_node(&self.graph) {
-            let node = self.graph.node_weight_mut(target).unwrap();
-            if node.name == child {
-                if node.location_specificity > len {
-                    node.location_specificity = len;
-                    node.location = location;
-                }
-                return target;
+        if let Some(&target) = self[parent].children.get(child) {
+            let node = &mut self[target];
+            if node.location_specificity > len {
+                node.location_specificity = len;
+                node.location = location;
             }
+            return target;
         }
 
         // time to add a new child
-        let path = format!("{}/{}", self.graph.node_weight(parent).unwrap().path, child);
-        let node = self.graph.add_node(Type {
+        let path = format!("{}/{}", self[parent].path, child);
+        let node = NodeIndex::new(self.graph.len());
+        self.graph.push(Type {
             name: child.to_owned(),
             path: path.clone(),
             vars: Default::default(),
@@ -874,8 +866,10 @@ impl ObjectTree {
             parent_type: NodeIndex::new(BAD_NODE_INDEX),
             docs: Default::default(),
             id: self.symbols.allocate(),
+            children: Default::default(),
+            parent_path: parent,
         });
-        self.graph.add_edge(parent, node, ());
+        self[parent].children.insert(child.to_owned(), node);
         self.types.insert(path, node);
         node
     }
@@ -1014,7 +1008,7 @@ impl ObjectTree {
         var_type.suffix(&suffix);
 
         let symbols = &mut self.symbols;
-        let node = &mut self.graph[parent];
+        let node = &mut self.graph[parent.index()];
         // TODO: warn and merge docs for repeats
         Ok(Some(node.vars.entry(prev.to_owned()).or_insert_with(|| TypeVar {
             value: VarValue {
@@ -1046,7 +1040,7 @@ impl ObjectTree {
         parameters: Vec<Parameter>,
         code: Code,
     ) -> Result<(usize, &mut ProcValue), DMError> {
-        let node = &mut self.graph[parent];
+        let node = &mut self.graph[parent.index()];
         let proc = node.procs.entry(name.to_owned()).or_insert_with(Default::default);
         if let Some(kind) = declaration {
             if let Some(ref decl) = proc.declaration {
@@ -1219,7 +1213,7 @@ impl ObjectTree {
 
     /// Drop all code ASTs to attempt to reduce memory usage.
     pub fn drop_code(&mut self) {
-        for node in self.graph.node_weights_mut() {
+        for node in self.graph.iter_mut() {
             for (_, typroc) in node.procs.iter_mut() {
                 for proc in typroc.value.iter_mut() {
                     proc.code = Code::Disabled;
@@ -1233,13 +1227,13 @@ impl std::ops::Index<NodeIndex> for ObjectTree {
     type Output = Type;
 
     fn index(&self, ix: NodeIndex) -> &Type {
-        self.graph.node_weight(ix).expect("node index out of range")
+        self.graph.get(ix.index()).expect("node index out of range")
     }
 }
 
 impl std::ops::IndexMut<NodeIndex> for ObjectTree {
     fn index_mut(&mut self, ix: NodeIndex) -> &mut Type {
-        self.graph.node_weight_mut(ix).expect("node index out of range")
+        self.graph.get_mut(ix.index()).expect("node index out of range")
     }
 }
 
