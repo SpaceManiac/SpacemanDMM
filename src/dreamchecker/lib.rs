@@ -616,15 +616,17 @@ impl<'o> AnalyzeObjectTree<'o> {
     }
 
     pub fn check_proc_call_tree(&mut self) {
-        for (procref, (_, location)) in self.must_not_sleep.directive.iter() {
+        for (procref, &(_, location)) in self.must_not_sleep.directive.iter() {
             if let Some(_) = self.waitfor_procs.get(&procref) {
                 error(procref.get().location, format!("{} sets SpacemanDMM_should_not_sleep but also sets waitfor = 0", procref))
+                    .with_note(location, "SpacemanDMM_should_not_sleep set here")
                     .with_errortype("must_not_sleep")
                     .register(self.context);
                 continue
             }
             if let Some(sleepvec) = self.sleeping_procs.get_violators(*procref) {
                 error(procref.get().location, format!("{} sets SpacemanDMM_should_not_sleep but calls blocking built-in(s)", procref))
+                    .with_note(location, "SpacemanDMM_should_not_sleep set here")
                     .with_errortype("must_not_sleep")
                     .with_blocking_builtins(sleepvec)
                     .register(self.context)
@@ -654,6 +656,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                 }
                 if let Some(sleepvec) = self.sleeping_procs.get_violators(nextproc) {
                     error(procref.get().location, format!("{} sets SpacemanDMM_should_not_sleep but calls blocking proc {}", procref, nextproc))
+                        .with_note(location, "SpacemanDMM_should_not_sleep set here")
                         .with_errortype("must_not_sleep")
                         .with_callstack(callstack)
                         .with_blocking_builtins(sleepvec)
