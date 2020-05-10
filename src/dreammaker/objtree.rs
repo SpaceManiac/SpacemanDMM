@@ -3,7 +3,6 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-pub(crate) use petgraph::graph::NodeIndex;
 use linked_hash_map::LinkedHashMap;
 
 use super::ast::{Expression, VarType, VarSuffix, PathOp, Parameter, Block, ProcDeclKind};
@@ -112,8 +111,6 @@ impl TypeProc {
 // ----------------------------------------------------------------------------
 // Types
 
-const BAD_NODE_INDEX: usize = std::usize::MAX;
-
 #[derive(Debug)]
 pub struct Type {
     pub name: String,
@@ -133,7 +130,7 @@ pub struct Type {
 
 impl Type {
     pub fn parent_type_index(&self) -> Option<NodeIndex> {
-        if self.parent_type == NodeIndex::new(BAD_NODE_INDEX) {
+        if self.parent_type == NodeIndex::end() {
             None
         } else {
             Some(self.parent_type)
@@ -643,12 +640,12 @@ impl Default for ObjectTree {
             location_specificity: 0,
             vars: Default::default(),
             procs: Default::default(),
-            parent_type: NodeIndex::new(BAD_NODE_INDEX),
+            parent_type: NodeIndex::end(),
             docs: Default::default(),
             id: tree.symbols.allocate(),
 
             children: Default::default(),
-            parent_path: NodeIndex::new(BAD_NODE_INDEX),
+            parent_path: NodeIndex::end(),
         });
         tree
     }
@@ -863,7 +860,7 @@ impl ObjectTree {
             procs: Default::default(),
             location,
             location_specificity: len,
-            parent_type: NodeIndex::new(BAD_NODE_INDEX),
+            parent_type: NodeIndex::end(),
             docs: Default::default(),
             id: self.symbols.allocate(),
             children: Default::default(),
@@ -1250,4 +1247,25 @@ fn is_proc_decl(s: &str) -> bool {
 #[inline]
 fn is_decl(s: &str) -> bool {
     is_var_decl(s) || is_proc_decl(s)
+}
+
+/// Node identifier.
+#[derive(Copy, Clone, Default, PartialEq, PartialOrd, Eq, Ord, Hash, Debug)]
+pub struct NodeIndex(u32);
+
+impl NodeIndex {
+    #[inline]
+    pub fn new(x: usize) -> Self {
+        NodeIndex(x as u32)
+    }
+
+    #[inline]
+    pub fn index(self) -> usize {
+        self.0 as usize
+    }
+
+    #[inline]
+    pub fn end() -> Self {
+        NodeIndex(std::u32::MAX)
+    }
 }

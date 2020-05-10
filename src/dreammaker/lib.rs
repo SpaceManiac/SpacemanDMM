@@ -1,7 +1,6 @@
 //! Parsing suite for DreamMaker, the language of the BYOND game engine.
 #![forbid(unsafe_code)]
 
-extern crate petgraph;
 extern crate linked_hash_map;
 extern crate interval_tree;
 extern crate lodepng;
