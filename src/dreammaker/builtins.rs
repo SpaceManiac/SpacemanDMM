@@ -557,6 +557,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         atom/var/tmp/appearance;  // not editable
         atom/var/appearance_flags = int!(0);
         atom/var/blend_mode = int!(0);
+        atom/var/bounds;
         atom/var/color;
         atom/var/list/atom/contents;  // TODO: editable on movables only
         atom/var/density = int!(0);
