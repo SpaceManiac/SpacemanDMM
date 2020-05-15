@@ -947,6 +947,14 @@ handle_method_call! {
                 url.set_path(&path);
             }
             eprintln!("workspace root: {}", url);
+
+            if let Ok(root_path) = url_to_path(&url) {
+                let config_path = root_path.join("SpacemanDMM.toml");
+                if config_path.exists() {
+                    self.context.force_config(&config_path);
+                }
+            }
+
             self.root = Some(url);
         } else {
             eprintln!("single file mode");
@@ -1774,7 +1782,11 @@ handle_notification! {
         if let Some(ref root) = self.root {
             // TODO: support non-files here
             if let Ok(root_path) = url_to_path(root) {
-                environment = dm::detect_environment(&root_path, dm::DEFAULT_ENV).map_err(invalid_request)?;
+                if let Some(dme) = self.context.config().environment.as_ref() {
+                    environment = Some(root_path.join(dme));
+                } else {
+                    environment = dm::detect_environment(&root_path, dm::DEFAULT_ENV).map_err(invalid_request)?;
+                }
             }
         }
 
