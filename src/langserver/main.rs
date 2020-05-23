@@ -472,14 +472,15 @@ impl<'a> Engine<'a> {
                     // normal path, when we have a workspace root & an environment loaded
                     let path = url_to_path(url)?;
                     let root = url_to_path(root)?;
-                    let stripped = match path.strip_prefix(&root) {
-                        Ok(path) => path,
-                        Err(_) => return Err(invalid_request(format!("outside workspace: {}", url))),
-                    };
 
                     let defines = match self.defines {
                         Some(ref d) => d,
                         None => return Err(invalid_request("no preprocessor history")),
+                    };
+
+                    let stripped = match path.strip_prefix(&root) {
+                        Ok(path) => path,
+                        Err(_) => "<outside workspace>".as_ref(),
                     };
                     let (real_file_id, mut preprocessor) = match self.context.get_file(&stripped) {
                         Some(id) => (id, defines.branch_at_file(id, &self.context)),
