@@ -738,6 +738,10 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         client/var/address;
         client/var/authenticate;
         client/var/bounds;
+        client/var/bound_x;
+        client/var/bound_y;
+        client/var/bound_width;
+        client/var/bound_height;
         client/var/byond_version;
         client/var/byond_build;
         client/var/CGI;
