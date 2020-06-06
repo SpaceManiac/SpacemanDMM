@@ -604,7 +604,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     // ------------------------------------------------------------------------
     // Object tree - types
 
-    fn tree_path(&mut self) -> Status<(bool, Vec<Ident>)> {
+    fn tree_path(&mut self, always_absolute: bool) -> Status<(bool, Vec<Ident>)> {
         // path :: '/'? ident ('/' ident?)*
 
         // handle leading slash
@@ -638,12 +638,12 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             } else {
                 slash_loc.column += 1;
                 self.annotate_precise(slash_loc..slash_loc, || {
-                    Annotation::IncompleteTreePath(absolute, parts.clone())
+                    Annotation::IncompleteTreePath(absolute || always_absolute, parts.clone())
                 });
             }
         }
 
-        self.annotate(start, || Annotation::TreePath(absolute, parts.clone()));
+        self.annotate(start, || Annotation::TreePath(absolute || always_absolute, parts.clone()));
         success((absolute, parts))
     }
 
@@ -694,7 +694,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         let entry_start = self.updated_location();
 
         // read and calculate the current path
-        let (absolute, mut path) = leading!(self.tree_path());
+        let (absolute, mut path) = leading!(self.tree_path(false));
 
         if absolute && current != self.tree.root().index() {
             DMError::new(entry_start, format!("nested absolute path inside {}", &self.tree[current].path))
@@ -1011,7 +1011,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
         // `name` or `obj/name` or `var/obj/name` or ...
         let leading_loc = self.updated_location();
-        let (_absolute, mut path) = leading!(self.tree_path());
+        let (_absolute, mut path) = leading!(self.tree_path(true));
         let name = match path.pop() {
             Some(name) => name,
             None => {
@@ -1365,7 +1365,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             if let Some(()) = self.exact(Token::Punct(Punctuation::LParen))? {
                 catch_params = require!(self.separated(Punctuation::Comma, Punctuation::RParen, None, |this| {
                     // TODO: improve upon this cheap approximation
-                    success(leading!(this.tree_path()).1)
+                    success(leading!(this.tree_path(true)).1)
                 }));
             } else {
                 catch_params = Vec::new();
@@ -1460,7 +1460,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             let mut var_stmts = Vec::new();
             loop {
                 let type_path_start = self.location();
-                let (_, mut tree_path) = require!(self.tree_path());
+                let (_, mut tree_path) = require!(self.tree_path(true));
                 let name = match tree_path.pop() {
                     Some(name) => name,
                     None => return Err(self.error("'var' must be followed by a name")),
