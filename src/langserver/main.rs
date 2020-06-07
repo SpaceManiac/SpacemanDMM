@@ -352,10 +352,13 @@ impl<'a> Engine<'a> {
         let elapsed = start.elapsed(); start += elapsed;
         eprint!("setup {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
 
+        let fatal_errored;
         {
             let mut parser = dm::parser::Parser::new(ctx, dm::indents::IndentProcessor::new(ctx, &mut pp));
             parser.enable_procs();
-            self.objtree = Arc::new(parser.parse_object_tree());
+            let (fatal_errored_2, objtree) = parser.parse_object_tree_2();
+            fatal_errored = fatal_errored_2;
+            self.objtree = Arc::new(objtree);
         }
         let elapsed = start.elapsed(); start += elapsed;
         eprint!(" - parse {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
@@ -370,7 +373,7 @@ impl<'a> Engine<'a> {
         let elapsed = start.elapsed(); start += elapsed;
         eprint!(" - references {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
 
-        if ctx.config().langserver.dreamchecker {
+        if ctx.config().langserver.dreamchecker && !fatal_errored {
             dreamchecker::run(&self.context, &self.objtree);
             let elapsed = start.elapsed(); start += elapsed;
             eprint!(" - dreamchecker {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());

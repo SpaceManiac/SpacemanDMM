@@ -346,6 +346,12 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         self.finalize_object_tree()
     }
 
+    pub fn parse_object_tree_2(mut self) -> (bool, ObjectTree) {
+        self.tree.register_builtins();
+        self.run();
+        (self.fatal_errored, self.finalize_object_tree())
+    }
+
     #[doc(hidden)]
     pub fn parse_object_tree_without_builtins(mut self) -> ObjectTree {
         self.run();
