@@ -96,6 +96,7 @@ pub fn default_defines(defines: &mut DefineMap) {
         PLANE_MASTER = Int(128);
         TILE_BOUND = Int(256);
         PIXEL_SCALE = Int(512);
+        PASS_MOUSE = Int(1024);
 
         CONTROL_FREAK_ALL = Int(1);
         CONTROL_FREAK_SKIN = Int(2);
