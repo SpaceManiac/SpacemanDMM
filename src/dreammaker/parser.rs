@@ -188,7 +188,7 @@ oper_table! { BINARY_OPS;
     BitXor {
         (BinaryOp, BitXor),
     }
-    // &
+    // |
     BitOr {
         (BinaryOp, BitOr),
     }
