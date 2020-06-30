@@ -180,10 +180,16 @@ oper_table! { BINARY_OPS;
         (BinaryOp, Equiv),
         (BinaryOp, NotEquiv),
     }
-    // & ^ |
-    Bitwise {
+    // &
+    BitAnd {
         (BinaryOp, BitAnd),
+    }
+    // ^
+    BitXor {
         (BinaryOp, BitXor),
+    }
+    // |
+    BitOr {
         (BinaryOp, BitOr),
     }
     // &&
