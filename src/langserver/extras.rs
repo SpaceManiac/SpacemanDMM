@@ -9,7 +9,7 @@ impl Notification for WindowStatus {
     const METHOD: &'static str = "$window/status";
     type Params = WindowStatusParams;
 }
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct WindowStatusParams {
     pub environment: Option<String>,
     pub tasks: Vec<String>,
@@ -20,11 +20,11 @@ impl Notification for ObjectTree {
     const METHOD: &'static str = "experimental/dreammaker/objectTree";
     type Params = ObjectTreeParams;
 }
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ObjectTreeParams {
     pub root: ObjectTreeType,
 }
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ObjectTreeType {
     pub name: String,
     pub kind: SymbolKind,
@@ -33,14 +33,14 @@ pub struct ObjectTreeType {
     pub procs: Vec<ObjectTreeProc>,
     pub children: Vec<ObjectTreeType>,
 }
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ObjectTreeVar {
     pub name: String,
     pub kind: SymbolKind,
     pub location: Option<lsp_types::Location>,
     pub is_declaration: bool,
 }
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ObjectTreeProc {
     pub name: String,
     pub kind: SymbolKind,
@@ -60,11 +60,11 @@ impl Request for StartDebugger {
     type Params = StartDebuggerParams;
     type Result = StartDebuggerResult;
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct StartDebuggerParams {
     pub dreamseeker_exe: String,
 }
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct StartDebuggerResult {
     pub port: u16,
 }

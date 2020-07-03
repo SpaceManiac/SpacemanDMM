@@ -1,7 +1,6 @@
 //! Parsing suite for DreamMaker, the language of the BYOND game engine.
 #![forbid(unsafe_code)]
 
-extern crate petgraph;
 extern crate linked_hash_map;
 extern crate interval_tree;
 extern crate lodepng;
@@ -50,7 +49,7 @@ impl Context {
     /// Will only return failure on an `io::Error`. Compilation failures will
     /// return a best-effort parse. Call `print_all_errors` to pretty-print
     /// errors to standard error.
-    pub fn parse_environment(&self, dme: &Path) -> io::Result<objtree::ObjectTree> {
+    pub fn parse_environment(&self, dme: &Path) -> Result<objtree::ObjectTree, DMError> {
         Ok(parser::parse(self,
             indents::IndentProcessor::new(self,
                 preprocessor::Preprocessor::new(self, dme.to_owned())?

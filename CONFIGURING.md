@@ -26,16 +26,26 @@ Raised by DreamChecker:
 * `disabled_directive` - Raised when attempting to disable a `set SpacemanDMM_*` directive that cannot be disabled
 * `sets_directive_twice` - Raised when a directive is set twice in the same proc
 * `invalid_lint_directive_value` - Raised when attempting to set a directive value to something other than `1`, `0`, `TRUE`, `FALSE`
+* `invalid_set_value` - Raised on invalid values used with builtin set directives
 * `unknown_linter_setting` - Raised when setting a `SpacemanDMM_*` directive that DreamChecker doesn't implement
 * `override_missing_keyword_arg` - Raised when proc overrides are missing keyword arguments
 * `must_not_override` - `SpacemanDMM_should_not_override` directive
 * `must_call_parent` - `SpacemanDMM_should_call_parent` directive
 * `final_var` - `SpacemanDMM_final` var type
+* `private_proc` - `SpacemanDMM_private_proc` directive
+* `protected_proc` - `SpacemanDMM_protected_proc` directive
+* `private_var` - `SpacemanDMM_private` var type
+* `protected_var` - `SpacemanDMM_protected` var type
+* `must_be_pure` - `SpacemanDMM_should_be_pure` directive
+* `must_not_sleep` - `SpacemanDMM_should_not_sleep` directive
+* `redefined_proc` - `SpacemanDMM_can_be_redefined` directive
 * `ambiguous_in_lhs` - Raised on ambiguous operations on the left hand side of an `in` operation
 * `no_typehint_implicit_new` - Raised on the use of `new` where no typehint is avaliable
 * `field_access_static_type` - Raised on using `.field_name` on a variable with no typehint
 * `proc_call_static_type` - Raised on using `.proc_name()` on a variable with no typehint
 * `no_operator_overload` - Raised on using a unary operator on a non-primative that doesn't define it's own override, eg `somemob++`
+* `control_condition_static` - Raised on a control condition such as `if`/`while` having a static condition such as `1` or `"string"`
+* `if_condition_determinate` - Raised on if condition being always true or always false
 
 Raised by Lexer:
 
@@ -45,6 +55,7 @@ Raised by Parser:
 
 * `var_in_proc_parameter` - Raised where `var/` is used in proc arguments
 * `static_in_proc_parameter` - Raised where `static/` is used in proc arguments
+* `semicolon_in_proc_parameter` - Raised where `;` is used in proc arguments
 * `in_precedes_as` - Raised where `input()` calls are using `as` after `in` which DM silently ignores
 * `tmp_no_effect` - Raised where local vars are defined as `tmp` which has no effect
 * `final_no_effect` - Raised where local vars are defined as `SpacemanDMM_final` which has no effect

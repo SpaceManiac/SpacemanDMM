@@ -283,11 +283,13 @@ impl RenderPass for Overlays {
             }
         } else if atom.istype("/obj/machinery/door/airlock/") {
             if atom.get_var("glass", objtree).to_bool() {
-                overlays.push(Sprite {
-                    icon: atom.get_var("overlays_file", objtree).as_path_str().unwrap_or(""),
-                    icon_state: "glass_closed",
-                    .. atom.sprite
-                })
+                if let Some(overlays_file) = atom.get_var("overlays_file", objtree).as_path_str() {
+                    overlays.push(Sprite {
+                        icon: overlays_file,
+                        icon_state: "glass_closed",
+                        .. atom.sprite
+                    })
+                }
             } else {
                 add_to(overlays, atom, "fill_closed");
             }

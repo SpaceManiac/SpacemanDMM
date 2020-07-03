@@ -1,16 +1,15 @@
-use dm::Context;
 use dm::objtree::Code;
+use dm::Context;
 use std::borrow::Cow;
 
-use crate::{AnalyzeObjectTree, check_var_defs};
+use crate::{check_var_defs, AnalyzeObjectTree};
 
 pub const NO_ERRORS: &[(u32, u16, &str)] = &[];
 
 pub fn parse_a_file_for_test<S: Into<Cow<'static, str>>>(buffer: S) -> Context {
-
     let context = Context::default();
 
-    let pp = dm::preprocessor::Preprocessor::from_buffer(&context, "unit_tests.rs".into(), buffer);
+    let pp = dm::preprocessor::Preprocessor::from_buffer(&context, "unit_tests.rs".into(), buffer.into());
 
     let indents = dm::indents::IndentProcessor::new(&context, pp);
 
@@ -36,12 +35,16 @@ pub fn parse_a_file_for_test<S: Into<Cow<'static, str>>>(buffer: S) -> Context {
                 Code::Present(ref code) => {
                     analyzer.check_proc(proc, code);
                 }
-                Code::Invalid(_) => {},
-                Code::Builtin => {},
-                Code::Disabled => panic!("proc parsing was enabled, but also disabled. this is a bug"),
+                Code::Invalid(_) => {}
+                Code::Builtin => {}
+                Code::Disabled => {
+                    panic!("proc parsing was enabled, but also disabled. this is a bug")
+                }
             }
         }
     });
+
+    analyzer.check_proc_call_tree();
 
     tree.root().recurse(&mut |ty| {
         for proc in ty.iter_self_procs() {
@@ -59,10 +62,19 @@ pub fn check_errors_match<S: Into<Cow<'static, str>>>(buffer: S, errorlist: &[(u
     let mut iter = errors.iter();
     for (line, column, desc) in errorlist {
         let nexterror = iter.next().unwrap();
-        if nexterror.location().line != *line || nexterror.location().column != *column || nexterror.description() != *desc {
-            panic!(format!("possible feature regression in dreamchecker, expected {}:{}:{}, found {}:{}:{}",
-                *line, *column, *desc,
-                nexterror.location().line, nexterror.location().column, nexterror.description()));
+        if nexterror.location().line != *line
+            || nexterror.location().column != *column
+            || nexterror.description() != *desc
+        {
+            panic!(format!(
+                "possible feature regression in dreamchecker, expected {}:{}:{}, found {}:{}:{}",
+                *line,
+                *column,
+                *desc,
+                nexterror.location().line,
+                nexterror.location().column,
+                nexterror.description()
+            ));
         }
     }
     if iter.next().is_some() {

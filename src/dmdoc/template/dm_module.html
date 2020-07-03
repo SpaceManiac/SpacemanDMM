@@ -22,16 +22,16 @@
             <tr><th>{% if item.type.substance -%}
                 <a href="{{ item.type.path | safe | substring(start=1) }}.html">{{item.type.path}}</a>
             {%- else -%}
-                {{ item.type.path | safe | linkify_type }}
+                {{ item.type.path | linkify_type | safe }}
             {%- endif %}</th><td>{{ item.type.teaser | safe }}</td></tr>
         {%- endif %}
     {%- endfor -%}
 </table>
 
 {%- if details.defines -%}
-<h2><a name="define">Define Details</a></h2>
+<h2 id="define">Define Details</h2>
 {% for name, define in details.defines -%}
-    <h3><aside class="declaration">#define </aside><a name="define/{{ name }}">{{ name }}</a>
+    <h3 id="define/{{ name }}"><aside class="declaration">#define </aside>{{ name }}
         {%- if define.has_params %}
             <aside>(
             {%- for param in define.params -%}

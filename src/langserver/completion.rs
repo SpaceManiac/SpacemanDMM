@@ -14,7 +14,7 @@ use crate::symbol_search::contains;
 pub fn item_var(ty: TypeRef, name: &str, var: &TypeVar) -> CompletionItem {
     let mut detail = ty.pretty_path().to_owned();
     if let Some(ref decl) = var.declaration {
-        if decl.var_type.is_const {
+        if decl.var_type.flags.is_const() {
             if let Some(ref constant) = var.value.constant {
                 if ty.is_root() {
                     detail = constant.to_string();

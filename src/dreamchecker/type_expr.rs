@@ -3,17 +3,17 @@
 
 use std::collections::HashMap;
 
-use dm::{Location, DMError};
-use dm::objtree::{ObjectTree, ProcRef};
-use dm::constants::Constant;
 use dm::ast::*;
+use dm::constants::Constant;
+use dm::objtree::{ObjectTree, ProcRef};
+use dm::{DMError, Location};
 
-use crate::{StaticType, Analysis};
+use crate::{Analysis, StaticType};
 
 pub struct TypeExprContext<'o, 't> {
     pub objtree: &'o ObjectTree,
     pub param_name_map: HashMap<&'t str, Analysis<'o>>,
-    pub param_idx_map: HashMap<usize, Analysis<'o>>
+    pub param_idx_map: HashMap<usize, Analysis<'o>>,
 }
 
 impl<'o, 't> TypeExprContext<'o, 't> {
@@ -58,11 +58,23 @@ pub enum TypeExpr<'o> {
 }
 
 impl<'o> TypeExpr<'o> {
-    pub fn compile(proc: ProcRef<'o>, location: Location, expression: &Expression) -> Result<TypeExpr<'o>, DMError> {
-        TypeExprCompiler { objtree: proc.tree(), proc }.visit_expression(location, expression)
+    pub fn compile(
+        proc: ProcRef<'o>,
+        location: Location,
+        expression: &Expression,
+    ) -> Result<TypeExpr<'o>, DMError> {
+        TypeExprCompiler {
+            objtree: proc.tree(),
+            proc,
+        }
+        .visit_expression(location, expression)
     }
 
-    pub fn evaluate(&self, location: Location, ec: &TypeExprContext<'o, '_>) -> Result<StaticType<'o>, DMError> {
+    pub fn evaluate(
+        &self,
+        location: Location,
+        ec: &TypeExprContext<'o, '_>,
+    ) -> Result<StaticType<'o>, DMError> {
         match self {
             TypeExpr::Static(st) => Ok(st.clone()),
 
@@ -72,9 +84,13 @@ impl<'o> TypeExpr<'o> {
                 } else {
                     else_.evaluate(location, ec)
                 }
-            },
+            }
 
-            TypeExpr::ParamTypepath { name, p_idx, index_ct: _ } => {
+            TypeExpr::ParamTypepath {
+                name,
+                p_idx,
+                index_ct: _,
+            } => {
                 if let Some(analysis) = ec.get(name, *p_idx) {
                     if let Some(Constant::Prefab(ref pop)) = analysis.value {
                         crate::static_type(ec.objtree, location, &pop.path)
@@ -84,15 +100,19 @@ impl<'o> TypeExpr<'o> {
                 } else {
                     Ok(StaticType::None)
                 }
-            },
+            }
 
-            TypeExpr::ParamStaticType { name, p_idx, index_ct } => {
+            TypeExpr::ParamStaticType {
+                name,
+                p_idx,
+                index_ct,
+            } => {
                 if let Some(analysis) = ec.get(name, *p_idx) {
                     Ok(analysis.static_ty.clone().strip_lists(*index_ct))
                 } else {
                     Ok(StaticType::None)
                 }
-            },
+            }
         }
     }
 }
@@ -109,11 +129,22 @@ struct TypeExprCompiler<'o> {
 }
 
 impl<'o> TypeExprCompiler<'o> {
-    fn visit_expression(&mut self, location: Location, expr: &Expression) -> Result<TypeExpr<'o>, DMError> {
+    fn visit_expression(
+        &mut self,
+        location: Location,
+        expr: &Expression,
+    ) -> Result<TypeExpr<'o>, DMError> {
         match expr {
-            Expression::Base { unary, term, follow } => {
+            Expression::Base {
+                unary,
+                term,
+                follow,
+            } => {
                 if let Some(op) = unary.first() {
-                    return Err(DMError::new(location, format!("type expr: bad unary {}", op.name())));
+                    return Err(DMError::new(
+                        location,
+                        format!("type expr: bad unary {}", op.name()),
+                    ));
                 }
 
                 let mut ty = self.visit_term(term.location, &term.elem)?;
@@ -121,8 +152,12 @@ impl<'o> TypeExprCompiler<'o> {
                     ty = self.visit_follow(each.location, ty, &each.elem)?;
                 }
                 Ok(ty)
-            },
-            Expression::BinaryOp { op: BinaryOp::Or, lhs, rhs } => {
+            }
+            Expression::BinaryOp {
+                op: BinaryOp::Or,
+                lhs,
+                rhs,
+            } => {
                 // `A || B` => `A ? A : B`
                 let lty = self.visit_expression(location, lhs)?;
                 let rty = self.visit_expression(location, rhs)?;
@@ -131,8 +166,12 @@ impl<'o> TypeExprCompiler<'o> {
                     if_: Box::new(lty),
                     else_: Box::new(rty),
                 })
-            },
-            Expression::BinaryOp { op: BinaryOp::And, lhs, rhs } => {
+            }
+            Expression::BinaryOp {
+                op: BinaryOp::And,
+                lhs,
+                rhs,
+            } => {
                 // `A && B` => `A ? B : A`
                 let lty = self.visit_expression(location, lhs)?;
                 let rty = self.visit_expression(location, rhs)?;
@@ -141,14 +180,12 @@ impl<'o> TypeExprCompiler<'o> {
                     if_: Box::new(rty),
                     else_: Box::new(lty),
                 })
-            },
-            Expression::TernaryOp { cond, if_, else_ } => {
-                Ok(TypeExpr::Condition {
-                    cond: Box::new(self.visit_expression(location, cond)?),
-                    if_: Box::new(self.visit_expression(location, if_)?),
-                    else_: Box::new(self.visit_expression(location, else_)?),
-                })
-            },
+            }
+            Expression::TernaryOp { cond, if_, else_ } => Ok(TypeExpr::Condition {
+                cond: Box::new(self.visit_expression(location, cond)?),
+                if_: Box::new(self.visit_expression(location, if_)?),
+                else_: Box::new(self.visit_expression(location, else_)?),
+            }),
             _ => Err(DMError::new(location, "type expr: bad expression node")),
         }
     }
@@ -160,11 +197,18 @@ impl<'o> TypeExprCompiler<'o> {
             Term::Ident(unscoped_name) => {
                 for (i, param) in self.proc.parameters.iter().enumerate() {
                     if *unscoped_name == param.name {
-                        return Ok(TypeExpr::ParamTypepath { name: unscoped_name.to_owned(), p_idx: i, index_ct: 0 });
+                        return Ok(TypeExpr::ParamTypepath {
+                            name: unscoped_name.to_owned(),
+                            p_idx: i,
+                            index_ct: 0,
+                        });
                     }
                 }
-                Err(DMError::new(location, format!("type expr: no such parameter {:?}", unscoped_name)))
-            },
+                Err(DMError::new(
+                    location,
+                    format!("type expr: no such parameter {:?}", unscoped_name),
+                ))
+            }
 
             Term::Expr(expr) => self.visit_expression(location, expr),
 
@@ -172,29 +216,57 @@ impl<'o> TypeExprCompiler<'o> {
                 let bits: Vec<_> = fab.path.iter().map(|(_, name)| name.to_owned()).collect();
                 let ty = crate::static_type(self.objtree, location, &bits)?;
                 Ok(TypeExpr::from(ty))
-            },
+            }
 
             _ => Err(DMError::new(location, "type expr: bad term node")),
         }
     }
 
-    fn visit_follow(&mut self, location: Location, lhs: TypeExpr<'o>, rhs: &Follow) -> Result<TypeExpr<'o>, DMError> {
+    fn visit_follow(
+        &mut self,
+        location: Location,
+        lhs: TypeExpr<'o>,
+        rhs: &Follow,
+    ) -> Result<TypeExpr<'o>, DMError> {
         match rhs {
             // X[_] => static type of argument X with one /list stripped
             Follow::Index(expr) => match expr.as_term() {
                 Some(Term::Ident(name)) if name == "_" => match lhs {
-                    TypeExpr::ParamTypepath { name, p_idx, index_ct } =>
-                        Ok(TypeExpr::ParamTypepath { name, p_idx, index_ct: index_ct + 1 }),
-                    _ => Err(DMError::new(location, "type expr: cannot index non-parameters")),
+                    TypeExpr::ParamTypepath {
+                        name,
+                        p_idx,
+                        index_ct,
+                    } => Ok(TypeExpr::ParamTypepath {
+                        name,
+                        p_idx,
+                        index_ct: index_ct + 1,
+                    }),
+                    _ => Err(DMError::new(
+                        location,
+                        "type expr: cannot index non-parameters",
+                    )),
                 },
-                _ => Err(DMError::new(location, "type expr: cannot index by anything but `_`")),
+                _ => Err(DMError::new(
+                    location,
+                    "type expr: cannot index by anything but `_`",
+                )),
             },
 
             // X.type => static type of argument X
             Follow::Field(_, name) if name == "type" => match lhs {
-                TypeExpr::ParamTypepath { name, p_idx, index_ct } =>
-                    Ok(TypeExpr::ParamStaticType { name, p_idx, index_ct }),
-                _ => Err(DMError::new(location, "type expr: cannot take .type of non-parameters")),
+                TypeExpr::ParamTypepath {
+                    name,
+                    p_idx,
+                    index_ct,
+                } => Ok(TypeExpr::ParamStaticType {
+                    name,
+                    p_idx,
+                    index_ct,
+                }),
+                _ => Err(DMError::new(
+                    location,
+                    "type expr: cannot take .type of non-parameters",
+                )),
             },
 
             _ => Err(DMError::new(location, "type expr: bad follow node")),

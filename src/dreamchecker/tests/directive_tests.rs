@@ -79,3 +79,32 @@ fn no_override_disable() {
 "##.trim();
     check_errors_match(code, NO_OVERRIDE_DISABLE_ERRORS);
 }
+
+#[test]
+fn can_be_redefined() {
+    let code = r##"
+/mob/proc/test()
+    set SpacemanDMM_can_be_redefined = 1
+    return
+
+/mob/test()
+    return
+"##.trim();
+    check_errors_match(code, NO_ERRORS);
+}
+
+pub const NO_CAN_BE_REDEFINED_ERRORS: &[(u32, u16, &str)] = &[
+    (4, 10, "redefining proc /mob/test"),
+];
+
+#[test]
+fn no_can_be_redefined() {
+    let code = r##"
+/mob/proc/test()
+    return
+
+/mob/test()
+    return
+"##.trim();
+    check_errors_match(code, NO_CAN_BE_REDEFINED_ERRORS);
+}

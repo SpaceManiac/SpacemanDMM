@@ -7,8 +7,14 @@ use dm::objtree::*;
 use dm::ast::*;
 
 pub struct ReferencesTable {
-    uses: HashMap<SymbolId, Vec<Location>>,
+    uses: HashMap<SymbolId, References>,
     symbols: SymbolIdSource,
+}
+
+#[derive(Default)]
+struct References {
+    references: Vec<Location>,
+    implementations: Vec<Location>,
 }
 
 impl ReferencesTable {
@@ -20,15 +26,18 @@ impl ReferencesTable {
 
         // Insert the "definition" locations for the types and such
         objtree.root().recurse(&mut |ty| {
-            tab.uses.insert(ty.id, vec![ty.location]);
+            tab.uses.insert(ty.id, References {
+                references: vec![ty.location],
+                implementations: vec![],
+            });
             for (name, var) in ty.vars.iter() {
                 if let Some(decl) = ty.get_var_declaration(name) {
-                    tab.use_symbol(decl.id, var.value.location);
+                    tab.impl_symbol(decl.id, var.value.location);
                 }
             }
             for (name, proc) in ty.procs.iter() {
                 if let Some(decl) = ty.get_proc_declaration(name) {
-                    tab.use_symbol(decl.id, proc.value.first().unwrap().location);
+                    tab.impl_symbol(decl.id, proc.value.first().unwrap().location);
                 }
             }
         });
@@ -54,7 +63,8 @@ impl ReferencesTable {
 
         // Sublime Text client does not sort these itself, so sort them here.
         for value in tab.uses.values_mut() {
-            value.sort();
+            value.references.sort();
+            value.implementations.sort();
         }
 
         tab
@@ -63,18 +73,32 @@ impl ReferencesTable {
     pub fn find_references(&self, symbol: SymbolId, _declaration: bool) -> &[Location] {
         match self.uses.get(&symbol) {
             None => &[],
-            Some(list) => list,
+            Some(list) => &list.references,
+        }
+    }
+
+    pub fn find_implementations(&self, symbol: SymbolId) -> &[Location] {
+        match self.uses.get(&symbol) {
+            None => &[],
+            Some(list) => &list.implementations,
         }
     }
 
     fn new_symbol(&mut self, location: Location) -> SymbolId {
         let id = self.symbols.allocate();
-        self.uses.insert(id, vec![location]);
+        self.uses.insert(id, References {
+            references: vec![location],
+            implementations: vec![],
+        });
         id
     }
 
     fn use_symbol(&mut self, symbol: SymbolId, location: Location) {
-        self.uses.entry(symbol).or_default().push(location);
+        self.uses.entry(symbol).or_default().references.push(location);
+    }
+
+    fn impl_symbol(&mut self, symbol: SymbolId, location: Location) {
+        self.uses.entry(symbol).or_default().implementations.push(location);
     }
 }
 
@@ -202,7 +226,7 @@ impl<'o> WalkProc<'o> {
             },
             Statement::DoWhile { block, condition } => {
                 self.visit_block(block);
-                self.visit_expression(location, condition, None);
+                self.visit_expression(condition.location, &condition.elem, None);
             },
             Statement::If { arms, else_arm } => {
                 for (condition, ref block) in arms.iter() {
@@ -259,13 +283,13 @@ impl<'o> WalkProc<'o> {
             },
             Statement::Switch { input, cases, default } => {
                 self.visit_expression(location, input, None);
-                for &(ref case, ref block) in cases.iter() {
-                    for case_part in case.iter() {
+                for (case, ref block) in cases.iter() {
+                    for case_part in case.elem.iter() {
                         match case_part {
-                            dm::ast::Case::Exact(expr) => { self.visit_expression(location, expr, None); },
+                            dm::ast::Case::Exact(expr) => { self.visit_expression(case.location, expr, None); },
                             dm::ast::Case::Range(start, end) => {
-                                self.visit_expression(location, start, None);
-                                self.visit_expression(location, end, None);
+                                self.visit_expression(case.location, start, None);
+                                self.visit_expression(case.location, end, None);
                             }
                         }
                     }
@@ -294,6 +318,7 @@ impl<'o> WalkProc<'o> {
             Statement::Continue(_) => {},
             Statement::Break(_) => {},
             Statement::Goto(_) => {},
+            Statement::Crash(_) => {},
             Statement::Label { name: _, block } => self.visit_block(block),
             Statement::Del(expr) => { self.visit_expression(location, expr, None); },
         }

@@ -390,6 +390,91 @@ impl Expression {
             _ => None,
         }
     }
+
+    pub fn is_const_eval(&self) -> bool {
+        match self {
+            Expression::BinaryOp { op, lhs, rhs } => {
+                guard!(let Some(lhterm) = lhs.as_term() else {
+                    return false
+                });
+                guard!(let Some(rhterm) = rhs.as_term() else {
+                    return false
+                });
+                if !lhterm.is_static() {
+                    return false
+                }
+                if !rhterm.is_static() {
+                    return false
+                }
+                match op {
+                    BinaryOp::Eq |
+                    BinaryOp::NotEq |
+                    BinaryOp::Less |
+                    BinaryOp::Greater |
+                    BinaryOp::LessEq |
+                    BinaryOp::GreaterEq |
+                    BinaryOp::And |
+                    BinaryOp::Or => return true,
+                    _ => return false,
+                }
+            },
+            _ => false,
+        }
+    }
+
+    pub fn is_truthy(&self) -> Option<bool> {
+        match self {
+            Expression::Base { unary, term, follow: _ } => {
+                guard!(let Some(truthy) = term.elem.is_truthy() else {
+                    return None
+                });
+                let mut negation = false;
+                for u in unary {
+                    if let UnaryOp::Not = u {
+                        negation = !negation;
+                    }
+                }
+                if negation {
+                    return Some(!truthy)
+                } else {
+                    return Some(truthy)
+                }
+            },
+            Expression::BinaryOp { op, lhs, rhs } => {
+                guard!(let Some(lhtruth) = lhs.is_truthy() else {
+                    return None
+                });
+                guard!(let Some(rhtruth) = rhs.is_truthy() else {
+                    return None
+                });
+                return match op {
+                    BinaryOp::And => Some(lhtruth && rhtruth),
+                    BinaryOp::Or => Some(lhtruth || rhtruth),
+                    _ => None,
+                }
+            },
+            Expression::AssignOp { op, lhs: _, rhs } => {
+                if let AssignOp::Assign = op {
+                    return match rhs.as_term() {
+                        Some(term) => term.is_truthy(),
+                        _ => None,
+                    }
+                } else {
+                    return None
+                }
+            },
+            Expression::TernaryOp { cond, if_, else_ } => {
+                guard!(let Some(condtruth) = cond.is_truthy() else {
+                    return None
+                });
+                if condtruth {
+                    return if_.is_truthy()
+                } else {
+                    return else_.is_truthy()
+                }
+            }
+        }
+    }
 }
 
 impl From<Term> for Expression {
@@ -463,6 +548,72 @@ pub enum Term {
     Pick(Vec<(Option<Expression>, Expression)>),
     /// A use of the `call()()` primitive.
     DynamicCall(Vec<Expression>, Vec<Expression>),
+}
+
+impl Term {
+    pub fn is_static(&self) -> bool {
+        return match self {
+            Term::Null |
+            Term::Int(_) |
+            Term::Float(_) |
+            Term::String(_) |
+            Term::Prefab(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_truthy(&self) -> Option<bool> {
+        return match self {
+            // `null`, `0`, and empty strings are falsey.
+            Term::Null => Some(false),
+            Term::Int(i) => Some(*i != 0),
+            Term::Float(i) => Some(*i != 0f32),
+            Term::String(s) => Some(s.len() > 0),
+
+            // Paths/prefabs are truthy.
+            Term::Prefab(_) => Some(true),
+            // `new()` and `list()` return the newly-created reference.
+            Term::New{type_: _, args: _} => Some(true),
+            Term::List(_) => Some(true),
+
+            // Truthy if any of the literal parts are non-empty.
+            // Otherwise, don't try to determine the content of the parts.
+            Term::InterpString(first, parts) => {
+                if !first.is_empty() || parts.iter().any(|(_, p)| !p.is_empty()) {
+                    Some(true)
+                } else {
+                    None
+                }
+            },
+
+            // Recurse.
+            Term::Expr(e) => e.is_truthy(),
+
+            _ => None,
+        };
+    }
+
+    pub fn valid_for_range(&self, other: &Term, step: &Option<Expression>) -> Option<bool> {
+        if let &Term::Int(i) = self {
+            if let &Term::Int(o) = other {
+                // edge case
+                if i == 0 && o == 0 {
+                    return Some(false)
+                }
+                if let Some(stepexp) = step {
+                    if let Some(stepterm) = stepexp.as_term() {
+                        if let Term::Int(_s) = stepterm {
+                            return Some(true)
+                        }
+                    } else {
+                        return Some(true)
+                    }
+                }
+                return Some(i <= o)
+            }
+        }
+        None
+    }
 }
 
 impl From<Expression> for Term {
@@ -664,25 +815,128 @@ type_table! {
     "color",        COLOR,        1 << 17;
 }
 
+bitflags! {
+    #[derive(Default)]
+    pub struct VarTypeFlags: u8 {
+        // DM flags
+        const STATIC = 1 << 0;
+        const CONST = 1 << 2;
+        const TMP = 1 << 3;
+        // SpacemanDMM flags
+        const FINAL = 1 << 4;
+        const PRIVATE = 1 << 5;
+        const PROTECTED = 1 << 6;
+    }
+}
+
+impl VarTypeFlags {
+    pub fn from_name(name: &str) -> Option<VarTypeFlags> {
+        match name {
+            // DM flags
+            "global" | "static" => Some(VarTypeFlags::STATIC),
+            "const" => Some(VarTypeFlags::CONST),
+            "tmp" => Some(VarTypeFlags::TMP),
+            // SpacemanDMM flags
+            "SpacemanDMM_final" => Some(VarTypeFlags::FINAL),
+            "SpacemanDMM_private" => Some(VarTypeFlags::PRIVATE),
+            "SpacemanDMM_protected" => Some(VarTypeFlags::PROTECTED),
+            // Fallback
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub fn is_static(&self) -> bool {
+        self.contains(VarTypeFlags::STATIC)
+    }
+
+    #[inline]
+    pub fn is_const(&self) -> bool {
+        self.contains(VarTypeFlags::CONST)
+    }
+
+    #[inline]
+    pub fn is_tmp(&self) -> bool {
+        self.contains(VarTypeFlags::TMP)
+    }
+
+    #[inline]
+    pub fn is_final(&self) -> bool {
+        self.contains(VarTypeFlags::FINAL)
+    }
+
+    #[inline]
+    pub fn is_private(&self) -> bool {
+        self.contains(VarTypeFlags::PRIVATE)
+    }
+
+    #[inline]
+    pub fn is_protected(&self) -> bool {
+        self.contains(VarTypeFlags::PROTECTED)
+    }
+
+    #[inline]
+    pub fn is_const_evaluable(&self) -> bool {
+        self.contains(VarTypeFlags::CONST) || !self.intersects(VarTypeFlags::STATIC | VarTypeFlags::PROTECTED)
+    }
+
+    #[inline]
+    pub fn is_normal(&self) -> bool {
+        !self.intersects(VarTypeFlags::CONST | VarTypeFlags::STATIC | VarTypeFlags::PROTECTED)
+    }
+
+    pub fn to_vec(&self) -> Vec<&'static str> {
+        let mut v = Vec::new();
+        if self.is_static() { v.push("static"); }
+        if self.is_const() { v.push("const"); }
+        if self.is_tmp() { v.push("tmp"); }
+        if self.is_final() { v.push("SpacemanDMM_final"); }
+        if self.is_private() { v.push("SpacemanDMM_private"); }
+        if self.is_protected() { v.push("SpacemanDMM_protected"); }
+        v
+    }
+}
+
+impl fmt::Display for VarTypeFlags {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        if self.is_static() {
+            fmt.write_str("static/")?;
+        }
+        if self.is_const() {
+            fmt.write_str("const/")?;
+        }
+        if self.is_tmp() {
+            fmt.write_str("tmp/")?;
+        }
+        if self.is_final() {
+            fmt.write_str("SpacemanDMM_final/")?;
+        }
+        if self.is_private() {
+            fmt.write_str("SpacemanDMM_private/")?;
+        }
+        if self.is_protected() {
+            fmt.write_str("SpacemanDMM_protected/")?;
+        }
+        Ok(())
+    }
+}
+
 /// A type which may be ascribed to a `var`.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct VarType {
-    pub is_static: bool,
-    pub is_const: bool,
-    pub is_tmp: bool,
-    pub is_final: bool,
+    pub flags: VarTypeFlags,
     pub type_path: TreePath,
 }
 
 impl VarType {
     #[inline]
     pub fn is_const_evaluable(&self) -> bool {
-        self.is_const || (!self.is_static && !self.is_tmp)
+        self.flags.is_const_evaluable()
     }
 
     #[inline]
     pub fn is_normal(&self) -> bool {
-        !(self.is_static || self.is_const || self.is_tmp)
+        self.flags.is_normal()
     }
 
     pub fn suffix(&mut self, suffix: &VarSuffix) {
@@ -694,31 +948,19 @@ impl VarType {
 
 impl FromIterator<String> for VarType {
     fn from_iter<T: IntoIterator<Item=String>>(iter: T) -> Self {
-        let (mut is_static, mut is_const, mut is_tmp, mut is_final) = (false, false, false, false);
+        let mut flags = VarTypeFlags::default();
         let type_path = iter
             .into_iter()
             .skip_while(|p| {
-                if p == "global" || p == "static" {
-                    is_static = true;
-                    true
-                } else if p == "SpacemanDMM_final" {
-                    is_final = true;
-                    true
-                } else if p == "const" {
-                    is_const = true;
-                    true
-                } else if p == "tmp" {
-                    is_tmp = true;
+                if let Some(flag) = VarTypeFlags::from_name(p) {
+                    flags |= flag;
                     true
                 } else {
                     false
                 }
             }).collect();
         VarType {
-            is_static,
-            is_const,
-            is_tmp,
-            is_final,
+            flags,
             type_path,
         }
     }
@@ -726,18 +968,7 @@ impl FromIterator<String> for VarType {
 
 impl fmt::Display for VarType {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        if self.is_static {
-            fmt.write_str("static/")?;
-        }
-        if self.is_const {
-            fmt.write_str("const/")?;
-        }
-        if self.is_tmp {
-            fmt.write_str("tmp/")?;
-        }
-        if self.is_final {
-            fmt.write_str("SpacemanDMM_final/")?;
-        }
+        self.flags.fmt(fmt)?;
         for bit in self.type_path.iter() {
             fmt.write_str(bit)?;
             fmt.write_str("/")?;
@@ -788,7 +1019,7 @@ pub enum Statement {
     },
     DoWhile {
         block: Block,
-        condition: Expression,
+        condition: Spanned<Expression>,
     },
     If {
         arms: Vec<(Spanned<Expression>, Block)>,
@@ -830,7 +1061,7 @@ pub enum Statement {
     },
     Switch {
         input: Expression,
-        cases: Vec<(Vec<Case>, Block)>,
+        cases: Vec<(Spanned<Vec<Case>>, Block)>,
         default: Option<Block>,
     },
     TryCatch {
@@ -846,6 +1077,7 @@ pub enum Statement {
         block: Block,
     },
     Del(Expression),
+    Crash(Expression),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -895,7 +1127,6 @@ pub const KNOWN_SETTING_NAMES: &[&str] = &[
     "invisibility",
     "src",
     "background",
-    // undocumented
     "waitfor",
 ];
 
@@ -909,9 +1140,20 @@ pub static VALID_FILTER_TYPES: phf::Map<&'static str, &[&str]> = phf_map! {
     "blur" => &[ "size" ],
     "layer" => &[ "x", "y", "icon", "render_source", "flags", "color", "transform", "blend_mode" ],
     "motion_blur" => &[ "x", "y" ],
-    "outline" => &[ "size", "color" ],
+    "outline" => &[ "size", "color", "flags" ],
     "radial_blur" => &[ "x", "y", "size" ],
     "rays" => &[ "x", "y", "size", "color", "offset", "density", "threshold", "factor", "flags" ],
     "ripple" => &[ "x", "y", "size", "repeat", "radius", "falloff", "flags" ],
     "wave" => &[ "x", "y", "size", "offset", "flags" ],
+};
+
+// filter type => (flag field name, exclusive, can_be_0, valid flag values)
+pub static VALID_FILTER_FLAGS: phf::Map<&'static str, (&str, bool, bool, &[&str])> = phf_map! {
+    "alpha" => ("flags", false, true, &[ "MASK_INVERSE", "MASK_SWAP" ]),
+    "color" => ("space", true, false, &[ "FILTER_COLOR_RGB", "FILTER_COLOR_HSV", "FILTER_COLOR_HSL", "FILTER_COLOR_HCY" ]),
+    "layer" => ("flags", true, true, &[ "FLAG_OVERLAY", "FLAG_UNDERLAY" ]),
+    "rays" => ("flags", false, true, &[ "FLAG_OVERLAY", "FLAG_UNDERLAY" ]),
+    "outline" => ("flags", false, true, &[ "OUTLINE_SHARP", "OUTLINE_SQUARE" ]),
+    "ripple" => ("flags", false, true, &[ "WAVE_BOUNDED" ]),
+    "wave" => ("flags", false, true, &[ "WAVE_SIDEWAYS", "WAVE_BOUNDED" ]),
 };

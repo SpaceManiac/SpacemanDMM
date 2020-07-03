@@ -92,7 +92,7 @@ impl Context {
 
 #[derive(StructOpt, Debug)]
 #[structopt(name="dmm-tools",
-author="Copyright (C) 2017-2019  Tad Hardesty",
+author="Copyright (C) 2017-2020  Tad Hardesty",
 about="This program comes with ABSOLUTELY NO WARRANTY. This is free software,
 and you are welcome to redistribute it under the conditions of the GNU
 General Public License version 3.")]
@@ -124,16 +124,6 @@ enum Command {
         /// Output as JSON.
         #[structopt(short="j", long="json")]
         json: bool,
-    },
-    /// Check the environment for errors and warnings.
-    #[structopt(name = "check")]
-    Check {
-        /// The minimum severity to print, of "error", "warning", "info", "hint".
-        #[structopt(long="severity", default_value="info")]
-        severity: String,
-        /// Check proc bodies as well as the object tree.
-        #[structopt(long="procs")]
-        procs: bool,
     },
     /// Build minimaps of the specified maps.
     #[structopt(name = "minimap")]
@@ -223,24 +213,6 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                     }
                 }
             }
-        },
-        // --------------------------------------------------------------------
-        Command::Check { ref severity, procs } => {
-            let severity = match severity.as_str() {
-                "error" => dm::Severity::Error,
-                "warning" => dm::Severity::Warning,
-                "info" => dm::Severity::Info,
-                _ => dm::Severity::Hint,
-            };
-            context.dm_context.set_print_severity(Some(severity));
-            context.procs = procs;
-            context.objtree(opt);
-            *context.exit_status.get_mut() = context
-                .dm_context
-                .errors()
-                .iter()
-                .filter(|e| e.severity() <= severity)
-                .count() as isize;
         },
         // --------------------------------------------------------------------
         Command::Minimap {

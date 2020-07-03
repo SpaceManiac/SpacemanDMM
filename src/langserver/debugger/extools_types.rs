@@ -94,6 +94,8 @@ pub enum Literal {
     Typepath(String),
     #[serde(rename = "resource")]
     Resource(String),
+    #[serde(rename = "proc")]
+    Proc(String),
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -161,6 +163,12 @@ impl std::fmt::Display for Literal {
             Literal::String(s) => write!(fmt, "{:?}", s),
             Literal::Typepath(t) => write!(fmt, "{}", t),
             Literal::Resource(f) => write!(fmt, "'{}'", f),
+            Literal::Proc(p) => {
+                match p.rfind('/') {
+                    Some(idx) => write!(fmt, "{}/proc/{}", &p[..idx], &p[idx + 1..]),
+                    None => write!(fmt, "{}", p),
+                }
+            }
         }
     }
 }
@@ -340,6 +348,17 @@ impl Request for GetListContents {
 
 impl Response for ListContents {
     const TYPE: &'static str = "get list contents";
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GetSource(pub String);
+
+impl Request for GetSource {
+    const TYPE: &'static str = "get source";
+}
+
+impl Response for GetSource {
+    const TYPE: &'static str = "get source";
 }
 
 // #define MESSAGE_GET_TYPE "get type" //Request content is Datum, response content is a string

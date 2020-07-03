@@ -590,7 +590,7 @@ impl EditorScene {
             ui.menu(im_str!("Help"), true, || {
                 ui.menu(im_str!("About SpacemanDMM"), true, || {
                     ui.text(&im_str!(
-                        "{} {}  Copyright (C) 2017-2019  Tad Hardesty",
+                        "{} {}  Copyright (C) 2017-2020  Tad Hardesty",
                         env!("CARGO_PKG_NAME"),
                         env!("CARGO_PKG_VERSION"),
                     ));
@@ -1020,7 +1020,7 @@ impl EditorScene {
                         if let Some(env) = self.environment.as_ref() {
                             ui.text(im_str!(
                                 "types[{}], icons[{}]",
-                                env.objtree.graph.node_count(),
+                                env.objtree.node_indices().count(),
                                 env.icons.len()
                             ));
                             ui.text(im_str!("turf = {}", env.turf));
