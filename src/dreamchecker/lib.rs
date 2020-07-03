@@ -1160,7 +1160,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             }
             let state = self.visit_statement(stmt.location, &stmt.elem, local_vars);
             if self.parent_calls > 1 && self.parent_calls > preblockparentcalls {
-                error(stmt.location, format!("double parent_call detected in {}", self.proc_ref))
+                error(stmt.location, format!("proc override contains multiple `..()` parent calls"))
                     .with_errortype("double_parent_call")
                     .register(self.context);
             }
