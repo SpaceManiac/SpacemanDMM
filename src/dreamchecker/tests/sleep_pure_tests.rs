@@ -31,6 +31,16 @@ fn sleep() {
 /mob/proc/test4()
     set SpacemanDMM_should_not_sleep = TRUE
     bar()
+/proc/spawnthensleepproc()
+    spawn(1)
+        sleep(1)
+/mob/proc/test5()
+    set SpacemanDMM_should_not_sleep = TRUE
+    spawn(1)
+        sleepingproc()
+/mob/proc/test6()
+    set SpacemanDMM_should_not_sleep = TRUE
+    spawnthensleepproc()
 "##.trim();
     check_errors_match(code, SLEEP_ERRORS);
 }
