@@ -6,7 +6,7 @@ use super::{Location, DMError};
 use super::preprocessor::{DefineMap, Define};
 
 const DM_VERSION: i32 = 513;
-const DM_BUILD: i32 = 1508;
+const DM_BUILD: i32 = 1514;
 
 /// Register BYOND builtin macros to the given define map.
 pub fn default_defines(defines: &mut DefineMap) {
@@ -96,6 +96,7 @@ pub fn default_defines(defines: &mut DefineMap) {
         PLANE_MASTER = Int(128);
         TILE_BOUND = Int(256);
         PIXEL_SCALE = Int(512);
+        PASS_MOUSE = Int(1024);
 
         CONTROL_FREAK_ALL = Int(1);
         CONTROL_FREAK_SKIN = Int(2);
@@ -336,7 +337,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
             alpha, color, infra_luminosity, layer, maptext_width, maptext_height,
             maptext_x, maptext_y, luminosity, pixel_x, pixel_y, pixel_w, pixel_z,
             transform, dir, icon, icon_state, invisibility, maptext, suffix, appearance,
-            dir,
+            dir, radius,
             // filters only
             size, x, y, offset, flags);
         proc/arccos(X);
@@ -435,7 +436,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         proc/new/*Type*/(Args);  // special form
         proc/newlist(A,B,C/*,...*/);
         proc/nonspantext(Haystack,Needles,Start=1);
-        proc/num2text(N,SigFig=6);
+        proc/num2text(N,SigFig=6, Radix); // +1 form, (N,SigFig) (N, Digits, Radix)
         proc/obounds(Ref=src, Dist=0);  // +1 form
         proc/ohearers(Depth=world.view,Center=usr);
         proc/orange(Dist,Center=usr);
@@ -478,7 +479,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         proc/text(FormatText,Args);
         proc/text2ascii(T,pos=1);
         proc/text2file(Text,File);
-        proc/text2num(T);
+        proc/text2num(T, Radix);
         proc/text2path(T);
         proc/time2text(timestamp,format);
         proc/turn(Dir,Angle);  // +2 forms
@@ -557,6 +558,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         atom/var/tmp/appearance;  // not editable
         atom/var/appearance_flags = int!(0);
         atom/var/blend_mode = int!(0);
+        atom/var/bounds;
         atom/var/color;
         atom/var/list/atom/contents;  // TODO: editable on movables only
         atom/var/density = int!(0);
@@ -737,6 +739,10 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         client/var/address;
         client/var/authenticate;
         client/var/bounds;
+        client/var/bound_x;
+        client/var/bound_y;
+        client/var/bound_width;
+        client/var/bound_height;
         client/var/byond_version;
         client/var/byond_build;
         client/var/CGI;
@@ -904,6 +910,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         image/var/appearance_flags;
         image/var/blend_mode;
         image/var/color;
+        image/var/desc;
         image/var/icon/icon;
         image/var/icon_state;
         image/var/text;
@@ -922,6 +929,8 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         image/var/pixel_w;
         image/var/pixel_z;
         image/var/plane;
+        image/var/render_source;
+        image/var/render_target;
         image/var/x;
         image/var/y;
         image/var/z;
@@ -929,9 +938,38 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         image/var/matrix/transform;
         image/var/list/vis_contents;
         image/var/list/filters;
-        image/var/name;  // undocumented
-        image/var/mouse_opacity;  // undocumented
+        // undocumented /image vars
+        image/var/animate_movement;
+        image/var/density;
+        image/var/gender;
+        image/var/invisibility;
+        image/var/luminosity;
+        image/var/mouse_drag_pointer;
+        image/var/mouse_drop_pointer;
+        image/var/mouse_drop_zone;
+        image/var/mouse_opacity;
+        image/var/mouse_over_pointer;
+        image/var/name;
+        image/var/opacity;
+        image/var/screen_loc;
+        image/var/suffix;
+        image/var/verbs;
+        image/var/vis_flags;
+
         image/New(icon, loc, icon_state, layer, dir);
+
+        // The BYOND reference states:
+        //
+        // > The /mutable_appearance datum is technically a descendant of
+        // > /image, but this is only for convenience, and should not be relied
+        // > on for any other purpose as it is subject to change in future
+        // > versions.
+        //
+        // It then lists which vars are actually documented to exist on mutable
+        // appearances. In order to be compatible with some unusual usage of
+        // images and mutable appearances in the wild, SpacemanDMM reproduces
+        // the reality of the DM compiler in this case rather than what the
+        // documentation reports.
         mutable_appearance/parent_type = path!(/image);
 
         savefile;
@@ -977,7 +1015,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         atom/var/render_source;
         atom/var/vis_flags;
 
-        client/proc/MeasureText(Text, Style, Width/*=0*/);
+        client/proc/MeasureText(text, style, width/*=0*/);
         client/proc/SoundQuery();
 
         regex/proc/Find_char(text, start, end);

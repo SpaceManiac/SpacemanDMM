@@ -1020,7 +1020,7 @@ impl EditorScene {
                         if let Some(env) = self.environment.as_ref() {
                             ui.text(im_str!(
                                 "types[{}], icons[{}]",
-                                env.objtree.graph.node_count(),
+                                env.objtree.node_indices().count(),
                                 env.icons.len()
                             ));
                             ui.text(im_str!("turf = {}", env.turf));

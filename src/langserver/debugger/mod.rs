@@ -220,6 +220,7 @@ struct Debugger {
     client_caps: ClientCaps,
 
     saved_breakpoints: HashMap<FileId, HashSet<(String, usize, i64)>>,
+    stddef_dm_info: Option<StddefDmInfo>,
 }
 
 impl Debugger {
@@ -235,6 +236,7 @@ impl Debugger {
             client_caps: Default::default(),
 
             saved_breakpoints: Default::default(),
+            stddef_dm_info: None,
         }
     }
 
@@ -314,6 +316,7 @@ handle_request! {
             supportsExceptionInfoRequest: Some(true),
             supportsConfigurationDoneRequest: Some(true),
             supportsFunctionBreakpoints: Some(true),
+            supportsDisassembleRequest: Some(true),
             exceptionBreakpointFilters: Some(vec![
                 ExceptionBreakpointsFilter {
                     filter: EXCEPTION_FILTER_RUNTIMES.to_owned(),
@@ -377,6 +380,10 @@ handle_request! {
 
     on ConfigurationDone(&mut self, ()) {
         let extools = self.extools.get()?;
+
+        let text = extools.get_source("stddef.dm".to_owned())?;
+        self.stddef_dm_info = Some(StddefDmInfo::new(text));
+
         extools.configuration_done();
     }
 
@@ -535,12 +542,26 @@ handle_request! {
             let mut dap_frame = StackFrame {
                 name: ex_frame.proc.clone(),
                 id: i as i64,
+                instructionPointerReference: Some(format!("{}@{}#{}", ex_frame.proc, ex_frame.override_id, ex_frame.offset)),
                 .. Default::default()
             };
 
             if let Some(proc) = self.db.get_proc(&ex_frame.proc, ex_frame.override_id) {
-                // `stddef.dm` procs will show as "Unknown source" which is fine for now.
-                if !proc.location.is_builtins() {
+                if proc.location.is_builtins() {
+                    // `stddef.dm` proc.
+                    if let Some(stddef_dm_info) = self.stddef_dm_info.as_ref() {
+                        if let Some(proc) = get_proc(&stddef_dm_info.objtree, &ex_frame.proc, ex_frame.override_id) {
+                            dap_frame.source = Some(Source {
+                                name: Some("stddef.dm".to_owned()),
+                                sourceReference: Some(STDDEF_SOURCE_REFERENCE),
+                                .. Default::default()
+                            });
+                            dap_frame.line = i64::from(proc.location.line);
+                            dap_frame.column = i64::from(proc.location.column);
+                        }
+                    }
+                } else {
+                    // Normal proc.
                     let path = self.db.files.get_path(proc.location.file);
 
                     dap_frame.source = Some(Source {
@@ -580,6 +601,11 @@ handle_request! {
 
         ScopesResponse {
             scopes: vec![
+                Scope {
+                    name: "Globals".to_owned(),
+                    variablesReference: 0x0e_000001,
+                    .. Default::default()
+                },
                 Scope {
                     name: "Arguments".to_owned(),
                     presentationHint: Some("arguments".to_owned()),
@@ -769,6 +795,54 @@ handle_request! {
     on Evaluate(&mut self, params) {
         self.evaluate(params)?
     }
+
+    on Source(&mut self, params) {
+        let mut source_reference = params.sourceReference;
+        if let Some(source) = params.source {
+            if let Some(reference) = source.sourceReference {
+                source_reference = reference;
+            }
+        }
+
+        if source_reference != STDDEF_SOURCE_REFERENCE {
+            return Err(Box::new(GenericError("Unknown source reference")));
+        }
+
+        if let Some(info) = self.stddef_dm_info.as_ref() {
+            SourceResponse::from(info.text.clone())
+        } else {
+            return Err(Box::new(GenericError("stddef.dm not available")));
+        }
+    }
+
+    on Disassemble(&mut self, params) {
+        guard!(let Some(captures) = MEMORY_REFERENCE_REGEX.captures(&params.memoryReference) else {
+            return Err(Box::new(GenericError("Invalid memory reference")));
+        });
+        let proc = &captures[1];
+        let override_id: usize = captures[2].parse()?;
+        //let offset: i64 = captures[3].parse()?;
+
+        let extools = self.extools.get()?;
+        let mut result = Vec::new();
+        for instr in extools.bytecode(proc, override_id) {
+            result.push(DisassembledInstruction {
+                address: format!("{}#{}@{}", proc, override_id, instr.offset),
+                instructionBytes: Some(instr.bytes.clone()),
+                instruction: format!("{}  {}", instr.mnemonic, instr.comment),
+                .. Default::default()
+            });
+        }
+
+        DisassembleResponse {
+            instructions: result
+        }
+    }
+}
+
+lazy_static! {
+    // `/proc#override@offset`
+    static ref MEMORY_REFERENCE_REGEX: regex::Regex = regex::Regex::new(r"^([^#]+)#(\d+)@(\d+)$").unwrap();
 }
 
 #[derive(Default, Debug)]
@@ -962,3 +1036,23 @@ const STDDEF_PROCS: &[&str] = &[
     "/regex/Find",
     "/regex/Replace"
 ];
+
+const STDDEF_SOURCE_REFERENCE: i64 = 1;
+
+struct StddefDmInfo {
+    text: String,
+    objtree: ObjectTree,
+}
+
+impl StddefDmInfo {
+    fn new(text: String) -> StddefDmInfo {
+        let context = dm::Context::default();
+        let pp = dm::preprocessor::Preprocessor::from_buffer(&context, "stddef.dm".into(), &text);
+        let parser = dm::parser::Parser::new(&context, dm::indents::IndentProcessor::new(&context, pp));
+        let objtree = parser.parse_object_tree_without_builtins();
+        StddefDmInfo {
+            text,
+            objtree,
+        }
+    }
+}

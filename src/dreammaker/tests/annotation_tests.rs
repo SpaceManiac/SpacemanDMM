@@ -22,7 +22,7 @@ fn annotation_basic() {
 "##.trim();
 
     let context = Default::default();
-    let lexer = Lexer::new(&context, Default::default(), code.bytes().map(Ok));
+    let lexer = Lexer::new(&context, Default::default(), code.as_bytes());
     let indent = IndentProcessor::new(&context, lexer);
     let mut annotations = AnnotationTree::default();
     Parser::new(&context, indent).parse_annotations_only(&mut annotations);

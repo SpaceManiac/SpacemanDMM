@@ -3,10 +3,6 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-pub use petgraph::graph::NodeIndex;
-use petgraph::graph::Graph;
-use petgraph::visit::EdgeRef;
-use petgraph::Direction;
 use linked_hash_map::LinkedHashMap;
 
 use super::ast::{Expression, VarType, VarSuffix, PathOp, Parameter, Block, ProcDeclKind};
@@ -115,8 +111,6 @@ impl TypeProc {
 // ----------------------------------------------------------------------------
 // Types
 
-const BAD_NODE_INDEX: usize = std::usize::MAX;
-
 #[derive(Debug)]
 pub struct Type {
     pub name: String,
@@ -127,14 +121,16 @@ pub struct Type {
     pub vars: LinkedHashMap<String, TypeVar>,
     /// Procs and verbs which this type has declarations or overrides for.
     pub procs: LinkedHashMap<String, TypeProc>,
+    parent_path: NodeIndex,
     parent_type: NodeIndex,
     pub docs: DocCollection,
     pub id: SymbolId,
+    children: BTreeMap<String, NodeIndex>,
 }
 
 impl Type {
     pub fn parent_type_index(&self) -> Option<NodeIndex> {
-        if self.parent_type == NodeIndex::new(BAD_NODE_INDEX) {
+        if self.parent_type == NodeIndex::end() {
             None
         } else {
             Some(self.parent_type)
@@ -212,26 +208,30 @@ impl<'a> TypeRef<'a> {
 
     #[inline]
     pub fn get(self) -> &'a Type {
-        self.tree.graph.node_weight(self.idx).unwrap()
+        &self.tree[self.idx]
     }
 
     pub fn tree(self) -> &'a ObjectTree {
         self.tree
     }
 
+    pub fn index(self) -> NodeIndex {
+        self.idx
+    }
+
     /// Find the parent **path**, without taking `parent_type` into account.
     pub fn parent_path(&self) -> Option<TypeRef<'a>> {
-        self.tree
-            .graph
-            .neighbors_directed(self.idx, Direction::Incoming)
-            .next()
-            .map(|i| TypeRef::new(self.tree, i))
+        if self.is_root() {
+            None
+        } else {
+            Some(TypeRef::new(self.tree, self.parent_path))
+        }
     }
 
     /// Find the parent **type** based on `parent_type` var, or parent path if unspecified.
     pub fn parent_type(&self) -> Option<TypeRef<'a>> {
         let idx = self.parent_type;
-        self.tree.graph.node_weight(idx).map(|_| TypeRef::new(self.tree, idx))
+        self.tree.graph.get(idx.index()).map(|_| TypeRef::new(self.tree, idx))
     }
 
     /// Find the parent type of this without returning root.
@@ -240,23 +240,17 @@ impl<'a> TypeRef<'a> {
         if idx == NodeIndex::new(0) {
             return None;
         }
-        self.tree.graph.node_weight(idx).map(|_| TypeRef::new(self.tree, idx))
+        self.tree.graph.get(idx.index()).map(|_| TypeRef::new(self.tree, idx))
     }
 
     /// Find a child **path** with the given name, if it exists.
     pub fn child(&self, name: &str) -> Option<TypeRef<'a>> {
-        for idx in self.tree.graph.neighbors(self.idx) {
-            let ty = self.tree.graph.node_weight(idx).unwrap();
-            if ty.name == name {
-                return Some(TypeRef::new(self.tree, idx));
-            }
-        }
-        None
+        self.children.get(name).map(|&idx| TypeRef::new(self.tree, idx))
     }
 
     /// Iterate over all child **paths**.
-    pub fn children(self) -> impl Iterator<Item=TypeRef<'a>> + 'a {
-        self.tree.graph.neighbors(self.idx).map(move |idx| TypeRef::new(self.tree, idx))
+    pub fn children<'b>(&'b self) -> impl Iterator<Item=TypeRef<'a>> + 'b {
+        self.children.values().map(move |&idx| TypeRef::new(self.tree, idx))
     }
 
     /// Recursively visit this and all child **paths**.
@@ -323,7 +317,7 @@ impl<'a> TypeRef<'a> {
                 if let Some(child) = self.child(name) {
                     return Some(child);
                 }
-                for idx in self.tree.graph.neighbors(self.idx) {
+                for &idx in self.children.values() {
                     if let Some(child) = TypeRef::new(self.tree, idx).navigate(PathOp::Colon, name) {
                         // Yes, simply returning the first thing that matches
                         // is the correct behavior.
@@ -627,8 +621,8 @@ impl<'a> std::hash::Hash for ProcRef<'a> {
 
 #[derive(Debug)]
 pub struct ObjectTree {
-    pub graph: Graph<Type, ()>,
-    pub types: BTreeMap<String, NodeIndex>,
+    graph: Vec<Type>,
+    types: BTreeMap<String, NodeIndex>,
     symbols: SymbolIdSource,
 }
 
@@ -639,16 +633,19 @@ impl Default for ObjectTree {
             types: Default::default(),
             symbols: SymbolIdSource::new(SymbolIdCategory::ObjectTree),
         };
-        tree.graph.add_node(Type {
+        tree.graph.push(Type {
             name: String::new(),
             path: String::new(),
             location: Default::default(),
             location_specificity: 0,
             vars: Default::default(),
             procs: Default::default(),
-            parent_type: NodeIndex::new(BAD_NODE_INDEX),
+            parent_type: NodeIndex::end(),
             docs: Default::default(),
             id: tree.symbols.allocate(),
+
+            children: Default::default(),
+            parent_path: NodeIndex::end(),
         });
         tree
     }
@@ -674,6 +671,14 @@ impl ObjectTree {
     // ------------------------------------------------------------------------
     // Access
 
+    pub fn node_indices(&self) -> impl Iterator<Item=NodeIndex> {
+        (0..self.graph.len()).map(NodeIndex::new)
+    }
+
+    pub fn iter_types<'a>(&'a self) -> impl Iterator<Item=TypeRef<'a>> + 'a {
+        self.node_indices().map(move |idx| TypeRef::new(self, idx))
+    }
+
     pub fn root(&self) -> TypeRef {
         TypeRef::new(self, NodeIndex::new(0))
     }
@@ -693,7 +698,7 @@ impl ObjectTree {
     }
 
     pub fn parent_of(&self, type_: &Type) -> Option<&Type> {
-        self.graph.node_weight(type_.parent_type)
+        self.graph.get(type_.parent_type.index())
     }
 
     pub fn type_by_path<I>(&self, path: I) -> Option<TypeRef>
@@ -717,22 +722,19 @@ impl ObjectTree {
         let mut current = NodeIndex::new(0);
         let mut first = true;
         'outer: for each in path {
-            let each = each.as_ref();
+            let each: &str = each.as_ref();
 
-            for edge in self.graph.edges(current) {
-                let target = edge.target();
-                if self.graph.node_weight(target).unwrap().name == each {
-                    current = target;
-                    if each == "list" && first {
-                        // any lookup under list/ is list/
-                        break 'outer;
-                    }
-                    first = false;
-                    continue 'outer;
+            if let Some(&target) = self[current].children.get(each) {
+                current = target;
+                if each == "list" && first {
+                    // any lookup under list/ is list/
+                    break 'outer;
                 }
+                first = false;
+                continue 'outer;
             }
             return (false, TypeRef::new(self, current));
-    }
+        }
         (true, TypeRef::new(self, current))
     }
 
@@ -756,7 +758,7 @@ impl ObjectTree {
 
     fn assign_parent_types(&mut self, context: &Context) {
         for (path, &type_idx) in self.types.iter() {
-            let mut location = self.graph.node_weight(type_idx).unwrap().location;
+            let mut location = self.graph[type_idx.index()].location;
             let idx = if path == "/datum" || path == "/list" || path == "/savefile" || path == "/world" {
                 // These types have no parent and cannot have one added. In the official compiler:
                 // - setting list or savefile/parent_type is denied with the same error as setting something's parent type to them;
@@ -764,7 +766,7 @@ impl ObjectTree {
                 // - setting world/parent_type compiles but has no runtime effect.
 
                 // Here, let's try to error if anything is set.
-                if let Some(var) = self.graph.node_weight(type_idx).unwrap().vars.get("parent_type") {
+                if let Some(var) = self[type_idx].vars.get("parent_type") {
                     // This check won't catch invalid redeclarations like `/datum/var/parent_type`, but that's fine for now.
                     if var.value.expression.is_some() {
                         context.register_error(DMError::new(
@@ -789,7 +791,7 @@ impl ObjectTree {
                         0 => "/datum",
                         idx => &path[..idx],
                     };
-                    if let Some(var) = self.graph.node_weight(type_idx).unwrap().vars.get("parent_type") {
+                    if let Some(var) = self[type_idx].vars.get("parent_type") {
                         location = var.value.location;
                         if let Some(expr) = var.value.expression.clone() {
                             match expr.simple_evaluate(var.value.location) {
@@ -831,44 +833,105 @@ impl ObjectTree {
                 }
             };
 
-            self.graph.node_weight_mut(type_idx)
-                .unwrap()
-                .parent_type = idx;
+            self.graph[type_idx.index()].parent_type = idx;
         }
     }
 
     // ------------------------------------------------------------------------
     // Parsing
 
-    fn subtype_or_add(&mut self, location: Location, parent: NodeIndex, child: &str, len: usize) -> NodeIndex {
-        let mut neighbors = self.graph.neighbors(parent).detach();
-        while let Some(target) = neighbors.next_node(&self.graph) {
-            let node = self.graph.node_weight_mut(target).unwrap();
-            if node.name == child {
-                if node.location_specificity > len {
-                    node.location_specificity = len;
-                    node.location = location;
-                }
-                return target;
+    pub(crate) fn subtype_or_add(&mut self, location: Location, parent: NodeIndex, child: &str, len: usize) -> NodeIndex {
+        if let Some(&target) = self[parent].children.get(child) {
+            let node = &mut self[target];
+            if node.location_specificity > len {
+                node.location_specificity = len;
+                node.location = location;
             }
+            return target;
         }
 
         // time to add a new child
-        let path = format!("{}/{}", self.graph.node_weight(parent).unwrap().path, child);
-        let node = self.graph.add_node(Type {
+        let path = format!("{}/{}", self[parent].path, child);
+        let node = NodeIndex::new(self.graph.len());
+        self.graph.push(Type {
             name: child.to_owned(),
             path: path.clone(),
             vars: Default::default(),
             procs: Default::default(),
             location,
             location_specificity: len,
-            parent_type: NodeIndex::new(BAD_NODE_INDEX),
+            parent_type: NodeIndex::end(),
             docs: Default::default(),
             id: self.symbols.allocate(),
+            children: Default::default(),
+            parent_path: parent,
         });
-        self.graph.add_edge(parent, node, ());
+        self[parent].children.insert(child.to_owned(), node);
         self.types.insert(path, node);
         node
+    }
+
+    fn insert_var(
+        &mut self,
+        ty: NodeIndex,
+        name: &str,
+        value: VarValue,
+        declaration: Option<VarDeclaration>,
+    ) -> &mut TypeVar {
+        // TODO: warn and merge docs for repeats
+        match self[ty].vars.entry(name.to_owned()) {
+            linked_hash_map::Entry::Vacant(slot) => {
+                slot.insert(TypeVar { value, declaration })
+            },
+            linked_hash_map::Entry::Occupied(slot) => {
+                let type_var = slot.into_mut();
+                if let Some(declaration) = declaration {
+                    type_var.declaration = Some(declaration);
+                }
+                type_var.value = value;
+                type_var
+            },
+        }
+    }
+
+    pub(crate) fn declare_var(
+        &mut self,
+        ty: NodeIndex,
+        name: &str,
+        location: Location,
+        docs: DocCollection,
+        var_type: VarType,
+        expression: Option<Expression>,
+    ) -> &mut TypeVar {
+        let id = self.symbols.allocate();
+        self.insert_var(ty, name, VarValue {
+            location,
+            expression,
+            docs,
+            constant: None,
+            being_evaluated: false,
+        }, Some(VarDeclaration {
+            var_type,
+            location,
+            id,
+        }))
+    }
+
+    pub(crate) fn override_var(
+        &mut self,
+        ty: NodeIndex,
+        name: &str,
+        location: Location,
+        docs: DocCollection,
+        expression: Expression,
+    ) -> &mut TypeVar {
+        self.insert_var(ty, name, VarValue {
+            location,
+            expression: Some(expression),
+            docs,
+            constant: None,
+            being_evaluated: false,
+        }, None)
     }
 
     fn get_from_path<'a, I: Iterator<Item=&'a str>>(
@@ -908,7 +971,9 @@ impl ObjectTree {
     where
         I: Iterator<Item=&'a str>,
     {
-        let (mut is_declaration, mut is_static, mut is_const, mut is_tmp, mut is_final, mut is_private, mut is_protected) = (false, false, false, false, false, false, false);
+        use super::ast::VarTypeFlags;
+        let mut is_declaration = false;
+        let mut flags = VarTypeFlags::default();
 
         if is_var_decl(prev) {
             is_declaration = true;
@@ -916,14 +981,9 @@ impl ObjectTree {
                 Some(name) => name,
                 None => return Ok(None), // var{} block, children will be real vars
             };
-            while prev == "global" || prev == "static" || prev == "tmp" || prev == "const" || prev == "SpacemanDMM_final" || prev == "SpacemanDMM_private" || prev == "SpacemanDMM_protected" {
+            while let Some(flag) = VarTypeFlags::from_name(prev) {
                 if let Some(name) = rest.next() {
-                    is_static |= prev == "global" || prev == "static";
-                    is_const |= prev == "const";
-                    is_tmp |= prev == "tmp";
-                    is_final |= prev == "SpacemanDMM_final";
-                    is_private |= prev == "SpacemanDMM_private";
-                    is_protected |= prev == "SpacemanDMM_protected";
+                    flags |= flag;
                     prev = name;
                 } else {
                     return Ok(None); // var/const{} block, children will be real vars
@@ -939,18 +999,13 @@ impl ObjectTree {
             prev = each;
         }
         let mut var_type = VarType {
-            is_static,
-            is_const,
-            is_tmp,
-            is_final,
-            is_private,
-            is_protected,
+            flags,
             type_path,
         };
         var_type.suffix(&suffix);
 
         let symbols = &mut self.symbols;
-        let node = self.graph.node_weight_mut(parent).unwrap();
+        let node = &mut self.graph[parent.index()];
         // TODO: warn and merge docs for repeats
         Ok(Some(node.vars.entry(prev.to_owned()).or_insert_with(|| TypeVar {
             value: VarValue {
@@ -972,7 +1027,7 @@ impl ObjectTree {
         })))
     }
 
-    fn register_proc(
+    pub(crate) fn register_proc(
         &mut self,
         context: &Context,
         location: Location,
@@ -982,7 +1037,7 @@ impl ObjectTree {
         parameters: Vec<Parameter>,
         code: Code,
     ) -> Result<(usize, &mut ProcValue), DMError> {
-        let node = self.graph.node_weight_mut(parent).unwrap();
+        let node = &mut self.graph[parent.index()];
         let proc = node.procs.entry(name.to_owned()).or_insert_with(Default::default);
         if let Some(kind) = declaration {
             if let Some(ref decl) = proc.declaration {
@@ -1049,7 +1104,7 @@ impl ObjectTree {
     }
 
     // an entry which may be anything depending on the path
-    pub fn add_entry<'a, I: Iterator<Item = &'a str>>(
+    fn add_entry<'a, I: Iterator<Item = &'a str>>(
         &mut self,
         location: Location,
         mut path: I,
@@ -1066,7 +1121,7 @@ impl ObjectTree {
             // proc{} block, children will be procs
         } else {
             let idx = self.subtype_or_add(location, parent, child, len);
-            self.graph.node_weight_mut(idx).unwrap().docs.extend(comment);
+            self[idx].docs.extend(comment);
             Ok(EntryType::Subtype)
         }
     }
@@ -1087,7 +1142,7 @@ impl ObjectTree {
     }
 
     // an entry which is definitely a var because a value is specified
-    pub fn add_var<'a, I: Iterator<Item = &'a str>>(
+    fn add_var<'a, I: Iterator<Item = &'a str>>(
         &mut self,
         location: Location,
         mut path: I,
@@ -1123,7 +1178,7 @@ impl ObjectTree {
     }
 
     // an entry which is definitely a proc because an argument list is specified
-    pub fn add_proc<'a, I: Iterator<Item = &'a str>>(
+    fn add_proc<'a, I: Iterator<Item = &'a str>>(
         &mut self,
         context: &Context,
         location: Location,
@@ -1155,13 +1210,27 @@ impl ObjectTree {
 
     /// Drop all code ASTs to attempt to reduce memory usage.
     pub fn drop_code(&mut self) {
-        for node in self.graph.node_weights_mut() {
+        for node in self.graph.iter_mut() {
             for (_, typroc) in node.procs.iter_mut() {
                 for proc in typroc.value.iter_mut() {
                     proc.code = Code::Disabled;
                 }
             }
         }
+    }
+}
+
+impl std::ops::Index<NodeIndex> for ObjectTree {
+    type Output = Type;
+
+    fn index(&self, ix: NodeIndex) -> &Type {
+        self.graph.get(ix.index()).expect("node index out of range")
+    }
+}
+
+impl std::ops::IndexMut<NodeIndex> for ObjectTree {
+    fn index_mut(&mut self, ix: NodeIndex) -> &mut Type {
+        self.graph.get_mut(ix.index()).expect("node index out of range")
     }
 }
 
@@ -1178,4 +1247,25 @@ fn is_proc_decl(s: &str) -> bool {
 #[inline]
 fn is_decl(s: &str) -> bool {
     is_var_decl(s) || is_proc_decl(s)
+}
+
+/// Node identifier.
+#[derive(Copy, Clone, Default, PartialEq, PartialOrd, Eq, Ord, Hash, Debug)]
+pub struct NodeIndex(u32);
+
+impl NodeIndex {
+    #[inline]
+    pub fn new(x: usize) -> Self {
+        NodeIndex(x as u32)
+    }
+
+    #[inline]
+    pub fn index(self) -> usize {
+        self.0 as usize
+    }
+
+    #[inline]
+    pub fn end() -> Self {
+        NodeIndex(std::u32::MAX)
+    }
 }

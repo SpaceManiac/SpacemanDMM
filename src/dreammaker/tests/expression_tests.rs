@@ -6,7 +6,7 @@ use dm::ast::*;
 
 fn parse_expr(f: &str) -> Expression {
     let context = Default::default();
-    let lexer = Lexer::new(&context, Default::default(), f.bytes().map(Ok));
+    let lexer = Lexer::new(&context, Default::default(), f.as_bytes());
     let result = parse_expression(&context, Default::default(), lexer).expect("failed to parse expression");
     context.assert_success();
     result
@@ -75,4 +75,21 @@ fn ternary_nesting() {
 fn ternary_without_spaces() {
     parse_expr(r#"listkey = set_keyword ? "[set_keyword] [locname]":"[locname]""#);
     parse_expr(r#"pump_direction?("release"):("siphon")"#);
+}
+
+#[test]
+fn bitop_precedence() {
+    // 1 | (6 & 2)
+    assert_eq!(
+        parse_expr("1 | 6 & 2"),
+        Expression::BinaryOp {
+            op: BinaryOp::BitOr,
+            lhs: Box::new(Expression::from(Term::Int(1))),
+            rhs: Box::new(Expression::BinaryOp {
+                op: BinaryOp::BitAnd,
+                lhs: Box::new(Expression::from(Term::Int(6))),
+                rhs: Box::new(Expression::from(Term::Int(2))),
+            }),
+        }
+    );
 }

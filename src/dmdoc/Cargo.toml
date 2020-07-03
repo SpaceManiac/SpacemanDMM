@@ -1,6 +1,6 @@
 [package]
 name = "dmdoc"
-version = "1.2.0"
+version = "1.2.1"
 authors = ["Tad Hardesty <tad@platymuus.com>"]
 homepage = "https://github.com/SpaceManiac/SpacemanDMM/blob/master/src/dmdoc/README.md"
 edition = "2018"
@@ -11,16 +11,16 @@ path = "main.rs"
 
 [dependencies]
 dreammaker = { path = "../dreammaker" }
-pulldown-cmark = "0.6.0"
+pulldown-cmark = "0.7.0"
 tera = "1.0.2"
 serde = "1.0.71"
 serde_derive = "1.0.27"
 walkdir = "2.2.0"
-git2 = { version = "0.11", default-features = false }
+git2 = { version = "0.13", default-features = false }
 
 [dev-dependencies]
 walkdir = "2.2.0"
 
 [build-dependencies]
 chrono = "0.4.0"
-git2 = { version = "0.11", default-features = false }
+git2 = { version = "0.13", default-features = false }

@@ -20,7 +20,7 @@ impl IconCache {
                     Some(root) => load(&root.join(path)),
                     _ => load(path),
                 }.map(Arc::new)).as_mut(),
-        }.map(|x| &**x))
+        }).map(|x| &**x)
     }
 
     pub fn retrieve_shared(&self, path: &Path) -> Option<Arc<IconFile>> {

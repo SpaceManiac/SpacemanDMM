@@ -23,7 +23,7 @@ git = "https://github.com/SpaceManiac/linked-hash-map"
 branch = "get-key-value"
 
 [dependencies.png]
-version = "0.15.0"
+version = "0.16.0"
 optional = true
 
 [dependencies.gfx_core]

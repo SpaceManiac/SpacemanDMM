@@ -39,6 +39,7 @@ Raised by DreamChecker:
 * `must_be_pure` - `SpacemanDMM_should_be_pure` directive
 * `pure_return_discarded` - Raised on `SpacemanDMM_should_be_pure` procs called without using the return result
 * `must_not_sleep` - `SpacemanDMM_should_not_sleep` directive
+* `redefined_proc` - `SpacemanDMM_can_be_redefined` directive
 * `ambiguous_in_lhs` - Raised on ambiguous operations on the left hand side of an `in` operation
 * `no_typehint_implicit_new` - Raised on the use of `new` where no typehint is avaliable
 * `field_access_static_type` - Raised on using `.field_name` on a variable with no typehint
@@ -46,7 +47,8 @@ Raised by DreamChecker:
 * `no_operator_overload` - Raised on using a unary operator on a non-primative that doesn't define it's own override, eg `somemob++`
 * `double_parent_call` - Raised when detecting two or more `..()` calls in a row
 * `unreachable_code` - Raised on finding code that can never be executed
-* `constant_conditional` - Raised on finding a conditional control statement that will always evaluate in the same way
+* `control_condition_static` - Raised on a control condition such as `if`/`while` having a static condition such as `1` or `"string"`
+* `if_condition_determinate` - Raised on if condition being always true or always false
 
 Raised by Lexer:
 
@@ -56,6 +58,7 @@ Raised by Parser:
 
 * `var_in_proc_parameter` - Raised where `var/` is used in proc arguments
 * `static_in_proc_parameter` - Raised where `static/` is used in proc arguments
+* `semicolon_in_proc_parameter` - Raised where `;` is used in proc arguments
 * `in_precedes_as` - Raised where `input()` calls are using `as` after `in` which DM silently ignores
 * `tmp_no_effect` - Raised where local vars are defined as `tmp` which has no effect
 * `final_no_effect` - Raised where local vars are defined as `SpacemanDMM_final` which has no effect

@@ -1,6 +1,6 @@
 [package]
 name = "cli"
-version = "1.1.1"
+version = "1.1.2"
 authors = ["Tad Hardesty <tad@platymuus.com>"]
 description = "BYOND map rendering and analysis tools powered by SpacemanDMM"
 edition = "2018"
@@ -21,4 +21,4 @@ dmm-tools = { path = "../tools", features = ["png"] }
 
 [build-dependencies]
 chrono = "0.4.0"
-git2 = { version = "0.11", default-features = false }
+git2 = { version = "0.13", default-features = false }
