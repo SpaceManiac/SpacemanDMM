@@ -11,7 +11,7 @@ use dm::objtree::{TypeRef, TypeVar, TypeProc, ProcValue};
 use crate::{Engine, Span, is_constructor_name};
 use crate::symbol_search::contains;
 
-pub fn item_var(ty: TypeRef, name: &str, var: &TypeVar) -> CompletionItem {
+fn item_var(ty: TypeRef, name: &str, var: &TypeVar) -> CompletionItem {
     let mut detail = ty.pretty_path().to_owned();
     if let Some(ref decl) = var.declaration {
         if decl.var_type.flags.is_const() {
@@ -34,7 +34,7 @@ pub fn item_var(ty: TypeRef, name: &str, var: &TypeVar) -> CompletionItem {
     }
 }
 
-pub fn item_proc(ty: TypeRef, name: &str, proc: &TypeProc) -> CompletionItem {
+fn item_proc(ty: TypeRef, name: &str, proc: &TypeProc) -> CompletionItem {
     CompletionItem {
         label: name.to_owned(),
         kind: Some(if ty.is_root() {
@@ -50,7 +50,7 @@ pub fn item_proc(ty: TypeRef, name: &str, proc: &TypeProc) -> CompletionItem {
     }
 }
 
-pub fn item_documentation(docs: &dm::docs::DocCollection) -> Option<Documentation> {
+fn item_documentation(docs: &dm::docs::DocCollection) -> Option<Documentation> {
     if docs.is_empty() {
         return None;
     }
@@ -61,7 +61,7 @@ pub fn item_documentation(docs: &dm::docs::DocCollection) -> Option<Documentatio
     }))
 }
 
-pub fn items_ty<'a>(
+fn items_ty<'a>(
     results: &mut Vec<CompletionItem>,
     skip: &mut HashSet<(&str, &'a String)>,
     ty: TypeRef<'a>,
