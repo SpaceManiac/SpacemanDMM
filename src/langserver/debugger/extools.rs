@@ -13,7 +13,7 @@ use super::extools_types::*;
 
 pub const DEFAULT_PORT: u16 = 2448;
 
-const RECV_TIMEOUT: Duration = Duration::from_secs(1);
+const RECV_TIMEOUT: Duration = Duration::from_secs(3);
 
 // ----------------------------------------------------------------------------
 // Data structures
@@ -144,6 +144,7 @@ pub struct Extools {
     get_field_rx: mpsc::Receiver<GetAllFieldsResponse>,
     runtime_rx: mpsc::Receiver<Runtime>,
     get_list_contents_rx: mpsc::Receiver<ListContents>,
+    get_source_rx: mpsc::Receiver<GetSource>,
     step_rx: mpsc::Receiver<ProcOffset>,
     last_runtime: Option<Runtime>,
 }
@@ -164,6 +165,7 @@ impl Extools {
         let (get_field_tx, get_field_rx) = mpsc::channel();
         let (runtime_tx, runtime_rx) = mpsc::channel();
         let (get_list_contents_tx, get_list_contents_rx) = mpsc::channel();
+        let (get_source_tx, get_source_rx) = mpsc::channel();
         let (step_tx, step_rx) = mpsc::sync_channel(0);
 
         let extools = Extools {
@@ -176,6 +178,7 @@ impl Extools {
             get_field_rx,
             runtime_rx,
             get_list_contents_rx,
+            get_source_rx,
             step_rx,
             last_runtime: None,
         };
@@ -191,6 +194,7 @@ impl Extools {
             get_field_tx,
             runtime_tx,
             get_list_contents_tx,
+            get_source_tx,
             step_tx,
         };
         (extools, thread)
@@ -340,6 +344,11 @@ impl Extools {
         Ok(self.get_list_contents_rx.recv_timeout(RECV_TIMEOUT)?)
     }
 
+    pub fn get_source(&self, fname: String) -> Result<String, Box<dyn Error>> {
+        self.sender.send(GetSource(fname));
+        Ok(self.get_source_rx.recv_timeout(RECV_TIMEOUT)?.0)
+    }
+
     pub fn last_error_message(&mut self) -> Option<&str> {
         while let Ok(runtime) = self.runtime_rx.try_recv() {
             self.last_runtime = Some(runtime);
@@ -381,6 +390,7 @@ struct ExtoolsThread {
     get_field_tx: mpsc::Sender<GetAllFieldsResponse>,
     runtime_tx: mpsc::Sender<Runtime>,
     get_list_contents_tx: mpsc::Sender<ListContents>,
+    get_source_tx: mpsc::Sender<GetSource>,
     step_tx: mpsc::SyncSender<ProcOffset>,
 }
 
@@ -514,6 +524,10 @@ handle_extools! {
 
     on ListContents(&mut self, response) {
         self.queue(&self.get_list_contents_tx, response);
+    }
+
+    on GetSource(&mut self, response) {
+        self.queue(&self.get_source_tx, response);
     }
 
     on BreakOnRuntime(&mut self, _) {

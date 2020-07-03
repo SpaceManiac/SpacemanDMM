@@ -394,11 +394,12 @@ impl fmt::Display for ConstFn {
 pub fn evaluate_str(location: Location, input: &[u8]) -> Result<Constant, DMError> {
     use super::lexer::{Lexer, from_utf8_or_latin1_borrowed};
 
-    let mut bytes = input.iter().map(|&x| Ok(x));
     let ctx = Context::default();
-    let expr = crate::parser::parse_expression(&ctx, location, Lexer::new(&ctx, location.file, &mut bytes))?;
-    if bytes.next().is_some() {
-        return Err(DMError::new(location, format!("leftover: {:?} {}", from_utf8_or_latin1_borrowed(&input), bytes.len())));
+    let mut lexer = Lexer::new(&ctx, location.file, input);
+    let expr = crate::parser::parse_expression(&ctx, location, &mut lexer)?;
+    let leftover = lexer.remaining();
+    if !leftover.is_empty() {
+        return Err(DMError::new(location, format!("leftover: {:?} {}", from_utf8_or_latin1_borrowed(&input), leftover.len())));
     }
     expr.simple_evaluate(location)
 }
@@ -427,16 +428,13 @@ pub fn preprocessor_evaluate(location: Location, expr: Expression, defines: &Def
 
 /// Evaluate all the type-level variables in an object tree into constants.
 pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree) {
-    for ty in tree.graph.node_indices() {
-        let keys: Vec<String> = tree.graph.node_weight(ty).unwrap().vars.keys().cloned().collect();
+    for ty in tree.node_indices() {
+        let keys: Vec<String> = tree[ty].vars.keys().cloned().collect();
         for key in keys {
-            if !tree
-                .graph
-                .node_weight(ty)
-                .unwrap()
+            if !tree[ty]
                 .get_var_declaration(&key, tree)
                 .map_or(true, |x| {
-                    x.var_type.is_const_evaluable() && (x.var_type.is_const || ty != NodeIndex::new(0))
+                    x.var_type.is_const_evaluable() && (x.var_type.flags.is_const() || ty != NodeIndex::new(0))
                 })
             {
                 continue;  // skip non-constant-evaluable vars
@@ -446,11 +444,11 @@ pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree) {
                 Ok(ConstLookup::Found(_, _)) => {}
                 Ok(ConstLookup::Continue(_)) => {
                     context.register_error(DMError::new(
-                        tree.graph.node_weight(ty).unwrap().vars[&key].value.location,
+                        tree[ty].vars[&key].value.location,
                         format!(
                             "undefined var '{}' on type '{}'",
                             key,
-                            tree.graph.node_weight(ty).unwrap().path,
+                            tree[ty].path,
                         ),
                     ));
                 }
@@ -473,10 +471,7 @@ fn constant_ident_lookup(
     // try to read the currently-set value if we can and
     // substitute that in, otherwise try to evaluate it.
     let (location, type_hint, expr) = {
-        let decl = match tree
-            .graph
-            .node_weight(ty)
-            .unwrap()
+        let decl = match tree[ty]
             .get_var_declaration(ident, tree)
             .cloned()
         {
@@ -484,7 +479,7 @@ fn constant_ident_lookup(
             None => return Ok(ConstLookup::Continue(None)),  // definitely doesn't exist
         };
 
-        let type_ = tree.graph.node_weight_mut(ty).unwrap();
+        let type_ = &mut tree[ty];
         let parent = type_.parent_type_index();
         match type_.vars.get_mut(ident) {
             None => return Ok(ConstLookup::Continue(parent)),
@@ -502,7 +497,7 @@ fn constant_ident_lookup(
                                 var.value.location,
                                 format!("non-const-evaluable variable: {}", ident),
                             ));
-                        } else if !decl.var_type.is_const && must_be_const {
+                        } else if !decl.var_type.flags.is_const() && must_be_const {
                             return Err(DMError::new(
                                 var.value.location,
                                 format!("non-const variable: {}", ident),
@@ -528,7 +523,7 @@ fn constant_ident_lookup(
         ty,
     }.expr(expr, if type_hint.is_empty() { None } else { Some(&type_hint) })?;
     // and store it into 'value', then return it
-    let var = tree.graph.node_weight_mut(ty).unwrap().vars.get_mut(ident).unwrap();
+    let var = tree[ty].vars.get_mut(ident).unwrap();
     var.value.constant = Some(value.clone());
     var.value.being_evaluated = false;
     Ok(ConstLookup::Found(type_hint, value))
@@ -627,8 +622,8 @@ impl<'a> ConstantFolder<'a> {
                     full_path.push('/');
                     full_path.push_str(&each);
                 }
-                match self.tree.as_mut().and_then(|t| t.types.get(&full_path)) {
-                    Some(&idx) => self.recursive_lookup(idx, &field_name, true),
+                match self.tree.as_mut().and_then(|t| t.find(&full_path)).map(|t| t.index()) {
+                    Some(idx) => self.recursive_lookup(idx, &field_name, true),
                     None => Err(self.error(format!("unknown typepath {}", full_path))),
                 }
             }

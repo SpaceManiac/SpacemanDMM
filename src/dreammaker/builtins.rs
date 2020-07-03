@@ -96,6 +96,7 @@ pub fn default_defines(defines: &mut DefineMap) {
         PLANE_MASTER = Int(128);
         TILE_BOUND = Int(256);
         PIXEL_SCALE = Int(512);
+        PASS_MOUSE = Int(1024);
 
         CONTROL_FREAK_ALL = Int(1);
         CONTROL_FREAK_SKIN = Int(2);
@@ -557,6 +558,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         atom/var/tmp/appearance;  // not editable
         atom/var/appearance_flags = int!(0);
         atom/var/blend_mode = int!(0);
+        atom/var/bounds;
         atom/var/color;
         atom/var/list/atom/contents;  // TODO: editable on movables only
         atom/var/density = int!(0);
@@ -737,6 +739,10 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         client/var/address;
         client/var/authenticate;
         client/var/bounds;
+        client/var/bound_x;
+        client/var/bound_y;
+        client/var/bound_width;
+        client/var/bound_height;
         client/var/byond_version;
         client/var/byond_build;
         client/var/CGI;
@@ -925,7 +931,6 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         image/var/plane;
         image/var/render_source;
         image/var/render_target;
-        image/var/invisibility; // undocumented
         image/var/x;
         image/var/y;
         image/var/z;
@@ -933,9 +938,38 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         image/var/matrix/transform;
         image/var/list/vis_contents;
         image/var/list/filters;
-        image/var/name;  // undocumented
-        image/var/mouse_opacity;  // undocumented
+        // undocumented /image vars
+        image/var/animate_movement;
+        image/var/density;
+        image/var/gender;
+        image/var/invisibility;
+        image/var/luminosity;
+        image/var/mouse_drag_pointer;
+        image/var/mouse_drop_pointer;
+        image/var/mouse_drop_zone;
+        image/var/mouse_opacity;
+        image/var/mouse_over_pointer;
+        image/var/name;
+        image/var/opacity;
+        image/var/screen_loc;
+        image/var/suffix;
+        image/var/verbs;
+        image/var/vis_flags;
+
         image/New(icon, loc, icon_state, layer, dir);
+
+        // The BYOND reference states:
+        //
+        // > The /mutable_appearance datum is technically a descendant of
+        // > /image, but this is only for convenience, and should not be relied
+        // > on for any other purpose as it is subject to change in future
+        // > versions.
+        //
+        // It then lists which vars are actually documented to exist on mutable
+        // appearances. In order to be compatible with some unusual usage of
+        // images and mutable appearances in the wild, SpacemanDMM reproduces
+        // the reality of the DM compiler in this case rather than what the
+        // documentation reports.
         mutable_appearance/parent_type = path!(/image);
 
         savefile;

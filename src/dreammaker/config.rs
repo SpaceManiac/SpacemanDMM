@@ -2,7 +2,7 @@
 
 use std::fs::File;
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 
 use serde::Deserialize;
@@ -14,10 +14,15 @@ use crate::DMError;
 #[derive(Deserialize, Default, Debug, Clone)]
 #[serde(default)]
 pub struct Config {
+    pub environment: Option<PathBuf>,
+
+    // diagnostic configuration
     display: WarningDisplay,
-    pub langserver: Langserver,
     diagnostics: HashMap<String, WarningLevel>,
     pub code_standards: CodeStandards,
+
+    // tool-specific configuration
+    pub langserver: Langserver,
     pub dmdoc: DMDoc,
 }
 

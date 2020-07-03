@@ -1,5 +1,5 @@
 //! The lexer/tokenizer.
-use std::io;
+use std::io::Read;
 use std::str::FromStr;
 use std::fmt;
 use std::borrow::Cow;
@@ -469,25 +469,61 @@ enum Directive {
     Stringy,
 }
 
+fn buffer_read<R: Read>(file: FileId, mut read: R) -> Result<Vec<u8>, DMError> {
+    let mut buffer = Vec::new();
+
+    if let Err(error) = read.read_to_end(&mut buffer) {
+        let mut tracker = LocationTracker::new(file, buffer.as_slice().into());
+        tracker.by_ref().count();
+        return Err(DMError::new(tracker.location(), "i/o error reading file").with_cause(error));
+    }
+
+    Ok(buffer)
+}
+
+/// Attempt to read an entire file into memory, returning a line and column if
+/// an I/O error occurs.
+pub fn buffer_file(file: FileId, path: &std::path::Path) -> Result<Vec<u8>, DMError> {
+    let mut buffer = match std::fs::metadata(path) {
+        Ok(metadata) => Vec::with_capacity(metadata.len() as usize),
+        Err(_) => Vec::new(),
+    };
+
+    let mut read = match std::fs::File::open(path) {
+        Ok(read) => read,
+        Err(error) => return Err(DMError::new(Location { file, line: 1, column: 1 }, "i/o error opening file").with_cause(error)),
+    };
+
+    if let Err(error) = read.read_to_end(&mut buffer) {
+        let mut tracker = LocationTracker::new(file, buffer.as_slice().into());
+        tracker.by_ref().count();
+        return Err(DMError::new(tracker.location(), "i/o error reading file").with_cause(error));
+    }
+
+    Ok(buffer)
+}
+
 /// A wrapper for an input stream which tracks line and column numbers.
 ///
 /// All characters, including tabs, are considered to occupy one column
 /// regardless of position.
 ///
 /// `io::Error`s are converted to `DMError`s which include the location.
-pub struct LocationTracker<I> {
-    inner: I,
+pub struct LocationTracker<'a> {
+    inner: Cow<'a, [u8]>,
+    offset: usize,
     /// The location of the last character returned by `next()`.
     location: Location,
     at_line_end: bool,
 }
 
-impl<I> LocationTracker<I> {
-    pub fn new(file_number: FileId, inner: I) -> LocationTracker<I> {
+impl<'a> LocationTracker<'a> {
+    pub fn new(file: FileId, inner: Cow<'a, [u8]>) -> LocationTracker<'a> {
         LocationTracker {
             inner,
+            offset: 0,
             location: Location {
-                file: file_number,
+                file,
                 line: 0,
                 column: 0,
             },
@@ -498,22 +534,27 @@ impl<I> LocationTracker<I> {
     pub fn location(&self) -> Location {
         self.location
     }
+
+    pub fn remaining(&self) -> &[u8] {
+        &self.inner[self.offset..]
+    }
 }
 
-impl<I> fmt::Debug for LocationTracker<I> {
+impl<'a> fmt::Debug for LocationTracker<'a> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("LocationTracker")
             // inner omitted
+            .field("offset", &self.offset)
             .field("location", &self.location)
             .field("at_line_end", &self.at_line_end)
             .finish()
     }
 }
 
-impl<I: Iterator<Item=io::Result<u8>>> Iterator for LocationTracker<I> {
-    type Item = Result<u8, DMError>;
+impl<'a> Iterator for LocationTracker<'a> {
+    type Item = u8;
 
-    fn next(&mut self) -> Option<Result<u8, DMError>> {
+    fn next(&mut self) -> Option<u8> {
         if self.at_line_end {
             self.at_line_end = false;
             match self.location.line.checked_add(1) {
@@ -523,27 +564,27 @@ impl<I: Iterator<Item=io::Result<u8>>> Iterator for LocationTracker<I> {
             self.location.column = 0;
         }
 
-        match self.inner.next() {
-            None => None,
-            Some(Ok(ch)) => {
-                if ch == b'\n' {
-                    self.at_line_end = true;
-                }
-                match self.location.column.checked_add(1) {
-                    Some(new) => self.location.column = new,
-                    None => panic!("per-line column limit of {} exceeded", self.location.column),
-                }
-                Some(Ok(ch))
-            }
-            Some(Err(e)) => Some(Err(DMError::new(self.location, "i/o error").with_cause(e))),
+        let ch = match self.inner.get(self.offset) {
+            Some(&ch) => ch,
+            None => return None,
+        };
+        self.offset += 1;
+
+        if ch == b'\n' {
+            self.at_line_end = true;
         }
+        match self.location.column.checked_add(1) {
+            Some(new) => self.location.column = new,
+            None => panic!("per-line column limit of {} exceeded", self.location.column),
+        }
+        Some(ch)
     }
 }
 
 /// The lexer, which serves as a source of tokens through iteration.
-pub struct Lexer<'ctx, I> {
+pub struct Lexer<'ctx> {
     context: &'ctx Context,
-    input: LocationTracker<I>,
+    input: LocationTracker<'ctx>,
     next: Option<u8>,
     final_newline: bool,
     at_line_head: bool,
@@ -552,7 +593,7 @@ pub struct Lexer<'ctx, I> {
     interp_stack: Vec<Interpolation>,
 }
 
-impl<'ctx, I> fmt::Debug for Lexer<'ctx, I> {
+impl<'ctx> fmt::Debug for Lexer<'ctx> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("Lexer")
             .field("context", self.context)
@@ -566,26 +607,19 @@ impl<'ctx, I> fmt::Debug for Lexer<'ctx, I> {
     }
 }
 
-impl<'ctx, I: Iterator<Item=io::Result<u8>>> HasLocation for Lexer<'ctx, I> {
+impl<'ctx> HasLocation for Lexer<'ctx> {
     #[inline]
     fn location(&self) -> Location {
         self.input.location
     }
 }
 
-impl<'ctx, R: io::Read> Lexer<'ctx, io::Bytes<R>> {
-    /// Create a new lexer from a reader.
-    pub fn from_read(context: &'ctx Context, file_number: FileId, source: R) -> Lexer<io::Bytes<R>> {
-        Lexer::new(context, file_number, source.bytes())
-    }
-}
-
-impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
+impl<'ctx> Lexer<'ctx> {
     /// Create a new lexer from a byte stream.
-    pub fn new(context: &'ctx Context, file_number: FileId, input: I) -> Lexer<I> {
+    pub fn new<I: Into<Cow<'ctx, [u8]>>>(context: &'ctx Context, file_number: FileId, input: I) -> Self {
         Lexer {
             context,
-            input: LocationTracker::new(file_number, input),
+            input: LocationTracker::new(file_number, input.into()),
             next: None,
             final_newline: false,
             at_line_head: true,
@@ -593,6 +627,20 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
             directive: Directive::None,
             interp_stack: Vec::new(),
         }
+    }
+
+    /// Create a new lexer from a reader.
+    pub fn from_read<R: Read>(context: &'ctx Context, file: FileId, read: R) -> Result<Self, DMError> {
+        Ok(Lexer::new(context, file, buffer_read(file, read)?))
+    }
+
+    /// Create a new lexer from a reader.
+    pub fn from_file(context: &'ctx Context, file: FileId, path: &std::path::Path) -> Result<Self, DMError> {
+        Ok(Lexer::new(context, file, buffer_file(file, path)?))
+    }
+
+    pub fn remaining(&self) -> &[u8] {
+        self.input.remaining()
     }
 
     fn next(&mut self) -> Option<u8> {
@@ -608,16 +656,11 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
         }
         match result {
             None => None,
-            Some(Ok(ch)) => {
+            Some(ch) => {
                 if ch != b'\t' && ch != b' ' {
                     self.at_line_head = false;
                 }
                 Some(ch)
-            }
-            Some(Err(err)) => {
-                // I/O error is effectively EOF.
-                self.context.register_error(err);
-                None
             }
         }
     }
@@ -1049,7 +1092,7 @@ impl<'ctx, I: Iterator<Item=io::Result<u8>>> Lexer<'ctx, I> {
     }
 }
 
-impl<'ctx, I: Iterator<Item=io::Result<u8>>> Iterator for Lexer<'ctx, I> {
+impl<'ctx> Iterator for Lexer<'ctx> {
     type Item = LocatedToken;
 
     fn next(&mut self) -> Option<LocatedToken> {

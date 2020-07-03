@@ -246,7 +246,7 @@ enum Include<'ctx> {
     File {
         path: PathBuf,
         file: FileId,
-        lexer: Lexer<'ctx, io::Bytes<Box<dyn io::Read>>>,
+        lexer: Lexer<'ctx>,
     },
     Expansion {
         name: String,
@@ -256,11 +256,20 @@ enum Include<'ctx> {
 }
 
 impl<'ctx> Include<'ctx> {
-    fn from_read(context: &'ctx Context, path: PathBuf, read: Box<dyn io::Read>) -> Include {
+    fn from_path(context: &'ctx Context, path: PathBuf) -> Result<Include<'ctx>, DMError> {
+        let idx = context.register_file(&path);
+        Ok(Include::File {
+            file: idx,
+            lexer: Lexer::from_file(context, idx, &path)?,
+            path,
+        })
+    }
+
+    fn from_buffer(context: &'ctx Context, path: PathBuf, buffer: Cow<'ctx, [u8]>) -> Include<'ctx> {
         let idx = context.register_file(&path);
         Include::File {
             file: idx,
-            lexer: Lexer::from_read(context, idx, read),
+            lexer: Lexer::new(context, idx, buffer),
             path,
         }
     }
@@ -389,16 +398,10 @@ impl<'ctx> HasLocation for Preprocessor<'ctx> {
 
 impl<'ctx> Preprocessor<'ctx> {
     /// Create a new preprocessor from the given Context and environment file.
-    pub fn new(context: &'ctx Context, env_file: PathBuf) -> io::Result<Self> {
+    pub fn new(context: &'ctx Context, env_file: PathBuf) -> Result<Self, DMError> {
         // Buffer the entire environment file. Large environments take a while
         // to load and locking it for the whole time is somewhat inconvenient.
-        let mut buffer = Vec::new();
-        {
-            use std::io::Read;
-            let mut file = File::open(&env_file)?;
-            file.read_to_end(&mut buffer)?;
-        }
-        let include = Include::from_read(context, env_file.clone(), Box::new(io::Cursor::new(buffer)));
+        let include = Include::from_path(context, env_file.clone())?;
 
         Ok(Preprocessor {
             context,
@@ -423,12 +426,12 @@ impl<'ctx> Preprocessor<'ctx> {
         })
     }
 
-    pub fn from_buffer<S: Into<Cow<'static, str>>>(context: &'ctx Context, env_file: PathBuf, buffer: S) -> Self {
+    pub fn from_buffer<S: Into<Cow<'ctx, str>>>(context: &'ctx Context, env_file: PathBuf, buffer: S) -> Self {
         let cow_u8 = match buffer.into() {
             Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
             Cow::Owned(s) => Cow::Owned(s.into_bytes()),
         };
-        let include = Include::from_read(context, env_file.clone(), Box::new(io::Cursor::new(cow_u8)));
+        let include = Include::from_buffer(context, env_file.clone(), cow_u8);
         Preprocessor {
             context,
             env_file,
@@ -491,14 +494,14 @@ impl<'ctx> Preprocessor<'ctx> {
     */
 
     /// Push a DM file to the top of this preprocessor's stack.
-    pub fn push_file<R: io::Read + 'static>(&mut self, path: PathBuf, read: R) -> FileId {
+    pub fn push_file<R: io::Read + 'static>(&mut self, path: PathBuf, read: R) -> Result<FileId, DMError> {
         let idx = self.context.register_file(&path);
         self.include_stack.stack.push(Include::File {
-            lexer: Lexer::from_read(self.context, idx, Box::new(read)),
+            lexer: Lexer::from_read(self.context, idx, read)?,
             file: idx,
             path,
         });
-        idx
+        Ok(idx)
     }
 
     /// Enable source file annotations.
@@ -634,7 +637,7 @@ impl<'ctx> Preprocessor<'ctx> {
             Ok(Include::File {
                 path,
                 file: file_id,
-                lexer: Lexer::from_read(&self.context, file_id, Box::new(read)),
+                lexer: Lexer::from_read(&self.context, file_id, read)?,
             })
         }
     }

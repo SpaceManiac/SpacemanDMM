@@ -424,6 +424,54 @@ pub struct ContinueResponse {
     pub allThreadsContinued: Option<bool>,
 }
 
+/// Disassembles code stored at the provided location.
+pub enum Disassemble {}
+
+impl Request for Disassemble {
+    type Params = DisassembleArguments;
+    type Result = DisassembleResponse;
+    const COMMAND: &'static str = "disassemble";
+}
+
+/// Arguments for ‘disassemble’ request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DisassembleArguments {
+    /**
+     * Memory reference to the base location containing the instructions to disassemble.
+     */
+    pub memoryReference: String,
+
+    /**
+     * Optional offset (in bytes) to be applied to the reference location before disassembling. Can be negative.
+     */
+    pub offset: Option<i64>,
+
+    /**
+     * Optional offset (in instructions) to be applied after the byte offset (if any) before disassembling. Can be negative.
+     */
+    pub instructionOffset: Option<i64>,
+
+    /**
+     * Number of instructions to disassemble starting at the specified location and offset.
+     * An adapter must return exactly this number of instructions - any unavailable instructions should be replaced with an implementation-defined 'invalid instruction' value.
+     */
+    pub instructionCount: i64,
+
+    /**
+     * If true, the adapter should attempt to resolve memory addresses and other values to symbolic names.
+     */
+    pub resolveSymbols: Option<bool>,
+}
+
+/// Response to ‘disassemble’ request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DisassembleResponse {
+    /**
+     * The list of disassembled instructions.
+     */
+    pub instructions: Vec<DisassembledInstruction>,
+}
+
 /// Evaluates the given expression in the context of the top most stack frame.
 ///
 /// The expression has access to any variables and arguments that are in scope.
@@ -562,6 +610,66 @@ pub struct ExceptionInfoResponse {
      * Detailed information about the exception.
      */
     pub details: Option<ExceptionDetails>,
+}
+
+/// The request sets the location where the debuggee will continue to run.
+pub enum Goto {}
+
+impl Request for Goto {
+    type Params = GotoArguments;
+    type Result = ();
+    const COMMAND: &'static str = "goto";
+}
+
+/// Arguments for ‘goto’ request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GotoArguments {
+    /**
+     * Set the goto target for this thread.
+     */
+    pub threadId: i64,
+
+    /**
+     * The location where the debuggee will continue to run.
+     */
+    pub targetId: i64,
+}
+
+/// This request retrieves the possible goto targets for the specified source location.
+pub enum GotoTargets {}
+
+impl Request for GotoTargets {
+    type Params = GotoTargetsArguments;
+    type Result = GotoTargetsResponse;
+    const COMMAND: &'static str = "gotoTargets";
+}
+
+/// Arguments for ‘gotoTargets’ request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GotoTargetsArguments {
+    /**
+     * The source location for which the goto targets are determined.
+     */
+    pub source: Source,
+
+    /**
+     * The line location for which the goto targets are determined.
+     */
+    pub line: i64,
+
+    /**
+     * An optional column location for which the goto targets are determined.
+     */
+    pub column: Option<i64>,
+}
+
+/// Response to ‘gotoTargets’ request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GotoTargetsResponse {
+    /**
+     * The possible goto targets of the specified location.
+     */
+    pub targets: Vec<GotoTarget>,
 }
 
 /// The request starts the debuggee to run again for one step.
@@ -733,6 +841,47 @@ pub struct SetFunctionBreakpointsResponse {
      * Information about the breakpoints. The array elements correspond to the elements of the 'breakpoints' array.
      */
     pub breakpoints: Vec<Breakpoint>,
+}
+
+impl Request for Source {
+    type Params = SourceArguments;
+    type Result = SourceResponse;
+    const COMMAND: &'static str = "source";
+}
+
+/// Arguments for ‘source’ request.
+#[derive(Deserialize, Debug)]
+pub struct SourceArguments {
+    /**
+     * Specifies the source content to load. Either source.path or source.sourceReference must be specified.
+     */
+    pub source: Option<Source>,
+
+    /**
+     * The reference to the source. This is the same as source.sourceReference.
+     * This is provided for backward compatibility since old backends do not understand the 'source' attribute.
+     */
+    pub sourceReference: i64,
+}
+
+/// Response to ‘source’ request.
+#[derive(Serialize, Debug)]
+pub struct SourceResponse {
+    /**
+     * Content of the source reference.
+     */
+    pub content: String,
+
+    /**
+     * Optional content type (mime type) of the source.
+     */
+    pub mimeType: Option<String>,
+}
+
+impl From<String> for SourceResponse {
+    fn from(content: String) -> SourceResponse {
+        SourceResponse { content, mimeType: None }
+    }
 }
 
 /// The request returns a stacktrace from the current execution state.
@@ -1089,6 +1238,57 @@ pub struct Capabilities {
     pub supportsBreakpointLocationsRequest: Option<bool>,
 }
 
+/// Represents a single disassembled instruction.
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct DisassembledInstruction {
+    /**
+     * The address of the instruction. Treated as a hex value if prefixed with '0x', or as a decimal value otherwise.
+     */
+    pub address: String,
+
+    /**
+     * Optional raw bytes representing the instruction and its operands, in an implementation-defined format.
+     */
+    pub instructionBytes: Option<String>,
+
+    /**
+     * Text representing the instruction and its operands, in an implementation-defined format.
+     */
+    pub instruction: String,
+
+    /**
+     * Name of the symbol that corresponds with the location of this instruction, if any.
+     */
+    pub symbol: Option<String>,
+
+    /**
+     * Source location that corresponds to this instruction, if any.
+     * Should always be set (if available) on the first instruction returned,
+     * but can be omitted afterwards if this instruction maps to the same source file as the previous instruction.
+     */
+    pub location: Option<Source>,
+
+    /**
+     * The line within the source location that corresponds to this instruction, if any.
+     */
+    pub line: Option<i64>,
+
+    /**
+     * The column within the line that corresponds to this instruction, if any.
+     */
+    pub column: Option<i64>,
+
+    /**
+     * The end line of the range that corresponds to this instruction, if any.
+     */
+    pub endLine: Option<i64>,
+
+    /**
+     * The end column of the range that corresponds to this instruction, if any.
+     */
+    pub endColumn: Option<i64>,
+}
+
 /// This enumeration defines all possible conditions when a thrown exception should result in a break.
 #[derive(Serialize, Deserialize, Debug)]
 pub enum ExceptionBreakMode {
@@ -1206,6 +1406,45 @@ pub struct FunctionBreakpoint {
      * An optional expression that controls how many hits of the breakpoint are ignored. The backend is expected to interpret the expression as needed.
      */
     pub hitCondition: Option<String>,
+}
+
+/// A GotoTarget describes a code location that can be used as a target in the ‘goto’ request.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GotoTarget {
+    /**
+     * Unique identifier for a goto target. This is used in the goto request.
+     */
+    pub id: i64,
+
+    /**
+     * The name of the goto target (shown in the UI).
+     */
+    pub label: String,
+
+    /**
+     * The line of the goto target.
+     */
+    pub line: i64,
+
+    /**
+     * An optional column of the goto target.
+     */
+    pub column: Option<i64>,
+
+    /**
+     * An optional end line of the range covered by the goto target.
+     */
+    pub endLine: Option<i64>,
+
+    /**
+     * An optional end column of the range covered by the goto target.
+     */
+    pub endColumn: Option<i64>,
+
+    /**
+     * Optional memory reference for the instruction pointer value represented by this target.
+     */
+    pub instructionPointerReference: Option<String>,
 }
 
 /// A structured message object. Used to return errors from requests.
