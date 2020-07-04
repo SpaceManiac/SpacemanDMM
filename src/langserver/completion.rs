@@ -433,7 +433,7 @@ impl<'a> Engine<'a> {
                     results.push(CompletionItem {
                         label: name.to_owned(),
                         kind: Some(CompletionItemKind::Constant),
-                        detail: Some(format!("{}", define)),
+                        detail: Some(define.display_with_name(name).to_string()),
                         documentation: item_documentation(define.docs()),
                         .. Default::default()
                     });

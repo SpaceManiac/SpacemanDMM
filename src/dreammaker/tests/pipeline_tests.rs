@@ -20,7 +20,7 @@ fn with_test_dme<F: FnOnce(Preprocessor)>(context: &Context, f: F) {
 fn check_preprocessor() {
     let context = Context::default();
     with_test_dme(&context, |mut preprocessor| {
-        let mut string = Vec::new();
+        let mut string = String::new();
         pretty_print(&mut string, preprocessor.by_ref().map(|t| t.token), true).unwrap();
         context.assert_success();
     });
@@ -30,7 +30,7 @@ fn check_preprocessor() {
 fn check_indentor() {
     let context = Context::default();
     with_test_dme(&context, |mut preprocessor| {
-        let mut string = Vec::new();
+        let mut string = String::new();
         pretty_print(
             &mut string,
             indents::IndentProcessor::new(&context, &mut preprocessor).map(|t| t.token),

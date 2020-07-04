@@ -12,7 +12,6 @@ extern crate serde;
 extern crate serde_derive;
 extern crate toml;
 
-use std::io;
 use std::path::Path;
 use std::borrow::Cow;
 
@@ -65,8 +64,8 @@ impl Context {
 ///
 /// If `show_ws` is true, braces and semicolons are included directly in the
 /// output rather than only being implied by the indentation.
-pub fn pretty_print<W, I>(w: &mut W, input: I, show_ws: bool) -> io::Result<()> where
-    W: io::Write,
+pub fn pretty_print<W, I>(w: &mut W, input: I, show_ws: bool) -> std::fmt::Result where
+    W: std::fmt::Write,
     I: IntoIterator<Item=lexer::Token>
 {
     let mut indents = 0;

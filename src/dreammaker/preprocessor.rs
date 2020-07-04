@@ -48,18 +48,33 @@ impl Define {
             Define::Function { subst, .. } => subst,
         }
     }
+
+    pub fn display_with_name<'a>(&'a self, name: &'a str) -> impl fmt::Display + 'a {
+        NameAndDefine(name, self)
+    }
 }
 
-impl fmt::Display for Define {
+struct NameAndDefine<'a>(&'a str, &'a Define);
+
+impl<'a> fmt::Display for NameAndDefine<'a> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let subst = self.substitution();
-        if subst.is_empty() {
-            fmt.write_str("(macro)")
-        } else if subst.len() == 1 {
-            write!(fmt, "{}", subst[0])
-        } else {
-            fmt.write_str("(macro...)")
+        write!(fmt, "#define {}", self.0)?;
+
+        if let Define::Function { params, .. } = self.1 {
+            fmt.write_str("(")?;
+            for (i, name) in params.iter().enumerate() {
+                if i > 0 {
+                    fmt.write_str(", ")?;
+                }
+                fmt.write_str(name)?;
+            }
+            fmt.write_str(")")?;
         }
+
+        fmt.write_str("\n")?;
+
+        let subst = self.1.substitution();
+        crate::pretty_print(fmt, subst.iter().cloned(), false)
     }
 }
 
