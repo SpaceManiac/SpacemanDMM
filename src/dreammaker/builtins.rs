@@ -433,7 +433,6 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         proc/md5(T);
         proc/min(A,B,C/*,...*/);
         proc/missile(Type,Start,End);
-        proc/new/*Type*/(Args);  // special form
         proc/newlist(A,B,C/*,...*/);
         proc/nonspantext(Haystack,Needles,Start=1);
         proc/num2text(N,SigFig=6, Radix); // +1 form, (N,SigFig) (N, Digits, Radix)

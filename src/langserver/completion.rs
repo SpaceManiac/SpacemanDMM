@@ -11,6 +11,43 @@ use dm::objtree::{TypeRef, TypeVar, TypeProc, ProcValue};
 use crate::{Engine, Span, is_constructor_name};
 use crate::symbol_search::contains;
 
+static PROC_KEYWORDS: &[&str] = &[
+    // Implicit variables
+    "args",
+    "global",
+    "src",
+    "usr",
+
+    // Term
+    "null",
+    "as",
+    ".",
+    "..",
+    "new",
+    // "list", "input", "locate", "pick" appear in builtin proc list
+    "call",
+
+    // Statement
+    "return",
+    "throw",
+    "while",
+    "do",
+    "if",
+    "else",
+    "for",
+    "var",
+    "set",
+    "spawn",
+    "switch",
+    "try",
+    "catch",
+    "continue",
+    "break",
+    "goto",
+    "del",
+    // "CRASH" appears in builtin proc list
+];
+
 fn item_var(ty: TypeRef, name: &str, var: &TypeVar) -> CompletionItem {
     let mut detail = ty.pretty_path().to_owned();
     if let Some(ref decl) = var.declaration {
@@ -344,7 +381,7 @@ impl<'a> Engine<'a> {
 
         // implicit proc vars
         if proc_name.is_some() {
-            for &name in ["args", "global", "src", "usr"].iter() {
+            for &name in PROC_KEYWORDS.iter() {
                 if contains(name, query) {
                     results.push(CompletionItem {
                         label: name.to_owned(),
