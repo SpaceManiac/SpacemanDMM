@@ -49,7 +49,7 @@ static PROC_KEYWORDS: &[&str] = &[
 ];
 
 fn item_var(ty: TypeRef, name: &str, var: &TypeVar) -> CompletionItem {
-    let mut detail = ty.pretty_path().to_owned();
+    let mut detail = format!("on {}", ty.pretty_path());
     if let Some(ref decl) = var.declaration {
         if decl.var_type.flags.is_const() {
             if let Some(ref constant) = var.value.constant {
@@ -81,7 +81,7 @@ fn item_proc(ty: TypeRef, name: &str, proc: &TypeProc) -> CompletionItem {
         } else {
             CompletionItemKind::Method
         }),
-        detail: Some(ty.pretty_path().to_owned()),
+        detail: Some(format!("on {}", ty.pretty_path())),
         documentation: item_documentation(&proc.main_value().docs),
         ..Default::default()
     }
