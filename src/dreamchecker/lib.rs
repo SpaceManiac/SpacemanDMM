@@ -1185,11 +1185,13 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 match expr {
                     Expression::Base { unary, term, follow } => {
                         if let Term::Call(call, vec) = &term.elem {
-                            if let Some(proc) = self.ty.get_proc(call) {
-                                if let Some((_, _, loc)) = self.env.must_be_pure.get_self_or_parent(proc) {
-                                    error(location, format!("call to pure proc {} discards return value", call))
-                                        .with_note(loc, "prohibited by this must_be_pure annotation")
-                                        .register(self.context);
+                            if !follow.iter().any(|f| match f.elem { Follow::Call(..) => true, _ => false }) {
+                                if let Some(proc) = self.ty.get_proc(call) {
+                                    if let Some((_, _, loc)) = self.env.must_be_pure.get_self_or_parent(proc) {
+                                        error(location, format!("call to pure proc {} discards return value", call))
+                                            .with_note(loc, "prohibited by this must_be_pure annotation")
+                                            .register(self.context);
+                                    }
                                 }
                             }
                         }
