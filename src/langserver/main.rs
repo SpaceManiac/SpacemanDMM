@@ -1089,11 +1089,12 @@ handle_method_call! {
     }
 
     on HoverRequest(&mut self, params) {
-        let (_, file_id, annotations) = self.get_annotations(&params.text_document.uri)?;
+        let tdp = params.text_document_position_params;
+        let (_, file_id, annotations) = self.get_annotations(&tdp.text_document.uri)?;
         let location = dm::Location {
             file: file_id,
-            line: params.position.line as u32 + 1,
-            column: params.position.character as u16 + 1,
+            line: tdp.position.line as u32 + 1,
+            column: tdp.position.character as u16 + 1,
         };
         let mut results = Vec::new();
 
@@ -1234,11 +1235,12 @@ handle_method_call! {
     }
 
     on GotoDefinition(&mut self, params) {
-        let (real_file_id, file_id, annotations) = self.get_annotations(&params.text_document.uri)?;
+        let tdp = params.text_document_position_params;
+        let (real_file_id, file_id, annotations) = self.get_annotations(&tdp.text_document.uri)?;
         let location = dm::Location {
             file: file_id,
-            line: params.position.line as u32 + 1,
-            column: params.position.character as u16 + 1,
+            line: tdp.position.line as u32 + 1,
+            column: tdp.position.character as u16 + 1,
         };
         let mut results = Vec::new();
 
@@ -1364,11 +1366,12 @@ handle_method_call! {
 
     on GotoTypeDefinition(&mut self, params) {
         // Like GotoDefinition, but only supports vars, then finds their types
-        let (_, file_id, annotations) = self.get_annotations(&params.text_document.uri)?;
+        let tdp = params.text_document_position_params;
+        let (_, file_id, annotations) = self.get_annotations(&tdp.text_document.uri)?;
         let location = dm::Location {
             file: file_id,
-            line: params.position.line as u32 + 1,
-            column: params.position.character as u16 + 1,
+            line: tdp.position.line as u32 + 1,
+            column: tdp.position.character as u16 + 1,
         };
 
         let mut type_path: &[String] = &[];
@@ -1438,7 +1441,8 @@ handle_method_call! {
     }
 
     on GotoImplementation(&mut self, params) {
-        let symbol_id = self.symbol_id_at(params)?;
+        let tdp = params.text_document_position_params;
+        let symbol_id = self.symbol_id_at(tdp)?;
 
         let mut result = &[][..];
         if let Some(id) = symbol_id {
@@ -1534,11 +1538,12 @@ handle_method_call! {
     }
 
     on SignatureHelpRequest(&mut self, params) {
-        let (_, file_id, annotations) = self.get_annotations(&params.text_document.uri)?;
+        let tdp = params.text_document_position_params;
+        let (_, file_id, annotations) = self.get_annotations(&tdp.text_document.uri)?;
         let location = dm::Location {
             file: file_id,
-            line: params.position.line as u32 + 1,
-            column: params.position.character as u16 + 1,
+            line: tdp.position.line as u32 + 1,
+            column: tdp.position.character as u16 + 1,
         };
         let iter = annotations.get_location(location);
         let mut result = None;
