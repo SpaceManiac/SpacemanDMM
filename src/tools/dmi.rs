@@ -7,8 +7,7 @@ use std::path::Path;
 use std::collections::BTreeMap;
 
 use ndarray::Array3;
-use lodepng::{self, RGBA};
-use lodepng::ffi::{State as PngState, ColorType};
+use lodepng::{self, RGBA, Decoder, ColorType};
 
 pub use dm::dmi::*;
 
@@ -28,9 +27,9 @@ pub struct IconFile {
 impl IconFile {
     pub fn from_file(path: &Path) -> io::Result<IconFile> {
         let path = &::dm::fix_case(path);
-        let mut decoder = PngState::new();
-        decoder.info_raw.colortype = ColorType::RGBA;
-        decoder.info_raw.set_bitdepth(8);
+        let mut decoder = Decoder::new();
+        decoder.info_raw_mut().colortype = ColorType::RGBA;
+        decoder.info_raw_mut().set_bitdepth(8);
         decoder.remember_unknown_chunks(false);
         let bitmap = match decoder.decode_file(path) {
             Ok(::lodepng::Image::RGBA(bitmap)) => bitmap,
@@ -142,9 +141,9 @@ impl Image {
     /// image contents at one time.
     pub fn from_file(path: &Path) -> io::Result<Image> {
         let path = &::dm::fix_case(path);
-        let mut decoder = PngState::new();
-        decoder.info_raw.colortype = ColorType::RGBA;
-        decoder.info_raw.set_bitdepth(8);
+        let mut decoder = Decoder::new();
+        decoder.info_raw_mut().colortype = ColorType::RGBA;
+        decoder.info_raw_mut().set_bitdepth(8);
         decoder.read_text_chunks(false);
         decoder.remember_unknown_chunks(false);
         let bitmap = match decoder.decode_file(path) {

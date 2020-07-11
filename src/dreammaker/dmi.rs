@@ -4,7 +4,7 @@ use std::io;
 use std::path::Path;
 use std::collections::BTreeMap;
 
-use lodepng::ffi::{State as PngState};
+use lodepng::Decoder;
 
 const VERSION: &str = "4.0";
 
@@ -277,7 +277,7 @@ impl Frames {
 
 fn read_metadata(path: &Path) -> io::Result<String> {
     let path = &crate::fix_case(path);
-    let mut decoder = PngState::new();
+    let mut decoder = Decoder::new();
     decoder.remember_unknown_chunks(false);
     match decoder.decode_file(path) {
         Ok(_) => {}

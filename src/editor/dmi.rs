@@ -6,8 +6,7 @@ use std::collections::hash_map::HashMap;
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
 
-use lodepng::{self, RGBA};
-use lodepng::ffi::{State as PngState, ColorType};
+use lodepng::{self, RGBA, Decoder, ColorType};
 
 use gfx::{self, Factory as FactoryTrait};
 use crate::{Factory, Texture};
@@ -123,9 +122,9 @@ pub struct IconFile {
 impl IconFile {
     pub fn from_file(path: &Path) -> io::Result<IconFile> {
         let path = &::dm::fix_case(path);
-        let mut decoder = PngState::new();
-        decoder.info_raw.colortype = ColorType::RGBA;
-        decoder.info_raw.set_bitdepth(8);
+        let mut decoder = Decoder::new();
+        decoder.info_raw_mut().colortype = ColorType::RGBA;
+        decoder.info_raw_mut().set_bitdepth(8);
         decoder.remember_unknown_chunks(false);
         let bitmap = match decoder.decode_file(path) {
             Ok(::lodepng::Image::RGBA(bitmap)) => bitmap,
@@ -200,9 +199,9 @@ impl IconFile {
 }
 
 pub fn texture_from_bytes(factory: &mut Factory, bytes: &[u8]) -> io::Result<Texture> {
-    let mut decoder = PngState::new();
-    decoder.info_raw.colortype = ColorType::RGBA;
-    decoder.info_raw.set_bitdepth(8);
+    let mut decoder = Decoder::new();
+    decoder.info_raw_mut().colortype = ColorType::RGBA;
+    decoder.info_raw_mut().set_bitdepth(8);
     decoder.remember_unknown_chunks(false);
     let bitmap = match decoder.decode(bytes) {
         Ok(::lodepng::Image::RGBA(bitmap)) => bitmap,

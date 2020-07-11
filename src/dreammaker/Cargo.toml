@@ -9,7 +9,7 @@ path = "lib.rs"
 
 [dependencies]
 interval-tree = { path = "../interval-tree" }
-lodepng = "2.1.5"
+lodepng = "3.0.0"
 bitflags = "1.0.3"
 termcolor = "1.0.4"
 ordered-float = "1.0.2"
