@@ -1142,6 +1142,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         for stmt in block.iter() {
             if term.terminates() {
                 error(stmt.location,"possible unreachable code here")
+                    .with_errortype("unreachable_code")
                     .register(self.context);
                 return term // stop evaluating
             }
@@ -1155,10 +1156,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         match expression.is_truthy() {
             Some(true) => {
                 error(location,"loop condition is always true")
+                    .with_errortype("loop_condition_determinate")
                     .register(self.context);
             },
             Some(false) => {
                 error(location,"loop condition is always false")
+                    .with_errortype("loop_condition_determinate")
                     .register(self.context);
             }
             _ => ()
@@ -1168,7 +1171,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     fn visit_control_condition(&mut self, location: Location, expression: &'o Expression) {
         if expression.is_const_eval() {
             error(location,"control flow condition is a constant evalutation")
-                    .register(self.context);
+                .with_errortype("control_condition_static")
+                .register(self.context);
         }
         else if let Some(term) = expression.as_term() {
             if term.is_static() {
@@ -1222,6 +1226,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Statement::Throw(expr) => { self.visit_expression(location, expr, None, local_vars); },
             Statement::While { condition, block } => {
                 let mut scoped_locals = local_vars.clone();
+                // We don't check for static/determine conditions because while(TRUE) is so common.
                 self.visit_expression(location, condition, None, &mut scoped_locals);
                 let mut state = self.visit_block(block, &mut scoped_locals);
                 state.end_loop();
@@ -1248,6 +1253,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     self.visit_control_condition(condition.location, &condition.elem);
                     if alwaystrue {
                         error(condition.location,"unreachable if block, preceeding if/elseif condition(s) are always true")
+                            .with_errortype("unreachable_code")
                             .register(self.context);
                     }
                     self.visit_expression(condition.location, &condition.elem, None, &mut scoped_locals);
@@ -1272,6 +1278,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     if alwaystrue {
                         if let Some(else_expr) = else_arm.first() {
                             error(else_expr.location ,"unreachable else block, preceeding if/elseif condition(s) are always true")
+                                .with_errortype("unreachable_code")
                                 .register(self.context);
                         }
                     }
@@ -1641,6 +1648,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     self.visit_call(location, src, proc, args, true, local_vars)
                 } else {
                     error(location, format!("proc has no parent: {}", self.proc_ref))
+                        .with_errortype("proc_has_no_parent")
                         .register(self.context);
                     Analysis::empty()
                 }
