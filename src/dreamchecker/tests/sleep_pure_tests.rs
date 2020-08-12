@@ -45,6 +45,29 @@ fn sleep() {
     check_errors_match(code, SLEEP_ERRORS);
 }
 
+pub const SLEEP_ERRORS2: &[(u32, u16, &str)] = &[
+    (10, 16, "/mob/living/proc/bar sets SpacemanDMM_should_not_sleep but calls blocking proc /mob/living/carbon/proc/foo"),
+];
+
+#[test]
+fn sleep2() {
+    let code = r##"
+/mob/proc/foo()
+    sleep(1)
+
+/mob/living/foo()
+    return TRUE
+
+/mob/living/carbon/foo()
+    sleep(1)
+
+/mob/living/bar()
+    set SpacemanDMM_should_not_sleep = TRUE
+    foo()
+"##.trim();
+    check_errors_match(code, SLEEP_ERRORS2);
+}
+
 pub const PURE_ERRORS: &[(u32, u16, &str)] = &[
     (12, 16, "/mob/proc/test2 sets SpacemanDMM_should_be_pure but calls a /proc/impure that does impure operations"),
 ];

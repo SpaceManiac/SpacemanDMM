@@ -660,20 +660,23 @@ impl<'o> AnalyzeObjectTree<'o> {
                 if new_context {
                     continue
                 }
-                if let Some(sleepvec) = self.sleeping_procs.get_violators(nextproc) {
-                    error(procref.get().location, format!("{} sets SpacemanDMM_should_not_sleep but calls blocking proc {}", procref, nextproc))
-                        .with_note(location, "SpacemanDMM_should_not_sleep set here")
-                        .with_errortype("must_not_sleep")
-                        .with_callstack(callstack)
-                        .with_blocking_builtins(sleepvec)
-                        .register(self.context)
-                } else if let Some(calledvec) = self.call_tree.get(&nextproc) {
-                    for (proccalled, location, new_context) in calledvec.iter() {
-                        let mut newstack = callstack.clone();
-                        newstack.add_step(*proccalled, *location, *new_context);
-                        to_visit.push_back((*proccalled, newstack, *new_context));
+
+                nextproc.recurse_children(&mut |child_proc| {
+                    if let Some(sleepvec) = self.sleeping_procs.get_violators(child_proc) {
+                        error(procref.get().location, format!("{} sets SpacemanDMM_should_not_sleep but calls blocking proc {}", procref, child_proc))
+                            .with_note(location, "SpacemanDMM_should_not_sleep set here")
+                            .with_errortype("must_not_sleep")
+                            .with_callstack(callstack.clone())
+                            .with_blocking_builtins(sleepvec)
+                            .register(self.context)
+                    } else if let Some(calledvec) = self.call_tree.get(&child_proc) {
+                        for (proccalled, location, new_context) in calledvec.iter() {
+                            let mut newstack = callstack.clone();
+                            newstack.add_step(*proccalled, *location, *new_context);
+                            to_visit.push_back((*proccalled, newstack, *new_context));
+                        }
                     }
-                }
+                });
             }
         }
 
@@ -698,20 +701,23 @@ impl<'o> AnalyzeObjectTree<'o> {
                 if !visited.insert(nextproc) {
                     continue
                 }
-                if let Some(impurevec) = self.impure_procs.get_violators(nextproc) {
-                    error(procref.get().location, format!("{} sets SpacemanDMM_should_be_pure but calls a {} that does impure operations", procref, nextproc))
-                        .with_note(*location, "SpacemanDMM_should_be_pure set here")
-                        .with_errortype("must_be_pure")
-                        .with_callstack(callstack)
-                        .with_impure_operations(impurevec)
-                        .register(self.context)
-                } else if let Some(calledvec) = self.call_tree.get(&nextproc) {
-                    for (proccalled, location, new_context) in calledvec.iter() {
-                        let mut newstack = callstack.clone();
-                        newstack.add_step(*proccalled, *location, *new_context);
-                        to_visit.push_back((*proccalled, newstack));
+
+                nextproc.recurse_children(&mut |child_proc| {
+                    if let Some(impurevec) = self.impure_procs.get_violators(child_proc) {
+                        error(procref.get().location, format!("{} sets SpacemanDMM_should_be_pure but calls a {} that does impure operations", procref, child_proc))
+                            .with_note(*location, "SpacemanDMM_should_be_pure set here")
+                            .with_errortype("must_be_pure")
+                            .with_callstack(callstack.clone())
+                            .with_impure_operations(impurevec)
+                            .register(self.context)
+                    } else if let Some(calledvec) = self.call_tree.get(&child_proc) {
+                        for (proccalled, location, new_context) in calledvec.iter() {
+                            let mut newstack = callstack.clone();
+                            newstack.add_step(*proccalled, *location, *new_context);
+                            to_visit.push_back((*proccalled, newstack));
+                        }
                     }
-                }
+                });
             }
         }
     }
