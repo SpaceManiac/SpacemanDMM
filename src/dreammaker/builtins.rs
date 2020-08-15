@@ -328,6 +328,10 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         var/const/WAVE_SIDEWAYS = int!(1);
         var/const/WAVE_BOUNDED = int!(2);
 
+        // outline filter
+        var/const/OUTLINE_SHARP = int!(1);
+        var/const/OUTLINE_SQUARE = int!(2);
+
         // global procs
         proc/abs(A);
         proc/addtext(Arg1, Arg2/*, ...*/);
