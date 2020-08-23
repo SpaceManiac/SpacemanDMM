@@ -481,13 +481,13 @@ impl<'o> CallStack<'o> {
 }
 
 trait DMErrorExt {
-    fn with_callstack(self, stack: CallStack) -> Self;
+    fn with_callstack(self, stack: &CallStack) -> Self;
     fn with_blocking_builtins(self, blockers: &Vec<(String, Location)>) -> Self;
     fn with_impure_operations(self, impures: &Vec<(String, Location)>) -> Self;
 }
 
 impl DMErrorExt for DMError {
-    fn with_callstack(mut self, stack: CallStack) -> DMError {
+    fn with_callstack(mut self, stack: &CallStack) -> DMError {
         for (procref, location, new_context) in stack.call_stack.iter() {
             self.add_note(*location, format!("{}() called here", procref));
         }
@@ -666,7 +666,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                         error(procref.get().location, format!("{} sets SpacemanDMM_should_not_sleep but calls blocking proc {}", procref, child_proc))
                             .with_note(location, "SpacemanDMM_should_not_sleep set here")
                             .with_errortype("must_not_sleep")
-                            .with_callstack(callstack.clone())
+                            .with_callstack(&callstack)
                             .with_blocking_builtins(sleepvec)
                             .register(self.context)
                     } else if let Some(calledvec) = self.call_tree.get(&child_proc) {
@@ -707,7 +707,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                         error(procref.get().location, format!("{} sets SpacemanDMM_should_be_pure but calls a {} that does impure operations", procref, child_proc))
                             .with_note(*location, "SpacemanDMM_should_be_pure set here")
                             .with_errortype("must_be_pure")
-                            .with_callstack(callstack.clone())
+                            .with_callstack(&callstack)
                             .with_impure_operations(impurevec)
                             .register(self.context)
                     } else if let Some(calledvec) = self.call_tree.get(&child_proc) {
