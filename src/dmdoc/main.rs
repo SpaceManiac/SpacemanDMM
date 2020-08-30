@@ -328,6 +328,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                 .get("name")
                 .and_then(|v| v.value.constant.as_ref())
                 .and_then(|c| c.as_str())
+                .map(strip_propriety)
                 .unwrap_or("")
                 .into();
         }
@@ -878,6 +879,13 @@ fn read_as_markdown(path: &Path) -> std::io::Result<Option<String>> {
     } else {
         Ok(None)
     }
+}
+
+fn strip_propriety(name: &str) -> &str {
+    name
+        .trim_start_matches("\\proper")
+        .trim_start_matches("\\improper")
+        .trim_start()
 }
 
 // ----------------------------------------------------------------------------
