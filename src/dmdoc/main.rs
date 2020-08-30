@@ -279,12 +279,21 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
 
         let entry = entry?;
         let path = entry.path();
-        if path.extension() != Some("md".as_ref()) {
+        let ext = path.extension();
+        let is_md = ext == Some("md".as_ref());
+        let is_txt = ext == Some("txt".as_ref());
+        if !is_md && !is_txt {
             continue;
         }
 
         let mut buf = String::new();
+        if is_txt {
+            buf.push_str("```\n");
+        }
         File::open(path)?.read_to_string(&mut buf)?;
+        if is_txt {
+            buf.push_str("```");
+        }
         if path == modules_path.join("README.md") {
             index_docs = Some(DocBlock::parse_with_title(&buf, Some(broken_link_callback)));
         } else {
