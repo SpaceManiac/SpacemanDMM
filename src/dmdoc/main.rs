@@ -44,7 +44,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     // command-line args
     let mut environment = None;
     let mut output_path = "dmdoc".to_owned();
-    let mut modules_path = "code".to_owned();
+    let mut index_path = None;
 
     let mut args = std::env::args();
     let _ = args.next();  // skip executable name
@@ -56,15 +56,14 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             environment = Some(args.next().expect("must specify a value for -e"));
         } else if arg == "--output" {
             output_path = args.next().expect("must specify a value for --output");
-        } else if arg == "--modules" {
-            modules_path = args.next().expect("must specify a value for --modules");
+        } else if arg == "--index" {
+            index_path = Some(args.next().expect("must specify a value for --index"));
         } else {
             return Err(format!("unknown argument: {}", arg).into());
         }
     }
 
     let output_path: &Path = output_path.as_ref();
-    let modules_path: &Path = modules_path.as_ref();
 
     // parse environment
     let environment = match environment {
@@ -91,6 +90,16 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     let define_history = pp.finalize();
 
     println!("collating documented types");
+
+    // Any top-level directory which is `#include`d in the `.dme` (most
+    // importantly "code", but also "_maps", "interface", and any downstream
+    // modular folders) will be searched for `.md` files to include in the docs.
+    let mut code_directories = std::collections::HashSet::new();
+    context.file_list().for_each(|path| {
+        if let Some(std::path::Component::Normal(first)) = path.components().next() {
+            code_directories.insert(first.to_owned());
+        }
+    });
 
     // get a read on which types *have* docs
     let mut types_with_docs = BTreeMap::new();
@@ -273,23 +282,29 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // search the code tree for Markdown files
-    let mut index_docs = None;
-    for entry in walkdir::WalkDir::new(modules_path).into_iter().filter_entry(is_visible) {
-        let entry = entry?;
-        let path = entry.path();
+    for modules_path in code_directories {
+        for entry in walkdir::WalkDir::new(modules_path).into_iter().filter_entry(is_visible) {
+            let entry = entry?;
+            let path = entry.path();
 
-        if let Some(buf) = read_as_markdown(path)? {
-            if path == modules_path.join("README.md") {
-                index_docs = Some(DocBlock::parse_with_title(&buf, Some(broken_link_callback)));
-            } else {
-                let module = module_entry(&mut modules1, &path);
-                module.items_wip.push((0, ModuleItem::DocComment(DocComment {
-                    kind: CommentKind::Block,
-                    target: DocTarget::EnclosingItem,
-                    text: buf,
-                })));
+            if let Some(buf) = read_as_markdown(path)? {
+                if Some(path) != index_path.as_ref().map(Path::new) {
+                    let module = module_entry(&mut modules1, &path);
+                    module.items_wip.push((0, ModuleItem::DocComment(DocComment {
+                        kind: CommentKind::Block,
+                        target: DocTarget::EnclosingItem,
+                        text: buf,
+                    })));
+                }
             }
         }
+    }
+
+    // Incorporate the index file if requested.
+    let mut index_docs = None;
+    if let Some(index_path) = index_path {
+        let buf = read_as_markdown(index_path.as_ref())?.expect("file for --index must be .md or .txt");
+        index_docs = Some(DocBlock::parse_with_title(&buf, Some(broken_link_callback)));
     }
 
     // collate types which have docs

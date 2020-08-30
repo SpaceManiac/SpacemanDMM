@@ -79,6 +79,12 @@ impl FileList {
             files[idx].to_owned()
         }
     }
+
+    pub fn for_each<F: FnMut(&Path)>(&self, mut f: F) {
+        for each in self.files.borrow().iter() {
+            f(each);
+        }
+    }
 }
 
 impl Context {
@@ -103,6 +109,10 @@ impl Context {
     /// Clone the file list of this Context but not its error list.
     pub fn clone_file_list(&self) -> FileList {
         self.files.clone()
+    }
+
+    pub fn file_list(&self) -> &FileList {
+        &self.files
     }
 
     // ------------------------------------------------------------------------
