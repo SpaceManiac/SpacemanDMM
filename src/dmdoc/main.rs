@@ -275,34 +275,20 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     // search the code tree for Markdown files
     let mut index_docs = None;
     for entry in walkdir::WalkDir::new(modules_path).into_iter().filter_entry(is_visible) {
-        use std::io::Read;
-
         let entry = entry?;
         let path = entry.path();
-        let ext = path.extension();
-        let is_md = ext == Some("md".as_ref());
-        let is_txt = ext == Some("txt".as_ref());
-        if !is_md && !is_txt {
-            continue;
-        }
 
-        let mut buf = String::new();
-        if is_txt {
-            buf.push_str("```\n");
-        }
-        File::open(path)?.read_to_string(&mut buf)?;
-        if is_txt {
-            buf.push_str("```");
-        }
-        if path == modules_path.join("README.md") {
-            index_docs = Some(DocBlock::parse_with_title(&buf, Some(broken_link_callback)));
-        } else {
-            let module = module_entry(&mut modules1, &path);
-            module.items_wip.push((0, ModuleItem::DocComment(DocComment {
-                kind: CommentKind::Block,
-                target: DocTarget::EnclosingItem,
-                text: buf,
-            })));
+        if let Some(buf) = read_as_markdown(path)? {
+            if path == modules_path.join("README.md") {
+                index_docs = Some(DocBlock::parse_with_title(&buf, Some(broken_link_callback)));
+            } else {
+                let module = module_entry(&mut modules1, &path);
+                module.items_wip.push((0, ModuleItem::DocComment(DocComment {
+                    kind: CommentKind::Block,
+                    target: DocTarget::EnclosingItem,
+                    text: buf,
+                })));
+            }
         }
     }
 
@@ -856,6 +842,27 @@ fn git_info(git: &mut Git) -> Result<(), git2::Error> {
         }
     }
     Ok(())
+}
+
+fn read_as_markdown(path: &Path) -> std::io::Result<Option<String>> {
+    use std::io::Read;
+
+    let ext = path.extension();
+    let is_md = ext == Some("md".as_ref());
+    let is_txt = ext == Some("txt".as_ref());
+    if is_md || is_txt {
+        let mut buf = String::new();
+        if is_txt {
+            buf.push_str("```\n");
+        }
+        File::open(path)?.read_to_string(&mut buf)?;
+        if is_txt {
+            buf.push_str("```");
+        }
+        Ok(Some(buf))
+    } else {
+        Ok(None)
+    }
 }
 
 // ----------------------------------------------------------------------------
