@@ -643,7 +643,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             html: index_docs.as_ref().map(|(_, docs)| &docs.html[..]),
             modules: build_index_tree(modules.iter().map(|(_path, module)| IndexTree {
                 htmlname: &module.htmlname,
-                full_name: &module.orig_filename,
+                full_name: &module.htmlname,
                 self_name: match module.name {
                     None => last_element(&module.htmlname),
                     Some(ref t) => t.as_str(),
@@ -730,7 +730,11 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
 // Helpers
 
 fn module_path(path: &Path) -> String {
-    path.with_extension("").display().to_string().replace("\\", "/")
+    let mut path = path.with_extension("");
+    if path.file_name().map_or(false, |x| x.to_string_lossy().eq_ignore_ascii_case("README")) {
+        path.pop();
+    }
+    path.display().to_string().replace("\\", "/")
 }
 
 fn module_entry<'a, 'b>(modules: &'a mut BTreeMap<String, Module1<'b>>, path: &Path) -> &'a mut Module1<'b> {
