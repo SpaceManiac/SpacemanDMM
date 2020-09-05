@@ -1096,9 +1096,11 @@ handle_method_call! {
             line: tdp.position.line as u32 + 1,
             column: tdp.position.character as u16 + 1,
         };
+        let symbol_id = self.symbol_id_at(tdp)?;
         let mut results = Vec::new();
 
-        for (_range, annotation) in annotations.get_location(location) {
+        let iter = annotations.get_location(location);
+        for (_range, annotation) in iter.clone() {
             #[cfg(debug_assertions)] {
                 results.push(format!("{:?}", annotation));
             }
@@ -1236,6 +1238,83 @@ handle_method_call! {
                         results.push(ds);
                     }
                 }
+                Annotation::UnscopedVar(var_name) if symbol_id != None => {
+                    let (ty, proc_name) = self.find_type_context(&iter);
+                    match self.find_unscoped_var(&iter, ty, proc_name, var_name) {
+                        UnscopedVar::Variable { ty, .. } => {
+                            if let Some(_decl) = ty.get_var_declaration(var_name) {
+                                let mut infos = String::new();
+                                let current = ty;
+                                let mut next = Some(current);
+                                let mut docstring : Option<String> = None;
+
+                                while let Some(current) = next {
+                                    if let Some(var) = current.vars.get(var_name) {
+                                        if let Some(ref decl) = var.declaration {
+                                            // First get the path of the type containing the declaration
+                                            let path = if current.path.is_empty() {
+                                                "(global)"
+                                            } else {
+                                                &current.path
+                                            };
+                                            infos.push_str(format!("[{}]({})\n", path, self.location_link(var.value.location)?).as_str());
+
+                                            // Next toss on the declaration itself
+                                            let mut declaration = String::new();
+                                            declaration.push_str("```dm\nvar");
+                                            if decl.var_type.flags.is_static() {
+                                                declaration.push_str("/static");
+                                            }
+                                            if decl.var_type.flags.is_const() {
+                                                declaration.push_str("/const");
+                                            }
+                                            if decl.var_type.flags.is_tmp() {
+                                                declaration.push_str("/tmp");
+                                            }
+                                            if decl.var_type.flags.is_final() {
+                                                declaration.push_str("/SpacemanDMM_final");
+                                            }
+                                            if decl.var_type.flags.is_private() {
+                                                declaration.push_str("/SpacemanDMM_private");
+                                            }
+                                            if decl.var_type.flags.is_protected() {
+                                                declaration.push_str("/SpacemanDMM_protected");
+                                            }
+                                            for bit in decl.var_type.type_path.iter() {
+                                                declaration.push('/');
+                                                declaration.push_str(&bit);
+                                            }
+                                            declaration.push_str("/");
+                                            declaration.push_str(var_name);
+                                            declaration.push_str("\n```");
+                                            infos += declaration.as_str();
+                                        }
+                                        if !var.value.docs.is_empty() {
+                                            docstring = Some(var.value.docs.text());
+                                        }
+                                    }
+                                    next = current.parent_type();
+                                }
+                                if !infos.is_empty() {
+                                    results.push(infos);
+                                }
+                                if let Some(ds) = docstring {
+                                    results.push(ds);
+                                }
+                            }
+                        },
+                        _ => {}
+                    }
+                }
+                // Annotation::UnscopedCall(proc_name) if symbol_id != None => {
+
+                // }
+                // Annotation::ScopedCall(priors, proc_name) if symbol_id != None => {
+
+                // }
+                // Annotation::ScopedVar(priors, var_name) if symbol_id != None => {
+
+                // }
                 _ => {}
             }
         }
