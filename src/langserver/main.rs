@@ -1176,7 +1176,7 @@ handle_method_call! {
                                 &current.path
                             };
                             let proc_value = proc.main_value();
-                            let mut message = format!("[{}]({})  \n{}(", path, self.location_link(proc_value.location)?, last);
+                            let mut message = format!("[{}]({})  \n```dm\n{}(", path, self.location_link(proc_value.location)?, last);
                             let mut first = true;
                             for each in proc_value.parameters.iter() {
                                 use std::fmt::Write;
@@ -1187,15 +1187,10 @@ handle_method_call! {
                                 }
                                 let _ = write!(message, "{}", each);
                             }
-                            message.push_str(")");
+                            message.push_str(")\n```");
                             infos.push_front(message);
                             if let Some(ref decl) = proc.declaration {
-                                let mut declaration = String::new();
-                                declaration.push_str(decl.kind.name());
-                                declaration.push_str("/**");
-                                declaration.push_str(last);
-                                declaration.push_str("**");
-                                infos.push_front(declaration);
+                                infos.push_front(format!("```dm\n{}/{}\n```", decl.kind.name(), last));
                             }
 
                             if !proc_value.docs.is_empty() {
