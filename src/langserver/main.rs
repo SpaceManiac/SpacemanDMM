@@ -1247,9 +1247,53 @@ handle_method_call! {
                         _ => {}
                     }
                 }
-                // Annotation::UnscopedCall(proc_name) if symbol_id != None => {
+                Annotation::UnscopedCall(proc_name) if symbol_id != None => {
+                    let (ty, _) = self.find_type_context(&iter);
+                    let mut next = ty.or(Some(self.objtree.root()));
+                    let mut proclink  = String::new();
+                    let mut defstring = String::new();
+                    let mut docstring : Option<String> = None;
+                    while let Some(ty) = next {
+                        if let Some(proc) = ty.procs.get(proc_name) {
+                            let proc_value = proc.main_value();
 
-                // }
+                            if defstring.is_empty() {
+                                let path = if ty.path.is_empty() {
+                                    "(global)"
+                                } else {
+                                    &ty.path
+                                };
+                                proclink = format!("[{}]({})", path, self.location_link(proc_value.location)?);
+                                let mut message = format!("{}(", proc_name);
+                                let mut first = true;
+                                for each in proc_value.parameters.iter() {
+                                    use std::fmt::Write;
+                                    if first {
+                                        first = false;
+                                    } else {
+                                        message.push_str(", ");
+                                    }
+                                    let _ = write!(message, "{}", each);
+                                }
+                                message.push_str(")");
+                                defstring = message.clone();
+                            }
+
+                            if let Some(ref decl) = proc.declaration {
+                                results.push(format!("{}\n```dm\n{}/{}\n```", proclink, decl.kind.name(), defstring));
+                            }
+
+                            if !proc_value.docs.is_empty() {
+                                docstring = Some(proc_value.docs.text());
+                            }
+                        }
+                        next = ty.parent_type();
+                    }
+
+                    if let Some(ds) = docstring {
+                        results.push(ds);
+                    }
+                }
                 // Annotation::ScopedCall(priors, proc_name) if symbol_id != None => {
 
                 // }
