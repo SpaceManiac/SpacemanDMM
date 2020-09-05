@@ -1340,9 +1340,37 @@ handle_method_call! {
                         results.push(ds);
                     }
                 }
-                // Annotation::ScopedVar(priors, var_name) if symbol_id != None => {
+                Annotation::ScopedVar(priors, var_name) if symbol_id != None => {
+                    let mut next = self.find_scoped_type(&iter, priors);
+                    let mut infos = String::new();
+                    let mut docstring : Option<String> = None;
+                    while let Some(ty) = next {
+                        if let Some(var) = ty.vars.get(var_name) {
+                            if let Some(ref decl) = var.declaration {
+                                // First get the path of the type containing the declaration
+                                let path = if ty.path.is_empty() {
+                                    "(global)"
+                                } else {
+                                    &ty.path
+                                };
+                                infos.push_str(format!("[{}]({})\n", path, self.location_link(var.value.location)?).as_str());
 
-                // }
+                                // Next toss on the declaration itself
+                                infos.push_str(format!("```dm\nvar/{}{}\n```", decl.var_type, var_name).as_str());
+                            }
+                            if !var.value.docs.is_empty() {
+                                docstring = Some(var.value.docs.text());
+                            }
+                        }
+                        next = ty.parent_type_without_root();
+                    }
+                    if !infos.is_empty() {
+                        results.push(infos);
+                    }
+                    if let Some(ds) = docstring {
+                        results.push(ds);
+                    }
+                }
                 _ => {}
             }
         }
