@@ -1294,9 +1294,52 @@ handle_method_call! {
                         results.push(ds);
                     }
                 }
-                // Annotation::ScopedCall(priors, proc_name) if symbol_id != None => {
+                Annotation::ScopedCall(priors, proc_name) if symbol_id != None => {
+                    let mut next = self.find_scoped_type(&iter, priors);
+                    let mut proclink  = String::new();
+                    let mut defstring = String::new();
+                    let mut docstring : Option<String> = None;
+                    while let Some(ty) = next {
+                        if let Some(proc) = ty.procs.get(proc_name) {
+                            let proc_value = proc.main_value();
 
-                // }
+                            if defstring.is_empty() {
+                                let path = if ty.path.is_empty() {
+                                    "(global)"
+                                } else {
+                                    &ty.path
+                                };
+                                proclink = format!("[{}]({})", path, self.location_link(proc_value.location)?);
+                                let mut message = format!("{}(", proc_name);
+                                let mut first = true;
+                                for each in proc_value.parameters.iter() {
+                                    use std::fmt::Write;
+                                    if first {
+                                        first = false;
+                                    } else {
+                                        message.push_str(", ");
+                                    }
+                                    let _ = write!(message, "{}", each);
+                                }
+                                message.push_str(")");
+                                defstring = message.clone();
+                            }
+
+                            if let Some(ref decl) = proc.declaration {
+                                results.push(format!("{}\n```dm\n{}/{}\n```", proclink, decl.kind.name(), defstring));
+                            }
+
+                            if !proc_value.docs.is_empty() {
+                                docstring = Some(proc_value.docs.text());
+                            }
+                        }
+                        next = ty.parent_type_without_root();
+                    }
+
+                    if let Some(ds) = docstring {
+                        results.push(ds);
+                    }
+                }
                 // Annotation::ScopedVar(priors, var_name) if symbol_id != None => {
 
                 // }
