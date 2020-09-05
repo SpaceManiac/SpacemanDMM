@@ -786,11 +786,12 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Punct(Assign) => {
                 // `something=` - var
                 let location = self.location;
+
                 // kind of goofy, but allows "enclosing" doc comments at the end of the line
+                // translators note: this allows comments of the form ``//! blah`` at the end of the line
                 let (docs, expression) = require!(self.doc_comment(|this| {
                     let expr = require!(this.expression());
                     let _ = require!(this.input_specifier());
-                    require!(this.statement_terminator());
                     success(expr)
                 }));
 

@@ -79,7 +79,7 @@ impl AnnotationTree {
     }
 
     pub fn get_location(&self, loc: Location) -> Iter {
-        self.tree.range(range(loc.pred(), loc))
+        self.tree.range(range(loc, loc))
     }
 
     pub fn get_range(&self, place: std::ops::Range<Location>) -> Iter {
