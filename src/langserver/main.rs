@@ -1162,7 +1162,7 @@ handle_method_call! {
                                 declaration.push_str("**");
                                 infos.push_front(declaration);
                             }
-                            if docstring == None && !var.value.docs.is_empty() {
+                            if !var.value.docs.is_empty() {
                                 docstring = Some(var.value.docs.text());
                             }
                         }
@@ -1223,7 +1223,7 @@ handle_method_call! {
                                 infos.push_front(declaration);
                             }
 
-                            if docstring == None && !proc_value.docs.is_empty() {
+                            if !proc_value.docs.is_empty() {
                                 docstring = Some(proc_value.docs.text());
                             }
                         }
