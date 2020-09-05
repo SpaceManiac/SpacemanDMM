@@ -1124,7 +1124,7 @@ handle_method_call! {
                     while let Some(current) = next {
                         if let Some(var) = current.vars.get(last) {
                             let constant = if let Some(ref constant) = var.value.constant {
-                                format!("  \n= `{}`", constant)
+                                format!("\n```dm\n= {}\n```", constant)
                             } else {
                                 String::new()
                             };
@@ -1135,34 +1135,7 @@ handle_method_call! {
                             };
                             infos.push_front(format!("[{}]({}){}", path, self.location_link(var.value.location)?, constant));
                             if let Some(ref decl) = var.declaration {
-                                let mut declaration = String::new();
-                                declaration.push_str("var");
-                                if decl.var_type.flags.is_static() {
-                                    declaration.push_str("/static");
-                                }
-                                if decl.var_type.flags.is_const() {
-                                    declaration.push_str("/const");
-                                }
-                                if decl.var_type.flags.is_tmp() {
-                                    declaration.push_str("/tmp");
-                                }
-                                if decl.var_type.flags.is_final() {
-                                    declaration.push_str("/SpacemanDMM_final");
-                                }
-                                if decl.var_type.flags.is_private() {
-                                    declaration.push_str("/SpacemanDMM_private");
-                                }
-                                if decl.var_type.flags.is_protected() {
-                                    declaration.push_str("/SpacemanDMM_protected");
-                                }
-                                for bit in decl.var_type.type_path.iter() {
-                                    declaration.push('/');
-                                    declaration.push_str(&bit);
-                                }
-                                declaration.push_str("/**");
-                                declaration.push_str(last);
-                                declaration.push_str("**");
-                                infos.push_front(declaration);
+                                infos.push_front(format!("```dm\nvar/{}{}\n```", decl.var_type, last));
                             }
                             if !var.value.docs.is_empty() {
                                 docstring = Some(var.value.docs.text());
@@ -1260,34 +1233,7 @@ handle_method_call! {
                                             infos.push_str(format!("[{}]({})\n", path, self.location_link(var.value.location)?).as_str());
 
                                             // Next toss on the declaration itself
-                                            let mut declaration = String::new();
-                                            declaration.push_str("```dm\nvar");
-                                            if decl.var_type.flags.is_static() {
-                                                declaration.push_str("/static");
-                                            }
-                                            if decl.var_type.flags.is_const() {
-                                                declaration.push_str("/const");
-                                            }
-                                            if decl.var_type.flags.is_tmp() {
-                                                declaration.push_str("/tmp");
-                                            }
-                                            if decl.var_type.flags.is_final() {
-                                                declaration.push_str("/SpacemanDMM_final");
-                                            }
-                                            if decl.var_type.flags.is_private() {
-                                                declaration.push_str("/SpacemanDMM_private");
-                                            }
-                                            if decl.var_type.flags.is_protected() {
-                                                declaration.push_str("/SpacemanDMM_protected");
-                                            }
-                                            for bit in decl.var_type.type_path.iter() {
-                                                declaration.push('/');
-                                                declaration.push_str(&bit);
-                                            }
-                                            declaration.push_str("/");
-                                            declaration.push_str(var_name);
-                                            declaration.push_str("\n```");
-                                            infos += declaration.as_str();
+                                            infos.push_str(format!("```dm\nvar/{}{}\n```", decl.var_type, var_name).as_str());
                                         }
                                         if !var.value.docs.is_empty() {
                                             docstring = Some(var.value.docs.text());
