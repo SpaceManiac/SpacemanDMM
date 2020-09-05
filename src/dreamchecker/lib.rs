@@ -69,6 +69,14 @@ impl<'o> StaticType<'o> {
     fn list_of_type(tree: &'o ObjectTree, of: &str) -> StaticType<'o> {
         StaticType::List { list: tree.expect("/list"), keys: Box::new(StaticType::Type(tree.expect(of))) }
     }
+
+    fn is_list(&self) -> bool {
+        match *self {
+            StaticType::None => false,
+            StaticType::Type(ty) => ty.path == "/list",
+            StaticType::List { .. } => true,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -1916,6 +1924,17 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
     fn visit_binary(&mut self, lhs: Analysis<'o>, rhs: Analysis<'o>, op: BinaryOp) -> Analysis<'o> {
         //println!("visit_binary: don't know anything about {}", op);
+        if lhs.static_ty.is_list() {
+            // If the LHS of these operators is a list, so is the result.
+            match op {
+                BinaryOp::Add |
+                BinaryOp::Sub |
+                BinaryOp::BitOr |
+                BinaryOp::BitAnd |
+                BinaryOp::BitXor => return lhs.static_ty.into(),
+                _ => {}
+            }
+        }
         Analysis::empty()
     }
 
