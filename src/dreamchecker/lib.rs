@@ -1701,7 +1701,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Term::List(args) => {
                 self.visit_arguments(location, args, local_vars);
-                assumption_set![Assumption::IsType(true, self.objtree.expect("/list"))].into()
+                Analysis::from_static_type(self.objtree.expect("/list"))
             },
             Term::Input { args, input_type, in_list } => {
                 if self.inside_newcontext == 0 {
