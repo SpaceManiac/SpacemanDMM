@@ -1118,6 +1118,7 @@ handle_method_call! {
 
                     let mut infos = VecDeque::new();
                     let mut next = Some(current);
+                    let mut docstring : Option<String> = None;
                     while let Some(current) = next {
                         if let Some(var) = current.vars.get(last) {
                             let constant = if let Some(ref constant) = var.value.constant {
@@ -1161,11 +1162,17 @@ handle_method_call! {
                                 declaration.push_str("**");
                                 infos.push_front(declaration);
                             }
+                            if docstring == None && !var.value.docs.is_empty() {
+                                docstring = Some(var.value.docs.text());
+                            }
                         }
                         next = current.parent_type();
                     }
                     if !infos.is_empty() {
                         results.push(infos.into_iter().collect::<Vec<_>>().join("\n\n"));
+                    }
+                    if let Some(ds) = docstring {
+                        results.push(ds);
                     }
                 }
                 Annotation::ProcHeader(path, _idx) if !path.is_empty() => {
@@ -1185,6 +1192,7 @@ handle_method_call! {
                     // the last proc for each type
                     let mut infos = VecDeque::new();
                     let mut next = Some(current);
+                    let mut docstring : Option<String> = None;
                     while let Some(current) = next {
                         if let Some(proc) = current.procs.get(last) {
                             let path = if current.path.is_empty() {
@@ -1214,11 +1222,18 @@ handle_method_call! {
                                 declaration.push_str("**");
                                 infos.push_front(declaration);
                             }
+
+                            if docstring == None && !proc_value.docs.is_empty() {
+                                docstring = Some(proc_value.docs.text());
+                            }
                         }
                         next = current.parent_type();
                     }
                     if !infos.is_empty() {
                         results.push(infos.into_iter().collect::<Vec<_>>().join("\n\n"));
+                    }
+                    if let Some(ds) = docstring {
+                        results.push(ds);
                     }
                 }
                 _ => {}
