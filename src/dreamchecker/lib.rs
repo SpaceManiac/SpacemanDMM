@@ -1312,7 +1312,33 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Statement::ForList { in_list, block, var_type, name, .. } => {
                 let mut scoped_locals = local_vars.clone();
                 if let Some(in_list) = in_list {
-                    self.visit_expression(location, in_list, None, &mut scoped_locals);
+                    let list = self.visit_expression(location, in_list, None, &mut scoped_locals);
+                    match list.static_ty {
+                        StaticType::None => {
+                            // Occurs extremely often due to DM not complaining about this, with
+                            // over 800 detections on /tg/. Maybe a future lint.
+                        }
+                        StaticType::List { .. } => {/* OK */}
+                        StaticType::Type(ty) => {
+                            if ty != self.objtree.expect("/world") && ty != self.objtree.expect("/list") {
+                                let atom = self.objtree.expect("/atom");
+                                if ty.is_subtype_of(&atom) {
+                                    // Fine.
+                                } else if atom.is_subtype_of(&ty) {
+                                    // Iffy conceptually, but the only detections on /tg/ are false positives in the
+                                    // component system, where we loop over `var/datum/parent` that is known to be an
+                                    // atom in a way that's hard for Dreamchecker to capture.
+                                    error(location, "iterating over a /datum which might not be an /atom")
+                                        .set_severity(Severity::Hint)
+                                        .register(self.context);
+                                } else {
+                                    // The type is a /datum/foo subtype that definitely can't be looped over.
+                                    error(location, format!("iterating over a {} which cannot be iterated", ty.path))
+                                        .register(self.context);
+                                }
+                            }
+                        }
+                    }
                 }
                 if let Some(var_type) = var_type {
                     self.visit_var(location, var_type, name, None, &mut scoped_locals);
