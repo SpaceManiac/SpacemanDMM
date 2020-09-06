@@ -1301,7 +1301,7 @@ handle_method_call! {
                         results.push(ds);
                     }
                 }
-                Annotation::UnscopedVar(var_name) if symbol_id != None => {
+                Annotation::UnscopedVar(var_name) if symbol_id.is_some() => {
                     let (ty, proc_name) = self.find_type_context(&iter);
                     match self.find_unscoped_var(&iter, ty, proc_name, var_name) {
                         UnscopedVar::Variable { ty, .. } => {
@@ -1312,16 +1312,16 @@ handle_method_call! {
                         _ => {}
                     }
                 }
-                Annotation::UnscopedCall(proc_name) if symbol_id != None => {
+                Annotation::UnscopedCall(proc_name) if symbol_id.is_some() => {
                     let (ty, _) = self.find_type_context(&iter);
                     let next = ty.or(Some(self.objtree.root()));
                     results.append(&mut self.construct_proc_hover(proc_name, next, false)?);
                 }
-                Annotation::ScopedCall(priors, proc_name) if symbol_id != None => {
+                Annotation::ScopedCall(priors, proc_name) if symbol_id.is_some() => {
                     let next = self.find_scoped_type(&iter, priors);
                     results.append(&mut self.construct_proc_hover(proc_name, next, true)?);
                 }
-                Annotation::ScopedVar(priors, var_name) if symbol_id != None => {
+                Annotation::ScopedVar(priors, var_name) if symbol_id.is_some() => {
                     let next = self.find_scoped_type(&iter, priors);
                     results.append(&mut self.construct_var_hover(var_name, next, true)?);
                 }
