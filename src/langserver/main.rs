@@ -840,11 +840,11 @@ impl<'a> Engine<'a> {
         Ok(symbol_id)
     }
 
-    fn construct_proc_hover(&self, proc_name : &str, mut provided_tok : Option<TypeRef>, scoped : bool) -> Result<Vec<String>, jsonrpc::Error> {
+    fn construct_proc_hover(&self, proc_name: &str, mut provided_tok: Option<TypeRef>, scoped: bool) -> Result<Vec<String>, jsonrpc::Error> {
         let mut results = Vec::new();
         let mut proclink  = String::new();
         let mut defstring = String::new();
-        let mut docstring : Option<String> = None;
+        let mut docstring: Option<String> = None;
         while let Some(ty) = provided_tok {
             if let Some(proc) = ty.procs.get(proc_name) {
                 let proc_value = proc.main_value();
@@ -884,8 +884,7 @@ impl<'a> Engine<'a> {
 
             if scoped {
                 provided_tok = ty.parent_type_without_root();
-            }
-            else {
+            } else {
                 provided_tok = ty.parent_type();
             }
         }
@@ -897,10 +896,10 @@ impl<'a> Engine<'a> {
         Ok(results)
     }
 
-    fn construct_var_hover(&self, var_name : &str, mut provided_tok : Option<TypeRef>, scoped : bool) -> Result<Vec<String>, jsonrpc::Error> {
+    fn construct_var_hover(&self, var_name: &str, mut provided_tok: Option<TypeRef>, scoped: bool) -> Result<Vec<String>, jsonrpc::Error> {
         let mut results = Vec::new();
         let mut infos = String::new();
-        let mut docstring : Option<String> = None;
+        let mut docstring: Option<String> = None;
         while let Some(ty) = provided_tok {
             if let Some(var) = ty.vars.get(var_name) {
                 if let Some(ref decl) = var.declaration {
@@ -922,8 +921,7 @@ impl<'a> Engine<'a> {
 
             if scoped {
                 provided_tok = ty.parent_type_without_root();
-            }
-            else {
+            } else {
                 provided_tok = ty.parent_type();
             }
         }
@@ -1217,7 +1215,7 @@ handle_method_call! {
 
                     let mut infos = VecDeque::new();
                     let mut next = Some(current);
-                    let mut docstring : Option<String> = None;
+                    let mut docstring: Option<String> = None;
                     while let Some(current) = next {
                         if let Some(var) = current.vars.get(last) {
                             let constant = if let Some(ref constant) = var.value.constant {
@@ -1264,7 +1262,7 @@ handle_method_call! {
                     // the last proc for each type
                     let mut infos = VecDeque::new();
                     let mut next = Some(current);
-                    let mut docstring : Option<String> = None;
+                    let mut docstring: Option<String> = None;
                     while let Some(current) = next {
                         if let Some(proc) = current.procs.get(last) {
                             let path = if current.path.is_empty() {
