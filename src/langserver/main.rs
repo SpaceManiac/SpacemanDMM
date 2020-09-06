@@ -840,6 +840,103 @@ impl<'a> Engine<'a> {
         Ok(symbol_id)
     }
 
+    fn construct_proc_hover(&self, proc_name : &str, mut provided_tok : Option<TypeRef>, scoped : bool) -> Result<Vec<String>, jsonrpc::Error> {
+        let mut results = Vec::new();
+        let mut proclink  = String::new();
+        let mut defstring = String::new();
+        let mut docstring : Option<String> = None;
+        while let Some(ty) = provided_tok {
+            if let Some(proc) = ty.procs.get(proc_name) {
+                let proc_value = proc.main_value();
+
+                // Because we need to find our declaration to get the declaration type, we partially
+                // form the markdown text to be used once the proc's declaration is reached
+                if defstring.is_empty() {
+                    let path = if ty.path.is_empty() {
+                        "(global)"
+                    } else {
+                        &ty.path
+                    };
+                    proclink = format!("[{}]({})", path, self.location_link(proc_value.location)?);
+                    let mut message = format!("{}(", proc_name);
+                    let mut first = true;
+                    for each in proc_value.parameters.iter() {
+                        use std::fmt::Write;
+                        if first {
+                            first = false;
+                        } else {
+                            message.push_str(", ");
+                        }
+                        let _ = write!(message, "{}", each);
+                    }
+                    message.push_str(")");
+                    defstring = message.clone();
+                }
+
+                if let Some(ref decl) = proc.declaration {
+                    results.push(format!("{}\n```dm\n{}/{}\n```", proclink, decl.kind.name(), defstring));
+                }
+
+                if !proc_value.docs.is_empty() {
+                    docstring = Some(proc_value.docs.text());
+                }
+            }
+
+            if scoped {
+                provided_tok = ty.parent_type_without_root();
+            }
+            else {
+                provided_tok = ty.parent_type();
+            }
+        }
+
+        if let Some(ds) = docstring {
+            results.push(ds);
+        }
+
+        Ok(results)
+    }
+
+    fn construct_var_hover(&self, var_name : &str, mut provided_tok : Option<TypeRef>, scoped : bool) -> Result<Vec<String>, jsonrpc::Error> {
+        let mut results = Vec::new();
+        let mut infos = String::new();
+        let mut docstring : Option<String> = None;
+        while let Some(ty) = provided_tok {
+            if let Some(var) = ty.vars.get(var_name) {
+                if let Some(ref decl) = var.declaration {
+                    // First get the path of the type containing the declaration
+                    let path = if ty.path.is_empty() {
+                        "(global)"
+                    } else {
+                        &ty.path
+                    };
+                    infos.push_str(format!("[{}]({})\n", path, self.location_link(var.value.location)?).as_str());
+
+                    // Next toss on the declaration itself
+                    infos.push_str(format!("```dm\nvar/{}{}\n```", decl.var_type, var_name).as_str());
+                }
+                if !var.value.docs.is_empty() {
+                    docstring = Some(var.value.docs.text());
+                }
+            }
+
+            if scoped {
+                provided_tok = ty.parent_type_without_root();
+            }
+            else {
+                provided_tok = ty.parent_type();
+            }
+        }
+        if !infos.is_empty() {
+            results.push(infos);
+        }
+        if let Some(ds) = docstring {
+            results.push(ds);
+        }
+
+        Ok(results)
+    }
+
     // ------------------------------------------------------------------------
     // Driver
 
@@ -1211,37 +1308,7 @@ handle_method_call! {
                     match self.find_unscoped_var(&iter, ty, proc_name, var_name) {
                         UnscopedVar::Variable { ty, .. } => {
                             if let Some(_decl) = ty.get_var_declaration(var_name) {
-                                let mut infos = String::new();
-                                let current = ty;
-                                let mut next = Some(current);
-                                let mut docstring : Option<String> = None;
-
-                                while let Some(current) = next {
-                                    if let Some(var) = current.vars.get(var_name) {
-                                        if let Some(ref decl) = var.declaration {
-                                            // First get the path of the type containing the declaration
-                                            let path = if current.path.is_empty() {
-                                                "(global)"
-                                            } else {
-                                                &current.path
-                                            };
-                                            infos.push_str(format!("[{}]({})\n", path, self.location_link(var.value.location)?).as_str());
-
-                                            // Next toss on the declaration itself
-                                            infos.push_str(format!("```dm\nvar/{}{}\n```", decl.var_type, var_name).as_str());
-                                        }
-                                        if !var.value.docs.is_empty() {
-                                            docstring = Some(var.value.docs.text());
-                                        }
-                                    }
-                                    next = current.parent_type();
-                                }
-                                if !infos.is_empty() {
-                                    results.push(infos);
-                                }
-                                if let Some(ds) = docstring {
-                                    results.push(ds);
-                                }
+                                results.append(&mut self.construct_var_hover(var_name, Some(ty), false)?);
                             }
                         },
                         _ => {}
@@ -1249,127 +1316,16 @@ handle_method_call! {
                 }
                 Annotation::UnscopedCall(proc_name) if symbol_id != None => {
                     let (ty, _) = self.find_type_context(&iter);
-                    let mut next = ty.or(Some(self.objtree.root()));
-                    let mut proclink  = String::new();
-                    let mut defstring = String::new();
-                    let mut docstring : Option<String> = None;
-                    while let Some(ty) = next {
-                        if let Some(proc) = ty.procs.get(proc_name) {
-                            let proc_value = proc.main_value();
-
-                            if defstring.is_empty() {
-                                let path = if ty.path.is_empty() {
-                                    "(global)"
-                                } else {
-                                    &ty.path
-                                };
-                                proclink = format!("[{}]({})", path, self.location_link(proc_value.location)?);
-                                let mut message = format!("{}(", proc_name);
-                                let mut first = true;
-                                for each in proc_value.parameters.iter() {
-                                    use std::fmt::Write;
-                                    if first {
-                                        first = false;
-                                    } else {
-                                        message.push_str(", ");
-                                    }
-                                    let _ = write!(message, "{}", each);
-                                }
-                                message.push_str(")");
-                                defstring = message.clone();
-                            }
-
-                            if let Some(ref decl) = proc.declaration {
-                                results.push(format!("{}\n```dm\n{}/{}\n```", proclink, decl.kind.name(), defstring));
-                            }
-
-                            if !proc_value.docs.is_empty() {
-                                docstring = Some(proc_value.docs.text());
-                            }
-                        }
-                        next = ty.parent_type();
-                    }
-
-                    if let Some(ds) = docstring {
-                        results.push(ds);
-                    }
+                    let next = ty.or(Some(self.objtree.root()));
+                    results.append(&mut self.construct_proc_hover(proc_name, next, false)?);
                 }
                 Annotation::ScopedCall(priors, proc_name) if symbol_id != None => {
-                    let mut next = self.find_scoped_type(&iter, priors);
-                    let mut proclink  = String::new();
-                    let mut defstring = String::new();
-                    let mut docstring : Option<String> = None;
-                    while let Some(ty) = next {
-                        if let Some(proc) = ty.procs.get(proc_name) {
-                            let proc_value = proc.main_value();
-
-                            if defstring.is_empty() {
-                                let path = if ty.path.is_empty() {
-                                    "(global)"
-                                } else {
-                                    &ty.path
-                                };
-                                proclink = format!("[{}]({})", path, self.location_link(proc_value.location)?);
-                                let mut message = format!("{}(", proc_name);
-                                let mut first = true;
-                                for each in proc_value.parameters.iter() {
-                                    use std::fmt::Write;
-                                    if first {
-                                        first = false;
-                                    } else {
-                                        message.push_str(", ");
-                                    }
-                                    let _ = write!(message, "{}", each);
-                                }
-                                message.push_str(")");
-                                defstring = message.clone();
-                            }
-
-                            if let Some(ref decl) = proc.declaration {
-                                results.push(format!("{}\n```dm\n{}/{}\n```", proclink, decl.kind.name(), defstring));
-                            }
-
-                            if !proc_value.docs.is_empty() {
-                                docstring = Some(proc_value.docs.text());
-                            }
-                        }
-                        next = ty.parent_type_without_root();
-                    }
-
-                    if let Some(ds) = docstring {
-                        results.push(ds);
-                    }
+                    let next = self.find_scoped_type(&iter, priors);
+                    results.append(&mut self.construct_proc_hover(proc_name, next, true)?);
                 }
                 Annotation::ScopedVar(priors, var_name) if symbol_id != None => {
-                    let mut next = self.find_scoped_type(&iter, priors);
-                    let mut infos = String::new();
-                    let mut docstring : Option<String> = None;
-                    while let Some(ty) = next {
-                        if let Some(var) = ty.vars.get(var_name) {
-                            if let Some(ref decl) = var.declaration {
-                                // First get the path of the type containing the declaration
-                                let path = if ty.path.is_empty() {
-                                    "(global)"
-                                } else {
-                                    &ty.path
-                                };
-                                infos.push_str(format!("[{}]({})\n", path, self.location_link(var.value.location)?).as_str());
-
-                                // Next toss on the declaration itself
-                                infos.push_str(format!("```dm\nvar/{}{}\n```", decl.var_type, var_name).as_str());
-                            }
-                            if !var.value.docs.is_empty() {
-                                docstring = Some(var.value.docs.text());
-                            }
-                        }
-                        next = ty.parent_type_without_root();
-                    }
-                    if !infos.is_empty() {
-                        results.push(infos);
-                    }
-                    if let Some(ds) = docstring {
-                        results.push(ds);
-                    }
+                    let next = self.find_scoped_type(&iter, priors);
+                    results.append(&mut self.construct_var_hover(var_name, next, true)?);
                 }
                 _ => {}
             }
