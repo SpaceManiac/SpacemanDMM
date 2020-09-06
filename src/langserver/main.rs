@@ -840,6 +840,91 @@ impl<'a> Engine<'a> {
         Ok(symbol_id)
     }
 
+    fn construct_proc_hover(&self, proc_name: &str, mut provided_tok: Option<TypeRef>, scoped: bool) -> Result<Vec<String>, jsonrpc::Error> {
+        let mut results = Vec::new();
+        let mut proclink  = String::new();
+        let mut defstring = String::new();
+        let mut docstring: Option<String> = None;
+        while let Some(ty) = provided_tok {
+            if let Some(proc) = ty.procs.get(proc_name) {
+                let proc_value = proc.main_value();
+
+                // Because we need to find our declaration to get the declaration type, we partially
+                // form the markdown text to be used once the proc's declaration is reached
+                if defstring.is_empty() {
+                    proclink = format!("[{}]({})", ty.pretty_path(), self.location_link(proc_value.location)?);
+                    let mut message = format!("{}(", proc_name);
+                    let mut first = true;
+                    for each in proc_value.parameters.iter() {
+                        use std::fmt::Write;
+                        if first {
+                            first = false;
+                        } else {
+                            message.push_str(", ");
+                        }
+                        let _ = write!(message, "{}", each);
+                    }
+                    message.push_str(")");
+                    defstring = message.clone();
+                }
+
+                if let Some(ref decl) = proc.declaration {
+                    results.push(format!("{}\n```dm\n{}/{}\n```", proclink, decl.kind.name(), defstring));
+                }
+
+                if !proc_value.docs.is_empty() {
+                    docstring = Some(proc_value.docs.text());
+                }
+            }
+
+            if scoped {
+                provided_tok = ty.parent_type_without_root();
+            } else {
+                provided_tok = ty.parent_type();
+            }
+        }
+
+        if let Some(ds) = docstring {
+            results.push(ds);
+        }
+
+        Ok(results)
+    }
+
+    fn construct_var_hover(&self, var_name: &str, mut provided_tok: Option<TypeRef>, scoped: bool) -> Result<Vec<String>, jsonrpc::Error> {
+        let mut results = Vec::new();
+        let mut infos = String::new();
+        let mut docstring: Option<String> = None;
+        while let Some(ty) = provided_tok {
+            if let Some(var) = ty.vars.get(var_name) {
+                if let Some(ref decl) = var.declaration {
+                    // First get the path of the type containing the declaration
+                    infos.push_str(format!("[{}]({})\n", ty.pretty_path(), self.location_link(var.value.location)?).as_str());
+
+                    // Next toss on the declaration itself
+                    infos.push_str(format!("```dm\nvar/{}{}\n```", decl.var_type, var_name).as_str());
+                }
+                if !var.value.docs.is_empty() {
+                    docstring = Some(var.value.docs.text());
+                }
+            }
+
+            if scoped {
+                provided_tok = ty.parent_type_without_root();
+            } else {
+                provided_tok = ty.parent_type();
+            }
+        }
+        if !infos.is_empty() {
+            results.push(infos);
+        }
+        if let Some(ds) = docstring {
+            results.push(ds);
+        }
+
+        Ok(results)
+    }
+
     // ------------------------------------------------------------------------
     // Driver
 
@@ -1096,9 +1181,11 @@ handle_method_call! {
             line: tdp.position.line as u32 + 1,
             column: tdp.position.character as u16 + 1,
         };
+        let symbol_id = self.symbol_id_at(tdp)?;
         let mut results = Vec::new();
 
-        for (_range, annotation) in annotations.get_location(location) {
+        let iter = annotations.get_location(location);
+        for (_range, annotation) in iter.clone() {
             #[cfg(debug_assertions)] {
                 results.push(format!("{:?}", annotation));
             }
@@ -1118,54 +1205,29 @@ handle_method_call! {
 
                     let mut infos = VecDeque::new();
                     let mut next = Some(current);
+                    let mut docstring: Option<String> = None;
                     while let Some(current) = next {
                         if let Some(var) = current.vars.get(last) {
                             let constant = if let Some(ref constant) = var.value.constant {
-                                format!("  \n= `{}`", constant)
+                                format!("\n```dm\n= {}\n```", constant)
                             } else {
                                 String::new()
                             };
-                            let path = if current.path.is_empty() {
-                                "(global)"
-                            } else {
-                                &current.path
-                            };
-                            infos.push_front(format!("[{}]({}){}", path, self.location_link(var.value.location)?, constant));
+                            infos.push_front(format!("[{}]({}){}", current.pretty_path(), self.location_link(var.value.location)?, constant));
                             if let Some(ref decl) = var.declaration {
-                                let mut declaration = String::new();
-                                declaration.push_str("var");
-                                if decl.var_type.flags.is_static() {
-                                    declaration.push_str("/static");
-                                }
-                                if decl.var_type.flags.is_const() {
-                                    declaration.push_str("/const");
-                                }
-                                if decl.var_type.flags.is_tmp() {
-                                    declaration.push_str("/tmp");
-                                }
-                                if decl.var_type.flags.is_final() {
-                                    declaration.push_str("/SpacemanDMM_final");
-                                }
-                                if decl.var_type.flags.is_private() {
-                                    declaration.push_str("/SpacemanDMM_private");
-                                }
-                                if decl.var_type.flags.is_protected() {
-                                    declaration.push_str("/SpacemanDMM_protected");
-                                }
-                                for bit in decl.var_type.type_path.iter() {
-                                    declaration.push('/');
-                                    declaration.push_str(&bit);
-                                }
-                                declaration.push_str("/**");
-                                declaration.push_str(last);
-                                declaration.push_str("**");
-                                infos.push_front(declaration);
+                                infos.push_front(format!("```dm\nvar/{}{}\n```", decl.var_type, last));
+                            }
+                            if !var.value.docs.is_empty() {
+                                docstring = Some(var.value.docs.text());
                             }
                         }
                         next = current.parent_type();
                     }
                     if !infos.is_empty() {
                         results.push(infos.into_iter().collect::<Vec<_>>().join("\n\n"));
+                    }
+                    if let Some(ds) = docstring {
+                        results.push(ds);
                     }
                 }
                 Annotation::ProcHeader(path, _idx) if !path.is_empty() => {
@@ -1185,15 +1247,11 @@ handle_method_call! {
                     // the last proc for each type
                     let mut infos = VecDeque::new();
                     let mut next = Some(current);
+                    let mut docstring: Option<String> = None;
                     while let Some(current) = next {
                         if let Some(proc) = current.procs.get(last) {
-                            let path = if current.path.is_empty() {
-                                "(global)"
-                            } else {
-                                &current.path
-                            };
                             let proc_value = proc.main_value();
-                            let mut message = format!("[{}]({})  \n{}(", path, self.location_link(proc_value.location)?, last);
+                            let mut message = format!("[{}]({})  \n```dm\n{}(", current.pretty_path(), self.location_link(proc_value.location)?, last);
                             let mut first = true;
                             for each in proc_value.parameters.iter() {
                                 use std::fmt::Write;
@@ -1204,15 +1262,14 @@ handle_method_call! {
                                 }
                                 let _ = write!(message, "{}", each);
                             }
-                            message.push_str(")");
+                            message.push_str(")\n```");
                             infos.push_front(message);
                             if let Some(ref decl) = proc.declaration {
-                                let mut declaration = String::new();
-                                declaration.push_str(decl.kind.name());
-                                declaration.push_str("/**");
-                                declaration.push_str(last);
-                                declaration.push_str("**");
-                                infos.push_front(declaration);
+                                infos.push_front(format!("```dm\n{}/{}\n```", decl.kind.name(), last));
+                            }
+
+                            if !proc_value.docs.is_empty() {
+                                docstring = Some(proc_value.docs.text());
                             }
                         }
                         next = current.parent_type();
@@ -1220,6 +1277,33 @@ handle_method_call! {
                     if !infos.is_empty() {
                         results.push(infos.into_iter().collect::<Vec<_>>().join("\n\n"));
                     }
+                    if let Some(ds) = docstring {
+                        results.push(ds);
+                    }
+                }
+                Annotation::UnscopedVar(var_name) if symbol_id.is_some() => {
+                    let (ty, proc_name) = self.find_type_context(&iter);
+                    match self.find_unscoped_var(&iter, ty, proc_name, var_name) {
+                        UnscopedVar::Variable { ty, .. } => {
+                            if let Some(_decl) = ty.get_var_declaration(var_name) {
+                                results.append(&mut self.construct_var_hover(var_name, Some(ty), false)?);
+                            }
+                        },
+                        _ => {}
+                    }
+                }
+                Annotation::UnscopedCall(proc_name) if symbol_id.is_some() => {
+                    let (ty, _) = self.find_type_context(&iter);
+                    let next = ty.or(Some(self.objtree.root()));
+                    results.append(&mut self.construct_proc_hover(proc_name, next, false)?);
+                }
+                Annotation::ScopedCall(priors, proc_name) if symbol_id.is_some() => {
+                    let next = self.find_scoped_type(&iter, priors);
+                    results.append(&mut self.construct_proc_hover(proc_name, next, true)?);
+                }
+                Annotation::ScopedVar(priors, var_name) if symbol_id.is_some() => {
+                    let next = self.find_scoped_type(&iter, priors);
+                    results.append(&mut self.construct_var_hover(var_name, next, true)?);
                 }
                 _ => {}
             }

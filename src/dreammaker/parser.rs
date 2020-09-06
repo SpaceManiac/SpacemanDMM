@@ -786,16 +786,21 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Punct(Assign) => {
                 // `something=` - var
                 let location = self.location;
+
                 // kind of goofy, but allows "enclosing" doc comments at the end of the line
+                // translators note: this allows comments of the form ``//! blah`` at the end of the line
                 let (docs, expression) = require!(self.doc_comment(|this| {
                     let expr = require!(this.expression());
                     let _ = require!(this.input_specifier());
+
+                    // We have to annotate prior to consuming the statement terminator, as we
+                    // will otherwise consume following whitespace resulting in a bad annotation range
+                    let node = this.tree[current].path.to_owned();
+                    this.annotate(entry_start, || Annotation::Variable(reconstruct_path(&node, proc_kind, var_type.as_ref(), last_part)));
+
                     require!(this.statement_terminator());
                     success(expr)
                 }));
-
-                let node = self.tree[current].path.to_owned();
-                self.annotate(entry_start, || Annotation::Variable(reconstruct_path(&node, proc_kind, var_type.as_ref(), last_part)));
 
                 if let Some(mut var_type) = var_type {
                     var_type.suffix(&var_suffix);
