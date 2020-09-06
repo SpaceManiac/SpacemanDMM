@@ -737,9 +737,17 @@ handle_request! {
                 .. Default::default()
             });
 
+            // If VSC receives two Variables with the same name, it only
+            // displays the first one. Avert this by adding suffixes.
+            let mut seen = std::collections::HashMap::new();
             variables.extend(frame.locals.iter().enumerate().map(|(i, vt)| Variable {
                 name: match locals.get(i) {
-                    Some(local) => local.clone(),
+                    Some(local) => {
+                        match seen.entry(local).and_modify(|e| *e += 1).or_default() {
+                            0 => local.clone(),
+                            n => format!("{} #{}", local, n),
+                        }
+                    }
                     None => i.to_string(),
                 },
                 value: vt.to_string(),
