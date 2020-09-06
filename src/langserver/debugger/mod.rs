@@ -602,8 +602,10 @@ handle_request! {
         ScopesResponse {
             scopes: vec![
                 Scope {
-                    name: "Globals".to_owned(),
-                    variablesReference: 0x0e_000001,
+                    name: "Locals".to_owned(),
+                    presentationHint: Some("locals".to_owned()),
+                    variablesReference: frameId * 2 + 2,
+                    indexedVariables: Some(frame.locals.len() as i64),
                     .. Default::default()
                 },
                 Scope {
@@ -614,12 +616,10 @@ handle_request! {
                     .. Default::default()
                 },
                 Scope {
-                    name: "Locals".to_owned(),
-                    presentationHint: Some("locals".to_owned()),
-                    variablesReference: frameId * 2 + 2,
-                    indexedVariables: Some(frame.locals.len() as i64),
+                    name: "Globals".to_owned(),
+                    variablesReference: 0x0e_000001,
                     .. Default::default()
-                }
+                },
             ]
         }
     }
