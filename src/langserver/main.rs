@@ -852,12 +852,7 @@ impl<'a> Engine<'a> {
                 // Because we need to find our declaration to get the declaration type, we partially
                 // form the markdown text to be used once the proc's declaration is reached
                 if defstring.is_empty() {
-                    let path = if ty.path.is_empty() {
-                        "(global)"
-                    } else {
-                        &ty.path
-                    };
-                    proclink = format!("[{}]({})", path, self.location_link(proc_value.location)?);
+                    proclink = format!("[{}]({})", ty.pretty_path(), self.location_link(proc_value.location)?);
                     let mut message = format!("{}(", proc_name);
                     let mut first = true;
                     for each in proc_value.parameters.iter() {
@@ -904,12 +899,7 @@ impl<'a> Engine<'a> {
             if let Some(var) = ty.vars.get(var_name) {
                 if let Some(ref decl) = var.declaration {
                     // First get the path of the type containing the declaration
-                    let path = if ty.path.is_empty() {
-                        "(global)"
-                    } else {
-                        &ty.path
-                    };
-                    infos.push_str(format!("[{}]({})\n", path, self.location_link(var.value.location)?).as_str());
+                    infos.push_str(format!("[{}]({})\n", ty.pretty_path(), self.location_link(var.value.location)?).as_str());
 
                     // Next toss on the declaration itself
                     infos.push_str(format!("```dm\nvar/{}{}\n```", decl.var_type, var_name).as_str());
@@ -1223,12 +1213,7 @@ handle_method_call! {
                             } else {
                                 String::new()
                             };
-                            let path = if current.path.is_empty() {
-                                "(global)"
-                            } else {
-                                &current.path
-                            };
-                            infos.push_front(format!("[{}]({}){}", path, self.location_link(var.value.location)?, constant));
+                            infos.push_front(format!("[{}]({}){}", current.pretty_path(), self.location_link(var.value.location)?, constant));
                             if let Some(ref decl) = var.declaration {
                                 infos.push_front(format!("```dm\nvar/{}{}\n```", decl.var_type, last));
                             }
@@ -1265,13 +1250,8 @@ handle_method_call! {
                     let mut docstring: Option<String> = None;
                     while let Some(current) = next {
                         if let Some(proc) = current.procs.get(last) {
-                            let path = if current.path.is_empty() {
-                                "(global)"
-                            } else {
-                                &current.path
-                            };
                             let proc_value = proc.main_value();
-                            let mut message = format!("[{}]({})  \n```dm\n{}(", path, self.location_link(proc_value.location)?, last);
+                            let mut message = format!("[{}]({})  \n```dm\n{}(", current.pretty_path(), self.location_link(proc_value.location)?, last);
                             let mut first = true;
                             for each in proc_value.parameters.iter() {
                                 use std::fmt::Write;
