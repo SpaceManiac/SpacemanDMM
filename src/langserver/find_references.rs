@@ -27,8 +27,8 @@ impl ReferencesTable {
         // Insert the "definition" locations for the types and such
         objtree.root().recurse(&mut |ty| {
             tab.uses.insert(ty.id, References {
-                references: vec![ty.location],
-                implementations: vec![],
+                references: vec![],
+                implementations: vec![ty.location],
             });
             for (name, var) in ty.vars.iter() {
                 if let Some(decl) = ty.get_var_declaration(name) {
