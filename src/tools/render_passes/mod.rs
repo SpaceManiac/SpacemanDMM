@@ -427,11 +427,11 @@ impl RenderPass for FancyLayers {
 fn unary_aboveground(atom: &Atom, objtree: &ObjectTree) -> Option<&'static str> {
     Some(match atom.get_var("icon_state", objtree) {
         &Constant::String(ref text) => match &**text {
-            "vent_map-1" | "vent_map-2" | "vent_map-3" => "vent_off",
-            "vent_map_on-1" | "vent_map_on-2" | "vent_map_on-3" => "vent_out",
-            "vent_map_siphon_on-1" | "vent_map_siphon_on-2" | "vent_map_siphon_on-3" => "vent_in",
-            "scrub_map-1" | "scrub_map-2" | "scrub_map-3" => "scrub_off",
-            "scrub_map_on-1" | "scrub_map_on-2" | "scrub_map_on-3" => "scrub_on",
+            "vent_map-1" | "vent_map-2" | "vent_map-3" | "vent_map-4" => "vent_off",
+            "vent_map_on-1" | "vent_map_on-2" | "vent_map_on-3" | "vent_map_on-4" => "vent_out",
+            "vent_map_siphon_on-1" | "vent_map_siphon_on-2" | "vent_map_siphon_on-3" | "vent_map_siphon_on-4" => "vent_in",
+            "scrub_map-1" | "scrub_map-2" | "scrub_map-3" | "scrub_map-4" => "scrub_off",
+            "scrub_map_on-1" | "scrub_map_on-2" | "scrub_map_on-3" | "scrub_map_on-4" => "scrub_on",
             _ => return None,
         },
         _ => return None,
