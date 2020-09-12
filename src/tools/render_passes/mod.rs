@@ -6,12 +6,14 @@ mod transit_tube;
 mod random;
 mod structures;
 mod icon_smoothing;
+mod icon_smoothing_2020;
 mod smart_cables;
 
 pub use self::transit_tube::TransitTube;
 pub use self::random::Random;
 pub use self::structures::{GravityGen, Spawners};
-pub use self::icon_smoothing::IconSmoothing;
+pub use self::icon_smoothing::IconSmoothing as IconSmoothing2016;
+pub use self::icon_smoothing_2020::IconSmoothing;
 pub use self::smart_cables::SmartCables;
 
 /// A map rendering pass.
@@ -107,7 +109,8 @@ pub const RENDER_PASSES: &[RenderPassInfo] = &[
     pass!(Wires, "only-powernet", "Render only power cables.", false),
     pass!(Pipes, "only-pipenet", "Render only atmospheric pipes.", false),
     pass!(FancyLayers, "fancy-layers", "Layer atoms according to in-game rules.", true),
-    pass!(IconSmoothing, "icon-smoothing", "Emulate the icon smoothing subsystem.", true),
+    pass!(IconSmoothing2016, "icon-smoothing-2016", "Emulate the icon smoothing subsystem (xxalpha, 2016).", false),
+    pass!(IconSmoothing, "icon-smoothing", "Emulate the icon smoothing subsystem (Rohesie, 2020).", true),
     pass!(SmartCables, "smart-cables", "Handle smart cable layout.", true),
 ];
 
