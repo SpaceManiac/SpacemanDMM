@@ -139,6 +139,18 @@ impl RenderPass for Random {
                     sprite.icon_state = c;
                 }
             }
+        } else if atom.istype("/obj/item/relic/") {
+	        sprite.icon_state = [
+                "shock_kit",
+                "armor-igniter-analyzer",
+                "infra-igniter0",
+                "infra-igniter1",
+                "radio-multitool",
+                "prox-radio1",
+                "radio-radio",
+                "timer-multitool0",
+                "radio-igniter-tank",
+            ].choose(&mut rng).unwrap();
         }
 
         if atom.istype("/obj/item/lipstick/random/") {
