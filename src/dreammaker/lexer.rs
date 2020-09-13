@@ -748,6 +748,11 @@ impl<'ctx> Lexer<'ctx> {
             if ch == b'\r' {
                 // not listening
             } else if backslash {
+                if ch == b'\n' {
+                    self.error("backslash in line comment may be commenting out the following line")
+                        .set_severity(Severity::Warning)
+                        .register(self.context);
+                }
                 backslash = false;
             } else if ch == b'\n' {
                 self.put_back(Some(ch));
