@@ -267,6 +267,26 @@ impl State {
     pub fn num_sprites(&self) -> usize {
         self.dirs.len() * self.frames.len()
     }
+
+    pub fn index_of_dir(&self, dir: Dir) -> u32 {
+        let dir_idx = match (self.dirs, dir) {
+            (Dirs::One, _) => 0,
+            (Dirs::Eight, Dir::Northwest) => 7,
+            (Dirs::Eight, Dir::Northeast) => 6,
+            (Dirs::Eight, Dir::Southwest) => 5,
+            (Dirs::Eight, Dir::Southeast) => 4,
+            (_, Dir::West) => 3,
+            (_, Dir::East) => 2,
+            (_, Dir::North) => 1,
+            (_, _) => 0,
+        };
+
+        self.offset as u32 + dir_idx
+    }
+
+    pub fn index_of_frame(&self, dir: Dir, frame: u32) -> u32 {
+        self.index_of_dir(dir) + frame * self.dirs.len() as u32
+    }
 }
 
 impl Dirs {

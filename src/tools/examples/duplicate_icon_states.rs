@@ -38,12 +38,12 @@ fn files_with_extension<F: FnMut(&Path)>(ext: &str, mut f: F) {
 
 fn all_same(icon_file: &IconFile, states: &[&State]) -> bool {
     let (first, rest) = states.split_first().unwrap();
-    let first_start_index = icon_file.index_of_state(first, Dir::default(), 0);
+    let first_start_index = first.offset as u32;
     for state in rest {
         if state.dirs != first.dirs || state.frames != first.frames {
             return false;
         }
-        let start_index = icon_file.index_of_state(state, Dir::default(), 0);
+        let start_index = state.offset as u32;
         for i in 0..state.num_sprites() as u32 {
             let rect1 = icon_file.rect_of_index(first_start_index + i);
             let rect2 = icon_file.rect_of_index(start_index + i);

@@ -147,20 +147,7 @@ impl IconFile {
             None => return None,
         };
         let state = &self.metadata.states[state_index];
-
-        let dir_idx = match (state.dirs, dir) {
-            (Dirs::One, _) => 0,
-            (Dirs::Eight, Dir::Northwest) => 7,
-            (Dirs::Eight, Dir::Northeast) => 6,
-            (Dirs::Eight, Dir::Southwest) => 5,
-            (Dirs::Eight, Dir::Southeast) => 4,
-            (_, Dir::West) => 3,
-            (_, Dir::East) => 2,
-            (_, Dir::North) => 1,
-            (_, _) => 0,
-        };
-
-        let icon_index = state.offset as u32 + dir_idx;
+        let icon_index = state.index_of_dir(dir);
         let icon_count = self.width / self.metadata.width;
         let (icon_x, icon_y) = (icon_index % icon_count, icon_index / icon_count);
         Some((
