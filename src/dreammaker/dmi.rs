@@ -261,6 +261,28 @@ impl Metadata {
     pub fn from_str(data: &str) -> Metadata {
         parse_metadata(data)
     }
+
+    pub fn rect_of(&self, bitmap_width: u32, icon_state: &str, dir: Dir, frame: u32) -> Option<(u32, u32, u32, u32)> {
+        if self.states.is_empty() {
+            return Some((0, 0, self.width, self.height));
+        }
+        let state_index = match self.state_names.get(icon_state) {
+            Some(&i) => i,
+            None if icon_state == "" => 0,
+            None => return None,
+        };
+        let state = &self.states[state_index];
+        let icon_index = state.index_of_frame(dir, frame);
+
+        let icon_count = bitmap_width / self.width;
+        let (icon_x, icon_y) = (icon_index % icon_count, icon_index / icon_count);
+        Some((
+            icon_x * self.width,
+            icon_y * self.height,
+            self.width,
+            self.height,
+        ))
+    }
 }
 
 impl State {
@@ -284,6 +306,7 @@ impl State {
         self.offset as u32 + dir_idx
     }
 
+    #[inline]
     pub fn index_of_frame(&self, dir: Dir, frame: u32) -> u32 {
         self.index_of_dir(dir) + frame * self.dirs.len() as u32
     }

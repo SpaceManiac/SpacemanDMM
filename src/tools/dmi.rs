@@ -32,17 +32,9 @@ impl IconFile {
         })
     }
 
+    #[inline]
     pub fn rect_of(&self, icon_state: &str, dir: Dir) -> Option<Rect> {
-        if self.metadata.states.is_empty() {
-            return Some((0, 0, self.image.width, self.image.height))
-        }
-        let state_index = match self.metadata.state_names.get(icon_state) {
-            Some(&i) => i,
-            None if icon_state == "" => 0,
-            None => return None,
-        };
-        let index = self.metadata.states[state_index].index_of_dir(dir);
-        Some(self.rect_of_index(index))
+        self.metadata.rect_of(self.image.width, icon_state, dir, 0)
     }
 
     pub fn rect_of_index(&self, icon_index: u32) -> Rect {
