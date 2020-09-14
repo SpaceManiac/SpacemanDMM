@@ -138,9 +138,9 @@ impl IconFile {
             states: Vec::new(),
             state_names: BTreeMap::new(),
         };
-        for (key, value) in decoder.info_png().text_keys_cstr() {
-            if key.to_str() == Ok("Description") {
-                if let Ok(value) = value.to_str() {
+        for (key, value) in decoder.info_png().text_keys() {
+            if key == b"Description" {
+                if let Ok(value) = std::str::from_utf8(value) {
                     metadata = Metadata::from_str(value);
                 }
                 break;

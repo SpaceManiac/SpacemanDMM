@@ -284,9 +284,9 @@ fn read_metadata(path: &Path) -> io::Result<String> {
         Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidData, e)),
     }
 
-    for (key, value) in decoder.info_png().text_keys_cstr() {
-        if key.to_str() == Ok("Description") {
-            if let Ok(value) = value.to_str() {
+    for (key, value) in decoder.info_png().text_keys() {
+        if key == b"Description" {
+            if let Ok(value) = std::str::from_utf8(value) {
                 return Ok(value.to_owned());
             }
         }
