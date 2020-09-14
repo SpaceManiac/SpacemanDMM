@@ -4,7 +4,6 @@
 
 use std::io;
 use std::path::Path;
-use std::collections::BTreeMap;
 
 use ndarray::Array3;
 use lodepng::{self, RGBA, Decoder, ColorType};
@@ -26,34 +25,9 @@ pub struct IconFile {
 
 impl IconFile {
     pub fn from_file(path: &Path) -> io::Result<IconFile> {
-        let path = &::dm::fix_case(path);
-        let mut decoder = Decoder::new();
-        decoder.info_raw_mut().colortype = ColorType::RGBA;
-        decoder.info_raw_mut().set_bitdepth(8);
-        decoder.remember_unknown_chunks(false);
-        let bitmap = match decoder.decode_file(path) {
-            Ok(::lodepng::Image::RGBA(bitmap)) => bitmap,
-            Ok(_) => return Err(io::Error::new(io::ErrorKind::InvalidData, "not RGBA")),
-            Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidData, e)),
-        };
-
-        let mut metadata = Metadata {
-            width: bitmap.width as u32,
-            height: bitmap.height as u32,
-            states: Vec::new(),
-            state_names: BTreeMap::new(),
-        };
-        for (key, value) in decoder.info_png().text_keys() {
-            if key == b"Description" {
-                if let Ok(value) = std::str::from_utf8(value) {
-                    metadata = Metadata::from_str(value);
-                }
-                break;
-            }
-        }
-
+        let (bitmap, metadata) = Metadata::from_file(path)?;
         Ok(IconFile {
-            metadata: metadata,
+            metadata,
             image: Image::from_rgba(bitmap),
         })
     }
