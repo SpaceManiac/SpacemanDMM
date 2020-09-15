@@ -1129,32 +1129,16 @@ impl ObjectTree {
     pub(crate) fn add_builtin_var(
         &mut self,
         elems: &[&'static str],
-        value: Expression,
+        value: Constant,
     ) -> Result<(), DMError> {
-        self.add_var(
-            Location::builtins(),
-            elems.iter().copied(),
-            elems.len() + 1,
-            value,
-            Default::default(),
-            Default::default(),
-        )
-    }
+        let location = Location::builtins();
+        let mut path = elems.iter().copied();
+        let len = elems.len() + 1;
 
-    // an entry which is definitely a var because a value is specified
-    fn add_var<'a, I: Iterator<Item = &'a str>>(
-        &mut self,
-        location: Location,
-        mut path: I,
-        len: usize,
-        expr: Expression,
-        comment: DocCollection,
-        suffix: VarSuffix,
-    ) -> Result<(), DMError> {
         let (parent, initial) = self.get_from_path(location, &mut path, len)?;
-        if let Some(type_var) = self.register_var(location, parent, initial, path, comment, suffix)? {
+        if let Some(type_var) = self.register_var(location, parent, initial, path, Default::default(), Default::default())? {
             type_var.value.location = location;
-            type_var.value.expression = Some(expr);
+            type_var.value.constant = Some(value);
             Ok(())
         } else {
             Err(DMError::new(location, "var must have a name"))
