@@ -1,5 +1,7 @@
 //! BYOND built-in types, procs, and vars.
 
+use builtins_proc_macro::entries;
+
 use super::objtree::*;
 use super::{Location, DMError};
 use super::preprocessor::{DefineMap, Define};
@@ -182,22 +184,15 @@ pub fn default_defines(defines: &mut DefineMap) {
 
 /// Register BYOND builtins into the specified object tree.
 pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
-    macro_rules! entries {
-        ($($($elem:ident)/ * $(($($arg:ident $(= $ignored:expr)*),*))* $(= $val:expr)*;)*) => {
-            $(loop {
-                #![allow(unreachable_code)]
-                let elems = [$(stringify!($elem)),*];
-                $(
-                    tree.add_builtin_var(&elems, $val)?;
-                    break;
-                )*
-                $(
-                    tree.add_builtin_proc(&elems, &[$(stringify!($arg)),*])?;
-                    break;
-                )*
-                tree.add_builtin_entry(&elems)?;
-                break;
-            })*
+    macro_rules! one_entry {
+        ($($elem:ident)/ *) => {
+            tree.add_builtin_entry(&[$(stringify!($elem)),*])?;
+        };
+        ($($elem:ident)/ * = $val:expr) => {
+            tree.add_builtin_var(&[$(stringify!($elem)),*], $val)?;
+        };
+        ($($elem:ident)/ * ($($arg:ident $(= $ignored:expr)*),*)) => {
+            tree.add_builtin_proc(&[$(stringify!($elem)),*], &[$(stringify!($arg)),*])?;
         }
     }
 

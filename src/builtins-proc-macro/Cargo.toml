@@ -1,0 +1,9 @@
+[package]
+name = "builtins-proc-macro"
+version = "0.0.0"
+authors = ["Tad Hardesty <tad@platymuus.com>"]
+edition = "2018"
+
+[lib]
+path = "lib.rs"
+proc-macro = true
