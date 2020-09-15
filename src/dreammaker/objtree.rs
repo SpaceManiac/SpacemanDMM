@@ -778,6 +778,7 @@ impl ObjectTree {
 
                 NodeIndex::new(0)
             } else {
+                let constant_buf;
                 let mut parent_type_buf;
                 let parent_type = if path == "/atom" {
                     "/datum"
@@ -793,26 +794,40 @@ impl ObjectTree {
                     };
                     if let Some(var) = self[type_idx].vars.get("parent_type") {
                         location = var.value.location;
-                        if let Some(expr) = var.value.expression.clone() {
-                            match expr.simple_evaluate(var.value.location) {
-                                Ok(Constant::String(s)) => {
-                                    parent_type_buf = s;
-                                    parent_type = &parent_type_buf;
+
+                        // At this point, accept either expressions (user code)
+                        // or pre-evaluated constants (builtins).
+                        let constant = if let Some(constant) = var.value.constant.as_ref() {
+                            Ok(constant)
+                        } else if let Some(expr) = var.value.expression.clone() {
+                            match expr.simple_evaluate(location) {
+                                Ok(constant) => {
+                                    constant_buf = constant;
+                                    Ok(&constant_buf)
                                 }
-                                Ok(Constant::Prefab(Pop { ref path, ref vars })) if vars.is_empty() => {
-                                    parent_type_buf = String::new();
-                                    for piece in path.iter() {
-                                        parent_type_buf.push('/');
-                                        parent_type_buf.push_str(&piece);
-                                    }
-                                    parent_type = &parent_type_buf;
+                                Err(e) => Err(e),
+                            }
+                        } else {
+                            Err(DMError::new(location, "bad parent_type: no value"))
+                        };
+
+                        match constant {
+                            Ok(Constant::String(s)) => {
+                                parent_type = s;
+                            }
+                            Ok(Constant::Prefab(Pop { ref path, ref vars })) if vars.is_empty() => {
+                                parent_type_buf = String::new();
+                                for piece in path.iter() {
+                                    parent_type_buf.push('/');
+                                    parent_type_buf.push_str(&piece);
                                 }
-                                Ok(other) => {
-                                    context.register_error(DMError::new(location, format!("bad parent_type: {}", other)));
-                                }
-                                Err(e) => {
-                                    context.register_error(e);
-                                }
+                                parent_type = &parent_type_buf;
+                            }
+                            Ok(other) => {
+                                context.register_error(DMError::new(location, format!("bad parent_type: {}", other)));
+                            }
+                            Err(e) => {
+                                context.register_error(e);
                             }
                         }
                     }
