@@ -758,7 +758,7 @@ impl ObjectTree {
 
     fn assign_parent_types(&mut self, context: &Context) {
         for (path, &type_idx) in self.types.iter() {
-            let mut location = self.graph[type_idx.index()].location;
+            let mut location = self[type_idx].location;
             let idx = if path == "/datum" || path == "/list" || path == "/savefile" || path == "/world" {
                 // These types have no parent and cannot have one added. In the official compiler:
                 // - setting list or savefile/parent_type is denied with the same error as setting something's parent type to them;
@@ -807,8 +807,11 @@ impl ObjectTree {
                                 }
                                 Err(e) => Err(e),
                             }
+                        } else if path == "/client" {
+                            Ok(Constant::EMPTY_STRING)
                         } else {
-                            Err(DMError::new(location, "bad parent_type: no value"))
+                            // A weird situation which should not happen.
+                            Err(DMError::new(location, format!("missing {}/parent_type", path)))
                         };
 
                         match constant {
@@ -824,7 +827,7 @@ impl ObjectTree {
                                 parent_type = &parent_type_buf;
                             }
                             Ok(other) => {
-                                context.register_error(DMError::new(location, format!("bad parent_type: {}", other)));
+                                context.register_error(DMError::new(location, format!("value of {}/parent_type must be a string or typepath, got {}", path, other)));
                             }
                             Err(e) => {
                                 context.register_error(e);

@@ -130,6 +130,8 @@ impl Constant {
     // ------------------------------------------------------------------------
     // Constructors
 
+    pub const EMPTY_STRING: &'static Constant = &Constant::String(String::new());
+
     pub fn null() -> &'static Constant {
         static NULL: Constant = Constant::Null(None);
         &NULL
