@@ -21,18 +21,22 @@ impl Debugger {
                 });
 
                 let bytecode = extools.bytecode(&frame.proc, frame.override_id);
-                let mut buf = String::new();
-
-                let bytes_max_len = bytecode.iter().map(|elem| elem.bytes.len()).max().unwrap_or(0);
-                for instr in bytecode {
-                    use std::fmt::Write;
-                    let _ = writeln!(buf, "{:6}  {:width$}  {} {}", instr.offset, instr.bytes, instr.mnemonic, instr.comment, width = bytes_max_len);
-                }
-
-                return Ok(EvaluateResponse::from(buf));
+                return Ok(EvaluateResponse::from(Self::format_disassembly(bytecode)));
             }
         }
 
         Err(Box::new(GenericError("Not yet implemented")))
+    }
+
+    pub fn format_disassembly(bytecode: &[super::extools_types::DisassembledInstruction]) -> String {
+        let mut buf = String::new();
+
+        let bytes_max_len = bytecode.iter().map(|elem| elem.bytes.len()).max().unwrap_or(0);
+        for instr in bytecode {
+            use std::fmt::Write;
+            let _ = writeln!(buf, "{:6}  {:width$}  {} {}", instr.offset, instr.bytes, instr.mnemonic, instr.comment, width = bytes_max_len);
+        }
+
+        buf
     }
 }

@@ -440,6 +440,11 @@ handle_request! {
                         .. Default::default()
                     });
                 } else {
+                    debug_output!(in self.seq,
+                        "Couldn't find line {} in the following disassembly:\n{}",
+                        sbp.line,
+                        Self::format_disassembly(extools.bytecode(&proc, override_id)));
+
                     breakpoints.push(Breakpoint {
                         message: Some("Unable to determine offset in proc".to_owned()),
                         line: Some(sbp.line),
