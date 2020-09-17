@@ -1063,7 +1063,7 @@ handle_method_call! {
             capabilities: ServerCapabilities {
                 definition_provider: Some(true),
                 workspace_symbol_provider: Some(true),
-                hover_provider: Some(true),
+                hover_provider: Some(HoverProviderCapability::Simple(true)),
                 document_symbol_provider: Some(true),
                 references_provider: Some(true),
                 implementation_provider: Some(ImplementationProviderCapability::Simple(true)),
@@ -1099,6 +1099,7 @@ handle_method_call! {
 
     // ------------------------------------------------------------------------
     // actual stuff provision
+    #[allow(deprecated)]  // DocumentSymbol::deprecated is... deprecated. But we need to provide a `None` anyways.
     on WorkspaceSymbol(&mut self, params) {
         let query = symbol_search::Query::parse(&params.query);
 
@@ -1694,6 +1695,7 @@ handle_method_call! {
         result
     }
 
+    #[allow(deprecated)]  // DocumentSymbol::deprecated is... deprecated. But we need to provide a `None` anyways.
     on DocumentSymbolRequest(&mut self, params) {
         fn name_and_detail(path: &[String]) -> (String, Option<String>) {
             let (name, rest) = path.split_last().unwrap();

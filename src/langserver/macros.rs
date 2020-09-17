@@ -11,7 +11,7 @@ pub mod all_notifications {
 }
 
 macro_rules! handle_method_call {
-    ($(on $what:ident(&mut $self:ident, $p:pat) $b:block)*) => {
+    ($($(#[$attr:meta])* on $what:ident(&mut $self:ident, $p:pat) $b:block)*) => {
         impl<'a> Engine<'a> {
             fn handle_method_call_table(method: &str) -> Option<fn(&mut Self, serde_json::Value) -> Result<serde_json::Value, jsonrpc::Error>> {
                 use macros::all_methods::*;
@@ -28,6 +28,7 @@ macro_rules! handle_method_call {
 
             $(
                 #[allow(non_snake_case)]
+                $(#[$attr])*
                 fn $what(&mut $self, $p: <macros::all_methods::$what as lsp_types::request::Request>::Params)
                 -> Result<<macros::all_methods::$what as lsp_types::request::Request>::Result, jsonrpc::Error>
                 {
