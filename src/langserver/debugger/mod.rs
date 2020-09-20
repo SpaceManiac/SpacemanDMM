@@ -31,7 +31,6 @@ mod dap_types;
 mod launched;
 mod extools_types;
 mod extools;
-mod local_names;
 mod extools_bundle;
 mod evaluate;
 
@@ -142,7 +141,6 @@ impl DebugDatabaseBuilder {
             files,
             objtree,
             line_numbers,
-            local_names: Default::default(),
         }
     }
 }
@@ -152,7 +150,6 @@ pub struct DebugDatabase {
     files: dm::FileList,
     objtree: Arc<ObjectTree>,
     line_numbers: HashMap<dm::FileId, Vec<(i64, String, String, usize)>>,
-    local_names: HashMap<(String, usize), Option<Vec<String>>>,
 }
 
 fn get_proc<'o>(objtree: &'o ObjectTree, proc_ref: &str, override_id: usize) -> Option<&'o dm::objtree::ProcValue> {
@@ -178,18 +175,6 @@ fn get_proc<'o>(objtree: &'o ObjectTree, proc_ref: &str, override_id: usize) -> 
 impl DebugDatabase {
     fn get_proc(&self, proc_ref: &str, override_id: usize) -> Option<&dm::objtree::ProcValue> {
         get_proc(&self.objtree, proc_ref, override_id)
-    }
-
-    fn get_local_names(&mut self, proc_ref: &str, override_id: usize) -> Option<&[String]> {
-        let objtree = &self.objtree;
-        self.local_names.entry((proc_ref.to_owned(), override_id)).or_insert_with(|| {
-            let proc = get_proc(objtree, proc_ref, override_id)?;
-            if let dm::objtree::Code::Present(ref code) = proc.code {
-                Some(local_names::extract(code))
-            } else {
-                None
-            }
-        }).as_ref().map(|x| &x[..])
     }
 
     fn file_id(&self, file_path: &str) -> Option<FileId> {
