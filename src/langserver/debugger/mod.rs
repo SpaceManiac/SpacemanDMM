@@ -551,6 +551,12 @@ handle_request! {
                 .. Default::default()
             };
 
+            if i == 0 {
+                // Column must be nonzero for VSC to show the exception widget,
+                // but we don't usually have meaningful column information.
+                dap_frame.column = 1;
+            }
+
             if let Some(proc) = self.db.get_proc(&ex_frame.proc, ex_frame.override_id) {
                 if proc.location.is_builtins() {
                     // `stddef.dm` proc.
@@ -562,7 +568,7 @@ handle_request! {
                                 .. Default::default()
                             });
                             dap_frame.line = i64::from(proc.location.line);
-                            dap_frame.column = i64::from(proc.location.column);
+                            //dap_frame.column = i64::from(proc.location.column);
                         }
                     }
                 } else {
@@ -578,14 +584,12 @@ handle_request! {
                         .. Default::default()
                     });
                     dap_frame.line = i64::from(proc.location.line);
-                    dap_frame.column = i64::from(proc.location.column);
+                    //dap_frame.column = i64::from(proc.location.column);
                 }
             }
 
             if let Some(line) = extools.offset_to_line(&ex_frame.proc, ex_frame.override_id, ex_frame.offset) {
                 dap_frame.line = line;
-                // Column must be nonzero for VSC to show the exception widget.
-                dap_frame.column = 1;
             }
 
             frames.push(dap_frame);
