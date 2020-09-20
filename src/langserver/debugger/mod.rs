@@ -698,26 +698,19 @@ handle_request! {
             return Err(Box::new(GenericError("Stack frame out of range")));
         });
 
-        let (parameters, locals);
-        let objtree = self.db.objtree.clone();
-        if let Some(proc) = get_proc(&objtree, &frame.proc, frame.override_id) {
-            parameters = &proc.parameters[..];
-            locals = self.db.get_local_names(&frame.proc, frame.override_id).unwrap_or(&[]);
-        } else {
-            parameters = &[];
-            locals = &[];
-        }
-
         if mod2 == 1 {
             // arguments
             let mut variables = Vec::with_capacity(2 + frame.args.len());
+            let mut seen = std::collections::HashMap::new();
 
+            seen.insert("src", 0);
             variables.push(Variable {
                 name: "src".to_owned(),
                 value: frame.src.to_string(),
                 variablesReference: frame.src.to_variables_reference(),
                 .. Default::default()
             });
+            seen.insert("usr", 0);
             variables.push(Variable {
                 name: "usr".to_owned(),
                 value: frame.usr.to_string(),
@@ -726,9 +719,14 @@ handle_request! {
             });
 
             variables.extend(frame.args.iter().enumerate().map(|(i, vt)| Variable {
-                name: match parameters.get(i) {
-                    Some(param) => param.name.clone(),
-                    None => i.to_string(),
+                name: match frame.arg_names.get(i) {
+                    Some(param) => {
+                        match seen.entry(param).and_modify(|e| *e += 1).or_default() {
+                            0 => param.clone(),
+                            n => format!("{} #{}", param, n),
+                        }
+                    }
+                    None => format!("args[{}]", i + 1),
                 },
                 value: vt.to_string(),
                 variablesReference: vt.to_variables_reference(),
@@ -750,7 +748,7 @@ handle_request! {
             // displays the first one. Avert this by adding suffixes.
             let mut seen = std::collections::HashMap::new();
             variables.extend(frame.locals.iter().enumerate().map(|(i, vt)| Variable {
-                name: match locals.get(i) {
+                name: match frame.local_names.get(i) {
                     Some(local) => {
                         match seen.entry(local).and_modify(|e| *e += 1).or_default() {
                             0 => local.clone(),

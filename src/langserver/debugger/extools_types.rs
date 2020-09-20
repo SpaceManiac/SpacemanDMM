@@ -65,6 +65,8 @@ pub struct StackFrame {
     pub dot: ValueText,
     pub locals: Vec<ValueText>,
     pub args: Vec<ValueText>,
+    pub local_names: Vec<String>,
+    pub arg_names: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
