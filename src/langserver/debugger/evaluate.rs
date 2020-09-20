@@ -34,7 +34,7 @@ impl Debugger {
         let bytes_max_len = bytecode.iter().map(|elem| elem.bytes.len()).max().unwrap_or(0);
         for instr in bytecode {
             use std::fmt::Write;
-            let _ = writeln!(buf, "{:6}  {:width$}  {} {}", instr.offset, instr.bytes, instr.mnemonic, instr.comment, width = bytes_max_len);
+            let _ = writeln!(buf, "{:#8X}  {:width$}  {} {}", instr.offset, instr.bytes, instr.mnemonic, instr.comment, width = bytes_max_len);
         }
 
         buf
