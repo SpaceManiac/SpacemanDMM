@@ -741,9 +741,10 @@ impl<'ctx> Preprocessor<'ctx> {
                     // include searches relevant paths for files
                     "include" if disabled => {}
                     "include" => {
-                        expect_token!((path) = Token::String(path));
+                        expect_token!((path_str) = Token::String(path_str));
+                        let include_loc = _last_expected_loc;
                         expect_token!(() = Token::Punct(Punctuation::Newline));
-                        let path = PathBuf::from(path.replace("\\", "/"));
+                        let path = PathBuf::from(path_str.replace("\\", "/"));
 
                         for candidate in vec![
                             // 1. relative to file in which `#include` appears.
@@ -762,7 +763,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                 DMS,
                                 DM,
                             }
-                            match match candidate.extension().and_then(|s| s.to_str()) {
+                            let file_type = match candidate.extension().and_then(|s| s.to_str()) {
                                 Some("dmm") => FileType::DMM,
                                 Some("dmf") => FileType::DMF,
                                 Some("dms") => FileType::DMS,
@@ -779,7 +780,19 @@ impl<'ctx> Preprocessor<'ctx> {
                                     self.context.register_error(DMError::new(self.last_input_loc, "filename has no extension"));
                                     return Ok(());
                                 }
-                            } {
+                            };
+
+                            if let Some(annotations) = self.annotations.as_mut() {
+                                let mut full_path = candidate.clone();
+                                if full_path.is_relative() {
+                                    full_path = std::env::current_dir().expect("couldn't get current dir").join(&full_path);
+                                }
+                                annotations.insert(
+                                    include_loc .. include_loc.add_columns(2 + path_str.len() as u16),
+                                    Annotation::Include(full_path));
+                            }
+
+                            match file_type {
                                 FileType::DMM => self.maps.push(candidate),
                                 FileType::DMF => self.skins.push(candidate),
                                 FileType::DMS => self.scripts.push(candidate),
@@ -794,8 +807,10 @@ impl<'ctx> Preprocessor<'ctx> {
                                     Err(e) => self.context.register_error(e),
                                 },
                             }
+
                             return Ok(());
                         }
+
                         self.context.register_error(DMError::new(self.last_input_loc, format!("failed to find #include {:?}", path)));
                         return Ok(());
                     }

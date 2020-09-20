@@ -1083,6 +1083,10 @@ handle_method_call! {
                     retrigger_characters: None,
                     work_done_progress_options: Default::default(),
                 }),
+                document_link_provider: Some(DocumentLinkOptions {
+                    resolve_provider: None,
+                    work_done_progress_options: Default::default(),
+                }),
                 color_provider: Some(ColorProviderCapability::Simple(true)),
                 .. Default::default()
             },
@@ -1848,6 +1852,30 @@ handle_method_call! {
                 .. Default::default()
             },
         ]
+    }
+
+    on DocumentLinkRequest(&mut self, params) {
+        let (_, _, annotations) = self.get_annotations(&params.text_document.uri)?;
+        if annotations.is_empty() {
+            None
+        } else {
+            let mut results = Vec::new();
+            for (span, annotation) in annotations.iter() {
+                match annotation {
+                    Annotation::Include(pathbuf) => {
+                        results.push(DocumentLink {
+                            range: span_to_range(span.start..span.end.add_columns(1)),
+                            target: Some(path_to_url(pathbuf.clone())?),
+                            tooltip: None,
+                            data: None,
+                        });
+                    }
+                    _ => {}
+                }
+            }
+
+            Some(results)
+        }
     }
 
     // ------------------------------------------------------------------------
