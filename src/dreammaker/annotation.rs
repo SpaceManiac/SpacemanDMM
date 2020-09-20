@@ -30,7 +30,9 @@ pub enum Annotation {
     // a macro is called here, which is defined at this location
     MacroDefinition(String),
     MacroUse(String, Location),
+
     Include(std::path::PathBuf),
+    Resource(std::path::PathBuf),
 
     // error annotations, mostly for autocompletion
     ScopedMissingIdent(Vec<String>),  // when a . is followed by a non-ident

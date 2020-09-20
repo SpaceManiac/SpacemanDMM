@@ -1855,17 +1855,26 @@ handle_method_call! {
     }
 
     on DocumentLinkRequest(&mut self, params) {
-        let (_, _, annotations) = self.get_annotations(&params.text_document.uri)?;
+        let (_, file_id, annotations) = self.get_annotations(&params.text_document.uri)?;
         if annotations.is_empty() {
             None
         } else {
             let mut results = Vec::new();
             for (span, annotation) in annotations.iter() {
+                if span.start.file != file_id {
+                    continue;
+                }
                 match annotation {
-                    Annotation::Include(pathbuf) => {
+                    Annotation::Include(path) |
+                    Annotation::Resource(path) => {
+                        let pathbuf = if path.is_relative() {
+                            std::env::current_dir().map_err(invalid_request)?.join(&path)
+                        } else {
+                            path.to_owned()
+                        };
                         results.push(DocumentLink {
                             range: span_to_range(span.start..span.end.add_columns(1)),
-                            target: Some(path_to_url(pathbuf.clone())?),
+                            target: Some(path_to_url(pathbuf)?),
                             tooltip: None,
                             data: None,
                         });

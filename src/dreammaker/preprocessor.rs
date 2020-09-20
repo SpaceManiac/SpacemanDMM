@@ -783,13 +783,9 @@ impl<'ctx> Preprocessor<'ctx> {
                             };
 
                             if let Some(annotations) = self.annotations.as_mut() {
-                                let mut full_path = candidate.clone();
-                                if full_path.is_relative() {
-                                    full_path = std::env::current_dir().expect("couldn't get current dir").join(&full_path);
-                                }
                                 annotations.insert(
                                     include_loc .. include_loc.add_columns(2 + path_str.len() as u16),
-                                    Annotation::Include(full_path));
+                                    Annotation::Include(candidate.clone()));
                             }
 
                             match file_type {
