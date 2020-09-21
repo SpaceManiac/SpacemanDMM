@@ -770,6 +770,11 @@ handle_request! {
         extools.step_over(params.threadId);
     }
 
+    on StepOut(&mut self, params) {
+        let extools = self.extools.get()?;
+        extools.step_out(params.threadId);
+    }
+
     on Pause(&mut self, _params) {
         let extools = self.extools.get()?;
         extools.pause();

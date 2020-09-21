@@ -952,6 +952,23 @@ pub struct StepInArguments {
     pub targetId: Option<i64>,
 }
 
+/// The request starts the debuggee to run again for one step.
+pub enum StepOut {}
+
+impl Request for StepOut {
+    type Params = StepOutArguments;
+    type Result = ();
+    const COMMAND: &'static str = "stepOut";
+}
+
+#[derive(Deserialize, Debug)]
+pub struct StepOutArguments {
+    /**
+     * Execute 'stepOut' for this thread.
+     */
+    pub threadId: i64,
+}
+
 /// The request retrieves a list of all threads.
 pub enum Threads {}
 

@@ -324,6 +324,10 @@ impl Extools {
         self.step_until_line(thread_id, BreakpointStepOver);
     }
 
+    pub fn step_out(&mut self, thread_id: i64) {
+        self.step_until_line(thread_id, BreakpointStepOut);
+    }
+
     pub fn pause(&self) {
         self.sender.send(Pause);
     }

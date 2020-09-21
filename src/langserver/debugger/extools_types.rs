@@ -278,6 +278,14 @@ impl Request for BreakpointStepOver {
     const TYPE: &'static str = "breakpoint step over";
 }
 
+// #define MESSAGE_BREAKPOINT_STEP_OVER "breakpoint step over" //Content is empty
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BreakpointStepOut;
+
+impl Request for BreakpointStepOut {
+    const TYPE: &'static str = "breakpoint step out";
+}
+
 // #define MESSAGE_BREAKPOINT_RESUME "breakpoint resume" //Content is empty
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BreakpointResume;
