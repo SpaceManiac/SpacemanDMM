@@ -69,7 +69,7 @@ You can link inside any doc comment or markdown file to another documented piece
 This is done via a crosslink, in the form `[path_to_link_to]`.
 
 Valid forms of crosslinks:
-```
+```dm
 [DEFINE_NAME]
 [/path_to_object]
 [/path_to_object/proc/foo]
@@ -86,7 +86,7 @@ The title of a documentation entry is determined by whichever is set first:
 * last component of the typepath
 
 Here's an example of setting a manual title for an object:
-```
+```dm
 /**
   * # Fubar
   */
