@@ -61,3 +61,19 @@ the modules tree.
 
 The contents of `code/README.md` will be used in the main page of the generated
 documentation.
+
+### Crosslinks
+
+You can link inside any doc comment or markdown file to another documented piece of code.
+
+This is done via a crosslink, in the form `[path_to_link_to]`.
+
+Valid forms of crosslinks:
+```
+[DEFINE_NAME]
+[/path_to_object]
+[/path_to_object/proc/foo]
+[/path_to_object/var/bar]
+```
+
+You can also customize the link text that appears. This is by prepending the custom link text in brackets, such as: `[some define][DEFINE_NAME]`.
