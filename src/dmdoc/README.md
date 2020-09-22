@@ -81,9 +81,9 @@ You can also customize the link text that appears. This is by prepending the cus
 ### Titles
 
 The title of a documentation entry is determined by whichever is set first:
-* A `# Title` set at the top of a doc block, if it's present
-* `name` var if present, and not disabled by the config
-* last component of the typepath
+* A `# Title` set at the top of a doc block, if present.
+* The type's `name` var if present and not [disabled in config].
+* The last component of the typepath.
 
 Here's an example of setting a manual title for an object:
 ```dm
@@ -95,3 +95,4 @@ Here's an example of setting a manual title for an object:
 
 This will cause the `/obj/foo` to have the title `Fubar` in the generated documentation. The typepath will still show up at the top of the details page.
 
+[disabled in config]: ../../CONFIGURING.md#dm-doc
