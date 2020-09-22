@@ -141,6 +141,14 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // (normalized, reference) -> (href, tooltip)
+    let error_entity: std::cell::Cell<Option<String>> = Default::default();
+    let error_entity_put = |string: String| error_entity.set(Some(string));
+    let error_entity_print = || {
+        if let Some(name) = error_entity.take() {
+            eprintln!("{}:", name);
+        }
+    };
+
     let broken_link_callback = &|_: &str, reference: &str| -> Option<(String, String)> {
         // macros
         if let Some(module) = macro_to_module_map.get(reference) {
@@ -204,7 +212,8 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             use std::fmt::Write;
 
             if best < progress.len() {
-                eprintln!("crosslink [{}] approximating to [{}]", reference, &progress[..best]);
+                error_entity_print();
+                eprintln!("    crosslink [{}] approximating to [{}]", reference, &progress[..best]);
                 progress.truncate(best);
             }
 
@@ -217,7 +226,8 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             return Some((href, progress));
         }
 
-        eprintln!("crosslink [{}] unknown", reference);
+        error_entity_print();
+        eprintln!("    crosslink [{}] unknown", reference);
         None
     };
 
@@ -259,6 +269,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         if docs.is_empty() {
             continue;
         }
+        error_entity_put(format!("#define {}", name));
         let docs = DocBlock::parse(&docs.text(), Some(broken_link_callback));
         let module = module_entry(&mut modules1, &context.file_path(range.start.file));
         module.items_wip.push((
@@ -304,6 +315,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     let mut index_docs = None;
     if let Some(index_path) = index_path {
         let buf = read_as_markdown(index_path.as_ref())?.expect("file for --index must be .md or .txt");
+        error_entity_put(index_path.to_owned());
         index_docs = Some(DocBlock::parse_with_title(&buf, Some(broken_link_callback)));
     }
 
@@ -336,6 +348,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         let mut anything = false;
         let mut substance = false;
         if !ty.docs.is_empty() {
+            error_entity_put(ty.path.to_owned());
             let (title, block) = DocBlock::parse_with_title(&ty.docs.text(), Some(broken_link_callback));
             if let Some(title) = title {
                 parsed_type.name = title.into();
@@ -367,6 +380,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                     next = current.parent_type();
                 }
 
+                error_entity_put(format!("{}/var/{}", ty.path, name));
                 let block = DocBlock::parse(&var.value.docs.text(), Some(broken_link_callback));
                 // `type` is pulled from the parent if necessary
                 let type_ = ty.get_var_declaration(name).map(|decl| VarType {
@@ -409,6 +423,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                     next = current.parent_type();
                 }
 
+                error_entity_put(format!("{}/proc/{}", ty.path, name));
                 let block = DocBlock::parse(&proc_value.docs.text(), Some(broken_link_callback));
                 parsed_type.procs.insert(name, Proc {
                     docs: block,
@@ -503,6 +518,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             }
         }}
 
+        error_entity_put(module.orig_filename.to_owned());
         let mut last_line = 0;
         items_wip.sort_by_key(|&(line, _)| line);
         for (line, item) in items_wip.drain(..) {
