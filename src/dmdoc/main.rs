@@ -156,24 +156,46 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // parse "proc" or "var" reference out
-        let mut reference2 = reference;
+        let mut ty_path = reference;
         let mut proc_name = None;
         let mut var_name = None;
         if let Some(idx) = reference.find("/proc/") {
+            // `[/ty/proc/procname]`
             proc_name = Some(&reference[idx + "/proc/".len()..]);
-            reference2 = &reference[..idx];
+            ty_path = &reference[..idx];
         } else if let Some(idx) = reference.find("/verb/") {
+            // `[/ty/verb/procname]`
             proc_name = Some(&reference[idx + "/verb/".len()..]);
-            reference2 = &reference[..idx];
+            ty_path = &reference[..idx];
         } else if let Some(idx) = reference.find("/var/") {
+            // `[/ty/var/varname]`
             var_name = Some(&reference[idx + "/var/".len()..]);
-            reference2 = &reference[..idx];
+            ty_path = &reference[..idx];
+        } else if objtree.find(reference).is_none() {
+            if let Some(idx) = reference.rfind('/') {
+                let (parent, rest) = (&reference[..idx], &reference[idx + 1..]);
+                if let Some(ty) = objtree.find(parent) {
+                    if ty.procs.contains_key(rest) && !ty.vars.contains_key(rest) {
+                        // correct `[/ty/procname]` to `[/ty/proc/procname]`
+                        proc_name = Some(rest);
+                        ty_path = parent;
+                        error_entity_print();
+                        eprintln!("    [{}]: correcting to [{}/proc/{}]", reference, parent, rest);
+                    } else if ty.vars.contains_key(rest) {
+                        // correct `[/ty/varname]` to `[/ty/var/varname]`
+                        var_name = Some(rest);
+                        ty_path = parent;
+                        eprintln!("    [{}]: correcting to [{}/var/{}]", reference, parent, rest);
+                    }
+                }
+            }
         }
+        // else `[/ty]`
 
         let mut progress = String::new();
         let mut best = 0;
 
-        if reference2.is_empty() {
+        if ty_path.is_empty() {
             progress.push_str("/global");
             if let Some(info) = types_with_docs.get("") {
                 if let Some(proc_name) = proc_name {
@@ -189,7 +211,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         } else {
-            for bit in reference2.trim_start_matches('/').split('/') {
+            for bit in ty_path.trim_start_matches('/').split('/') {
                 progress.push_str("/");
                 progress.push_str(bit);
                 if let Some(info) = types_with_docs.get(progress.as_str()) {
