@@ -159,6 +159,10 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             error_entity_print();
             eprintln!("    [{}]: macro not documented", reference);
             return None;
+        } else if reference.ends_with(".dm") || reference.ends_with(".txt") || reference.ends_with(".md") {
+            // TODO: only linkify if the module in question will actually exist.
+            let path = format!("{}.html", module_path(reference.as_ref()));
+            return Some((path, reference.to_owned()));
         }
 
         // parse "proc" or "var" reference out
