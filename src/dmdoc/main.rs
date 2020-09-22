@@ -133,10 +133,12 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    let mut macro_exists = BTreeSet::new();
     let mut macro_to_module_map = BTreeMap::new();
     for (range, (name, define)) in define_history.iter() {
+        macro_exists.insert(name.as_str());
         if !define.docs().is_empty() {
-            macro_to_module_map.insert(name.clone(), module_path(&context.file_path(range.start.file)));
+            macro_to_module_map.insert(name.as_str(), module_path(&context.file_path(range.start.file)));
         }
     }
 
@@ -153,6 +155,10 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         // macros
         if let Some(module) = macro_to_module_map.get(reference) {
             return Some((format!("{}.html#define/{}", module, reference), reference.to_owned()));
+        } else if macro_exists.contains(reference) {
+            error_entity_print();
+            eprintln!("    [{}]: macro exists but is not documented", reference);
+            return None;
         }
 
         // parse "proc" or "var" reference out
