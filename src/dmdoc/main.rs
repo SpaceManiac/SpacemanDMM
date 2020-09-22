@@ -71,8 +71,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         None => match dm::detect_environment_default()? {
             Some(env) => env,
             None => {
-                eprintln!("Unable to find a .dme file in this directory");
-                return Ok(());
+                return Err("Unable to find a .dme file in this directory".into());
             }
         }
     };
