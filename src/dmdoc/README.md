@@ -56,8 +56,43 @@ The summary sections of module pages are sorted in line number order, with
 file-level documentation interspersed with the summary lines of documented
 items.
 
-Markdown files inside the `code` directory will also be rendered and added to
+Markdown and .txt files inside the `code` directory will also be rendered and added to
 the modules tree.
 
 The contents of `code/README.md` will be used in the main page of the generated
 documentation.
+
+### Crosslinks
+
+You can link inside any doc comment or markdown file to another documented piece of code.
+
+This is done via a crosslink, in the form `[path_to_link_to]`.
+
+Valid forms of crosslinks:
+```dm
+[DEFINE_NAME]
+[/path_to_object]
+[/path_to_object/proc/foo]
+[/path_to_object/var/bar]
+```
+
+You can also customize the link text that appears. This is by prepending the custom link text in brackets, such as: `[some define][DEFINE_NAME]`.
+
+### Titles
+
+The title of a documentation entry is determined by whichever is set first:
+* A `# Title` set at the top of a doc block, if present.
+* The type's `name` var if present and not [disabled in config].
+* The last component of the typepath.
+
+Here's an example of setting a manual title for an object:
+```dm
+/**
+  * # Fubar
+  */
+/obj/foo
+```
+
+This will cause the `/obj/foo` to have the title `Fubar` in the generated documentation. The typepath will still show up at the top of the details page.
+
+[disabled in config]: ../../CONFIGURING.md#dm-doc
