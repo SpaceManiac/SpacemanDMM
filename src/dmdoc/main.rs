@@ -157,7 +157,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             return Some((format!("{}.html#define/{}", module, reference), reference.to_owned()));
         } else if macro_exists.contains(reference) {
             error_entity_print();
-            eprintln!("    [{}]: macro exists but is not documented", reference);
+            eprintln!("    [{}]: macro not documented", reference);
             return None;
         }
 
@@ -192,26 +192,31 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             }
         } else if let Some(_) = objtree.find(reference) {
             entity_exists = true;
-        } else {
-            if let Some(idx) = reference.rfind('/') {
-                let (parent, rest) = (&reference[..idx], &reference[idx + 1..]);
-                if let Some(ty) = objtree.find(parent) {
-                    if ty.procs.contains_key(rest) && !ty.vars.contains_key(rest) {
-                        // correct `[/ty/procname]` to `[/ty/proc/procname]`
-                        proc_name = Some(rest);
-                        ty_path = parent;
-                        error_entity_print();
-                        eprintln!("    [{}]: correcting to [{}/proc/{}]", reference, parent, rest);
-                        entity_exists = true;
-                    } else if ty.vars.contains_key(rest) {
-                        // correct `[/ty/varname]` to `[/ty/var/varname]`
-                        var_name = Some(rest);
-                        ty_path = parent;
-                        eprintln!("    [{}]: correcting to [{}/var/{}]", reference, parent, rest);
-                        entity_exists = true;
-                    }
+        } else if let Some(idx) = reference.rfind('/') {
+            let (parent, rest) = (&reference[..idx], &reference[idx + 1..]);
+            if let Some(ty) = objtree.find(parent) {
+                if ty.procs.contains_key(rest) && !ty.vars.contains_key(rest) {
+                    // correct `[/ty/procname]` to `[/ty/proc/procname]`
+                    proc_name = Some(rest);
+                    ty_path = parent;
+                    error_entity_print();
+                    eprintln!("    [{}]: correcting to [{}/proc/{}]", reference, parent, rest);
+                    entity_exists = true;
+                } else if ty.vars.contains_key(rest) {
+                    // correct `[/ty/varname]` to `[/ty/var/varname]`
+                    var_name = Some(rest);
+                    ty_path = parent;
+                    error_entity_print();
+                    eprintln!("    [{}]: correcting to [{}/var/{}]", reference, parent, rest);
+                    entity_exists = true;
                 }
             }
+        } else if objtree.root().vars.contains_key(reference) {
+            ty_path = "";
+            var_name = Some(reference);
+            error_entity_print();
+            eprintln!("    [{0}]: correcting to [/var/{0}]", reference);
+            entity_exists = true;
         }
         // else `[/ty]`
 
