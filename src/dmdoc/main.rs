@@ -165,19 +165,34 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         let mut ty_path = reference;
         let mut proc_name = None;
         let mut var_name = None;
+        let mut entity_exists = false;
         if let Some(idx) = reference.find("/proc/") {
             // `[/ty/proc/procname]`
-            proc_name = Some(&reference[idx + "/proc/".len()..]);
+            let name = &reference[idx + "/proc/".len()..];
+            proc_name = Some(name);
             ty_path = &reference[..idx];
+            if let Some(ty) = objtree.find(ty_path) {
+                entity_exists = ty.procs.contains_key(name);
+            }
         } else if let Some(idx) = reference.find("/verb/") {
             // `[/ty/verb/procname]`
-            proc_name = Some(&reference[idx + "/verb/".len()..]);
+            let name = &reference[idx + "/verb/".len()..];
+            proc_name = Some(name);
             ty_path = &reference[..idx];
+            if let Some(ty) = objtree.find(ty_path) {
+                entity_exists = ty.procs.contains_key(name);
+            }
         } else if let Some(idx) = reference.find("/var/") {
             // `[/ty/var/varname]`
-            var_name = Some(&reference[idx + "/var/".len()..]);
+            let name = &reference[idx + "/var/".len()..];
+            var_name = Some(name);
             ty_path = &reference[..idx];
-        } else if objtree.find(reference).is_none() {
+            if let Some(ty) = objtree.find(ty_path) {
+                entity_exists = ty.vars.contains_key(name);
+            }
+        } else if let Some(_) = objtree.find(reference) {
+            entity_exists = true;
+        } else {
             if let Some(idx) = reference.rfind('/') {
                 let (parent, rest) = (&reference[..idx], &reference[idx + 1..]);
                 if let Some(ty) = objtree.find(parent) {
@@ -187,11 +202,13 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                         ty_path = parent;
                         error_entity_print();
                         eprintln!("    [{}]: correcting to [{}/proc/{}]", reference, parent, rest);
+                        entity_exists = true;
                     } else if ty.vars.contains_key(rest) {
                         // correct `[/ty/varname]` to `[/ty/var/varname]`
                         var_name = Some(rest);
                         ty_path = parent;
                         eprintln!("    [{}]: correcting to [{}/var/{}]", reference, parent, rest);
+                        entity_exists = true;
                     }
                 }
             }
@@ -241,7 +258,17 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
 
             if best < progress.len() {
                 error_entity_print();
-                eprintln!("    crosslink [{}] approximating to [{}]", reference, &progress[..best]);
+                if entity_exists {
+                    eprint!("    [{}]: not documented, guessing [{}", reference, &progress[..best]);
+                } else {
+                    eprint!("    [{}]: unknown crosslink, guessing [{}", reference, &progress[..best]);
+                }
+                if let Some(proc_name) = proc_name {
+                    let _ = eprint!("/proc/{}", proc_name);
+                } else if let Some(var_name) = var_name {
+                    let _ = eprint!("/var/{}", var_name);
+                }
+                eprintln!("]");
                 progress.truncate(best);
             }
 
@@ -251,12 +278,16 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             } else if let Some(var_name) = var_name {
                 let _ = write!(href, "#var/{}", var_name);
             }
-            return Some((href, progress));
+            Some((href, progress))
+        } else {
+            error_entity_print();
+            if entity_exists {
+                eprintln!("    [{}]: not documented", reference);
+            } else {
+                eprintln!("    [{}]: unknown crosslink", reference);
+            }
+            None
         }
-
-        error_entity_print();
-        eprintln!("    crosslink [{}] unknown", reference);
-        None
     };
 
     // collate modules which have docs
