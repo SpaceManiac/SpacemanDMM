@@ -487,6 +487,14 @@ handle_extools! {
                     });
                 }
             }
+            BreakpointHitReason::Pause => {
+                self.seq.issue_event(dap_types::StoppedEvent {
+                    reason: dap_types::StoppedEvent::REASON_PAUSE.to_owned(),
+                    description: Some("Paused by request".to_owned()),
+                    threadId: Some(0),
+                    .. Default::default()
+                })
+            }
             _ => {
                 debug_output!(in self.seq, "[extools] {}#{}@{} hit", hit.proc, hit.override_id, hit.offset);
                 self.seq.issue_event(dap_types::StoppedEvent {

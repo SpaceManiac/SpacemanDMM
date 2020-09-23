@@ -424,6 +424,8 @@ pub enum BreakpointHitReason {
     BreakpointOpcode,
     #[serde(rename = "step")]
     Step,
+    #[serde(rename = "pause")]
+    Pause,
     #[serde(other)]
     Unknown,
 }
