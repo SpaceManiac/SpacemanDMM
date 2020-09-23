@@ -145,7 +145,6 @@ pub struct Extools {
     runtime_rx: mpsc::Receiver<Runtime>,
     get_list_contents_rx: mpsc::Receiver<ListContents>,
     get_source_rx: mpsc::Receiver<GetSource>,
-    step_rx: mpsc::Receiver<ProcOffset>,
     last_runtime: Option<Runtime>,
 }
 
@@ -166,7 +165,6 @@ impl Extools {
         let (runtime_tx, runtime_rx) = mpsc::channel();
         let (get_list_contents_tx, get_list_contents_rx) = mpsc::channel();
         let (get_source_tx, get_source_rx) = mpsc::channel();
-        let (step_tx, step_rx) = mpsc::sync_channel(0);
 
         let extools = Extools {
             seq,
@@ -179,7 +177,6 @@ impl Extools {
             runtime_rx,
             get_list_contents_rx,
             get_source_rx,
-            step_rx,
             last_runtime: None,
         };
         let seq = extools.seq.clone();
@@ -195,7 +192,6 @@ impl Extools {
             runtime_tx,
             get_list_contents_tx,
             get_source_tx,
-            step_tx,
         };
         (extools, thread)
     }
@@ -265,55 +261,8 @@ impl Extools {
         self.sender.send(BreakpointResume);
     }
 
-    fn step_until_line<T: Request + Clone>(&mut self, thread_id: i64, msg: T) {
-        let frame = {
-            let lock = self.threads.lock().unwrap();
-            guard!(let Some(thread) = lock.get(&thread_id) else {
-                debug_output!(in self.seq, "[extools] Line-step bad thread ID");
-                self.sender.send(msg);
-                return;
-            });
-            guard!(let Some(frame) = thread.call_stack.get(0) else {
-                debug_output!(in self.seq, "[extools] Line-step bad stack frame");
-                self.sender.send(msg);
-                return;
-            });
-            ProcOffset {
-                proc: frame.proc.clone(),
-                override_id: frame.override_id,
-                offset: frame.offset,
-            }
-        };
-        let frame_line = self.offset_to_line(&frame.proc, frame.override_id, frame.offset);
-
-        self.sender.send(msg.clone());
-        let mut got_stopped = false;
-        while let Ok(hit) = self.step_rx.recv_timeout(RECV_TIMEOUT) {
-            // Always keep stepping if current proc is stddef.
-            if !super::STDDEF_PROCS.contains(&hit.proc.as_str()) || hit.override_id != 0 {
-                // Break if current proc changed
-                if hit.proc != frame.proc && hit.override_id != frame.override_id {
-                    got_stopped = true;
-                    break;
-                }
-                // Break if line number changed
-                let line = self.offset_to_line(&hit.proc, hit.override_id, hit.offset);
-                if line != frame_line {
-                    got_stopped = true;
-                    break;
-                }
-            }
-            // Keep stepping
-            self.sender.send(msg.clone());
-        }
-
-        if got_stopped {
-            self.seq.issue_event(dap_types::StoppedEvent {
-                reason: dap_types::StoppedEvent::REASON_STEP.to_owned(),
-                threadId: Some(0),
-                .. Default::default()
-            });
-        }
+    fn step_until_line<T: Request + Clone>(&mut self, _thread_id: i64, msg: T) {
+        self.sender.send(msg);
     }
 
     pub fn step_in(&mut self, thread_id: i64) {
@@ -395,7 +344,6 @@ struct ExtoolsThread {
     runtime_tx: mpsc::Sender<Runtime>,
     get_list_contents_tx: mpsc::Sender<ListContents>,
     get_source_tx: mpsc::Sender<GetSource>,
-    step_tx: mpsc::SyncSender<ProcOffset>,
 }
 
 impl ExtoolsThread {
@@ -472,20 +420,11 @@ handle_extools! {
     on BreakpointHit(&mut self, hit) {
         match hit.reason {
             BreakpointHitReason::Step => {
-                // Try to transmit the step event to step_until_line above if
-                // it's listening, but if it timed out without issuing a
-                // Stopped, do that now.
-                if self.step_tx.try_send(ProcOffset {
-                    proc: hit.proc,
-                    override_id: hit.override_id,
-                    offset: hit.offset,
-                }).is_err() {
-                    self.seq.issue_event(dap_types::StoppedEvent {
-                        reason: dap_types::StoppedEvent::REASON_STEP.to_owned(),
-                        threadId: Some(0),
-                        .. Default::default()
-                    });
-                }
+                self.seq.issue_event(dap_types::StoppedEvent {
+                    reason: dap_types::StoppedEvent::REASON_STEP.to_owned(),
+                    threadId: Some(0),
+                    .. Default::default()
+                });
             }
             BreakpointHitReason::Pause => {
                 self.seq.issue_event(dap_types::StoppedEvent {
