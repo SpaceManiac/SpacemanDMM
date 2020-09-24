@@ -196,13 +196,23 @@ impl Extools {
         (extools, thread)
     }
 
-    pub fn get_default_thread(&self) -> Result<ThreadInfo, Box<dyn Error>> {
-        self.get_thread(0)
+    pub fn get_all_threads(&self) -> std::sync::MutexGuard<HashMap<i64, ThreadInfo>> {
+        self.threads.lock().unwrap()
     }
 
     pub fn get_thread(&self, thread_id: i64) -> Result<ThreadInfo, Box<dyn Error>> {
         self.threads.lock().unwrap().get(&thread_id).cloned()
             .ok_or_else(|| Box::new(super::GenericError("Getting call stack failed")) as Box<dyn Error>)
+    }
+
+    pub fn get_thread_by_frame_id(&self, frame_id: i64) -> Result<(ThreadInfo, usize), Box<dyn Error>> {
+        let frame_id = frame_id as usize;
+        let threads = self.threads.lock().unwrap();
+        let thread_id = (frame_id % threads.len()) as i64;
+        let frame_no = frame_id / threads.len();
+        let thread = threads.get(&thread_id).cloned()
+            .ok_or_else(|| Box::new(super::GenericError("Getting call stack failed")) as Box<dyn Error>)?;
+        Ok((thread, frame_no))
     }
 
     pub fn bytecode(&mut self, proc_ref: &str, override_id: usize) -> &[DisassembledInstruction] {
@@ -402,6 +412,22 @@ impl ExtoolsThread {
             debug_output!(in self.seq, "[extools] Dropping {:?}", _e);
         }
     }
+
+    fn stopped(&self, base: dap_types::StoppedEvent) {
+        for &k in self.threads.lock().unwrap().keys() {
+            if k != 0 {
+                self.seq.issue_event(dap_types::StoppedEvent {
+                    reason: "sleep".to_owned(),
+                    threadId: Some(k),
+                    .. Default::default()
+                });
+            }
+        }
+        self.seq.issue_event(dap_types::StoppedEvent {
+            threadId: Some(0),
+            .. base
+        });
+    }
 }
 
 handle_extools! {
@@ -420,25 +446,22 @@ handle_extools! {
     on BreakpointHit(&mut self, hit) {
         match hit.reason {
             BreakpointHitReason::Step => {
-                self.seq.issue_event(dap_types::StoppedEvent {
+                self.stopped(dap_types::StoppedEvent {
                     reason: dap_types::StoppedEvent::REASON_STEP.to_owned(),
-                    threadId: Some(0),
                     .. Default::default()
                 });
             }
             BreakpointHitReason::Pause => {
-                self.seq.issue_event(dap_types::StoppedEvent {
+                self.stopped(dap_types::StoppedEvent {
                     reason: dap_types::StoppedEvent::REASON_PAUSE.to_owned(),
                     description: Some("Paused by request".to_owned()),
-                    threadId: Some(0),
                     .. Default::default()
                 })
             }
             _ => {
                 debug_output!(in self.seq, "[extools] {}#{}@{} hit", hit.proc, hit.override_id, hit.offset);
-                self.seq.issue_event(dap_types::StoppedEvent {
+                self.stopped(dap_types::StoppedEvent {
                     reason: dap_types::StoppedEvent::REASON_BREAKPOINT.to_owned(),
-                    threadId: Some(0),
                     .. Default::default()
                 });
             }
@@ -447,10 +470,9 @@ handle_extools! {
 
     on Runtime(&mut self, runtime) {
         output!(in self.seq, "[extools] Runtime in {}: {}", runtime.proc, runtime.message);
-        self.seq.issue_event(dap_types::StoppedEvent {
+        self.stopped(dap_types::StoppedEvent {
             reason: dap_types::StoppedEvent::REASON_EXCEPTION.to_owned(),
             text: Some(runtime.message.clone()),
-            threadId: Some(0),
             .. Default::default()
         });
         self.queue(&self.runtime_tx, runtime);

@@ -531,7 +531,7 @@ handle_request! {
         for (i, ex_frame) in thread.call_stack.into_iter().enumerate() {
             let mut dap_frame = StackFrame {
                 name: ex_frame.proc.clone(),
-                id: i as i64,
+                id: (i * extools.get_all_threads().len()) as i64 + params.threadId,
                 instructionPointerReference: Some(format!("{}@{}#{}", ex_frame.proc, ex_frame.override_id, ex_frame.offset)),
                 .. Default::default()
             };
@@ -588,9 +588,14 @@ handle_request! {
 
     on Scopes(&mut self, ScopesArguments { frameId }) {
         let extools = self.extools.get()?;
-        let thread = extools.get_default_thread()?;
-        guard!(let Some(frame) = thread.call_stack.get(frameId as usize) else {
-            return Err(Box::new(GenericError("Stack frame out of range")));
+        let frame_id = frameId as usize;
+
+        let threads = extools.get_all_threads();
+        let thread_id = (frame_id % threads.len()) as i64;
+        let frame_no = frame_id / threads.len();
+
+        guard!(let Some(frame) = threads[&thread_id].call_stack.get(frame_no) else {
+            return Err(Box::new(GenericError2(format!("Stack frame out of range: {} (thread {}, depth {})", frameId, thread_id, frame_no))));
         });
 
         ScopesResponse {
@@ -674,12 +679,11 @@ handle_request! {
         }
 
         // Stack frame, arguments or locals
-        let frame_idx = (params.variablesReference - 1) / 2;
+        let frame_id = (params.variablesReference - 1) / 2;
         let mod2 = params.variablesReference % 2;
 
-        // TODO: variablesReference should be different based on thread ID
-        let thread = extools.get_default_thread()?;
-        guard!(let Some(frame) = thread.call_stack.get(frame_idx as usize) else {
+        let (thread, frame_no) = extools.get_thread_by_frame_id(frame_id)?;
+        guard!(let Some(frame) = thread.call_stack.get(frame_no) else {
             return Err(Box::new(GenericError("Stack frame out of range")));
         });
 
@@ -941,6 +945,19 @@ impl Error for GenericError {
 impl std::fmt::Display for GenericError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
         fmt.write_str(self.0)
+    }
+}
+
+#[derive(Debug)]
+pub struct GenericError2(String);
+
+impl Error for GenericError2 {
+    fn description(&self) -> &str { &self.0 }
+}
+
+impl std::fmt::Display for GenericError2 {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        fmt.write_str(&self.0)
     }
 }
 
