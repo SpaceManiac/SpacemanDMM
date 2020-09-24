@@ -436,7 +436,10 @@ impl Response for BreakpointHit {
 
 // #define MESSAGE_CALL_STACK "call stack" //Content is a vector of proc paths
 #[derive(Deserialize, Debug)]
-pub struct CallStack(pub Vec<StackFrame>);
+pub struct CallStack {
+    pub current: Vec<StackFrame>,
+    pub suspended: Vec<Vec<StackFrame>>,
+}
 
 impl Response for CallStack {
     const TYPE: &'static str = "call stack";

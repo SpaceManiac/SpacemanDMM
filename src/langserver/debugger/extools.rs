@@ -480,7 +480,11 @@ handle_extools! {
 
     on CallStack(&mut self, stack) {
         let mut map = self.threads.lock().unwrap();
-        map.entry(0).or_default().call_stack = stack.0;
+        map.clear();
+        map.entry(0).or_default().call_stack = stack.current;
+        for (i, list) in stack.suspended.into_iter().enumerate() {
+            map.entry((i + 1) as i64).or_default().call_stack = list;
+        }
     }
 
     on DisassembledProc(&mut self, disasm) {
