@@ -274,6 +274,36 @@ impl Debugger {
     fn issue_event<E: Event>(&mut self, event: E) {
         self.seq.issue_event(event);
     }
+
+    fn notify_continue(&mut self) {
+        // Called when a Step occurs so we can tell VSC that actually you can't
+        // do that on a per-thread basis in DM.
+        self.cull_thread_list();
+        self.issue_event(dap_types::ContinuedEvent {
+            threadId: 0,
+            allThreadsContinued: Some(true),
+        });
+    }
+
+    fn cull_thread_list(&mut self) {
+        // Cull threads other than the main thread so that VSC goes back to
+        // acting like the application is single-threaded, rather than showing
+        // the last-known sleeping stacks every time.
+
+        // An alternative would be to send these in real-time when sleeping
+        // threads enter or exit existence.
+
+        let keys: Vec<_> = {
+            guard!(let Ok(extools) = self.extools.get() else { return });
+            extools.get_all_threads().keys().cloned().filter(|&k| k != 0).collect()
+        };
+        for k in keys {
+            self.issue_event(dap_types::ThreadEvent {
+                reason: dap_types::ThreadEvent::REASON_EXITED.to_owned(),
+                threadId: k,
+            });
+        }
+    }
 }
 
 const EXCEPTION_FILTER_RUNTIMES: &str = "runtimes";
@@ -373,8 +403,25 @@ handle_request! {
     }
 
     on Threads(&mut self, ()) {
+        let mut threads = Vec::new();
+
+        let extools = self.extools.get()?;
+        for (&k, v) in extools.get_all_threads().iter() {
+            threads.push(Thread {
+                id: k,
+                name: v.call_stack.last().unwrap().proc.clone(),
+            });
+        }
+
+        if threads.is_empty() {
+            threads.push(Thread {
+                id: 0,
+                name: "Main".to_owned(),
+            });
+        }
+
         ThreadsResponse {
-            threads: vec![Thread { id: 0, name: "Main".to_owned() }]
+            threads,
         }
     }
 
@@ -757,6 +804,7 @@ handle_request! {
     }
 
     on Continue(&mut self, _params) {
+        self.cull_thread_list();
         let extools = self.extools.get()?;
         extools.continue_execution();
         ContinueResponse {
@@ -765,16 +813,19 @@ handle_request! {
     }
 
     on StepIn(&mut self, params) {
+        self.notify_continue();
         let extools = self.extools.get()?;
         extools.step_in(params.threadId);
     }
 
     on Next(&mut self, params) {
+        self.notify_continue();
         let extools = self.extools.get()?;
         extools.step_over(params.threadId);
     }
 
     on StepOut(&mut self, params) {
+        self.notify_continue();
         let extools = self.extools.get()?;
         extools.step_out(params.threadId);
     }

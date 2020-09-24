@@ -113,6 +113,28 @@ pub struct ErrorResponseBody {
 // ----------------------------------------------------------------------------
 // Events
 
+/// The event indicates that the execution of the debuggee has continued.
+///
+/// Please note: a debug adapter is not expected to send this event in response to a request that implies that execution continues, e.g. ‘launch’ or ‘continue’.
+///
+/// It is only necessary to send a ‘continued’ event if there was no previous request that implied this.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ContinuedEvent {
+    /**
+     * The thread which was continued.
+     */
+    pub threadId: i64,
+
+    /**
+     * If 'allThreadsContinued' is true, a debug adapter can announce that all threads have continued.
+     */
+    pub allThreadsContinued: Option<bool>,
+}
+
+impl Event for ContinuedEvent {
+    const EVENT: &'static str = "continued";
+}
+
 /// The event indicates that the debuggee has exited and returns its exit code.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ExitedEvent {
@@ -139,6 +161,30 @@ pub struct TerminatedEvent {
 
 impl Event for TerminatedEvent {
     const EVENT: &'static str = "terminated";
+}
+
+/// The event indicates that a thread has started or exited.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ThreadEvent {
+    /**
+     * The reason for the event.
+     * Values: 'started', 'exited', etc.
+     */
+    pub reason: String,
+
+    /**
+    * The identifier of the thread.
+    */
+    pub threadId: i64,
+}
+
+impl ThreadEvent {
+    pub const REASON_STARTED: &'static str = "started";
+    pub const REASON_EXITED: &'static str = "exited";
+}
+
+impl Event for ThreadEvent {
+    const EVENT: &'static str = "thread";
 }
 
 /// The event indicates that the target has produced some output.
