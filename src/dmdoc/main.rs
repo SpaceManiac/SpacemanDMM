@@ -45,6 +45,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     let mut environment = None;
     let mut output_path = "dmdoc".to_owned();
     let mut index_path = None;
+    let mut dry_run = false;
 
     let mut args = std::env::args();
     let _ = args.next();  // skip executable name
@@ -58,6 +59,8 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             output_path = args.next().expect("must specify a value for --output");
         } else if arg == "--index" {
             index_path = Some(args.next().expect("must specify a value for --index"));
+        } else if arg == "--dry-run" {
+            dry_run = true;
         } else {
             return Err(format!("unknown argument: {}", arg).into());
         }
@@ -628,6 +631,10 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             count,
             (type_docs.len() * 1000 / count) as f32 / 10.
         );
+    }
+
+    if dry_run {
+        return Ok(());
     }
 
     // load tera templates
