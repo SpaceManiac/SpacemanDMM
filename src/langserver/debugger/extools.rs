@@ -419,6 +419,7 @@ impl ExtoolsThread {
                 self.seq.issue_event(dap_types::StoppedEvent {
                     reason: "sleep".to_owned(),
                     threadId: Some(k),
+                    preserveFocusHint: Some(true),
                     .. Default::default()
                 });
             }
