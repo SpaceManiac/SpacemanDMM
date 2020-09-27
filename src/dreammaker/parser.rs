@@ -725,6 +725,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             }
         };
 
+        let mut relative_type_location = None;
         macro_rules! traverse_tree {
             ($what:expr) => {
                 let each = $what;
@@ -744,6 +745,19 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 } else {
                     let len = self.tree[current].path.chars().filter(|&c| c == '/').count() + path_len;
                     current = self.tree.subtype_or_add(self.location, current, each, len);
+
+                    if !absolute && self.context.config().code_standards.disallow_relative_type_definitions {
+                        relative_type_location = Some(self.location);
+                    }
+                }
+            }
+        }
+        macro_rules! handle_relative_type_error {
+            () => {
+                if let Some(loc) = relative_type_location {
+                    DMError::new(loc, "relatively pathed type defined here")
+                        .set_severity(Severity::Warning)
+                        .register(self.context);
                 }
             }
         }
@@ -769,6 +783,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 // `thing{` - block
                 self.put_back(t);
                 traverse_tree!(last_part);
+                handle_relative_type_error!();
                 let start = self.updated_location();
 
                 if proc_kind.is_some() || var_type.is_some() {
@@ -785,6 +800,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             }
             Punct(Assign) => {
                 // `something=` - var
+                handle_relative_type_error!();
                 let location = self.location;
 
                 // kind of goofy, but allows "enclosing" doc comments at the end of the line
@@ -846,6 +862,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     self.error("child of `proc/` without body")
                         .register(self.context);
                 } else {
+                    handle_relative_type_error!();
                     let docs = std::mem::take(&mut self.docs_following);
                     let len = self.tree[current].path.chars().filter(|&c| c == '/').count() + path_len;
                     current = self.tree.subtype_or_add(self.location, current, last_part, len);
