@@ -1113,12 +1113,12 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     }
 
     /// Parse an optional 'as' input_type and 'in' expression pair.
-    fn input_specifier(&mut self) -> Status<(InputType, Option<Expression>)> {
+    fn input_specifier(&mut self) -> Status<(Option<InputType>, Option<Expression>)> {
         // as obj|turf
         let input_type = if let Some(()) = self.exact_ident("as")? {
-            require!(self.input_type())
+            Some(require!(self.input_type()))
         } else {
-            InputType::default()
+            None
         };
         // `in view(7)` or `in list("a", "b")` or ...
         let in_list;
@@ -1140,12 +1140,18 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     /// Parse a verb input type. Used by proc params and the input() form.
     fn input_type(&mut self) -> Status<InputType> {
+        // Not supporting `as((mob|obj)|turf)` constructs right now.
+        if self.exact(Token::Punct(Punctuation::LParen))?.is_some() {
+            require!(self.exact(Token::Punct(Punctuation::RParen)));
+            return success(InputType::empty());
+        }
+
         let ident = leading!(self.ident());
         let mut as_what = match InputType::from_str(&ident) {
             Some(what) => what,
             None => {
                 self.context.register_error(self.error(format!("bad input type: '{}'", ident)));
-                InputType::default()
+                InputType::empty()
             }
         };
         while let Some(()) = self.exact(Token::Punct(Punctuation::BitOr))? {
@@ -1314,7 +1320,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                                 return spanned(Statement::ForList {
                                     var_type: None,
                                     name,
-                                    input_type: InputType::default(),
+                                    input_type: None,
                                     in_list: Some(rhs),
                                     block: require!(self.block(&LoopContext::ForList)),
                                 });
@@ -1330,9 +1336,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
                 let input_type = if let Some(()) = self.exact_ident("as")? {
                     // for(var/a as obj
-                    require!(self.input_type())
+                    Some(require!(self.input_type()))
                 } else {
-                    InputType::default()
+                    None
                 };
 
                 let in_list = if let Some(()) = self.exact(Token::Punct(Punctuation::In))? {
@@ -1540,9 +1546,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 let (input_types, in_list) = if !in_for {
                     require!(self.input_specifier())
                 } else {
-                    (InputType::default(), None)
+                    (None, None)
                 };
-                if !input_types.is_empty() || in_list.is_some() {
+                if input_types.is_some() || in_list.is_some() {
                     self.error("'as' clause has no effect on local variables")
                         .set_severity(Severity::Warning)
                         .with_errortype("as_local_var")
@@ -2004,7 +2010,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             // term :: 'as' '(' input_type ')'
             Token::Ident(ref i, _) if i == "as" => {
                 require!(self.exact(Token::Punct(Punctuation::LParen)));
-                let input_type = self.input_type()?.unwrap_or_default();
+                let input_type = self.input_type()?.unwrap_or_else(InputType::empty);
                 require!(self.exact(Token::Punct(Punctuation::RParen)));
                 Term::As(input_type)
             },

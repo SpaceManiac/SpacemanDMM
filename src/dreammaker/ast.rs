@@ -536,7 +536,7 @@ pub enum Term {
     /// An `input` call.
     Input {
         args: Vec<Expression>,
-        input_type: InputType, // as
+        input_type: Option<InputType>, // as
         in_list: Option<Box<Expression>>, // in
     },
     /// A `locate` call.
@@ -738,7 +738,7 @@ pub struct Parameter {
     pub var_type: VarType,
     pub name: String,
     pub default: Option<Expression>,
-    pub input_type: InputType,
+    pub input_type: Option<InputType>,
     pub in_list: Option<Expression>,
     pub location: Location,
 }
@@ -746,8 +746,8 @@ pub struct Parameter {
 impl fmt::Display for Parameter {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write!(fmt, "{}{}", self.var_type, self.name)?;
-        if !self.input_type.is_empty() {
-            write!(fmt, " as {}", self.input_type)?;
+        if let Some(input_type) = self.input_type {
+            write!(fmt, " as {}", input_type)?;
         }
         Ok(())
     }
@@ -783,7 +783,9 @@ macro_rules! type_table {
                         first = false;
                     }
                 )*
-                let _ = first;
+                if first {
+                    fmt.write_str("()")?;
+                }
                 Ok(())
             }
         }
@@ -792,7 +794,6 @@ macro_rules! type_table {
 
 type_table! {
     /// A type specifier for verb arguments and input() calls.
-    #[derive(Default)]
     pub struct InputType;
 
     // These values can be known with an invocation such as:
@@ -1035,7 +1036,7 @@ pub enum Statement {
         var_type: Option<VarType>,
         name: String,
         /// If zero, uses the declared type of the variable.
-        input_type: InputType,
+        input_type: Option<InputType>,
         /// Defaults to 'world'.
         in_list: Option<Expression>,
         block: Block,

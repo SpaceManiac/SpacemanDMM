@@ -1732,7 +1732,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     self.visit_expression(location, expr, None, local_vars);
                 }
 
-                let without_null = *input_type - InputType::NULL;
+                let input_type = input_type.unwrap_or_else(InputType::empty);
+                let without_null = input_type - InputType::NULL;
                 if input_type.contains(InputType::ANYTHING) {
                     Analysis::empty()
                 } else if without_null == InputType::MOB {
