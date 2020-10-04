@@ -414,8 +414,8 @@ impl Expression {
                     BinaryOp::LessEq |
                     BinaryOp::GreaterEq |
                     BinaryOp::And |
-                    BinaryOp::Or => return true,
-                    _ => return false,
+                    BinaryOp::Or => true,
+                    _ => false,
                 }
             },
             _ => false,
@@ -435,9 +435,9 @@ impl Expression {
                     }
                 }
                 if negation {
-                    return Some(!truthy)
+                    Some(!truthy)
                 } else {
-                    return Some(truthy)
+                    Some(truthy)
                 }
             },
             Expression::BinaryOp { op, lhs, rhs } => {
@@ -447,7 +447,7 @@ impl Expression {
                 guard!(let Some(rhtruth) = rhs.is_truthy() else {
                     return None
                 });
-                return match op {
+                match op {
                     BinaryOp::And => Some(lhtruth && rhtruth),
                     BinaryOp::Or => Some(lhtruth || rhtruth),
                     _ => None,
@@ -468,9 +468,9 @@ impl Expression {
                     return None
                 });
                 if condtruth {
-                    return if_.is_truthy()
+                    if_.is_truthy()
                 } else {
-                    return else_.is_truthy()
+                    else_.is_truthy()
                 }
             }
         }
