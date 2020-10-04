@@ -553,11 +553,11 @@ pub enum Term {
 impl Term {
     pub fn is_static(&self) -> bool {
         matches!(self,
-            Term::Null      |
-            Term::Int(_)    |
-            Term::Float(_)  |
-            Term::String(_) |
-            Term::Prefab(_)
+            Term::Null
+            | Term::Int(_)
+            | Term::Float(_)
+            | Term::String(_)
+            | Term::Prefab(_)
         )
     }
 

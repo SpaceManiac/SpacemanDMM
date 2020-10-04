@@ -51,10 +51,11 @@ impl Dir {
     }
 
     pub fn is_diagonal(self) -> bool {
-        !matches!(self, Dir::North  |
-                        Dir::South  |
-                        Dir::East   |
-                        Dir::West)
+        !matches!(self,
+            Dir::North
+            | Dir::South
+            | Dir::East
+            | Dir::West)
     }
 
     pub fn flip(self) -> Dir {

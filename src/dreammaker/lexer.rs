@@ -314,10 +314,10 @@ impl Token {
     /// Check whether this token is whitespace.
     pub fn is_whitespace(&self) -> bool {
         matches!(*self,
-            Token::Punct(Punctuation::Tab)      |
-            Token::Punct(Punctuation::Newline)  |
-            Token::Punct(Punctuation::Space)    |
-            Token::Eof
+            Token::Punct(Punctuation::Tab)
+            | Token::Punct(Punctuation::Newline)
+            | Token::Punct(Punctuation::Space)
+            | Token::Eof
         )
     }
 
