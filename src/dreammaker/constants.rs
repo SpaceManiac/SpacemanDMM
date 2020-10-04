@@ -70,7 +70,7 @@ pub enum Constant {
 // upstream properties without having to wrap/unwrap at all hours of the day.
 impl std::hash::Hash for Constant {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        std::mem::discriminant(&self).hash(state);
+        std::mem::discriminant(self).hash(state);
         match self {
             Constant::Null(p) => p.hash(state),
             Constant::New { type_, args } => (type_, args).hash(state),
@@ -147,10 +147,7 @@ impl Constant {
 
     #[inline]
     pub fn is_null(&self) -> bool {
-        match *self {
-            Constant::Null(_) => true,
-            _ => false,
-        }
+        matches!(*self, Constant::Null(_))
     }
 
     pub fn to_bool(&self) -> bool {
@@ -747,7 +744,7 @@ impl<'a> ConstantFolder<'a> {
                         return Err(self.error(format!("malformed rgb() call, must have 3 or 4 arguments and instead has {}", args.len())));
                     }
                     let mut result = String::with_capacity(7);
-                    result.push_str("#");
+                    result.push('#');
                     for each in args {
                         if let Some(i) = self.expr(each, None)?.to_int() {
                             let clamped = std::cmp::max(::std::cmp::min(i, 255), 0);

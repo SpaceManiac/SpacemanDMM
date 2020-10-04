@@ -51,13 +51,11 @@ impl Dir {
     }
 
     pub fn is_diagonal(self) -> bool {
-        match self {
-            Dir::North |
-            Dir::South |
-            Dir::East |
-            Dir::West => false,
-            _ => true
-        }
+        !matches!(self,
+            Dir::North
+            | Dir::South
+            | Dir::East
+            | Dir::West)
     }
 
     pub fn flip(self) -> Dir {
@@ -243,7 +241,7 @@ impl Metadata {
         for (key, value) in decoder.info_png().text_keys() {
             if key == b"Description" {
                 if let Ok(value) = std::str::from_utf8(value) {
-                    return Metadata::from_str(value);
+                    return Metadata::meta_from_str(value);
                 }
                 break;
             }
@@ -258,7 +256,7 @@ impl Metadata {
 
     /// Parse metadata from a `Description` string.
     #[inline]
-    pub fn from_str(data: &str) -> Metadata {
+    pub fn meta_from_str(data: &str) -> Metadata {
         parse_metadata(data)
     }
 

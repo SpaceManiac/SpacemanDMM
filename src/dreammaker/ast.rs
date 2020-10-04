@@ -414,8 +414,8 @@ impl Expression {
                     BinaryOp::LessEq |
                     BinaryOp::GreaterEq |
                     BinaryOp::And |
-                    BinaryOp::Or => return true,
-                    _ => return false,
+                    BinaryOp::Or => true,
+                    _ => false,
                 }
             },
             _ => false,
@@ -435,9 +435,9 @@ impl Expression {
                     }
                 }
                 if negation {
-                    return Some(!truthy)
+                    Some(!truthy)
                 } else {
-                    return Some(truthy)
+                    Some(truthy)
                 }
             },
             Expression::BinaryOp { op, lhs, rhs } => {
@@ -447,7 +447,7 @@ impl Expression {
                 guard!(let Some(rhtruth) = rhs.is_truthy() else {
                     return None
                 });
-                return match op {
+                match op {
                     BinaryOp::And => Some(lhtruth && rhtruth),
                     BinaryOp::Or => Some(lhtruth || rhtruth),
                     _ => None,
@@ -468,9 +468,9 @@ impl Expression {
                     return None
                 });
                 if condtruth {
-                    return if_.is_truthy()
+                    if_.is_truthy()
                 } else {
-                    return else_.is_truthy()
+                    else_.is_truthy()
                 }
             }
         }
@@ -552,14 +552,13 @@ pub enum Term {
 
 impl Term {
     pub fn is_static(&self) -> bool {
-        return match self {
-            Term::Null |
-            Term::Int(_) |
-            Term::Float(_) |
-            Term::String(_) |
-            Term::Prefab(_) => true,
-            _ => false,
-        }
+        matches!(self,
+            Term::Null
+            | Term::Int(_)
+            | Term::Float(_)
+            | Term::String(_)
+            | Term::Prefab(_)
+        )
     }
 
     pub fn is_truthy(&self) -> Option<bool> {
@@ -568,7 +567,7 @@ impl Term {
             Term::Null => Some(false),
             Term::Int(i) => Some(*i != 0),
             Term::Float(i) => Some(*i != 0f32),
-            Term::String(s) => Some(s.len() > 0),
+            Term::String(s) => Some(!s.is_empty()),
 
             // Paths/prefabs are truthy.
             Term::Prefab(_) => Some(true),
@@ -594,8 +593,8 @@ impl Term {
     }
 
     pub fn valid_for_range(&self, other: &Term, step: &Option<Expression>) -> Option<bool> {
-        if let &Term::Int(i) = self {
-            if let &Term::Int(o) = other {
+        if let Term::Int(i) = *self {
+            if let Term::Int(o) = *other {
                 // edge case
                 if i == 0 && o == 0 {
                     return Some(false)
