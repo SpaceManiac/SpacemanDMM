@@ -70,7 +70,7 @@ pub enum Constant {
 // upstream properties without having to wrap/unwrap at all hours of the day.
 impl std::hash::Hash for Constant {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        std::mem::discriminant(&self).hash(state);
+        std::mem::discriminant(self).hash(state);
         match self {
             Constant::Null(p) => p.hash(state),
             Constant::New { type_, args } => (type_, args).hash(state),
