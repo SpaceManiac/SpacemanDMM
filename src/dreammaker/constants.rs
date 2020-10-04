@@ -147,10 +147,7 @@ impl Constant {
 
     #[inline]
     pub fn is_null(&self) -> bool {
-        match *self {
-            Constant::Null(_) => true,
-            _ => false,
-        }
+        matches!(*self, Constant::Null(_))
     }
 
     pub fn to_bool(&self) -> bool {
