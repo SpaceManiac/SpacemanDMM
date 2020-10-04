@@ -747,7 +747,7 @@ impl<'a> ConstantFolder<'a> {
                         return Err(self.error(format!("malformed rgb() call, must have 3 or 4 arguments and instead has {}", args.len())));
                     }
                     let mut result = String::with_capacity(7);
-                    result.push_str("#");
+                    result.push('#');
                     for each in args {
                         if let Some(i) = self.expr(each, None)?.to_int() {
                             let clamped = std::cmp::max(::std::cmp::min(i, 255), 0);

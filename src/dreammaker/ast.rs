@@ -552,14 +552,13 @@ pub enum Term {
 
 impl Term {
     pub fn is_static(&self) -> bool {
-        return match self {
-            Term::Null |
-            Term::Int(_) |
-            Term::Float(_) |
+        matches!(self,
+            Term::Null      |
+            Term::Int(_)    |
+            Term::Float(_)  |
             Term::String(_) |
-            Term::Prefab(_) => true,
-            _ => false,
-        }
+            Term::Prefab(_)
+        )
     }
 
     pub fn is_truthy(&self) -> Option<bool> {
@@ -568,7 +567,7 @@ impl Term {
             Term::Null => Some(false),
             Term::Int(i) => Some(*i != 0),
             Term::Float(i) => Some(*i != 0f32),
-            Term::String(s) => Some(s.len() > 0),
+            Term::String(s) => Some(!s.is_empty()),
 
             // Paths/prefabs are truthy.
             Term::Prefab(_) => Some(true),
@@ -594,8 +593,8 @@ impl Term {
     }
 
     pub fn valid_for_range(&self, other: &Term, step: &Option<Expression>) -> Option<bool> {
-        if let &Term::Int(i) = self {
-            if let &Term::Int(o) = other {
+        if let Term::Int(i) = *self {
+            if let Term::Int(o) = *other {
                 // edge case
                 if i == 0 && o == 0 {
                     return Some(false)

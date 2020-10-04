@@ -227,10 +227,7 @@ oper_table! { BINARY_OPS;
 
 impl Strength {
     fn right_binding(self) -> bool {
-        match self {
-            Strength::Assign => true,
-            _ => false,
-        }
+        matches!(self, Strength::Assign)
     }
 }
 
@@ -367,7 +364,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     pub fn parse_with_module_docs(mut self) -> (ObjectTree, BTreeMap<FileId, Vec<(u32, DocComment)>>) {
         self.tree.register_builtins();
         self.run();
-        let docs = std::mem::replace(&mut self.module_docs, Default::default());
+        let docs = std::mem::take(&mut self.module_docs);
         (self.finalize_object_tree(), docs)
     }
 
@@ -568,8 +565,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     fn doc_comment<R, F: FnOnce(&mut Self) -> Status<R>>(&mut self, f: F) -> Status<(DocCollection, R)> {
         use std::mem::replace;
 
-        let enclosing = replace(&mut self.docs_enclosing, Default::default());
-        let mut docs = replace(&mut self.docs_following, Default::default());
+        let enclosing = std::mem::take(&mut self.docs_enclosing);
+        let mut docs = std::mem::take(&mut self.docs_following);
         self.in_docs += 1;
         let result = f(self);
         self.in_docs -= 1;

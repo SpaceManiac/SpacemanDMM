@@ -306,10 +306,7 @@ impl<'ctx> IncludeStack<'ctx> {
     }
 
     fn in_expansion(&self) -> bool {
-        match self.stack.last() {
-            Some(Include::Expansion { .. }) => true,
-            _ => false,
-        }
+        matches!(self.stack.last(), Some(Include::Expansion { .. }))
     }
 }
 

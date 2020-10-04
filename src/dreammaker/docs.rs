@@ -39,15 +39,15 @@ impl DocCollection {
                         continue;
                     }
                     // block comments are always paragraphs
-                    output.push_str("\n");
+                    output.push('\n');
                     if simplify(&mut output, &each.text, '*') {
-                        output.push_str("\n");
+                        output.push('\n');
                     }
                 },
                 CommentKind::Line => {
                     // line comments are paragraphs only if there are blanks
                     line_comments.push_str(&each.text);
-                    line_comments.push_str("\n");
+                    line_comments.push('\n');
                 },
             }
         }
@@ -182,7 +182,7 @@ fn simplify(out: &mut String, text: &str, ignore_char: char) -> bool {
         }
         // ...but include them in the middle.
         for _ in 0..newlines {
-            out.push_str("\n");
+            out.push('\n');
         }
         out.push_str(&line[prefix_len..line.len() - suffix_len]);
         anything = true;
