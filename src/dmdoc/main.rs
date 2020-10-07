@@ -161,9 +161,11 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // set up crosslink error reporting
+    let diagnostic_count: std::cell::Cell<i32> = Default::default();
     let error_entity: std::cell::Cell<Option<String>> = Default::default();
     let error_entity_put = |string: String| error_entity.set(Some(string));
     let error_entity_print = || {
+        diagnostic_count.set(diagnostic_count.get() + 1);
         if let Some(name) = error_entity.take() {
             eprintln!("{}:", name);
         }
@@ -642,8 +644,12 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    if dry_run {
-        return Ok(());
+    {
+        // Ensure the diagnostic count is not increased after this point.
+        let exit_code = diagnostic_count.into_inner();
+        if dry_run {
+            std::process::exit(exit_code);
+        }
     }
 
     // load tera templates
