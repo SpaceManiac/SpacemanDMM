@@ -356,21 +356,27 @@ fn run_inner(context: &Context, objtree: &ObjectTree, cli: bool) {
         }
     });
 
-    cli_println!("Procs analyzed: {}. Errored: {}. Builtins: {}.\n", present, invalid, builtin);
-
-    cli_println!("============================================================");
-    cli_println!("Analyzing proc call tree...\n");
-    analyzer.check_proc_call_tree();
+    cli_println!(
+        "Procs analyzed: {}. Errored: {}. Builtins: {}.\n",
+        present,
+        invalid,
+        builtin
+    );
 
     cli_println!("============================================================");
     cli_println!("Analyzing proc override validity...\n");
     objtree.root().recurse(&mut |ty| {
         for proc in ty.iter_self_procs() {
             analyzer.check_kwargs(proc);
+            analyzer.propagate_violations(proc);
         }
     });
 
     analyzer.finish_check_kwargs();
+
+    cli_println!("============================================================");
+    cli_println!("Analyzing proc call tree...\n");
+    analyzer.check_proc_call_tree();
 }
 
 // ----------------------------------------------------------------------------
@@ -489,13 +495,13 @@ impl<'o> CallStack<'o> {
 }
 
 trait DMErrorExt {
-    fn with_callstack(self, stack: CallStack) -> Self;
+    fn with_callstack(self, stack: &CallStack) -> Self;
     fn with_blocking_builtins(self, blockers: &Vec<(String, Location)>) -> Self;
     fn with_impure_operations(self, impures: &Vec<(String, Location)>) -> Self;
 }
 
 impl DMErrorExt for DMError {
-    fn with_callstack(mut self, stack: CallStack) -> DMError {
+    fn with_callstack(mut self, stack: &CallStack) -> DMError {
         for (procref, location, new_context) in stack.call_stack.iter() {
             self.add_note(*location, format!("{}() called here", procref));
         }
@@ -532,6 +538,21 @@ impl<'o> ViolatingProcs<'o> {
     }
 }
 
+#[derive(Default, Debug)]
+pub struct ViolatingOverrides<'o> {
+    overrides: HashMap<ProcRef<'o>, Vec<ProcRef<'o>>>,
+}
+
+impl<'o> ViolatingOverrides<'o> {
+    pub fn insert_override(&mut self, proc: ProcRef<'o>, child: ProcRef<'o>) {
+        self.overrides.entry(proc).or_default().push(child);
+    }
+
+    pub fn get_override_violators(&self, proc: ProcRef<'o>) -> Option<&Vec<ProcRef<'o>>> {
+        self.overrides.get(&proc)
+    }
+}
+
 /// A deeper analysis of an ObjectTree
 pub struct AnalyzeObjectTree<'o> {
     context: &'o Context,
@@ -554,6 +575,9 @@ pub struct AnalyzeObjectTree<'o> {
     sleeping_procs: ViolatingProcs<'o>,
     impure_procs: ViolatingProcs<'o>,
     waitfor_procs: HashSet<ProcRef<'o>>,
+
+    sleeping_overrides: ViolatingOverrides<'o>,
+    impure_overrides: ViolatingOverrides<'o>,
 }
 
 impl<'o> AnalyzeObjectTree<'o> {
@@ -578,6 +602,8 @@ impl<'o> AnalyzeObjectTree<'o> {
             sleeping_procs: Default::default(),
             impure_procs: Default::default(),
             waitfor_procs: Default::default(),
+            sleeping_overrides: Default::default(),
+            impure_overrides: Default::default(),
         }
     }
 
@@ -665,9 +691,21 @@ impl<'o> AnalyzeObjectTree<'o> {
                     error(procref.get().location, format!("{} sets SpacemanDMM_should_not_sleep but calls blocking proc {}", procref, nextproc))
                         .with_note(location, "SpacemanDMM_should_not_sleep set here")
                         .with_errortype("must_not_sleep")
-                        .with_callstack(callstack)
+                        .with_callstack(&callstack)
                         .with_blocking_builtins(sleepvec)
                         .register(self.context)
+                } else if let Some(overridesleep) = self.sleeping_overrides.get_override_violators(nextproc) {
+                    for child_violator in overridesleep {
+                        if procref.ty().is_subtype_of(&nextproc.ty()) && !child_violator.ty().is_subtype_of(&procref.ty()) {
+                            continue
+                        }
+                        error(procref.get().location, format!("{} calls {} which has override child proc that sleeps {}", procref, nextproc, child_violator))
+                            .with_note(location, "SpacemanDMM_should_not_sleep set here")
+                            .with_errortype("must_not_sleep")
+                            .with_callstack(&callstack)
+                            .with_blocking_builtins(self.sleeping_procs.get_violators(*child_violator).unwrap())
+                            .register(self.context)
+                    }
                 } else if let Some(calledvec) = self.call_tree.get(&nextproc) {
                     for (proccalled, location, new_context) in calledvec.iter() {
                         let mut newstack = callstack.clone();
@@ -703,9 +741,21 @@ impl<'o> AnalyzeObjectTree<'o> {
                     error(procref.get().location, format!("{} sets SpacemanDMM_should_be_pure but calls a {} that does impure operations", procref, nextproc))
                         .with_note(*location, "SpacemanDMM_should_be_pure set here")
                         .with_errortype("must_be_pure")
-                        .with_callstack(callstack)
+                        .with_callstack(&callstack)
                         .with_impure_operations(impurevec)
                         .register(self.context)
+                } else if let Some(overrideimpure) = self.impure_overrides.get_override_violators(nextproc) {
+                    for child_violator in overrideimpure {
+                        if procref.ty().is_subtype_of(&nextproc.ty()) && !child_violator.ty().is_subtype_of(&procref.ty()) {
+                            continue
+                        }
+                        error(procref.get().location, format!("{} calls {} which has override child proc that does impure operations {}", procref, nextproc, child_violator))
+                            .with_note(*location, "SpacemanDMM_should_not_pure set here")
+                            .with_errortype("must_be_pure")
+                            .with_callstack(&callstack)
+                            .with_blocking_builtins(self.impure_procs.get_violators(*child_violator).unwrap())
+                            .register(self.context)
+                    }
                 } else if let Some(calledvec) = self.call_tree.get(&nextproc) {
                     for (proccalled, location, new_context) in calledvec.iter() {
                         let mut newstack = callstack.clone();
@@ -782,6 +832,27 @@ impl<'o> AnalyzeObjectTree<'o> {
                 }
             } else {
                 break;
+            }
+        }
+    }
+
+    /// Propagate violations make up the inheritence graph
+    pub fn propagate_violations(&mut self, proc: ProcRef<'o>) {
+        if proc.name() == "New" { // New() propogates via ..() and causes weirdness
+            return;
+        }
+        if self.sleeping_procs.get_violators(proc).is_some() {
+            let mut next = proc.parent_proc();
+            while let Some(current) = next {
+                self.sleeping_overrides.insert_override(current, proc);
+                next = current.parent_proc();
+            }
+        }
+        if self.impure_procs.get_violators(proc).is_some() {
+            let mut next = proc.parent_proc();
+            while let Some(current) = next {
+                self.impure_overrides.insert_override(current, proc);
+                next = current.parent_proc();
             }
         }
     }
