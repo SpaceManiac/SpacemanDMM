@@ -72,3 +72,24 @@ fn do_while() {
 "##.trim();
     check_errors_match(code, DO_WHILE_ERRORS);
 }
+
+pub const FOR_LOOP_CONDITION_ERRORS: &[(u32, u16, &str)] = &[
+    (2, 5, "loop condition is always true"),
+    (2, 5, "control flow condition is a static term"),
+    (4, 5, "control flow condition is a constant evalutation"),
+];
+
+#[test]
+fn for_loop_condition() {
+    let code = r##"
+/proc/test()
+    for(var/x = 0; 1; x++)
+        break
+    for(var/y = 0; 5 <= 7; y++)
+        break
+    for(var/z = 1; z <= 6; z++) // Legit, should have no error
+        break
+    return
+"##.trim();
+    check_errors_match(code, FOR_LOOP_CONDITION_ERRORS);
+}
