@@ -135,16 +135,32 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // collate modules which have docs
+    let mut modules1 = BTreeMap::new();
+    let mut macro_count = 0;
+    let mut macros_all = 0;
+    for (file, comment_vec) in module_docs {
+        let file_path = context.file_path(file);
+        let module = module_entry(&mut modules1, &file_path);
+        for (line, doc) in comment_vec {
+            module.items_wip.push((line, ModuleItem::DocComment(doc)));
+        }
+    }
+    let mut modules_which_exist: BTreeSet<_> = modules1.keys().cloned().collect();
+
+    // build a map of macro names to the module.html files in which they appear
     let mut macro_exists = BTreeSet::new();
     let mut macro_to_module_map = BTreeMap::new();
     for (range, (name, define)) in define_history.iter() {
         macro_exists.insert(name.as_str());
         if !define.docs().is_empty() {
-            macro_to_module_map.insert(name.as_str(), module_path(&context.file_path(range.start.file)));
+            let mod_path = module_path(&context.file_path(range.start.file));
+            modules_which_exist.insert(mod_path.clone());
+            macro_to_module_map.insert(name.as_str(), mod_path);
         }
     }
 
-    // (normalized, reference) -> (href, tooltip)
+    // set up crosslink error reporting
     let error_entity: std::cell::Cell<Option<String>> = Default::default();
     let error_entity_put = |string: String| error_entity.set(Some(string));
     let error_entity_print = || {
@@ -153,6 +169,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+    // (normalized, reference) -> (href, tooltip)
     let broken_link_callback = &|_: &str, reference: &str| -> Option<(String, String)> {
         // macros
         if let Some(module) = macro_to_module_map.get(reference) {
@@ -162,9 +179,13 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             eprintln!("    [{}]: macro not documented", reference);
             return None;
         } else if reference.ends_with(".dm") || reference.ends_with(".txt") || reference.ends_with(".md") {
-            // TODO: only linkify if the module in question will actually exist.
-            let path = format!("{}.html", module_path(reference.as_ref()));
-            return Some((path, reference.to_owned()));
+            let mod_path = module_path(reference.as_ref());
+            if modules_which_exist.contains(&mod_path) {
+                return Some((format!("{}.html", mod_path), reference.to_owned()));
+            }
+            error_entity_print();
+            eprintln!("    [{}]: module {}", reference, if Path::new(reference).exists() { "not documented" } else { "does not exist" });
+            return None;
         }
 
         // parse "proc" or "var" reference out
@@ -300,18 +321,6 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             None
         }
     };
-
-    // collate modules which have docs
-    let mut modules1 = BTreeMap::new();
-    let mut macro_count = 0;
-    let mut macros_all = 0;
-    for (file, comment_vec) in module_docs {
-        let file_path = context.file_path(file);
-        let module = module_entry(&mut modules1, &file_path);
-        for (line, doc) in comment_vec {
-            module.items_wip.push((line, ModuleItem::DocComment(doc)));
-        }
-    }
 
     // if macros have docs, that counts as a module too
     for (range, (name, define)) in define_history.iter() {
