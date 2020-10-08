@@ -48,8 +48,8 @@ pub fn parse_a_file_for_test<S: Into<Cow<'static, str>>>(buffer: S) -> Context {
 
     tree.root().recurse(&mut |ty| {
         for proc in ty.iter_self_procs() {
-            analyzer.propagate_violations(proc);
             analyzer.check_kwargs(proc);
+            analyzer.propagate_violations(proc);
         }
     });
     analyzer.finish_check_kwargs();
