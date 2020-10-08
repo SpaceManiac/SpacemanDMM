@@ -9,6 +9,8 @@ pub const NO_ERRORS: &[(u32, u16, &str)] = &[];
 pub fn parse_a_file_for_test<S: Into<Cow<'static, str>>>(buffer: S) -> Context {
     let context = Context::default();
 
+    // TODO: make this use dreamchecker::run_inner()
+
     let pp = dm::preprocessor::Preprocessor::from_buffer(&context, "unit_tests.rs".into(), buffer.into());
 
     let indents = dm::indents::IndentProcessor::new(&context, pp);
@@ -44,14 +46,15 @@ pub fn parse_a_file_for_test<S: Into<Cow<'static, str>>>(buffer: S) -> Context {
         }
     });
 
-    analyzer.check_proc_call_tree();
-
     tree.root().recurse(&mut |ty| {
         for proc in ty.iter_self_procs() {
+            analyzer.propagate_violations(proc);
             analyzer.check_kwargs(proc);
         }
     });
     analyzer.finish_check_kwargs();
+
+    analyzer.check_proc_call_tree();
 
     context
 }
