@@ -356,12 +356,7 @@ fn run_inner(context: &Context, objtree: &ObjectTree, cli: bool) {
         }
     });
 
-    cli_println!(
-        "Procs analyzed: {}. Errored: {}. Builtins: {}.\n",
-        present,
-        invalid,
-        builtin
-    );
+    cli_println!("Procs analyzed: {}. Errored: {}. Builtins: {}.\n", present, invalid, builtin);
 
     cli_println!("============================================================");
     cli_println!("Analyzing proc override validity...\n");
