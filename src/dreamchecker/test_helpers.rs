@@ -1,15 +1,12 @@
-use dm::objtree::Code;
 use dm::Context;
 use std::borrow::Cow;
 
-use crate::{check_var_defs, AnalyzeObjectTree};
+use crate::{run_inner};
 
 pub const NO_ERRORS: &[(u32, u16, &str)] = &[];
 
 pub fn parse_a_file_for_test<S: Into<Cow<'static, str>>>(buffer: S) -> Context {
     let context = Context::default();
-
-    // TODO: make this use dreamchecker::run_inner()
 
     let pp = dm::preprocessor::Preprocessor::from_buffer(&context, "unit_tests.rs".into(), buffer.into());
 
@@ -19,42 +16,7 @@ pub fn parse_a_file_for_test<S: Into<Cow<'static, str>>>(buffer: S) -> Context {
     parser.enable_procs();
     let tree = parser.parse_object_tree();
 
-    check_var_defs(&tree, &context);
-
-    let mut analyzer = AnalyzeObjectTree::new(&context, &tree);
-
-    tree.root().recurse(&mut |ty| {
-        for proc in ty.iter_self_procs() {
-            if let Code::Present(ref code) = proc.get().code {
-                analyzer.gather_settings(proc, code);
-            }
-        }
-    });
-
-    tree.root().recurse(&mut |ty| {
-        for proc in ty.iter_self_procs() {
-            match proc.get().code {
-                Code::Present(ref code) => {
-                    analyzer.check_proc(proc, code);
-                }
-                Code::Invalid(_) => {}
-                Code::Builtin => {}
-                Code::Disabled => {
-                    panic!("proc parsing was enabled, but also disabled. this is a bug")
-                }
-            }
-        }
-    });
-
-    tree.root().recurse(&mut |ty| {
-        for proc in ty.iter_self_procs() {
-            analyzer.check_kwargs(proc);
-            analyzer.propagate_violations(proc);
-        }
-    });
-    analyzer.finish_check_kwargs();
-
-    analyzer.check_proc_call_tree();
+    run_inner(&context, &tree, false);
 
     context
 }
