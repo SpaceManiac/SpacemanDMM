@@ -79,6 +79,39 @@ fn sleep2() {
     check_errors_match(code, SLEEP_ERRORS2);
 }
 
+// This test is like sleep2, but checks /atom/movable -> /mob relationship
+#[test]
+fn sleep3() {
+    let code = r##"
+/atom/New()
+/atom/proc/foo()
+    sleep(1)
+/atom/movable/foo()
+    return TRUE
+/mob/foo()
+    sleep(1)
+/atom/movable/proc/bar()
+    set SpacemanDMM_should_not_sleep = TRUE
+    foo()
+    thing()
+    new /atom/movable()
+/atom/movable/New()
+    . = ..()
+/mob/human/foo()
+    . = ..()
+/atom/dead/New()
+    sleep(1)
+/atom/proc/thing()
+/atom/dead/thing()
+    sleep(1)
+/atom/movable/thing()
+    . = ..()
+"##.trim();
+    check_errors_match(code, &[
+        (8, 23, "/atom/movable/proc/bar calls /atom/movable/proc/foo which has override child proc that sleeps /mob/proc/foo"),
+    ]);
+}
+
 pub const PURE_ERRORS: &[(u32, u16, &str)] = &[
     (12, 16, "/mob/proc/test2 sets SpacemanDMM_should_be_pure but calls a /proc/impure that does impure operations"),
 ];
