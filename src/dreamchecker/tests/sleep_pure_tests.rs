@@ -5,6 +5,7 @@ use dc::test_helpers::check_errors_match;
 
 pub const SLEEP_ERRORS: &[(u32, u16, &str)] = &[
     (16, 16, "/mob/proc/test3 sets SpacemanDMM_should_not_sleep but calls blocking proc /proc/sleepingproc"),
+    (32, 16, "/mob/proc/test7 sets SpacemanDMM_should_not_sleep but calls blocking built-in(s)"),
 ];
 
 #[test]
@@ -41,6 +42,10 @@ fn sleep() {
 /mob/proc/test6()
     set SpacemanDMM_should_not_sleep = TRUE
     spawnthensleepproc()
+/mob/proc/test7()
+    set SpacemanDMM_should_not_sleep = TRUE
+    world.Export()
+    world.Import()
 "##.trim();
     check_errors_match(code, SLEEP_ERRORS);
 }
