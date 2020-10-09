@@ -68,11 +68,17 @@ impl RenderPass for IconSmoothing {
                 cardinal_smooth(output, objtree, bump, atom, adjacencies);
             }
             false
+        } else if smooth_flags & SMOOTH_BITMASK != 0 {
+            let adjacencies = calculate_adjacencies(objtree, neighborhood, atom, smooth_flags);
+            bitmask_smooth(output, objtree, bump, neighborhood, atom, adjacencies, smooth_flags)
         } else {
             true
         }
     }
 }
+
+// ----------------------------------------------------------------------------
+// Older cardinal smoothing system
 
 fn calculate_adjacencies(objtree: &ObjectTree, neighborhood: &Neighborhood, atom: &Atom, smooth_flags: i32) -> i32 {
     if atom.istype("/atom/movable/") {
@@ -201,31 +207,7 @@ fn diagonal_smooth<'a>(output: &mut Vec<Sprite<'a>>, objtree: &'a ObjectTree, bu
 
     // turf underneath
     if source.istype("/turf/closed/wall/") {
-        // BYOND memes
-        if source
-            .get_var("fixed_underlay", objtree)
-            .index(&Constant::string("space"))
-            .is_some()
-        {
-            output.push(Sprite::from_vars(objtree, &objtree.expect("/turf/open/space/basic")));
-        } else {
-            let dir = reverse_ndir(adjacencies).flip();
-            let mut needs_plating = true;
-            // check direct, then 45deg left, then 45deg right
-            'dirs: for &each in &[dir, dir.counterclockwise_45(), dir.clockwise_45()] {
-                let atom_list = neighborhood.offset(each);
-                for atom in atom_list {
-                    if atom.istype("/turf/open/") {
-                        output.push(Sprite::from_vars(objtree, atom));
-                        needs_plating = false;
-                        break 'dirs;
-                    }
-                }
-            }
-            if needs_plating {
-                output.push(Sprite::from_vars(objtree, &objtree.expect("/turf/open/floor/plating")));
-            }
-        }
+        diagonal_underlay(output, objtree, neighborhood, source, adjacencies);
     }
 
     // the diagonal overlay
@@ -241,7 +223,35 @@ fn diagonal_smooth<'a>(output: &mut Vec<Sprite<'a>>, objtree: &'a ObjectTree, bu
     }
 }
 
-fn reverse_ndir(ndir: i32) -> Dir {
+fn diagonal_underlay<'a>(output: &mut Vec<Sprite<'a>>, objtree: &'a ObjectTree, neighborhood: &Neighborhood<'a, '_>, source: &Atom<'a>, adjacencies: i32) {
+    // BYOND memes
+    if source
+        .get_var("fixed_underlay", objtree)
+        .index(&Constant::string("space"))
+        .is_some()
+    {
+        output.push(Sprite::from_vars(objtree, &objtree.expect("/turf/open/space/basic")));
+    } else if let Some(dir) = reverse_ndir(adjacencies) {
+        let dir = dir.flip();
+        let mut needs_plating = true;
+        // check direct, then 45deg left, then 45deg right
+        'dirs: for &each in &[dir, dir.counterclockwise_45(), dir.clockwise_45()] {
+            let atom_list = neighborhood.offset(each);
+            for atom in atom_list {
+                if atom.istype("/turf/open/") {
+                    output.push(Sprite::from_vars(objtree, atom));
+                    needs_plating = false;
+                    break 'dirs;
+                }
+            }
+        }
+        if needs_plating {
+            output.push(Sprite::from_vars(objtree, &objtree.expect("/turf/open/floor/plating")));
+        }
+    }
+}
+
+fn reverse_ndir(ndir: i32) -> Option<Dir> {
     const NW1: i32 = NORTH_JUNCTION | WEST_JUNCTION;
     const NW2: i32 = NW1 | NORTHWEST_JUNCTION;
     const NE1: i32 = NORTH_JUNCTION | EAST_JUNCTION;
@@ -252,14 +262,49 @@ fn reverse_ndir(ndir: i32) -> Dir {
     const SE2: i32 = SE1 | SOUTHEAST_JUNCTION;
 
     match ndir {
-        NORTH_JUNCTION => Dir::North,
-        SOUTH_JUNCTION => Dir::South,
-        WEST_JUNCTION => Dir::West,
-        EAST_JUNCTION => Dir::East,
-        SOUTHEAST_JUNCTION | SE1 | SE2 => Dir::Southeast,
-        SOUTHWEST_JUNCTION | SW1 | SW2 => Dir::Southwest,
-        NORTHEAST_JUNCTION | NE1 | NE2 => Dir::Northeast,
-        NORTHWEST_JUNCTION | NW1 | NW2 => Dir::Northwest,
-        _ => panic!(),
+        NORTH_JUNCTION => Some(Dir::North),
+        SOUTH_JUNCTION => Some(Dir::South),
+        WEST_JUNCTION => Some(Dir::West),
+        EAST_JUNCTION => Some(Dir::East),
+        SOUTHEAST_JUNCTION | SE1 | SE2 => Some(Dir::Southeast),
+        SOUTHWEST_JUNCTION | SW1 | SW2 => Some(Dir::Southwest),
+        NORTHEAST_JUNCTION | NE1 | NE2 => Some(Dir::Northeast),
+        NORTHWEST_JUNCTION | NW1 | NW2 => Some(Dir::Northwest),
+        _ => None,
     }
+}
+
+// ----------------------------------------------------------------------------
+// Bitmask smoothing system
+
+fn bitmask_smooth<'a>(
+    output: &mut Vec<Sprite<'a>>,
+    objtree: &'a ObjectTree,
+    bump: &'a bumpalo::Bump,
+    neighborhood: &Neighborhood<'a, '_>,
+    source: &Atom<'a>,
+    smoothing_junction: i32,
+    smooth_flags: i32,
+) -> bool {
+    let mut diagonal = "";
+    if source.istype("/turf/open/floor/") {
+        if source.get_var("broken", objtree).to_bool() || source.get_var("burnt", objtree).to_bool() {
+            return true;  // use original appearance
+        }
+    } else if source.istype("/turf/closed/") && (smooth_flags & SMOOTH_DIAGONAL_CORNERS != 0) && reverse_ndir(smoothing_junction).is_some() {
+        diagonal_underlay(output, objtree, neighborhood, source, smoothing_junction);
+        diagonal = "-d";
+    }
+
+    let base_icon_state = source.get_var("base_icon_state", objtree).as_str().unwrap_or("");
+    let mut sprite = Sprite {
+        icon_state: bumpalo::format!(in bump, "{}-{}{}", base_icon_state, smoothing_junction, diagonal).into_bump_str(),
+        .. source.sprite
+    };
+    if let Some(icon) = source.get_var("smooth_icon", objtree).as_path_str() {
+        sprite.icon = icon;
+    }
+    output.push(sprite);
+
+    false
 }
