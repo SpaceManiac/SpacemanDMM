@@ -1,7 +1,8 @@
 //! Port of icon smoothing subsystem as of 2020.
 //!
 //! https://github.com/tgstation/tgstation/pull/52864
-//! (b0726e032ba01221bf318928917fa9a55887c5ef)
+//! followed by
+//! https://github.com/tgstation/tgstation/pull/53906
 
 use dm::objtree::ObjectTree;
 use dm::constants::Constant;
@@ -10,18 +11,23 @@ use crate::minimap::{Sprite, Atom, GetVar, Neighborhood};
 
 use super::RenderPass;
 
-const N_NORTH: i32 = 1 << 0;
-const N_SOUTH: i32 = 1 << 1;
-const N_EAST: i32 = 1 << 2;
-const N_WEST: i32 = 1 << 3;
-const N_NORTHEAST: i32 = 1 << 4;
-const N_NORTHWEST: i32 = 1 << 5;
-const N_SOUTHEAST: i32 = 1 << 6;
-const N_SOUTHWEST: i32 = 1 << 7;
+const NORTH_JUNCTION: i32 = 1 << 0;
+const SOUTH_JUNCTION: i32 = 1 << 1;
+const EAST_JUNCTION: i32 = 1 << 2;
+const WEST_JUNCTION: i32 = 1 << 3;
+const NORTHEAST_JUNCTION: i32 = 1 << 4;
+const SOUTHEAST_JUNCTION: i32 = 1 << 5;
+const SOUTHWEST_JUNCTION: i32 = 1 << 6;
+const NORTHWEST_JUNCTION: i32 = 1 << 7;
 
-const SMOOTH_CORNERS: i32 = 1 << 0;  // Smoothing system in where adjacencies are calculated and used to build an image by mounting each corner at runtime.
-const SMOOTH_DIAGONAL: i32 = 1 << 2;  // if atom should smooth diagonally, this should be present in 'smoothing_flags' var
-const SMOOTH_BORDER: i32 = 1 << 3;  // atom will smooth with the borders of the map
+/// Smoothing system in where adjacencies are calculated and used to build an image by mounting each corner at runtime.
+const SMOOTH_CORNERS: i32 = 1 << 0;
+/// Smoothing system in where adjacencies are calculated and used to select a pre-baked icon_state, encoded by bitmasking.
+const SMOOTH_BITMASK: i32 = 1 << 1;
+/// Atom has diagonal corners, with underlays under them.
+const SMOOTH_DIAGONAL_CORNERS: i32 = 1 << 2;
+/// Atom will smooth with the borders of the map.
+const SMOOTH_BORDER: i32 = 1 << 3;
 
 pub struct IconSmoothing {
     pub mask: i32,
@@ -56,7 +62,7 @@ impl RenderPass for IconSmoothing {
         let smooth_flags = self.mask & atom.get_var("smoothing_flags", objtree).to_int().unwrap_or(0);
         if smooth_flags & SMOOTH_CORNERS != 0 {
             let adjacencies = calculate_adjacencies(objtree, neighborhood, atom, smooth_flags);
-            if smooth_flags & SMOOTH_DIAGONAL != 0 {
+            if smooth_flags & SMOOTH_DIAGONAL_CORNERS != 0 {
                 diagonal_smooth(output, objtree, bump, neighborhood, atom, adjacencies);
             } else {
                 cardinal_smooth(output, objtree, bump, atom, adjacencies);
@@ -84,25 +90,25 @@ fn calculate_adjacencies(objtree: &ObjectTree, neighborhood: &Neighborhood, atom
         }
     };
 
-    adjacencies |= check_one(Dir::North, N_NORTH);
-    adjacencies |= check_one(Dir::South, N_SOUTH);
-    adjacencies |= check_one(Dir::East, N_EAST);
-    adjacencies |= check_one(Dir::West, N_WEST);
+    adjacencies |= check_one(Dir::North, NORTH_JUNCTION);
+    adjacencies |= check_one(Dir::South, SOUTH_JUNCTION);
+    adjacencies |= check_one(Dir::East, EAST_JUNCTION);
+    adjacencies |= check_one(Dir::West, WEST_JUNCTION);
 
-    if adjacencies & N_NORTH != 0 {
-        if adjacencies & N_WEST != 0 {
-            adjacencies |= check_one(Dir::Northwest, N_NORTHWEST);
+    if adjacencies & NORTH_JUNCTION != 0 {
+        if adjacencies & WEST_JUNCTION != 0 {
+            adjacencies |= check_one(Dir::Northwest, NORTHWEST_JUNCTION);
         }
-        if adjacencies & N_EAST != 0 {
-            adjacencies |= check_one(Dir::Northeast, N_NORTHEAST);
+        if adjacencies & EAST_JUNCTION != 0 {
+            adjacencies |= check_one(Dir::Northeast, NORTHEAST_JUNCTION);
         }
     }
-    if adjacencies & N_SOUTH != 0 {
-        if adjacencies & N_WEST != 0 {
-            adjacencies |= check_one(Dir::Southwest, N_SOUTHWEST);
+    if adjacencies & SOUTH_JUNCTION != 0 {
+        if adjacencies & WEST_JUNCTION != 0 {
+            adjacencies |= check_one(Dir::Southwest, SOUTHWEST_JUNCTION);
         }
-        if adjacencies & N_EAST != 0 {
-            adjacencies |= check_one(Dir::Southeast, N_SOUTHEAST);
+        if adjacencies & EAST_JUNCTION != 0 {
+            adjacencies |= check_one(Dir::Southeast, SOUTHEAST_JUNCTION);
         }
     }
 
@@ -142,10 +148,10 @@ fn find_type_in_direction(objtree: &ObjectTree, adjacency: &Neighborhood, source
 
 fn cardinal_smooth<'a>(output: &mut Vec<Sprite<'a>>, objtree: &'a ObjectTree, bump: &'a bumpalo::Bump, source: &Atom<'a>, adjacencies: i32) {
     for &(what, f1, n1, f2, n2, f3) in &[
-        ("1", N_NORTH, "n", N_WEST, "w", N_NORTHWEST),
-        ("2", N_NORTH, "n", N_EAST, "e", N_NORTHEAST),
-        ("3", N_SOUTH, "s", N_WEST, "w", N_SOUTHWEST),
-        ("4", N_SOUTH, "s", N_EAST, "e", N_SOUTHEAST),
+        ("1", NORTH_JUNCTION, "n", WEST_JUNCTION, "w", NORTHWEST_JUNCTION),
+        ("2", NORTH_JUNCTION, "n", EAST_JUNCTION, "e", NORTHEAST_JUNCTION),
+        ("3", SOUTH_JUNCTION, "s", WEST_JUNCTION, "w", SOUTHWEST_JUNCTION),
+        ("4", SOUTH_JUNCTION, "s", EAST_JUNCTION, "e", SOUTHEAST_JUNCTION),
     ] {
         let name = if (adjacencies & f1 != 0) && (adjacencies & f2 != 0) {
             if (adjacencies & f3) != 0 {
@@ -173,21 +179,21 @@ fn cardinal_smooth<'a>(output: &mut Vec<Sprite<'a>>, objtree: &'a ObjectTree, bu
 }
 
 fn diagonal_smooth<'a>(output: &mut Vec<Sprite<'a>>, objtree: &'a ObjectTree, bump: &'a bumpalo::Bump, neighborhood: &Neighborhood<'a, '_>, source: &Atom<'a>, adjacencies: i32) {
-    let presets = if adjacencies == N_NORTH | N_WEST {
+    let presets = if adjacencies == NORTH_JUNCTION | WEST_JUNCTION {
         ["d-se", "d-se-0"]
-    } else if adjacencies == N_NORTH | N_EAST {
+    } else if adjacencies == NORTH_JUNCTION | EAST_JUNCTION {
         ["d-sw", "d-sw-0"]
-    } else if adjacencies == N_SOUTH | N_WEST {
+    } else if adjacencies == SOUTH_JUNCTION | WEST_JUNCTION {
         ["d-ne", "d-ne-0"]
-    } else if adjacencies == N_SOUTH | N_EAST {
+    } else if adjacencies == SOUTH_JUNCTION | EAST_JUNCTION {
         ["d-nw", "d-nw-0"]
-    } else if adjacencies == N_NORTH | N_WEST | N_NORTHWEST {
+    } else if adjacencies == NORTH_JUNCTION | WEST_JUNCTION | NORTHWEST_JUNCTION {
         ["d-se", "d-se-1"]
-    } else if adjacencies == N_NORTH | N_EAST | N_NORTHEAST {
+    } else if adjacencies == NORTH_JUNCTION | EAST_JUNCTION | NORTHEAST_JUNCTION {
         ["d-sw", "d-sw-1"]
-    } else if adjacencies == N_SOUTH | N_WEST | N_SOUTHWEST {
+    } else if adjacencies == SOUTH_JUNCTION | WEST_JUNCTION | SOUTHWEST_JUNCTION {
         ["d-ne", "d-ne-1"]
-    } else if adjacencies == N_SOUTH | N_EAST | N_SOUTHEAST {
+    } else if adjacencies == SOUTH_JUNCTION | EAST_JUNCTION | SOUTHEAST_JUNCTION {
         ["d-nw", "d-nw-1"]
     } else {
         return cardinal_smooth(output, objtree, bump, source, adjacencies);
@@ -236,24 +242,24 @@ fn diagonal_smooth<'a>(output: &mut Vec<Sprite<'a>>, objtree: &'a ObjectTree, bu
 }
 
 fn reverse_ndir(ndir: i32) -> Dir {
-    const NW1: i32 = N_NORTH | N_WEST;
-    const NW2: i32 = NW1 | N_NORTHWEST;
-    const NE1: i32 = N_NORTH | N_EAST;
-    const NE2: i32 = NE1 | N_NORTHEAST;
-    const SW1: i32 = N_SOUTH | N_WEST;
-    const SW2: i32 = SW1 | N_SOUTHWEST;
-    const SE1: i32 = N_SOUTH | N_EAST;
-    const SE2: i32 = SE1 | N_SOUTHEAST;
+    const NW1: i32 = NORTH_JUNCTION | WEST_JUNCTION;
+    const NW2: i32 = NW1 | NORTHWEST_JUNCTION;
+    const NE1: i32 = NORTH_JUNCTION | EAST_JUNCTION;
+    const NE2: i32 = NE1 | NORTHEAST_JUNCTION;
+    const SW1: i32 = SOUTH_JUNCTION | WEST_JUNCTION;
+    const SW2: i32 = SW1 | SOUTHWEST_JUNCTION;
+    const SE1: i32 = SOUTH_JUNCTION | EAST_JUNCTION;
+    const SE2: i32 = SE1 | SOUTHEAST_JUNCTION;
 
     match ndir {
-        N_NORTH => Dir::North,
-        N_SOUTH => Dir::South,
-        N_WEST => Dir::West,
-        N_EAST => Dir::East,
-        N_SOUTHEAST | SE1 | SE2 => Dir::Southeast,
-        N_SOUTHWEST | SW1 | SW2 => Dir::Southwest,
-        N_NORTHEAST | NE1 | NE2 => Dir::Northeast,
-        N_NORTHWEST | NW1 | NW2 => Dir::Northwest,
+        NORTH_JUNCTION => Dir::North,
+        SOUTH_JUNCTION => Dir::South,
+        WEST_JUNCTION => Dir::West,
+        EAST_JUNCTION => Dir::East,
+        SOUTHEAST_JUNCTION | SE1 | SE2 => Dir::Southeast,
+        SOUTHWEST_JUNCTION | SW1 | SW2 => Dir::Southwest,
+        NORTHEAST_JUNCTION | NE1 | NE2 => Dir::Northeast,
+        NORTHWEST_JUNCTION | NW1 | NW2 => Dir::Northwest,
         _ => panic!(),
     }
 }
