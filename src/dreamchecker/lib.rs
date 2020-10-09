@@ -1702,10 +1702,13 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
 
             Term::Call(unscoped_name, args) => {
-                if unscoped_name == "sleep" || unscoped_name == "alert" || unscoped_name == "shell" || unscoped_name == "winexists" || unscoped_name == "winget" {
-                    if self.inside_newcontext == 0 {
+                if matches!(unscoped_name.as_str(),
+                    "sleep"
+                    | "alert"
+                    | "shell"
+                    | "winexists"
+                    | "winget" if self.inside_newcontext == 0) {
                         self.env.sleeping_procs.insert_violator(self.proc_ref, unscoped_name, location);
-                    }
                 }
                 let src = self.ty;
                 if let Some(proc) = self.ty.get_proc(unscoped_name) {
@@ -1950,6 +1953,13 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                                     .with_errortype("protected_proc")
                                     .with_note(decllocation, "prohibited by this protected_proc annotation")
                                     .register(self.context);
+                            }
+                        }
+                        if ty.get().path.as_str() == "/world" {
+                            if matches!(name.as_str(),
+                                "Import"
+                                | "Export" if self.inside_newcontext == 0) {
+                                self.env.sleeping_procs.insert_violator(self.proc_ref, format!("world.{}", name).as_str(), location);
                             }
                         }
                         self.visit_call(location, ty, proc, arguments, false, local_vars)
