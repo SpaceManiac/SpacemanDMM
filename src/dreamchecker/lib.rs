@@ -1702,12 +1702,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
 
             Term::Call(unscoped_name, args) => {
-                if matches!(unscoped_name.as_str(),
+                if self.inside_newcontext == 0 && matches!(unscoped_name.as_str(),
                     "sleep"
                     | "alert"
                     | "shell"
                     | "winexists"
-                    | "winget" if self.inside_newcontext == 0) {
+                    | "winget") {
                         self.env.sleeping_procs.insert_violator(self.proc_ref, unscoped_name, location);
                 }
                 let src = self.ty;
@@ -1956,9 +1956,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                             }
                         }
                         if ty.get().path.as_str() == "/world" {
-                            if matches!(name.as_str(),
+                            if self.inside_newcontext == 0 && matches!(name.as_str(),
                                 "Import"
-                                | "Export" if self.inside_newcontext == 0) {
+                                | "Export") {
                                 self.env.sleeping_procs.insert_violator(self.proc_ref, format!("world.{}", name).as_str(), location);
                             }
                         }
