@@ -112,6 +112,21 @@ fn sleep3() {
     ]);
 }
 
+pub const SLEEP_ERROR4: &[(u32, u16, &str)] = &[
+    (1, 16, "/mob/proc/test1 sets SpacemanDMM_should_not_sleep but calls blocking built-in(s)"),
+];
+
+#[test]
+fn sleep4() {
+    let code = r##"
+/mob/proc/test1()
+    set SpacemanDMM_should_not_sleep = TRUE
+    world.Export()
+    world.Import()
+"##.trim();
+    check_errors_match(code, SLEEP_ERROR4);
+}
+
 pub const PURE_ERRORS: &[(u32, u16, &str)] = &[
     (12, 16, "/mob/proc/test2 sets SpacemanDMM_should_be_pure but calls a /proc/impure that does impure operations"),
 ];
