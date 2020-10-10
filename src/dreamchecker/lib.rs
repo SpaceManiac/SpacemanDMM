@@ -8,6 +8,7 @@ use dm::{Context, DMError, Location, Severity};
 use dm::objtree::{ObjectTree, TypeRef, ProcRef, Code};
 use dm::constants::{Constant, ConstFn};
 use dm::ast::*;
+use dm::config::*;
 
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
@@ -518,6 +519,22 @@ impl DMErrorExt for DMError {
     }
 }
 
+trait DirectiveFromConfig {
+    fn to_proc_directive(self, directive_string: &'static str) -> ProcDirective;
+}
+
+impl DirectiveFromConfig for MustCallParent {
+    fn to_proc_directive(self, directive_string: &'static str) -> ProcDirective {
+        ProcDirective {
+            directive: Default::default(),
+            directive_string,
+            can_be_disabled: self.can_be_disabled,
+            set_at_definition: self.set_at_definition,
+            can_be_global: self.can_be_global,
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct ViolatingProcs<'o> {
     violators: HashMap<ProcRef<'o>, Vec<(String, Location)>>,
@@ -584,7 +601,7 @@ impl<'o> AnalyzeObjectTree<'o> {
             context,
             objtree,
             return_type,
-            must_call_parent: ProcDirective::new("SpacemanDMM_should_call_parent", true, false, false),
+            must_call_parent: context.config().procdirective.must_call_parent.to_proc_directive("SpacemanDMM_should_call_parent"),
             must_not_override: ProcDirective::new("SpacemanDMM_should_not_override", false, false, false),
             private: ProcDirective::new("SpacemanDMM_private_proc", false, true, false),
             protected: ProcDirective::new("SpacemanDMM_protected_proc", false, true, false),

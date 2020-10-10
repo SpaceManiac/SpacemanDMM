@@ -24,6 +24,7 @@ pub struct Config {
     // tool-specific configuration
     pub langserver: Langserver,
     pub dmdoc: DMDoc,
+    pub procdirective: ProcDirectiveSection,
 }
 
 /// General error display options
@@ -185,4 +186,113 @@ impl From<toml::de::Error> for Error {
     fn from(err: toml::de::Error) -> Error {
         Error::Toml(err)
     }
+}
+
+#[derive(Debug, Deserialize, Default, Clone)]
+#[serde(default)]
+pub struct ProcDirectiveSection {
+    pub must_call_parent: MustCallParent,
+    must_not_override: MustNotOverride,
+    private: PrivateDirective,
+    protected: ProtectedDirective,
+    must_not_sleep: MustNotSleep,
+    sleep_exempt: SleepExempt,
+    must_be_pure: MustBePure,
+    can_be_redefined: CanBeRedefined,
+}
+
+#[derive(Debug, Deserialize, Default, Clone, Copy)]
+#[serde(default)]
+pub struct MustCallParent {
+    #[serde(default = "enable")]
+    pub can_be_disabled: bool,
+    #[serde(default = "disable")]
+    pub set_at_definition: bool,
+    #[serde(default = "disable")]
+    pub can_be_global: bool,
+}
+
+#[derive(Debug, Deserialize, Default, Clone)]
+#[serde(default)]
+pub struct MustNotOverride {
+    #[serde(default = "disable")]
+    can_be_disabled: bool,
+    #[serde(default = "disable")]
+    set_at_definition: bool,
+    #[serde(default = "disable")]
+    can_be_global: bool,
+}
+
+#[derive(Debug, Deserialize, Default, Clone)]
+#[serde(default)]
+pub struct PrivateDirective {
+    #[serde(default = "disable")]
+    can_be_disabled: bool,
+    #[serde(default = "enable")]
+    set_at_definition: bool,
+    #[serde(default = "disable")]
+    can_be_global: bool,
+}
+
+#[derive(Debug, Deserialize, Default, Clone)]
+#[serde(default)]
+pub struct ProtectedDirective {
+    #[serde(default = "disable")]
+    can_be_disabled: bool,
+    #[serde(default = "enable")]
+    set_at_definition: bool,
+    #[serde(default = "disable")]
+    can_be_global: bool,
+}
+
+#[derive(Debug, Deserialize, Default, Clone)]
+#[serde(default)]
+pub struct MustNotSleep {
+    #[serde(default = "disable")]
+    can_be_disabled: bool,
+    #[serde(default = "enable")]
+    set_at_definition: bool,
+    #[serde(default = "enable")]
+    can_be_global: bool,
+}
+
+#[derive(Debug, Deserialize, Default, Clone)]
+#[serde(default)]
+pub struct SleepExempt {
+    #[serde(default = "disable")]
+    can_be_disabled: bool,
+    #[serde(default = "enable")]
+    set_at_definition: bool,
+    #[serde(default = "enable")]
+    can_be_global: bool,
+}
+
+#[derive(Debug, Deserialize, Default, Clone)]
+#[serde(default)]
+pub struct MustBePure {
+    #[serde(default = "disable")]
+    can_be_disabled: bool,
+    #[serde(default = "enable")]
+    set_at_definition: bool,
+    #[serde(default = "enable")]
+    can_be_global: bool,
+}
+
+#[derive(Debug, Deserialize, Default, Clone)]
+#[serde(default)]
+pub struct CanBeRedefined {
+    #[serde(default = "disable")]
+    can_be_disabled: bool,
+    #[serde(default = "disable")]
+    set_at_definition: bool,
+    #[serde(default = "disable")]
+    can_be_global: bool,
+}
+
+fn enable() -> bool {
+    true
+}
+
+fn disable() -> bool {
+    false
 }
