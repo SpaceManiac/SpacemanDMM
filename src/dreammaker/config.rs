@@ -192,102 +192,38 @@ impl From<toml::de::Error> for Error {
 #[serde(default)]
 pub struct ProcDirectiveSection {
     pub must_call_parent: MustCallParent,
-    must_not_override: MustNotOverride,
-    private: PrivateDirective,
-    protected: ProtectedDirective,
-    must_not_sleep: MustNotSleep,
-    sleep_exempt: SleepExempt,
-    must_be_pure: MustBePure,
-    can_be_redefined: CanBeRedefined,
+    pub must_not_override: MustNotOverride,
+    pub private: PrivateDirective,
+    pub protected: ProtectedDirective,
+    pub must_not_sleep: MustNotSleep,
+    pub sleep_exempt: SleepExempt,
+    pub must_be_pure: MustBePure,
+    pub can_be_redefined: CanBeRedefined,
 }
 
-#[derive(Debug, Deserialize, Default, Clone, Copy)]
-#[serde(default)]
-pub struct MustCallParent {
-    #[serde(default = "enable")]
-    pub can_be_disabled: bool,
-    #[serde(default = "disable")]
-    pub set_at_definition: bool,
-    #[serde(default = "disable")]
-    pub can_be_global: bool,
+macro_rules! procdirective {
+    ($name: ident $cbd: tt $sad: tt $cbg: tt) => {
+        #[derive(Debug, Deserialize, Default, Clone, Copy)]
+        #[serde(default)]
+        pub struct $name {
+            #[serde(default = $cbd)]
+            pub can_be_disabled: bool,
+            #[serde(default = $sad)]
+            pub set_at_definition: bool,
+            #[serde(default = $cbg)]
+            pub can_be_global: bool,
+        }
+    };
 }
 
-#[derive(Debug, Deserialize, Default, Clone)]
-#[serde(default)]
-pub struct MustNotOverride {
-    #[serde(default = "disable")]
-    can_be_disabled: bool,
-    #[serde(default = "disable")]
-    set_at_definition: bool,
-    #[serde(default = "disable")]
-    can_be_global: bool,
-}
-
-#[derive(Debug, Deserialize, Default, Clone)]
-#[serde(default)]
-pub struct PrivateDirective {
-    #[serde(default = "disable")]
-    can_be_disabled: bool,
-    #[serde(default = "enable")]
-    set_at_definition: bool,
-    #[serde(default = "disable")]
-    can_be_global: bool,
-}
-
-#[derive(Debug, Deserialize, Default, Clone)]
-#[serde(default)]
-pub struct ProtectedDirective {
-    #[serde(default = "disable")]
-    can_be_disabled: bool,
-    #[serde(default = "enable")]
-    set_at_definition: bool,
-    #[serde(default = "disable")]
-    can_be_global: bool,
-}
-
-#[derive(Debug, Deserialize, Default, Clone)]
-#[serde(default)]
-pub struct MustNotSleep {
-    #[serde(default = "disable")]
-    can_be_disabled: bool,
-    #[serde(default = "enable")]
-    set_at_definition: bool,
-    #[serde(default = "enable")]
-    can_be_global: bool,
-}
-
-#[derive(Debug, Deserialize, Default, Clone)]
-#[serde(default)]
-pub struct SleepExempt {
-    #[serde(default = "disable")]
-    can_be_disabled: bool,
-    #[serde(default = "enable")]
-    set_at_definition: bool,
-    #[serde(default = "enable")]
-    can_be_global: bool,
-}
-
-#[derive(Debug, Deserialize, Default, Clone)]
-#[serde(default)]
-pub struct MustBePure {
-    #[serde(default = "disable")]
-    can_be_disabled: bool,
-    #[serde(default = "enable")]
-    set_at_definition: bool,
-    #[serde(default = "enable")]
-    can_be_global: bool,
-}
-
-#[derive(Debug, Deserialize, Default, Clone)]
-#[serde(default)]
-pub struct CanBeRedefined {
-    #[serde(default = "disable")]
-    can_be_disabled: bool,
-    #[serde(default = "disable")]
-    set_at_definition: bool,
-    #[serde(default = "disable")]
-    can_be_global: bool,
-}
+procdirective! {MustCallParent "enable" "disable" "disable"}
+procdirective! {MustNotOverride "disable" "disable" "disable"}
+procdirective! {PrivateDirective "disable" "enable" "disable"}
+procdirective! {ProtectedDirective "disable" "enable" "disable"}
+procdirective! {MustNotSleep "disable" "enable" "enable"}
+procdirective! {SleepExempt "disable" "enable" "enable"}
+procdirective! {MustBePure "disable" "enable" "enable"}
+procdirective! {CanBeRedefined "disable" "disable" "disable"}
 
 fn enable() -> bool {
     true
