@@ -5,11 +5,12 @@
 
 extern crate dreammaker as dm;
 use dm::{Context, DMError, Location, Severity};
-use dm::objtree::{ObjectTree, TypeRef, ProcRef, Code};
+use dm::objtree::{ObjectTree, TypeRef, ProcRef, Code, VarDeclaration};
 use dm::constants::{Constant, ConstFn};
 use dm::ast::*;
 
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::borrow::Borrow;
 
 mod type_expr;
 use type_expr::TypeExpr;
@@ -322,9 +323,9 @@ fn run_inner(context: &Context, objtree: &ObjectTree, cli: bool) {
     cli_println!("============================================================");
     cli_println!("Analyzing variables...\n");
 
-    check_var_defs(&objtree, &context);
-
     let mut analyzer = AnalyzeObjectTree::new(context, objtree);
+
+    analyzer.check_var_defs();
 
     let mut present = 0;
     let mut invalid = 0;
@@ -372,6 +373,11 @@ fn run_inner(context: &Context, objtree: &ObjectTree, cli: bool) {
     cli_println!("============================================================");
     cli_println!("Analyzing proc call tree...\n");
     analyzer.check_proc_call_tree();
+
+    cli_println!("============================================================");
+    cli_println!("Listing unused var declarations...\n");
+
+    analyzer.check_unused_typevars();
 }
 
 // ----------------------------------------------------------------------------
@@ -553,6 +559,8 @@ pub struct AnalyzeObjectTree<'o> {
     context: &'o Context,
     objtree: &'o ObjectTree,
 
+    unused_typevars: HashSet<&'o VarDeclaration>,
+
     return_type: HashMap<ProcRef<'o>, TypeExpr<'o>>,
     must_call_parent: ProcDirective<'o>,
     must_not_override: ProcDirective<'o>,
@@ -584,6 +592,7 @@ impl<'o> AnalyzeObjectTree<'o> {
             context,
             objtree,
             return_type,
+            unused_typevars: Default::default(),
             must_call_parent: ProcDirective::new("SpacemanDMM_should_call_parent", true, false, false),
             must_not_override: ProcDirective::new("SpacemanDMM_should_not_override", false, false, false),
             private: ProcDirective::new("SpacemanDMM_private_proc", false, true, false),
@@ -599,6 +608,70 @@ impl<'o> AnalyzeObjectTree<'o> {
             waitfor_procs: Default::default(),
             sleeping_overrides: Default::default(),
             impure_overrides: Default::default(),
+        }
+    }
+
+    // ----------------------------------------------------------------------------
+    // Variable analyzer
+
+    /// Examines an ObjectTree for var definitions that are invalid
+    pub fn check_var_defs(&mut self) {
+        for typeref in self.objtree.iter_types() {
+            let path = &typeref.path;
+
+            for (varname, typevar) in typeref.vars.iter() {
+                if let Some(decl) = typeref.get_var_declaration(varname) {
+                    self.unused_typevars.insert(decl.borrow());
+                }
+            }
+
+            for parent in typeref.iter_parent_types() {
+                if parent.is_root() {
+                    break;
+                }
+
+                if &parent.path == path {
+                    continue;
+                }
+
+                for (varname, typevar) in typeref.vars.iter() {
+                    if varname == "vars" {
+                        continue;
+                    }
+                    if path == "/client" && varname == "parent_type" {
+                        continue;
+                    }
+
+                    guard!(let Some(parentvar) = parent.vars.get(varname)
+                        else { continue });
+
+                    guard!(let Some(decl) = &parentvar.declaration
+                        else { continue });
+
+                    if let Some(mydecl) = &typevar.declaration {
+                        if typevar.value.location.is_builtins() {
+                            continue;
+                        }
+                        DMError::new(mydecl.location, format!("{} redeclares var {:?}", path, varname))
+                            .with_note(decl.location, format!("declared on {} here", parent.path))
+                            .register(self.context);
+                    }
+
+                    if decl.var_type.flags.is_final() {
+                        DMError::new(typevar.value.location, format!("{} overrides final var {:?}", path, varname))
+                            .with_errortype("final_var")
+                            .with_note(decl.location, format!("declared final on {} here", parent.path))
+                            .register(self.context);
+                    }
+
+                    if decl.var_type.flags.is_private() {
+                        DMError::new(typevar.value.location, format!("{} overrides private var {:?}", path, varname))
+                            .with_errortype("private_var")
+                            .with_note(decl.location, format!("declared private on {} here", parent.path))
+                            .register(self.context);
+                    }
+                }
+            }
         }
     }
 
@@ -648,6 +721,18 @@ impl<'o> AnalyzeObjectTree<'o> {
                 }
             },
             Err(error) => self.context.register_error(error.with_errortype("invalid_lint_directive_value")),
+        }
+    }
+
+    pub fn check_unused_typevars(&mut self) {
+        for decl in self.unused_typevars.iter() {
+            if decl.location.is_builtins() {
+                continue
+            }
+            error(decl.location, "Unused var declaration")
+                .with_errortype("unused_var_declaration")
+                .set_severity(Severity::Info)
+                .register(self.context);
         }
     }
 
@@ -953,64 +1038,6 @@ fn static_type<'o>(objtree: &'o ObjectTree, location: Location, mut of: &[String
 
 fn error<S: Into<String>>(location: Location, desc: S) -> DMError {
     DMError::new(location, desc).with_component(dm::Component::DreamChecker)
-}
-
-// ----------------------------------------------------------------------------
-// Variable analyzer
-
-/// Examines an ObjectTree for var definitions that are invalid
-pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
-    for typeref in objtree.iter_types() {
-        let path = &typeref.path;
-
-        for parent in typeref.iter_parent_types() {
-            if parent.is_root() {
-                break;
-            }
-
-            if &parent.path == path {
-                continue;
-            }
-
-            for (varname, typevar) in typeref.vars.iter() {
-                if varname == "vars" {
-                    continue;
-                }
-                if path == "/client" && varname == "parent_type" {
-                    continue;
-                }
-
-                guard!(let Some(parentvar) = parent.vars.get(varname)
-                    else { continue });
-
-                guard!(let Some(decl) = &parentvar.declaration
-                    else { continue });
-
-                if let Some(mydecl) = &typevar.declaration {
-                    if typevar.value.location.is_builtins() {
-                        continue;
-                    }
-                    DMError::new(mydecl.location, format!("{} redeclares var {:?}", path, varname))
-                        .with_note(decl.location, format!("declared on {} here", parent.path))
-                        .register(context);
-                }
-
-                if decl.var_type.flags.is_final() {
-                    DMError::new(typevar.value.location, format!("{} overrides final var {:?}", path, varname))
-                        .with_errortype("final_var")
-                        .with_note(decl.location, format!("declared final on {} here", parent.path))
-                        .register(context);
-                }
-
-                if decl.var_type.flags.is_private() {
-                    DMError::new(typevar.value.location, format!("{} overrides private var {:?}", path, varname))
-                        .with_errortype("private_var")
-                        .with_note(decl.location, format!("declared private on {} here", parent.path))
-                        .register(context);
-                }
-            }
-        }
-    }
 }
 
 // ----------------------------------------------------------------------------
@@ -1662,7 +1689,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         .with_fix_hint(var.location, "add additional type info here")
                 }
                 if let Some(decl) = self.ty.get_var_declaration(unscoped_name) {
-                    //println!("found type var");
+                    self.env.unused_typevars.remove(decl);
                     let mut ana = self.static_type(location, &decl.var_type.type_path)
                         .with_fix_hint(decl.location, "add additional type info here");
                     ana.is_impure = Some(true);
@@ -1906,6 +1933,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Follow::Field(kind, name) => {
                 if let Some(ty) = lhs.static_ty.basic_type() {
                     if let Some(decl) = ty.get_var_declaration(name) {
+                        self.env.unused_typevars.remove(decl);
                         if ty != self.ty && decl.var_type.flags.is_private() {
                             error(location, format!("field {:?} on {} is declared as private", name, ty))
                                 .with_errortype("private_var")
