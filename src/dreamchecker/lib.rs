@@ -643,8 +643,8 @@ impl<'o> AnalyzeObjectTree<'o> {
     #[inline]
     fn add_directive_or_error(&mut self, proc: ProcRef<'o>, directive: &str, expr: &Expression, location: Location) {
         let procdirective = match directive {
-            "SpacemanDMM_should_not_override" => &mut self.must_not_override,
             "SpacemanDMM_should_call_parent" => &mut self.must_call_parent,
+            "SpacemanDMM_should_not_override" => &mut self.must_not_override,
             "SpacemanDMM_private_proc" => &mut self.private,
             "SpacemanDMM_protected_proc" => &mut self.protected,
             "SpacemanDMM_should_not_sleep" => &mut self.must_not_sleep,
