@@ -203,32 +203,31 @@ pub struct ProcDirectiveSection {
 
 macro_rules! procdirective {
     ($name: ident $cbd: tt $sad: tt $cbg: tt) => {
-        #[derive(Debug, Deserialize, Default, Clone, Copy)]
+        #[derive(Debug, Deserialize, Clone, Copy)]
         #[serde(default)]
         pub struct $name {
-            #[serde(default = $cbd)]
             pub can_be_disabled: bool,
-            #[serde(default = $sad)]
             pub set_at_definition: bool,
-            #[serde(default = $cbg)]
             pub can_be_global: bool,
+        }
+
+        impl Default for $name {
+            fn default() -> Self {
+                $name {
+                    can_be_disabled: $cbd,
+                    set_at_definition: $sad,
+                    can_be_global: $cbg,
+                }
+            }
         }
     };
 }
 
-procdirective! {MustCallParent "enable" "disable" "disable"}
-procdirective! {MustNotOverride "disable" "disable" "disable"}
-procdirective! {PrivateDirective "disable" "enable" "disable"}
-procdirective! {ProtectedDirective "disable" "enable" "disable"}
-procdirective! {MustNotSleep "disable" "enable" "enable"}
-procdirective! {SleepExempt "disable" "enable" "enable"}
-procdirective! {MustBePure "disable" "enable" "enable"}
-procdirective! {CanBeRedefined "disable" "disable" "disable"}
-
-fn enable() -> bool {
-    true
-}
-
-fn disable() -> bool {
-    false
-}
+procdirective! {MustCallParent true false false}
+procdirective! {MustNotOverride false false false}
+procdirective! {PrivateDirective false true false}
+procdirective! {ProtectedDirective false true false}
+procdirective! {MustNotSleep false true true}
+procdirective! {SleepExempt false true true}
+procdirective! {MustBePure false true true}
+procdirective! {CanBeRedefined false false false}
