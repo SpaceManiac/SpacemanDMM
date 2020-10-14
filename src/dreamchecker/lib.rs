@@ -725,13 +725,13 @@ impl<'o> AnalyzeObjectTree<'o> {
     }
 
     pub fn check_unused_typevars(&mut self) {
+        if !self.context.config().code_standards.disallow_unused_var_definitions { return }
         for decl in self.unused_typevars.iter() {
             if decl.location.is_builtins() {
                 continue
             }
             error(decl.location, "Unused var declaration")
                 .with_errortype("unused_var_declaration")
-                .set_severity(Severity::Info)
                 .register(self.context);
         }
     }
