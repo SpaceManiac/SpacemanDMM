@@ -1,0 +1,69 @@
+name: rust-g
+on:
+  push:
+    branches:
+    - master
+  pull_request:
+    branches:
+    - master
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: x86_64-pc-windows-msvc
+      - name: Check (all features)
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: stable
+          command: check
+          args: --target x86_64-pc-windows-msvc --all-features
+      - uses: actions-rs/cargo@v1
+        with:
+          toolchain: stable
+          command: build
+          args: --target x86_64-pc-windows-msvc --release
+      - name: Run tests
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: stable
+          command: test
+          args: --target x86_64-pc-windows-msvc
+  build-linux:
+    runs-on: ubuntu-latest
+    env:
+      PKG_CONFIG_ALLOW_CROSS: 1
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: x86_64-unknown-linux-gnu
+      - name: Check (all features)
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: stable
+          command: check
+          args: --target x86_64-unknown-linux-gnu --all-features
+      - name: Build (Debug)
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: stable
+          command: build
+          args: --target x86_64-unknown-linux-gnu
+      - name: Run tests
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: stable
+          command: test
+          args: --target x86_64-unknown-linux-gnu
+      - name: Build (release)
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: stable
+          command: build
+          args: --target x86_64-unknown-linux-gnu --release
+
