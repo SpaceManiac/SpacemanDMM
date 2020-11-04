@@ -29,6 +29,8 @@ macro_rules! debug_output {
 
 mod dap_types;
 mod launched;
+mod auxtools_types;
+mod auxtools;
 mod extools_types;
 mod extools;
 mod extools_bundle;
