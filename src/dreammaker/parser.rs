@@ -289,6 +289,7 @@ pub struct Parser<'ctx, 'an, 'inp> {
     possible_indentation_error: bool,
     next: Option<Token>,
     location: Location,
+    prev_location: Location, // if next is None it's the previous location, otherwise the next location
     expected: Vec<Cow<'static, str>>,
 
     docs_following: DocCollection,
@@ -321,6 +322,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             possible_indentation_error: false,
             next: None,
             location: Default::default(),
+            prev_location: Default::default(),
             expected: Vec::new(),
 
             docs_following: Default::default(),
@@ -444,6 +446,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     fn next<S: Into<Cow<'static, str>>>(&mut self, expected: S) -> Result<Token, DMError> {
         let tok = loop {
             if let Some(next) = self.next.take() {
+                let tmp_location = self.location;
+                self.location = self.prev_location;
+                self.prev_location = tmp_location;
                 break Ok(next);
             }
             match self.input.next() {
@@ -462,6 +467,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 },
                 Some(token) => {
                     self.expected.clear();
+                    self.prev_location = self.location();
                     self.location = token.location;
                     break Ok(token.token);
                 }
@@ -486,6 +492,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         if self.next.is_some() {
             panic!("cannot put_back twice")
         }
+        let tmp_location = self.location;
+        self.location = self.prev_location;
+        self.prev_location = tmp_location;
         self.next = Some(tok);
     }
 
