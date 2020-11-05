@@ -783,6 +783,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Default::default()
         };
 
+        let old_location = self.location;
+
         // read the contents for real
         match self.next("contents")? {
             t @ Punct(LBrace) => {
@@ -807,7 +809,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Punct(Assign) => {
                 // `something=` - var
                 handle_relative_type_error!();
-                let location = self.location;
 
                 // kind of goofy, but allows "enclosing" doc comments at the end of the line
                 // translators note: this allows comments of the form ``//! blah`` at the end of the line
@@ -826,9 +827,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
                 if let Some(mut var_type) = var_type {
                     var_type.suffix(&var_suffix);
-                    self.tree.declare_var(current, last_part, location, docs, var_type, Some(expression));
+                    self.tree.declare_var(current, last_part, old_location, docs, var_type, Some(expression));
                 } else {
-                    self.tree.override_var(current, last_part, location, docs, expression);
+                    self.tree.override_var(current, last_part, old_location, docs, expression);
                 }
 
                 SUCCESS
