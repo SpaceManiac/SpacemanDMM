@@ -1,14 +1,23 @@
 use super::auxtools_types::*;
-use std::{sync::Arc, io::{Error, Read, Write}, net::SocketAddr, net::TcpStream, thread::JoinHandle};
 use std::sync::mpsc;
 use std::thread;
+use std::{
+    collections::HashSet,
+    io::{Read, Write},
+    net::Ipv4Addr,
+    net::SocketAddr,
+    net::TcpStream,
+    sync::Arc,
+    thread::JoinHandle,
+};
 
-use super::SequenceNumber;
 use super::dap_types;
+use super::SequenceNumber;
 
 pub struct Auxtools {
     requests: mpsc::Sender<Request>,
     responses: mpsc::Receiver<Response>,
+    breakpoints: HashSet<InstructionRef>,
     _thread: JoinHandle<()>,
 }
 
@@ -20,131 +29,225 @@ pub struct AuxtoolsThread {
 }
 
 impl Auxtools {
-    pub fn new(addr: &SocketAddr, seq: Arc<SequenceNumber>) -> std::io::Result<Self> {
-		let (requests_sender, requests_receiver) = mpsc::channel();
-		let (responses_sender, responses_receiver) = mpsc::channel();
+    pub fn new(seq: Arc<SequenceNumber>, port: Option<u16>) -> std::io::Result<Self> {
+        let addr: SocketAddr = (Ipv4Addr::LOCALHOST, port.unwrap_or(DEFAULT_PORT)).into();
+        let (requests_sender, requests_receiver) = mpsc::channel();
+        let (responses_sender, responses_receiver) = mpsc::channel();
+
+        let stream = TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(5))?;
+        stream.set_nonblocking(true)?;
+
+        // Look at this little trouble-maker right here
+        seq.issue_event(dap_types::InitializedEvent);
 
         let thread = AuxtoolsThread {
             seq,
             requests: requests_receiver,
             responses: responses_sender,
-            stream: TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(5))?
+            stream,
         };
 
         Ok(Auxtools {
             requests: requests_sender,
             responses: responses_receiver,
+            breakpoints: HashSet::new(),
             _thread: thread.start_thread(),
         })
     }
 
     fn read_response(&mut self) -> Result<Response, mpsc::RecvTimeoutError> {
-        self.responses.recv_timeout(std::time::Duration::from_secs(5))
+        self.responses
+            .recv_timeout(std::time::Duration::from_secs(5))
     }
 
     pub fn get_line_number(&mut self, path: &str, override_id: u32, offset: u32) -> Option<u32> {
-        self.requests.send(Request::LineNumber {
-            proc: ProcRef {
-                path: path.to_owned(),
-                override_id,
-            },
-            offset,
-        }).unwrap();
+        self.requests
+            .send(Request::LineNumber {
+                proc: ProcRef {
+                    path: path.to_owned(),
+                    override_id,
+                },
+                offset,
+            })
+            .unwrap();
 
         match self.read_response() {
             Ok(response) => {
                 match response {
-                    Response::LineNumber { line } => {
-                        line
-                    }
+                    Response::LineNumber { line } => line,
 
                     // TODO: disconnect
-                    _ => panic!("received wrong response")
+                    _ => panic!("received wrong response"),
                 }
             }
 
             // TODO: disconnect
-            _ => panic!("timed out")
+            _ => panic!("timed out"),
         }
     }
 
     pub fn get_offset(&mut self, path: &str, override_id: u32, line: u32) -> Option<u32> {
-        self.requests.send(Request::Offset {
-            proc: ProcRef {
-                path: path.to_owned(),
-                override_id,
-            },
-            line,
-        }).unwrap();
+        self.requests
+            .send(Request::Offset {
+                proc: ProcRef {
+                    path: path.to_owned(),
+                    override_id,
+                },
+                line,
+            })
+            .unwrap();
 
         match self.read_response() {
             Ok(response) => {
                 match response {
-                    Response::Offset { offset } => {
-                        offset
-                    }
+                    Response::Offset { offset } => offset,
 
                     // TODO: disconnect
-                    _ => panic!("received wrong response")
+                    _ => panic!("received wrong response"),
                 }
             }
 
             // TODO: disconnect
-            _ => panic!("timed out")
+            _ => panic!("timed out"),
         }
     }
 
-    pub fn set_breakpoint(&mut self, path: &str, override_id: u32, offset: u32) {
-        self.requests.send(Request::BreakpointSet {
-            proc: ProcRef {
-                path: path.to_owned(),
-                override_id,
-            },
-            offset,
-        }).unwrap();
+    // Kinda lame: This function waits for a confirmation between set/unset
+    pub fn set_breakpoints(&mut self, new_breakpoints: &HashSet<InstructionRef>) {
+        let current_breakpoints = self.breakpoints.clone();
 
-        // We ignore the result
-        // TODO: disconnect
-        self.read_response().unwrap();
+        for ins in new_breakpoints {
+            if !current_breakpoints.contains(&ins) {
+                self.set_breakpoint(&ins);
+            }
+        }
+
+        for ins in current_breakpoints {
+            if !new_breakpoints.contains(&ins) {
+                self.unset_breakpoint(&ins);
+            }
+        }
     }
 
-    pub fn unset_breakpoint(&mut self, path: &str, override_id: u32, offset: u32) {
-        self.requests.send(Request::BreakpointUnset {
-            proc: ProcRef {
-                path: path.to_owned(),
-                override_id,
-            },
-            offset,
-        }).unwrap();
+    fn set_breakpoint(&mut self, instruction: &InstructionRef) {
+        self.requests
+            .send(Request::BreakpointSet {
+                instruction: instruction.clone(),
+            })
+            .unwrap();
+
+        // TODO: disconnect on fail
+        match self.read_response() {
+            Ok(response) => {
+                match response {
+                    Response::BreakpointSet { success } => {
+                        if success {
+                            self.breakpoints.insert(instruction.clone());
+                        }
+                    }
+
+                    // TODO: disconnect
+                    _ => panic!("received wrong response"),
+                }
+            }
+
+            // TODO: disconnect
+            _ => panic!("timed out"),
+        }
+    }
+
+    fn unset_breakpoint(&mut self, instruction: &InstructionRef) {
+        self.requests
+            .send(Request::BreakpointUnset {
+                instruction: instruction.clone(),
+            })
+            .unwrap();
 
         // We ignore the result
         // TODO: disconnect
-        self.read_response().unwrap();
+        match self.read_response() {
+            Ok(response) => {
+                match response {
+                    Response::BreakpointUnset { success } => {
+                        if success {
+                            self.breakpoints.remove(instruction);
+                        }
+                    }
+
+                    // TODO: disconnect
+                    _ => panic!("received wrong response"),
+                }
+            }
+
+            // TODO: disconnect
+            _ => panic!("timed out"),
+        }
     }
 
     pub fn continue_execution(&mut self) {
         // TODO: disconnect
-        self.requests.send(Request::Continue {
-            kind: ContinueKind::Continue
-        }).unwrap();
+        self.requests
+            .send(Request::Continue {
+                kind: ContinueKind::Continue,
+            })
+            .unwrap();
     }
 
-    pub fn step_over(&mut self) {
+    pub fn next(&mut self) {
         // TODO: disconnect
-        self.requests.send(Request::Continue {
-            kind: ContinueKind::StepOver
-        }).unwrap();
+        self.requests
+            .send(Request::Continue {
+                kind: ContinueKind::StepOver,
+            })
+            .unwrap();
+    }
+
+    pub fn pause(&mut self) {
+        // TODO: disconnect
+        self.requests.send(Request::Pause).unwrap();
+    }
+
+    pub fn get_stack_frames(
+        &mut self,
+        thread_id: u32,
+        start_frame: Option<u32>,
+        count: Option<u32>,
+    ) -> (Vec<StackFrame>, u32) {
+        self.requests.send(Request::StackFrames {
+            thread_id,
+            start_frame,
+            count,
+        });
+
+        match self.read_response() {
+            Ok(response) => {
+                match response {
+                    Response::StackFrames {
+                        frames,
+                        total_count,
+                    } => return (frames, total_count),
+
+                    // TODO: disconnect
+                    _ => panic!("received wrong response"),
+                }
+            }
+
+            // TODO: disconnect
+            _ => panic!("timed out"),
+        }
+
+        (vec![], 0)
     }
 }
 
 impl AuxtoolsThread {
-	fn send(&mut self, request: Request) {
-		let mut message = serde_json::to_vec(&request).unwrap();
-		message.push(0); // null-terminator
-		self.stream.write_all(&message[..]).unwrap();
+    fn send(&mut self, request: Request) {
+        let mut message = serde_json::to_vec(&request).unwrap();
+        message.push(0); // null-terminator
+        self.stream.write_all(&message[..]).unwrap();
     }
-    
-	fn handle_message(&mut self, data: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+
+    fn handle_message(&mut self, data: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
         let response = serde_json::from_slice::<Response>(data)?;
 
         match response {
@@ -158,50 +261,57 @@ impl AuxtoolsThread {
                 self.seq.issue_event(dap_types::StoppedEvent {
                     threadId: Some(0),
                     reason: reason.to_owned(),
-                    .. Default::default()
+                    ..Default::default()
                 });
-            },
+            }
             x => {
                 self.responses.send(x)?;
             }
         }
 
-		Ok(())
+        Ok(())
     }
-    
+
     pub fn start_thread(mut self) -> JoinHandle<()> {
-		thread::spawn(move || {
+        thread::spawn(move || {
             let mut buf = [0u8; 4096];
             let mut queued_data = vec![];
 
             loop {
+                let mut got_data = false;
                 match self.stream.read(&mut buf) {
                     Ok(0) => (),
                     Ok(n) => {
                         queued_data.extend_from_slice(&buf[..n]);
+                        got_data = true;
                     }
+
+                    // This is a crutch
+                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
                     Err(_) => panic!("Handle me!"),
                 }
-    
-                for message in queued_data.split(|x| *x == 0) {
-                    // split can give us empty slices
-                    if message.is_empty() {
-                        continue;
+
+                if got_data {
+                    for message in queued_data.split(|x| *x == 0) {
+                        // split can give us empty slices
+                        if message.is_empty() {
+                            continue;
+                        }
+
+                        self.handle_message(message).unwrap();
                     }
-    
-                    self.handle_message(message).unwrap();
                 }
-    
+
                 // Clear any finished messages from the buffer
                 if let Some(idx) = queued_data.iter().rposition(|x| *x == 0) {
                     queued_data.drain(..idx);
                 }
-    
+
                 // Send any requests to the server
                 while let Ok(request) = self.requests.try_recv() {
                     self.send(request);
                 }
             }
-		})
-	} 
+        })
+    }
 }

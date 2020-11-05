@@ -1,9 +1,9 @@
 //! Child process lifecycle management.
 #![allow(unsafe_code)]
 
-use std::sync::{Arc, Mutex};
-use std::process::{Command, Stdio};
 use super::{dap_types, SequenceNumber};
+use std::process::{Command, Stdio};
+use std::sync::{Arc, Mutex};
 
 // active --kill--> killed: emit Terminated, send SIGKILL
 // active --detach--> detached: emit Terminated
@@ -28,7 +28,13 @@ pub struct Launched {
 }
 
 impl Launched {
-    pub fn new(seq: Arc<SequenceNumber>, dreamseeker_exe: &str, dmb: &str, port: Option<u16>, extools_dll: Option<&std::path::Path>) -> std::io::Result<Launched> {
+    pub fn new(
+        seq: Arc<SequenceNumber>,
+        dreamseeker_exe: &str,
+        dmb: &str,
+        port: Option<u16>,
+        extools_dll: Option<&std::path::Path>,
+    ) -> std::io::Result<Launched> {
         let mut command = Command::new(dreamseeker_exe);
         command
             .arg(dmb)
@@ -83,11 +89,7 @@ impl Launched {
                 });
             })?;
 
-        Ok(Launched {
-            handle,
-            seq,
-            mutex,
-        })
+        Ok(Launched { handle, seq, mutex })
     }
 
     pub fn kill(self) -> std::io::Result<()> {

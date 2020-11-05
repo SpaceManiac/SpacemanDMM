@@ -5,7 +5,7 @@ authors = ["Tad Hardesty <tad@platymuus.com>"]
 edition = "2018"
 
 [[bin]]
-name = "dm-langserver"
+name = "dm_langserver"
 path = "main.rs"
 
 [dependencies]
