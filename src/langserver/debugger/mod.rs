@@ -658,13 +658,15 @@ handle_request! {
 
                 saved.retain(|k| {
                     if !keep.contains(&k) {
-                        auxtools.unset_breakpoint(&auxtools_types::InstructionRef {
-                            proc: auxtools_types::ProcRef {
-                                path: k.0.clone(),
-                                override_id: k.1 as u32
-                            },
-                            offset: k.2 as u32
-                        });
+                        if let Some(offset) = auxtools.get_offset(k.0.as_str(), k.1 as u32, k.2 as u32) {
+                            auxtools.unset_breakpoint(&auxtools_types::InstructionRef {
+                                proc: auxtools_types::ProcRef {
+                                    path: k.0.clone(),
+                                    override_id: k.1 as u32
+                                },
+                                offset: offset,
+                            });
+                        }
                         false
                     } else {
                         true

@@ -145,14 +145,11 @@ impl Auxtools {
             })
             .unwrap();
 
-        // We ignore the result
         // TODO: disconnect
         match self.read_response() {
             Ok(response) => {
                 match response {
-                    Response::BreakpointUnset { success } => {
-
-                    }
+                    Response::BreakpointUnset { success: _ } => {}
 
                     // TODO: disconnect
                     _ => panic!("received wrong response"),
