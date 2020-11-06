@@ -1,8 +1,8 @@
 use super::auxtools_types::*;
-use std::sync::mpsc;
+use std::{collections::HashSet, sync::mpsc};
 use std::thread;
 use std::{
-    collections::HashSet,
+    collections::HashMap,
     io::{Read, Write},
     net::Ipv4Addr,
     net::SocketAddr,
@@ -13,11 +13,12 @@ use std::{
 
 use super::dap_types;
 use super::SequenceNumber;
+use dm::FileId;
 
 pub struct Auxtools {
     requests: mpsc::Sender<Request>,
     responses: mpsc::Receiver<Response>,
-    breakpoints: HashSet<InstructionRef>,
+    breakpoints: HashMap<FileId, HashMap<InstructionRef, BreakpointSetResult>>,
     _thread: JoinHandle<()>,
 }
 
@@ -50,7 +51,7 @@ impl Auxtools {
         Ok(Auxtools {
             requests: requests_sender,
             responses: responses_receiver,
-            breakpoints: HashSet::new(),
+            breakpoints: HashMap::new(),
             _thread: thread.start_thread(),
         })
     }
@@ -112,24 +113,7 @@ impl Auxtools {
         }
     }
 
-    // Kinda lame: This function waits for a confirmation between set/unset
-    pub fn set_breakpoints(&mut self, new_breakpoints: &HashSet<InstructionRef>) {
-        let current_breakpoints = self.breakpoints.clone();
-
-        for ins in new_breakpoints {
-            if !current_breakpoints.contains(&ins) {
-                self.set_breakpoint(&ins);
-            }
-        }
-
-        for ins in current_breakpoints {
-            if !new_breakpoints.contains(&ins) {
-                self.unset_breakpoint(&ins);
-            }
-        }
-    }
-
-    fn set_breakpoint(&mut self, instruction: &InstructionRef) {
+    pub fn set_breakpoint(&mut self, instruction: &InstructionRef) -> BreakpointSetResult {
         self.requests
             .send(Request::BreakpointSet {
                 instruction: instruction.clone(),
@@ -140,10 +124,8 @@ impl Auxtools {
         match self.read_response() {
             Ok(response) => {
                 match response {
-                    Response::BreakpointSet { success } => {
-                        if success {
-                            self.breakpoints.insert(instruction.clone());
-                        }
+                    Response::BreakpointSet { result } => {
+                        return result;
                     }
 
                     // TODO: disconnect
@@ -156,7 +138,7 @@ impl Auxtools {
         }
     }
 
-    fn unset_breakpoint(&mut self, instruction: &InstructionRef) {
+    pub fn unset_breakpoint(&mut self, instruction: &InstructionRef) {
         self.requests
             .send(Request::BreakpointUnset {
                 instruction: instruction.clone(),
@@ -169,9 +151,7 @@ impl Auxtools {
             Ok(response) => {
                 match response {
                     Response::BreakpointUnset { success } => {
-                        if success {
-                            self.breakpoints.remove(instruction);
-                        }
+
                     }
 
                     // TODO: disconnect

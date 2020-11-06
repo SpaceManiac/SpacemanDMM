@@ -527,10 +527,13 @@ handle_request! {
         }
 
         let inputs = params.breakpoints.unwrap_or_default();
-        let mut breakpoints = Vec::new();
+        let saved = self.saved_breakpoints.entry(file_id).or_default();
+        let mut keep = HashSet::new();
 
         match &mut self.client {
             DebugClient::Extools(extools) => {
+                let mut breakpoints = Vec::new();
+
                 guard!(let Some(extools) = extools.as_ref() else {
                     for sbp in inputs {
                         breakpoints.push(Breakpoint {
@@ -542,9 +545,6 @@ handle_request! {
                     }
                     return Ok(SetBreakpointsResponse { breakpoints });
                 });
-
-                let saved = self.saved_breakpoints.entry(file_id).or_default();
-                let mut keep = HashSet::new();
 
                 for sbp in inputs {
                     if let Some((typepath, name, override_id)) = self.db.location_to_proc_ref(file_id, sbp.line) {
@@ -598,7 +598,80 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                return Err(Box::new(GenericError("auxtools can't set breakpoints yet")));
+                let mut breakpoints = vec![];
+
+                for sbp in inputs {
+                    if let Some((typepath, name, override_id)) = self.db.location_to_proc_ref(file_id, sbp.line) {
+                        // TODO: better discipline around format!("{}/{}") and so on
+                        let proc = format!("{}/{}", typepath, name);
+
+                        if let Some(offset) = auxtools.get_offset(proc.as_str(), override_id as u32, sbp.line as u32) {
+                            saved.insert((proc.clone(), override_id, sbp.line));
+                            keep.insert((proc.clone(), override_id, sbp.line));
+
+                            let result = auxtools.set_breakpoint(&auxtools_types::InstructionRef {
+                                proc: auxtools_types::ProcRef {
+                                    path: proc,
+                                    override_id: override_id as u32
+                                },
+                                offset
+                            });
+
+                            breakpoints.push(match result {
+                                auxtools_types::BreakpointSetResult::Success { line } => {
+                                    Breakpoint {
+                                        verified: true,
+                                        line: line.map(|x| x as i64),
+                                        .. Default::default()
+                                    }
+                                },
+
+                                auxtools_types::BreakpointSetResult::Failed => {
+                                    Breakpoint {
+                                        verified: false,
+                                        .. Default::default()
+                                    }
+                                }
+                            });
+                        } else {
+                            // debug_output!(in self.seq,
+                            //     "Couldn't find line {} in the following disassembly:\n{}",
+                            //     sbp.line,
+                            //     Self::format_disassembly(extools.bytecode(&proc, override_id)));
+
+                            breakpoints.push(Breakpoint {
+                                message: Some("Unable to determine offset in proc".to_owned()),
+                                line: Some(sbp.line),
+                                verified: false,
+                                .. Default::default()
+                            });
+                        }
+                    } else {
+                        breakpoints.push(Breakpoint {
+                            message: Some("Unable to determine proc ref".to_owned()),
+                            line: Some(sbp.line),
+                            verified: false,
+                            .. Default::default()
+                        });
+                    }
+                }
+
+                saved.retain(|k| {
+                    if !keep.contains(&k) {
+                        auxtools.unset_breakpoint(&auxtools_types::InstructionRef {
+                            proc: auxtools_types::ProcRef {
+                                path: k.0.clone(),
+                                override_id: k.1 as u32
+                            },
+                            offset: k.2 as u32
+                        });
+                        false
+                    } else {
+                        true
+                    }
+                });
+
+                SetBreakpointsResponse { breakpoints }
             }
         }
     }

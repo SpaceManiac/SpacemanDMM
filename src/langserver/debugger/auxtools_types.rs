@@ -36,7 +36,7 @@ pub enum Request {
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Response {
 	BreakpointSet {
-		success: bool,
+		result: BreakpointSetResult,
 	},
 	BreakpointUnset {
 		success: bool,
@@ -92,4 +92,10 @@ pub enum ContinueKind {
 pub struct StackFrame {
 	pub instruction: InstructionRef,
 	pub line: Option<u32>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum BreakpointSetResult {
+	Success { line: Option<u32> },
+	Failed,
 }
