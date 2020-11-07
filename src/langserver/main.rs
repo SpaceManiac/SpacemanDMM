@@ -47,8 +47,6 @@ use dm::annotation::{Annotation, AnnotationTree};
 use dm::objtree::TypeRef;
 
 fn main() {
-    std::thread::sleep(std::time::Duration::from_secs(10));
-    
     std::env::set_var("RUST_BACKTRACE", "1");
 
     eprintln!(

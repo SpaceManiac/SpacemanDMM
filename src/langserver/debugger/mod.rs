@@ -1127,7 +1127,7 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                return Err(Box::new(GenericError("auxtools can't step-out yet")));
+                auxtools.step_out();
             }
         }
     }

@@ -85,7 +85,7 @@ pub enum ContinueKind {
 	Continue,
 	StepOver,
 	StepInto,
-	// StepOut,
+	StepOut,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

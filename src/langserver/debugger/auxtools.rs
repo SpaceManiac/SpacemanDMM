@@ -188,6 +188,15 @@ impl Auxtools {
             .unwrap();
     }
 
+    pub fn step_out(&mut self) {
+        // TODO: disconnect
+        self.requests
+            .send(Request::Continue {
+                kind: ContinueKind::StepOut,
+            })
+            .unwrap();
+    }
+
     pub fn pause(&mut self) {
         // TODO: disconnect
         self.requests.send(Request::Pause).unwrap();
