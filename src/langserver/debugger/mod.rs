@@ -426,7 +426,6 @@ handle_request! {
     }
 
     on AttachVsc(&mut self, params) {
-        std::thread::sleep(std::time::Duration::from_secs(10));
         self.client = DebugClient::Auxtools(Auxtools::new(self.seq.clone(), params.port)?);
         /*self.client = match params.client {
             DebugClientParam::Extools => {
