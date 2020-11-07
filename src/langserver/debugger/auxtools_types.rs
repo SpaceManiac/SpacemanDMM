@@ -84,7 +84,7 @@ pub enum BreakpointReason {
 pub enum ContinueKind {
 	Continue,
 	StepOver,
-	// StepInto,
+	StepInto,
 	// StepOut,
 }
 

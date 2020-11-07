@@ -179,6 +179,15 @@ impl Auxtools {
             .unwrap();
     }
 
+    pub fn step_into(&mut self) {
+        // TODO: disconnect
+        self.requests
+            .send(Request::Continue {
+                kind: ContinueKind::StepInto,
+            })
+            .unwrap();
+    }
+
     pub fn pause(&mut self) {
         // TODO: disconnect
         self.requests.send(Request::Pause).unwrap();

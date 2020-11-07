@@ -1098,7 +1098,7 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                return Err(Box::new(GenericError("auxtools can't step-in yet")));
+                auxtools.step_into();
             }
         }
     }
