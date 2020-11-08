@@ -922,26 +922,36 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                match auxtools.get_scopes( frameId as u32 ) {
-                    Some(globals) => {
-                        ScopesResponse {
-                            scopes: vec![
-                                Scope {
-                                    name: "Globals".to_owned(),
-                                    variablesReference: globals.encode(),
-                                    .. Default::default()
-                                },
-                            ],
-                        }
-                    }
+                let (arguments, locals, globals) = auxtools.get_scopes( frameId as u32 );
+                let mut scopes = vec![];
 
-                    None => {
-                        ScopesResponse {
-                            scopes: vec![],
-                        }
-                    }
+                if let Some(arguments) = arguments {
+                    scopes.push(Scope {
+                        name: "Arguments".to_owned(),
+                        variablesReference: arguments.encode(),
+                        .. Default::default()
+                    });
                 }
-                
+
+                if let Some(locals) = locals {
+                    scopes.push(Scope {
+                        name: "Locals".to_owned(),
+                        variablesReference: locals.encode(),
+                        .. Default::default()
+                    });
+                }
+
+                if let Some(globals) = globals {
+                    scopes.push(Scope {
+                        name: "Globals".to_owned(),
+                        variablesReference: globals.encode(),
+                        .. Default::default()
+                    });
+                }
+
+                ScopesResponse {
+                    scopes
+                }
             }
         }
     }
@@ -1093,7 +1103,7 @@ handle_request! {
                     variables.push(Variable {
                         name: aux_var.name,
                         value: aux_var.value,
-                        variablesReference: 0,
+                        variablesReference: aux_var.variables.map(|x| x.encode()).unwrap_or(0),
                         .. Default::default()
                     });
                 }

@@ -113,8 +113,8 @@ pub enum BreakpointSetResult {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum VariablesRef {
-	Arguments { frame: u16 },
-	Locals { frame: u16 },
+	Arguments { frame: u32 },
+	Locals { frame: u32 },
 	Internal { tag: u8, data: u32 },
 }
 

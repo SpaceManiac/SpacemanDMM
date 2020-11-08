@@ -15,15 +15,23 @@ use super::dap_types;
 use super::SequenceNumber;
 use dm::FileId;
 
+// We need to be able to encode/decode VariablesRef into an i64 for DAP to use
+// but valid values are between 1 and 2^32-1.
+// We make a few assumptions here:
+// 1) BYOND doesn't use 0x7F or 0x7E as a tag for any data-types
+// 2) The data portion of any BYOND value only needs 24-bits to be stored
+// 3) Frame IDs only need 24-bits to be stored
+//
+// If this doesn't work out we'll just keep a map on the server of identifiers -> refs
 impl VariablesRef {
 	pub fn encode(&self) -> i64 {
 		match self {
-            VariablesRef::Arguments { frame: _ } => {
-                0
+            VariablesRef::Arguments { frame } => {
+                (0x7F << 24) + *frame as i64
             }
 
-            VariablesRef::Locals { frame: _ } => {
-                0
+            VariablesRef::Locals { frame } => {
+                (0x7E << 24) + *frame as i64
             }
 
             VariablesRef::Internal { tag, data } => {
@@ -35,12 +43,28 @@ impl VariablesRef {
     }
     
     pub fn decode(value: i64) -> Self {
-        let tag = (value & 0xFF000000) >> 24;
-        let data = value & 0x00FFFFFF;
+        let tag = (((value as u32) & 0xFF000000) >> 24) as u8;
+        let data = (value as u32) & 0x00FFFFFF;
 
-        VariablesRef::Internal {
-            tag: tag as u8,
-            data: data as u32,
+        match tag {
+            0x7F => {
+                VariablesRef::Arguments {
+                    frame: data,
+                }
+            }
+
+            0x7E => {
+                VariablesRef::Locals {
+                    frame: data,
+                }
+            }
+
+            tag => {
+                VariablesRef::Internal {
+                    tag,
+                    data: data as u32,
+                }
+            }
         }
     }
 }
@@ -263,7 +287,7 @@ impl Auxtools {
     }
 
     // TODO: return all the scopes
-    pub fn get_scopes(&mut self, frame_id: u32) -> Option<VariablesRef> {
+    pub fn get_scopes(&mut self, frame_id: u32) -> (Option<VariablesRef>, Option<VariablesRef>, Option<VariablesRef>) {
         self.requests.send(Request::Scopes {
             frame_id
         }).unwrap();
@@ -272,10 +296,12 @@ impl Auxtools {
             Ok(response) => {
                 match response {
                     Response::Scopes {
-                        arguments: _,
-                        locals: _,
+                        arguments,
+                        locals,
                         globals,
-                    } => return globals,
+                    } => {
+                        (arguments, locals, globals)
+                    }
 
                     // TODO: disconnect
                     _ => panic!("received wrong response"),
