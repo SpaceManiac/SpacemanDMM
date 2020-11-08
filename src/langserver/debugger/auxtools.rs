@@ -1,5 +1,5 @@
 use super::auxtools_types::*;
-use std::{collections::HashSet, sync::mpsc};
+use std::{sync::mpsc};
 use std::thread;
 use std::{
     collections::HashMap,
@@ -14,6 +14,36 @@ use std::{
 use super::dap_types;
 use super::SequenceNumber;
 use dm::FileId;
+
+impl VariablesRef {
+	pub fn encode(&self) -> i64 {
+		match self {
+            VariablesRef::Arguments { frame: _ } => {
+                0
+            }
+
+            VariablesRef::Locals { frame: _ } => {
+                0
+            }
+
+            VariablesRef::Internal { tag, data } => {
+                let tag = *tag as i64;
+                let data = *data as i64;
+                (tag << 24) + data
+            }
+        }
+    }
+    
+    pub fn decode(value: i64) -> Self {
+        let tag = (value & 0xFF000000) >> 24;
+        let data = value & 0x00FFFFFF;
+
+        VariablesRef::Internal {
+            tag: tag as u8,
+            data: data as u32,
+        }
+    }
+}
 
 pub struct Auxtools {
     requests: mpsc::Sender<Request>,
@@ -212,7 +242,7 @@ impl Auxtools {
             thread_id,
             start_frame,
             count,
-        });
+        }).unwrap();
 
         match self.read_response() {
             Ok(response) => {
@@ -230,8 +260,51 @@ impl Auxtools {
             // TODO: disconnect
             _ => panic!("timed out"),
         }
+    }
 
-        (vec![], 0)
+    // TODO: return all the scopes
+    pub fn get_scopes(&mut self, frame_id: u32) -> Option<VariablesRef> {
+        self.requests.send(Request::Scopes {
+            frame_id
+        }).unwrap();
+
+        match self.read_response() {
+            Ok(response) => {
+                match response {
+                    Response::Scopes {
+                        arguments: _,
+                        locals: _,
+                        globals,
+                    } => return globals,
+
+                    // TODO: disconnect
+                    _ => panic!("received wrong response"),
+                }
+            }
+
+            // TODO: disconnect
+            _ => panic!("timed out"),
+        }
+    }
+
+    pub fn get_variables(&mut self, vars: VariablesRef) -> Vec<Variable> {
+        self.requests.send(Request::Variables {
+            vars
+        }).unwrap();
+
+        match self.read_response() {
+            Ok(response) => {
+                match response {
+                    Response::Variables { vars } => return vars,
+
+                    // TODO: disconnect
+                    _ => panic!("received wrong response"),
+                }
+            }
+
+            // TODO: disconnect
+            _ => panic!("timed out"),
+        }
     }
 }
 
@@ -287,13 +360,10 @@ impl AuxtoolsThread {
                 }
 
                 if got_data {
-                    for message in queued_data.split(|x| *x == 0) {
-                        // split can give us empty slices
-                        if message.is_empty() {
-                            continue;
-                        }
-
-                        self.handle_message(message).unwrap();
+                    while let Some(pos) = queued_data.iter().position(|x| *x == 0) {
+                        let mut message: Vec<u8> = queued_data.drain(0..=pos).collect();
+                        message.pop(); // remove null-terminator
+                        self.handle_message(&message).unwrap();
                     }
                 }
 

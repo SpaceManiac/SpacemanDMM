@@ -922,7 +922,26 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                return Err(Box::new(GenericError("auxtools can't scopes yet")));
+                match auxtools.get_scopes( frameId as u32 ) {
+                    Some(globals) => {
+                        ScopesResponse {
+                            scopes: vec![
+                                Scope {
+                                    name: "Globals".to_owned(),
+                                    variablesReference: globals.encode(),
+                                    .. Default::default()
+                                },
+                            ],
+                        }
+                    }
+
+                    None => {
+                        ScopesResponse {
+                            scopes: vec![],
+                        }
+                    }
+                }
+                
             }
         }
     }
@@ -1063,7 +1082,25 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                return Err(Box::new(GenericError("auxtools can't variables yet")));
+                let aux_variables = auxtools.get_variables(auxtools_types::VariablesRef::decode(params.variablesReference));
+                let mut variables = vec![];
+
+                // TODO
+                // If VSC receives two Variables with the same name, it only
+                // displays the first one. Avert this by adding suffixes.
+
+                for aux_var in aux_variables {
+                    variables.push(Variable {
+                        name: aux_var.name,
+                        value: aux_var.value,
+                        variablesReference: 0,
+                        .. Default::default()
+                    });
+                }
+
+                VariablesResponse {
+                    variables
+                }
             }
         }
     }

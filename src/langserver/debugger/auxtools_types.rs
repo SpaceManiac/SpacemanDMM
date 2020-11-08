@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+#[allow(dead_code)]
 pub const DEFAULT_PORT: u16 = 2448;
 
 // Message from client -> server
@@ -25,6 +26,12 @@ pub enum Request {
 		thread_id: u32,
 		start_frame: Option<u32>,
 		count: Option<u32>,
+	},
+	Scopes {
+		frame_id: u32,
+	},
+	Variables {
+		vars: VariablesRef,
 	},
 	Continue {
 		kind: ContinueKind,
@@ -51,10 +58,14 @@ pub enum Response {
 		frames: Vec<StackFrame>,
 		total_count: u32,
 	},
-
-	// Notifications (no `Request` counter-part)
-	// The server should send back a `Continue` request after getting this
-	// These should only be sent between Server/ServerThread on the notifications channel
+	Scopes {
+		arguments: Option<VariablesRef>,
+		locals: Option<VariablesRef>,
+		globals: Option<VariablesRef>,
+	},
+	Variables {
+		vars: Vec<Variable>,
+	},
 	BreakpointHit {
 		reason: BreakpointReason,
 	},
@@ -98,4 +109,19 @@ pub struct StackFrame {
 pub enum BreakpointSetResult {
 	Success { line: Option<u32> },
 	Failed,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum VariablesRef {
+	Arguments { frame: u16 },
+	Locals { frame: u16 },
+	Internal { tag: u8, data: u32 },
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Variable {
+	pub name: String,
+	pub kind: String,
+	pub value: String,
+	pub variables: Option<VariablesRef>,
 }
