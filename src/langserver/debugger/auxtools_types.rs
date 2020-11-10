@@ -101,6 +101,7 @@ pub enum ContinueKind {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StackFrame {
+	pub id: u32,
 	pub instruction: InstructionRef,
 	pub line: Option<u32>,
 }

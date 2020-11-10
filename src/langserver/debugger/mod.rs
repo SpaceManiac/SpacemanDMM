@@ -825,7 +825,7 @@ handle_request! {
                     let aux_proc = &aux_frame.instruction.proc;
                     let mut dap_frame = StackFrame {
                         name: aux_proc.path.to_owned(),
-                        id: params.threadId, // TODO: multiple threads
+                        id: aux_frame.id as i64, // TODO: multiple threads
                         instructionPointerReference: Some(format!("{}@{}#{}", aux_proc.path, aux_proc.override_id, aux_frame.instruction.offset)),
                         .. Default::default()
                     };
