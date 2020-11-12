@@ -2,18 +2,16 @@ use super::auxtools_types::*;
 use std::{sync::mpsc};
 use std::thread;
 use std::{
-    collections::HashMap,
     io::{Read, Write},
     net::Ipv4Addr,
     net::SocketAddr,
     net::TcpStream,
-    sync::Arc,
+    sync::{Arc, RwLock},
     thread::JoinHandle,
 };
 
 use super::dap_types;
 use super::SequenceNumber;
-use dm::FileId;
 
 // We need to be able to encode/decode VariablesRef into an i64 for DAP to use
 // but valid values are between 1 and 2^32-1.
@@ -72,8 +70,8 @@ impl VariablesRef {
 pub struct Auxtools {
     requests: mpsc::Sender<Request>,
     responses: mpsc::Receiver<Response>,
-    breakpoints: HashMap<FileId, HashMap<InstructionRef, BreakpointSetResult>>,
     _thread: JoinHandle<()>,
+    last_error: Arc<RwLock<String>>,
 }
 
 pub struct AuxtoolsThread {
@@ -81,6 +79,7 @@ pub struct AuxtoolsThread {
     requests: mpsc::Receiver<Request>,
     responses: mpsc::Sender<Response>,
     stream: TcpStream,
+    last_error: Arc<RwLock<String>>,
 }
 
 impl Auxtools {
@@ -95,18 +94,21 @@ impl Auxtools {
         // Look at this little trouble-maker right here
         seq.issue_event(dap_types::InitializedEvent);
 
+        let last_error = Arc::new(RwLock::new("".to_owned()));
+
         let thread = AuxtoolsThread {
             seq,
             requests: requests_receiver,
             responses: responses_sender,
             stream,
+            last_error: last_error.clone(),
         };
 
         Ok(Auxtools {
             requests: requests_sender,
             responses: responses_receiver,
-            breakpoints: HashMap::new(),
             _thread: thread.start_thread(),
+            last_error,
         })
     }
 
@@ -332,6 +334,10 @@ impl Auxtools {
             _ => panic!("timed out"),
         }
     }
+
+    pub fn get_last_error_message(&self) -> String {
+        self.last_error.read().unwrap().clone()
+    }
 }
 
 impl AuxtoolsThread {
@@ -346,15 +352,23 @@ impl AuxtoolsThread {
 
         match response {
             Response::BreakpointHit { reason } => {
+                let mut description = None;
+
                 let reason = match reason {
                     BreakpointReason::Step => dap_types::StoppedEvent::REASON_STEP,
                     BreakpointReason::Pause => dap_types::StoppedEvent::REASON_PAUSE,
                     BreakpointReason::Breakpoint => dap_types::StoppedEvent::REASON_BREAKPOINT,
+                    BreakpointReason::Runtime(error) => {
+                        *(self.last_error.write().unwrap()) = error.clone();
+                        description = Some(error);
+                        dap_types::StoppedEvent::REASON_EXCEPTION
+                    }
                 };
 
                 self.seq.issue_event(dap_types::StoppedEvent {
                     threadId: Some(0),
                     reason: reason.to_owned(),
+                    description,
                     ..Default::default()
                 });
             }

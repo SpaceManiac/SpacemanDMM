@@ -1220,7 +1220,12 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                return Err(Box::new(GenericError("auxtools can't exception-info yet")));
+                ExceptionInfoResponse {
+                    exceptionId: auxtools.get_last_error_message(),
+                    description: None,
+                    breakMode: ExceptionBreakMode::Always,
+                    details: None,
+                }
             }
         }
     }

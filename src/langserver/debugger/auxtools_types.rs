@@ -89,6 +89,7 @@ pub enum BreakpointReason {
 	Breakpoint,
 	Step,
 	Pause,
+	Runtime(String),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
