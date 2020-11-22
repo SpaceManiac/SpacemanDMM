@@ -338,7 +338,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
             transform, dir, icon, icon_state, invisibility, maptext, suffix, appearance,
             dir, radius,
             // filters only
-            size, x, y, offset, flags);
+            size, x, y, offset, flags, repeat);
         proc/arccos(X);
         proc/arcsin(X);
         proc/arglist(List);  // special form
