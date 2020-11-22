@@ -14,6 +14,7 @@ pub enum Request {
 	BreakpointUnset {
 		instruction: InstructionRef,
 	},
+	SetCatchRuntimes(bool),
 	LineNumber {
 		proc: ProcRef,
 		offset: u32,

@@ -338,6 +338,10 @@ impl Auxtools {
     pub fn get_last_error_message(&self) -> String {
         self.last_error.read().unwrap().clone()
     }
+
+    pub fn set_catch_runtimes(&self, should_catch: bool) {
+        self.requests.send(Request::SetCatchRuntimes(should_catch)).unwrap();
+    }
 }
 
 impl AuxtoolsThread {

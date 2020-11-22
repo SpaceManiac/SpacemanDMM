@@ -1200,7 +1200,7 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                return Err(Box::new(GenericError("auxtools can't set-exception-breakpoints yet")));
+                auxtools.set_catch_runtimes(params.filters.iter().any(|x| x == EXCEPTION_FILTER_RUNTIMES));
             }
         }
     }
