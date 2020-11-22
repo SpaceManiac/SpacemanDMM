@@ -117,6 +117,10 @@ impl Auxtools {
             .recv_timeout(std::time::Duration::from_secs(5))
     }
 
+    pub fn disconnect(&mut self) {
+        self.requests.send(Request::Disconnect).unwrap();
+    }
+
     pub fn get_line_number(&mut self, path: &str, override_id: u32, offset: u32) -> Option<u32> {
         self.requests
             .send(Request::LineNumber {
@@ -351,10 +355,13 @@ impl AuxtoolsThread {
         self.stream.write_all(&message[..]).unwrap();
     }
 
-    fn handle_message(&mut self, data: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+    // returns true if we should disconnect
+    fn handle_message(&mut self, data: &[u8]) -> Result<bool, Box<dyn std::error::Error>> {
         let response = serde_json::from_slice::<Response>(data)?;
 
         match response {
+            Response::Disconnect => return Ok(true),
+
             Response::BreakpointHit { reason } => {
                 let mut description = None;
 
@@ -376,20 +383,22 @@ impl AuxtoolsThread {
                     ..Default::default()
                 });
             }
+
             x => {
                 self.responses.send(x)?;
             }
         }
 
-        Ok(())
+        Ok(false)
     }
 
+    // TODO: rewrite to not be a non-blocking socket
     pub fn start_thread(mut self) -> JoinHandle<()> {
         thread::spawn(move || {
             let mut buf = [0u8; 4096];
             let mut queued_data = vec![];
 
-            loop {
+            'outer: loop {
                 let mut got_data = false;
                 match self.stream.read(&mut buf) {
                     Ok(0) => (),
@@ -407,7 +416,9 @@ impl AuxtoolsThread {
                     while let Some(pos) = queued_data.iter().position(|x| *x == 0) {
                         let mut message: Vec<u8> = queued_data.drain(0..=pos).collect();
                         message.pop(); // remove null-terminator
-                        self.handle_message(&message).unwrap();
+                        if self.handle_message(&message).unwrap() {
+                            break 'outer;
+                        }
                     }
                 }
 
@@ -421,6 +432,8 @@ impl AuxtoolsThread {
                     self.send(request);
                 }
             }
+
+            self.seq.issue_event(dap_types::TerminatedEvent::default());
         })
     }
 }

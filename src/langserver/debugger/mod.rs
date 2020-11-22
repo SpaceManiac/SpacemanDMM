@@ -448,7 +448,7 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                //auxtools.disconnect();
+                auxtools.disconnect();
             }
         }
 

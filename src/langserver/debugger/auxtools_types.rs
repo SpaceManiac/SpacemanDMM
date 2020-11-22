@@ -8,6 +8,7 @@ pub const DEFAULT_PORT: u16 = 2448;
 // Message from client -> server
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Request {
+	Disconnect,
 	BreakpointSet {
 		instruction: InstructionRef,
 	},
@@ -43,6 +44,7 @@ pub enum Request {
 // Message from server -> client
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Response {
+	Disconnect,
 	BreakpointSet {
 		result: BreakpointSetResult,
 	},
