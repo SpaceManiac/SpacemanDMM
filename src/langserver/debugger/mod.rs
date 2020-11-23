@@ -480,9 +480,7 @@ handle_request! {
                 extools.configuration_done();
             }
 
-            DebugClient::Auxtools(auxtools) => {
-
-            }
+            DebugClient::Auxtools(_) => {}
         }
 
     }
@@ -767,7 +765,7 @@ handle_request! {
                 SetFunctionBreakpointsResponse { breakpoints }
             }
 
-            DebugClient::Auxtools(auxtools) => {
+            DebugClient::Auxtools(_) => {
                 return Err(Box::new(GenericError("auxtools can't set function breakpoints yet")));
             }
         }
@@ -1304,7 +1302,7 @@ handle_request! {
                 }
             }
 
-            DebugClient::Auxtools(auxtools) => {
+            DebugClient::Auxtools(_) => {
                 return Err(Box::new(GenericError("auxtools can't disassemble yet")));
             }
         }
