@@ -319,7 +319,7 @@ pub enum NewType {
     /// Implicit type, taken from context.
     Implicit,
     /// A prefab to be instantiated.
-    Prefab(Prefab),
+    Prefab(Box<Prefab>),
     /// A "mini-expression" in which to find the prefab to instantiate.
     MiniExpr {
         ident: Ident,
@@ -515,7 +515,7 @@ pub enum Term {
     /// An expression contained in a term.
     Expr(Box<Expression>),
     /// A prefab literal (path + vars).
-    Prefab(Prefab),
+    Prefab(Box<Prefab>),
     /// An interpolated string, alternating string/expr/string/expr.
     InterpString(String, Vec<(Option<Expression>, String)>),
 
@@ -999,7 +999,7 @@ impl VarSuffix {
             None
         } else {
             Some(Expression::from(Term::New {
-                type_: NewType::Prefab(Prefab::from(vec![(PathOp::Slash, "list".to_owned())])),
+                type_: NewType::Prefab(Box::new(Prefab::from(vec![(PathOp::Slash, "list".to_owned())]))),
                 args: Some(args),
             }))
         }

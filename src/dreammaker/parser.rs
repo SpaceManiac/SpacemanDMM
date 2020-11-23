@@ -1646,11 +1646,11 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     // distinct from a tree_path, path must begin with a path separator and can
     // use any path separator rather than just slash, AND can be followed by vars
-    fn prefab(&mut self) -> Status<Prefab> {
+    fn prefab(&mut self) -> Status<Box<Prefab>> {
         self.prefab_ex(Vec::new())
     }
 
-    fn prefab_ex(&mut self, mut parts: TypePath) -> Status<Prefab> {
+    fn prefab_ex(&mut self, mut parts: TypePath) -> Status<Box<Prefab>> {
         // path :: path_sep ident (path_sep ident?)*
         // path_sep :: '/' | '.' | ':'
         let start = self.updated_location();
@@ -1658,7 +1658,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         // expect at least one path element
         let sep = match self.path_separator()? {
             Some(sep) => sep,
-            None if !parts.is_empty() => return Ok(Some(Prefab::from(parts))),
+            None if !parts.is_empty() => return Ok(Some(Box::new(Prefab::from(parts)))),
             None => return Ok(None),
         };
         let mut separator_loc = self.location;
@@ -1703,7 +1703,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             })?;
         }
 
-        success(Prefab { path: parts, vars })
+        success(Box::new(Prefab { path: parts, vars }))
     }
 
     fn expression(&mut self) -> Status<Expression> {

@@ -716,7 +716,7 @@ impl<'a> ConstantFolder<'a> {
             Term::Null => Constant::Null(type_hint.cloned()),
             Term::New { type_, args } => Constant::New {
                 type_: match type_ {
-                    NewType::Prefab(e) => Some(self.prefab(e)?),
+                    NewType::Prefab(e) => Some(self.prefab(*e)?),
                     NewType::Implicit => None,
                     NewType::MiniExpr { .. } => return Err(self.error("non-constant new expression")),
                 },
@@ -774,7 +774,7 @@ impl<'a> ConstantFolder<'a> {
                 // other functions are no-goes
                 _ => return Err(self.error(format!("non-constant function call: {}", ident))),
             },
-            Term::Prefab(prefab) => Constant::Prefab(self.prefab(prefab)?),
+            Term::Prefab(prefab) => Constant::Prefab(self.prefab(*prefab)?),
             Term::Ident(ident) => self.ident(ident, false)?,
             Term::String(v) => Constant::String(v),
             Term::Resource(v) => Constant::Resource(v),
