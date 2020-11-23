@@ -951,7 +951,7 @@ handle_request! {
                 if let Some(arguments) = arguments {
                     scopes.push(Scope {
                         name: "Arguments".to_owned(),
-                        variablesReference: arguments.encode(),
+                        variablesReference: arguments.0 as i64,
                         .. Default::default()
                     });
                 }
@@ -959,7 +959,7 @@ handle_request! {
                 if let Some(locals) = locals {
                     scopes.push(Scope {
                         name: "Locals".to_owned(),
-                        variablesReference: locals.encode(),
+                        variablesReference: locals.0 as i64,
                         .. Default::default()
                     });
                 }
@@ -967,7 +967,7 @@ handle_request! {
                 if let Some(globals) = globals {
                     scopes.push(Scope {
                         name: "Globals".to_owned(),
-                        variablesReference: globals.encode(),
+                        variablesReference: globals.0 as i64,
                         .. Default::default()
                     });
                 }
@@ -1115,7 +1115,7 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                let aux_variables = auxtools.get_variables(auxtools_types::VariablesRef::decode(params.variablesReference));
+                let aux_variables = auxtools.get_variables(auxtools_types::VariablesRef(params.variablesReference as i32));
                 let mut variables = vec![];
 
                 // TODO
@@ -1126,7 +1126,7 @@ handle_request! {
                     variables.push(Variable {
                         name: aux_var.name,
                         value: aux_var.value,
-                        variablesReference: aux_var.variables.map(|x| x.encode()).unwrap_or(0),
+                        variablesReference: aux_var.variables.map(|x| x.0 as i64).unwrap_or(0),
                         .. Default::default()
                     });
                 }

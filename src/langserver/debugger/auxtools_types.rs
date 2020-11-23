@@ -132,12 +132,8 @@ pub enum BreakpointSetResult {
 	Failed,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub enum VariablesRef {
-	Arguments { frame: u32 },
-	Locals { frame: u32 },
-	Internal { tag: u8, data: u32 },
-}
+#[derive(Clone, Hash, Eq, PartialEq, Serialize, Deserialize, Debug)]
+pub struct VariablesRef(pub i32);
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Variable {
