@@ -1879,7 +1879,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
         success(Expression::Base {
             unary: unary_ops,
-            term,
+            term: Box::new(term),
             follow,
         })
     }

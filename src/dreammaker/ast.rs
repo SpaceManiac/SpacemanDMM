@@ -336,7 +336,7 @@ pub enum Expression {
         /// The unary operations applied to this value, in reverse order.
         unary: Vec<UnaryOp>,
         /// The term of the expression.
-        term: Spanned<Term>,
+        term: Box<Spanned<Term>>,
         /// The follow operations applied to this value.
         follow: Vec<Spanned<Follow>>,
     },
@@ -486,7 +486,7 @@ impl From<Term> for Expression {
             term => Expression::Base {
                 unary: vec![],
                 follow: vec![],
-                term: Spanned::new(Default::default(), term),
+                term: Box::new(Spanned::new(Default::default(), term)),
             },
         }
     }

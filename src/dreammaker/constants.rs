@@ -760,12 +760,8 @@ impl<'a> ConstantFolder<'a> {
                     if args.len() != 1 {
                         return Err(self.error(format!("malformed defined() call, must have 1 argument and instead has {}", args.len())));
                     }
-                    match args[0] {
-                        Expression::Base {
-                            ref unary,
-                            term: Spanned { elem: Term::Ident(ref ident), .. },
-                            ref follow
-                        } if unary.is_empty() && follow.is_empty() => {
+                    match args[0].as_term() {
+                        Some(Term::Ident(ref ident)) => {
                             Constant::Int(if defines.contains_key(ident) { 1 } else { 0 })
                         },
                         _ => return Err(self.error("malformed defined() call, argument given isn't an Ident.")),
