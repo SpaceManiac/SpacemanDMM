@@ -63,11 +63,12 @@ pub fn default_defines(defines: &mut DefineMap) {
     // constants
     macro_rules! c {
         ($($i:ident = $($x:expr),*;)*) => {
-            $(
-                assert!(defines.insert(
-                    stringify!($i).into(), (location, Define::Constant { subst: vec![$($x),*], docs: Default::default() })
-                ).is_none(), stringify!($i));
-            )*
+            for (name, value) in &[
+                $((stringify!($i), [$($x,)*]),)*
+            ] {
+                let previous = defines.insert(name.to_string(), (location, Define::Constant { subst: value.to_vec(), docs: Default::default() }));
+                assert!(previous.is_none(), name);
+            }
         }
     }
     c! {
