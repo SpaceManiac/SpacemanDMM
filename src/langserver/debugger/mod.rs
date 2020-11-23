@@ -352,7 +352,15 @@ impl Debugger {
                 }
             }
 
-            DebugClient::Auxtools(_) => {}
+            DebugClient::Auxtools(auxtools) => for stack in auxtools.get_stacks() {
+                    if stack.id == 0 {
+                        continue;
+                    }
+                    self.issue_event(dap_types::ThreadEvent {
+                        reason: dap_types::ThreadEvent::REASON_EXITED.to_owned(),
+                        threadId: stack.id as i64,
+                    });
+                },
         }
     }
 }
@@ -506,8 +514,25 @@ handle_request! {
             },
 
             DebugClient::Auxtools(auxtools) => {
+                let mut threads : Vec<Thread> = auxtools.get_stacks().into_iter().map(|x| {
+                    Thread {
+                        id: x.id as i64,
+                        name: x.name,
+                    }
+                }).collect();
+
+                // If we tell DAP that there are no threads, Pause requests never get passed through!
+                if threads.is_empty() {
+                    threads.push(
+                        Thread {
+                            id: 0,
+                            name: "Main".to_owned(),
+                        }
+                    );
+                }
+
                 ThreadsResponse {
-                    threads: vec![Thread { id: 0, name: "Main".to_owned() }],
+                    threads,
                 }
             }
         }
@@ -825,7 +850,7 @@ handle_request! {
                     let aux_proc = &aux_frame.instruction.proc;
                     let mut dap_frame = StackFrame {
                         name: aux_proc.path.to_owned(),
-                        id: aux_frame.id as i64, // TODO: multiple threads
+                        id: aux_frame.id as i64,
                         instructionPointerReference: Some(format!("{}@{}#{}", aux_proc.path, aux_proc.override_id, aux_frame.instruction.offset)),
                         .. Default::default()
                     };
@@ -1116,7 +1141,7 @@ handle_request! {
     }
 
     on Continue(&mut self, _params) {
-        self.cull_thread_list();
+        self.notify_continue();
 
         match &mut self.client {
             DebugClient::Extools(extools) => {
@@ -1144,7 +1169,7 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                auxtools.step_into();
+                auxtools.step_into(params.threadId as u32);
             }
         }
     }
@@ -1159,7 +1184,7 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                auxtools.next();
+                auxtools.next(params.threadId as u32);
             }
         }
     }
@@ -1174,7 +1199,7 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                auxtools.step_out();
+                auxtools.step_out(params.threadId as u32);
             }
         }
     }

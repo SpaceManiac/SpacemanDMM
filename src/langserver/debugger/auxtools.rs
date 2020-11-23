@@ -230,29 +230,29 @@ impl Auxtools {
             .unwrap();
     }
 
-    pub fn next(&mut self) {
+    pub fn next(&mut self, stack_id: u32) {
         // TODO: disconnect
         self.requests
             .send(Request::Continue {
-                kind: ContinueKind::StepOver,
+                kind: ContinueKind::StepOver { stack_id },
             })
             .unwrap();
     }
 
-    pub fn step_into(&mut self) {
+    pub fn step_into(&mut self, stack_id: u32) {
         // TODO: disconnect
         self.requests
             .send(Request::Continue {
-                kind: ContinueKind::StepInto,
+                kind: ContinueKind::StepInto { stack_id },
             })
             .unwrap();
     }
 
-    pub fn step_out(&mut self) {
+    pub fn step_out(&mut self, stack_id: u32) {
         // TODO: disconnect
         self.requests
             .send(Request::Continue {
-                kind: ContinueKind::StepOut,
+                kind: ContinueKind::StepOut { stack_id },
             })
             .unwrap();
     }
@@ -262,14 +262,32 @@ impl Auxtools {
         self.requests.send(Request::Pause).unwrap();
     }
 
+    pub fn get_stacks(&mut self) -> Vec<Stack> {
+        self.requests.send(Request::Stacks).unwrap();
+
+        match self.read_response() {
+            Ok(response) => {
+                match response {
+                    Response::Stacks { stacks } => return stacks,
+
+                    // TODO: disconnect
+                    _ => panic!("received wrong response"),
+                }
+            }
+
+            // TODO: disconnect
+            _ => panic!("timed out"),
+        }
+    }
+
     pub fn get_stack_frames(
         &mut self,
-        thread_id: u32,
+        stack_id: u32,
         start_frame: Option<u32>,
         count: Option<u32>,
     ) -> (Vec<StackFrame>, u32) {
         self.requests.send(Request::StackFrames {
-            thread_id,
+            stack_id,
             start_frame,
             count,
         }).unwrap();
@@ -380,6 +398,7 @@ impl AuxtoolsThread {
                     threadId: Some(0),
                     reason: reason.to_owned(),
                     description,
+                    allThreadsStopped: Some(true),
                     ..Default::default()
                 });
             }
@@ -409,7 +428,10 @@ impl AuxtoolsThread {
 
                     // This is a crutch
                     Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
-                    Err(_) => panic!("Handle me!"),
+                    Err(e) => {
+                        println!("{:?}", e);
+                        panic!("Handle me!");
+                    }
                 }
 
                 if got_data {

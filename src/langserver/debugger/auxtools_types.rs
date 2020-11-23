@@ -24,8 +24,9 @@ pub enum Request {
 		proc: ProcRef,
 		line: u32,
 	},
+	Stacks,
 	StackFrames {
-		thread_id: u32,
+		stack_id: u32,
 		start_frame: Option<u32>,
 		count: Option<u32>,
 	},
@@ -56,6 +57,9 @@ pub enum Response {
 	},
 	Offset {
 		offset: Option<u32>,
+	},
+	Stacks {
+		stacks: Vec<Stack>,
 	},
 	StackFrames {
 		frames: Vec<StackFrame>,
@@ -98,9 +102,15 @@ pub enum BreakpointReason {
 #[derive(Serialize, Deserialize, Debug)]
 pub enum ContinueKind {
 	Continue,
-	StepOver,
-	StepInto,
-	StepOut,
+	StepOver { stack_id: u32 },
+	StepInto { stack_id: u32 },
+	StepOut { stack_id: u32 },
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Stack {
+	pub id: u32,
+	pub name: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
