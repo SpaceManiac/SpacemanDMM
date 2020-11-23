@@ -5,7 +5,7 @@ use std::fmt;
 
 use linked_hash_map::LinkedHashMap;
 
-use super::ast::{Expression, VarType, VarSuffix, PathOp, Parameter, Block, ProcDeclKind};
+use super::ast::{Expression, VarType, VarSuffix, PathOp, Parameter, Block, ProcDeclKind, Ident};
 use super::constants::{Constant, Pop};
 use super::docs::DocCollection;
 use super::{DMError, Location, Context, Severity};
@@ -481,8 +481,8 @@ impl<'o> NavigatePathResult<'o> {
         }
     }
 
-    pub fn to_path(self) -> Vec<String> {
-        let mut path: Vec<String> = self.ty().path.split('/').skip(1).map(ToOwned::to_owned).collect();
+    pub fn to_path(self) -> Vec<Ident> {
+        let mut path: Vec<Ident> = self.ty().path.split('/').skip(1).map(ToOwned::to_owned).collect();
         match self {
             NavigatePathResult::Type(_) => {},
             NavigatePathResult::ProcGroup(_, kind) => path.push(kind.to_string()),

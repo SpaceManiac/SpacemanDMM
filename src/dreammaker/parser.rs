@@ -13,8 +13,6 @@ use super::annotation::*;
 use super::ast::*;
 use super::docs::*;
 
-type Ident = String;
-
 // ----------------------------------------------------------------------------
 // Error handling
 
@@ -1192,7 +1190,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         success(result)
     }
 
-    fn statement(&mut self, loop_ctx: &LoopContext, vars: &mut Vec<(Location, VarType, String)>) -> Status<Spanned<Statement>> {
+    fn statement(&mut self, loop_ctx: &LoopContext, vars: &mut Vec<(Location, VarType, Ident)>) -> Status<Spanned<Statement>> {
         let start = self.location();
         let spanned = |v| success(Spanned::new(start, v));
 
@@ -1491,7 +1489,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     }
 
     // Single-line statements. Can appear in for loops. Followed by a semicolon.
-    fn simple_statement(&mut self, in_for: bool, vars: &mut Vec<(Location, VarType, String)>) -> Status<Statement> {
+    fn simple_statement(&mut self, in_for: bool, vars: &mut Vec<(Location, VarType, Ident)>) -> Status<Statement> {
         if let Some(()) = self.exact_ident("var")? {
             // statement :: 'var' type_path name ('=' value)
             let mut var_stmts = Vec::new();
@@ -1592,7 +1590,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     fn for_range(
         &mut self,
         var_type: Option<VarType>,
-        name: String,
+        name: Ident,
         start: Expression,
         end: Expression,
     ) -> Status<Statement> {
@@ -1886,7 +1884,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         })
     }
 
-    fn term(&mut self, belongs_to: &mut Vec<String>) -> Status<Spanned<Term>> {
+    fn term(&mut self, belongs_to: &mut Vec<Ident>) -> Status<Spanned<Term>> {
         use super::lexer::Punctuation::*;
 
         let start = self.updated_location();
@@ -2107,7 +2105,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         success(Spanned::new(start, term))
     }
 
-    fn follow(&mut self, belongs_to: &mut Vec<String>, in_ternary: bool) -> Status<Spanned<Follow>> {
+    fn follow(&mut self, belongs_to: &mut Vec<Ident>, in_ternary: bool) -> Status<Spanned<Follow>> {
         let first_location = self.updated_location();
         let kind = match self.next("field access")? {
             // follow :: '[' expression ']'
@@ -2165,7 +2163,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     // TODO: somehow fix the fact that this is basically copy-pasted from
     // follow() above, except for the very end.
-    fn index_or_field(&mut self, belongs_to: &mut Vec<String>, in_ternary: bool) -> Status<IndexOrField> {
+    fn index_or_field(&mut self, belongs_to: &mut Vec<Ident>, in_ternary: bool) -> Status<IndexOrField> {
         let kind = match self.next("field access")? {
             // follow :: '[' expression ']'
             Token::Punct(Punctuation::LBracket) => {
@@ -2209,7 +2207,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     }
 
     /// a parenthesized, comma-separated list of expressions
-    fn arguments(&mut self, parents: &[String], proc: &str) -> Status<Vec<Expression>> {
+    fn arguments(&mut self, parents: &[Ident], proc: &str) -> Status<Vec<Expression>> {
         leading!(self.exact(Token::Punct(Punctuation::LParen)));
         let start = self.location;
 
@@ -2311,7 +2309,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     }
 }
 
-fn reconstruct_path(node: &str, proc_kind: Option<ProcDeclKind>, var_type: Option<&VarType>, last: &str) -> Vec<String> {
+fn reconstruct_path(node: &str, proc_kind: Option<ProcDeclKind>, var_type: Option<&VarType>, last: &str) -> Vec<Ident> {
     let mut result = Vec::new();
     for entry in node.split('/').skip(1) {
         result.push(entry.to_owned());

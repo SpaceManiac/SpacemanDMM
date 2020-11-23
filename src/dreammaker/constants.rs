@@ -17,7 +17,7 @@ use super::preprocessor::DefineMap;
 #[derive(Clone, Hash, Eq, PartialEq, Debug)]
 pub struct Pop {
     pub path: TreePath,
-    pub vars: LinkedHashMap<String, Constant>,
+    pub vars: LinkedHashMap<Ident, Constant>,
 }
 
 impl From<TreePath> for Pop {
@@ -824,7 +824,7 @@ impl<'a> ConstantFolder<'a> {
         Ok(Pop { path, vars })
     }
 
-    fn vars(&mut self, input: LinkedHashMap<String, Expression>) -> Result<LinkedHashMap<String, Constant>, DMError> {
+    fn vars(&mut self, input: LinkedHashMap<Ident, Expression>) -> Result<LinkedHashMap<Ident, Constant>, DMError> {
         // Visit the vars recursively.
         let mut vars = LinkedHashMap::new();
         for (k, v) in input {
@@ -834,7 +834,7 @@ impl<'a> ConstantFolder<'a> {
         Ok(vars)
     }
 
-    fn ident(&mut self, ident: String, must_be_const: bool) -> Result<Constant, DMError> {
+    fn ident(&mut self, ident: Ident, must_be_const: bool) -> Result<Constant, DMError> {
         let ty = self.ty;
         self.recursive_lookup(ty, &ident, must_be_const)
     }

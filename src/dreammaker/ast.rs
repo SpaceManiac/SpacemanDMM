@@ -82,6 +82,8 @@ impl<'a, T: fmt::Display + ?Sized> fmt::Display for Around<'a, T> {
     }
 }
 
+pub type Ident = String;
+
 /// The DM path operators.
 ///
 /// Which path operator is used typically only matters at the start of a path.
@@ -112,9 +114,9 @@ impl fmt::Display for PathOp {
 }
 
 /// A (typically absolute) tree path where the path operator is irrelevant.
-pub type TreePath = Vec<String>;
+pub type TreePath = Vec<Ident>;
 
-pub struct FormatTreePath<'a>(pub &'a [String]);
+pub struct FormatTreePath<'a>(pub &'a [Ident]);
 
 impl<'a> fmt::Display for FormatTreePath<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -126,9 +128,9 @@ impl<'a> fmt::Display for FormatTreePath<'a> {
 }
 
 /// A series of identifiers separated by path operators.
-pub type TypePath = Vec<(PathOp, String)>;
+pub type TypePath = Vec<(PathOp, Ident)>;
 
-pub struct FormatTypePath<'a>(pub &'a [(PathOp, String)]);
+pub struct FormatTypePath<'a>(pub &'a [(PathOp, Ident)]);
 
 impl<'a> fmt::Display for FormatTypePath<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -278,7 +280,7 @@ augmented! {
 #[derive(Clone, PartialEq, Debug)]
 pub struct Prefab {
     pub path: TypePath,
-    pub vars: LinkedHashMap<String, Expression>,
+    pub vars: LinkedHashMap<Ident, Expression>,
 }
 
 impl From<TypePath> for Prefab {
@@ -291,7 +293,7 @@ impl From<TypePath> for Prefab {
 }
 
 /// Formatting helper for variable arrays.
-pub struct FormatVars<'a, E>(pub &'a LinkedHashMap<String, E>);
+pub struct FormatVars<'a, E>(pub &'a LinkedHashMap<Ident, E>);
 
 impl<'a, E: fmt::Display> fmt::Display for FormatVars<'a, E> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -320,7 +322,7 @@ pub enum NewType {
     Prefab(Prefab),
     /// A "mini-expression" in which to find the prefab to instantiate.
     MiniExpr {
-        ident: String,
+        ident: Ident,
         fields: Vec<IndexOrField>,
     },
 }
@@ -501,7 +503,7 @@ pub enum Term {
     /// A floating-point literal.
     Float(f32),
     /// An identifier.
-    Ident(String),
+    Ident(Ident),
     /// A string literal.
     String(String),
     /// A resource literal.
@@ -519,7 +521,7 @@ pub enum Term {
 
     // Function calls with recursive contents ---------------------------------
     /// An unscoped function call.
-    Call(String, Vec<Expression>),
+    Call(Ident, Vec<Expression>),
     /// A `.()` call.
     SelfCall(Vec<Expression>),
     /// A `..()` call. If arguments is empty, the proc's arguments are passed.
@@ -667,9 +669,9 @@ pub enum Follow {
     /// Index the value by an expression.
     Index(Box<Expression>),
     /// Access a field of the value.
-    Field(IndexKind, String),
+    Field(IndexKind, Ident),
     /// Call a method of the value.
-    Call(IndexKind, String, Vec<Expression>),
+    Call(IndexKind, Ident, Vec<Expression>),
 }
 
 /// Like a `Follow` but supports index or fields only.
@@ -678,7 +680,7 @@ pub enum IndexOrField {
     /// Index the value by an expression.
     Index(Box<Expression>),
     /// Access a field of the value.
-    Field(IndexKind, String),
+    Field(IndexKind, Ident),
 }
 
 impl From<IndexOrField> for Follow {
@@ -735,7 +737,7 @@ impl fmt::Display for ProcDeclKind {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Parameter {
     pub var_type: VarType,
-    pub name: String,
+    pub name: Ident,
     pub default: Option<Expression>,
     pub input_type: Option<InputType>,
     pub in_list: Option<Expression>,
@@ -1033,7 +1035,7 @@ pub enum Statement {
     },
     ForList {
         var_type: Option<VarType>,
-        name: String,
+        name: Ident,
         /// If zero, uses the declared type of the variable.
         input_type: Option<InputType>,
         /// Defaults to 'world'.
@@ -1042,7 +1044,7 @@ pub enum Statement {
     },
     ForRange {
         var_type: Option<VarType>,
-        name: String,
+        name: Ident,
         start: Expression,
         end: Expression,
         step: Option<Expression>,
@@ -1051,7 +1053,7 @@ pub enum Statement {
     Var(VarStatement),
     Vars(Vec<VarStatement>),
     Setting {
-        name: String,
+        name: Ident,
         mode: SettingMode,
         value: Expression
     },
@@ -1069,11 +1071,11 @@ pub enum Statement {
         catch_params: Vec<TreePath>,
         catch_block: Block,
     },
-    Continue(Option<String>),
-    Break(Option<String>),
-    Goto(String),
+    Continue(Option<Ident>),
+    Break(Option<Ident>),
+    Goto(Ident),
     Label {
-        name: String,
+        name: Ident,
         block: Block,
     },
     Del(Expression),
@@ -1083,7 +1085,7 @@ pub enum Statement {
 #[derive(Debug, Clone, PartialEq)]
 pub struct VarStatement {
     pub var_type: VarType,
-    pub name: String,
+    pub name: Ident,
     pub value: Option<Expression>,
 }
 
