@@ -768,7 +768,7 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                return Err(Box::new(GenericError("auxtools can't set breakpoints yet")));
+                return Err(Box::new(GenericError("auxtools can't set function breakpoints yet")));
             }
         }
     }

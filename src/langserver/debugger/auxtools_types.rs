@@ -45,7 +45,6 @@ pub enum Request {
 // Message from server -> client
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Response {
-	Disconnect,
 	BreakpointSet {
 		result: BreakpointSetResult,
 	},
@@ -72,6 +71,13 @@ pub enum Response {
 	},
 	Variables {
 		vars: Vec<Variable>,
+	},
+
+	// These responses can occur at any moment, even between a request and its response
+	// I guess they aren't really responses...
+	Disconnect,
+	Notification {
+		message: String,
 	},
 	BreakpointHit {
 		reason: BreakpointReason,
