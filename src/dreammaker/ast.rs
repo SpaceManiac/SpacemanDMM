@@ -594,7 +594,7 @@ impl Term {
         };
     }
 
-    pub fn valid_for_range(&self, other: &Term, step: &Option<Expression>) -> Option<bool> {
+    pub fn valid_for_range(&self, other: &Term, step: Option<&Expression>) -> Option<bool> {
         if let Term::Int(i) = *self {
             if let Term::Int(o) = *other {
                 // edge case
@@ -1039,15 +1039,15 @@ pub enum Statement {
         /// If zero, uses the declared type of the variable.
         input_type: Option<InputType>,
         /// Defaults to 'world'.
-        in_list: Option<Expression>,
+        in_list: Option<Box<Expression>>,
         block: Block,
     },
     ForRange {
         var_type: Option<VarType>,
         name: Ident,
-        start: Expression,
-        end: Expression,
-        step: Option<Expression>,
+        start: Box<Expression>,
+        end: Box<Expression>,
+        step: Option<Box<Expression>>,
         block: Block,
     },
     Var(VarStatement),

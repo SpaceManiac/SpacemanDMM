@@ -1425,7 +1425,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 let mut state = self.visit_block(block, &mut scoped_locals);
                 if let Some(startterm) = start.as_term() {
                     if let Some(endterm) = end.as_term() {
-                        if let Some(validity) = startterm.valid_for_range(endterm, step) {
+                        if let Some(validity) = startterm.valid_for_range(endterm, step.as_deref()) {
                             if !validity {
                                 error(location,"for range loop body is never reached due to invalid range")
                                     .register(self.context);

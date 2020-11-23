@@ -1270,7 +1270,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         // for(var/a = 1 to
                         require!(self.exact_ident("to"));
                         let rhs = require!(self.expression());
-                        return spanned(require!(self.for_range(Some(var_type), name, value, rhs)));
+                        return spanned(require!(self.for_range(Some(var_type), name, Box::new(value), Box::new(rhs))));
                     }
                     Statement::Expr(Expression::AssignOp {
                         op: AssignOp::Assign,
@@ -1284,7 +1284,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         };
                         require!(self.exact_ident("to"));
                         let to_rhs = require!(self.expression());
-                        return spanned(require!(self.for_range(None, name, *rhs, to_rhs)));
+                        return spanned(require!(self.for_range(None, name, rhs, Box::new(to_rhs))));
                     }
                     Statement::Var(VarStatement {
                         var_type,
@@ -1307,7 +1307,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         //   let (b, c) = *a;
                         match {*rhs} {
                             Expression::BinaryOp { op: BinaryOp::To, lhs, rhs } => {
-                                return spanned(require!(self.for_range(None, name, *lhs, *rhs)));
+                                return spanned(require!(self.for_range(None, name, lhs, rhs)));
                             },
                             rhs => {
                                 // I love code duplication, don't you?
@@ -1316,7 +1316,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                                     var_type: None,
                                     name,
                                     input_type: None,
-                                    in_list: Some(rhs),
+                                    in_list: Some(Box::new(rhs)),
                                     block: require!(self.block(&LoopContext::ForList)),
                                 });
                             }
@@ -1340,7 +1340,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     let value = require!(self.expression());
                     if let Some(()) = self.exact_ident("to")? {
                         let rhs = require!(self.expression());
-                        return spanned(require!(self.for_range(var_type, name, value, rhs)));
+                        return spanned(require!(self.for_range(var_type, name, Box::new(value), Box::new(rhs))));
                     }
                     Some(value)
                 } else {
@@ -1352,7 +1352,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     var_type,
                     name,
                     input_type,
-                    in_list,
+                    in_list: in_list.map(Box::new),
                     block: require!(self.block(&LoopContext::ForList)),
                 })
             } else {
@@ -1591,8 +1591,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         &mut self,
         var_type: Option<VarType>,
         name: Ident,
-        start: Expression,
-        end: Expression,
+        start: Box<Expression>,
+        end: Box<Expression>,
     ) -> Status<Statement> {
         // step 2
         let step = if let Some(()) = self.exact_ident("step")? {
@@ -1608,7 +1608,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             name,
             start,
             end,
-            step,
+            step: step.map(Box::new),
             block: require!(self.block(&LoopContext::ForRange)),
         })
     }
