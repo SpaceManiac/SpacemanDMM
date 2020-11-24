@@ -1029,7 +1029,7 @@ pub enum Statement {
     },
     ForLoop {
         init: Option<Box<Statement>>,
-        test: Option<Expression>,
+        test: Option<Box<Expression>>,
         inc: Option<Box<Statement>>,
         block: Block,
     },
@@ -1062,8 +1062,8 @@ pub enum Statement {
         block: Block,
     },
     Switch {
-        input: Expression,
-        cases: Vec<(Spanned<Vec<Case>>, Block)>,
+        input: Box<Expression>,
+        cases: Box<[(Spanned<Vec<Case>>, Block)]>,
         default: Option<Block>,
     },
     TryCatch {

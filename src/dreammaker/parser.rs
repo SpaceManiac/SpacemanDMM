@@ -1254,7 +1254,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 require!(self.exact(Token::Punct(Punctuation::RParen)));
                 spanned(Statement::ForLoop {
                     init: init.map(Box::new),
-                    test,
+                    test: test.map(Box::new),
                     inc: inc.map(Box::new),
                     block: require!(self.block(&LoopContext::ForLoop)),
                 })
@@ -1385,7 +1385,11 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 None
             };
             require!(self.exact(Token::Punct(Punctuation::RBrace)));
-            spanned(Statement::Switch { input: expr, cases, default })
+            spanned(Statement::Switch {
+                input: Box::new(expr),
+                cases: cases.into_boxed_slice(),
+                default,
+            })
         } else if let Some(()) = self.exact_ident("try")? {
             let try_block = require!(self.block(loop_ctx));
             self.skip_phantom_semicolons()?;
