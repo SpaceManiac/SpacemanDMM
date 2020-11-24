@@ -484,8 +484,8 @@ impl From<Term> for Expression {
         match term {
             Term::Expr(expr) => *expr,
             term => Expression::Base {
-                unary: vec![],
-                follow: vec![],
+                unary: Default::default(),
+                follow: Default::default(),
                 term: Box::new(Spanned::new(Default::default(), term)),
             },
         }
@@ -1050,7 +1050,7 @@ pub enum Statement {
         step: Option<Box<Expression>>,
         block: Block,
     },
-    Var(VarStatement),
+    Var(Box<VarStatement>),
     Vars(Vec<VarStatement>),
     Setting {
         name: Ident,

@@ -1262,16 +1262,15 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 // in-list form ("for list")
                 let (var_type, name) = match init {
                     // this is a really terrible way to do this
-                    Statement::Var(VarStatement {
-                        var_type,
-                        name,
-                        value: Some(value),
-                    }) => {
-                        // for(var/a = 1 to
-                        require!(self.exact_ident("to"));
-                        let rhs = require!(self.expression());
-                        return spanned(require!(self.for_range(Some(var_type), name, Box::new(value), Box::new(rhs))));
-                    }
+                    Statement::Var(vs) => match vs.value {
+                        None => (Some(vs.var_type), vs.name),
+                        Some(value) => {
+                            // for(var/a = 1 to
+                            require!(self.exact_ident("to"));
+                            let rhs = require!(self.expression());
+                            return spanned(require!(self.for_range(Some(vs.var_type), vs.name, Box::new(value), Box::new(rhs))));
+                        }
+                    },
                     Statement::Expr(Expression::AssignOp {
                         op: AssignOp::Assign,
                         lhs,
@@ -1286,11 +1285,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         let to_rhs = require!(self.expression());
                         return spanned(require!(self.for_range(None, name, rhs, Box::new(to_rhs))));
                     }
-                    Statement::Var(VarStatement {
-                        var_type,
-                        name,
-                        value: None,
-                    }) => (Some(var_type), name),
                     Statement::Expr(Expression::BinaryOp {
                         op: BinaryOp::In,
                         lhs,
@@ -1556,7 +1550,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 }
             }
             if var_stmts.len() == 1 {
-                success(Statement::Var(var_stmts.remove(0)))
+                success(Statement::Var(Box::new(var_stmts.remove(0))))
             } else {
                 success(Statement::Vars(var_stmts))
             }
