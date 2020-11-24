@@ -1007,7 +1007,7 @@ impl VarSuffix {
 }
 
 /// A block of statements.
-pub type Block = Vec<Spanned<Statement>>;
+pub type Block = Box<[Spanned<Statement>]>;
 
 /// A statement in a proc body.
 #[derive(Debug, Clone, PartialEq)]

@@ -1187,7 +1187,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         for (loc, var_type, name) in vars {
             self.annotate(loc, || Annotation::LocalVarScope(var_type, name));
         }
-        success(result)
+        success(result.into_boxed_slice())
     }
 
     fn statement(&mut self, loop_ctx: &LoopContext, vars: &mut Vec<(Location, VarType, Ident)>) -> Status<Spanned<Statement>> {
