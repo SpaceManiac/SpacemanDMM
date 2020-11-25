@@ -14,15 +14,14 @@ use super::dap_types;
 use super::SequenceNumber;
 
 pub struct Auxtools {
-    requests: mpsc::Sender<Request>,
     responses: mpsc::Receiver<Response>,
     _thread: JoinHandle<()>,
+    stream: TcpStream,
     last_error: Arc<RwLock<String>>,
 }
 
 pub struct AuxtoolsThread {
     seq: Arc<SequenceNumber>,
-    requests: mpsc::Receiver<Request>,
     responses: mpsc::Sender<Response>,
     stream: TcpStream,
     last_error: Arc<RwLock<String>>,
@@ -31,11 +30,9 @@ pub struct AuxtoolsThread {
 impl Auxtools {
     pub fn new(seq: Arc<SequenceNumber>, port: Option<u16>) -> std::io::Result<Self> {
         let addr: SocketAddr = (Ipv4Addr::LOCALHOST, port.unwrap_or(DEFAULT_PORT)).into();
-        let (requests_sender, requests_receiver) = mpsc::channel();
         let (responses_sender, responses_receiver) = mpsc::channel();
 
         let stream = TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(5))?;
-        stream.set_nonblocking(true)?;
 
         // Look at this little trouble-maker right here
         seq.issue_event(dap_types::InitializedEvent);
@@ -44,16 +41,15 @@ impl Auxtools {
 
         let thread = AuxtoolsThread {
             seq,
-            requests: requests_receiver,
             responses: responses_sender,
-            stream,
+            stream: stream.try_clone().unwrap(),
             last_error: last_error.clone(),
         };
 
         Ok(Auxtools {
-            requests: requests_sender,
             responses: responses_receiver,
             _thread: thread.start_thread(),
+            stream,
             last_error,
         })
     }
@@ -63,13 +59,20 @@ impl Auxtools {
             .recv_timeout(std::time::Duration::from_secs(5))
     }
 
+    fn send(&mut self, request: Request) -> Result<(), ()> {
+        let data = bincode::serialize(&request).unwrap();
+        self.stream.write_all(&(data.len() as u32).to_le_bytes()).unwrap();
+        self.stream.write_all(&data[..]).unwrap();
+        self.stream.flush().unwrap();
+        Ok(())
+    }
+
     pub fn disconnect(&mut self) {
-        self.requests.send(Request::Disconnect).unwrap();
+        self.send(Request::Disconnect).unwrap();
     }
 
     pub fn get_line_number(&mut self, path: &str, override_id: u32, offset: u32) -> Option<u32> {
-        self.requests
-            .send(Request::LineNumber {
+        self.send(Request::LineNumber {
                 proc: ProcRef {
                     path: path.to_owned(),
                     override_id,
@@ -94,8 +97,7 @@ impl Auxtools {
     }
 
     pub fn get_offset(&mut self, path: &str, override_id: u32, line: u32) -> Option<u32> {
-        self.requests
-            .send(Request::Offset {
+        self.send(Request::Offset {
                 proc: ProcRef {
                     path: path.to_owned(),
                     override_id,
@@ -120,8 +122,7 @@ impl Auxtools {
     }
 
     pub fn set_breakpoint(&mut self, instruction: &InstructionRef) -> BreakpointSetResult {
-        self.requests
-            .send(Request::BreakpointSet {
+        self.send(Request::BreakpointSet {
                 instruction: instruction.clone(),
             })
             .unwrap();
@@ -145,8 +146,7 @@ impl Auxtools {
     }
 
     pub fn unset_breakpoint(&mut self, instruction: &InstructionRef) {
-        self.requests
-            .send(Request::BreakpointUnset {
+        self.send(Request::BreakpointUnset {
                 instruction: instruction.clone(),
             })
             .unwrap();
@@ -169,8 +169,7 @@ impl Auxtools {
 
     pub fn continue_execution(&mut self) {
         // TODO: disconnect
-        self.requests
-            .send(Request::Continue {
+        self.send(Request::Continue {
                 kind: ContinueKind::Continue,
             })
             .unwrap();
@@ -178,8 +177,7 @@ impl Auxtools {
 
     pub fn next(&mut self, stack_id: u32) {
         // TODO: disconnect
-        self.requests
-            .send(Request::Continue {
+        self.send(Request::Continue {
                 kind: ContinueKind::StepOver { stack_id },
             })
             .unwrap();
@@ -187,8 +185,7 @@ impl Auxtools {
 
     pub fn step_into(&mut self, stack_id: u32) {
         // TODO: disconnect
-        self.requests
-            .send(Request::Continue {
+        self.send(Request::Continue {
                 kind: ContinueKind::StepInto { stack_id },
             })
             .unwrap();
@@ -196,8 +193,7 @@ impl Auxtools {
 
     pub fn step_out(&mut self, stack_id: u32) {
         // TODO: disconnect
-        self.requests
-            .send(Request::Continue {
+        self.send(Request::Continue {
                 kind: ContinueKind::StepOut { stack_id },
             })
             .unwrap();
@@ -205,11 +201,11 @@ impl Auxtools {
 
     pub fn pause(&mut self) {
         // TODO: disconnect
-        self.requests.send(Request::Pause).unwrap();
+        self.send(Request::Pause).unwrap();
     }
 
     pub fn get_stacks(&mut self) -> Vec<Stack> {
-        self.requests.send(Request::Stacks).unwrap();
+        self.send(Request::Stacks).unwrap();
 
         match self.read_response() {
             Ok(response) => {
@@ -232,7 +228,7 @@ impl Auxtools {
         start_frame: Option<u32>,
         count: Option<u32>,
     ) -> (Vec<StackFrame>, u32) {
-        self.requests.send(Request::StackFrames {
+        self.send(Request::StackFrames {
             stack_id,
             start_frame,
             count,
@@ -258,7 +254,7 @@ impl Auxtools {
 
     // TODO: return all the scopes
     pub fn get_scopes(&mut self, frame_id: u32) -> (Option<VariablesRef>, Option<VariablesRef>, Option<VariablesRef>) {
-        self.requests.send(Request::Scopes {
+        self.send(Request::Scopes {
             frame_id
         }).unwrap();
 
@@ -284,7 +280,7 @@ impl Auxtools {
     }
 
     pub fn get_variables(&mut self, vars: VariablesRef) -> Vec<Variable> {
-        self.requests.send(Request::Variables {
+        self.send(Request::Variables {
             vars
         }).unwrap();
 
@@ -307,21 +303,15 @@ impl Auxtools {
         self.last_error.read().unwrap().clone()
     }
 
-    pub fn set_catch_runtimes(&self, should_catch: bool) {
-        self.requests.send(Request::SetCatchRuntimes(should_catch)).unwrap();
+    pub fn set_catch_runtimes(&mut self, should_catch: bool) {
+        self.send(Request::CatchRuntimes { should_catch }).unwrap();
     }
 }
 
 impl AuxtoolsThread {
-    fn send(&mut self, request: Request) {
-        let mut message = serde_json::to_vec(&request).unwrap();
-        message.push(0); // null-terminator
-        self.stream.write_all(&message[..]).unwrap();
-    }
-
     // returns true if we should disconnect
-    fn handle_message(&mut self, data: &[u8]) -> Result<bool, Box<dyn std::error::Error>> {
-        let response = serde_json::from_slice::<Response>(data)?;
+    fn handle_response(&mut self, data: &[u8]) -> Result<bool, Box<dyn std::error::Error>> {
+        let response = bincode::deserialize::<Response>(data)?;
 
         match response {
             Response::Disconnect => return Ok(true),
@@ -364,44 +354,42 @@ impl AuxtoolsThread {
     // TODO: rewrite to not be a non-blocking socket
     pub fn start_thread(mut self) -> JoinHandle<()> {
         thread::spawn(move || {
-            let mut buf = [0u8; 4096];
-            let mut queued_data = vec![];
+            let mut buf = vec![];
 
-            'outer: loop {
-                let mut got_data = false;
-                match self.stream.read(&mut buf) {
-                    Ok(0) => (),
-                    Ok(n) => {
-                        queued_data.extend_from_slice(&buf[..n]);
-                        got_data = true;
-                    }
-
-                    // This is a crutch
-                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+            // The incoming stream is a u32 followed by a bincode-encoded Request.
+            loop {
+                let mut len_bytes = [0u8; 4];
+                let len = match self.stream.read_exact(&mut len_bytes) {
+                    Ok(_) => u32::from_le_bytes(len_bytes),
+    
                     Err(e) => {
-                        println!("{:?}", e);
-                        panic!("Handle me!");
+                        eprintln!("Debug server thread read error: {}", e);
+                        break;
                     }
-                }
+                };
 
-                if got_data {
-                    while let Some(pos) = queued_data.iter().position(|x| *x == 0) {
-                        let mut message: Vec<u8> = queued_data.drain(0..=pos).collect();
-                        message.pop(); // remove null-terminator
-                        if self.handle_message(&message).unwrap() {
-                            break 'outer;
+                buf.resize(len as usize, 0);
+                match self.stream.read_exact(&mut buf) {
+                    Ok(_) => (),
+    
+                    Err(e) => {
+                        eprintln!("Debug server thread read error: {}", e);
+                        break;
+                    }
+                };
+
+                match self.handle_response(&buf[..]) {
+                    Ok(requested_disconnect) => {
+                        if requested_disconnect {
+                            eprintln!("Debug server disconnected");
+                            break;
                         }
                     }
-                }
-
-                // Clear any finished messages from the buffer
-                if let Some(idx) = queued_data.iter().rposition(|x| *x == 0) {
-                    queued_data.drain(..idx);
-                }
-
-                // Send any requests to the server
-                while let Ok(request) = self.requests.try_recv() {
-                    self.send(request);
+    
+                    Err(e) => {
+                        eprintln!("Debug server thread failed to handle request: {}", e);
+                        break;
+                    }
                 }
             }
 

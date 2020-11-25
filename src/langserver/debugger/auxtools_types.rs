@@ -15,7 +15,9 @@ pub enum Request {
 	BreakpointUnset {
 		instruction: InstructionRef,
 	},
-	SetCatchRuntimes(bool),
+	CatchRuntimes {
+		should_catch: bool,
+	},
 	LineNumber {
 		proc: ProcRef,
 		offset: u32,
@@ -87,7 +89,6 @@ pub enum Response {
 #[derive(Serialize, Deserialize, Debug, Hash, PartialEq, Eq, Clone)]
 pub struct ProcRef {
 	pub path: String,
-	// TODO: this is 0 in some places
 	pub override_id: u32,
 }
 
@@ -138,7 +139,6 @@ pub struct VariablesRef(pub i32);
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Variable {
 	pub name: String,
-	pub kind: String,
 	pub value: String,
 	pub variables: Option<VariablesRef>,
 }
