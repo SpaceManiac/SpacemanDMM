@@ -157,7 +157,7 @@ impl Auxtools {
 
         match self.read_response_or_disconnect()? {
             Response::LineNumber { line } => Ok(line),
-            _ => Err(Box::new(super::GenericError("received incorrect response"))),
+            response => Err(Box::new(UnexpectedResponse::new("LineNumber", response))),
         }
     }
 
@@ -172,7 +172,7 @@ impl Auxtools {
 
         match self.read_response_or_disconnect()? {
             Response::Offset { offset } => Ok(offset),
-            _ => Err(Box::new(super::GenericError("received incorrect response"))),
+            response => Err(Box::new(UnexpectedResponse::new("Offset", response))),
         }
     }
 
@@ -183,7 +183,7 @@ impl Auxtools {
 
         match self.read_response_or_disconnect()? {
             Response::BreakpointSet { result } => Ok(result),
-            _ => Err(Box::new(super::GenericError("received incorrect response"))),
+            response => Err(Box::new(UnexpectedResponse::new("BreakpointSet", response))),
         }
     }
 
@@ -194,7 +194,7 @@ impl Auxtools {
 
         match self.read_response_or_disconnect()? {
             Response::BreakpointUnset { .. } => Ok(()),
-            _ => Err(Box::new(super::GenericError("received incorrect response"))),
+            response => Err(Box::new(UnexpectedResponse::new("BreakpointUnset", response))),
         }
     }
 
@@ -205,7 +205,7 @@ impl Auxtools {
 
         match self.read_response_or_disconnect()? {
             Response::Ack { .. } => Ok(()),
-            _ => Err(Box::new(super::GenericError("received incorrect response"))),
+            response => Err(Box::new(UnexpectedResponse::new("Ack", response))),
         }
     }
 
@@ -216,7 +216,7 @@ impl Auxtools {
 
         match self.read_response_or_disconnect()? {
             Response::Ack { .. } => Ok(()),
-            _ => Err(Box::new(super::GenericError("received incorrect response"))),
+            response => Err(Box::new(UnexpectedResponse::new("Ack", response))),
         }
     }
 
@@ -227,7 +227,7 @@ impl Auxtools {
 
         match self.read_response_or_disconnect()? {
             Response::Ack { .. } => Ok(()),
-            _ => Err(Box::new(super::GenericError("received incorrect response"))),
+            response => Err(Box::new(UnexpectedResponse::new("Ack", response))),
         }
     }
 
@@ -238,7 +238,7 @@ impl Auxtools {
 
         match self.read_response_or_disconnect()? {
             Response::Ack { .. } => Ok(()),
-            _ => Err(Box::new(super::GenericError("received incorrect response"))),
+            response => Err(Box::new(UnexpectedResponse::new("Ack", response))),
         }
     }
 
@@ -247,7 +247,7 @@ impl Auxtools {
 
         match self.read_response_or_disconnect()? {
             Response::Ack { .. } => Ok(()),
-            _ => Err(Box::new(super::GenericError("received incorrect response"))),
+            response => Err(Box::new(UnexpectedResponse::new("Ack", response))),
         }
     }
 
@@ -256,7 +256,7 @@ impl Auxtools {
 
         match self.read_response_or_disconnect()? {
             Response::Stacks { stacks } => Ok(stacks),
-            _ => Err(Box::new(super::GenericError("received incorrect response"))),
+            response => Err(Box::new(UnexpectedResponse::new("Stacks", response))),
         }
     }
 
@@ -277,7 +277,7 @@ impl Auxtools {
                 frames,
                 total_count,
             } => Ok((frames, total_count)),
-            _ => Err(Box::new(super::GenericError("received incorrect response"))),
+            response => Err(Box::new(UnexpectedResponse::new("StackFrames", response))),
         }
     }
 
@@ -293,7 +293,7 @@ impl Auxtools {
                 locals,
                 globals,
             } => Ok((arguments, locals, globals)),
-            _ => Err(Box::new(super::GenericError("received incorrect response"))),
+            response => Err(Box::new(UnexpectedResponse::new("Scopes", response))),
         }
     }
 
@@ -304,7 +304,7 @@ impl Auxtools {
 
         match self.read_response_or_disconnect()? {
             Response::Variables { vars } => Ok(vars),
-            _ => Err(Box::new(super::GenericError("received incorrect response"))),
+            response => Err(Box::new(UnexpectedResponse::new("Variables", response))),
         }
     }
 
@@ -428,5 +428,26 @@ impl AuxtoolsThread {
         }
 
         self.seq.issue_event(dap_types::TerminatedEvent::default());
+    }
+}
+
+#[derive(Debug)]
+pub struct UnexpectedResponse(String);
+
+impl UnexpectedResponse {
+    fn new(expected: &'static str, received: Response) -> Self {
+        Self(format!("received unexpected response: expected {}, got {:?}", expected, received))
+    }
+}
+
+impl std::error::Error for UnexpectedResponse {
+    fn description(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for UnexpectedResponse {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        fmt.write_str(&self.0)
     }
 }
