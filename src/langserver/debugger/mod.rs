@@ -656,8 +656,8 @@ handle_request! {
                         let proc = format!("{}/{}", typepath, name);
 
                         if let Some(offset) = auxtools.get_offset(proc.as_str(), override_id as u32, sbp.line as u32)? {
-                            saved.insert((proc.clone(), override_id, sbp.line));
-                            keep.insert((proc.clone(), override_id, sbp.line));
+                            saved.insert((proc.clone(), override_id, offset as i64));
+                            keep.insert((proc.clone(), override_id, offset as i64));
 
                             let result = auxtools.set_breakpoint(&auxtools_types::InstructionRef {
                                 proc: auxtools_types::ProcRef {
@@ -708,15 +708,13 @@ handle_request! {
 
                 saved.retain(|k| {
                     if !keep.contains(&k) {
-                        if let Ok(Some(offset)) = auxtools.get_offset(k.0.as_str(), k.1 as u32, k.2 as u32) {
-                            let _ = auxtools.unset_breakpoint(&auxtools_types::InstructionRef {
-                                proc: auxtools_types::ProcRef {
-                                    path: k.0.clone(),
-                                    override_id: k.1 as u32
-                                },
-                                offset: offset,
-                            });
-                        }
+                        let _ = auxtools.unset_breakpoint(&auxtools_types::InstructionRef {
+                            proc: auxtools_types::ProcRef {
+                                path: k.0.clone(),
+                                override_id: k.1 as u32
+                            },
+                            offset: k.2 as u32,
+                        });
                         false
                     } else {
                         true
@@ -733,6 +731,8 @@ handle_request! {
 
         let inputs = params.breakpoints;
         let mut breakpoints = Vec::new();
+        let saved = self.saved_breakpoints.entry(file_id).or_default();
+        let mut keep = HashSet::new();
 
         match &mut self.client {
             DebugClient::Extools(extools) => {
@@ -746,9 +746,6 @@ handle_request! {
                     }
                     return Ok(SetFunctionBreakpointsResponse { breakpoints });
                 });
-
-                let saved = self.saved_breakpoints.entry(file_id).or_default();
-                let mut keep = HashSet::new();
 
                 for sbp in inputs {
                     // parse function reference
@@ -793,8 +790,67 @@ handle_request! {
                 SetFunctionBreakpointsResponse { breakpoints }
             }
 
-            DebugClient::Auxtools(_) => {
-                return Err(Box::new(GenericError("auxtools can't set function breakpoints yet")));
+
+            DebugClient::Auxtools(auxtools) => {
+                let mut breakpoints = vec![];
+
+                for sbp in inputs {
+                    // parse function reference
+                    let mut proc = &sbp.name[..];
+                    let mut override_id = 0;
+                    if let Some(idx) = sbp.name.find('#') {
+                        proc = &sbp.name[..idx];
+                        override_id = sbp.name[idx+1..].parse()?;
+                    }
+
+                    let offset = 0;
+                    let tup = (proc.to_owned(), override_id, offset);
+                    
+                    saved.insert(tup.clone());
+                    keep.insert(tup.clone());
+
+                    let result = auxtools.set_breakpoint(&auxtools_types::InstructionRef {
+                        proc: auxtools_types::ProcRef {
+                            path: tup.0,
+                            override_id: override_id as u32
+                        },
+                        offset: offset as u32,
+                    })?;
+
+                    breakpoints.push(match result {
+                        auxtools_types::BreakpointSetResult::Success { line } => {
+                            Breakpoint {
+                                verified: true,
+                                line: line.map(|x| x as i64),
+                                .. Default::default()
+                            }
+                        },
+
+                        auxtools_types::BreakpointSetResult::Failed => {
+                            Breakpoint {
+                                verified: false,
+                                .. Default::default()
+                            }
+                        }
+                    });
+                }
+
+                saved.retain(|k| {
+                    if !keep.contains(&k) {
+                        let _ = auxtools.unset_breakpoint(&auxtools_types::InstructionRef {
+                            proc: auxtools_types::ProcRef {
+                                path: k.0.clone(),
+                                override_id: k.1 as u32
+                            },
+                            offset: k.2 as u32,
+                        });
+                        false
+                    } else {
+                        true
+                    }
+                });
+
+                SetFunctionBreakpointsResponse { breakpoints }
             }
         }
     }
