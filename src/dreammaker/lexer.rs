@@ -6,6 +6,7 @@ use std::borrow::Cow;
 
 use super::{DMError, Location, HasLocation, FileId, Context, Severity};
 use super::docs::*;
+use super::ast::Ident;
 
 macro_rules! table {
     (
@@ -231,7 +232,7 @@ pub enum Token {
     /// A punctuation symbol.
     Punct(Punctuation),
     /// A raw identifier or keyword. Indicates whether it is followed by whitespace.
-    Ident(String, bool),
+    Ident(Ident, bool),
     /// A string literal with no interpolation.
     String(String),
     /// The opening portion of an interpolated string. Followed by an expression.

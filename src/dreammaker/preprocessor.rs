@@ -11,6 +11,7 @@ use super::{DMError, Location, HasLocation, FileId, Context, Severity};
 use super::lexer::*;
 use super::docs::{DocComment, DocTarget, DocCollection};
 use super::annotation::*;
+use super::ast::Ident;
 
 /// The maximum recursion depth of macro expansion.
 const MAX_RECURSION_DEPTH: usize = 32;
@@ -25,7 +26,7 @@ pub enum Define {
         docs: DocCollection,
     },
     Function {
-        params: Vec<String>,
+        params: Vec<Ident>,
         subst: Vec<Token>,
         variadic: bool,
         docs: DocCollection,
@@ -264,7 +265,7 @@ enum Include<'ctx> {
         lexer: Lexer<'ctx>,
     },
     Expansion {
-        name: String,
+        name: Ident,
         location: Location,
         tokens: VecDeque<Token>,
     },
@@ -391,7 +392,7 @@ pub struct Preprocessor<'ctx> {
     scripts: Vec<PathBuf>,
 
     last_printable_input_loc: Location,
-    danger_idents: HashMap<String, Location>,
+    danger_idents: HashMap<Ident, Location>,
     in_interp_string: u32,
 
     docs_in: VecDeque<(Location, DocComment)>,

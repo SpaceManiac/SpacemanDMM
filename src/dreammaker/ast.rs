@@ -82,6 +82,8 @@ impl<'a, T: fmt::Display + ?Sized> fmt::Display for Around<'a, T> {
     }
 }
 
+pub type Ident = String;
+
 /// The DM path operators.
 ///
 /// Which path operator is used typically only matters at the start of a path.
@@ -112,9 +114,9 @@ impl fmt::Display for PathOp {
 }
 
 /// A (typically absolute) tree path where the path operator is irrelevant.
-pub type TreePath = Vec<String>;
+pub type TreePath = Vec<Ident>;
 
-pub struct FormatTreePath<'a>(pub &'a [String]);
+pub struct FormatTreePath<'a>(pub &'a [Ident]);
 
 impl<'a> fmt::Display for FormatTreePath<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -126,9 +128,9 @@ impl<'a> fmt::Display for FormatTreePath<'a> {
 }
 
 /// A series of identifiers separated by path operators.
-pub type TypePath = Vec<(PathOp, String)>;
+pub type TypePath = Vec<(PathOp, Ident)>;
 
-pub struct FormatTypePath<'a>(pub &'a [(PathOp, String)]);
+pub struct FormatTypePath<'a>(pub &'a [(PathOp, Ident)]);
 
 impl<'a> fmt::Display for FormatTypePath<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -278,7 +280,7 @@ augmented! {
 #[derive(Clone, PartialEq, Debug)]
 pub struct Prefab {
     pub path: TypePath,
-    pub vars: LinkedHashMap<String, Expression>,
+    pub vars: LinkedHashMap<Ident, Expression>,
 }
 
 impl From<TypePath> for Prefab {
@@ -291,7 +293,7 @@ impl From<TypePath> for Prefab {
 }
 
 /// Formatting helper for variable arrays.
-pub struct FormatVars<'a, E>(pub &'a LinkedHashMap<String, E>);
+pub struct FormatVars<'a, E>(pub &'a LinkedHashMap<Ident, E>);
 
 impl<'a, E: fmt::Display> fmt::Display for FormatVars<'a, E> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -317,10 +319,10 @@ pub enum NewType {
     /// Implicit type, taken from context.
     Implicit,
     /// A prefab to be instantiated.
-    Prefab(Prefab),
+    Prefab(Box<Prefab>),
     /// A "mini-expression" in which to find the prefab to instantiate.
     MiniExpr {
-        ident: String,
+        ident: Ident,
         fields: Vec<IndexOrField>,
     },
 }
@@ -334,7 +336,7 @@ pub enum Expression {
         /// The unary operations applied to this value, in reverse order.
         unary: Vec<UnaryOp>,
         /// The term of the expression.
-        term: Spanned<Term>,
+        term: Box<Spanned<Term>>,
         /// The follow operations applied to this value.
         follow: Vec<Spanned<Follow>>,
     },
@@ -482,9 +484,9 @@ impl From<Term> for Expression {
         match term {
             Term::Expr(expr) => *expr,
             term => Expression::Base {
-                unary: vec![],
-                follow: vec![],
-                term: Spanned::new(Default::default(), term),
+                unary: Default::default(),
+                follow: Default::default(),
+                term: Box::new(Spanned::new(Default::default(), term)),
             },
         }
     }
@@ -501,7 +503,7 @@ pub enum Term {
     /// A floating-point literal.
     Float(f32),
     /// An identifier.
-    Ident(String),
+    Ident(Ident),
     /// A string literal.
     String(String),
     /// A resource literal.
@@ -513,13 +515,13 @@ pub enum Term {
     /// An expression contained in a term.
     Expr(Box<Expression>),
     /// A prefab literal (path + vars).
-    Prefab(Prefab),
+    Prefab(Box<Prefab>),
     /// An interpolated string, alternating string/expr/string/expr.
     InterpString(String, Vec<(Option<Expression>, String)>),
 
     // Function calls with recursive contents ---------------------------------
     /// An unscoped function call.
-    Call(String, Vec<Expression>),
+    Call(Ident, Vec<Expression>),
     /// A `.()` call.
     SelfCall(Vec<Expression>),
     /// A `..()` call. If arguments is empty, the proc's arguments are passed.
@@ -592,7 +594,7 @@ impl Term {
         };
     }
 
-    pub fn valid_for_range(&self, other: &Term, step: &Option<Expression>) -> Option<bool> {
+    pub fn valid_for_range(&self, other: &Term, step: Option<&Expression>) -> Option<bool> {
         if let Term::Int(i) = *self {
             if let Term::Int(o) = *other {
                 // edge case
@@ -667,9 +669,9 @@ pub enum Follow {
     /// Index the value by an expression.
     Index(Box<Expression>),
     /// Access a field of the value.
-    Field(IndexKind, String),
+    Field(IndexKind, Ident),
     /// Call a method of the value.
-    Call(IndexKind, String, Vec<Expression>),
+    Call(IndexKind, Ident, Vec<Expression>),
 }
 
 /// Like a `Follow` but supports index or fields only.
@@ -678,7 +680,7 @@ pub enum IndexOrField {
     /// Index the value by an expression.
     Index(Box<Expression>),
     /// Access a field of the value.
-    Field(IndexKind, String),
+    Field(IndexKind, Ident),
 }
 
 impl From<IndexOrField> for Follow {
@@ -735,7 +737,7 @@ impl fmt::Display for ProcDeclKind {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Parameter {
     pub var_type: VarType,
-    pub name: String,
+    pub name: Ident,
     pub default: Option<Expression>,
     pub input_type: Option<InputType>,
     pub in_list: Option<Expression>,
@@ -997,7 +999,7 @@ impl VarSuffix {
             None
         } else {
             Some(Expression::from(Term::New {
-                type_: NewType::Prefab(Prefab::from(vec![(PathOp::Slash, "list".to_owned())])),
+                type_: NewType::Prefab(Box::new(Prefab::from(vec![(PathOp::Slash, "list".to_owned())]))),
                 args: Some(args),
             }))
         }
@@ -1005,7 +1007,7 @@ impl VarSuffix {
 }
 
 /// A block of statements.
-pub type Block = Vec<Spanned<Statement>>;
+pub type Block = Box<[Spanned<Statement>]>;
 
 /// A statement in a proc body.
 #[derive(Debug, Clone, PartialEq)]
@@ -1027,31 +1029,31 @@ pub enum Statement {
     },
     ForLoop {
         init: Option<Box<Statement>>,
-        test: Option<Expression>,
+        test: Option<Box<Expression>>,
         inc: Option<Box<Statement>>,
         block: Block,
     },
     ForList {
         var_type: Option<VarType>,
-        name: String,
+        name: Ident,
         /// If zero, uses the declared type of the variable.
         input_type: Option<InputType>,
         /// Defaults to 'world'.
-        in_list: Option<Expression>,
+        in_list: Option<Box<Expression>>,
         block: Block,
     },
     ForRange {
         var_type: Option<VarType>,
-        name: String,
-        start: Expression,
-        end: Expression,
-        step: Option<Expression>,
+        name: Ident,
+        start: Box<Expression>,
+        end: Box<Expression>,
+        step: Option<Box<Expression>>,
         block: Block,
     },
-    Var(VarStatement),
+    Var(Box<VarStatement>),
     Vars(Vec<VarStatement>),
     Setting {
-        name: String,
+        name: Ident,
         mode: SettingMode,
         value: Expression
     },
@@ -1060,8 +1062,8 @@ pub enum Statement {
         block: Block,
     },
     Switch {
-        input: Expression,
-        cases: Vec<(Spanned<Vec<Case>>, Block)>,
+        input: Box<Expression>,
+        cases: Box<[(Spanned<Vec<Case>>, Block)]>,
         default: Option<Block>,
     },
     TryCatch {
@@ -1069,11 +1071,11 @@ pub enum Statement {
         catch_params: Vec<TreePath>,
         catch_block: Block,
     },
-    Continue(Option<String>),
-    Break(Option<String>),
-    Goto(String),
+    Continue(Option<Ident>),
+    Break(Option<Ident>),
+    Goto(Ident),
     Label {
-        name: String,
+        name: Ident,
         block: Block,
     },
     Del(Expression),
@@ -1083,7 +1085,7 @@ pub enum Statement {
 #[derive(Debug, Clone, PartialEq)]
 pub struct VarStatement {
     pub var_type: VarType,
-    pub name: String,
+    pub name: Ident,
     pub value: Option<Expression>,
 }
 

@@ -1281,6 +1281,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Statement::Return(Some(expr)) => {
                 // TODO: factor in the previous return type if there was one
+                if self.inside_newcontext > 0 {
+                    error(location, "returning a value in a spawn has no effect")
+                        .set_severity(Severity::Warning)
+                        .register(self.context);
+                }
                 let return_type = self.visit_expression(location, expr, None, local_vars);
                 local_vars.get_mut(".").unwrap().analysis = return_type;
                 return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false }
@@ -1425,7 +1430,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 let mut state = self.visit_block(block, &mut scoped_locals);
                 if let Some(startterm) = start.as_term() {
                     if let Some(endterm) = end.as_term() {
-                        if let Some(validity) = startterm.valid_for_range(endterm, step) {
+                        if let Some(validity) = startterm.valid_for_range(endterm, step.as_deref()) {
                             if !validity {
                                 error(location,"for range loop body is never reached due to invalid range")
                                     .register(self.context);

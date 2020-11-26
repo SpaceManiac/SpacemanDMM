@@ -10,36 +10,36 @@ pub type Iter<'a> = RangePairIter<'a, Location, Annotation>;
 #[derive(Debug)]
 pub enum Annotation {
     // contextual information
-    TreeBlock(Vec<String>),
-    TreePath(bool, Vec<String>),
+    TreeBlock(Vec<Ident>),
+    TreePath(bool, Vec<Ident>),
     TypePath(TypePath),
-    Variable(Vec<String>),
-    ProcHeader(Vec<String>, usize),
-    ProcBody(Vec<String>, usize),
-    LocalVarScope(VarType, String),
+    Variable(Vec<Ident>),
+    ProcHeader(Vec<Ident>, usize),
+    ProcBody(Vec<Ident>, usize),
+    LocalVarScope(VarType, Ident),
 
     // local information about a specific token
-    UnscopedCall(String),
-    UnscopedVar(String),
-    ScopedCall(Vec<String>, String),
-    ScopedVar(Vec<String>, String),
+    UnscopedCall(Ident),
+    UnscopedVar(Ident),
+    ScopedCall(Vec<Ident>, Ident),
+    ScopedVar(Vec<Ident>, Ident),
     ParentCall,  // ..
     ReturnVal,  // .
     InSequence(usize),  // where in TreePath or TypePath is this ident
 
     // a macro is called here, which is defined at this location
-    MacroDefinition(String),
+    MacroDefinition(Ident),
     MacroUse(String, Location),
 
     Include(std::path::PathBuf),
     Resource(std::path::PathBuf),
 
     // error annotations, mostly for autocompletion
-    ScopedMissingIdent(Vec<String>),  // when a . is followed by a non-ident
+    ScopedMissingIdent(Vec<Ident>),  // when a . is followed by a non-ident
     IncompleteTypePath(TypePath, PathOp),
-    IncompleteTreePath(bool, Vec<String>),
+    IncompleteTreePath(bool, Vec<Ident>),
 
-    ProcArguments(Vec<String>, String, usize),  // Vec empty for unscoped call
+    ProcArguments(Vec<Ident>, String, usize),  // Vec empty for unscoped call
     ProcArgument(usize),  // where in the prog arguments we are
 }
 
