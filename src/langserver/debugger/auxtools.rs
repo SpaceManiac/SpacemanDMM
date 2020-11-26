@@ -14,13 +14,13 @@ use super::dap_types;
 use super::SequenceNumber;
 
 enum StreamState {
-	// The client is waiting for a Stream to be sent from the thread
-	Waiting(mpsc::Receiver<TcpStream>),
+    // The client is waiting for a Stream to be sent from the thread
+    Waiting(mpsc::Receiver<TcpStream>),
 
-	Connected(TcpStream),
+    Connected(TcpStream),
 
-	// The server has finished being used
-	Disconnected,
+    // The server has finished being used
+    Disconnected,
 }
 
 pub struct Auxtools {
@@ -318,28 +318,28 @@ impl Auxtools {
 }
 
 impl AuxtoolsThread {
-	fn spawn_listener(
-		self,
-		listener: TcpListener,
-		connection_sender: mpsc::Sender<TcpStream>,
-	) -> JoinHandle<()> {
-		thread::spawn(move || match listener.accept() {
-			Ok((stream, _)) => {
-				match connection_sender.send(stream.try_clone().unwrap()) {
-					Ok(_) => {}
-					Err(e) => {
-						eprintln!("Debug client thread failed to pass cloned TcpStream: {}", e);
-						return;
-					}
+    fn spawn_listener(
+        self,
+        listener: TcpListener,
+        connection_sender: mpsc::Sender<TcpStream>,
+    ) -> JoinHandle<()> {
+        thread::spawn(move || match listener.accept() {
+            Ok((stream, _)) => {
+                match connection_sender.send(stream.try_clone().unwrap()) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        eprintln!("Debug client thread failed to pass cloned TcpStream: {}", e);
+                        return;
+                    }
                 }
                 
-				self.run(stream);
-			}
+                self.run(stream);
+            }
 
-			Err(e) => {
-				eprintln!("Debug client failed to accept connection: {}", e);
-			}
-		})
+            Err(e) => {
+                eprintln!("Debug client failed to accept connection: {}", e);
+            }
+        })
     }
     
     // returns true if we should disconnect
