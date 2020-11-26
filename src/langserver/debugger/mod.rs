@@ -352,7 +352,7 @@ impl Debugger {
                 }
             }
 
-            DebugClient::Auxtools(auxtools) => for stack in auxtools.get_stacks() {
+            DebugClient::Auxtools(auxtools) => for stack in auxtools.get_stacks().unwrap_or(vec![]) {
                     if stack.id == 0 {
                         continue;
                     }
@@ -434,7 +434,7 @@ handle_request! {
     }
 
     on AttachVsc(&mut self, params) {
-        self.client = DebugClient::Auxtools(Auxtools::new(self.seq.clone(), params.port)?);
+        self.client = DebugClient::Auxtools(Auxtools::connect(self.seq.clone(), params.port)?);
         /*self.client = match params.client {
             DebugClientParam::Extools => {
                 DebugClient::Extools(ExtoolsHolder::attach(self.seq.clone(), params.port.unwrap_or(extools::DEFAULT_PORT))?)
@@ -512,7 +512,7 @@ handle_request! {
             },
 
             DebugClient::Auxtools(auxtools) => {
-                let mut threads : Vec<Thread> = auxtools.get_stacks().into_iter().map(|x| {
+                let mut threads : Vec<Thread> = auxtools.get_stacks()?.into_iter().map(|x| {
                     Thread {
                         id: x.id as i64,
                         name: x.name,
@@ -627,7 +627,7 @@ handle_request! {
                         // TODO: better discipline around format!("{}/{}") and so on
                         let proc = format!("{}/{}", typepath, name);
 
-                        if let Some(offset) = auxtools.get_offset(proc.as_str(), override_id as u32, sbp.line as u32) {
+                        if let Some(offset) = auxtools.get_offset(proc.as_str(), override_id as u32, sbp.line as u32)? {
                             saved.insert((proc.clone(), override_id, sbp.line));
                             keep.insert((proc.clone(), override_id, sbp.line));
 
@@ -637,7 +637,7 @@ handle_request! {
                                     override_id: override_id as u32
                                 },
                                 offset
-                            });
+                            })?;
 
                             breakpoints.push(match result {
                                 auxtools_types::BreakpointSetResult::Success { line } => {
@@ -680,8 +680,8 @@ handle_request! {
 
                 saved.retain(|k| {
                     if !keep.contains(&k) {
-                        if let Some(offset) = auxtools.get_offset(k.0.as_str(), k.1 as u32, k.2 as u32) {
-                            auxtools.unset_breakpoint(&auxtools_types::InstructionRef {
+                        if let Ok(Some(offset)) = auxtools.get_offset(k.0.as_str(), k.1 as u32, k.2 as u32) {
+                            let _ = auxtools.unset_breakpoint(&auxtools_types::InstructionRef {
                                 proc: auxtools_types::ProcRef {
                                     path: k.0.clone(),
                                     override_id: k.1 as u32
@@ -841,7 +841,7 @@ handle_request! {
                 let (aux_frames, aux_frames_total) = auxtools.get_stack_frames(
                     params.threadId as u32,
                     params.startFrame.map(|x| x as u32),
-                    params.levels.map(|x| x as u32));
+                    params.levels.map(|x| x as u32))?;
 
                 let mut frames = Vec::with_capacity(aux_frames.len());
                 for (i, aux_frame) in aux_frames.iter().enumerate() {
@@ -945,7 +945,7 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                let (arguments, locals, globals) = auxtools.get_scopes( frameId as u32 );
+                let (arguments, locals, globals) = auxtools.get_scopes( frameId as u32 )?;
                 let mut scopes = vec![];
 
                 if let Some(arguments) = arguments {
@@ -1115,7 +1115,7 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                let aux_variables = auxtools.get_variables(auxtools_types::VariablesRef(params.variablesReference as i32));
+                let aux_variables = auxtools.get_variables(auxtools_types::VariablesRef(params.variablesReference as i32))?;
                 let mut variables = vec![];
 
                 // TODO
@@ -1148,7 +1148,7 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                auxtools.continue_execution();
+                auxtools.continue_execution()?;
             }
         }
 
@@ -1167,7 +1167,7 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                auxtools.step_into(params.threadId as u32);
+                auxtools.step_into(params.threadId as u32)?;
             }
         }
     }
@@ -1182,7 +1182,7 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                auxtools.next(params.threadId as u32);
+                auxtools.next(params.threadId as u32)?;
             }
         }
     }
@@ -1197,7 +1197,7 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                auxtools.step_out(params.threadId as u32);
+                auxtools.step_out(params.threadId as u32)?;
             }
         }
     }
@@ -1210,7 +1210,7 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                auxtools.pause();
+                auxtools.pause()?;
             }
         }
     }
@@ -1223,7 +1223,7 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                auxtools.set_catch_runtimes(params.filters.iter().any(|x| x == EXCEPTION_FILTER_RUNTIMES));
+                auxtools.set_catch_runtimes(params.filters.iter().any(|x| x == EXCEPTION_FILTER_RUNTIMES))?;
             }
         }
     }

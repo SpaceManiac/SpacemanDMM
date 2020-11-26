@@ -47,6 +47,7 @@ pub enum Request {
 // Message from server -> client
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Response {
+	Ack,
 	BreakpointSet {
 		result: BreakpointSetResult,
 	},
