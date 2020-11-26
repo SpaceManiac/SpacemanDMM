@@ -44,9 +44,6 @@ impl Auxtools {
         let last_error = Arc::new(RwLock::new("".to_owned()));
         let stream = TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(5))?;
 
-        // Look at this little trouble-maker right here
-        seq.issue_event(dap_types::InitializedEvent);
-
         let thread = {
             let seq = seq.clone();
             let last_error = last_error.clone();
@@ -336,9 +333,6 @@ impl AuxtoolsThread {
 					}
                 }
                 
-                // Look at this little trouble-maker right here (he got me again)
-                self.seq.issue_event(dap_types::InitializedEvent);
-
 				self.run(stream);
 			}
 
@@ -392,6 +386,9 @@ impl AuxtoolsThread {
 
     pub fn run(mut self, mut stream: TcpStream) {
         let mut buf = vec![];
+
+        // Look at this little trouble-maker right here
+        self.seq.issue_event(dap_types::InitializedEvent);
 
         // The incoming stream is a u32 followed by a bincode-encoded Request.
         loop {
