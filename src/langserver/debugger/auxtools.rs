@@ -1,5 +1,5 @@
 use super::auxtools_types::*;
-use std::{sync::mpsc};
+use std::{net::TcpListener, sync::mpsc};
 use std::thread;
 use std::{
     io::{Read, Write},
@@ -67,6 +67,33 @@ impl Auxtools {
             stream: StreamState::Connected(stream),
             last_error,
         })
+    }
+
+    pub fn listen(seq: Arc<SequenceNumber>) -> std::io::Result<(u16, Self)> {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
+        let port = listener.local_addr()?.port();
+
+        let (connection_sender, connection_receiver) = mpsc::channel();
+        let (responses_sender, responses_receiver) = mpsc::channel();
+        let last_error = Arc::new(RwLock::new("".to_owned()));
+
+        let thread = {
+            let seq = seq.clone();
+            let last_error = last_error.clone();
+            AuxtoolsThread {
+                seq,
+                responses: responses_sender,
+                last_error: last_error,
+            }.spawn_listener(listener, connection_sender)
+        };
+
+        Ok((port, Auxtools {
+            seq,
+            responses: responses_receiver,
+            _thread: thread,
+            stream: StreamState::Waiting(connection_receiver),
+            last_error,
+        }))
     }
 
     fn read_response_or_disconnect(&mut self) -> Result<Response, Box<dyn std::error::Error>> {
@@ -294,6 +321,33 @@ impl Auxtools {
 }
 
 impl AuxtoolsThread {
+	fn spawn_listener(
+		self,
+		listener: TcpListener,
+		connection_sender: mpsc::Sender<TcpStream>,
+	) -> JoinHandle<()> {
+		thread::spawn(move || match listener.accept() {
+			Ok((stream, _)) => {
+				match connection_sender.send(stream.try_clone().unwrap()) {
+					Ok(_) => {}
+					Err(e) => {
+						eprintln!("Debug client thread failed to pass cloned TcpStream: {}", e);
+						return;
+					}
+                }
+                
+                // Look at this little trouble-maker right here (he got me again)
+                self.seq.issue_event(dap_types::InitializedEvent);
+
+				self.run(stream);
+			}
+
+			Err(e) => {
+				eprintln!("Debug client failed to accept connection: {}", e);
+			}
+		})
+    }
+    
     // returns true if we should disconnect
     fn handle_response(&mut self, data: &[u8]) -> Result<bool, Box<dyn std::error::Error>> {
         let response = bincode::deserialize::<Response>(data)?;

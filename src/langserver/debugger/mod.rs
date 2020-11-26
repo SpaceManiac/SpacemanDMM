@@ -28,6 +28,7 @@ macro_rules! debug_output {
 }
 
 mod auxtools;
+mod auxtools_bundle;
 mod auxtools_types;
 mod dap_types;
 mod evaluate;
@@ -42,12 +43,13 @@ use std::sync::{atomic, Arc, Mutex};
 
 use dm::objtree::ObjectTree;
 use dm::FileId;
+use dreammaker::config::DebugEngine;
 
 use auxtools::Auxtools;
 
 use self::dap_types::*;
 use self::extools::ExtoolsHolder;
-use self::launched::Launched;
+use self::launched::{Launched, EngineParams};
 use crate::jrpc_io;
 
 pub fn start_server(
@@ -64,9 +66,13 @@ pub fn start_server(
         .spawn(move || {
             let (stream, _) = listener.accept().unwrap();
             drop(listener);
-
+            let env = dm::detect_environment_default()
+                .expect("error detecting .dme")
+                .expect("no .dme found");
+            let ctx = dm::Context::default();
+            ctx.autodetect_config(&env);
             let mut input = std::io::BufReader::new(stream.try_clone().unwrap());
-            let mut debugger = Debugger::new(dreamseeker_exe, db, Box::new(stream));
+            let mut debugger = Debugger::new(ctx, dreamseeker_exe, db, Box::new(stream));
             jrpc_io::run_with_read(&mut input, |message| debugger.handle_input(message));
         })?;
 
@@ -98,6 +104,7 @@ pub fn debugger_main<I: Iterator<Item = String>>(mut args: I) {
         .expect("detect .dme error")
         .expect("did not detect a .dme");
     let ctx = dm::Context::default();
+    ctx.autodetect_config(&environment);
     let mut pp = dm::preprocessor::Preprocessor::new(&ctx, environment).unwrap();
     let objtree = {
         let mut parser =
@@ -112,7 +119,7 @@ pub fn debugger_main<I: Iterator<Item = String>>(mut args: I) {
         objtree,
         extools_dll: None,
     };
-    let mut debugger = Debugger::new(dreamseeker_exe, db, Box::new(std::io::stdout()));
+    let mut debugger = Debugger::new(ctx, dreamseeker_exe, db, Box::new(std::io::stdout()));
     jrpc_io::run_until_stdin_eof(|message| debugger.handle_input(message));
 }
 
@@ -232,6 +239,7 @@ enum DebugClient {
 }
 
 struct Debugger {
+    context: dm::Context,
     dreamseeker_exe: String,
     extools_dll: Option<String>,
     db: DebugDatabase,
@@ -246,8 +254,9 @@ struct Debugger {
 }
 
 impl Debugger {
-    fn new(dreamseeker_exe: String, mut db: DebugDatabaseBuilder, stream: OutStream) -> Self {
+    fn new(context: dm::Context, dreamseeker_exe: String, mut db: DebugDatabaseBuilder, stream: OutStream) -> Self {
         Debugger {
+            context,
             dreamseeker_exe,
             extools_dll: db.extools_dll.take(),
             db: db.build(),
@@ -405,45 +414,64 @@ handle_request! {
     on LaunchVsc(&mut self, params) {
         // Determine port number to pass if debugging is enabled.
         let debug = !params.base.noDebug.unwrap_or(false);
-        let port = if debug {
-            let (port, extools) = ExtoolsHolder::listen(self.seq.clone())?;
-            self.client = DebugClient::Extools(extools);
-            Some(port)
+
+        let engine_params = if debug {
+            Some(match self.context.config().debugger.engine {
+                DebugEngine::Extools => {
+                    let (port, extools) = ExtoolsHolder::listen(self.seq.clone())?;
+                    self.client = DebugClient::Extools(extools);
+
+                    // Set EXTOOLS_DLL based on configuration or on bundle if available.
+                    #[allow(unused_mut)]
+                    let mut extools_dll = self.extools_dll.as_ref().map(|x| std::path::Path::new(x).to_path_buf());
+
+                    debug_output!(in self.seq, "[main] configured override: {:?}", extools_dll);
+
+                    #[cfg(extools_bundle)] {
+                        if extools_dll.is_none() {
+                            extools_dll = Some(self::extools_bundle::extract()?);
+                        }
+                    }
+                    
+                    EngineParams::Extools {
+                        port,
+                        dll: extools_dll,
+                    }
+                }
+
+                DebugEngine::Auxtools => {
+                    let (port, auxtools) = Auxtools::listen(self.seq.clone())?;
+                    self.client = DebugClient::Auxtools(auxtools);
+                    let auxtools_dll = None;
+
+                    #[cfg(extools_bundle)] {
+                        auxtools_dll = Some(self::auxtools_bundle::extract()?);
+                    }
+
+                    EngineParams::Auxtools {
+                        port,
+                        dll: auxtools_dll,
+                    }
+                }
+            })
         } else {
             None
         };
 
-        // Set EXTOOLS_DLL based on configuration or on bundle if available.
-        #[cfg(extools_bundle)]
-        let pathbuf;
-
-        #[allow(unused_mut)]
-        let mut extools_dll = self.extools_dll.as_ref().map(std::path::Path::new);
-
-        debug_output!(in self.seq, "[main] configured override: {:?}", extools_dll);
-
-        #[cfg(extools_bundle)] {
-            if extools_dll.is_none() {
-                pathbuf = self::extools_bundle::extract()?;
-                extools_dll = Some(&pathbuf);
-            }
-        }
-
         // Launch the subprocess.
-        self.launched = Some(Launched::new(self.seq.clone(), &self.dreamseeker_exe, &params.dmb, port, extools_dll)?);
+        self.launched = Some(Launched::new(self.seq.clone(), &self.dreamseeker_exe, &params.dmb, engine_params)?);
     }
 
     on AttachVsc(&mut self, params) {
-        self.client = DebugClient::Auxtools(Auxtools::connect(self.seq.clone(), params.port)?);
-        /*self.client = match params.client {
-            DebugClientParam::Extools => {
+        self.client = match self.context.config().debugger.engine {
+            DebugEngine::Extools => {
                 DebugClient::Extools(ExtoolsHolder::attach(self.seq.clone(), params.port.unwrap_or(extools::DEFAULT_PORT))?)
             }
 
-            DebugClientParam::Auxtools => {
-                DebugClient::Auxtools(Auxtools::new(self.seq.clone(), params.port)?)
+            DebugEngine::Auxtools => {
+                DebugClient::Auxtools(Auxtools::connect(self.seq.clone(), params.port)?)
             }
-        };*/
+        };
     }
 
     on Disconnect(&mut self, params) {
@@ -1437,12 +1465,6 @@ impl Request for LaunchVsc {
 }
 
 #[derive(Deserialize)]
-pub enum DebugClientParam {
-    Extools,
-    Auxtools,
-}
-
-#[derive(Deserialize)]
 pub struct LaunchRequestArgumentsVsc {
     #[serde(flatten)]
     base: LaunchRequestArguments,
@@ -1464,7 +1486,6 @@ impl Request for AttachVsc {
 pub struct AttachRequestArgumentsVsc {
     #[serde(flatten)]
     base: AttachRequestArguments,
-    //client: DebugClientParam,
     port: Option<u16>,
 }
 

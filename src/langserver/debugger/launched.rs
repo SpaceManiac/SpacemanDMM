@@ -27,13 +27,23 @@ pub struct Launched {
     mutex: Arc<Mutex<State>>,
 }
 
+pub enum EngineParams {
+    Extools {
+        port: u16,
+        dll: Option<std::path::PathBuf>
+    },
+    Auxtools {
+        port: u16,
+        dll: Option<std::path::PathBuf> 
+    }
+}
+
 impl Launched {
     pub fn new(
         seq: Arc<SequenceNumber>,
         dreamseeker_exe: &str,
         dmb: &str,
-        port: Option<u16>,
-        extools_dll: Option<&std::path::Path>,
+        params: Option<EngineParams>,
     ) -> std::io::Result<Launched> {
         let mut command = Command::new(dreamseeker_exe);
         command
@@ -42,15 +52,27 @@ impl Launched {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
-        if let Some(extools_dll) = extools_dll {
-            command.env("EXTOOLS_DLL", extools_dll);
+
+        match params {
+            Some(EngineParams::Extools { port, dll }) => {
+                command.env("EXTOOLS_MODE", "LAUNCHED");
+                command.env("EXTOOLS_PORT", port.to_string());
+                if let Some(dll) = dll {
+                    command.env("EXTOOLS_DLL", dll);
+                }
+            }
+
+            Some(EngineParams::Auxtools { port, dll }) => {
+                command.env("AUXTOOLS_DEBUG_MODE", "LAUNCHED");
+                command.env("AUXTOOLS_DEBUG_PORT", port.to_string());
+                if let Some(dll) = dll {
+                    command.env("AUXTOOLS_DEBUG_DLL", dll);
+                }
+            }
+
+            None => (),
         }
-        if let Some(port) = port {
-            command.env("EXTOOLS_MODE", "LAUNCHED");
-            command.env("EXTOOLS_PORT", port.to_string());
-        } else {
-            command.env("EXTOOLS_MODE", "NONE");
-        }
+
         let mut child = command.spawn()?;
         output!(in seq, "[launched] Started: {:?}", command);
         let mutex = Arc::new(Mutex::new(State::Active));
