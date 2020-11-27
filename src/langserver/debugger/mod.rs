@@ -53,6 +53,7 @@ use self::launched::{Launched, EngineParams};
 use crate::jrpc_io;
 
 pub fn start_server(
+    engine: DebugEngine,
     dreamseeker_exe: String,
     db: DebugDatabaseBuilder,
 ) -> std::io::Result<(u16, std::thread::JoinHandle<()>)> {
@@ -66,13 +67,8 @@ pub fn start_server(
         .spawn(move || {
             let (stream, _) = listener.accept().unwrap();
             drop(listener);
-            let env = dm::detect_environment_default()
-                .expect("error detecting .dme")
-                .expect("no .dme found");
-            let ctx = dm::Context::default();
-            ctx.autodetect_config(&env);
             let mut input = std::io::BufReader::new(stream.try_clone().unwrap());
-            let mut debugger = Debugger::new(ctx, dreamseeker_exe, db, Box::new(stream));
+            let mut debugger = Debugger::new(engine, dreamseeker_exe, db, Box::new(stream));
             jrpc_io::run_with_read(&mut input, |message| debugger.handle_input(message));
         })?;
 
@@ -119,7 +115,7 @@ pub fn debugger_main<I: Iterator<Item = String>>(mut args: I) {
         objtree,
         extools_dll: None,
     };
-    let mut debugger = Debugger::new(ctx, dreamseeker_exe, db, Box::new(std::io::stdout()));
+    let mut debugger = Debugger::new(ctx.config().debugger.engine, dreamseeker_exe, db, Box::new(std::io::stdout()));
     jrpc_io::run_until_stdin_eof(|message| debugger.handle_input(message));
 }
 
@@ -239,7 +235,7 @@ enum DebugClient {
 }
 
 struct Debugger {
-    context: dm::Context,
+    engine: DebugEngine,
     dreamseeker_exe: String,
     extools_dll: Option<String>,
     db: DebugDatabase,
@@ -254,9 +250,9 @@ struct Debugger {
 }
 
 impl Debugger {
-    fn new(context: dm::Context, dreamseeker_exe: String, mut db: DebugDatabaseBuilder, stream: OutStream) -> Self {
+    fn new(engine: DebugEngine, dreamseeker_exe: String, mut db: DebugDatabaseBuilder, stream: OutStream) -> Self {
         Debugger {
-            context,
+            engine,
             dreamseeker_exe,
             extools_dll: db.extools_dll.take(),
             db: db.build(),
@@ -416,7 +412,7 @@ handle_request! {
         let debug = !params.base.noDebug.unwrap_or(false);
 
         let engine_params = if debug {
-            Some(match self.context.config().debugger.engine {
+            Some(match self.engine {
                 DebugEngine::Extools => {
                     let (port, extools) = ExtoolsHolder::listen(self.seq.clone())?;
                     self.client = DebugClient::Extools(extools);
@@ -463,7 +459,7 @@ handle_request! {
     }
 
     on AttachVsc(&mut self, params) {
-        self.client = match self.context.config().debugger.engine {
+        self.client = match self.engine {
             DebugEngine::Extools => {
                 DebugClient::Extools(ExtoolsHolder::attach(self.seq.clone(), params.port.unwrap_or(extools::DEFAULT_PORT))?)
             }
