@@ -42,7 +42,7 @@ pub fn check_errors_match<S: Into<Cow<'static, str>>>(buffer: S, errorlist: &[(u
             ));
         }
     }
-    if iter.next().is_some() {
-        panic!("found more errors than was expected");
+    if let Some(nexterror) = iter.next() {
+        panic!(format!("found more errors than was expected, next was: {}:{}:{}", nexterror.location().line, nexterror.location().column, nexterror.description()));
     }
 }

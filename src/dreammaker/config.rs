@@ -24,6 +24,7 @@ pub struct Config {
     // tool-specific configuration
     pub langserver: Langserver,
     pub dmdoc: DMDoc,
+    pub procdirective: ProcDirectiveSection,
 }
 
 /// General error display options
@@ -186,3 +187,47 @@ impl From<toml::de::Error> for Error {
         Error::Toml(err)
     }
 }
+
+#[derive(Debug, Deserialize, Default, Clone)]
+#[serde(default)]
+pub struct ProcDirectiveSection {
+    pub must_call_parent: MustCallParent,
+    pub must_not_override: MustNotOverride,
+    pub private: PrivateDirective,
+    pub protected: ProtectedDirective,
+    pub must_not_sleep: MustNotSleep,
+    pub sleep_exempt: SleepExempt,
+    pub must_be_pure: MustBePure,
+    pub can_be_redefined: CanBeRedefined,
+}
+
+macro_rules! procdirective {
+    ($name: ident $cbd: tt $sad: tt $cbg: tt) => {
+        #[derive(Debug, Deserialize, Clone, Copy)]
+        #[serde(default)]
+        pub struct $name {
+            pub can_be_disabled: bool,
+            pub set_at_definition: bool,
+            pub can_be_global: bool,
+        }
+
+        impl Default for $name {
+            fn default() -> Self {
+                $name {
+                    can_be_disabled: $cbd,
+                    set_at_definition: $sad,
+                    can_be_global: $cbg,
+                }
+            }
+        }
+    };
+}
+
+procdirective! {MustCallParent true false false}
+procdirective! {MustNotOverride false false false}
+procdirective! {PrivateDirective false true false}
+procdirective! {ProtectedDirective false true false}
+procdirective! {MustNotSleep false true true}
+procdirective! {SleepExempt false true true}
+procdirective! {MustBePure false true true}
+procdirective! {CanBeRedefined false false false}

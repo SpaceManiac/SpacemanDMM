@@ -8,6 +8,7 @@ use dm::{Context, DMError, Location, Severity};
 use dm::objtree::{ObjectTree, TypeRef, ProcRef, Code};
 use dm::constants::{Constant, ConstFn};
 use dm::ast::*;
+use dm::config::*;
 
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
@@ -518,6 +519,35 @@ impl DMErrorExt for DMError {
     }
 }
 
+trait DirectiveFromConfig {
+    fn to_proc_directive(self, directive_string: &'static str) -> ProcDirective;
+}
+
+macro_rules! to_proc_directive {
+    ($name: ident) => {
+        impl DirectiveFromConfig for $name {
+            fn to_proc_directive(self, directive_string: &'static str) -> ProcDirective {
+                ProcDirective {
+                    directive: Default::default(),
+                    directive_string,
+                    can_be_disabled: self.can_be_disabled,
+                    set_at_definition: self.set_at_definition,
+                    can_be_global: self.can_be_global,
+                }
+            }
+        }
+    }
+}
+
+to_proc_directive! { MustCallParent }
+to_proc_directive! { MustNotOverride }
+to_proc_directive! { PrivateDirective }
+to_proc_directive! { ProtectedDirective }
+to_proc_directive! { MustNotSleep }
+to_proc_directive! { SleepExempt }
+to_proc_directive! { MustBePure }
+to_proc_directive! { CanBeRedefined }
+
 #[derive(Default)]
 pub struct ViolatingProcs<'o> {
     violators: HashMap<ProcRef<'o>, Vec<(String, Location)>>,
@@ -584,14 +614,14 @@ impl<'o> AnalyzeObjectTree<'o> {
             context,
             objtree,
             return_type,
-            must_call_parent: ProcDirective::new("SpacemanDMM_should_call_parent", true, false, false),
-            must_not_override: ProcDirective::new("SpacemanDMM_should_not_override", false, false, false),
-            private: ProcDirective::new("SpacemanDMM_private_proc", false, true, false),
-            protected: ProcDirective::new("SpacemanDMM_protected_proc", false, true, false),
-            must_not_sleep: ProcDirective::new("SpacemanDMM_should_not_sleep", false, true, true),
-            sleep_exempt: ProcDirective::new("SpacemanDMM_allowed_to_sleep", false, true, true),
-            must_be_pure: ProcDirective::new("SpacemanDMM_should_be_pure", false, true, true),
-            can_be_redefined: ProcDirective::new("SpacemanDMM_can_be_redefined", false, false, false),
+            must_call_parent: context.config().procdirective.must_call_parent.to_proc_directive("SpacemanDMM_should_call_parent"),
+            must_not_override: context.config().procdirective.must_not_override.to_proc_directive("SpacemanDMM_should_not_override"),
+            private: context.config().procdirective.private.to_proc_directive("SpacemanDMM_private_proc"),
+            protected: context.config().procdirective.protected.to_proc_directive("SpacemanDMM_protected_proc"),
+            must_not_sleep: context.config().procdirective.must_not_sleep.to_proc_directive("SpacemanDMM_should_not_sleep"),
+            sleep_exempt: context.config().procdirective.sleep_exempt.to_proc_directive("SpacemanDMM_allowed_to_sleep"),
+            must_be_pure: context.config().procdirective.must_be_pure.to_proc_directive("SpacemanDMM_should_be_pure"),
+            can_be_redefined: context.config().procdirective.can_be_redefined.to_proc_directive("SpacemanDMM_can_be_redefined"),
             used_kwargs: Default::default(),
             call_tree: Default::default(),
             sleeping_procs: Default::default(),
@@ -613,8 +643,8 @@ impl<'o> AnalyzeObjectTree<'o> {
     #[inline]
     fn add_directive_or_error(&mut self, proc: ProcRef<'o>, directive: &str, expr: &Expression, location: Location) {
         let procdirective = match directive {
-            "SpacemanDMM_should_not_override" => &mut self.must_not_override,
             "SpacemanDMM_should_call_parent" => &mut self.must_call_parent,
+            "SpacemanDMM_should_not_override" => &mut self.must_not_override,
             "SpacemanDMM_private_proc" => &mut self.private,
             "SpacemanDMM_protected_proc" => &mut self.protected,
             "SpacemanDMM_should_not_sleep" => &mut self.must_not_sleep,

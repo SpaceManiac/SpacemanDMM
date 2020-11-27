@@ -101,6 +101,26 @@ The `[dmdoc]` section has the following options:
 
 * `use_typepath_names` - Set to `true` to have dmdoc use the true typepath name instead of the value of the `name` var for types
 
+### Directives
+
+The `[procdirective]` section can be used to change the limitations of proc directives, the following names can be used which each corrospond to a `set SpacemanDMM_` proc directive:
+
+* `must_call_parent`
+* `must_not_override`
+* `private`
+* `protected`
+* `must_not_sleep`
+* `must_be_pure`
+* `can_be_redefined`
+
+In each section you can set the following as `true` or `false`:
+
+* `can_be_disabled` - Allows the directive to be set false in a child proc
+* `set_at_definition` - Enforces the requirement the directive be set in the proc definition
+* `can_be_global` - Allows the directive to be set in global procs
+
+See the example below on how to use these.
+
 ## Example
 
 ```toml
@@ -113,4 +133,8 @@ dreamchecker = true
 [diagnostics]
 duplicate_include = "error"
 macro_redefined = "off"
+
+[procdirective]
+    [procdirective.must_call_parent]
+    can_be_disabled = false
 ```
