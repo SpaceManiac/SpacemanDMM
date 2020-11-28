@@ -1197,13 +1197,18 @@ handle_request! {
                 let aux_variables = auxtools.get_variables(auxtools_types::VariablesRef(params.variablesReference as i32))?;
                 let mut variables = vec![];
 
-                // TODO
                 // If VSC receives two Variables with the same name, it only
                 // displays the first one. Avert this by adding suffixes.
+                let mut seen = std::collections::HashMap::new();
 
                 for aux_var in aux_variables {
+                    let name = match seen.entry(aux_var.name.clone()).and_modify(|e| *e += 1).or_default() {
+                        0 => aux_var.name,
+                        n => format!("{} #{}", aux_var.name, n),
+                    };
+
                     variables.push(Variable {
-                        name: aux_var.name,
+                        name,
                         value: aux_var.value,
                         variablesReference: aux_var.variables.map(|x| x.0 as i64).unwrap_or(0),
                         .. Default::default()
