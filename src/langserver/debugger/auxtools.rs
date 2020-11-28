@@ -126,7 +126,7 @@ impl Auxtools {
         }
     }
 
-    fn send_or_disconnect(&mut self, request: Request) -> Result<(), Box<dyn std::error::Error>>  {
+    fn send_or_disconnect(&mut self, request: Request) -> Result<(), Box<dyn std::error::Error>> {
         if let Err(e) = self.send(request) {
             self.disconnect();
             return Err(e);
@@ -332,7 +332,7 @@ impl AuxtoolsThread {
                         return;
                     }
                 }
-                
+
                 self.run(stream);
             }
 
@@ -341,7 +341,7 @@ impl AuxtoolsThread {
             }
         })
     }
-    
+
     // returns true if we should disconnect
     fn handle_response(&mut self, data: &[u8]) -> Result<bool, Box<dyn std::error::Error>> {
         let response = bincode::deserialize::<Response>(data)?;

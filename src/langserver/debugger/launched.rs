@@ -34,7 +34,7 @@ pub enum EngineParams {
     },
     Auxtools {
         port: u16,
-        dll: Option<std::path::PathBuf> 
+        dll: Option<std::path::PathBuf>
     }
 }
 

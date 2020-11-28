@@ -428,7 +428,7 @@ handle_request! {
                             extools_dll = Some(self::extools_bundle::extract()?);
                         }
                     }
-                    
+
                     EngineParams::Extools {
                         port,
                         dll: extools_dll,
@@ -506,7 +506,6 @@ handle_request! {
 
             DebugClient::Auxtools(_) => {}
         }
-
     }
 
     on Threads(&mut self, ()) {
@@ -801,7 +800,7 @@ handle_request! {
 
                     let offset = 0;
                     let tup = (proc.to_owned(), override_id, offset);
-                    
+
                     saved.insert(tup.clone());
                     keep.insert(tup.clone());
 
