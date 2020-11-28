@@ -1024,21 +1024,21 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                let (arguments, locals, globals) = auxtools.get_scopes( frameId as u32 )?;
-                let mut scopes = vec![];
-
-                if let Some(arguments) = arguments {
-                    scopes.push(Scope {
-                        name: "Arguments".to_owned(),
-                        variablesReference: arguments.0 as i64,
-                        .. Default::default()
-                    });
-                }
+                let (arguments, locals, globals) = auxtools.get_scopes(frameId as u32)?;
+                let mut scopes = Vec::with_capacity(locals.is_some() as usize + arguments.is_some() as usize + globals.is_some() as usize);
 
                 if let Some(locals) = locals {
                     scopes.push(Scope {
                         name: "Locals".to_owned(),
                         variablesReference: locals.0 as i64,
+                        .. Default::default()
+                    });
+                }
+
+                if let Some(arguments) = arguments {
+                    scopes.push(Scope {
+                        name: "Arguments".to_owned(),
+                        variablesReference: arguments.0 as i64,
                         .. Default::default()
                     });
                 }
