@@ -1900,7 +1900,7 @@ handle_method_call! {
             objtree: self.objtree.clone(),
             extools_dll: self.extools_dll.clone(),
         };
-        let (port, handle) = debugger::start_server(params.dreamseeker_exe, db).map_err(invalid_request)?;
+        let (port, handle) = debugger::start_server(self.context.config().debugger.engine, params.dreamseeker_exe, db).map_err(invalid_request)?;
         self.threads.push(handle);
         extras::StartDebuggerResult { port }
     }
