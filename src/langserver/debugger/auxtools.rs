@@ -146,6 +146,16 @@ impl Auxtools {
         self.stream = StreamState::Disconnected;
     }
 
+    pub fn configured(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        debug_output!(in self.seq, "[auxtools] configured");
+        self.send_or_disconnect(Request::Configured)?;
+
+        match self.read_response_or_disconnect()? {
+            Response::Ack { .. } => Ok(()),
+            response => Err(Box::new(UnexpectedResponse::new("Ack", response))),
+        }
+    }
+
     pub fn get_line_number(&mut self, path: &str, override_id: u32, offset: u32) -> Result<Option<u32>, Box<dyn std::error::Error>> {
         self.send_or_disconnect(Request::LineNumber {
             proc: ProcRef {

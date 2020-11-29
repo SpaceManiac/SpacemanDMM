@@ -504,7 +504,9 @@ handle_request! {
                 extools.configuration_done();
             }
 
-            DebugClient::Auxtools(_) => {}
+            DebugClient::Auxtools(auxtools) => {
+                auxtools.configured()?;
+            }
         }
     }
 

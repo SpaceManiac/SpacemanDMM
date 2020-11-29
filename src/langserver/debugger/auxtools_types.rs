@@ -9,6 +9,7 @@ pub const DEFAULT_PORT: u16 = 2448;
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Request {
     Disconnect,
+    Configured,
     BreakpointSet {
         instruction: InstructionRef,
     },
