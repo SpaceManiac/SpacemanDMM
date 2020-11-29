@@ -46,7 +46,7 @@ impl Debugger {
 
             DebugClient::Auxtools(auxtools) => {
                 lazy_static! {
-                    static ref DISASSEMBLE_REGEX: Regex = Regex::new(r"^#dis(?:assemble)? (?P<path>[\w/\(\)]+) ?(?P<override>[0-9]*)$").unwrap();
+                    static ref DISASSEMBLE_REGEX: Regex = Regex::new(r"^#dis(?:assemble)? (?P<path>[^ ]+) ?(?P<override>[0-9]*)$").unwrap();
                 }
 
                 if input.starts_with("#help") {
