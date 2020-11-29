@@ -10,6 +10,7 @@ pub const DEFAULT_PORT: u16 = 2448;
 pub enum Request {
     Disconnect,
     Configured,
+    StdDef,
     BreakpointSet {
         instruction: InstructionRef,
     },
@@ -49,6 +50,7 @@ pub enum Request {
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Response {
     Ack,
+    StdDef(Option<String>),
     BreakpointSet {
         result: BreakpointSetResult,
     },

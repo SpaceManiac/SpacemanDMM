@@ -156,6 +156,15 @@ impl Auxtools {
         }
     }
 
+    pub fn get_stddef(&mut self) -> Result<Option<String>, Box<dyn std::error::Error>> {
+        self.send_or_disconnect(Request::StdDef)?;
+
+        match self.read_response_or_disconnect()? {
+            Response::StdDef(contents) => Ok(contents),
+            response => Err(Box::new(UnexpectedResponse::new("StdDef", response))),
+        }
+    }
+
     pub fn get_line_number(&mut self, path: &str, override_id: u32, offset: u32) -> Result<Option<u32>, Box<dyn std::error::Error>> {
         self.send_or_disconnect(Request::LineNumber {
             proc: ProcRef {

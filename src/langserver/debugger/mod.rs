@@ -505,6 +505,7 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
+                self.stddef_dm_info = auxtools.get_stddef()?.map(|x| StddefDmInfo::new(x));
                 auxtools.configured()?;
             }
         }
