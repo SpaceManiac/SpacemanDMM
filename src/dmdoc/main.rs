@@ -506,6 +506,20 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
 
                 error_entity_put(format!("{}/proc/{}", ty.path, name));
                 let block = DocBlock::parse(&proc_value.docs.text(), Some(broken_link_callback));
+
+                // if the proc is global, add it to the module tree
+                if ty.is_root() {
+                    let module = module_entry(&mut modules1, &context.file_path(proc_value.location.file));
+                    module.items_wip.push((
+                        proc_value.location.line,
+                        ModuleItem::GlobalProc {
+                            name,
+                            teaser: block.teaser().to_owned(),
+                        }
+                    ));
+                }
+
+                // add the proc to the type containing it
                 parsed_type.procs.insert(name, Proc {
                     docs: block,
                     params: proc_value.parameters.iter().map(|p| Param {
@@ -1233,5 +1247,10 @@ enum ModuleItem<'a> {
         path: &'a str,
         teaser: String,
         substance: bool,
+    },
+    #[serde(rename="global_proc")]
+    GlobalProc {
+        name: &'a str,
+        teaser: String,
     },
 }
