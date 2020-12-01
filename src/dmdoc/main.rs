@@ -527,16 +527,15 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
 
         // file the type under its module as well
         if let Some(ref block) = parsed_type.docs {
-            if let Some(module) = modules1.get_mut(&module_path(&context.file_path(ty.location.file))) {
-                module.items_wip.push((
-                    ty.location.line,
-                    ModuleItem::Type {
-                        path: ty.get().pretty_path(),
-                        teaser: block.teaser().to_owned(),
-                        substance: substance,
-                    },
-                ));
-            }
+            let module = module_entry(&mut modules1, &context.file_path(ty.location.file));
+            module.items_wip.push((
+                ty.location.line,
+                ModuleItem::Type {
+                    path: ty.get().pretty_path(),
+                    teaser: block.teaser().to_owned(),
+                    substance: substance,
+                },
+            ));
         }
 
         if anything {
