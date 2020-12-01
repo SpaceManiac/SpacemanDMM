@@ -463,6 +463,19 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
 
                 error_entity_put(format!("{}/var/{}", ty.path, name));
                 let block = DocBlock::parse(&var.value.docs.text(), Some(broken_link_callback));
+
+                // if the var is global, add it to the module tree
+                if ty.is_root() {
+                    let module = module_entry(&mut modules1, &context.file_path(var.value.location.file));
+                    module.items_wip.push((
+                        var.value.location.line,
+                        ModuleItem::GlobalVar {
+                            name,
+                            teaser: block.teaser().to_owned(),
+                        }
+                    ));
+                }
+
                 // `type` is pulled from the parent if necessary
                 let type_ = ty.get_var_declaration(name).map(|decl| VarType {
                     is_static: decl.var_type.flags.is_static(),
@@ -1250,6 +1263,11 @@ enum ModuleItem<'a> {
     },
     #[serde(rename="global_proc")]
     GlobalProc {
+        name: &'a str,
+        teaser: String,
+    },
+    #[serde(rename="global_var")]
+    GlobalVar {
         name: &'a str,
         teaser: String,
     },
