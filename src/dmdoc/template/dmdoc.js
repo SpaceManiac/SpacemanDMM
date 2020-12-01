@@ -27,6 +27,12 @@ document.addEventListener("DOMContentLoaded", function() {
                 this.textContent = node.hidden ? "\u2795" : "\u2796";
             };
         }(node));
+
+        if (node.parentElement.parentElement.classList.contains("modules")) {
+            node.hidden = false;
+            expander.textContent = "\u2796";
+        }
+
         parent.insertBefore(expander, parent.firstChild);
         nodes.push([node, expander]);
     }

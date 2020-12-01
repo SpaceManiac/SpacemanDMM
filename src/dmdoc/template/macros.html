@@ -19,8 +19,8 @@
     {%- endif -%}
 {%- endmacro git_link %}
 
-{% macro index_tree(elems) -%}
-<ul class="index-tree">
+{% macro index_tree(elems, extra_class="") -%}
+<ul class="index-tree{% if extra_class %} {{extra_class}}{% endif %}">
     {% for tree in elems -%}
         {{ self::index_tree_elem(tree=tree) }}
     {% endfor -%}

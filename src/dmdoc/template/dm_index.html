@@ -16,7 +16,7 @@
 <aside>({{ env.coverage.modules }} modules,
     {{ env.coverage.macros_documented }}/{{ env.coverage.macros_all }} macros{#
     #}{{ macros::percentage(amt=env.coverage.macros_documented, total=env.coverage.macros_all) }})</aside></h3>
-{{ macros::index_tree(elems=modules) }}
+{{ macros::index_tree(elems=modules, extra_class="modules") }}
 {% endif %}
 
 {% if types %}
