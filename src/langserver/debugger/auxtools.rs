@@ -146,6 +146,46 @@ impl Auxtools {
         self.stream = StreamState::Disconnected;
     }
 
+    pub fn configured(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        debug_output!(in self.seq, "[auxtools] configured");
+        self.send_or_disconnect(Request::Configured)?;
+
+        match self.read_response_or_disconnect()? {
+            Response::Ack { .. } => Ok(()),
+            response => Err(Box::new(UnexpectedResponse::new("Ack", response))),
+        }
+    }
+
+    pub fn get_stddef(&mut self) -> Result<Option<String>, Box<dyn std::error::Error>> {
+        self.send_or_disconnect(Request::StdDef)?;
+
+        match self.read_response_or_disconnect()? {
+            Response::StdDef(contents) => Ok(contents),
+            response => Err(Box::new(UnexpectedResponse::new("StdDef", response))),
+        }
+    }
+
+    pub fn disassemble(&mut self, path: &str, override_id: u32) -> Result<String, Box<dyn std::error::Error>> {
+        self.send_or_disconnect(Request::Disassemble(ProcRef {
+            path: path.to_owned(),
+            override_id,
+        }))?;
+
+        match self.read_response_or_disconnect()? {
+            Response::Disassemble(res) => Ok(res),
+            response => Err(Box::new(UnexpectedResponse::new("Disassemble", response))),
+        }
+    }
+
+    pub fn get_current_proc(&mut self, frame_id: u32) -> Result<Option<(String, u32)>, Box<dyn std::error::Error>> {
+        self.send_or_disconnect(Request::CurrentInstruction { frame_id })?;
+
+        match self.read_response_or_disconnect()? {
+            Response::CurrentInstruction(ins) => Ok(ins.map(|x| (x.proc.path, x.proc.override_id))),
+            response => Err(Box::new(UnexpectedResponse::new("CurrentInstruction", response))),
+        }
+    }
+
     pub fn get_line_number(&mut self, path: &str, override_id: u32, offset: u32) -> Result<Option<u32>, Box<dyn std::error::Error>> {
         self.send_or_disconnect(Request::LineNumber {
             proc: ProcRef {

@@ -504,7 +504,10 @@ handle_request! {
                 extools.configuration_done();
             }
 
-            DebugClient::Auxtools(_) => {}
+            DebugClient::Auxtools(auxtools) => {
+                self.stddef_dm_info = auxtools.get_stddef()?.map(|x| StddefDmInfo::new(x));
+                auxtools.configured()?;
+            }
         }
     }
 
