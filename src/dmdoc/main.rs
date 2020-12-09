@@ -93,6 +93,10 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("collating documented types");
 
+    if index_path.is_none() {
+        index_path = context.config().dmdoc.index_file.clone();
+    }
+
     // Any top-level directory which is `#include`d in the `.dme` (most
     // importantly "code", but also "_maps", "interface", and any downstream
     // modular folders) will be searched for `.md` files to include in the docs.

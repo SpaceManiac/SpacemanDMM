@@ -50,8 +50,10 @@ pub struct CodeStandards {
 
 /// DMDoc config options
 #[derive(Deserialize, Default, Debug, Clone)]
+#[serde(default)]
 pub struct DMDoc {
     pub use_typepath_names: bool,
+    pub index_file: Option<String>,
 }
 
 // Debugger config options
