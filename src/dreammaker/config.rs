@@ -54,6 +54,7 @@ pub struct CodeStandards {
 pub struct DMDoc {
     pub use_typepath_names: bool,
     pub index_file: Option<String>,
+    pub module_directories: Vec<String>,
 }
 
 // Debugger config options

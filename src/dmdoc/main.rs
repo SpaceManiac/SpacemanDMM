@@ -97,15 +97,21 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         index_path = context.config().dmdoc.index_file.clone();
     }
 
-    // Any top-level directory which is `#include`d in the `.dme` (most
-    // importantly "code", but also "_maps", "interface", and any downstream
-    // modular folders) will be searched for `.md` files to include in the docs.
-    let mut code_directories = std::collections::HashSet::new();
-    context.file_list().for_each(|path| {
-        if let Some(std::path::Component::Normal(first)) = path.components().next() {
-            code_directories.insert(first.to_owned());
-        }
-    });
+    let mut code_directories: std::collections::HashSet<std::ffi::OsString>;
+    if context.config().dmdoc.module_directories.is_empty() {
+        // Any top-level directory which is `#include`d in the `.dme` (most
+        // importantly "code", but also "_maps", "interface", and any downstream
+        // modular folders) will be searched for `.md` files to include in the docs.
+        code_directories = Default::default();
+        context.file_list().for_each(|path| {
+            if let Some(std::path::Component::Normal(first)) = path.components().next() {
+                code_directories.insert(first.to_owned());
+            }
+        });
+    } else {
+        // Use what the config specifies without any additional logic.
+        code_directories = context.config().dmdoc.module_directories.iter().map(std::ffi::OsString::from).collect();
+    }
 
     // get a read on which types *have* docs
     let mut types_with_docs = BTreeMap::new();
