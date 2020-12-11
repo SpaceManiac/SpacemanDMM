@@ -250,7 +250,9 @@ trait WithFixHint {
 impl WithFixHint for DMError {
     fn with_fix_hint(mut self, analysis: &Analysis) -> Self {
         if let Some((loc, desc)) = analysis.fix_hint.clone() {
-            self.add_note(loc, desc);
+            if !loc.is_builtins() {  // Don't try to tell people to edit the builtins.
+                self.add_note(loc, desc);
+            }
         }
         self
     }
