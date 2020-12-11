@@ -438,10 +438,13 @@ handle_request! {
                 DebugEngine::Auxtools => {
                     let (port, auxtools) = Auxtools::listen(self.seq.clone())?;
                     self.client = DebugClient::Auxtools(auxtools);
-                    let auxtools_dll = None;
+
+                    let mut auxtools_dll = None;
 
                     #[cfg(extools_bundle)] {
-                        auxtools_dll = Some(self::auxtools_bundle::extract()?);
+                        if auxtools_dll.is_none() {
+                            auxtools_dll = Some(self::auxtools_bundle::extract()?);
+                        }
                     }
 
                     EngineParams::Auxtools {

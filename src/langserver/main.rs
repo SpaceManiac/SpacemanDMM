@@ -65,6 +65,9 @@ fn main() {
     #[cfg(extools_bundle)] {
         eprintln!("extools commit: {}", env!("EXTOOLS_COMMIT_HASH"));
     }
+    #[cfg(auxtools_bundle)] {
+        eprintln!("auxtools commit: {}", env!("AUXTOOLS_COMMIT_HASH"));
+    }
     match std::env::current_dir() {
         Ok(path) => eprintln!("directory: {}", path.display()),
         Err(e) => eprintln!("dir check failure: {}", e),
