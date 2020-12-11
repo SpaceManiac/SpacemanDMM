@@ -389,8 +389,8 @@ impl AuxtoolsThread {
         match response {
             Response::Disconnect => return Ok(true),
 
-            Response::Notification { message } => {
-                debug_output!(in self.seq, "[auxtools] {}", message);
+            Response::Notification { message: _message } => {
+                debug_output!(in self.seq, "[auxtools] {}", _message);
             }
 
             Response::BreakpointHit { reason } => {
