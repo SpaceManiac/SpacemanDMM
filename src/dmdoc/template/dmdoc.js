@@ -44,7 +44,7 @@ document.addEventListener("DOMContentLoaded", function() {
         toggle.addEventListener("click", function(event) {
             event.preventDefault();
 
-            var hidden = !nodes[0].node.hidden;
+            var hidden = !nodes[1].node.hidden;
             for (var i = 0; i < nodes.length; ++i) {
                 nodes[i].node.hidden = hidden;
                 nodes[i].expander.textContent = hidden ? "\u2795" : "\u2796";
