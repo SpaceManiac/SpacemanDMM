@@ -665,7 +665,7 @@ impl ObjectTree {
     }
 
     pub(crate) fn register_builtins(&mut self) {
-        super::builtins::register_builtins(self).expect("register_builtins failed");
+        super::builtins::register_builtins(self);
     }
 
     // ------------------------------------------------------------------------

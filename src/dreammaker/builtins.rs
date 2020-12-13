@@ -6,6 +6,7 @@ use super::objtree::*;
 use super::{Location, DMError};
 use super::preprocessor::{DefineMap, Define};
 use super::constants::Constant;
+use super::docs::{BuiltinDocs, DocCollection};
 
 const DM_VERSION: i32 = 513;
 const DM_BUILD: i32 = 1527;
@@ -184,7 +185,7 @@ pub fn default_defines(defines: &mut DefineMap) {
 }
 
 /// Register BYOND builtins into the specified object tree.
-pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
+pub fn register_builtins(tree: &mut ObjectTree) {
     macro_rules! path {
         ($(/$elem:ident)*) => {
             Constant::Prefab(super::constants::Pop {
@@ -205,71 +206,93 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
     }
 
     builtins_table! {
-        var/const/vars;  // "/DM/vars"
+        #[dm_ref("/DM/vars")]
+        var/const/vars;
 
         // enum /atom/var/dir
-        var/const/NORTH = int!(1);
-        var/const/SOUTH = int!(2);
-        var/const/EAST = int!(4);
-        var/const/WEST = int!(8);
-        var/const/NORTHEAST = int!(5);
-        var/const/SOUTHEAST = int!(6);
-        var/const/NORTHWEST = int!(9);
-        var/const/SOUTHWEST = int!(10);
-        var/const/UP = int!(16);
-        var/const/DOWN = int!(32);
+        #[dm_ref("/atom/var/dir")] {
+            var/const/NORTH = int!(1);
+            var/const/SOUTH = int!(2);
+            var/const/EAST = int!(4);
+            var/const/WEST = int!(8);
+            var/const/NORTHEAST = int!(5);
+            var/const/SOUTHEAST = int!(6);
+            var/const/NORTHWEST = int!(9);
+            var/const/SOUTHWEST = int!(10);
+            var/const/UP = int!(16);
+            var/const/DOWN = int!(32);
+        }
 
         // enum /mob/var/sight
-        var/const/BLIND = int!(1);
-        var/const/SEE_MOBS = int!(4);
-        var/const/SEE_OBJS = int!(8);
-        var/const/SEE_TURFS = int!(16);
-        var/const/SEE_SELF = int!(32);
-        var/const/SEE_INFRA = int!(64);
-        var/const/SEE_PIXELS = int!(256);
-        var/const/SEE_THRU = int!(512);
-        var/const/SEE_BLACKNESS = int!(1024);
+        #[dm_ref("/mob/var/sight")] {
+            var/const/BLIND = int!(1);
+            var/const/SEE_MOBS = int!(4);
+            var/const/SEE_OBJS = int!(8);
+            var/const/SEE_TURFS = int!(16);
+            var/const/SEE_SELF = int!(32);
+            var/const/SEE_INFRA = int!(64);
+            var/const/SEE_PIXELS = int!(256);
+            var/const/SEE_THRU = int!(512);
+            var/const/SEE_BLACKNESS = int!(1024);
+        }
 
         // enum /client/var/perspective
-        var/const/MOB_PERSPECTIVE = int!(0);
-        var/const/EYE_PERSPECTIVE = int!(1);
-        var/const/EDGE_PERSPECTIVE = int!(2);
+        #[dm_ref("/client/var/perspective")] {
+            var/const/MOB_PERSPECTIVE = int!(0);
+            var/const/EYE_PERSPECTIVE = int!(1);
+            var/const/EDGE_PERSPECTIVE = int!(2);
+        }
 
         // layers
-        var/const/FLOAT_LAYER = int!(-1);  // "/atom/var/overlays"
-        var/const/AREA_LAYER = int!(1);  // "/atom/var/layer"...
-        var/const/TURF_LAYER = int!(2);
-        var/const/OBJ_LAYER = int!(3);
-        var/const/MOB_LAYER = int!(4);
-        var/const/FLY_LAYER = int!(5);
-        var/const/EFFECTS_LAYER = int!(5000);  // "/{notes}/EFFECTS_LAYER"
-        var/const/TOPDOWN_LAYER = int!(10000);  // "/{notes}/TOPDOWN_LAYER"
-        var/const/BACKGROUND_LAYER = int!(20000);  // "/{notes}/BACKGROUND_LAYER"
-        var/const/FLOAT_PLANE = int!(-32767);  // "/atom/var/plane"
+        #[dm_ref("/atom/var/overlays")]
+        var/const/FLOAT_LAYER = int!(-1);
+        #[dm_ref("/atom/var/layer")] {
+            var/const/AREA_LAYER = int!(1);
+            var/const/TURF_LAYER = int!(2);
+            var/const/OBJ_LAYER = int!(3);
+            var/const/MOB_LAYER = int!(4);
+            var/const/FLY_LAYER = int!(5);
+        }
+        #[dm_ref("/{notes}/EFFECTS_LAYER")]
+        var/const/EFFECTS_LAYER = int!(5000);
+        #[dm_ref("/{notes}/TOPDOWN_LAYER")]
+        var/const/TOPDOWN_LAYER = int!(10000);
+        #[dm_ref("/{notes}/BACKGROUND_LAYER")]
+        var/const/BACKGROUND_LAYER = int!(20000);
+        #[dm_ref("/atom/var/plane")]
+        var/const/FLOAT_PLANE = int!(-32767);
 
         // enum /world/var/map_format
-        var/const/TOPDOWN_MAP = int!(0);  // "/{notes}/topdown"
-        var/const/ISOMETRIC_MAP = int!(1);  // "/{notes}/isometric"
-        var/const/SIDE_MAP = int!(2);  // "/{notes}/side"
-        var/const/TILED_ICON_MAP = int!(32768);  // "/{notes}/tiled-icons"
+        #[dm_ref("/{notes}/topdown")]
+        var/const/TOPDOWN_MAP = int!(0);
+        #[dm_ref("/{notes}/isometric")]
+        var/const/ISOMETRIC_MAP = int!(1);
+        #[dm_ref("/{notes}/side")]
+        var/const/SIDE_MAP = int!(2);
+        #[dm_ref("/{notes}/tiled-icons")]
+        var/const/TILED_ICON_MAP = int!(32768);
 
         var/const/TRUE = int!(1);
         var/const/FALSE = int!(0);
 
         // enum /mob/var/gender
-        var/const/MALE = string!("male");
-        var/const/FEMALE = string!("female");
-        var/const/NEUTER = string!("neuter");
-        var/const/PLURAL = string!("plural");
+        #[dm_ref("/mob/var/gender")] {
+            var/const/MALE = string!("male");
+            var/const/FEMALE = string!("female");
+            var/const/NEUTER = string!("neuter");
+            var/const/PLURAL = string!("plural");
+        }
 
         // enum /DM/mouse/pointers
-        var/const/MOUSE_INACTIVE_POINTER = int!(0);
-        var/const/MOUSE_ACTIVE_POINTER = int!(1);
-        var/const/MOUSE_DRAG_POINTER = int!(3);
-        var/const/MOUSE_DROP_POINTER = int!(4);
-        var/const/MOUSE_ARROW_POINTER = int!(5);
-        var/const/MOUSE_CROSSHAIRS_POINTER = int!(6);
-        var/const/MOUSE_HAND_POINTER = int!(7);
+        #[dm_ref("/DM/mouse/pointers")] {
+            var/const/MOUSE_INACTIVE_POINTER = int!(0);
+            var/const/MOUSE_ACTIVE_POINTER = int!(1);
+            var/const/MOUSE_DRAG_POINTER = int!(3);
+            var/const/MOUSE_DROP_POINTER = int!(4);
+            var/const/MOUSE_ARROW_POINTER = int!(5);
+            var/const/MOUSE_CROSSHAIRS_POINTER = int!(6);
+            var/const/MOUSE_HAND_POINTER = int!(7);
+        }
 
         var/const/MOUSE_LEFT_BUTTON = int!(1);
         var/const/MOUSE_RIGHT_BUTTON = int!(2);
@@ -279,49 +302,65 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         var/const/MOUSE_ALT_KEY = int!(32);
 
         // enum /world/var/system_type
-        var/const/MS_WINDOWS = string!("MS Windows");
-        var/const/UNIX = string!("UNIX");
+        #[dm_ref("/world/var/system_type")] {
+            var/const/MS_WINDOWS = string!("MS Windows");
+            var/const/UNIX = string!("UNIX");
+        }
 
         // enum /sound/var/status
-        var/const/SOUND_MUTE = int!(1);
-        var/const/SOUND_PAUSED = int!(2);
-        var/const/SOUND_STREAM = int!(4);
-        var/const/SOUND_UPDATE = int!(16);
+        #[dm_ref("/sound/var/status")] {
+            var/const/SOUND_MUTE = int!(1);
+            var/const/SOUND_PAUSED = int!(2);
+            var/const/SOUND_STREAM = int!(4);
+            var/const/SOUND_UPDATE = int!(16);
+        }
 
         // enum /atom/var/blend_mode
-        var/const/BLEND_DEFAULT = int!(0);
-        var/const/BLEND_OVERLAY = int!(1);
-        var/const/BLEND_ADD = int!(2);
-        var/const/BLEND_SUBTRACT = int!(3);
-        var/const/BLEND_MULTIPLY = int!(4);
-        var/const/BLEND_INSET_OVERLAY = int!(5);
+        #[dm_ref("/atom/var/blend_mode")] {
+            var/const/BLEND_DEFAULT = int!(0);
+            var/const/BLEND_OVERLAY = int!(1);
+            var/const/BLEND_ADD = int!(2);
+            var/const/BLEND_SUBTRACT = int!(3);
+            var/const/BLEND_MULTIPLY = int!(4);
+            var/const/BLEND_INSET_OVERLAY = int!(5);
+        }
 
         // this is just a procstyle syntax wrapper for \ref[foo]
         proc/ref(A);
 
         // alpha mask filter, /{notes}/filters/alpha
-        var/const/MASK_INVERSE = int!(1);
-        var/const/MASK_SWAP = int!(2);
+        #[dm_ref("/{notes}/filters/alpha")] {
+            var/const/MASK_INVERSE = int!(1);
+            var/const/MASK_SWAP = int!(2);
+        }
 
         // rgb filter, /{notes}/filters/color
-        var/const/FILTER_COLOR_RGB = int!(0);
-        var/const/FILTER_COLOR_HSV = int!(1);
-        var/const/FILTER_COLOR_HSL = int!(2);
-        var/const/FILTER_COLOR_HCY = int!(3);
+        #[dm_ref("/{notes}/filters/color")] {
+            var/const/FILTER_COLOR_RGB = int!(0);
+            var/const/FILTER_COLOR_HSV = int!(1);
+            var/const/FILTER_COLOR_HSL = int!(2);
+            var/const/FILTER_COLOR_HCY = int!(3);
+        }
 
         // layering / ray filter
         // described in /{notes}/filters/rays
         // also mentioned in /{notes}/filters/layer
-        var/const/FILTER_OVERLAY = int!(1);
-        var/const/FILTER_UNDERLAY = int!(2);
+        #[dm_ref("/{notes}/filters/rays")] {
+            var/const/FILTER_OVERLAY = int!(1);
+            var/const/FILTER_UNDERLAY = int!(2);
+        }
 
         // wave filter / ripple filter
-        var/const/WAVE_SIDEWAYS = int!(1);  // wave only, "/{notes}/filters/wave"
-        var/const/WAVE_BOUNDED = int!(2);  // wave and also "/{notes}/filters/ripple"
+        #[dm_ref("/{notes}/filters/wave")] {
+            var/const/WAVE_SIDEWAYS = int!(1);  // wave only, "/{notes}/filters/wave"
+            var/const/WAVE_BOUNDED = int!(2);  // wave and also "/{notes}/filters/ripple"
+        }
 
         // outline filter, /{notes}/filters/outline
-        var/const/OUTLINE_SHARP = int!(1);
-        var/const/OUTLINE_SQUARE = int!(2);
+        #[dm_ref("/{notes}/filters/outline")] {
+            var/const/OUTLINE_SHARP = int!(1);
+            var/const/OUTLINE_SQUARE = int!(2);
+        }
 
         // global procs
         proc/abs(A);
@@ -1017,6 +1056,11 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         regex/proc/Find_char(text, start, end);
         regex/proc/Replace_char(text, rep, start, end);
     };
+}
 
-    Ok(())
+impl DocCollection {
+    fn dm_ref(&mut self, hash: &'static str) -> &mut Self {
+        self.builtin_docs = BuiltinDocs::ReferenceHash(hash);
+        self
+    }
 }
