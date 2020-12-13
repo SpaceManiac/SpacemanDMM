@@ -1147,7 +1147,7 @@ impl ObjectTree {
     pub(crate) fn add_builtin_var(
         &mut self,
         elems: &[&'static str],
-        value: Constant,
+        value: Option<Constant>,
     ) -> Result<(), DMError> {
         let location = Location::builtins();
         let mut path = elems.iter().copied();
@@ -1156,7 +1156,7 @@ impl ObjectTree {
         let (parent, initial) = self.get_from_path(location, &mut path, len)?;
         if let Some(type_var) = self.register_var(location, parent, initial, path, Default::default(), Default::default())? {
             type_var.value.location = location;
-            type_var.value.constant = Some(value);
+            type_var.value.constant = value;
             Ok(())
         } else {
             Err(DMError::new(location, "var must have a name"))

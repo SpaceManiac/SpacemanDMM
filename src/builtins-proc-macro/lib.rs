@@ -78,7 +78,7 @@ impl Parse for Builtins {
 }
 
 #[proc_macro]
-pub fn entries(input: TokenStream) -> TokenStream {
+pub fn builtins_table(input: TokenStream) -> TokenStream {
     let builtins = parse_macro_input!(input as Builtins).0;
 
     let mut output = Vec::new();
@@ -97,12 +97,12 @@ pub fn entries(input: TokenStream) -> TokenStream {
             },
             EntryBody::Variable(None) => {
                 quote_spanned! { span =>
-                    tree.add_builtin_entry(#path)?;
+                    tree.add_builtin_var(#path, None)?;
                 }
             },
             EntryBody::Variable(Some(expr)) => {
                 quote_spanned! { span =>
-                    tree.add_builtin_var(#path, #expr)?;
+                    tree.add_builtin_var(#path, Some(#expr))?;
                 }
             },
             EntryBody::Proc(args) => {

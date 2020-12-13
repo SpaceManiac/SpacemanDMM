@@ -1,6 +1,6 @@
 //! BYOND built-in types, procs, and vars.
 
-use builtins_proc_macro::entries;
+use builtins_proc_macro::builtins_table;
 
 use super::objtree::*;
 use super::{Location, DMError};
@@ -204,7 +204,7 @@ pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
         };
     }
 
-    entries! {
+    builtins_table! {
         var/const/vars;  // "/DM/vars"
 
         // enum /atom/var/dir
