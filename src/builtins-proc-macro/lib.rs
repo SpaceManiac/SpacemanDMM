@@ -92,23 +92,23 @@ pub fn builtins_table(input: TokenStream) -> TokenStream {
         let line = match entry.body {
             EntryBody::None => {
                 quote_spanned! { span =>
-                    tree.add_builtin_entry(#path)?;
+                    tree.add_builtin_entry(#path);
                 }
             },
             EntryBody::Variable(None) => {
                 quote_spanned! { span =>
-                    tree.add_builtin_var(#path, None)?;
+                    tree.add_builtin_var(#path, None);
                 }
             },
             EntryBody::Variable(Some(expr)) => {
                 quote_spanned! { span =>
-                    tree.add_builtin_var(#path, Some(#expr))?;
+                    tree.add_builtin_var(#path, Some(#expr));
                 }
             },
             EntryBody::Proc(args) => {
                 let args: Vec<_> = args.into_iter().map(|x| LitStr::new(&x.name.to_string(), x.name.span())).collect();
                 quote_spanned! { span =>
-                    tree.add_builtin_proc(#path, &[ #(#args),* ])?;
+                    tree.add_builtin_proc(#path, &[ #(#args),* ]);
                 }
             }
         };

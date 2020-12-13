@@ -1110,15 +1110,14 @@ impl ObjectTree {
     pub(crate) fn add_builtin_entry(
         &mut self,
         elems: &[&'static str],
-    ) -> Result<(), DMError> {
+    ) {
         self.add_entry(
             Location::builtins(),
             elems.iter().cloned(),
             elems.len() + 1,
             Default::default(),
             Default::default(),
-        )?;
-        Ok(())
+        ).unwrap();
     }
 
     // an entry which may be anything depending on the path
@@ -1148,18 +1147,17 @@ impl ObjectTree {
         &mut self,
         elems: &[&'static str],
         value: Option<Constant>,
-    ) -> Result<(), DMError> {
+    ) {
         let location = Location::builtins();
         let mut path = elems.iter().copied();
         let len = elems.len() + 1;
 
-        let (parent, initial) = self.get_from_path(location, &mut path, len)?;
-        if let Some(type_var) = self.register_var(location, parent, initial, path, Default::default(), Default::default())? {
+        let (parent, initial) = self.get_from_path(location, &mut path, len).unwrap();
+        if let Some(type_var) = self.register_var(location, parent, initial, path, Default::default(), Default::default()).unwrap() {
             type_var.value.location = location;
             type_var.value.constant = value;
-            Ok(())
         } else {
-            Err(DMError::new(location, "var must have a name"))
+            panic!("var must have a name")
         }
     }
 
@@ -1167,7 +1165,7 @@ impl ObjectTree {
         &mut self,
         elems: &[&'static str],
         params: &[&'static str],
-    ) -> Result<(), DMError> {
+    ) {
         self.add_proc(
             &Default::default(),
             Location::builtins(),
@@ -1175,8 +1173,7 @@ impl ObjectTree {
             elems.len() + 1,
             params.iter().copied().map(|param| Parameter { name: param.into(), .. Default::default() }).collect(),
             Code::Builtin,
-        )?;
-        Ok(())
+        ).unwrap();
     }
 
     // an entry which is definitely a proc because an argument list is specified
