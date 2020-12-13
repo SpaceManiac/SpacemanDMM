@@ -160,6 +160,10 @@ dependencies = [
 [[package]]
 name = "builtins-proc-macro"
 version = "0.0.0"
+dependencies = [
+ "quote 1.0.7",
+ "syn",
+]
 
 [[package]]
 name = "bumpalo"

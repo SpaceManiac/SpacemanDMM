@@ -7,3 +7,7 @@ edition = "2018"
 [lib]
 path = "lib.rs"
 proc-macro = true
+
+[dependencies]
+syn = "1.0"
+quote = "1.0"

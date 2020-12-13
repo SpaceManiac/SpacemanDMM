@@ -185,18 +185,6 @@ pub fn default_defines(defines: &mut DefineMap) {
 
 /// Register BYOND builtins into the specified object tree.
 pub fn register_builtins(tree: &mut ObjectTree) -> Result<(), DMError> {
-    macro_rules! one_entry {
-        ($($elem:ident)/ *) => {
-            tree.add_builtin_entry(&[$(stringify!($elem)),*])?;
-        };
-        ($($elem:ident)/ * = $val:expr) => {
-            tree.add_builtin_var(&[$(stringify!($elem)),*], $val)?;
-        };
-        ($($elem:ident)/ * ($($arg:ident $(= $ignored:expr)*),*)) => {
-            tree.add_builtin_proc(&[$(stringify!($elem)),*], &[$(stringify!($arg)),*])?;
-        }
-    }
-
     macro_rules! path {
         ($(/$elem:ident)*) => {
             Constant::Prefab(super::constants::Pop {
