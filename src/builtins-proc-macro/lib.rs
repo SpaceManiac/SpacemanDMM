@@ -4,9 +4,38 @@ use quote::{quote, quote_spanned};
 use syn::*;
 use syn::ext::IdentExt;
 use syn::parse::{Parse, ParseStream};
-use syn::token::Paren;
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
+
+#[derive(Clone, Default)]
+struct Header {
+    attrs: Vec<Attribute>,
+    path: Vec<Ident>,
+}
+
+impl Header {
+    fn parse_mut(&mut self, input: ParseStream) -> Result<()> {
+        self.attrs.extend(Attribute::parse_outer(input)?);
+
+        if input.peek(Ident) {
+            self.path.push(Ident::parse_any(input)?);
+        }
+        while input.peek(Token![/]) {
+            input.parse::<Token![/]>()?;
+            self.path.push(Ident::parse_any(input)?);
+        }
+
+        Ok(())
+    }
+}
+
+impl Parse for Header {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let mut header = Self::default();
+        header.parse_mut(input)?;
+        Ok(header)
+    }
+}
 
 struct ProcArgument {
     name: Ident,
@@ -31,53 +60,70 @@ enum EntryBody {
     Proc(Punctuated<ProcArgument, Token![,]>),
 }
 
+impl EntryBody {
+    fn parse_with_path(path: &[Ident], input: ParseStream) -> Result<Self> {
+        if input.peek(Token![=]) {
+            input.parse::<Token![=]>()?;
+            Ok(EntryBody::Variable(Some(input.parse::<Expr>()?)))
+        } else if input.peek(syn::token::Paren) {
+            let content;
+            parenthesized!(content in input);
+            Ok(EntryBody::Proc(content.parse_terminated(ProcArgument::parse)?))
+        } else if path.iter().any(|i| i == "var") {
+            Ok(EntryBody::Variable(None))
+        } else {
+            Ok(EntryBody::None)
+        }
+    }
+}
+
 struct BuiltinEntry {
-    attrs: Vec<Attribute>,
-    path: Vec<Ident>,
+    header: Header,
     body: EntryBody,
 }
 
 impl Parse for BuiltinEntry {
     fn parse(input: ParseStream) -> Result<Self> {
-        let attrs = Attribute::parse_outer(input)?;
-
-        let ident = input.parse()?;
-        let mut path = vec![ident];
-        while input.peek(Token![/]) {
-            input.parse::<Token![/]>()?;
-            path.push(Ident::parse_any(input)?);
-        }
-
-        let body = if input.peek(Token![=]) {
-            input.parse::<Token![=]>()?;
-            EntryBody::Variable(Some(input.parse::<Expr>()?))
-        } else if input.peek(Paren) {
-            let content;
-            parenthesized!(content in input);
-            EntryBody::Proc(content.parse_terminated(ProcArgument::parse)?)
-        } else if path.iter().any(|i| i == "var") {
-            EntryBody::Variable(None)
-        } else {
-            EntryBody::None
-        };
+        let header: Header = input.parse()?;
+        let body = EntryBody::parse_with_path(&header.path, input)?;
 
         input.parse::<Token![;]>()?.span;
         Ok(BuiltinEntry {
-            attrs,
-            path,
+            header,
             body,
         })
     }
 }
 
-struct Builtins(Vec<BuiltinEntry>);
-impl Parse for Builtins {
+struct BuiltinsTable(Vec<BuiltinEntry>);
+
+impl BuiltinsTable {
+    fn parse_with_header_into(vec: &mut Vec<BuiltinEntry>, header: &Header, input: ParseStream) -> Result<()> {
+        while !input.is_empty() {
+            let mut new_header = header.clone();
+            new_header.parse_mut(input)?;
+            if input.peek(syn::token::Brace) {
+                let content;
+                braced!(content in input);
+                BuiltinsTable::parse_with_header_into(vec, &new_header, &content)?;
+            } else {
+                let body = EntryBody::parse_with_path(&new_header.path, input)?;
+                input.parse::<Token![;]>()?;
+                vec.push(BuiltinEntry {
+                    header: new_header,
+                    body,
+                });
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Parse for BuiltinsTable {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut vec = Vec::new();
-        while !input.is_empty() {
-            vec.push(input.parse()?);
-        }
-        Ok(Builtins(vec))
+        BuiltinsTable::parse_with_header_into(&mut vec, &Default::default(), input)?;
+        Ok(BuiltinsTable(vec))
     }
 }
 
@@ -92,12 +138,12 @@ impl Parse for DocComment {
 
 #[proc_macro]
 pub fn builtins_table(input: TokenStream) -> TokenStream {
-    let builtins = parse_macro_input!(input as Builtins).0;
+    let builtins = parse_macro_input!(input as BuiltinsTable).0;
 
     let mut output = Vec::new();
     for entry in builtins {
-        let span = entry.path.first().unwrap().span();
-        let lit_strs: Vec<_> = entry.path.into_iter().map(|x| LitStr::new(&x.to_string(), x.span())).collect();
+        let span = entry.header.path.first().unwrap().span();
+        let lit_strs: Vec<_> = entry.header.path.into_iter().map(|x| LitStr::new(&x.to_string(), x.span())).collect();
         let path = quote! {
             &[ #(#lit_strs),* ]
         };
@@ -106,7 +152,7 @@ pub fn builtins_table(input: TokenStream) -> TokenStream {
         let mut markdown_span = None;
 
         let mut attr_calls = TokenStream2::new();
-        for attr in entry.attrs {
+        for attr in entry.header.attrs {
             let attr_span = attr.span();
             let path = attr.path;
             let ident = &path.segments.last().unwrap().ident;
