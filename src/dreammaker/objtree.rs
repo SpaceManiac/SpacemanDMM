@@ -1107,47 +1107,38 @@ impl ObjectTree {
         }
     }
 
-    pub(crate) fn add_builtin_entry(
+    pub(crate) fn add_builtin_type(
         &mut self,
         elems: &[&'static str],
-    ) {
-        self.add_entry(
+    ) -> &mut Type {
+        self.add_type(
             Location::builtins(),
             elems.iter().cloned(),
             elems.len() + 1,
             Default::default(),
-            Default::default(),
-        ).unwrap();
+        ).unwrap()
     }
 
     // an entry which may be anything depending on the path
-    fn add_entry<'a, I: Iterator<Item = &'a str>>(
+    fn add_type<'a, I: Iterator<Item = &'a str>>(
         &mut self,
         location: Location,
         mut path: I,
         len: usize,
         comment: DocCollection,
-        suffix: VarSuffix,
-    ) -> Result<EntryType, DMError> {
+    ) -> Result<&mut Type, DMError> {
         let (parent, child) = self.get_from_path(location, &mut path, len)?;
-        if is_var_decl(child) {
-            self.register_var(location, parent, "var", path, comment, suffix)?;
-            Ok(EntryType::VarDecl)
-        } else if is_proc_decl(child) {
-            Ok(EntryType::ProcDecl)
-            // proc{} block, children will be procs
-        } else {
-            let idx = self.subtype_or_add(location, parent, child, len);
-            self[idx].docs.extend(comment);
-            Ok(EntryType::Subtype)
-        }
+        assert!(!is_var_decl(child) && !is_proc_decl(child));
+        let idx = self.subtype_or_add(location, parent, child, len);
+        self[idx].docs.extend(comment);
+        Ok(&mut self[idx])
     }
 
     pub(crate) fn add_builtin_var(
         &mut self,
         elems: &[&'static str],
         value: Option<Constant>,
-    ) {
+    ) -> &mut VarValue {
         let location = Location::builtins();
         let mut path = elems.iter().copied();
         let len = elems.len() + 1;
@@ -1156,6 +1147,7 @@ impl ObjectTree {
         if let Some(type_var) = self.register_var(location, parent, initial, path, Default::default(), Default::default()).unwrap() {
             type_var.value.location = location;
             type_var.value.constant = value;
+            &mut type_var.value
         } else {
             panic!("var must have a name")
         }
@@ -1165,7 +1157,7 @@ impl ObjectTree {
         &mut self,
         elems: &[&'static str],
         params: &[&'static str],
-    ) {
+    ) -> &mut ProcValue {
         self.add_proc(
             &Default::default(),
             Location::builtins(),
@@ -1173,7 +1165,7 @@ impl ObjectTree {
             elems.len() + 1,
             params.iter().copied().map(|param| Parameter { name: param.into(), .. Default::default() }).collect(),
             Code::Builtin,
-        ).unwrap();
+        ).unwrap().1
     }
 
     // an entry which is definitely a proc because an argument list is specified

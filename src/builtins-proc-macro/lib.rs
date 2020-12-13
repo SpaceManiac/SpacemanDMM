@@ -92,7 +92,7 @@ pub fn builtins_table(input: TokenStream) -> TokenStream {
         let line = match entry.body {
             EntryBody::None => {
                 quote_spanned! { span =>
-                    tree.add_builtin_entry(#path);
+                    tree.add_builtin_type(#path);
                 }
             },
             EntryBody::Variable(None) => {
