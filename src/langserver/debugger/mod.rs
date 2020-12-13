@@ -439,6 +439,7 @@ handle_request! {
                     let (port, auxtools) = Auxtools::listen(self.seq.clone())?;
                     self.client = DebugClient::Auxtools(auxtools);
 
+                    #[allow(unused_mut)]
                     let mut auxtools_dll = None;
 
                     #[cfg(extools_bundle)] {
