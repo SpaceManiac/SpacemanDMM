@@ -3,7 +3,7 @@
 use builtins_proc_macro::builtins_table;
 
 use super::objtree::*;
-use super::{Location, DMError};
+use super::Location;
 use super::preprocessor::{DefineMap, Define};
 use super::constants::Constant;
 use super::docs::{BuiltinDocs, DocCollection};

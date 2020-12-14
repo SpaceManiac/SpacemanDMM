@@ -235,11 +235,19 @@ impl<'a> Engine<'a> {
         }
     }
 
-    fn convert_location(&self, loc: dm::Location, if_builtin: &[&str]) -> Result<lsp_types::Location, jsonrpc::Error> {
+    fn convert_location(&self, loc: dm::Location, docs: &dm::docs::DocCollection, if_builtin: &[&str]) -> Result<lsp_types::Location, jsonrpc::Error> {
         Ok(lsp_types::Location {
             uri: if loc.is_builtins() {
-                Url::parse(&format!("dm://docs/reference.dm#{}", if_builtin.join("")))
-                    .map_err(invalid_request)?
+                let temp;
+                Url::parse(&format!(
+                    "dm://docs/reference.dm#{}",
+                    if let dm::docs::BuiltinDocs::ReferenceHash(hash) = docs.builtin_docs {
+                        hash
+                    } else {
+                        temp = if_builtin.join("");
+                        &temp
+                    }
+                )).map_err(invalid_request)?
             } else {
                 self.file_url(loc.file)?
             },
@@ -273,7 +281,7 @@ impl<'a> Engine<'a> {
         let mut entry = extras::ObjectTreeType {
             name: ty.name.to_owned(),
             kind: lsp_types::SymbolKind::Class,
-            location: self.convert_location(ty.location, &[&ty.path]).ok(),
+            location: self.convert_location(ty.location, &ty.docs, &[&ty.path]).ok(),
             vars: Vec::new(),
             procs: Vec::new(),
             children: Vec::new(),
@@ -285,7 +293,7 @@ impl<'a> Engine<'a> {
             entry.vars.push(extras::ObjectTreeVar {
                 name: name.to_owned(),
                 kind: lsp_types::SymbolKind::Field,
-                location: self.convert_location(var.value.location, &[&ty.path, "/var/", name]).ok(),
+                location: self.convert_location(var.value.location, &var.value.docs, &[&ty.path, "/var/", name]).ok(),
                 is_declaration,
             });
         }
@@ -298,7 +306,7 @@ impl<'a> Engine<'a> {
                 entry.procs.push(extras::ObjectTreeProc {
                     name: name.to_owned(),
                     kind: lsp_types::SymbolKind::Method,
-                    location: self.convert_location(value.location, &[&ty.path, "/proc/", name]).ok(),
+                    location: self.convert_location(value.location, &value.docs, &[&ty.path, "/proc/", name]).ok(),
                     is_verb,
                 });
                 is_verb = None;
@@ -1117,12 +1125,12 @@ handle_method_call! {
 
         let mut results = Vec::new();
         if let Some(ref defines) = self.defines {
-            for (range, &(ref name, _)) in defines.iter() {
+            for (range, &(ref name, ref define)) in defines.iter() {
                 if query.matches_define(name) {
                     results.push(SymbolInformation {
                         name: name.to_owned(),
                         kind: SymbolKind::Constant,
-                        location: self.convert_location(range.start, &["/DM/preprocessor/", name])?,
+                        location: self.convert_location(range.start, define.docs(), &["/DM/preprocessor/", name])?,
                         container_name: None,
                         deprecated: None,
                     });
@@ -1135,7 +1143,7 @@ handle_method_call! {
                 results.push(SymbolInformation {
                     name: ty.name.clone(),
                     kind: SymbolKind::Class,
-                    location: self.convert_location(ty.location, &[&ty.path])?,
+                    location: self.convert_location(ty.location, &ty.docs, &[&ty.path])?,
                     container_name: Some(ty.path[..ty.path.len() - ty.name.len() - 1].to_owned()),
                     deprecated: None,
                 });
@@ -1150,7 +1158,7 @@ handle_method_call! {
                         results.push(SymbolInformation {
                             name: var_name.clone(),
                             kind: SymbolKind::Field,
-                            location: self.convert_location(decl.location, &[&ty.path, "/var/", var_name])?,
+                            location: self.convert_location(decl.location, &tv.value.docs, &[&ty.path, "/var/", var_name])?,
                             container_name: Some(ty.path.clone()),
                             deprecated: None,
                         });
@@ -1170,7 +1178,7 @@ handle_method_call! {
                             } else {
                                 SymbolKind::Method
                             },
-                            location: self.convert_location(decl.location, &[&ty.path, "/proc/", proc_name])?,
+                            location: self.convert_location(decl.location, &pv.main_value().docs, &[&ty.path, "/proc/", proc_name])?,
                             container_name: Some(ty.path.clone()),
                             deprecated: None,
                         });
@@ -1342,7 +1350,7 @@ handle_method_call! {
             let full_path: Vec<&str> = completion::combine_tree_path(&iter, *absolute, parts).collect();
 
             if let Some(ty) = self.objtree.type_by_path(full_path.iter().cloned()) {
-                results.push(self.convert_location(ty.location, &[&ty.path])?);
+                results.push(self.convert_location(ty.location, &ty.docs, &[&ty.path])?);
             } else if let Some((&proc_name, prefix)) = full_path.split_last() {
                 // If it's not a type, try to find the proc equivalent. Start
                 // at the parent type so that this is a decent shortcut for
@@ -1354,7 +1362,7 @@ handle_method_call! {
                 }
                 while let Some(ty) = next {
                     if let Some(proc) = ty.procs.get(proc_name) {
-                        results.push(self.convert_location(proc.main_value().location, &[&ty.path, "/proc/", proc_name])?);
+                        results.push(self.convert_location(proc.main_value().location, &proc.main_value().docs, &[&ty.path, "/proc/", proc_name])?);
                         break;
                     }
                     next = ty.parent_type();
@@ -1365,11 +1373,11 @@ handle_method_call! {
             match self.follow_type_path(&iter, parts) {
                 // '/datum/proc/foo'
                 Some(completion::TypePathResult { ty, decl: _, proc: Some((proc_name, proc)) }) => {
-                    results.push(self.convert_location(proc.location, &[&ty.path, "/proc/", proc_name])?);
+                    results.push(self.convert_location(proc.location, &proc.docs, &[&ty.path, "/proc/", proc_name])?);
                 },
                 // 'datum/bar'
                 Some(completion::TypePathResult { ty, decl: None, proc: None }) => {
-                    results.push(self.convert_location(ty.location, &[&ty.path])?);
+                    results.push(self.convert_location(ty.location, &ty.docs, &[&ty.path])?);
                 },
                 _ => {}
             }
@@ -1379,7 +1387,7 @@ handle_method_call! {
             let mut next = ty.or(Some(self.objtree.root()));
             while let Some(ty) = next {
                 if let Some(proc) = ty.procs.get(proc_name) {
-                    results.push(self.convert_location(proc.main_value().location, &[&ty.path, "/proc/", proc_name])?);
+                    results.push(self.convert_location(proc.main_value().location, &proc.main_value().docs, &[&ty.path, "/proc/", proc_name])?);
                     break;
                 }
                 next = ty.parent_type();
@@ -1389,13 +1397,13 @@ handle_method_call! {
             let (ty, proc_name) = self.find_type_context(&iter);
             match self.find_unscoped_var(&iter, ty, proc_name, var_name) {
                 UnscopedVar::Parameter { ty, proc, param } => {
-                    results.push(self.convert_location(param.location, &[&ty.path, "/proc/", proc])?);
+                    results.push(self.convert_location(param.location, &Default::default(), &[&ty.path, "/proc/", proc])?);
                 },
                 UnscopedVar::Variable { ty, var } => {
-                    results.push(self.convert_location(var.value.location, &[&ty.path, "/var/", var_name])?);
+                    results.push(self.convert_location(var.value.location, &var.value.docs, &[&ty.path, "/var/", var_name])?);
                 },
                 UnscopedVar::Local { loc, .. } => {
-                    results.push(self.convert_location(dm::Location { file: real_file_id, ..loc }, &[])?);
+                    results.push(self.convert_location(dm::Location { file: real_file_id, ..loc }, &Default::default(), &[])?);
                 },
                 UnscopedVar::None => {}
             }
@@ -1404,7 +1412,7 @@ handle_method_call! {
             let mut next = self.find_scoped_type(&iter, priors);
             while let Some(ty) = next {
                 if let Some(proc) = ty.procs.get(proc_name) {
-                    results.push(self.convert_location(proc.main_value().location, &[&ty.path, "/proc/", proc_name])?);
+                    results.push(self.convert_location(proc.main_value().location, &proc.main_value().docs, &[&ty.path, "/proc/", proc_name])?);
                     break;
                 }
                 next = ty.parent_type_without_root();
@@ -1414,7 +1422,7 @@ handle_method_call! {
             let mut next = self.find_scoped_type(&iter, priors);
             while let Some(ty) = next {
                 if let Some(var) = ty.vars.get(var_name) {
-                    results.push(self.convert_location(var.value.location, &[&ty.path, "/var/", var_name])?);
+                    results.push(self.convert_location(var.value.location, &var.value.docs, &[&ty.path, "/var/", var_name])?);
                     break;
                 }
                 next = ty.parent_type_without_root();
@@ -1431,7 +1439,7 @@ handle_method_call! {
                     let mut next = ty.parent_type();
                     while let Some(ty) = next {
                         if let Some(proc) = ty.procs.get(proc_name) {
-                            results.push(self.convert_location(proc.main_value().location, &[&ty.path, "/proc/", proc_name])?);
+                            results.push(self.convert_location(proc.main_value().location, &proc.main_value().docs, &[&ty.path, "/proc/", proc_name])?);
                             break;
                         }
                         next = ty.parent_type();
@@ -1439,13 +1447,14 @@ handle_method_call! {
                 } else if let Some(proc) = ty.procs.get(proc_name) {
                     // override, go to the previous version of the proc
                     if let Some(parent) = proc.value.get(idx - 1) {
-                        results.push(self.convert_location(parent.location, &[&ty.path, "/proc/", proc_name])?);
+                        results.push(self.convert_location(parent.location, &parent.docs, &[&ty.path, "/proc/", proc_name])?);
                     }
                 }
             }
         },
         Annotation::MacroUse(name, location) => {
-            results.push(self.convert_location(*location, &["/DM/preprocessor/", name])?);
+            // TODO: get docs for this macro
+            results.push(self.convert_location(*location, &Default::default(), &["/DM/preprocessor/", name])?);
         },
         }
 
@@ -1504,7 +1513,7 @@ handle_method_call! {
         if type_path.is_empty() {
             None
         } else if let Some(ty) = self.objtree.type_by_path(type_path) {
-            let ty_loc = self.convert_location(ty.location, &[&ty.path])?;
+            let ty_loc = self.convert_location(ty.location, &ty.docs, &[&ty.path])?;
             Some(GotoDefinitionResponse::Scalar(ty_loc))
         } else {
             None
@@ -1526,7 +1535,7 @@ handle_method_call! {
         } else {
             let mut output = Vec::new();
             for each in result {
-                output.push(self.convert_location(*each, &[])?);
+                output.push(self.convert_location(*each, &Default::default(), &[])?);
             }
             Some(output)
         }
@@ -1547,7 +1556,7 @@ handle_method_call! {
         } else {
             let mut output = Vec::new();
             for each in result {
-                output.push(self.convert_location(*each, &[])?);
+                output.push(self.convert_location(*each, &Default::default(), &[])?);
             }
             Some(GotoDefinitionResponse::Array(output))
         }
