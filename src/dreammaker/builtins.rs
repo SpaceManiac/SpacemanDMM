@@ -272,8 +272,10 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         #[dm_ref("/{notes}/tiled-icons")]
         var/const/TILED_ICON_MAP = int!(32768);
 
-        var/const/TRUE = int!(1);
-        var/const/FALSE = int!(0);
+        #[dm_ref("/proc/if")] {
+            var/const/TRUE = int!(1);
+            var/const/FALSE = int!(0);
+        }
 
         // enum /mob/var/gender
         #[dm_ref("/mob/var/gender")] {

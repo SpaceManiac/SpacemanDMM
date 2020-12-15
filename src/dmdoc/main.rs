@@ -30,6 +30,8 @@ const BUILD_INFO: &str = concat!(
     "General Public License version 3.",
 );
 
+const DM_REFERENCE_BASE: &str = "https://secure.byond.com/docs/ref/#";
+
 // ----------------------------------------------------------------------------
 // Driver
 
@@ -219,6 +221,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             proc_name = Some(name);
             ty_path = &reference[..idx];
             if let Some(ty) = objtree.find(ty_path) {
+                // there are no builtin verbs
                 entity_exists = ty.procs.contains_key(name);
             }
         } else if let Some(idx) = reference.find("/var/") {
@@ -258,6 +261,41 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             entity_exists = true;
         }
         // else `[/ty]`
+
+        // Determine external doc URL
+        let mut external_url = None;
+        if entity_exists {
+            // TODO: .location.is_builtins() is not the best way to find this out,
+            // for example if it's overridden in the DM code but not re-documented.
+            if let Some(ty) = objtree.find(ty_path) {
+                if let Some(var_name) = var_name {
+                    if let Some(var) = ty.get_value(var_name) {
+                        if var.location.is_builtins() {
+                            external_url = Some(match var.docs.builtin_docs {
+                                BuiltinDocs::None => format!("{}{}/var/{}", DM_REFERENCE_BASE, ty.path, var_name),
+                                BuiltinDocs::ReferenceHash(hash) => format!("{}{}", DM_REFERENCE_BASE, hash),
+                            })
+                        }
+                    }
+                } else if let Some(proc_name) = proc_name {
+                    if let Some(proc) = ty.get_proc(proc_name) {
+                        if proc.location.is_builtins() {
+                            external_url = Some(match proc.docs.builtin_docs {
+                                BuiltinDocs::None => format!("{}{}/proc/{}", DM_REFERENCE_BASE, ty.path, proc_name),
+                                BuiltinDocs::ReferenceHash(hash) => format!("{}{}", DM_REFERENCE_BASE, hash),
+                            })
+                        }
+                    }
+                } else {
+                    if ty.location.is_builtins() {
+                        external_url = Some(match ty.docs.builtin_docs {
+                            BuiltinDocs::None => format!("{}{}", DM_REFERENCE_BASE, ty.path),
+                            BuiltinDocs::ReferenceHash(hash) => format!("{}{}", DM_REFERENCE_BASE, hash),
+                        })
+                    }
+                }
+            }
+        }
 
         let mut progress = String::new();
         let mut best = 0;
@@ -323,6 +361,8 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                 let _ = write!(href, "#var/{}", var_name);
             }
             Some((href, progress))
+        } else if let Some(external) = external_url {
+            Some((external, reference.to_owned()))
         } else {
             error_entity_print();
             if entity_exists {
