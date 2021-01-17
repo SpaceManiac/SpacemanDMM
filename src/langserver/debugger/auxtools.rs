@@ -165,15 +165,15 @@ impl Auxtools {
         }
     }
 
-    pub fn disassemble(&mut self, path: &str, override_id: u32) -> Result<String, Box<dyn std::error::Error>> {
-        self.send_or_disconnect(Request::Disassemble(ProcRef {
-            path: path.to_owned(),
-            override_id,
-        }))?;
+    pub fn eval(&mut self, frame_id: Option<u32>, command: &str) -> Result<String, Box<dyn std::error::Error>> {
+        self.send_or_disconnect(Request::Eval{
+            frame_id,
+            command: command.to_owned()
+        })?;
 
         match self.read_response_or_disconnect()? {
-            Response::Disassemble(res) => Ok(res),
-            response => Err(Box::new(UnexpectedResponse::new("Disassemble", response))),
+            Response::Eval(res) => Ok(res),
+            response => Err(Box::new(UnexpectedResponse::new("Eval", response))),
         }
     }
 

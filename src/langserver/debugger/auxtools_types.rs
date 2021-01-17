@@ -11,7 +11,10 @@ pub enum Request {
     Disconnect,
     Configured,
     StdDef,
-    Disassemble(ProcRef),
+    Eval {
+        frame_id: Option<u32>,
+        command: String,
+    },
     CurrentInstruction {
         frame_id: u32,
     },
@@ -55,7 +58,7 @@ pub enum Request {
 pub enum Response {
     Ack,
     StdDef(Option<String>),
-    Disassemble(String),
+    Eval(String),
     CurrentInstruction(Option<InstructionRef>),
     BreakpointSet {
         result: BreakpointSetResult,
