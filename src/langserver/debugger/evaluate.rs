@@ -38,14 +38,12 @@ impl Debugger {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                if input.starts_with("#") {
-                    return Ok(EvaluateResponse::from(
-                        auxtools.eval(
-                            params.frameId.map(|x| x as u32),
-                            &input[1..]
-                        )?
-                    ));
-                }
+                return Ok(EvaluateResponse::from(
+                    auxtools.eval(
+                        params.frameId.map(|x| x as u32),
+                        input
+                    )?
+                ));
             }
         }
 
