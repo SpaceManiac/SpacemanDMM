@@ -1,15 +1,8 @@
-use regex::Regex;
-use lazy_static;
-
 use super::dap_types::*;
 use super::*;
 
 const EXTOOLS_HELP: &str = "
 #dis, #disassemble: show disassembly for current stack frame";
-
-const AUXTOOLS_HELP: &str = "
-#dis, #disassemble: show disassembly for current stack frame
-#dis, #disassemble <proc path> <override id (optional)>: show disassembly for specified proc";
 
 impl Debugger {
     pub fn evaluate(
@@ -45,35 +38,12 @@ impl Debugger {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                lazy_static! {
-                    static ref DISASSEMBLE_REGEX: Regex = Regex::new(r"^#dis(?:assemble)? (?P<path>[^ ]+) ?(?P<override>[0-9]*)$").unwrap();
-                }
-
-                if input.starts_with("#help") {
-                    return Ok(EvaluateResponse::from(AUXTOOLS_HELP.trim()));
-                }
-
-                if input == "#dis" || input == "#disassemble" {
-                    guard!(let Some(frame_id) = params.frameId else {
-                        return Err(Box::new(GenericError("Must select a stack frame to evaluate in")));
-                    });
-
-                    let (path, override_id) = auxtools.get_current_proc(frame_id as u32)?.ok_or_else(|| {
-                        Box::new(GenericError("Couldn't find current proc"))
-                    })?;
-
-                    return Ok(EvaluateResponse::from(auxtools.disassemble(&path, override_id)?));
-                }
-
-                if let Some(captures) = DISASSEMBLE_REGEX.captures(input) {
-                    let path = &captures["path"];
-                    let override_id = match captures.name("override").map(|x| x.as_str()) {
-                        Some(str) => str.parse::<u32>().unwrap_or(0),
-                        _ => 0,
-                    };
-
-                    return Ok(EvaluateResponse::from(auxtools.disassemble(path, override_id)?));
-                }
+                return Ok(EvaluateResponse::from(
+                    auxtools.eval(
+                        params.frameId.map(|x| x as u32),
+                        input
+                    )?
+                ));
             }
         }
 
