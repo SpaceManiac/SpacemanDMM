@@ -46,6 +46,13 @@ impl Launched {
         params: Option<EngineParams>,
     ) -> std::io::Result<Launched> {
         let mut command = Command::new(dreamseeker_exe);
+
+        #[cfg(unix)] {
+            if let Some(parent) = std::path::Path::new(dreamseeker_exe).parent() {
+                command.env("LD_LIBRARY_PATH", parent);
+            }
+        }
+
         command
             .arg(dmb)
             .arg("-trusted")
