@@ -57,8 +57,8 @@ impl Launched {
             .arg(dmb)
             .arg("-trusted")
             .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
 
         match params {
             Some(EngineParams::Extools { port, dll }) => {
@@ -87,6 +87,9 @@ impl Launched {
 
         let seq2 = seq.clone();
         let mutex2 = mutex.clone();
+
+        pipe_output(seq.clone(), "stdout", child.stdout.take())?;
+        pipe_output(seq.clone(), "stderr", child.stderr.take())?;
 
         std::thread::Builder::new()
             .name("launched debuggee manager thread".to_owned())
@@ -152,6 +155,40 @@ impl Launched {
             }
         }
     }
+}
+
+fn pipe_output<R: std::io::Read + Send + 'static>(seq: Arc<SequenceNumber>, keyword: &'static str, stream: Option<R>) -> std::io::Result<()> {
+    guard!(let Some(stream2) = stream else { return Ok(()); });
+    std::thread::Builder::new()
+        .name(format!("launched debuggee {} relay", keyword))
+        .spawn(move || {
+            use std::io::BufRead;
+
+            let mut line = String::new();
+            let mut buf_stream = std::io::BufReader::new(stream2);
+            loop {
+                line.clear();
+                match buf_stream.read_line(&mut line) {
+                    Ok(0) => break,
+                    Ok(_) => {
+                        seq.issue_event(super::dap_types::OutputEvent {
+                            output: line.clone(),
+                            category: Some(keyword.to_owned()),
+                            ..Default::default()
+                        });
+                    }
+                    Err(e) => {
+                        seq.issue_event(super::dap_types::OutputEvent {
+                            output: format!("[launched {}] {}", keyword, e),
+                            category: Some("console".to_owned()),
+                            ..Default::default()
+                        });
+                        break;
+                    }
+                }
+            }
+        })?;
+    Ok(())
 }
 
 #[cfg(unix)]
