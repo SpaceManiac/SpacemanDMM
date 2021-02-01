@@ -394,7 +394,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
             alpha, color, infra_luminosity, layer, maptext_width, maptext_height,
             maptext_x, maptext_y, luminosity, pixel_x, pixel_y, pixel_w, pixel_z,
             transform, dir, icon, icon_state, invisibility, maptext, suffix, appearance,
-            dir, radius,
+            dir, radius, space,
             // filters only
             size, x, y, offset, flags, repeat);
         proc/arccos(X);
@@ -453,6 +453,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         proc/get_step_rand(Ref);
         proc/get_step_to(Ref,Trg,Min=0);
         proc/get_step_towards(Ref,Trg);
+        proc/gradient(Gradient, index); // unsure how to handle (Item1, Item2, ..., index) form
         proc/hascall(Object,ProcName);
         proc/hearers(Depth=world.view,Center=usr);
         proc/html_decode(HtmlText);
@@ -483,6 +484,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         proc/link(url);
         proc/list(A,B,C/*,...*/);  // +1 form
         proc/list2params(List);
+        proc/load_resource(File, KeepTime); // 514 (special form?)
         proc/locate(Type)/*in Container*/;  // +3 forms
         proc/log(X=2.718, Y);
         proc/lowertext(T);
@@ -511,7 +513,8 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         proc/REGEX_QUOTE_REPLACEMENT(text);
         proc/replacetext(Haystack,Needle,Replacement,Start=1,End=0);
         proc/replacetextEx(Haystack,Needle,Replacement,Start=1,End=0);
-        proc/rgb(R,G,B,A=null);
+        proc/rgb(R,G,B,A=null,space); // special form? - [r,g,b|x,y,z],(a),(space)
+        proc/rgb2num(color, space);
         proc/roll(ndice=1,sides);  // +1 form
         proc/round(A,B=null);
         proc/run(File);
@@ -523,6 +526,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         proc/sorttextEx(T1,T2/*,...*/);
         proc/sound(file,repeat=0,wait,channel,volume);  // SNA
         proc/spantext(Haystack,Needles,Start=1);
+        proc/splicetext(Text,Start=1,End=0,Insert="")
         proc/splittext(Text,Delimiter,Start=1,End=0,include_delimiters=0);
         proc/sqrt(A);
         proc/startup(File,Port=0,Options/*,...*/);
@@ -538,7 +542,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         proc/text2file(Text,File);
         proc/text2num(T, Radix);
         proc/text2path(T);
-        proc/time2text(timestamp,format);
+        proc/time2text(timestamp,format,timezone);
         proc/turn(Dir,Angle);  // +2 forms
         proc/typesof(Type1,Type2/*,...*/);
         proc/uppertext(T);
@@ -607,6 +611,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         list/proc/Insert(Index, Item1, Item2/*,...*/);
         list/proc/Join(Glue, Start=1, End=0);
         list/proc/Remove(Item1, Item2/*,...*/);
+        list/proc/Splice(Start=1, End=0, Item1, Item2/*,...*/); // 514
         list/proc/Swap(Index1, Index2);
         list/var/len;
 
@@ -743,6 +748,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         world/var/internet_address;
         world/var/log;
         world/var/loop_checks = int!(1);
+        world/var/map_cpu;
         world/var/map_format = int!(0); // TOPDOWN_MAP
         world/var/maxx;
         world/var/maxy;
@@ -761,6 +767,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         world/var/turf/turf = path!(/turf);
         world/var/time;
         world/var/timeofday;
+        world/var/timezone; // 514
         world/var/url;
         world/var/version = int!(0);
         world/var/view = int!(5);
@@ -836,6 +843,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         client/var/statobj;
         client/var/statpanel;
         client/var/tick_lag = int!(0);
+        client/var/timezone; // 514
         client/var/list/verbs;
         client/var/view;
         client/var/virtual_eye;
@@ -1069,6 +1077,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         proc/spantext_char(Haystack,Needles,Start=1);
         proc/nonspantext_char(Haystack,Needles,Start=1);
         proc/splittext_char(Text,Delimiter,Start=1,End=0,include_delimiters=0);
+        proc/splicetext_char(Text,Start=1,End=0,Insert=""); // 514
 
         atom/var/render_target;
         atom/var/render_source;
