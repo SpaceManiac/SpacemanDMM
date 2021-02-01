@@ -263,7 +263,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
             var/const/TILE_MOVEMENT_MODE = int!(1);
             var/const/PIXEL_MOVEMENT_MODE = int!(2);
         }
-
+s
         // layers
         #[dm_ref("/atom/var/overlays")]
         var/const/FLOAT_LAYER = int!(-1);
@@ -526,7 +526,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         proc/sorttextEx(T1,T2/*,...*/);
         proc/sound(file,repeat=0,wait,channel,volume);  // SNA
         proc/spantext(Haystack,Needles,Start=1);
-        proc/splicetext(Text,Start=1,End=0,Insert="")
+        proc/splicetext(Text,Start=1,End=0,Insert="");
         proc/splittext(Text,Delimiter,Start=1,End=0,include_delimiters=0);
         proc/sqrt(A);
         proc/startup(File,Port=0,Options/*,...*/);
