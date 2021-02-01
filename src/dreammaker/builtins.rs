@@ -104,6 +104,7 @@ pub fn default_defines(defines: &mut DefineMap) {
         TILE_BOUND = Int(256);
         PIXEL_SCALE = Int(512);
         PASS_MOUSE = Int(1024);
+        TILE_MOVER = Int(2048); // 514
 
         CONTROL_FREAK_ALL = Int(1);
         CONTROL_FREAK_SKIN = Int(2);
@@ -139,9 +140,9 @@ pub fn default_defines(defines: &mut DefineMap) {
         ELASTIC_EASING = Int(5);
         BACK_EASING = Int(6);
         QUAD_EASING = Int(7);
+        JUMP_EASING = Int(7); // 513
         EASE_IN = Int(64);
         EASE_OUT = Int(128);
-        JUMP_EASING = Int(256); // 513
 
         // animation flags
         ANIMATION_END_NOW = Int(1);
@@ -165,9 +166,7 @@ pub fn default_defines(defines: &mut DefineMap) {
         DATABASE_ROW_COLUMN_VALUE = Int(17);
         DATABASE_ROW_LIST = Int(18);
 
-        // 513 stuff
-
-        // vis_flags
+        // vis_flags (513)
         VIS_INHERIT_ICON = Int(1);
         VIS_INHERIT_ICON_STATE = Int(2);
         VIS_INHERIT_DIR = Int(4);
@@ -177,13 +176,25 @@ pub fn default_defines(defines: &mut DefineMap) {
         VIS_UNDERLAY = Int(64);
         VIS_HIDE = Int(128);
 
-        // world.Profile()
+        // color spaces (514)
+        COLORSPACE_RGB = Int(0);
+        COLORSPACE_HSV = Int(1);
+        COLORSPACE_HSL = Int(2);
+        COLORSPACE_HCY = Int(3);
+
+        // world.Profile() (513)
         PROFILE_STOP = Int(1);
         PROFILE_CLEAR = Int(2);
         PROFILE_AVERAGE = Int(4);
         PROFILE_START = Int(0);
         PROFILE_REFRESH = Int(0);
         PROFILE_RESTART = Int(2);
+
+        // generator functions (514)
+        UNIFORM_RAND = Int(0);
+        GAUSS_RAND = Int(1);
+        LINEAR_RAND = Int(2);
+        SQUARE_RAND = Int(3);
     }
 }
 
@@ -244,6 +255,13 @@ pub fn register_builtins(tree: &mut ObjectTree) {
             var/const/MOB_PERSPECTIVE = int!(0);
             var/const/EYE_PERSPECTIVE = int!(1);
             var/const/EDGE_PERSPECTIVE = int!(2);
+        }
+
+        // enum /world/var/movement_mode (514)
+        #[dm_ref("/world/var/movement_mode")] {
+            var/const/LEGACY_MOVEMENT_MODE = int!(0);
+            var/const/TILE_MOVEMENT_MODE = int!(1);
+            var/const/PIXEL_MOVEMENT_MODE = int!(2);
         }
 
         // layers
@@ -418,7 +436,8 @@ pub fn register_builtins(tree: &mut ObjectTree) {
             factor,
             repeat,
             radius,
-            falloff
+            falloff,
+            alpha
         );
         proc/findlasttext(Haystack,Needle,Start=0,End=1);
         proc/findlasttextEx(Haystack,Needle,Start=0,End=1);
@@ -1060,6 +1079,35 @@ pub fn register_builtins(tree: &mut ObjectTree) {
 
         regex/proc/Find_char(text, start, end);
         regex/proc/Replace_char(text, rep, start, end);
+
+        // 514 stuff
+
+        generator;
+        generator/proc/Rand();
+        generator/proc/Turn(a);
+
+        particles;
+        particles/var/width;
+        particles/var/height;
+        particles/var/spawning;
+        particles/var/count;
+        particles/var/bound1;
+        particles/var/bound2;
+        particles/var/gravity;
+        particles/var/gradient;
+        particles/var/transform;
+        particles/var/lifespan;
+        particles/var/fade;
+        particles/var/position;
+        particles/var/velocity;
+        particles/var/color;
+        particles/var/color_change;
+        particles/var/icon;
+        particles/var/icon_state;
+        particles/var/scale;
+        particles/var/rotation;
+        particles/var/spin;
+        particles/var/drift;
     };
 }
 

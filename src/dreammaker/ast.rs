@@ -1136,6 +1136,7 @@ pub const KNOWN_SETTING_NAMES: &[&str] = &[
 pub static VALID_FILTER_TYPES: phf::Map<&'static str, &[&str]> = phf_map! {
     "alpha" => &[ "x", "y", "icon", "render_source", "flags" ],
     "angular_blur" => &[ "x", "y", "size" ],
+    "bloom" => &[ "threshold", "size", "offset", "alpha" ],
     "color" => &[ "color", "space" ],
     "displace" => &[ "x", "y", "size", "icon", "render_source" ],
     "drop_shadow" => &[ "x", "y", "size", "offset", "color"],
