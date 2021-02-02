@@ -215,7 +215,7 @@ oper_table! { BINARY_OPS;
         (AssignOp, BitXorAssign),
         (AssignOp, LShiftAssign),
         (AssignOp, RShiftAssign),
-        (AssignOp, ExpressAssign),
+        (AssignOp, AssignInto),
         (AssignOp, AndAssign),
         (AssignOp, OrAssign),
     }

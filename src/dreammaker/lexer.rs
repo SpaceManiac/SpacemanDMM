@@ -100,7 +100,7 @@ table! {
     "//",  LineComment;
     "/=",  DivAssign;
     ":",   Colon -> CloseColon;
-    ":=",  ExpressAssign;
+    ":=",  AssignInto;
     ";",   Semicolon;
     "<",   Less;
     "<<",  LShift;
@@ -282,7 +282,7 @@ impl Token {
                 SubAssign |
                 DivAssign |
                 Colon |
-                ExpressAssign |
+                AssignInto |
                 Less |
                 LShift |
                 LShiftAssign |
