@@ -1096,6 +1096,8 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         generator/proc/Rand();
         generator/proc/Turn(a);
 
+        /proc/generator(type, A, B, rand);
+
         particles;
         particles/var/width;
         particles/var/height;
