@@ -692,6 +692,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         atom/movable/var/tmp/list/locs;  // not editable
         atom/movable/var/screen_loc;
         atom/movable/var/glide_size = int!(0);
+        atom/movable/var/particles;
         atom/movable/var/step_size = int!(32);
         atom/movable/var/step_x = int!(0);
         atom/movable/var/step_y = int!(0);
