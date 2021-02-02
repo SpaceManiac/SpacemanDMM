@@ -215,6 +215,9 @@ oper_table! { BINARY_OPS;
         (AssignOp, BitXorAssign),
         (AssignOp, LShiftAssign),
         (AssignOp, RShiftAssign),
+        (AssignOp, ExpressAssign),
+        (AssignOp, SafeBitAndAssign),
+        (AssignOp, SafeBitOrAssign),
     }
     // "in" is special and has different precedence in different contexts
     In {
