@@ -263,7 +263,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
             var/const/TILE_MOVEMENT_MODE = int!(1);
             var/const/PIXEL_MOVEMENT_MODE = int!(2);
         }
-s
+
         // layers
         #[dm_ref("/atom/var/overlays")]
         var/const/FLOAT_LAYER = int!(-1);
