@@ -272,6 +272,7 @@ impl Token {
                 Mod |
                 And |
                 BitAndAssign |
+                AndAssign |
                 Mul |
                 Pow |
                 MulAssign |
@@ -281,6 +282,7 @@ impl Token {
                 SubAssign |
                 DivAssign |
                 Colon |
+                ExpressAssign |
                 Less |
                 LShift |
                 LShiftAssign |
