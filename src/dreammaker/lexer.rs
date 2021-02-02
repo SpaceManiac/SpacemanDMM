@@ -78,7 +78,7 @@ table! {
     "&",   BitAnd;
     "&&",  And;
     "&=",  BitAndAssign;
-    "&&=", SafeBitAndAssign;
+    "&&=", AndAssign;
     "'",   SingleQuote;
     "(",   LParen;
     ")",   RParen;
@@ -125,7 +125,7 @@ table! {
     "|",   BitOr;
     "||",  Or;
     "|=",  BitOrAssign;
-    "||=",  SafeBitOrAssign;
+    "||=",  OrAssign;
     "}",   RBrace;
     "~",   BitNot;
     "~!",  NotEquiv;
@@ -294,7 +294,7 @@ impl Token {
                 QuestionMark |
                 BitXorAssign |
                 BitOrAssign |
-                SafeBitOrAssign |
+                OrAssign |
                 Or => return true,
                 _ => {}
             }
