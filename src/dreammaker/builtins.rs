@@ -192,7 +192,7 @@ pub fn default_defines(defines: &mut DefineMap) {
 
         // generator functions (514)
         UNIFORM_RAND = Int(0);
-        GAUSS_RAND = Int(1);
+        NORMAL_RAND = Int(1);
         LINEAR_RAND = Int(2);
         SQUARE_RAND = Int(3);
     }
