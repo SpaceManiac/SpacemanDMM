@@ -140,7 +140,7 @@ pub fn default_defines(defines: &mut DefineMap) {
         ELASTIC_EASING = Int(5);
         BACK_EASING = Int(6);
         QUAD_EASING = Int(7);
-        JUMP_EASING = Int(7); // 513
+        JUMP_EASING = Int(8); // 513
         EASE_IN = Int(64);
         EASE_OUT = Int(128);
 
