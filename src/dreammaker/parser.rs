@@ -140,7 +140,7 @@ macro_rules! oper_table {
 // Highest precedence is first in the list, to match the reference.
 oper_table! { BINARY_OPS;
     // () . : /        // here . : / are path operators
-    // []
+    // [] ?[]
     // . : ?. :
     // ~ ! - ++ --     // unary operators
     // **
