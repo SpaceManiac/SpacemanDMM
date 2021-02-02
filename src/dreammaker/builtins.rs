@@ -1112,6 +1112,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         particles/var/velocity;
         particles/var/color;
         particles/var/color_change;
+        particles/var/friction;
         particles/var/icon;
         particles/var/icon_state;
         particles/var/scale;
