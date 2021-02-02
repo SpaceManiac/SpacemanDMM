@@ -125,7 +125,7 @@ table! {
     "|",   BitOr;
     "||",  Or;
     "|=",  BitOrAssign;
-    "||=",  OrAssign;
+    "||=", OrAssign;
     "}",   RBrace;
     "~",   BitNot;
     "~!",  NotEquiv;
