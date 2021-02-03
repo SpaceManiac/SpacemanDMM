@@ -4,11 +4,12 @@
 
 use std::io;
 use std::path::Path;
+use bytemuck::Pod;
 
-use ndarray::Array3;
 use lodepng::{self, RGBA, Decoder, ColorType};
 
 pub use dm::dmi::*;
+use std::ops::{Index, IndexMut};
 
 type Rect = (u32, u32, u32, u32);
 
@@ -49,6 +50,43 @@ impl IconFile {
     }
 }
 
+#[derive(Default, Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
+pub struct Rgba8 {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: u8,
+}
+
+impl Rgba8 {
+    pub fn new(r: u8, g: u8, b: u8, a: u8) -> Rgba8 {
+        Rgba8 { r, g, b, a }
+    }
+
+    pub fn as_bytes(&self) -> &[u8; 4] {
+        bytemuck::cast_ref(self)
+    }
+
+    pub fn as_bytes_mut(&mut self) -> &mut [u8; 4] {
+        bytemuck::cast_mut(self)
+    }
+}
+
+impl Index<u8> for Rgba8 {
+    type Output = u8;
+
+    fn index(&self, index: u8) -> &Self::Output {
+        &self.as_bytes()[index as usize]
+    }
+}
+
+impl IndexMut<u8> for Rgba8 {
+    fn index_mut(&mut self, index: u8) -> &mut Self::Output {
+        &mut self.as_bytes_mut()[index as usize]
+    }
+}
+
 // ----------------------------------------------------------------------------
 // Image manipulation
 
@@ -56,7 +94,7 @@ impl IconFile {
 pub struct Image {
     pub width: u32,
     pub height: u32,
-    pub data: Array3<u8>,
+    pub data: Vec<Rgba8>,
 }
 
 impl Image {
@@ -64,7 +102,7 @@ impl Image {
         Image {
             width,
             height,
-            data: Array3::zeros((height as usize, width as usize, 4)),
+            data: vec![Default::default(); (width * height) as usize],
         }
     }
 
@@ -72,16 +110,7 @@ impl Image {
         Image {
             width: bitmap.width as u32,
             height: bitmap.height as u32,
-            data: Array3::from_shape_fn((bitmap.height, bitmap.width, 4), |(y, x, c)| {
-                let rgba = bitmap.buffer[y * bitmap.width + x];
-                match c {
-                    0 => rgba.r,
-                    1 => rgba.g,
-                    2 => rgba.b,
-                    3 => rgba.a,
-                    _ => unreachable!(),
-                }
-            }),
+            data: bytemuck::cast_slice(bitmap.buffer.as_slice()).to_vec(),
         }
     }
 
@@ -105,7 +134,7 @@ impl Image {
         Ok(Image::from_rgba(bitmap))
     }
 
-    #[cfg(feature="png")]
+    #[cfg(feature = "png")]
     pub fn to_file(&self, path: &Path) -> io::Result<()> {
         use std::fs::File;
 
@@ -115,51 +144,47 @@ impl Image {
         let mut writer = encoder.write_header()?;
         // TODO: metadata with write_chunk()
 
-        writer.write_image_data(self.data.as_slice().unwrap())?;
+        writer.write_image_data(bytemuck::cast_slice(self.data.as_slice()))?;
         Ok(())
     }
 
     pub fn composite(&mut self, other: &Image, pos: (u32, u32), crop: Rect, color: [u8; 4]) {
-        use ndarray::Axis;
-
-        let mut destination = self.data.slice_mut(s![
-            pos.1 as isize..(pos.1 + crop.3) as isize,
-            pos.0 as isize..(pos.0 + crop.2) as isize,
-            ..
-        ]);
-        let source = other.data.slice(s![
-            crop.1 as isize..(crop.1 + crop.3) as isize,
-            crop.0 as isize..(crop.0 + crop.2) as isize,
-            ..
-        ]);
-
-        // loop over each [r, g, b, a] available in the relevant area
-        for (mut dest, orig_src) in destination.lanes_mut(Axis(2)).into_iter().zip(source.lanes(Axis(2))) {
-            macro_rules! tint {
-                ($i:expr) => {
-                    mul255(
-                        *orig_src.get($i).unwrap_or(&255),
-                        *color.get($i).unwrap_or(&255),
-                    )
-                };
-            }
-            let src = [tint!(0), tint!(1), tint!(2), tint!(3)];
-
-            // out_A = src_A + dst_A (1 - src_A)
-            // out_RGB = (src_RGB src_A + dst_RGB dst_A (1 - src_A)) / out_A
-            let out_a = src[3] + mul255(dest[3], 255 - src[3]);
-            if out_a != 0 {
-                for i in 0..3 {
-                    dest[i] = ((src[i] as u32 * src[3] as u32
-                        + dest[i] as u32 * dest[3] as u32 * (255 - src[3] as u32) / 255)
-                        / out_a as u32) as u8;
+        let mut sy = crop.1;
+        for y in pos.1..(pos.1 + crop.3) {
+            let mut sx = crop.0;
+            for x in pos.0..(pos.0 + crop.2) {
+                let src = other.data[(sy * other.width + sx) as usize];
+                macro_rules! tint {
+                    ($i:expr) => {
+                        mul255(
+                            src[$i],
+                            color[$i],
+                        )
+                    };
                 }
-            } else {
-                for i in 0..3 {
-                    dest[i] = 0;
+                let mut dst = &mut self.data[(y * self.width + x) as usize];
+                let src_tint = Rgba8::new(tint!(0), tint!(1), tint!(2), tint!(3));
+
+                // out_A = src_A + dst_A (1 - src_A)
+                // out_RGB = (src_RGB src_A + dst_RGB dst_A (1 - src_A)) / out_A
+                let out_a = src_tint.a + mul255(dst.a, 255 - src_tint.a);
+                if out_a != 0 {
+                    for i in 0..3 {
+                        dst[i] = ((src_tint[i] as u32 * src_tint.a as u32
+                            + dst[i] as u32 * dst.a as u32 * (255 - src_tint.a as u32) / 255)
+                            / out_a as u32) as u8;
+                    }
+                } else {
+                    for i in 0..3 {
+                        dst[i] = 0;
+                    }
                 }
+                dst.a = out_a as u8;
+
+                sx += 1;
             }
-            dest[3] = out_a as u8;
+
+            sy += 1;
         }
     }
 }
