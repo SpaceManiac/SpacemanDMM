@@ -104,6 +104,7 @@ pub fn default_defines(defines: &mut DefineMap) {
         TILE_BOUND = Int(256);
         PIXEL_SCALE = Int(512);
         PASS_MOUSE = Int(1024);
+        TILE_MOVER = Int(2048); // 514
 
         CONTROL_FREAK_ALL = Int(1);
         CONTROL_FREAK_SKIN = Int(2);
@@ -139,9 +140,9 @@ pub fn default_defines(defines: &mut DefineMap) {
         ELASTIC_EASING = Int(5);
         BACK_EASING = Int(6);
         QUAD_EASING = Int(7);
+        JUMP_EASING = Int(8); // 513
         EASE_IN = Int(64);
         EASE_OUT = Int(128);
-        JUMP_EASING = Int(256); // 513
 
         // animation flags
         ANIMATION_END_NOW = Int(1);
@@ -165,9 +166,7 @@ pub fn default_defines(defines: &mut DefineMap) {
         DATABASE_ROW_COLUMN_VALUE = Int(17);
         DATABASE_ROW_LIST = Int(18);
 
-        // 513 stuff
-
-        // vis_flags
+        // vis_flags (513)
         VIS_INHERIT_ICON = Int(1);
         VIS_INHERIT_ICON_STATE = Int(2);
         VIS_INHERIT_DIR = Int(4);
@@ -177,13 +176,25 @@ pub fn default_defines(defines: &mut DefineMap) {
         VIS_UNDERLAY = Int(64);
         VIS_HIDE = Int(128);
 
-        // world.Profile()
+        // color spaces (514)
+        COLORSPACE_RGB = Int(0);
+        COLORSPACE_HSV = Int(1);
+        COLORSPACE_HSL = Int(2);
+        COLORSPACE_HCY = Int(3);
+
+        // world.Profile() (513)
         PROFILE_STOP = Int(1);
         PROFILE_CLEAR = Int(2);
         PROFILE_AVERAGE = Int(4);
         PROFILE_START = Int(0);
         PROFILE_REFRESH = Int(0);
         PROFILE_RESTART = Int(2);
+
+        // generator functions (514)
+        UNIFORM_RAND = Int(0);
+        NORMAL_RAND = Int(1);
+        LINEAR_RAND = Int(2);
+        SQUARE_RAND = Int(3);
     }
 }
 
@@ -244,6 +255,13 @@ pub fn register_builtins(tree: &mut ObjectTree) {
             var/const/MOB_PERSPECTIVE = int!(0);
             var/const/EYE_PERSPECTIVE = int!(1);
             var/const/EDGE_PERSPECTIVE = int!(2);
+        }
+
+        // enum /world/var/movement_mode (514)
+        #[dm_ref("/world/var/movement_mode")] {
+            var/const/LEGACY_MOVEMENT_MODE = int!(0);
+            var/const/TILE_MOVEMENT_MODE = int!(1);
+            var/const/PIXEL_MOVEMENT_MODE = int!(2);
         }
 
         // layers
@@ -376,7 +394,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
             alpha, color, infra_luminosity, layer, maptext_width, maptext_height,
             maptext_x, maptext_y, luminosity, pixel_x, pixel_y, pixel_w, pixel_z,
             transform, dir, icon, icon_state, invisibility, maptext, suffix, appearance,
-            dir, radius,
+            dir, radius, space,
             // filters only
             size, x, y, offset, flags, repeat);
         proc/arccos(X);
@@ -418,7 +436,8 @@ pub fn register_builtins(tree: &mut ObjectTree) {
             factor,
             repeat,
             radius,
-            falloff
+            falloff,
+            alpha
         );
         proc/findlasttext(Haystack,Needle,Start=0,End=1);
         proc/findlasttextEx(Haystack,Needle,Start=0,End=1);
@@ -434,6 +453,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         proc/get_step_rand(Ref);
         proc/get_step_to(Ref,Trg,Min=0);
         proc/get_step_towards(Ref,Trg);
+        proc/gradient(Gradient, index); // unsure how to handle (Item1, Item2, ..., index) form
         proc/hascall(Object,ProcName);
         proc/hearers(Depth=world.view,Center=usr);
         proc/html_decode(HtmlText);
@@ -464,6 +484,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         proc/link(url);
         proc/list(A,B,C/*,...*/);  // +1 form
         proc/list2params(List);
+        proc/load_resource(File, KeepTime); // 514 (special form?)
         proc/locate(Type)/*in Container*/;  // +3 forms
         proc/log(X=2.718, Y);
         proc/lowertext(T);
@@ -492,7 +513,8 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         proc/REGEX_QUOTE_REPLACEMENT(text);
         proc/replacetext(Haystack,Needle,Replacement,Start=1,End=0);
         proc/replacetextEx(Haystack,Needle,Replacement,Start=1,End=0);
-        proc/rgb(R,G,B,A=null);
+        proc/rgb(R,G,B,A=null,space); // special form? - [r,g,b|x,y,z],(a),(space)
+        proc/rgb2num(color, space);
         proc/roll(ndice=1,sides);  // +1 form
         proc/round(A,B=null);
         proc/run(File);
@@ -504,6 +526,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         proc/sorttextEx(T1,T2/*,...*/);
         proc/sound(file,repeat=0,wait,channel,volume);  // SNA
         proc/spantext(Haystack,Needles,Start=1);
+        proc/splicetext(Text,Start=1,End=0,Insert="");
         proc/splittext(Text,Delimiter,Start=1,End=0,include_delimiters=0);
         proc/sqrt(A);
         proc/startup(File,Port=0,Options/*,...*/);
@@ -519,7 +542,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         proc/text2file(Text,File);
         proc/text2num(T, Radix);
         proc/text2path(T);
-        proc/time2text(timestamp,format);
+        proc/time2text(timestamp,format,timezone);
         proc/turn(Dir,Angle);  // +2 forms
         proc/typesof(Type1,Type2/*,...*/);
         proc/uppertext(T);
@@ -588,6 +611,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         list/proc/Insert(Index, Item1, Item2/*,...*/);
         list/proc/Join(Glue, Start=1, End=0);
         list/proc/Remove(Item1, Item2/*,...*/);
+        list/proc/Splice(Start=1, End=0, Item1, Item2/*,...*/); // 514
         list/proc/Swap(Index1, Index2);
         list/var/len;
 
@@ -668,6 +692,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         atom/movable/var/tmp/list/locs;  // not editable
         atom/movable/var/screen_loc;
         atom/movable/var/glide_size = int!(0);
+        atom/movable/var/particles;
         atom/movable/var/step_size = int!(32);
         atom/movable/var/step_x = int!(0);
         atom/movable/var/step_y = int!(0);
@@ -724,6 +749,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         world/var/internet_address;
         world/var/log;
         world/var/loop_checks = int!(1);
+        world/var/map_cpu;
         world/var/map_format = int!(0); // TOPDOWN_MAP
         world/var/maxx;
         world/var/maxy;
@@ -742,6 +768,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         world/var/turf/turf = path!(/turf);
         world/var/time;
         world/var/timeofday;
+        world/var/timezone; // 514
         world/var/url;
         world/var/version = int!(0);
         world/var/view = int!(5);
@@ -817,6 +844,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         client/var/statobj;
         client/var/statpanel;
         client/var/tick_lag = int!(0);
+        client/var/timezone; // 514
         client/var/list/verbs;
         client/var/view;
         client/var/virtual_eye;
@@ -1050,6 +1078,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         proc/spantext_char(Haystack,Needles,Start=1);
         proc/nonspantext_char(Haystack,Needles,Start=1);
         proc/splittext_char(Text,Delimiter,Start=1,End=0,include_delimiters=0);
+        proc/splicetext_char(Text,Start=1,End=0,Insert=""); // 514
 
         atom/var/render_target;
         atom/var/render_source;
@@ -1060,6 +1089,38 @@ pub fn register_builtins(tree: &mut ObjectTree) {
 
         regex/proc/Find_char(text, start, end);
         regex/proc/Replace_char(text, rep, start, end);
+
+        // 514 stuff
+
+        generator;
+        generator/proc/Rand();
+        generator/proc/Turn(a);
+
+        /proc/generator(type, A, B, rand);
+
+        particles;
+        particles/var/width;
+        particles/var/height;
+        particles/var/spawning;
+        particles/var/count;
+        particles/var/bound1;
+        particles/var/bound2;
+        particles/var/gravity;
+        particles/var/gradient;
+        particles/var/transform;
+        particles/var/lifespan;
+        particles/var/fade;
+        particles/var/position;
+        particles/var/velocity;
+        particles/var/color;
+        particles/var/color_change;
+        particles/var/friction;
+        particles/var/icon;
+        particles/var/icon_state;
+        particles/var/scale;
+        particles/var/rotation;
+        particles/var/spin;
+        particles/var/drift;
     };
 }
 
