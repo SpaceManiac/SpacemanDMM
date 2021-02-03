@@ -77,8 +77,8 @@ table! {
     "%=",  ModAssign;
     "&",   BitAnd;
     "&&",  And;
-    "&=",  BitAndAssign;
     "&&=", AndAssign;
+    "&=",  BitAndAssign;
     "'",   SingleQuote;
     "(",   LParen;
     ")",   RParen;
@@ -123,8 +123,8 @@ table! {
     "{",   LBrace;
     "{\"", BlockString;
     "|",   BitOr;
-    "||",  Or;
     "|=",  BitOrAssign;
+    "||",  Or;
     "||=", OrAssign;
     "}",   RBrace;
     "~",   BitNot;
@@ -177,10 +177,16 @@ fn make_speedy_table() {
     }
 
     let mut table = vec![];
+    let mut prev = None;
     for (i, (each, _)) in PUNCT_TABLE.iter().enumerate() {
         if each.chars().any(|c| c.is_alphanumeric()) {
             continue;
         }
+
+        if let Some(prev) = prev {
+            assert!(each > prev, "out-of-order: {:?} is not greater than {:?}", each, prev);
+        }
+        prev = Some(each);
 
         let b = each.as_bytes()[0] as usize;
         if b >= table.len() {
