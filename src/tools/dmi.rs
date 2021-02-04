@@ -149,7 +149,6 @@ impl Image {
         let mut encoder = png::Encoder::new(File::create(path)?, self.width, self.height);
         encoder.set_color(::png::ColorType::RGBA);
         encoder.set_depth(::png::BitDepth::Eight);
-        encoder.set_compression(::png::Compression::Fast);
         let mut writer = encoder.write_header()?;
         // TODO: metadata with write_chunk()
 
