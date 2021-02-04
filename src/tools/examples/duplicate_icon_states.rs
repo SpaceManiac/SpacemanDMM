@@ -49,13 +49,11 @@ fn all_same(icon_file: &IconFile, states: &[&State]) -> bool {
             let rect2 = icon_file.rect_of_index(start_index + i);
             let slice1 = icon_file.image.data.slice(s![
                 rect1.1 as isize..(rect1.1 + rect1.3) as isize,
-                rect1.0 as isize..(rect1.0 + rect1.2) as isize,
-                ..
+                rect1.0 as isize..(rect1.0 + rect1.2) as isize
             ]);
             let slice2 = icon_file.image.data.slice(s![
                 rect2.1 as isize..(rect2.1 + rect2.3) as isize,
-                rect2.0 as isize..(rect2.0 + rect2.2) as isize,
-                ..
+                rect2.0 as isize..(rect2.0 + rect2.2) as isize
             ]);
             if slice1 != slice2 {
                 return false;
