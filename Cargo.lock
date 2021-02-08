@@ -167,6 +167,7 @@ dependencies = [
 name = "builtins-proc-macro"
 version = "0.0.0"
 dependencies = [
+ "proc-macro2 1.0.24",
  "quote 1.0.8",
  "syn",
 ]

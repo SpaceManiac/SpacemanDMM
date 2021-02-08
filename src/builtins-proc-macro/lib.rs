@@ -1,4 +1,3 @@
-use export::TokenStream2;
 use proc_macro::TokenStream;
 use quote::{quote, quote_spanned};
 use syn::*;
@@ -6,6 +5,7 @@ use syn::ext::IdentExt;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
+use proc_macro2::TokenStream as TokenStream2;
 
 #[derive(Clone, Default)]
 struct Header {
