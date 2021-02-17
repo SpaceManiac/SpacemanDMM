@@ -24,6 +24,12 @@
             {%- else -%}
                 {{ item.type.path | linkify_type | safe }}
             {%- endif %}</th><td>{{ item.type.teaser | safe }}</td></tr>
+        {%- elif item.global_proc -%}
+            <tr><th>/proc/<a href="global.html#proc/{{item.global_proc.name}}">{{item.global_proc.name}}</a></th>
+                <td>{{ item.global_proc.teaser | safe }}</td></tr>
+        {%- elif item.global_var -%}
+            <tr><th>/var/<a href="global.html#var/{{item.global_var.name}}">{{item.global_var.name}}</a></th>
+                <td>{{ item.global_var.teaser | safe }}</td></tr>
         {%- endif %}
     {%- endfor -%}
 </table>

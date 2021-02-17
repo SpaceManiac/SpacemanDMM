@@ -1147,7 +1147,8 @@ impl EditorScene {
         self.target_tile = self.tile_under(self.last_mouse_pos);
     }
 
-    #[deny(unreachable_patterns)]
+    // Commented out due to https://github.com/rust-lang/rust/issues/82012
+    //#[deny(unreachable_patterns)]
     fn chord(&mut self, ctrl: bool, shift: bool, alt: bool, key: Key) {
         use Key::*;
         macro_rules! k {
@@ -1163,7 +1164,6 @@ impl EditorScene {
             (@[$ctrl:pat, $shift:pat, $alt:pat] Alt + $($rest:tt)*) => {
                 k!(@[$ctrl, $shift, true] $($rest)*)
             };
-            (@$($rest:tt)*) => { error };
             ($($rest:tt)*) => {
                 k!(@[false, false, false] $($rest)*)
             };

@@ -21,6 +21,12 @@ fn main() {
     if env::var_os("EXTOOLS_BUNDLE_DLL").is_some() {
         println!("cargo:rustc-cfg=extools_bundle");
     }
+
+    // auxtools bundling
+    println!("cargo:rerun-if-env-changed=AUXTOOLS_BUNDLE_DLL");
+    if env::var_os("AUXTOOLS_BUNDLE_DLL").is_some() {
+        println!("cargo:rustc-cfg=auxtools_bundle");
+    }
 }
 
 fn read_commit() -> Result<String, git2::Error> {

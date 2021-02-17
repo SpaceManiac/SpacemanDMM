@@ -121,6 +121,8 @@ pub enum ConstFn {
     Filter,
     /// The `file()` annotator (marks a string as `isfile`).
     File,
+    /// The `generator()` type constructor.
+    Generator,
 }
 
 /// A constant-evaluation error (usually type mismatch).
@@ -383,6 +385,7 @@ impl fmt::Display for ConstFn {
             ConstFn::Sound => "sound",
             ConstFn::Filter => "filter",
             ConstFn::File => "file",
+            ConstFn::Generator => "generator",
         })
     }
 }
@@ -733,6 +736,7 @@ impl<'a> ConstantFolder<'a> {
                 "icon" => Constant::Call(ConstFn::Icon, self.arguments(args)?),
                 "sound" => Constant::Call(ConstFn::Sound, self.arguments(args)?),
                 "file" => Constant::Call(ConstFn::File, self.arguments(args)?),
+                "generator" => Constant::Call(ConstFn::Generator, self.arguments(args)?),
                 // constant-evaluatable functions
                 "sin" => self.trig_op(args, f32::sin)?,
                 "cos" => self.trig_op(args, f32::cos)?,
@@ -840,7 +844,7 @@ impl<'a> ConstantFolder<'a> {
         while let Some(ty) = idx {
             let location = self.location;
             if self.tree.is_none() {
-                return Err(self.error("cannot reference variables in this context"));
+                return Err(self.error(format!("cannot reference variable {:?} in this context", ident)));
             }
             let tree = self.tree.as_mut().unwrap();
             match constant_ident_lookup(tree, ty, &ident, must_be_const)

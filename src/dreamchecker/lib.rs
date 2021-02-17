@@ -143,6 +143,7 @@ impl<'o> AssumptionSet<'o> {
                 ConstFn::Matrix => AssumptionSet::from_valid_instance(objtree.expect("/matrix")),
                 ConstFn::Newlist => AssumptionSet::from_valid_instance(objtree.expect("/list")),
                 ConstFn::Sound => AssumptionSet::from_valid_instance(objtree.expect("/sound")),
+                ConstFn::Generator => AssumptionSet::from_valid_instance(objtree.expect("/generator")),
                 ConstFn::Filter => AssumptionSet::default(),
                 ConstFn::File => AssumptionSet::default(),
             },
@@ -250,7 +251,9 @@ trait WithFixHint {
 impl WithFixHint for DMError {
     fn with_fix_hint(mut self, analysis: &Analysis) -> Self {
         if let Some((loc, desc)) = analysis.fix_hint.clone() {
-            self.add_note(loc, desc);
+            if !loc.is_builtins() {  // Don't try to tell people to edit the builtins.
+                self.add_note(loc, desc);
+            }
         }
         self
     }
@@ -1281,6 +1284,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Statement::Return(Some(expr)) => {
                 // TODO: factor in the previous return type if there was one
+                if self.inside_newcontext > 0 {
+                    error(location, "returning a value in a spawn has no effect")
+                        .set_severity(Severity::Warning)
+                        .register(self.context);
+                }
                 let return_type = self.visit_expression(location, expr, None, local_vars);
                 local_vars.get_mut(".").unwrap().analysis = return_type;
                 return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false }

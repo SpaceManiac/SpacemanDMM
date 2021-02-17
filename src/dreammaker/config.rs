@@ -24,6 +24,7 @@ pub struct Config {
     // tool-specific configuration
     pub langserver: Langserver,
     pub dmdoc: DMDoc,
+    pub debugger: Debugger,
 }
 
 /// General error display options
@@ -49,8 +50,18 @@ pub struct CodeStandards {
 
 /// DMDoc config options
 #[derive(Deserialize, Default, Debug, Clone)]
+#[serde(default)]
 pub struct DMDoc {
     pub use_typepath_names: bool,
+    pub index_file: Option<String>,
+    pub module_directories: Vec<String>,
+}
+
+// Debugger config options
+#[derive(Deserialize, Default, Debug, Clone)]
+pub struct Debugger {
+    #[serde(default)]
+    pub engine: DebugEngine,
 }
 
 /// Severity overrides from configuration
@@ -68,6 +79,14 @@ pub enum WarningLevel {
     #[serde(alias = "false", alias = "off")]
     Disabled = 5,
     Unset = 6,
+}
+
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
+pub enum DebugEngine {
+    #[serde(alias = "extools")]
+    Extools,
+    #[serde(alias = "auxtools")]
+    Auxtools,
 }
 
 impl Config {
@@ -149,6 +168,12 @@ impl PartialEq<Severity> for WarningLevel {
             (WarningLevel::Hint, Severity::Hint) => true,
             _ => false,
         }
+    }
+}
+
+impl Default for DebugEngine {
+    fn default() -> Self {
+        Self::Extools
     }
 }
 

@@ -24,29 +24,39 @@ macro_rules! debug_output {
 
 #[cfg(not(debug_assertions))]
 macro_rules! debug_output {
-    ($($rest:tt)*) => { {} }
+    ($($rest:tt)*) => {{}};
 }
 
+mod auxtools;
+mod auxtools_bundle;
+mod auxtools_types;
 mod dap_types;
-mod launched;
-mod extools_types;
+mod evaluate;
 mod extools;
 mod extools_bundle;
-mod evaluate;
+mod extools_types;
+mod launched;
 
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::sync::{atomic, Arc, Mutex};
-use std::collections::{HashMap, HashSet};
 
-use dm::FileId;
 use dm::objtree::ObjectTree;
+use dm::FileId;
+use dreammaker::config::DebugEngine;
 
-use crate::jrpc_io;
+use auxtools::Auxtools;
+
 use self::dap_types::*;
-use self::launched::Launched;
 use self::extools::ExtoolsHolder;
+use self::launched::{Launched, EngineParams};
+use crate::jrpc_io;
 
-pub fn start_server(dreamseeker_exe: String, db: DebugDatabaseBuilder) -> std::io::Result<(u16, std::thread::JoinHandle<()>)> {
+pub fn start_server(
+    engine: DebugEngine,
+    dreamseeker_exe: String,
+    db: DebugDatabaseBuilder,
+) -> std::io::Result<(u16, std::thread::JoinHandle<()>)> {
     use std::net::*;
 
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
@@ -57,37 +67,44 @@ pub fn start_server(dreamseeker_exe: String, db: DebugDatabaseBuilder) -> std::i
         .spawn(move || {
             let (stream, _) = listener.accept().unwrap();
             drop(listener);
-
             let mut input = std::io::BufReader::new(stream.try_clone().unwrap());
-            let mut debugger = Debugger::new(dreamseeker_exe, db, Box::new(stream));
+            let mut debugger = Debugger::new(engine, dreamseeker_exe, db, Box::new(stream));
             jrpc_io::run_with_read(&mut input, |message| debugger.handle_input(message));
         })?;
 
     Ok((port, handle))
 }
 
-pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
+pub fn debugger_main<I: Iterator<Item = String>>(mut args: I) {
     eprintln!("acting as debug adapter");
     let mut dreamseeker_exe = None;
 
     while let Some(arg) = args.next() {
         if arg == "--dreamseeker-exe" {
-            dreamseeker_exe = Some(args.next().expect("must specify a value for --dreamseeker-exe"));
+            dreamseeker_exe = Some(
+                args.next()
+                    .expect("must specify a value for --dreamseeker-exe"),
+            );
         } else {
             panic!("unknown argument {:?}", arg);
         }
     }
 
-    let dreamseeker_exe = dreamseeker_exe.expect("must provide argument `--dreamseeker-exe path/to/dreamseeker.exe`");
+    let dreamseeker_exe =
+        dreamseeker_exe.expect("must provide argument `--dreamseeker-exe path/to/dreamseeker.exe`");
     eprintln!("dreamseeker: {}", dreamseeker_exe);
 
     // This isn't the preferred way to run the DAP server so it's okay for it
     // to be kind of sloppy.
-    let environment = dm::detect_environment_default().expect("detect .dme error").expect("did not detect a .dme");
+    let environment = dm::detect_environment_default()
+        .expect("detect .dme error")
+        .expect("did not detect a .dme");
     let ctx = dm::Context::default();
+    ctx.autodetect_config(&environment);
     let mut pp = dm::preprocessor::Preprocessor::new(&ctx, environment).unwrap();
     let objtree = {
-        let mut parser = dm::parser::Parser::new(&ctx, dm::indents::IndentProcessor::new(&ctx, &mut pp));
+        let mut parser =
+            dm::parser::Parser::new(&ctx, dm::indents::IndentProcessor::new(&ctx, &mut pp));
         parser.enable_procs();
         Arc::new(parser.parse_object_tree())
     };
@@ -98,7 +115,7 @@ pub fn debugger_main<I: Iterator<Item=String>>(mut args: I) {
         objtree,
         extools_dll: None,
     };
-    let mut debugger = Debugger::new(dreamseeker_exe, db, Box::new(std::io::stdout()));
+    let mut debugger = Debugger::new(ctx.config().debugger.engine, dreamseeker_exe, db, Box::new(std::io::stdout()));
     jrpc_io::run_until_stdin_eof(|message| debugger.handle_input(message));
 }
 
@@ -111,23 +128,32 @@ pub struct DebugDatabaseBuilder {
 
 impl DebugDatabaseBuilder {
     fn build(self) -> DebugDatabase {
-        let DebugDatabaseBuilder { root_dir, files, objtree, extools_dll: _ } = self;
-        let mut line_numbers: HashMap<dm::FileId, Vec<(i64, String, String, usize)>> = HashMap::new();
+        let DebugDatabaseBuilder {
+            root_dir,
+            files,
+            objtree,
+            extools_dll: _,
+        } = self;
+        let mut line_numbers: HashMap<dm::FileId, Vec<(i64, String, String, usize)>> =
+            HashMap::new();
 
         objtree.root().recurse(&mut |ty| {
             for (name, proc) in ty.procs.iter() {
-                for (override_id, pv) in proc.value.iter()
-                    .skip_while(|pv| pv.location.is_builtins() && !STDDEF_PROCS.contains(&format!("{}/{}", ty.path, name).as_str()))
+                for (override_id, pv) in proc
+                    .value
+                    .iter()
+                    .skip_while(|pv| {
+                        pv.location.is_builtins()
+                            && !STDDEF_PROCS.contains(&format!("{}/{}", ty.path, name).as_str())
+                    })
                     .enumerate()
                 {
-                    line_numbers.entry(pv.location.file)
-                        .or_default()
-                        .push((
-                            pv.location.line.into(),
-                            ty.path.to_owned(),
-                            name.to_owned(),
-                            override_id,
-                        ));
+                    line_numbers.entry(pv.location.file).or_default().push((
+                        pv.location.line.into(),
+                        ty.path.to_owned(),
+                        name.to_owned(),
+                        override_id,
+                    ));
                 }
             }
         });
@@ -152,11 +178,17 @@ pub struct DebugDatabase {
     line_numbers: HashMap<dm::FileId, Vec<(i64, String, String, usize)>>,
 }
 
-fn get_proc<'o>(objtree: &'o ObjectTree, proc_ref: &str, override_id: usize) -> Option<&'o dm::objtree::ProcValue> {
+fn get_proc<'o>(
+    objtree: &'o ObjectTree,
+    proc_ref: &str,
+    override_id: usize,
+) -> Option<&'o dm::objtree::ProcValue> {
     let mut bits: Vec<&str> = proc_ref.split('/').collect();
     let procname = bits.pop().unwrap();
     match bits.last() {
-        Some(&"proc") | Some(&"verb") => { bits.pop(); }
+        Some(&"proc") | Some(&"verb") => {
+            bits.pop();
+        }
         _ => {}
     }
     let typename = bits.join("/");
@@ -164,7 +196,9 @@ fn get_proc<'o>(objtree: &'o ObjectTree, proc_ref: &str, override_id: usize) -> 
     if let Some(ty) = objtree.find(&typename) {
         if let Some(ty_proc) = ty.get().procs.get(procname) {
             // Don't consider (most) builtins against the override_id count.
-            return ty_proc.value.iter()
+            return ty_proc
+                .value
+                .iter()
                 .skip_while(|pv| pv.location.is_builtins() && !STDDEF_PROCS.contains(&proc_ref))
                 .nth(override_id);
         }
@@ -179,7 +213,8 @@ impl DebugDatabase {
 
     fn file_id(&self, file_path: &str) -> Option<FileId> {
         let path = std::path::Path::new(file_path);
-        self.files.get_id(path.strip_prefix(&self.root_dir).unwrap_or(path))
+        self.files
+            .get_id(path.strip_prefix(&self.root_dir).unwrap_or(path))
     }
 
     fn location_to_proc_ref(&self, file_id: FileId, line: i64) -> Option<(&str, &str, usize)> {
@@ -194,12 +229,18 @@ impl DebugDatabase {
     }
 }
 
+enum DebugClient {
+    Extools(ExtoolsHolder),
+    Auxtools(Auxtools),
+}
+
 struct Debugger {
+    engine: DebugEngine,
     dreamseeker_exe: String,
     extools_dll: Option<String>,
     db: DebugDatabase,
     launched: Option<Launched>,
-    extools: ExtoolsHolder,
+    client: DebugClient,
 
     seq: Arc<SequenceNumber>,
     client_caps: ClientCaps,
@@ -209,13 +250,14 @@ struct Debugger {
 }
 
 impl Debugger {
-    fn new(dreamseeker_exe: String, mut db: DebugDatabaseBuilder, stream: OutStream) -> Self {
+    fn new(engine: DebugEngine, dreamseeker_exe: String, mut db: DebugDatabaseBuilder, stream: OutStream) -> Self {
         Debugger {
+            engine,
             dreamseeker_exe,
             extools_dll: db.extools_dll.take(),
             db: db.build(),
             launched: None,
-            extools: ExtoolsHolder::default(),
+            client: DebugClient::Extools(ExtoolsHolder::default()),
 
             seq: Arc::new(SequenceNumber::new(stream)),
             client_caps: Default::default(),
@@ -227,7 +269,8 @@ impl Debugger {
 
     fn handle_input(&mut self, message: &str) {
         // TODO: error handling
-        self.handle_input_inner(message).expect("error in handle_input");
+        self.handle_input_inner(message)
+            .expect("error in handle_input");
     }
 
     fn handle_input_inner(&mut self, message: &str) -> Result<(), Box<dyn Error>> {
@@ -239,7 +282,9 @@ impl Debugger {
                 let command = request.command.clone();
 
                 let handled = match Self::handle_request_table(&request.command) {
-                    Some(handler) => handler(self, request.arguments.unwrap_or(serde_json::Value::Null)),
+                    Some(handler) => {
+                        handler(self, request.arguments.unwrap_or(serde_json::Value::Null))
+                    }
                     None => Err(format!("Request NYI: {}", request.command).into()),
                 };
 
@@ -259,13 +304,14 @@ impl Debugger {
                             }
                             debug_output!(in self.seq, " - {}", message);
                             None
-                        },
+                        }
                     },
                     command,
                 };
-                self.seq.send_raw(&serde_json::to_string(&response).expect("response encode error"))
+                self.seq
+                    .send_raw(&serde_json::to_string(&response).expect("response encode error"))
             }
-            other => return Err(format!("unknown `type` field {:?}", other).into())
+            other => return Err(format!("unknown `type` field {:?}", other).into()),
         }
         Ok(())
     }
@@ -292,16 +338,34 @@ impl Debugger {
 
         // An alternative would be to send these in real-time when sleeping
         // threads enter or exit existence.
+        match &mut self.client {
+            DebugClient::Extools(extools) => {
+                let keys: Vec<_> = {
+                    guard!(let Ok(extools) = extools.get() else { return });
+                    extools
+                        .get_all_threads()
+                        .keys()
+                        .cloned()
+                        .filter(|&k| k != 0)
+                        .collect()
+                };
+                for k in keys {
+                    self.issue_event(dap_types::ThreadEvent {
+                        reason: dap_types::ThreadEvent::REASON_EXITED.to_owned(),
+                        threadId: k,
+                    });
+                }
+            }
 
-        let keys: Vec<_> = {
-            guard!(let Ok(extools) = self.extools.get() else { return });
-            extools.get_all_threads().keys().cloned().filter(|&k| k != 0).collect()
-        };
-        for k in keys {
-            self.issue_event(dap_types::ThreadEvent {
-                reason: dap_types::ThreadEvent::REASON_EXITED.to_owned(),
-                threadId: k,
-            });
+            DebugClient::Auxtools(auxtools) => for stack in auxtools.get_stacks().unwrap_or(vec![]) {
+                    if stack.id == 0 {
+                        continue;
+                    }
+                    self.issue_event(dap_types::ThreadEvent {
+                        reason: dap_types::ThreadEvent::REASON_EXITED.to_owned(),
+                        threadId: stack.id as i64,
+                    });
+                },
         }
     }
 }
@@ -346,43 +410,83 @@ handle_request! {
     on LaunchVsc(&mut self, params) {
         // Determine port number to pass if debugging is enabled.
         let debug = !params.base.noDebug.unwrap_or(false);
-        let port = if debug {
-            let (port, extools) = ExtoolsHolder::listen(self.seq.clone())?;
-            self.extools = extools;
-            Some(port)
+
+        let engine_params = if debug {
+            Some(match self.engine {
+                DebugEngine::Extools => {
+                    let (port, extools) = ExtoolsHolder::listen(self.seq.clone())?;
+                    self.client = DebugClient::Extools(extools);
+
+                    // Set EXTOOLS_DLL based on configuration or on bundle if available.
+                    #[allow(unused_mut)]
+                    let mut extools_dll = self.extools_dll.as_ref().map(|x| std::path::Path::new(x).to_path_buf());
+
+                    debug_output!(in self.seq, "[main] configured override: {:?}", extools_dll);
+
+                    #[cfg(extools_bundle)] {
+                        if extools_dll.is_none() {
+                            extools_dll = Some(self::extools_bundle::extract()?);
+                        }
+                    }
+
+                    EngineParams::Extools {
+                        port,
+                        dll: extools_dll,
+                    }
+                }
+
+                DebugEngine::Auxtools => {
+                    let (port, auxtools) = Auxtools::listen(self.seq.clone())?;
+                    self.client = DebugClient::Auxtools(auxtools);
+
+                    #[allow(unused_mut)]
+                    let mut auxtools_dll = None;
+
+                    #[cfg(extools_bundle)] {
+                        if auxtools_dll.is_none() {
+                            auxtools_dll = Some(self::auxtools_bundle::extract()?);
+                        }
+                    }
+
+                    EngineParams::Auxtools {
+                        port,
+                        dll: auxtools_dll,
+                    }
+                }
+            })
         } else {
             None
         };
 
-        // Set EXTOOLS_DLL based on configuration or on bundle if available.
-        #[cfg(extools_bundle)]
-        let pathbuf;
-
-        #[allow(unused_mut)]
-        let mut extools_dll = self.extools_dll.as_ref().map(std::path::Path::new);
-
-        debug_output!(in self.seq, "[main] configured override: {:?}", extools_dll);
-
-        #[cfg(extools_bundle)] {
-            if extools_dll.is_none() {
-                pathbuf = self::extools_bundle::extract()?;
-                extools_dll = Some(&pathbuf);
-            }
-        }
-
         // Launch the subprocess.
-        self.launched = Some(Launched::new(self.seq.clone(), &self.dreamseeker_exe, &params.dmb, port, extools_dll)?);
+        self.launched = Some(Launched::new(self.seq.clone(), &self.dreamseeker_exe, &params.dmb, engine_params)?);
     }
 
     on AttachVsc(&mut self, params) {
-        self.extools = ExtoolsHolder::attach(self.seq.clone(), params.port.unwrap_or(extools::DEFAULT_PORT))?;
+        self.client = match self.engine {
+            DebugEngine::Extools => {
+                DebugClient::Extools(ExtoolsHolder::attach(self.seq.clone(), params.port.unwrap_or(extools::DEFAULT_PORT))?)
+            }
+
+            DebugEngine::Auxtools => {
+                DebugClient::Auxtools(Auxtools::connect(self.seq.clone(), params.port)?)
+            }
+        };
     }
 
     on Disconnect(&mut self, params) {
         let default_terminate = self.launched.is_some();
         let terminate = params.terminateDebuggee.unwrap_or(default_terminate);
 
-        self.extools.disconnect();
+        match &mut self.client {
+            DebugClient::Extools(extools) => {
+                extools.disconnect();
+            }
+
+            DebugClient::Auxtools(auxtools) => {
+                auxtools.disconnect();
+            }
+        }
 
         if let Some(launched) = self.launched.take() {
             if terminate {
@@ -394,34 +498,71 @@ handle_request! {
     }
 
     on ConfigurationDone(&mut self, ()) {
-        let extools = self.extools.get()?;
+        match &mut self.client {
+            DebugClient::Extools(extools) => {
+                let extools = extools.get()?;
 
-        let text = extools.get_source("stddef.dm".to_owned())?;
-        self.stddef_dm_info = Some(StddefDmInfo::new(text));
+                let text = extools.get_source("stddef.dm".to_owned())?;
+                self.stddef_dm_info = Some(StddefDmInfo::new(text));
 
-        extools.configuration_done();
+                extools.configuration_done();
+            }
+
+            DebugClient::Auxtools(auxtools) => {
+                self.stddef_dm_info = auxtools.get_stddef()?.map(|x| StddefDmInfo::new(x));
+                auxtools.configured()?;
+            }
+        }
     }
 
     on Threads(&mut self, ()) {
-        let mut threads = Vec::new();
+        match &mut self.client {
+            DebugClient::Extools(extools) => {
 
-        let extools = self.extools.get()?;
-        for (&k, v) in extools.get_all_threads().iter() {
-            threads.push(Thread {
-                id: k,
-                name: v.call_stack.last().unwrap().proc.clone(),
-            });
-        }
+                let mut threads = Vec::new();
 
-        if threads.is_empty() {
-            threads.push(Thread {
-                id: 0,
-                name: "Main".to_owned(),
-            });
-        }
+                let extools = extools.get()?;
+                for (&k, v) in extools.get_all_threads().iter() {
+                    threads.push(Thread {
+                        id: k,
+                        name: v.call_stack.last().unwrap().proc.clone(),
+                    });
+                }
 
-        ThreadsResponse {
-            threads,
+                if threads.is_empty() {
+                    threads.push(Thread {
+                        id: 0,
+                        name: "Main".to_owned(),
+                    });
+                }
+
+                ThreadsResponse {
+                    threads,
+                }
+            },
+
+            DebugClient::Auxtools(auxtools) => {
+                let mut threads : Vec<Thread> = auxtools.get_stacks()?.into_iter().map(|x| {
+                    Thread {
+                        id: x.id as i64,
+                        name: x.name,
+                    }
+                }).collect();
+
+                // If we tell DAP that there are no threads, Pause requests never get passed through!
+                if threads.is_empty() {
+                    threads.push(
+                        Thread {
+                            id: 0,
+                            name: "Main".to_owned(),
+                        }
+                    );
+                }
+
+                ThreadsResponse {
+                    threads,
+                }
+            }
         }
     }
 
@@ -438,72 +579,153 @@ handle_request! {
         }
 
         let inputs = params.breakpoints.unwrap_or_default();
-        let mut breakpoints = Vec::new();
-
-        guard!(let Some(extools) = self.extools.as_ref() else {
-            for sbp in inputs {
-                breakpoints.push(Breakpoint {
-                    message: Some("Debugging hooks not available".to_owned()),
-                    line: Some(sbp.line),
-                    verified: false,
-                    .. Default::default()
-                });
-            }
-            return Ok(SetBreakpointsResponse { breakpoints });
-        });
-
         let saved = self.saved_breakpoints.entry(file_id).or_default();
         let mut keep = HashSet::new();
 
-        for sbp in inputs {
-            if let Some((typepath, name, override_id)) = self.db.location_to_proc_ref(file_id, sbp.line) {
-                // TODO: better discipline around format!("{}/{}") and so on
-                let proc = format!("{}/{}", typepath, name);
-                if let Some(offset) = extools.line_to_offset(&proc, override_id, sbp.line) {
-                    let tup = (proc, override_id, offset);
-                    if saved.insert(tup.clone()) {
-                        extools.set_breakpoint(&tup.0, tup.1, tup.2);
-                    }
-                    keep.insert(tup);
-                    breakpoints.push(Breakpoint {
-                        line: Some(sbp.line),
-                        verified: true,
-                        column: Some(0),
-                        .. Default::default()
-                    });
-                } else {
-                    debug_output!(in self.seq,
-                        "Couldn't find line {} in the following disassembly:\n{}",
-                        sbp.line,
-                        Self::format_disassembly(extools.bytecode(&proc, override_id)));
+        match &mut self.client {
+            DebugClient::Extools(extools) => {
+                let mut breakpoints = Vec::new();
 
-                    breakpoints.push(Breakpoint {
-                        message: Some("Unable to determine offset in proc".to_owned()),
-                        line: Some(sbp.line),
-                        verified: false,
-                        .. Default::default()
-                    });
-                }
-            } else {
-                breakpoints.push(Breakpoint {
-                    message: Some("Unable to determine proc ref".to_owned()),
-                    line: Some(sbp.line),
-                    verified: false,
-                    .. Default::default()
+                guard!(let Some(extools) = extools.as_ref() else {
+                    for sbp in inputs {
+                        breakpoints.push(Breakpoint {
+                            message: Some("Debugging hooks not available".to_owned()),
+                            line: Some(sbp.line),
+                            verified: false,
+                            .. Default::default()
+                        });
+                    }
+                    return Ok(SetBreakpointsResponse { breakpoints });
                 });
+
+                for sbp in inputs {
+                    if let Some((typepath, name, override_id)) = self.db.location_to_proc_ref(file_id, sbp.line) {
+                        // TODO: better discipline around format!("{}/{}") and so on
+                        let proc = format!("{}/{}", typepath, name);
+                        if let Some(offset) = extools.line_to_offset(&proc, override_id, sbp.line) {
+                            let tup = (proc, override_id, offset);
+                            if saved.insert(tup.clone()) {
+                                extools.set_breakpoint(&tup.0, tup.1, tup.2);
+                            }
+                            keep.insert(tup);
+                            breakpoints.push(Breakpoint {
+                                line: Some(sbp.line),
+                                verified: true,
+                                column: Some(0),
+                                .. Default::default()
+                            });
+                        } else {
+                            debug_output!(in self.seq,
+                                "Couldn't find line {} in the following disassembly:\n{}",
+                                sbp.line,
+                                Self::format_disassembly(extools.bytecode(&proc, override_id)));
+
+                            breakpoints.push(Breakpoint {
+                                message: Some("Unable to determine offset in proc".to_owned()),
+                                line: Some(sbp.line),
+                                verified: false,
+                                .. Default::default()
+                            });
+                        }
+                    } else {
+                        breakpoints.push(Breakpoint {
+                            message: Some("Unable to determine proc ref".to_owned()),
+                            line: Some(sbp.line),
+                            verified: false,
+                            .. Default::default()
+                        });
+                    }
+                }
+
+                saved.retain(|k| {
+                    if !keep.contains(&k) {
+                        extools.unset_breakpoint(&k.0, k.1, k.2);
+                        false
+                    } else {
+                        true
+                    }
+                });
+
+                SetBreakpointsResponse { breakpoints }
+            }
+
+            DebugClient::Auxtools(auxtools) => {
+                let mut breakpoints = vec![];
+
+                for sbp in inputs {
+                    if let Some((typepath, name, override_id)) = self.db.location_to_proc_ref(file_id, sbp.line) {
+                        // TODO: better discipline around format!("{}/{}") and so on
+                        let proc = format!("{}/{}", typepath, name);
+
+                        if let Some(offset) = auxtools.get_offset(proc.as_str(), override_id as u32, sbp.line as u32)? {
+                            saved.insert((proc.clone(), override_id, offset as i64));
+                            keep.insert((proc.clone(), override_id, offset as i64));
+
+                            let result = auxtools.set_breakpoint(&auxtools_types::InstructionRef {
+                                proc: auxtools_types::ProcRef {
+                                    path: proc,
+                                    override_id: override_id as u32
+                                },
+                                offset
+                            })?;
+
+                            breakpoints.push(match result {
+                                auxtools_types::BreakpointSetResult::Success { line } => {
+                                    Breakpoint {
+                                        verified: true,
+                                        line: line.map(|x| x as i64),
+                                        .. Default::default()
+                                    }
+                                },
+
+                                auxtools_types::BreakpointSetResult::Failed => {
+                                    Breakpoint {
+                                        verified: false,
+                                        .. Default::default()
+                                    }
+                                }
+                            });
+                        } else {
+                            // debug_output!(in self.seq,
+                            //     "Couldn't find line {} in the following disassembly:\n{}",
+                            //     sbp.line,
+                            //     Self::format_disassembly(extools.bytecode(&proc, override_id)));
+
+                            breakpoints.push(Breakpoint {
+                                message: Some("Unable to determine offset in proc".to_owned()),
+                                line: Some(sbp.line),
+                                verified: false,
+                                .. Default::default()
+                            });
+                        }
+                    } else {
+                        breakpoints.push(Breakpoint {
+                            message: Some("Unable to determine proc ref".to_owned()),
+                            line: Some(sbp.line),
+                            verified: false,
+                            .. Default::default()
+                        });
+                    }
+                }
+
+                saved.retain(|k| {
+                    if !keep.contains(&k) {
+                        let _ = auxtools.unset_breakpoint(&auxtools_types::InstructionRef {
+                            proc: auxtools_types::ProcRef {
+                                path: k.0.clone(),
+                                override_id: k.1 as u32
+                            },
+                            offset: k.2 as u32,
+                        });
+                        false
+                    } else {
+                        true
+                    }
+                });
+
+                SetBreakpointsResponse { breakpoints }
             }
         }
-
-        saved.retain(|k| {
-            if !keep.contains(&k) {
-                extools.unset_breakpoint(&k.0, k.1, k.2);
-                false
-            } else {
-                true
-            }
-        });
-
-        SetBreakpointsResponse { breakpoints }
     }
 
     on SetFunctionBreakpoints(&mut self, params) {
@@ -511,302 +733,516 @@ handle_request! {
 
         let inputs = params.breakpoints;
         let mut breakpoints = Vec::new();
-
-        guard!(let Some(extools) = self.extools.as_ref() else {
-            for _ in inputs {
-                breakpoints.push(Breakpoint {
-                    message: Some("Debugging hooks not available".to_owned()),
-                    verified: false,
-                    .. Default::default()
-                });
-            }
-            return Ok(SetFunctionBreakpointsResponse { breakpoints });
-        });
-
         let saved = self.saved_breakpoints.entry(file_id).or_default();
         let mut keep = HashSet::new();
 
-        for sbp in inputs {
-            // parse function reference
-            let mut proc = &sbp.name[..];
-            let mut override_id = 0;
-            if let Some(idx) = sbp.name.find('#') {
-                proc = &sbp.name[..idx];
-                override_id = sbp.name[idx+1..].parse()?;
+        match &mut self.client {
+            DebugClient::Extools(extools) => {
+                guard!(let Some(extools) = extools.as_ref() else {
+                    for _ in inputs {
+                        breakpoints.push(Breakpoint {
+                            message: Some("Debugging hooks not available".to_owned()),
+                            verified: false,
+                            .. Default::default()
+                        });
+                    }
+                    return Ok(SetFunctionBreakpointsResponse { breakpoints });
+                });
+
+                for sbp in inputs {
+                    // parse function reference
+                    let mut proc = &sbp.name[..];
+                    let mut override_id = 0;
+                    if let Some(idx) = sbp.name.find('#') {
+                        proc = &sbp.name[..idx];
+                        override_id = sbp.name[idx+1..].parse()?;
+                    }
+
+                    if let Some(proc_ref) = self.db.get_proc(proc, override_id) {
+                        let offset = 0;
+                        let tup = (proc.to_owned(), override_id, offset);
+                        if saved.insert(tup.clone()) {
+                            extools.set_breakpoint(&tup.0, tup.1, tup.2);
+                        }
+                        keep.insert(tup);
+                        breakpoints.push(Breakpoint {
+                            line: Some(proc_ref.location.line as i64),
+                            verified: true,
+                            column: Some(0),
+                            .. Default::default()
+                        });
+                    } else {
+                        breakpoints.push(Breakpoint {
+                            message: Some(format!("Unknown proc {}#{}", proc, override_id)),
+                            verified: false,
+                            .. Default::default()
+                        });
+                    }
+                }
+
+                saved.retain(|k| {
+                    if !keep.contains(&k) {
+                        extools.unset_breakpoint(&k.0, k.1, k.2);
+                        false
+                    } else {
+                        true
+                    }
+                });
+
+                SetFunctionBreakpointsResponse { breakpoints }
             }
 
-            if let Some(proc_ref) = self.db.get_proc(proc, override_id) {
-                let offset = 0;
-                let tup = (proc.to_owned(), override_id, offset);
-                if saved.insert(tup.clone()) {
-                    extools.set_breakpoint(&tup.0, tup.1, tup.2);
+
+            DebugClient::Auxtools(auxtools) => {
+                let mut breakpoints = vec![];
+
+                for sbp in inputs {
+                    // parse function reference
+                    let mut proc = &sbp.name[..];
+                    let mut override_id = 0;
+                    if let Some(idx) = sbp.name.find('#') {
+                        proc = &sbp.name[..idx];
+                        override_id = sbp.name[idx+1..].parse()?;
+                    }
+
+                    let offset = 0;
+                    let tup = (proc.to_owned(), override_id, offset);
+
+                    saved.insert(tup.clone());
+                    keep.insert(tup.clone());
+
+                    let result = auxtools.set_breakpoint(&auxtools_types::InstructionRef {
+                        proc: auxtools_types::ProcRef {
+                            path: tup.0,
+                            override_id: override_id as u32
+                        },
+                        offset: offset as u32,
+                    })?;
+
+                    breakpoints.push(match result {
+                        auxtools_types::BreakpointSetResult::Success { line } => {
+                            Breakpoint {
+                                verified: true,
+                                line: line.map(|x| x as i64),
+                                .. Default::default()
+                            }
+                        },
+
+                        auxtools_types::BreakpointSetResult::Failed => {
+                            Breakpoint {
+                                verified: false,
+                                .. Default::default()
+                            }
+                        }
+                    });
                 }
-                keep.insert(tup);
-                breakpoints.push(Breakpoint {
-                    line: Some(proc_ref.location.line as i64),
-                    verified: true,
-                    column: Some(0),
-                    .. Default::default()
+
+                saved.retain(|k| {
+                    if !keep.contains(&k) {
+                        let _ = auxtools.unset_breakpoint(&auxtools_types::InstructionRef {
+                            proc: auxtools_types::ProcRef {
+                                path: k.0.clone(),
+                                override_id: k.1 as u32
+                            },
+                            offset: k.2 as u32,
+                        });
+                        false
+                    } else {
+                        true
+                    }
                 });
-            } else {
-                breakpoints.push(Breakpoint {
-                    message: Some(format!("Unknown proc {}#{}", proc, override_id)),
-                    verified: false,
-                    .. Default::default()
-                });
+
+                SetFunctionBreakpointsResponse { breakpoints }
             }
         }
-
-        saved.retain(|k| {
-            if !keep.contains(&k) {
-                extools.unset_breakpoint(&k.0, k.1, k.2);
-                false
-            } else {
-                true
-            }
-        });
-
-        SetFunctionBreakpointsResponse { breakpoints }
     }
 
     on StackTrace(&mut self, params) {
-        let extools = self.extools.get()?;
-        let thread = extools.get_thread(params.threadId)?;
+        match &mut self.client {
+            DebugClient::Extools(extools) => {
+                let extools = extools.get()?;
+                let thread = extools.get_thread(params.threadId)?;
 
-        let len = thread.call_stack.len();
-        let mut frames = Vec::with_capacity(len);
-        for (i, ex_frame) in thread.call_stack.into_iter().enumerate() {
-            let mut dap_frame = StackFrame {
-                name: ex_frame.proc.clone(),
-                id: (i * extools.get_all_threads().len()) as i64 + params.threadId,
-                instructionPointerReference: Some(format!("{}@{}#{}", ex_frame.proc, ex_frame.override_id, ex_frame.offset)),
-                .. Default::default()
-            };
+                let len = thread.call_stack.len();
+                let mut frames = Vec::with_capacity(len);
+                for (i, ex_frame) in thread.call_stack.into_iter().enumerate() {
+                    let mut dap_frame = StackFrame {
+                        name: ex_frame.proc.clone(),
+                        id: (i * extools.get_all_threads().len()) as i64 + params.threadId,
+                        instructionPointerReference: Some(format!("{}@{}#{}", ex_frame.proc, ex_frame.override_id, ex_frame.offset)),
+                        .. Default::default()
+                    };
 
-            if i == 0 {
-                // Column must be nonzero for VSC to show the exception widget,
-                // but we don't usually have meaningful column information.
-                dap_frame.column = 1;
-            }
+                    if i == 0 {
+                        // Column must be nonzero for VSC to show the exception widget,
+                        // but we don't usually have meaningful column information.
+                        dap_frame.column = 1;
+                    }
 
-            if let Some(proc) = self.db.get_proc(&ex_frame.proc, ex_frame.override_id) {
-                if proc.location.is_builtins() {
-                    // `stddef.dm` proc.
-                    if let Some(stddef_dm_info) = self.stddef_dm_info.as_ref() {
-                        if let Some(proc) = get_proc(&stddef_dm_info.objtree, &ex_frame.proc, ex_frame.override_id) {
+                    if let Some(proc) = self.db.get_proc(&ex_frame.proc, ex_frame.override_id) {
+                        if proc.location.is_builtins() {
+                            // `stddef.dm` proc.
+                            if let Some(stddef_dm_info) = self.stddef_dm_info.as_ref() {
+                                if let Some(proc) = get_proc(&stddef_dm_info.objtree, &ex_frame.proc, ex_frame.override_id) {
+                                    dap_frame.source = Some(Source {
+                                        name: Some("stddef.dm".to_owned()),
+                                        sourceReference: Some(STDDEF_SOURCE_REFERENCE),
+                                        .. Default::default()
+                                    });
+                                    dap_frame.line = i64::from(proc.location.line);
+                                    //dap_frame.column = i64::from(proc.location.column);
+                                }
+                            }
+                        } else {
+                            // Normal proc.
+                            let path = self.db.files.get_path(proc.location.file);
+
                             dap_frame.source = Some(Source {
-                                name: Some("stddef.dm".to_owned()),
-                                sourceReference: Some(STDDEF_SOURCE_REFERENCE),
+                                name: Some(path.file_name()
+                                    .unwrap_or_default()
+                                    .to_string_lossy()
+                                    .into_owned()),
+                                path: Some(self.db.root_dir.join(path).to_string_lossy().into_owned()),
                                 .. Default::default()
                             });
                             dap_frame.line = i64::from(proc.location.line);
                             //dap_frame.column = i64::from(proc.location.column);
                         }
                     }
-                } else {
-                    // Normal proc.
-                    let path = self.db.files.get_path(proc.location.file);
 
-                    dap_frame.source = Some(Source {
-                        name: Some(path.file_name()
-                            .unwrap_or_default()
-                            .to_string_lossy()
-                            .into_owned()),
-                        path: Some(self.db.root_dir.join(path).to_string_lossy().into_owned()),
-                        .. Default::default()
-                    });
-                    dap_frame.line = i64::from(proc.location.line);
-                    //dap_frame.column = i64::from(proc.location.column);
+                    if let Some(line) = extools.offset_to_line(&ex_frame.proc, ex_frame.override_id, ex_frame.offset) {
+                        dap_frame.line = line;
+                    }
+
+                    frames.push(dap_frame);
+                }
+
+                StackTraceResponse {
+                    totalFrames: Some(len as i64),
+                    stackFrames: frames,
                 }
             }
 
-            if let Some(line) = extools.offset_to_line(&ex_frame.proc, ex_frame.override_id, ex_frame.offset) {
-                dap_frame.line = line;
+            DebugClient::Auxtools(auxtools) => {
+                let (aux_frames, aux_frames_total) = auxtools.get_stack_frames(
+                    params.threadId as u32,
+                    params.startFrame.map(|x| x as u32),
+                    params.levels.map(|x| x as u32))?;
+
+                let mut frames = Vec::with_capacity(aux_frames.len());
+                for (i, aux_frame) in aux_frames.iter().enumerate() {
+                    let aux_proc = &aux_frame.instruction.proc;
+                    let mut dap_frame = StackFrame {
+                        name: aux_proc.path.to_owned(),
+                        id: aux_frame.id as i64,
+                        instructionPointerReference: Some(format!("{}@{}#{}", aux_proc.path, aux_proc.override_id, aux_frame.instruction.offset)),
+                        .. Default::default()
+                    };
+
+                    if i == 0 {
+                        // Column must be nonzero for VSC to show the exception widget,
+                        // but we don't usually have meaningful column information.
+                        dap_frame.column = 1;
+                    }
+
+                    if let Some(proc) = self.db.get_proc(&aux_proc.path, aux_proc.override_id as usize) {
+                        if proc.location.is_builtins() {
+                            // `stddef.dm` proc.
+                            if let Some(stddef_dm_info) = self.stddef_dm_info.as_ref() {
+                                if let Some(proc) = get_proc(&stddef_dm_info.objtree, &aux_proc.path, aux_proc.override_id as usize) {
+                                    dap_frame.source = Some(Source {
+                                        name: Some("stddef.dm".to_owned()),
+                                        sourceReference: Some(STDDEF_SOURCE_REFERENCE),
+                                        .. Default::default()
+                                    });
+                                    dap_frame.line = i64::from(proc.location.line);
+                                    //dap_frame.column = i64::from(proc.location.column);
+                                }
+                            }
+                        } else {
+                            // Normal proc.
+                            let path = self.db.files.get_path(proc.location.file);
+
+                            dap_frame.source = Some(Source {
+                                name: Some(path.file_name()
+                                    .unwrap_or_default()
+                                    .to_string_lossy()
+                                    .into_owned()),
+                                path: Some(self.db.root_dir.join(path).to_string_lossy().into_owned()),
+                                .. Default::default()
+                            });
+                            dap_frame.line = i64::from(proc.location.line);
+                            //dap_frame.column = i64::from(proc.location.column);
+                        }
+                    }
+
+                    if let Some(line) = aux_frame.line {
+                        dap_frame.line = line as i64;
+                    }
+
+                    frames.push(dap_frame);
+                }
+
+                StackTraceResponse {
+                    totalFrames: Some(aux_frames_total as i64),
+                    stackFrames: frames,
+                }
             }
-
-            frames.push(dap_frame);
-        }
-
-        StackTraceResponse {
-            totalFrames: Some(len as i64),
-            stackFrames: frames,
         }
     }
 
     on Scopes(&mut self, ScopesArguments { frameId }) {
-        let extools = self.extools.get()?;
-        let frame_id = frameId as usize;
+        match &mut self.client {
+            DebugClient::Extools(extools) => {
+                let extools = extools.get()?;
+                let frame_id = frameId as usize;
 
-        let threads = extools.get_all_threads();
-        let thread_id = (frame_id % threads.len()) as i64;
-        let frame_no = frame_id / threads.len();
+                let threads = extools.get_all_threads();
+                let thread_id = (frame_id % threads.len()) as i64;
+                let frame_no = frame_id / threads.len();
 
-        guard!(let Some(frame) = threads[&thread_id].call_stack.get(frame_no) else {
-            return Err(Box::new(GenericError2(format!("Stack frame out of range: {} (thread {}, depth {})", frameId, thread_id, frame_no))));
-        });
+                guard!(let Some(frame) = threads[&thread_id].call_stack.get(frame_no) else {
+                    return Err(Box::new(GenericError2(format!("Stack frame out of range: {} (thread {}, depth {})", frameId, thread_id, frame_no))));
+                });
 
-        ScopesResponse {
-            scopes: vec![
-                Scope {
-                    name: "Locals".to_owned(),
-                    presentationHint: Some("locals".to_owned()),
-                    variablesReference: frameId * 2 + 2,
-                    indexedVariables: Some(frame.locals.len() as i64),
-                    .. Default::default()
-                },
-                Scope {
-                    name: "Arguments".to_owned(),
-                    presentationHint: Some("arguments".to_owned()),
-                    variablesReference: frameId * 2 + 1,
-                    namedVariables: Some(2 + frame.args.len() as i64),
-                    .. Default::default()
-                },
-                Scope {
-                    name: "Globals".to_owned(),
-                    variablesReference: 0x0e_000001,
-                    .. Default::default()
-                },
-            ]
+                ScopesResponse {
+                    scopes: vec![
+                        Scope {
+                            name: "Locals".to_owned(),
+                            presentationHint: Some("locals".to_owned()),
+                            variablesReference: frameId * 2 + 2,
+                            indexedVariables: Some(frame.locals.len() as i64),
+                            .. Default::default()
+                        },
+                        Scope {
+                            name: "Arguments".to_owned(),
+                            presentationHint: Some("arguments".to_owned()),
+                            variablesReference: frameId * 2 + 1,
+                            namedVariables: Some(2 + frame.args.len() as i64),
+                            .. Default::default()
+                        },
+                        Scope {
+                            name: "Globals".to_owned(),
+                            variablesReference: 0x0e_000001,
+                            .. Default::default()
+                        },
+                    ]
+                }
+            }
+
+            DebugClient::Auxtools(auxtools) => {
+                let (arguments, locals, globals) = auxtools.get_scopes(frameId as u32)?;
+                let mut scopes = Vec::with_capacity(locals.is_some() as usize + arguments.is_some() as usize + globals.is_some() as usize);
+
+                if let Some(locals) = locals {
+                    scopes.push(Scope {
+                        name: "Locals".to_owned(),
+                        variablesReference: locals.0 as i64,
+                        .. Default::default()
+                    });
+                }
+
+                if let Some(arguments) = arguments {
+                    scopes.push(Scope {
+                        name: "Arguments".to_owned(),
+                        variablesReference: arguments.0 as i64,
+                        .. Default::default()
+                    });
+                }
+
+                if let Some(globals) = globals {
+                    scopes.push(Scope {
+                        name: "Globals".to_owned(),
+                        variablesReference: globals.0 as i64,
+                        .. Default::default()
+                    });
+                }
+
+                ScopesResponse {
+                    scopes
+                }
+            }
         }
     }
 
     on Variables(&mut self, params) {
-        let extools = self.extools.get()?;
+        match &mut self.client {
+            DebugClient::Extools(extools) => {
+                let extools = extools.get()?;
 
-        if params.variablesReference >= 0x01_000000 {
-            let (var, ref_) = extools_types::ValueText::from_variables_reference(params.variablesReference);
-            let mut variables = Vec::new();
+                if params.variablesReference >= 0x01_000000 {
+                    let (var, ref_) = extools_types::ValueText::from_variables_reference(params.variablesReference);
+                    let mut variables = Vec::new();
 
-            if var.is_list {
-                // List reference
-                match extools.get_list_contents(ref_)? {
-                    extools_types::ListContents::Linear(entries) => {
-                        for (i, entry) in entries.iter().enumerate() {
+                    if var.is_list {
+                        // List reference
+                        match extools.get_list_contents(ref_)? {
+                            extools_types::ListContents::Linear(entries) => {
+                                for (i, entry) in entries.iter().enumerate() {
+                                    variables.push(Variable {
+                                        name: format!("[{}]", 1 + i),
+                                        value: entry.to_string(),
+                                        variablesReference: entry.to_variables_reference(),
+                                        .. Default::default()
+                                    });
+                                }
+                            }
+                            extools_types::ListContents::Associative(entries) => {
+                                for (i, (key, val)) in entries.iter().enumerate() {
+                                    variables.push(Variable {
+                                        name: format!("keys[{}]", 1 + i),
+                                        value: key.to_string(),
+                                        variablesReference: key.to_variables_reference(),
+                                        .. Default::default()
+                                    });
+                                    variables.push(Variable {
+                                        name: format!("vals[{}]", 1 + i),
+                                        value: val.to_string(),
+                                        variablesReference: val.to_variables_reference(),
+                                        .. Default::default()
+                                    });
+                                }
+                            }
+                        }
+                    } else if var.has_vars {
+                        // Datum reference
+                        let hashmap = extools.get_all_fields(ref_)?;
+                        let mut entries: Vec<_> = hashmap.iter().collect();
+                        entries.sort_unstable_by_key(|tup| tup.0);
+                        for (name, vt) in entries {
                             variables.push(Variable {
-                                name: format!("[{}]", 1 + i),
-                                value: entry.to_string(),
-                                variablesReference: entry.to_variables_reference(),
+                                name: name.to_owned(),
+                                value: vt.to_string(),
+                                variablesReference: vt.to_variables_reference(),
                                 .. Default::default()
-                            });
+                            })
                         }
                     }
-                    extools_types::ListContents::Associative(entries) => {
-                        for (i, (key, val)) in entries.iter().enumerate() {
-                            variables.push(Variable {
-                                name: format!("keys[{}]", 1 + i),
-                                value: key.to_string(),
-                                variablesReference: key.to_variables_reference(),
-                                .. Default::default()
-                            });
-                            variables.push(Variable {
-                                name: format!("vals[{}]", 1 + i),
-                                value: val.to_string(),
-                                variablesReference: val.to_variables_reference(),
-                                .. Default::default()
-                            });
-                        }
-                    }
+
+                    return Ok(VariablesResponse { variables });
                 }
-            } else if var.has_vars {
-                // Datum reference
-                let hashmap = extools.get_all_fields(ref_)?;
-                let mut entries: Vec<_> = hashmap.iter().collect();
-                entries.sort_unstable_by_key(|tup| tup.0);
-                for (name, vt) in entries {
+
+                // Stack frame, arguments or locals
+                let frame_id = (params.variablesReference - 1) / 2;
+                let mod2 = params.variablesReference % 2;
+
+                let (thread, frame_no) = extools.get_thread_by_frame_id(frame_id)?;
+                guard!(let Some(frame) = thread.call_stack.get(frame_no) else {
+                    return Err(Box::new(GenericError("Stack frame out of range")));
+                });
+
+                if mod2 == 1 {
+                    // arguments
+                    let mut variables = Vec::with_capacity(2 + frame.args.len());
+                    let mut seen = std::collections::HashMap::new();
+
+                    seen.insert("src", 0);
                     variables.push(Variable {
-                        name: name.to_owned(),
+                        name: "src".to_owned(),
+                        value: frame.src.to_string(),
+                        variablesReference: frame.src.to_variables_reference(),
+                        .. Default::default()
+                    });
+                    seen.insert("usr", 0);
+                    variables.push(Variable {
+                        name: "usr".to_owned(),
+                        value: frame.usr.to_string(),
+                        variablesReference: frame.usr.to_variables_reference(),
+                        .. Default::default()
+                    });
+
+                    variables.extend(frame.args.iter().enumerate().map(|(i, vt)| Variable {
+                        name: match frame.arg_names.get(i) {
+                            Some(param) => {
+                                match seen.entry(param).and_modify(|e| *e += 1).or_default() {
+                                    0 => param.clone(),
+                                    n => format!("{} #{}", param, n),
+                                }
+                            }
+                            None => format!("args[{}]", i + 1),
+                        },
                         value: vt.to_string(),
                         variablesReference: vt.to_variables_reference(),
                         .. Default::default()
-                    })
+                    }));
+                    VariablesResponse { variables }
+                } else if mod2 == 0 {
+                    // locals
+                    let mut variables = Vec::with_capacity(1 + frame.locals.len());
+
+                    variables.push(Variable {
+                        name: ".".to_owned(),
+                        value: frame.dot.to_string(),
+                        variablesReference: frame.dot.to_variables_reference(),
+                        .. Default::default()
+                    });
+
+                    // If VSC receives two Variables with the same name, it only
+                    // displays the first one. Avert this by adding suffixes.
+                    let mut seen = std::collections::HashMap::new();
+                    variables.extend(frame.locals.iter().enumerate().map(|(i, vt)| Variable {
+                        name: match frame.local_names.get(i) {
+                            Some(local) => {
+                                match seen.entry(local).and_modify(|e| *e += 1).or_default() {
+                                    0 => local.clone(),
+                                    n => format!("{} #{}", local, n),
+                                }
+                            }
+                            None => i.to_string(),
+                        },
+                        value: vt.to_string(),
+                        variablesReference: vt.to_variables_reference(),
+                        .. Default::default()
+                    }));
+                    VariablesResponse { variables }
+                } else {
+                    return Err(Box::new(GenericError("Bad variables reference")));
                 }
             }
 
-            return Ok(VariablesResponse { variables });
-        }
+            DebugClient::Auxtools(auxtools) => {
+                let aux_variables = auxtools.get_variables(auxtools_types::VariablesRef(params.variablesReference as i32))?;
+                let mut variables = vec![];
 
-        // Stack frame, arguments or locals
-        let frame_id = (params.variablesReference - 1) / 2;
-        let mod2 = params.variablesReference % 2;
+                // If VSC receives two Variables with the same name, it only
+                // displays the first one. Avert this by adding suffixes.
+                let mut seen = std::collections::HashMap::new();
 
-        let (thread, frame_no) = extools.get_thread_by_frame_id(frame_id)?;
-        guard!(let Some(frame) = thread.call_stack.get(frame_no) else {
-            return Err(Box::new(GenericError("Stack frame out of range")));
-        });
+                for aux_var in aux_variables {
+                    let name = match seen.entry(aux_var.name.clone()).and_modify(|e| *e += 1).or_default() {
+                        0 => aux_var.name,
+                        n => format!("{} #{}", aux_var.name, n),
+                    };
 
-        if mod2 == 1 {
-            // arguments
-            let mut variables = Vec::with_capacity(2 + frame.args.len());
-            let mut seen = std::collections::HashMap::new();
+                    variables.push(Variable {
+                        name,
+                        value: aux_var.value,
+                        variablesReference: aux_var.variables.map(|x| x.0 as i64).unwrap_or(0),
+                        .. Default::default()
+                    });
+                }
 
-            seen.insert("src", 0);
-            variables.push(Variable {
-                name: "src".to_owned(),
-                value: frame.src.to_string(),
-                variablesReference: frame.src.to_variables_reference(),
-                .. Default::default()
-            });
-            seen.insert("usr", 0);
-            variables.push(Variable {
-                name: "usr".to_owned(),
-                value: frame.usr.to_string(),
-                variablesReference: frame.usr.to_variables_reference(),
-                .. Default::default()
-            });
-
-            variables.extend(frame.args.iter().enumerate().map(|(i, vt)| Variable {
-                name: match frame.arg_names.get(i) {
-                    Some(param) => {
-                        match seen.entry(param).and_modify(|e| *e += 1).or_default() {
-                            0 => param.clone(),
-                            n => format!("{} #{}", param, n),
-                        }
-                    }
-                    None => format!("args[{}]", i + 1),
-                },
-                value: vt.to_string(),
-                variablesReference: vt.to_variables_reference(),
-                .. Default::default()
-            }));
-            VariablesResponse { variables }
-        } else if mod2 == 0 {
-            // locals
-            let mut variables = Vec::with_capacity(1 + frame.locals.len());
-
-            variables.push(Variable {
-                name: ".".to_owned(),
-                value: frame.dot.to_string(),
-                variablesReference: frame.dot.to_variables_reference(),
-                .. Default::default()
-            });
-
-            // If VSC receives two Variables with the same name, it only
-            // displays the first one. Avert this by adding suffixes.
-            let mut seen = std::collections::HashMap::new();
-            variables.extend(frame.locals.iter().enumerate().map(|(i, vt)| Variable {
-                name: match frame.local_names.get(i) {
-                    Some(local) => {
-                        match seen.entry(local).and_modify(|e| *e += 1).or_default() {
-                            0 => local.clone(),
-                            n => format!("{} #{}", local, n),
-                        }
-                    }
-                    None => i.to_string(),
-                },
-                value: vt.to_string(),
-                variablesReference: vt.to_variables_reference(),
-                .. Default::default()
-            }));
-            VariablesResponse { variables }
-        } else {
-            return Err(Box::new(GenericError("Bad variables reference")));
+                VariablesResponse {
+                    variables
+                }
+            }
         }
     }
 
     on Continue(&mut self, _params) {
-        self.cull_thread_list();
-        let extools = self.extools.get()?;
-        extools.continue_execution();
+        self.notify_continue();
+
+        match &mut self.client {
+            DebugClient::Extools(extools) => {
+                let extools = extools.get()?;
+                extools.continue_execution();
+            }
+
+            DebugClient::Auxtools(auxtools) => {
+                auxtools.continue_execution()?;
+            }
+        }
+
         ContinueResponse {
             allThreadsContinued: Some(true),
         }
@@ -814,41 +1250,97 @@ handle_request! {
 
     on StepIn(&mut self, params) {
         self.notify_continue();
-        let extools = self.extools.get()?;
-        extools.step_in(params.threadId);
+
+        match &mut self.client {
+            DebugClient::Extools(extools) => {
+                let extools = extools.get()?;
+                extools.step_in(params.threadId);
+            }
+
+            DebugClient::Auxtools(auxtools) => {
+                auxtools.step_into(params.threadId as u32)?;
+            }
+        }
     }
 
     on Next(&mut self, params) {
         self.notify_continue();
-        let extools = self.extools.get()?;
-        extools.step_over(params.threadId);
+
+        match &mut self.client {
+            DebugClient::Extools(extools) => {
+                let extools = extools.get()?;
+                extools.step_over(params.threadId);
+            }
+
+            DebugClient::Auxtools(auxtools) => {
+                auxtools.next(params.threadId as u32)?;
+            }
+        }
     }
 
     on StepOut(&mut self, params) {
         self.notify_continue();
-        let extools = self.extools.get()?;
-        extools.step_out(params.threadId);
+
+        match &mut self.client {
+            DebugClient::Extools(extools) => {
+                let extools = extools.get()?;
+                extools.step_out(params.threadId);
+            }
+
+            DebugClient::Auxtools(auxtools) => {
+                auxtools.step_out(params.threadId as u32)?;
+            }
+        }
     }
 
     on Pause(&mut self, _params) {
-        let extools = self.extools.get()?;
-        extools.pause();
+        match &mut self.client {
+            DebugClient::Extools(extools) => {
+                let extools = extools.get()?;
+                extools.pause();
+            }
+
+            DebugClient::Auxtools(auxtools) => {
+                auxtools.pause()?;
+            }
+        }
     }
 
     on SetExceptionBreakpoints(&mut self, params) {
-        let extools = self.extools.get()?;
-        extools.set_break_on_runtime(params.filters.iter().any(|x| x == EXCEPTION_FILTER_RUNTIMES));
+        match &mut self.client {
+            DebugClient::Extools(extools) => {
+                let extools = extools.get()?;
+                extools.set_break_on_runtime(params.filters.iter().any(|x| x == EXCEPTION_FILTER_RUNTIMES));
+            }
+
+            DebugClient::Auxtools(auxtools) => {
+                auxtools.set_catch_runtimes(params.filters.iter().any(|x| x == EXCEPTION_FILTER_RUNTIMES))?;
+            }
+        }
     }
 
     on ExceptionInfo(&mut self, _params) {
-        let extools = self.extools.get()?;
-        // VSC shows exceptionId, description, stackTrace in that order.
-        let message = extools.last_error_message();
-        ExceptionInfoResponse {
-            exceptionId: message.unwrap_or_default().to_owned(),
-            description: None,
-            breakMode: ExceptionBreakMode::Always,
-            details: None,
+        match &mut self.client {
+            DebugClient::Extools(extools) => {
+                let extools = extools.get()?;
+                // VSC shows exceptionId, description, stackTrace in that order.
+                let message = extools.last_error_message();
+                ExceptionInfoResponse {
+                    exceptionId: message.unwrap_or_default().to_owned(),
+                    description: None,
+                    breakMode: ExceptionBreakMode::Always,
+                    details: None,
+                }
+            }
+
+            DebugClient::Auxtools(auxtools) => {
+                ExceptionInfoResponse {
+                    exceptionId: auxtools.get_last_error_message(),
+                    description: None,
+                    breakMode: ExceptionBreakMode::Always,
+                    details: None,
+                }
+            }
         }
     }
 
@@ -876,26 +1368,34 @@ handle_request! {
     }
 
     on Disassemble(&mut self, params) {
-        guard!(let Some(captures) = MEMORY_REFERENCE_REGEX.captures(&params.memoryReference) else {
-            return Err(Box::new(GenericError("Invalid memory reference")));
-        });
-        let proc = &captures[1];
-        let override_id: usize = captures[2].parse()?;
-        //let offset: i64 = captures[3].parse()?;
+        match &mut self.client {
+            DebugClient::Extools(extools) => {
+                guard!(let Some(captures) = MEMORY_REFERENCE_REGEX.captures(&params.memoryReference) else {
+                    return Err(Box::new(GenericError("Invalid memory reference")));
+                });
+                let proc = &captures[1];
+                let override_id: usize = captures[2].parse()?;
+                //let offset: i64 = captures[3].parse()?;
 
-        let extools = self.extools.get()?;
-        let mut result = Vec::new();
-        for instr in extools.bytecode(proc, override_id) {
-            result.push(DisassembledInstruction {
-                address: format!("{}#{}@{}", proc, override_id, instr.offset),
-                instructionBytes: Some(instr.bytes.clone()),
-                instruction: format!("{}  {}", instr.mnemonic, instr.comment),
-                .. Default::default()
-            });
-        }
+                let extools = extools.get()?;
+                let mut result = Vec::new();
+                for instr in extools.bytecode(proc, override_id) {
+                    result.push(DisassembledInstruction {
+                        address: format!("{}#{}@{}", proc, override_id, instr.offset),
+                        instructionBytes: Some(instr.bytes.clone()),
+                        instruction: format!("{}  {}", instr.mnemonic, instr.comment),
+                        .. Default::default()
+                    });
+                }
 
-        DisassembleResponse {
-            instructions: result
+                DisassembleResponse {
+                    instructions: result
+                }
+            }
+
+            DebugClient::Auxtools(_) => {
+                return Err(Box::new(GenericError("auxtools can't disassemble yet")));
+            }
         }
     }
 }
@@ -966,7 +1466,7 @@ impl SequenceNumber {
         output.push('\n');
         self.issue_event(OutputEvent {
             output,
-            .. Default::default()
+            ..Default::default()
         })
     }
 
@@ -976,7 +1476,7 @@ impl SequenceNumber {
         self.issue_event(OutputEvent {
             output,
             category: Some("console".to_owned()),
-            .. Default::default()
+            ..Default::default()
         })
     }
 
@@ -990,7 +1490,9 @@ impl SequenceNumber {
 pub struct GenericError(&'static str);
 
 impl Error for GenericError {
-    fn description(&self) -> &str { self.0 }
+    fn description(&self) -> &str {
+        self.0
+    }
 }
 
 impl std::fmt::Display for GenericError {
@@ -1003,7 +1505,9 @@ impl std::fmt::Display for GenericError {
 pub struct GenericError2(String);
 
 impl Error for GenericError2 {
-    fn description(&self) -> &str { &self.0 }
+    fn description(&self) -> &str {
+        &self.0
+    }
 }
 
 impl std::fmt::Display for GenericError2 {
@@ -1030,7 +1534,6 @@ pub struct LaunchRequestArgumentsVsc {
 
     // provided by vscode
     dmb: String,
-
     // other keys: __sessionId, name, preLaunchTask, request, type
 }
 
@@ -1046,7 +1549,6 @@ impl Request for AttachVsc {
 pub struct AttachRequestArgumentsVsc {
     #[serde(flatten)]
     base: AttachRequestArguments,
-
     port: Option<u16>,
 }
 
@@ -1107,7 +1609,7 @@ const STDDEF_PROCS: &[&str] = &[
     "/exception/New",
     "/regex/New",
     "/regex/Find",
-    "/regex/Replace"
+    "/regex/Replace",
 ];
 
 const STDDEF_SOURCE_REFERENCE: i64 = 1;
@@ -1121,11 +1623,9 @@ impl StddefDmInfo {
     fn new(text: String) -> StddefDmInfo {
         let context = dm::Context::default();
         let pp = dm::preprocessor::Preprocessor::from_buffer(&context, "stddef.dm".into(), &text);
-        let parser = dm::parser::Parser::new(&context, dm::indents::IndentProcessor::new(&context, pp));
+        let parser =
+            dm::parser::Parser::new(&context, dm::indents::IndentProcessor::new(&context, pp));
         let objtree = parser.parse_object_tree_without_builtins();
-        StddefDmInfo {
-            text,
-            objtree,
-        }
+        StddefDmInfo { text, objtree }
     }
 }

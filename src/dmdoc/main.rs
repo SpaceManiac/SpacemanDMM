@@ -30,6 +30,8 @@ const BUILD_INFO: &str = concat!(
     "General Public License version 3.",
 );
 
+const DM_REFERENCE_BASE: &str = "https://secure.byond.com/docs/ref/#";
+
 // ----------------------------------------------------------------------------
 // Driver
 
@@ -93,15 +95,25 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("collating documented types");
 
-    // Any top-level directory which is `#include`d in the `.dme` (most
-    // importantly "code", but also "_maps", "interface", and any downstream
-    // modular folders) will be searched for `.md` files to include in the docs.
-    let mut code_directories = std::collections::HashSet::new();
-    context.file_list().for_each(|path| {
-        if let Some(std::path::Component::Normal(first)) = path.components().next() {
-            code_directories.insert(first.to_owned());
-        }
-    });
+    if index_path.is_none() {
+        index_path = context.config().dmdoc.index_file.clone();
+    }
+
+    let mut code_directories: std::collections::HashSet<std::ffi::OsString>;
+    if context.config().dmdoc.module_directories.is_empty() {
+        // Any top-level directory which is `#include`d in the `.dme` (most
+        // importantly "code", but also "_maps", "interface", and any downstream
+        // modular folders) will be searched for `.md` files to include in the docs.
+        code_directories = Default::default();
+        context.file_list().for_each(|path| {
+            if let Some(std::path::Component::Normal(first)) = path.components().next() {
+                code_directories.insert(first.to_owned());
+            }
+        });
+    } else {
+        // Use what the config specifies without any additional logic.
+        code_directories = context.config().dmdoc.module_directories.iter().map(std::ffi::OsString::from).collect();
+    }
 
     // get a read on which types *have* docs
     let mut types_with_docs = BTreeMap::new();
@@ -209,6 +221,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             proc_name = Some(name);
             ty_path = &reference[..idx];
             if let Some(ty) = objtree.find(ty_path) {
+                // there are no builtin verbs
                 entity_exists = ty.procs.contains_key(name);
             }
         } else if let Some(idx) = reference.find("/var/") {
@@ -248,6 +261,41 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             entity_exists = true;
         }
         // else `[/ty]`
+
+        // Determine external doc URL
+        let mut external_url = None;
+        if entity_exists {
+            // TODO: .location.is_builtins() is not the best way to find this out,
+            // for example if it's overridden in the DM code but not re-documented.
+            if let Some(ty) = objtree.find(ty_path) {
+                if let Some(var_name) = var_name {
+                    if let Some(var) = ty.get_value(var_name) {
+                        if var.location.is_builtins() {
+                            external_url = Some(match var.docs.builtin_docs {
+                                BuiltinDocs::None => format!("{}{}/var/{}", DM_REFERENCE_BASE, ty.path, var_name),
+                                BuiltinDocs::ReferenceHash(hash) => format!("{}{}", DM_REFERENCE_BASE, hash),
+                            })
+                        }
+                    }
+                } else if let Some(proc_name) = proc_name {
+                    if let Some(proc) = ty.get_proc(proc_name) {
+                        if proc.location.is_builtins() {
+                            external_url = Some(match proc.docs.builtin_docs {
+                                BuiltinDocs::None => format!("{}{}/proc/{}", DM_REFERENCE_BASE, ty.path, proc_name),
+                                BuiltinDocs::ReferenceHash(hash) => format!("{}{}", DM_REFERENCE_BASE, hash),
+                            })
+                        }
+                    }
+                } else {
+                    if ty.location.is_builtins() {
+                        external_url = Some(match ty.docs.builtin_docs {
+                            BuiltinDocs::None => format!("{}{}", DM_REFERENCE_BASE, ty.path),
+                            BuiltinDocs::ReferenceHash(hash) => format!("{}{}", DM_REFERENCE_BASE, hash),
+                        })
+                    }
+                }
+            }
+        }
 
         let mut progress = String::new();
         let mut best = 0;
@@ -313,6 +361,8 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                 let _ = write!(href, "#var/{}", var_name);
             }
             Some((href, progress))
+        } else if let Some(external) = external_url {
+            Some((external, reference.to_owned()))
         } else {
             error_entity_print();
             if entity_exists {
@@ -463,6 +513,19 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
 
                 error_entity_put(format!("{}/var/{}", ty.path, name));
                 let block = DocBlock::parse(&var.value.docs.text(), Some(broken_link_callback));
+
+                // if the var is global, add it to the module tree
+                if ty.is_root() {
+                    let module = module_entry(&mut modules1, &context.file_path(var.value.location.file));
+                    module.items_wip.push((
+                        var.value.location.line,
+                        ModuleItem::GlobalVar {
+                            name,
+                            teaser: block.teaser().to_owned(),
+                        }
+                    ));
+                }
+
                 // `type` is pulled from the parent if necessary
                 let type_ = ty.get_var_declaration(name).map(|decl| VarType {
                     is_static: decl.var_type.flags.is_static(),
@@ -506,6 +569,20 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
 
                 error_entity_put(format!("{}/proc/{}", ty.path, name));
                 let block = DocBlock::parse(&proc_value.docs.text(), Some(broken_link_callback));
+
+                // if the proc is global, add it to the module tree
+                if ty.is_root() {
+                    let module = module_entry(&mut modules1, &context.file_path(proc_value.location.file));
+                    module.items_wip.push((
+                        proc_value.location.line,
+                        ModuleItem::GlobalProc {
+                            name,
+                            teaser: block.teaser().to_owned(),
+                        }
+                    ));
+                }
+
+                // add the proc to the type containing it
                 parsed_type.procs.insert(name, Proc {
                     docs: block,
                     params: proc_value.parameters.iter().map(|p| Param {
@@ -527,16 +604,15 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
 
         // file the type under its module as well
         if let Some(ref block) = parsed_type.docs {
-            if let Some(module) = modules1.get_mut(&module_path(&context.file_path(ty.location.file))) {
-                module.items_wip.push((
-                    ty.location.line,
-                    ModuleItem::Type {
-                        path: ty.get().pretty_path(),
-                        teaser: block.teaser().to_owned(),
-                        substance: substance,
-                    },
-                ));
-            }
+            let module = module_entry(&mut modules1, &context.file_path(ty.location.file));
+            module.items_wip.push((
+                ty.location.line,
+                ModuleItem::Type {
+                    path: ty.get().pretty_path(),
+                    teaser: block.teaser().to_owned(),
+                    substance: substance,
+                },
+            ));
         }
 
         if anything {
@@ -1234,5 +1310,15 @@ enum ModuleItem<'a> {
         path: &'a str,
         teaser: String,
         substance: bool,
+    },
+    #[serde(rename="global_proc")]
+    GlobalProc {
+        name: &'a str,
+        teaser: String,
+    },
+    #[serde(rename="global_var")]
+    GlobalVar {
+        name: &'a str,
+        teaser: String,
     },
 }

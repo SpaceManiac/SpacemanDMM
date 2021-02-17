@@ -1,9 +1,9 @@
 //! Child process lifecycle management.
 #![allow(unsafe_code)]
 
-use std::sync::{Arc, Mutex};
-use std::process::{Command, Stdio};
 use super::{dap_types, SequenceNumber};
+use std::process::{Command, Stdio};
+use std::sync::{Arc, Mutex};
 
 // active --kill--> killed: emit Terminated, send SIGKILL
 // active --detach--> detached: emit Terminated
@@ -27,24 +27,59 @@ pub struct Launched {
     mutex: Arc<Mutex<State>>,
 }
 
+pub enum EngineParams {
+    Extools {
+        port: u16,
+        dll: Option<std::path::PathBuf>
+    },
+    Auxtools {
+        port: u16,
+        dll: Option<std::path::PathBuf>
+    }
+}
+
 impl Launched {
-    pub fn new(seq: Arc<SequenceNumber>, dreamseeker_exe: &str, dmb: &str, port: Option<u16>, extools_dll: Option<&std::path::Path>) -> std::io::Result<Launched> {
+    pub fn new(
+        seq: Arc<SequenceNumber>,
+        dreamseeker_exe: &str,
+        dmb: &str,
+        params: Option<EngineParams>,
+    ) -> std::io::Result<Launched> {
         let mut command = Command::new(dreamseeker_exe);
+
+        #[cfg(unix)] {
+            if let Some(parent) = std::path::Path::new(dreamseeker_exe).parent() {
+                command.env("LD_LIBRARY_PATH", parent);
+            }
+        }
+
         command
             .arg(dmb)
             .arg("-trusted")
             .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
-        if let Some(extools_dll) = extools_dll {
-            command.env("EXTOOLS_DLL", extools_dll);
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        match params {
+            Some(EngineParams::Extools { port, dll }) => {
+                command.env("EXTOOLS_MODE", "LAUNCHED");
+                command.env("EXTOOLS_PORT", port.to_string());
+                if let Some(dll) = dll {
+                    command.env("EXTOOLS_DLL", dll);
+                }
+            }
+
+            Some(EngineParams::Auxtools { port, dll }) => {
+                command.env("AUXTOOLS_DEBUG_MODE", "LAUNCHED");
+                command.env("AUXTOOLS_DEBUG_PORT", port.to_string());
+                if let Some(dll) = dll {
+                    command.env("AUXTOOLS_DEBUG_DLL", dll);
+                }
+            }
+
+            None => (),
         }
-        if let Some(port) = port {
-            command.env("EXTOOLS_MODE", "LAUNCHED");
-            command.env("EXTOOLS_PORT", port.to_string());
-        } else {
-            command.env("EXTOOLS_MODE", "NONE");
-        }
+
         let mut child = command.spawn()?;
         output!(in seq, "[launched] Started: {:?}", command);
         let mutex = Arc::new(Mutex::new(State::Active));
@@ -52,6 +87,9 @@ impl Launched {
 
         let seq2 = seq.clone();
         let mutex2 = mutex.clone();
+
+        pipe_output(seq.clone(), "stdout", child.stdout.take())?;
+        pipe_output(seq.clone(), "stderr", child.stderr.take())?;
 
         std::thread::Builder::new()
             .name("launched debuggee manager thread".to_owned())
@@ -83,11 +121,7 @@ impl Launched {
                 });
             })?;
 
-        Ok(Launched {
-            handle,
-            seq,
-            mutex,
-        })
+        Ok(Launched { handle, seq, mutex })
     }
 
     pub fn kill(self) -> std::io::Result<()> {
@@ -121,6 +155,40 @@ impl Launched {
             }
         }
     }
+}
+
+fn pipe_output<R: std::io::Read + Send + 'static>(seq: Arc<SequenceNumber>, keyword: &'static str, stream: Option<R>) -> std::io::Result<()> {
+    guard!(let Some(stream2) = stream else { return Ok(()); });
+    std::thread::Builder::new()
+        .name(format!("launched debuggee {} relay", keyword))
+        .spawn(move || {
+            use std::io::BufRead;
+
+            let mut line = String::new();
+            let mut buf_stream = std::io::BufReader::new(stream2);
+            loop {
+                line.clear();
+                match buf_stream.read_line(&mut line) {
+                    Ok(0) => break,
+                    Ok(_) => {
+                        seq.issue_event(super::dap_types::OutputEvent {
+                            output: line.clone(),
+                            category: Some(keyword.to_owned()),
+                            ..Default::default()
+                        });
+                    }
+                    Err(e) => {
+                        seq.issue_event(super::dap_types::OutputEvent {
+                            output: format!("[launched {}] {}", keyword, e),
+                            category: Some("console".to_owned()),
+                            ..Default::default()
+                        });
+                        break;
+                    }
+                }
+            }
+        })?;
+    Ok(())
 }
 
 #[cfg(unix)]

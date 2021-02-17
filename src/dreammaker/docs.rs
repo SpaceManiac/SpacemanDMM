@@ -6,6 +6,7 @@ use std::fmt;
 #[derive(Default, Clone, Debug, PartialEq)]
 pub struct DocCollection {
     elems: Vec<DocComment>,
+    pub builtin_docs: BuiltinDocs,
 }
 
 impl DocCollection {
@@ -202,4 +203,18 @@ pub enum DocTarget {
     FollowingItem,
     /// Starting with `!`, referring to the enclosing item.
     EnclosingItem,
+}
+
+/// Information about where builtin docs can be found.
+#[derive(Clone, Debug, PartialEq)]
+pub enum BuiltinDocs {
+    None,
+    /// A DM reference hash such as "/DM/vars".
+    ReferenceHash(&'static str),
+}
+
+impl Default for BuiltinDocs {
+    fn default() -> Self {
+        BuiltinDocs::None
+    }
 }
