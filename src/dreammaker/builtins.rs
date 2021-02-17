@@ -1118,6 +1118,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         particles/var/icon;
         particles/var/icon_state;
         particles/var/scale;
+        particles/var/grow;
         particles/var/rotation;
         particles/var/spin;
         particles/var/drift;
