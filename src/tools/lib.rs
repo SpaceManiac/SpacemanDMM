@@ -7,7 +7,7 @@ extern crate dreammaker as dm;
 extern crate lodepng;
 extern crate inflate;
 
-#[macro_use] extern crate ndarray;
+#[macro_use] extern crate bytemuck;
 extern crate linked_hash_map;
 extern crate rand;
 extern crate bumpalo;
