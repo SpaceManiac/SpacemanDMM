@@ -773,6 +773,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         world/var/version = int!(0);
         world/var/view = int!(5);
         world/var/visibility = int!(1);
+        world/var/movement_mode = int!(0);  // LEGACY_MOVEMENT_MODE
         world/proc/AddCredits(player, credits, note);
         world/proc/ClearMedal(medal, player);
         world/proc/Export(Addr, File, Persist, Clients);
