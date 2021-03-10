@@ -8,8 +8,8 @@ use super::preprocessor::{DefineMap, Define};
 use super::constants::Constant;
 use super::docs::{BuiltinDocs, DocCollection};
 
-const DM_VERSION: i32 = 513;
-const DM_BUILD: i32 = 1527;
+const DM_VERSION: i32 = 514;
+const DM_BUILD: i32 = 1549;
 
 /// Register BYOND builtin macros to the given define map.
 pub fn default_defines(defines: &mut DefineMap) {
@@ -857,6 +857,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         client/proc/DblClick(object, location, control, params);
         client/proc/East();
         client/proc/Export(file);
+        client/proc/GetAPI();
         client/proc/Import(Query);
         client/proc/IsByondMember();
         client/proc/MouseDown(object, location, control, params);
@@ -872,6 +873,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         client/proc/Northeast();
         client/proc/Northwest();
         client/proc/SendPage(msg, recipient, options);
+        client/proc/SetAPI();
         client/proc/South();
         client/proc/Southeast();
         client/proc/Southwest();
@@ -1108,6 +1110,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         particles/var/bound2;
         particles/var/gravity;
         particles/var/gradient;
+        particles/var/grow;
         particles/var/transform;
         particles/var/lifespan;
         particles/var/fade;
