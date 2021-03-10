@@ -1970,6 +1970,13 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                                 self.env.sleeping_procs.insert_violator(self.proc_ref, format!("world.{}", name).as_str(), location);
                             }
                         }
+                        if ty.get().path.as_str() == "/client" {
+                            if self.inside_newcontext == 0 && matches!(name.as_str(),
+                                "SoundQuery"
+                                | "MeasureText") {
+                                self.env.sleeping_procs.insert_violator(self.proc_ref, format!("client.{}", name).as_str(), location);
+                            }
+                        }
                         self.visit_call(location, ty, proc, arguments, false, local_vars)
                     } else {
                         error(location, format!("undefined proc: {:?} on {}", name, ty))

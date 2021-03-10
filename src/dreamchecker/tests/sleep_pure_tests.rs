@@ -123,6 +123,11 @@ fn sleep4() {
     set SpacemanDMM_should_not_sleep = TRUE
     world.Export()
     world.Import()
+    var/client/C = new /client
+    C.MeasureText()
+/client/proc/foo()
+    SoundQuery()
+    MeasureText()
 "##.trim();
     check_errors_match(code, SLEEP_ERROR4);
 }
