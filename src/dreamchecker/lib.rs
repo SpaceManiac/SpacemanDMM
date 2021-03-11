@@ -1718,6 +1718,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     | "winget") {
                         self.env.sleeping_procs.insert_violator(self.proc_ref, unscoped_name, location);
                 }
+                self.check_type_sleepers(self.ty, location, unscoped_name);
                 let src = self.ty;
                 if let Some(proc) = self.ty.get_proc(unscoped_name) {
                     self.visit_call(location, src, proc, args, false, local_vars)
@@ -1873,6 +1874,23 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
     }
 
+    fn check_type_sleepers(&mut self, ty: TypeRef<'o>, location: Location, unscoped_name: &Ident) {
+        println!("{}, {}", ty, unscoped_name);
+        match ty.get().path.as_str() {
+            "/client" => if self.inside_newcontext == 0 && matches!(unscoped_name.as_str(),
+                "SoundQuery"
+                | "MeasureText") {
+                    self.env.sleeping_procs.insert_violator(self.proc_ref, format!("client.{}", unscoped_name).as_str(), location);
+            },
+            "/world" => if self.inside_newcontext == 0 && matches!(unscoped_name.as_str(),
+                "Import"
+                | "Export") {
+                    self.env.sleeping_procs.insert_violator(self.proc_ref, format!("world.{}", unscoped_name).as_str(), location);
+            },
+            _ => {},
+        }
+    }
+
     fn visit_follow(&mut self, location: Location, lhs: Analysis<'o>, rhs: &'o Follow, local_vars: &mut HashMap<String, LocalVar<'o>>) -> Analysis<'o> {
         match rhs {
             Follow::Field(IndexKind::Colon, _) => Analysis::empty(),
@@ -1945,6 +1963,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Follow::Call(kind, name, arguments) => {
                 if let Some(ty) = lhs.static_ty.basic_type() {
+                    self.check_type_sleepers(ty, location, name);
                     if let Some(proc) = ty.get_proc(name) {
                         if let Some((privateproc, true, decllocation)) = self.env.private.get_self_or_parent(proc) {
                             if ty != privateproc.ty() {
@@ -1961,13 +1980,6 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                                     .with_errortype("protected_proc")
                                     .with_note(decllocation, "prohibited by this protected_proc annotation")
                                     .register(self.context);
-                            }
-                        }
-                        if ty.get().path.as_str() == "/world" {
-                            if self.inside_newcontext == 0 && matches!(name.as_str(),
-                                "Import"
-                                | "Export") {
-                                self.env.sleeping_procs.insert_violator(self.proc_ref, format!("world.{}", name).as_str(), location);
                             }
                         }
                         self.visit_call(location, ty, proc, arguments, false, local_vars)
