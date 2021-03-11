@@ -128,6 +128,9 @@ fn sleep4() {
 /client/proc/foo()
     SoundQuery()
     MeasureText()
+/world/proc/bar()
+    Import()
+    Export()
 "##.trim();
     check_errors_match(code, SLEEP_ERROR4);
 }
