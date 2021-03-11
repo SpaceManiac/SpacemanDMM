@@ -1110,7 +1110,6 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         particles/var/bound2;
         particles/var/gravity;
         particles/var/gradient;
-        particles/var/grow;
         particles/var/transform;
         particles/var/lifespan;
         particles/var/fade;
