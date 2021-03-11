@@ -1875,19 +1875,19 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     }
 
     fn check_type_sleepers(&mut self, ty: TypeRef<'o>, location: Location, unscoped_name: &Ident) {
-        if ty.get().path.as_str() == "/client" {
-            if self.inside_newcontext == 0 && matches!(unscoped_name.as_str(),
+        println!("{}, {}", ty, unscoped_name);
+        match ty.get().path.as_str() {
+            "/client" => if self.inside_newcontext == 0 && matches!(unscoped_name.as_str(),
                 "SoundQuery"
                 | "MeasureText") {
                     self.env.sleeping_procs.insert_violator(self.proc_ref, format!("client.{}", unscoped_name).as_str(), location);
-            }
-        }
-        if ty.get().path.as_str() == "/world" {
-            if self.inside_newcontext == 0 && matches!(unscoped_name.as_str(),
+            },
+            "/world" => if self.inside_newcontext == 0 && matches!(unscoped_name.as_str(),
                 "Import"
                 | "Export") {
                     self.env.sleeping_procs.insert_violator(self.proc_ref, format!("world.{}", unscoped_name).as_str(), location);
-            }
+            },
+            _ => {},
         }
     }
 
@@ -1963,6 +1963,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Follow::Call(kind, name, arguments) => {
                 if let Some(ty) = lhs.static_ty.basic_type() {
+                    self.check_type_sleepers(ty, location, name);
                     if let Some(proc) = ty.get_proc(name) {
                         if let Some((privateproc, true, decllocation)) = self.env.private.get_self_or_parent(proc) {
                             if ty != privateproc.ty() {
@@ -1981,7 +1982,6 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                                     .register(self.context);
                             }
                         }
-                        self.check_type_sleepers(ty, location, name);
                         self.visit_call(location, ty, proc, arguments, false, local_vars)
                     } else {
                         error(location, format!("undefined proc: {:?} on {}", name, ty))

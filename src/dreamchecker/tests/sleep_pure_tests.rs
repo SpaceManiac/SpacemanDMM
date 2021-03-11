@@ -114,6 +114,11 @@ fn sleep3() {
 
 pub const SLEEP_ERROR4: &[(u32, u16, &str)] = &[
     (1, 16, "/mob/proc/test1 sets SpacemanDMM_should_not_sleep but calls blocking built-in(s)"),
+    (1, 16, "/mob/proc/test1 sets SpacemanDMM_should_not_sleep but calls blocking proc /mob/proc/test2"),
+    (1, 16, "/mob/proc/test1 sets SpacemanDMM_should_not_sleep but calls blocking proc /client/proc/checksoundquery"),
+    (1, 16, "/mob/proc/test1 sets SpacemanDMM_should_not_sleep but calls blocking proc /client/proc/checkmeasuretext"),
+    (1, 16, "/mob/proc/test1 sets SpacemanDMM_should_not_sleep but calls blocking proc /world/proc/checkimport"),
+    (1, 16, "/mob/proc/test1 sets SpacemanDMM_should_not_sleep but calls blocking proc /world/proc/checkexport"),
 ];
 
 #[test]
@@ -124,13 +129,22 @@ fn sleep4() {
     world.Export()
     world.Import()
     var/client/C = new /client
-    C.MeasureText()
-/client/proc/foo()
+    test2()
+    C.checksoundquery()
+    C.checkmeasuretext()
+    world.checkimport()
+    world.checkexport()
+/client/proc/checksoundquery()
     SoundQuery()
+/client/proc/checkmeasuretext()
     MeasureText()
-/world/proc/bar()
+/world/proc/checkimport()
     Import()
+/world/proc/checkexport()
     Export()
+/mob/proc/test2()
+    var/client/C = new /client
+    C.MeasureText()
 "##.trim();
     check_errors_match(code, SLEEP_ERROR4);
 }
