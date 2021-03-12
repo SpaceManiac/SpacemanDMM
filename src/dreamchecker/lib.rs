@@ -1875,7 +1875,6 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     }
 
     fn check_type_sleepers(&mut self, ty: TypeRef<'o>, location: Location, unscoped_name: &Ident) {
-        println!("{}, {}", ty, unscoped_name);
         match ty.get().path.as_str() {
             "/client" => if self.inside_newcontext == 0 && matches!(unscoped_name.as_str(),
                 "SoundQuery"
