@@ -744,8 +744,8 @@ impl<'a> ConstantFolder<'a> {
                 "arccos" => self.trig_op(args, f32::acos)?,
                 "rgb" => {
                     use std::fmt::Write;
-                    if args.len() != 3 && args.len() != 4 {
-                        return Err(self.error(format!("malformed rgb() call, must have 3 or 4 arguments and instead has {}", args.len())));
+                    if args.len() != 3 && args.len() != 4 && args.len() != 5 {
+                        return Err(self.error(format!("malformed rgb() call, must have 3, 4, or 5 arguments and instead has {}", args.len())));
                     }
                     let mut result = String::with_capacity(7);
                     result.push('#');
