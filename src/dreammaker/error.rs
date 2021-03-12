@@ -42,6 +42,8 @@ pub struct Context {
     /// Warning config
     config: RefCell<Config>,
     print_severity: Option<Severity>,
+
+    io_time: std::cell::Cell<std::time::Duration>,
 }
 
 impl FileList {
@@ -145,6 +147,21 @@ impl Context {
     /// Set a severity at and above which errors will be printed immediately.
     pub fn set_print_severity(&mut self, print_severity: Option<Severity>) {
         self.print_severity = print_severity;
+    }
+
+    // ------------------------------------------------------------------------
+    // Additional diagnostics
+
+    pub fn reset_io_time(&self) {
+        self.io_time.take();
+    }
+
+    pub fn add_io_time(&self, add: std::time::Duration) {
+        self.io_time.set(self.io_time.get() + add);
+    }
+
+    pub fn get_io_time(&self) -> std::time::Duration {
+        self.io_time.get()
     }
 
     // ------------------------------------------------------------------------

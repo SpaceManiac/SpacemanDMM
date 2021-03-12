@@ -643,12 +643,18 @@ impl<'ctx> Lexer<'ctx> {
 
     /// Create a new lexer from a reader.
     pub fn from_read<R: Read>(context: &'ctx Context, file: FileId, read: R) -> Result<Self, DMError> {
-        Ok(Lexer::new(context, file, buffer_read(file, read)?))
+        let start_time = std::time::Instant::now();
+        let input = buffer_read(file, read)?;
+        context.add_io_time(start_time.elapsed());
+        Ok(Lexer::new(context, file, input))
     }
 
     /// Create a new lexer from a reader.
     pub fn from_file(context: &'ctx Context, file: FileId, path: &std::path::Path) -> Result<Self, DMError> {
-        Ok(Lexer::new(context, file, buffer_file(file, path)?))
+        let start_time = std::time::Instant::now();
+        let input = buffer_file(file, path)?;
+        context.add_io_time(start_time.elapsed());
+        Ok(Lexer::new(context, file, input))
     }
 
     pub fn remaining(&self) -> &[u8] {

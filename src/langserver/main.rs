@@ -341,6 +341,7 @@ impl<'a> Engine<'a> {
         }
 
         let ctx = self.context;
+        ctx.reset_io_time();
         ctx.autodetect_config(&environment);
         let mut pp = match dm::preprocessor::Preprocessor::new(ctx, environment.clone()) {
             Ok(pp) => pp,
@@ -372,7 +373,11 @@ impl<'a> Engine<'a> {
             self.objtree = Arc::new(objtree);
         }
         let elapsed = start.elapsed(); start += elapsed;
-        eprint!(" - parse {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+        {
+            let disk = ctx.get_io_time();
+            let parse = elapsed - disk;
+            eprint!(" - disk {}.{:03}s - parse {}.{:03}s", disk.as_secs(), disk.subsec_millis(), parse.as_secs(), parse.subsec_millis());
+        }
 
         if self.client_caps.object_tree {
             self.update_objtree();
