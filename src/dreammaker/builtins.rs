@@ -513,7 +513,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         proc/REGEX_QUOTE_REPLACEMENT(text);
         proc/replacetext(Haystack,Needle,Replacement,Start=1,End=0);
         proc/replacetextEx(Haystack,Needle,Replacement,Start=1,End=0);
-        proc/rgb(R,G,B,A=null,space,red,blue,green,alpha,h,hue,s,saturation,c,chroma,v,value,l,luminance,y); // [r,g,b|h,s,(v|l|y)],(a),(space)
+        proc/rgb(R,G,B,A=null,space,red,blue,green,alpha,h,hue,s,saturation,c,chroma,v,value,l,luminance,y); // [r,g,b|h,s,[v|l|y]],(a),(space)
         proc/rgb2num(color, space);
         proc/roll(ndice=1,sides);  // +1 form
         proc/round(A,B=null);
