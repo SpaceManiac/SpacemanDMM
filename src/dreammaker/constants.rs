@@ -6,7 +6,7 @@ use std::path::Path;
 use linked_hash_map::LinkedHashMap;
 use ordered_float::OrderedFloat;
 
-use super::{DMError, Location, HasLocation, Context};
+use super::{DMError, Location, HasLocation, Context, Severity};
 use super::objtree::*;
 use super::ast::*;
 use super::preprocessor::DefineMap;
@@ -753,7 +753,7 @@ impl<'a> ConstantFolder<'a> {
                     for each in self.arguments(args)? {
                         let value = each.0;
                         let potential_kwarg_value = each.1;
-                        let mut range = 0..255;
+                        let mut range = 0..=255;
 
                         let mut to_check = value.clone();
 
@@ -763,12 +763,12 @@ impl<'a> ConstantFolder<'a> {
                                 to_check = kwarg_value; // Set the value to actually check to be our associated vaue
 
                                 range = match kwarg {
-                                    "r" | "red" | "g" | "green" | "b" | "blue" => 0..255,
-                                    "h" | "hue" => 0..360,
-                                    "s" | "saturation" => 0..100,
-                                    "v" | "value" => 0..100,
-                                    "l" | "y" | "luminance" => 0..100,
-                                    "a" | "alpha" => 0..255,
+                                    "r" | "red" | "g" | "green" | "b" | "blue" => 0..=255,
+                                    "h" | "hue" => 0..=360,
+                                    "s" | "saturation" => 0..=100,
+                                    "v" | "value" => 0..=100,
+                                    "l" | "y" | "luminance" => 0..=100,
+                                    "a" | "alpha" => 0..=255,
                                     "space" => continue, // Don't range-check the value of the space
                                     _ => return Err(self.error(format!("malformed rgb() call, bad kwarg passed: {}", kwarg))),
                                 };
@@ -778,7 +778,13 @@ impl<'a> ConstantFolder<'a> {
                         }
 
                         if let Some(i) = to_check.to_int() {
-                            let clamped = std::cmp::max(::std::cmp::min(i, range.end), range.start);
+                            if !range.contains(&i) {
+                                return Err(self.error(format!("malformed rgb() call, {} is not within the valid range ({}..{})", i, range.start(), range.end()))
+                                    .set_severity(Severity::Warning)
+                                    .with_location(self.location)
+                                )
+                            }
+                            let clamped = std::cmp::max(::std::cmp::min(i, *range.end()), *range.start());
                             let _ = write!(result, "{:02x}", clamped);
                         } else {
                             return Err(self.error("malformed rgb() call, value wasn't an int"));
