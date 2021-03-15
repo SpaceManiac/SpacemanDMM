@@ -6,10 +6,10 @@ use std::path::Path;
 use linked_hash_map::LinkedHashMap;
 use ordered_float::OrderedFloat;
 
-use super::{DMError, Location, HasLocation, Context, Severity};
-use super::objtree::*;
 use super::ast::*;
+use super::objtree::*;
 use super::preprocessor::DefineMap;
+use super::{Context, DMError, HasLocation, Location, Severity};
 
 /// An absolute typepath and optional variables.
 ///
@@ -478,7 +478,7 @@ fn constant_ident_lookup(
             .cloned()
         {
             Some(decl) => decl,
-            None => return Ok(ConstLookup::Continue(None)),  // definitely doesn't exist
+            None => return Ok(ConstLookup::Continue(None)), // definitely doesn't exist
         };
 
         let type_ = &mut tree[ty];
@@ -770,7 +770,9 @@ impl<'a> ConstantFolder<'a> {
                                     "l" | "y" | "luminance" => 0..=100,
                                     "a" | "alpha" => 0..=255,
                                     "space" => continue, // Don't range-check the value of the space
-                                    _ => return Err(self.error(format!("malformed rgb() call, bad kwarg passed: {}", kwarg))),
+                                    _ => {
+                                        return Err(self.error(format!("malformed rgb() call, bad kwarg passed: {}", kwarg)))
+                                    }
                                 };
                             } else {
                                 return Err(self.error(format!("malformed rgb() call, kwarg is not string: {}", value)));
@@ -782,7 +784,7 @@ impl<'a> ConstantFolder<'a> {
                                 return Err(self.error(format!("malformed rgb() call, {} is not within the valid range ({}..{})", i, range.start(), range.end()))
                                     .set_severity(Severity::Warning)
                                     .with_location(self.location)
-                                )
+                                );
                             }
                             let clamped = std::cmp::max(::std::cmp::min(i, *range.end()), *range.start());
                             let _ = write!(result, "{:02x}", clamped);
