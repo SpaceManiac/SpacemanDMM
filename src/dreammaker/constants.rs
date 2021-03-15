@@ -751,8 +751,8 @@ impl<'a> ConstantFolder<'a> {
                     result.push('#');
 
                     for each in self.arguments(args)? {
-                        let value = each.0.clone();
-                        let potential_kwarg_value = each.1.clone();
+                        let value = each.0;
+                        let potential_kwarg_value = each.1;
                         let mut range = (0, 255);
 
                         let mut to_check = value.clone();
