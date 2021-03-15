@@ -31,7 +31,7 @@ pub fn check_errors_match<S: Into<Cow<'static, str>>>(buffer: S, errorlist: &[(u
             || nexterror.location().column != *column
             || nexterror.description() != *desc
         {
-            panic!(format!(
+            panic!(
                 "possible feature regression in dreamchecker, expected {}:{}:{}, found {}:{}:{}",
                 *line,
                 *column,
@@ -39,7 +39,7 @@ pub fn check_errors_match<S: Into<Cow<'static, str>>>(buffer: S, errorlist: &[(u
                 nexterror.location().line,
                 nexterror.location().column,
                 nexterror.description()
-            ));
+            );
         }
     }
     if iter.next().is_some() {
