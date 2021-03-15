@@ -749,12 +749,38 @@ impl<'a> ConstantFolder<'a> {
                     }
                     let mut result = String::with_capacity(7);
                     result.push('#');
-                    for each in args {
-                        if let Some(i) = self.expr(each, None)?.to_int() {
-                            let clamped = std::cmp::max(::std::cmp::min(i, 255), 0);
+
+                    for each in self.arguments(args)? {
+                        let value = each.0.clone();
+                        let potential_kwarg_value = each.1.clone();
+                        let mut range = (0, 255);
+
+                        let mut to_check = value.clone();
+
+                        // If we have a secondary value, it's a kwarg, we need to get the actual value. If this fails, it's normal.
+                        if let Some(kwarg_value) = potential_kwarg_value {
+                            if let Some(kwarg) = value.as_str() {
+                                to_check = kwarg_value; // Set the value to actually check to be our associated vaue
+
+                                range = match kwarg {
+                                    "r" | "red" | "g" | "green" | "b" | "blue" => (0, 255),
+                                    "h" | "hue" => (0, 360),
+                                    "s" | "saturation" => (0, 100),
+                                    "v" | "value" => (0, 100),
+                                    "l" | "y" | "luminance" => (0, 100),
+                                    "a" | "alpha" => (0, 255),
+                                    "space" => continue, // Don't range-check the value of the space
+                                    _ => return Err(self.error(format!("malformed rgb() call, bad kwarg passed: {}", kwarg))),
+                                };
+                            } else {
+                                return Err(self.error(format!("malformed rgb() call, kwarg is not string: {}", value)));
+                            }
+                        }
+                        if let Some(i) = to_check.to_int() {
+                            let clamped = std::cmp::max(::std::cmp::min(i, range.1), range.0);
                             let _ = write!(result, "{:02x}", clamped);
                         } else {
-                            return Err(self.error("malformed rgb() call, argument wasn't an int"));
+                            return Err(self.error("malformed rgb() call, value wasn't an int"));
                         }
                     }
                     Constant::String(result)
