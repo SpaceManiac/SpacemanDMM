@@ -5,7 +5,7 @@ use std::path::Path;
 
 use linked_hash_map::LinkedHashMap;
 use ordered_float::OrderedFloat;
-use color_space::{Rgb, Hsv, Hsl, Lch};
+use color_space::{Hsl, Hsv, Lch, Rgb};
 
 use super::ast::*;
 use super::objtree::*;
@@ -878,6 +878,7 @@ impl<'a> ConstantFolder<'a> {
                                     "h" | "hue" => 0..=360,
                                     "s" | "saturation" => 0..=100,
                                     "v" | "value" => 0..=100,
+                                    "c" | "chroma" => 0..=100,
                                     "l" | "y" | "luminance" => 0..=100,
                                     "a" | "alpha" => 0..=255,
                                     "space" => continue, // Don't range-check the value of the space
@@ -897,7 +898,7 @@ impl<'a> ConstantFolder<'a> {
                                     .with_location(self.location)
                                 );
                             }
-                            let clamped = std::cmp::max(::std::cmp::min(i, *range.end()), *range.start());
+                            let clamped= std::cmp::max(::std::cmp::min(i, *range.end()), *range.start());
                             value_vec.push(clamped.into());
                         } else {
                             return Err(self.error("malformed rgb() call, value wasn't an int"));
@@ -906,7 +907,7 @@ impl<'a> ConstantFolder<'a> {
                         arg_pos += 1;
                     }
 
-                    assert_eq!(value_vec.len(), 3); // Make sure we got 3 values
+                    assert!(value_vec.len() >= 3); // Make sure we got 3+ values
 
                     // Convert our color given a space to a rgb hexcode
                     let color: Rgb = match space {
@@ -919,7 +920,7 @@ impl<'a> ConstantFolder<'a> {
                         }
                     };
 
-                    let _ = write!(result, "{:02x}{:02x}{:02x}", color.r as u8, color.g as u8, color.b as u8);
+                    let _ = write!(result, "{:02x}{:02x}{:02x}", color.r.round() as u8, color.g.round() as u8, color.b.round() as u8); // APPARENTLY the author thinks fractional rgb is a thing
                     Constant::String(result)
                 },
                 "defined" if self.defines.is_some() => {
