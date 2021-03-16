@@ -57,6 +57,22 @@ fn rgb_args() {
 }
 
 #[test]
+fn rgb_alpha() {
+    let code_hsv = "rgb(h=0, s=0, v=100, a=50, space=1)";
+    assert_eq!(
+        dm::constants::evaluate_str(Default::default(), code_hsv.as_bytes())
+            .expect("evaluation failed"),
+        Constant::String("#ffffff32".to_owned()),
+    );
+    let code_hsv2 = "rgb(h=0, s=0, v=100, 50)";
+    assert_eq!(
+        dm::constants::evaluate_str(Default::default(), code_hsv2.as_bytes())
+            .expect("evaluation failed"),
+        Constant::String("#ffffff32".to_owned()),
+    );
+}
+
+#[test]
 fn rgb_hsv() {
     let code_hsv = "rgb(h=0, s=0, v=100)";
     assert_eq!(

@@ -765,6 +765,7 @@ impl<'a> ConstantFolder<'a> {
                         l: bool,
                         c: bool,
                         y: bool,
+                        a: Option<i32>,
                     }
 
                     let mut color_args = ColorArgs {..Default::default()};
@@ -786,7 +787,7 @@ impl<'a> ConstantFolder<'a> {
                                     "l" | "luminance" => color_args.l = true,
                                     "c" | "chroma" => color_args.c = true,
                                     "y" => color_args.y = true,
-                                    "a" | "alpha" => continue, // Alpha can be applied to any colorspace
+                                    "a" | "alpha" => color_args.a = kwarg_value.to_int(),
                                     "space" => match kwarg_value.to_int() { // Do we have an actual colorspace specified? Set the values.
                                         Some(0) => space = 0,
                                         Some(1) => space = 1,
@@ -920,7 +921,13 @@ impl<'a> ConstantFolder<'a> {
                         }
                     };
 
-                    let _ = write!(result, "{:02x}{:02x}{:02x}", color.r.round() as u8, color.g.round() as u8, color.b.round() as u8); // APPARENTLY the author thinks fractional rgb is a thing
+                    // APPARENTLY the author thinks fractional rgb is a thing, hence the rounding
+                    if let Some(alpha) = color_args.a {
+                        let _ = write!(result, "{:02x}{:02x}{:02x}{:02x}", color.r.round() as u8, color.g.round() as u8, color.b.round() as u8, alpha);
+                    } else {
+                        let _ = write!(result, "{:02x}{:02x}{:02x}", color.r.round() as u8, color.g.round() as u8, color.b.round() as u8);
+                    }
+
                     Constant::String(result)
                 },
                 "defined" if self.defines.is_some() => {
