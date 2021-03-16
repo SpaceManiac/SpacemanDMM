@@ -921,9 +921,18 @@ impl<'a> ConstantFolder<'a> {
                         }
                     };
 
+                    let alpha;
+
+                    // Extract the raw 4th alpha positional argument if it wasn't a kwarg
+                    if color_args.a.is_none() && value_vec.len() > 3 {
+                        alpha = Some(value_vec[3] as i32);
+                    } else { // Handle the kwarg if it was there
+                        alpha = color_args.a;
+                    }
+
                     // APPARENTLY the author thinks fractional rgb is a thing, hence the rounding
-                    if let Some(alpha) = color_args.a {
-                        let _ = write!(result, "{:02x}{:02x}{:02x}{:02x}", color.r.round() as u8, color.g.round() as u8, color.b.round() as u8, alpha);
+                    if alpha.is_some() {
+                        let _ = write!(result, "{:02x}{:02x}{:02x}{:02x}", color.r.round() as u8, color.g.round() as u8, color.b.round() as u8, alpha.unwrap());
                     } else {
                         let _ = write!(result, "{:02x}{:02x}{:02x}", color.r.round() as u8, color.g.round() as u8, color.b.round() as u8);
                     }
