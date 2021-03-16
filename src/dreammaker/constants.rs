@@ -899,7 +899,7 @@ impl<'a> ConstantFolder<'a> {
                                     .with_location(self.location)
                                 );
                             }
-                            let clamped= std::cmp::max(::std::cmp::min(i, *range.end()), *range.start());
+                            let clamped = std::cmp::max(::std::cmp::min(i, *range.end()), *range.start());
                             value_vec.push(clamped.into());
                         } else {
                             return Err(self.error("malformed rgb() call, value wasn't an int"));
