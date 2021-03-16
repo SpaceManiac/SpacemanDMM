@@ -5,6 +5,7 @@ use std::path::Path;
 
 use linked_hash_map::LinkedHashMap;
 use ordered_float::OrderedFloat;
+use color_space::{Rgb, Hsv, Hsl, Lch};
 
 use super::ast::*;
 use super::objtree::*;
@@ -750,12 +751,122 @@ impl<'a> ConstantFolder<'a> {
                     let mut result = String::with_capacity(7);
                     result.push('#');
 
-                    for each in self.arguments(args)? {
-                        let value = each.0;
-                        let potential_kwarg_value = each.1;
-                        let mut range = 0..=255;
+                    let mut space = -1; // -1 to indicate not set
+                    let arguments = self.arguments(args)?;
 
-                        let mut to_check = value.clone();
+                    #[derive(Default)]
+                    struct ColorArgs {
+                        r: bool,
+                        g: bool,
+                        b: bool,
+                        h: bool,
+                        s: bool,
+                        v: bool,
+                        l: bool,
+                        c: bool,
+                        y: bool,
+                    }
+
+                    let mut color_args = ColorArgs {..Default::default()};
+
+                    for each in &arguments {
+                        let value = &each.0;
+                        let potential_kwarg_value = &each.1;
+
+                        // Check for kwargs if we're in the right form
+                        if let Some(kwarg_value) = potential_kwarg_value {
+                            if let Some(kwarg) = value.as_str() {
+                                match kwarg {
+                                    "r" | "red" => color_args.r = true,
+                                    "g" | "green" => color_args.g = true,
+                                    "b" | "blue" => color_args.b = true,
+                                    "h" | "hue" => color_args.h = true,
+                                    "s" | "saturation" => color_args.s = true,
+                                    "v" | "value" => color_args.v = true,
+                                    "l" | "luminance" => color_args.l = true,
+                                    "c" | "chroma" => color_args.c = true,
+                                    "y" => color_args.y = true,
+                                    "a" | "alpha" => continue, // Alpha can be applied to any colorspace
+                                    "space" => match kwarg_value.to_int() { // Do we have an actual colorspace specified? Set the values.
+                                        Some(0) => space = 0,
+                                        Some(1) => space = 1,
+                                        Some(2) => space = 2,
+                                        Some(3) => space = 3,
+                                        _ => {
+                                            return Err(self.error(format!("malformed rgb() call, bad color space: {}", kwarg_value)))
+                                        }
+                                    }
+                                    _ => {
+                                        return Err(self.error(format!("malformed rgb() call, bad kwarg passed: {}", kwarg)))
+                                    }
+                                }
+                            } else {
+                                return Err(self.error(format!("malformed rgb() call, kwarg is not string: {}", value)));
+                            }
+                        }
+                    }
+
+                    // Only set space if it wasn't set manually by the space arg
+                    if space == -1 {
+                        space = 0; // Default
+                        if color_args.r || color_args.g || color_args.b {
+                            // TODO: Add hint here for useless r/g/b kwarg
+                        }
+                        if color_args.h {
+                            if color_args.c && color_args.y {
+                                space = 3;
+                            }
+                            else if color_args.s {
+                                if color_args.v {
+                                    space = 1;
+                                }
+                                else if color_args.l {
+                                    space = 2;
+                                }
+                                else {
+                                    return Err(self.error("malformed rgb() call, could not determine space: only h & s specified"));
+                                }
+                            }
+                            else {
+                                return Err(self.error("malformed rgb() call, could not determine space: only h specified"));
+                            }
+                        }
+                    }
+
+                    let mut value_vec: Vec<f64> = vec![];
+
+                    let mut arg_pos = 0;
+
+                    for each in &*arguments {
+                        let value = &each.0;
+                        let potential_kwarg_value = &each.1;
+                        let mut to_check = &value.clone();
+
+                        // Determines the range based on predetermined colorspace
+                        let mut range = match arg_pos {
+                            0 => match space {
+                                0 => 0..=255, //r
+                                1 => 0..=360, //h
+                                2 => 0..=360, //h
+                                3 => 0..=360, //h
+                                _ => return Err(self.error("malformed rgb() call, illegal color space")),
+                            },
+                            1 => match space {
+                                0 => 0..=255, //g
+                                1 => 0..=100, //s
+                                2 => 0..=100, //s
+                                3 => 0..=100, //c
+                                _ => return Err(self.error("malformed rgb() call, illegal color space")),
+                            },
+                            2 => match space {
+                                0 => 0..=255, //b
+                                1 => 0..=100, //v
+                                2 => 0..=100, //l
+                                3 => 0..=100, //y
+                                _ => return Err(self.error("malformed rgb() call, illegal color space")),
+                            },
+                            _ => 0..=255,
+                        };
 
                         // If we have a secondary value, it's a kwarg, we need to get the actual value. If this fails, it's normal.
                         if let Some(kwarg_value) = potential_kwarg_value {
@@ -787,11 +898,28 @@ impl<'a> ConstantFolder<'a> {
                                 );
                             }
                             let clamped = std::cmp::max(::std::cmp::min(i, *range.end()), *range.start());
-                            let _ = write!(result, "{:02x}", clamped);
+                            value_vec.push(clamped.into());
                         } else {
                             return Err(self.error("malformed rgb() call, value wasn't an int"));
                         }
+
+                        arg_pos += 1;
                     }
+
+                    assert_eq!(value_vec.len(), 3); // Make sure we got 3 values
+
+                    // Convert our color given a space to a rgb hexcode
+                    let color: Rgb = match space {
+                        0 => Rgb::new(value_vec[0], value_vec[1], value_vec[2]),
+                        1 => Hsv::new(value_vec[0], value_vec[1] * 0.01, value_vec[2] * 0.01).into(),
+                        2 => Hsl::new(value_vec[0], value_vec[1] * 0.01, value_vec[2] * 0.01).into(),
+                        3 => Lch::new(value_vec[2], value_vec[1], value_vec[0]).into(),
+                        _ => {
+                            return Err(self.error(format!("malformed rgb() call, bad color space: {}", space)))
+                        }
+                    };
+
+                    let _ = write!(result, "{:02x}{:02x}{:02x}", color.r as u8, color.g as u8, color.b as u8);
                     Constant::String(result)
                 },
                 "defined" if self.defines.is_some() => {
