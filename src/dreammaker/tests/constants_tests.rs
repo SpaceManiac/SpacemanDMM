@@ -1,6 +1,6 @@
 extern crate dreammaker as dm;
 
-use dm::{constants::*};
+use dm::constants::*;
 
 #[test]
 fn floating_point_rgb() {
