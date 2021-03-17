@@ -217,9 +217,10 @@ impl Auxtools {
         }
     }
 
-    pub fn set_breakpoint(&mut self, instruction: &InstructionRef) -> Result<BreakpointSetResult, Box<dyn std::error::Error>> {
+    pub fn set_breakpoint(&mut self, instruction: InstructionRef, condition: Option<String>) -> Result<BreakpointSetResult, Box<dyn std::error::Error>> {
         self.send_or_disconnect(Request::BreakpointSet {
-            instruction: instruction.clone(),
+            instruction,
+            condition
         })?;
 
         match self.read_response_or_disconnect()? {
