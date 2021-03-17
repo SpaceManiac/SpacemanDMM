@@ -395,7 +395,7 @@ handle_request! {
             supportsExceptionInfoRequest: Some(true),
             supportsConfigurationDoneRequest: Some(true),
             supportsFunctionBreakpoints: Some(true),
-            supportsConditionalBreakpoints: Some(matches!(self.client, DebugClient::Auxtools {..})),
+            supportsConditionalBreakpoints: Some(true),
             supportsDisassembleRequest: Some(true),
             exceptionBreakpointFilters: Some(vec![
                 ExceptionBreakpointsFilter {
