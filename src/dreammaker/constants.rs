@@ -847,7 +847,14 @@ impl<'a> ConstantFolder<'a> {
             return Err(self.error(format!("malformed rgb() call, must have 3, 4, or 5 arguments and instead has {}", args.len())));
         }
 
-        let mut space = -1; // -1 to indicate not set
+        enum ColorSpace {
+            Rgb = 0,
+            Hsv = 1,
+            Hsl = 2,
+            Hcy = 3,
+        }
+
+        let mut space = None;
         let arguments = self.arguments(args)?;
 
         #[derive(Default)]
@@ -864,7 +871,7 @@ impl<'a> ConstantFolder<'a> {
             a: Option<i32>,
         }
 
-        let mut color_args = ColorArgs {..Default::default()};
+        let mut color_args = ColorArgs::default();
 
         for each in &arguments {
             let value = &each.0;
@@ -885,10 +892,10 @@ impl<'a> ConstantFolder<'a> {
                         "y" => color_args.y = true,
                         "a" | "alpha" => color_args.a = kwarg_value.to_int(),
                         "space" => match kwarg_value.to_int() { // Do we have an actual colorspace specified? Set the values.
-                            Some(0) => space = 0,
-                            Some(1) => space = 1,
-                            Some(2) => space = 2,
-                            Some(3) => space = 3,
+                            Some(0) => space = Some(ColorSpace::Rgb),
+                            Some(1) => space = Some(ColorSpace::Hsv),
+                            Some(2) => space = Some(ColorSpace::Hsl),
+                            Some(3) => space = Some(ColorSpace::Hcy),
                             _ => {
                                 return Err(self.error(format!("malformed rgb() call, bad color space: {}", kwarg_value)))
                             }
@@ -904,31 +911,30 @@ impl<'a> ConstantFolder<'a> {
         }
 
         // Only set space if it wasn't set manually by the space arg
-        if space == -1 {
-            space = 0; // Default
+        let space = if let Some(space) = space {
+            space
+        } else {
             if color_args.r || color_args.g || color_args.b {
                 // TODO: Add hint here for useless r/g/b kwarg
-            }
-            if color_args.h {
+                ColorSpace::Rgb
+            } else if color_args.h {
                 if color_args.c && color_args.y {
-                    space = 3;
-                }
-                else if color_args.s {
+                    ColorSpace::Hcy
+                } else if color_args.s {
                     if color_args.v {
-                        space = 1;
-                    }
-                    else if color_args.l {
-                        space = 2;
-                    }
-                    else {
+                        ColorSpace::Hsv
+                    } else if color_args.l {
+                        ColorSpace::Hsl
+                    } else {
                         return Err(self.error("malformed rgb() call, could not determine space: only h & s specified"));
                     }
-                }
-                else {
+                } else {
                     return Err(self.error("malformed rgb() call, could not determine space: only h specified"));
                 }
+            } else {
+                ColorSpace::Rgb  // Default
             }
-        }
+        };
 
         let mut value_vec: Vec<f64> = vec![];
 
@@ -942,25 +948,22 @@ impl<'a> ConstantFolder<'a> {
             // Determines the range based on predetermined colorspace
             let mut range = match arg_pos {
                 0 => match space {
-                    0 => 0..=255, //r
-                    1 => 0..=360, //h
-                    2 => 0..=360, //h
-                    3 => 0..=360, //h
-                    _ => return Err(self.error("malformed rgb() call, illegal color space")),
+                    ColorSpace::Rgb => 0..=255, //r
+                    ColorSpace::Hsv => 0..=360, //h
+                    ColorSpace::Hsl => 0..=360, //h
+                    ColorSpace::Hcy => 0..=360, //h
                 },
                 1 => match space {
-                    0 => 0..=255, //g
-                    1 => 0..=100, //s
-                    2 => 0..=100, //s
-                    3 => 0..=100, //c
-                    _ => return Err(self.error("malformed rgb() call, illegal color space")),
+                    ColorSpace::Rgb => 0..=255, //g
+                    ColorSpace::Hsv => 0..=100, //s
+                    ColorSpace::Hsl => 0..=100, //s
+                    ColorSpace::Hcy => 0..=100, //c
                 },
                 2 => match space {
-                    0 => 0..=255, //b
-                    1 => 0..=100, //v
-                    2 => 0..=100, //l
-                    3 => 0..=100, //y
-                    _ => return Err(self.error("malformed rgb() call, illegal color space")),
+                    ColorSpace::Rgb => 0..=255, //b
+                    ColorSpace::Hsv => 0..=100, //v
+                    ColorSpace::Hsl => 0..=100, //l
+                    ColorSpace::Hcy => 0..=100, //y
                 },
                 _ => 0..=255,
             };
@@ -1008,13 +1011,10 @@ impl<'a> ConstantFolder<'a> {
 
         // Convert our color given a space to a rgb hexcode
         let color: Rgb = match space {
-            0 => Rgb::new(value_vec[0], value_vec[1], value_vec[2]),
-            1 => Hsv::new(value_vec[0], value_vec[1] * 0.01, value_vec[2] * 0.01).into(),
-            2 => Hsl::new(value_vec[0], value_vec[1] * 0.01, value_vec[2] * 0.01).into(),
-            3 => Lch::new(value_vec[2], value_vec[1], value_vec[0]).into(),
-            _ => {
-                return Err(self.error(format!("malformed rgb() call, bad color space: {}", space)))
-            }
+            ColorSpace::Rgb => Rgb::new(value_vec[0], value_vec[1], value_vec[2]),
+            ColorSpace::Hsv => Hsv::new(value_vec[0], value_vec[1] * 0.01, value_vec[2] * 0.01).into(),
+            ColorSpace::Hsl => Hsl::new(value_vec[0], value_vec[1] * 0.01, value_vec[2] * 0.01).into(),
+            ColorSpace::Hcy => Lch::new(value_vec[2], value_vec[1], value_vec[0]).into(),
         };
 
         let alpha;
