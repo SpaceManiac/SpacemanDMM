@@ -938,9 +938,7 @@ impl<'a> ConstantFolder<'a> {
 
         let mut value_vec: Vec<f64> = vec![];
 
-        let mut arg_pos = 0;
-
-        for each in &*arguments {
+        for (arg_pos, each) in arguments.iter().enumerate() {
             let value = &each.0;
             let potential_kwarg_value = &each.1;
             let mut to_check = &value.clone();
@@ -1003,8 +1001,6 @@ impl<'a> ConstantFolder<'a> {
             } else {
                 return Err(self.error("malformed rgb() call, value wasn't an int"));
             }
-
-            arg_pos += 1;
         }
 
         assert!(value_vec.len() >= 3); // Make sure we got 3+ values
