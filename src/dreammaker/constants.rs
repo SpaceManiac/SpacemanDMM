@@ -843,12 +843,9 @@ impl<'a> ConstantFolder<'a> {
     }
 
     fn rgb(&mut self, args: Vec<Expression>) -> Result<String, DMError> {
-        use std::fmt::Write;
         if args.len() != 3 && args.len() != 4 && args.len() != 5 {
             return Err(self.error(format!("malformed rgb() call, must have 3, 4, or 5 arguments and instead has {}", args.len())));
         }
-        let mut result = String::with_capacity(7);
-        result.push('#');
 
         let mut space = -1; // -1 to indicate not set
         let arguments = self.arguments(args)?;
@@ -1030,12 +1027,10 @@ impl<'a> ConstantFolder<'a> {
         }
 
         // APPARENTLY the author thinks fractional rgb is a thing, hence the rounding
-        if alpha.is_some() {
-            let _ = write!(result, "{:02x}{:02x}{:02x}{:02x}", color.r.round() as u8, color.g.round() as u8, color.b.round() as u8, alpha.unwrap());
+        if let Some(alpha) = alpha {
+            Ok(format!("#{:02x}{:02x}{:02x}{:02x}", color.r.round() as u8, color.g.round() as u8, color.b.round() as u8, alpha))
         } else {
-            let _ = write!(result, "{:02x}{:02x}{:02x}", color.r.round() as u8, color.g.round() as u8, color.b.round() as u8);
+            Ok(format!("#{:02x}{:02x}{:02x}", color.r.round() as u8, color.g.round() as u8, color.b.round() as u8))
         }
-
-        Ok(result)
     }
 }
