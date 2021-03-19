@@ -164,15 +164,15 @@ fn pipe_output<R: std::io::Read + Send + 'static>(seq: Arc<SequenceNumber>, keyw
         .spawn(move || {
             use std::io::BufRead;
 
-            let mut line = String::new();
+            let mut line = vec![];
             let mut buf_stream = std::io::BufReader::new(stream2);
             loop {
                 line.clear();
-                match buf_stream.read_line(&mut line) {
+                match buf_stream.read_until(b'\n', &mut line) {
                     Ok(0) => break,
                     Ok(_) => {
                         seq.issue_event(super::dap_types::OutputEvent {
-                            output: line.clone(),
+                            output: String::from_utf8_lossy(&line).into_owned(),
                             category: Some(keyword.to_owned()),
                             ..Default::default()
                         });
