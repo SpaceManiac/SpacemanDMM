@@ -743,202 +743,7 @@ impl<'a> ConstantFolder<'a> {
                 "cos" => self.trig_op(args, f32::cos)?,
                 "arcsin" => self.trig_op(args, f32::asin)?,
                 "arccos" => self.trig_op(args, f32::acos)?,
-                "rgb" => {
-                    use std::fmt::Write;
-                    if args.len() != 3 && args.len() != 4 && args.len() != 5 {
-                        return Err(self.error(format!("malformed rgb() call, must have 3, 4, or 5 arguments and instead has {}", args.len())));
-                    }
-                    let mut result = String::with_capacity(7);
-                    result.push('#');
-
-                    let mut space = -1; // -1 to indicate not set
-                    let arguments = self.arguments(args)?;
-
-                    #[derive(Default)]
-                    struct ColorArgs {
-                        r: bool,
-                        g: bool,
-                        b: bool,
-                        h: bool,
-                        s: bool,
-                        v: bool,
-                        l: bool,
-                        c: bool,
-                        y: bool,
-                        a: Option<i32>,
-                    }
-
-                    let mut color_args = ColorArgs {..Default::default()};
-
-                    for each in &arguments {
-                        let value = &each.0;
-                        let potential_kwarg_value = &each.1;
-
-                        // Check for kwargs if we're in the right form
-                        if let Some(kwarg_value) = potential_kwarg_value {
-                            if let Some(kwarg) = value.as_str() {
-                                match kwarg {
-                                    "r" | "red" => color_args.r = true,
-                                    "g" | "green" => color_args.g = true,
-                                    "b" | "blue" => color_args.b = true,
-                                    "h" | "hue" => color_args.h = true,
-                                    "s" | "saturation" => color_args.s = true,
-                                    "v" | "value" => color_args.v = true,
-                                    "l" | "luminance" => color_args.l = true,
-                                    "c" | "chroma" => color_args.c = true,
-                                    "y" => color_args.y = true,
-                                    "a" | "alpha" => color_args.a = kwarg_value.to_int(),
-                                    "space" => match kwarg_value.to_int() { // Do we have an actual colorspace specified? Set the values.
-                                        Some(0) => space = 0,
-                                        Some(1) => space = 1,
-                                        Some(2) => space = 2,
-                                        Some(3) => space = 3,
-                                        _ => {
-                                            return Err(self.error(format!("malformed rgb() call, bad color space: {}", kwarg_value)))
-                                        }
-                                    }
-                                    _ => {
-                                        return Err(self.error(format!("malformed rgb() call, bad kwarg passed: {}", kwarg)))
-                                    }
-                                }
-                            } else {
-                                return Err(self.error(format!("malformed rgb() call, kwarg is not string: {}", value)));
-                            }
-                        }
-                    }
-
-                    // Only set space if it wasn't set manually by the space arg
-                    if space == -1 {
-                        space = 0; // Default
-                        if color_args.r || color_args.g || color_args.b {
-                            // TODO: Add hint here for useless r/g/b kwarg
-                        }
-                        if color_args.h {
-                            if color_args.c && color_args.y {
-                                space = 3;
-                            }
-                            else if color_args.s {
-                                if color_args.v {
-                                    space = 1;
-                                }
-                                else if color_args.l {
-                                    space = 2;
-                                }
-                                else {
-                                    return Err(self.error("malformed rgb() call, could not determine space: only h & s specified"));
-                                }
-                            }
-                            else {
-                                return Err(self.error("malformed rgb() call, could not determine space: only h specified"));
-                            }
-                        }
-                    }
-
-                    let mut value_vec: Vec<f64> = vec![];
-
-                    let mut arg_pos = 0;
-
-                    for each in &*arguments {
-                        let value = &each.0;
-                        let potential_kwarg_value = &each.1;
-                        let mut to_check = &value.clone();
-
-                        // Determines the range based on predetermined colorspace
-                        let mut range = match arg_pos {
-                            0 => match space {
-                                0 => 0..=255, //r
-                                1 => 0..=360, //h
-                                2 => 0..=360, //h
-                                3 => 0..=360, //h
-                                _ => return Err(self.error("malformed rgb() call, illegal color space")),
-                            },
-                            1 => match space {
-                                0 => 0..=255, //g
-                                1 => 0..=100, //s
-                                2 => 0..=100, //s
-                                3 => 0..=100, //c
-                                _ => return Err(self.error("malformed rgb() call, illegal color space")),
-                            },
-                            2 => match space {
-                                0 => 0..=255, //b
-                                1 => 0..=100, //v
-                                2 => 0..=100, //l
-                                3 => 0..=100, //y
-                                _ => return Err(self.error("malformed rgb() call, illegal color space")),
-                            },
-                            _ => 0..=255,
-                        };
-
-                        // If we have a secondary value, it's a kwarg, we need to get the actual value. If this fails, it's normal.
-                        if let Some(kwarg_value) = potential_kwarg_value {
-                            if let Some(kwarg) = value.as_str() {
-                                to_check = kwarg_value; // Set the value to actually check to be our associated vaue
-
-                                range = match kwarg {
-                                    "r" | "red" | "g" | "green" | "b" | "blue" => 0..=255,
-                                    "h" | "hue" => 0..=360,
-                                    "s" | "saturation" => 0..=100,
-                                    "v" | "value" => 0..=100,
-                                    "c" | "chroma" => 0..=100,
-                                    "l" | "y" | "luminance" => 0..=100,
-                                    "a" | "alpha" => 0..=255,
-                                    "space" => continue, // Don't range-check the value of the space
-                                    _ => {
-                                        return Err(self.error(format!("malformed rgb() call, bad kwarg passed: {}", kwarg)))
-                                    }
-                                };
-                            } else {
-                                return Err(self.error(format!("malformed rgb() call, kwarg is not string: {}", value)));
-                            }
-                        }
-
-                        if let Some(i) = to_check.to_int() {
-                            if !range.contains(&i) {
-                                return Err(self.error(format!("malformed rgb() call, {} is not within the valid range ({}..{})", i, range.start(), range.end()))
-                                    .set_severity(Severity::Warning)
-                                    .with_location(self.location)
-                                );
-                            }
-                            let clamped = std::cmp::max(::std::cmp::min(i, *range.end()), *range.start());
-                            value_vec.push(clamped.into());
-                        } else {
-                            return Err(self.error("malformed rgb() call, value wasn't an int"));
-                        }
-
-                        arg_pos += 1;
-                    }
-
-                    assert!(value_vec.len() >= 3); // Make sure we got 3+ values
-
-                    // Convert our color given a space to a rgb hexcode
-                    let color: Rgb = match space {
-                        0 => Rgb::new(value_vec[0], value_vec[1], value_vec[2]),
-                        1 => Hsv::new(value_vec[0], value_vec[1] * 0.01, value_vec[2] * 0.01).into(),
-                        2 => Hsl::new(value_vec[0], value_vec[1] * 0.01, value_vec[2] * 0.01).into(),
-                        3 => Lch::new(value_vec[2], value_vec[1], value_vec[0]).into(),
-                        _ => {
-                            return Err(self.error(format!("malformed rgb() call, bad color space: {}", space)))
-                        }
-                    };
-
-                    let alpha;
-
-                    // Extract the raw 4th alpha positional argument if it wasn't a kwarg
-                    if color_args.a.is_none() && value_vec.len() > 3 {
-                        alpha = Some(value_vec[3] as i32);
-                    } else { // Handle the kwarg if it was there
-                        alpha = color_args.a;
-                    }
-
-                    // APPARENTLY the author thinks fractional rgb is a thing, hence the rounding
-                    if alpha.is_some() {
-                        let _ = write!(result, "{:02x}{:02x}{:02x}{:02x}", color.r.round() as u8, color.g.round() as u8, color.b.round() as u8, alpha.unwrap());
-                    } else {
-                        let _ = write!(result, "{:02x}{:02x}{:02x}", color.r.round() as u8, color.g.round() as u8, color.b.round() as u8);
-                    }
-
-                    Constant::String(result)
-                },
+                "rgb" => Constant::String(self.rgb(args)?),
                 "defined" if self.defines.is_some() => {
                     let defines = self.defines.unwrap();  // annoying, but keeps the match clean
                     if args.len() != 1 {
@@ -1035,5 +840,202 @@ impl<'a> ConstantFolder<'a> {
             }
         }
         Err(self.error(format!("unknown variable: {}", ident)))
+    }
+
+    fn rgb(&mut self, args: Vec<Expression>) -> Result<String, DMError> {
+        use std::fmt::Write;
+        if args.len() != 3 && args.len() != 4 && args.len() != 5 {
+            return Err(self.error(format!("malformed rgb() call, must have 3, 4, or 5 arguments and instead has {}", args.len())));
+        }
+        let mut result = String::with_capacity(7);
+        result.push('#');
+
+        let mut space = -1; // -1 to indicate not set
+        let arguments = self.arguments(args)?;
+
+        #[derive(Default)]
+        struct ColorArgs {
+            r: bool,
+            g: bool,
+            b: bool,
+            h: bool,
+            s: bool,
+            v: bool,
+            l: bool,
+            c: bool,
+            y: bool,
+            a: Option<i32>,
+        }
+
+        let mut color_args = ColorArgs {..Default::default()};
+
+        for each in &arguments {
+            let value = &each.0;
+            let potential_kwarg_value = &each.1;
+
+            // Check for kwargs if we're in the right form
+            if let Some(kwarg_value) = potential_kwarg_value {
+                if let Some(kwarg) = value.as_str() {
+                    match kwarg {
+                        "r" | "red" => color_args.r = true,
+                        "g" | "green" => color_args.g = true,
+                        "b" | "blue" => color_args.b = true,
+                        "h" | "hue" => color_args.h = true,
+                        "s" | "saturation" => color_args.s = true,
+                        "v" | "value" => color_args.v = true,
+                        "l" | "luminance" => color_args.l = true,
+                        "c" | "chroma" => color_args.c = true,
+                        "y" => color_args.y = true,
+                        "a" | "alpha" => color_args.a = kwarg_value.to_int(),
+                        "space" => match kwarg_value.to_int() { // Do we have an actual colorspace specified? Set the values.
+                            Some(0) => space = 0,
+                            Some(1) => space = 1,
+                            Some(2) => space = 2,
+                            Some(3) => space = 3,
+                            _ => {
+                                return Err(self.error(format!("malformed rgb() call, bad color space: {}", kwarg_value)))
+                            }
+                        }
+                        _ => {
+                            return Err(self.error(format!("malformed rgb() call, bad kwarg passed: {}", kwarg)))
+                        }
+                    }
+                } else {
+                    return Err(self.error(format!("malformed rgb() call, kwarg is not string: {}", value)));
+                }
+            }
+        }
+
+        // Only set space if it wasn't set manually by the space arg
+        if space == -1 {
+            space = 0; // Default
+            if color_args.r || color_args.g || color_args.b {
+                // TODO: Add hint here for useless r/g/b kwarg
+            }
+            if color_args.h {
+                if color_args.c && color_args.y {
+                    space = 3;
+                }
+                else if color_args.s {
+                    if color_args.v {
+                        space = 1;
+                    }
+                    else if color_args.l {
+                        space = 2;
+                    }
+                    else {
+                        return Err(self.error("malformed rgb() call, could not determine space: only h & s specified"));
+                    }
+                }
+                else {
+                    return Err(self.error("malformed rgb() call, could not determine space: only h specified"));
+                }
+            }
+        }
+
+        let mut value_vec: Vec<f64> = vec![];
+
+        let mut arg_pos = 0;
+
+        for each in &*arguments {
+            let value = &each.0;
+            let potential_kwarg_value = &each.1;
+            let mut to_check = &value.clone();
+
+            // Determines the range based on predetermined colorspace
+            let mut range = match arg_pos {
+                0 => match space {
+                    0 => 0..=255, //r
+                    1 => 0..=360, //h
+                    2 => 0..=360, //h
+                    3 => 0..=360, //h
+                    _ => return Err(self.error("malformed rgb() call, illegal color space")),
+                },
+                1 => match space {
+                    0 => 0..=255, //g
+                    1 => 0..=100, //s
+                    2 => 0..=100, //s
+                    3 => 0..=100, //c
+                    _ => return Err(self.error("malformed rgb() call, illegal color space")),
+                },
+                2 => match space {
+                    0 => 0..=255, //b
+                    1 => 0..=100, //v
+                    2 => 0..=100, //l
+                    3 => 0..=100, //y
+                    _ => return Err(self.error("malformed rgb() call, illegal color space")),
+                },
+                _ => 0..=255,
+            };
+
+            // If we have a secondary value, it's a kwarg, we need to get the actual value. If this fails, it's normal.
+            if let Some(kwarg_value) = potential_kwarg_value {
+                if let Some(kwarg) = value.as_str() {
+                    to_check = kwarg_value; // Set the value to actually check to be our associated vaue
+
+                    range = match kwarg {
+                        "r" | "red" | "g" | "green" | "b" | "blue" => 0..=255,
+                        "h" | "hue" => 0..=360,
+                        "s" | "saturation" => 0..=100,
+                        "v" | "value" => 0..=100,
+                        "c" | "chroma" => 0..=100,
+                        "l" | "y" | "luminance" => 0..=100,
+                        "a" | "alpha" => 0..=255,
+                        "space" => continue, // Don't range-check the value of the space
+                        _ => {
+                            return Err(self.error(format!("malformed rgb() call, bad kwarg passed: {}", kwarg)))
+                        }
+                    };
+                } else {
+                    return Err(self.error(format!("malformed rgb() call, kwarg is not string: {}", value)));
+                }
+            }
+
+            if let Some(i) = to_check.to_int() {
+                if !range.contains(&i) {
+                    return Err(self.error(format!("malformed rgb() call, {} is not within the valid range ({}..{})", i, range.start(), range.end()))
+                        .set_severity(Severity::Warning)
+                        .with_location(self.location)
+                    );
+                }
+                let clamped = std::cmp::max(::std::cmp::min(i, *range.end()), *range.start());
+                value_vec.push(clamped.into());
+            } else {
+                return Err(self.error("malformed rgb() call, value wasn't an int"));
+            }
+
+            arg_pos += 1;
+        }
+
+        assert!(value_vec.len() >= 3); // Make sure we got 3+ values
+
+        // Convert our color given a space to a rgb hexcode
+        let color: Rgb = match space {
+            0 => Rgb::new(value_vec[0], value_vec[1], value_vec[2]),
+            1 => Hsv::new(value_vec[0], value_vec[1] * 0.01, value_vec[2] * 0.01).into(),
+            2 => Hsl::new(value_vec[0], value_vec[1] * 0.01, value_vec[2] * 0.01).into(),
+            3 => Lch::new(value_vec[2], value_vec[1], value_vec[0]).into(),
+            _ => {
+                return Err(self.error(format!("malformed rgb() call, bad color space: {}", space)))
+            }
+        };
+
+        let alpha;
+
+        // Extract the raw 4th alpha positional argument if it wasn't a kwarg
+        if color_args.a.is_none() && value_vec.len() > 3 {
+            alpha = Some(value_vec[3] as i32);
+        } else { // Handle the kwarg if it was there
+            alpha = color_args.a;
+        }
+
+        // APPARENTLY the author thinks fractional rgb is a thing, hence the rounding
+        if alpha.is_some() {
+            let _ = write!(result, "{:02x}{:02x}{:02x}{:02x}", color.r.round() as u8, color.g.round() as u8, color.b.round() as u8, alpha.unwrap());
+        } else {
+            let _ = write!(result, "{:02x}{:02x}{:02x}", color.r.round() as u8, color.g.round() as u8, color.b.round() as u8);
+        }
+
+        Ok(result)
     }
 }
