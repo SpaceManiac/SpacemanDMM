@@ -873,10 +873,7 @@ impl<'a> ConstantFolder<'a> {
 
         let mut color_args = ColorArgs::default();
 
-        for each in &arguments {
-            let value = &each.0;
-            let potential_kwarg_value = &each.1;
-
+        for (value, potential_kwarg_value) in &arguments {
             // Check for kwargs if we're in the right form
             if let Some(kwarg_value) = potential_kwarg_value {
                 if let Some(kwarg) = value.as_str() {
@@ -938,10 +935,8 @@ impl<'a> ConstantFolder<'a> {
 
         let mut value_vec: Vec<f64> = vec![];
 
-        for (arg_pos, each) in arguments.iter().enumerate() {
-            let value = &each.0;
-            let potential_kwarg_value = &each.1;
-            let mut to_check = &value.clone();
+        for (arg_pos, (value, potential_kwarg_value)) in arguments.iter().enumerate() {
+            let mut to_check = value;
 
             // Determines the range based on predetermined colorspace
             let mut range = match arg_pos {
