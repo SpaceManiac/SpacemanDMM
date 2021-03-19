@@ -1013,14 +1013,8 @@ impl<'a> ConstantFolder<'a> {
             ColorSpace::Hcy => Lch::new(value_vec[2], value_vec[1], value_vec[0]).into(),
         };
 
-        let alpha;
-
         // Extract the raw 4th alpha positional argument if it wasn't a kwarg
-        if color_args.a.is_none() && value_vec.len() > 3 {
-            alpha = Some(value_vec[3] as i32);
-        } else { // Handle the kwarg if it was there
-            alpha = color_args.a;
-        }
+        let alpha = color_args.a.or(value_vec.get(3).map(|&x| x as i32));
 
         // APPARENTLY the author thinks fractional rgb is a thing, hence the rounding
         if let Some(alpha) = alpha {
