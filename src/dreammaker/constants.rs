@@ -843,19 +843,12 @@ impl<'a> ConstantFolder<'a> {
     }
 
     fn rgb(&mut self, args: Vec<Expression>) -> Result<String, DMError> {
-        if args.len() != 3 && args.len() != 4 && args.len() != 5 {
-            return Err(self.error(format!("malformed rgb() call, must have 3, 4, or 5 arguments and instead has {}", args.len())));
-        }
-
         enum ColorSpace {
             Rgb = 0,
             Hsv = 1,
             Hsl = 2,
             Hcy = 3,
         }
-
-        let mut space = None;
-        let arguments = self.arguments(args)?;
 
         #[derive(Default)]
         struct ColorArgs {
@@ -871,8 +864,15 @@ impl<'a> ConstantFolder<'a> {
             a: Option<i32>,
         }
 
+        if args.len() != 3 && args.len() != 4 && args.len() != 5 {
+            return Err(self.error(format!("malformed rgb() call, must have 3, 4, or 5 arguments and instead has {}", args.len())));
+        }
+
+        let arguments = self.arguments(args)?;
+        let mut space = None;
         let mut color_args = ColorArgs::default();
 
+        // Get the value of the `space` kwarg if present, or collect which kwargs are set to automatically determine the color space.
         for (value, potential_kwarg_value) in &arguments {
             // Check for kwargs if we're in the right form
             if let Some(kwarg_value) = potential_kwarg_value {
