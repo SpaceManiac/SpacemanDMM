@@ -1033,6 +1033,9 @@ pub enum Statement {
         arms: Vec<(Spanned<Expression>, Block)>,
         else_arm: Option<Block>
     },
+    ForInfinite {
+        block: Block,
+    },
     ForLoop {
         init: Option<Box<Statement>>,
         test: Option<Box<Expression>>,

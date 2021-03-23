@@ -74,15 +74,17 @@ fn do_while() {
 }
 
 pub const FOR_LOOP_CONDITION_ERRORS: &[(u32, u16, &str)] = &[
-    (2, 5, "loop condition is always true"),
-    (2, 5, "control flow condition is a static term"),
-    (4, 5, "control flow condition is a constant evalutation"),
+    (4, 5, "loop condition is always true"),
+    (4, 5, "control flow condition is a static term"),
+    (6, 5, "control flow condition is a constant evalutation"),
 ];
 
 #[test]
 fn for_loop_condition() {
     let code = r##"
 /proc/test()
+    for()
+        break
     for(var/x = 0; 1; x++)
         break
     for(var/y = 0; 5 <= 7; y++)

@@ -237,6 +237,9 @@ impl<'o> WalkProc<'o> {
                     self.visit_block(else_arm);
                 }
             },
+            Statement::ForInfinite { block } => {
+                self.visit_block(block);
+            }
             Statement::ForLoop { init, test, inc, block } => {
                 if let Some(init) = init {
                     self.visit_statement(location, init);
