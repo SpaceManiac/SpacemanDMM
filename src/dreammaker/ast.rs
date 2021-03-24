@@ -329,7 +329,7 @@ pub enum NewType {
     /// A "mini-expression" in which to find the prefab to instantiate.
     MiniExpr {
         ident: Ident,
-        fields: Vec<IndexOrField>,
+        fields: Vec<Field>,
     },
 }
 
@@ -680,21 +680,16 @@ pub enum Follow {
     Call(IndexKind, Ident, Vec<Expression>),
 }
 
-/// Like a `Follow` but supports index or fields only.
+/// Like a `Follow` but only supports field accesses.
 #[derive(Debug, Clone, PartialEq)]
-pub enum IndexOrField {
-    /// Index the value by an expression.
-    Index(Box<Expression>),
-    /// Access a field of the value.
-    Field(IndexKind, Ident),
+pub struct Field {
+    pub kind: IndexKind,
+    pub ident: Ident,
 }
 
-impl From<IndexOrField> for Follow {
-    fn from(input: IndexOrField) -> Follow {
-        match input {
-            IndexOrField::Index(expr) => Follow::Index(expr),
-            IndexOrField::Field(kind, name) => Follow::Field(kind, name),
-        }
+impl From<Field> for Follow {
+    fn from(field: Field) -> Follow {
+        Follow::Field(field.kind, field.ident)
     }
 }
 

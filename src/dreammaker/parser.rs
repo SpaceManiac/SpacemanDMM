@@ -1890,7 +1890,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
         let start = self.updated_location();
         let term = match self.next("term")? {
-            // term :: 'new' (prefab | (ident (index | field)*))? arglist?
+            // term :: 'new' (prefab | (ident field*))? arglist?
             Token::Ident(ref i, _) if i == "new" => {
                 // It's not entirely clear what is supposed to be valid here.
                 // Some things definitely are:
@@ -1898,7 +1898,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 //   * new /obj()
                 //   * new /obj{name = "foo"}()
                 //   * new .relative/path()
-                //   * new some_list[0]()
                 //   * new various.field.accesses()
                 // But some things definitely aren't:
                 //   * new some_proc()() - first parens belong to the 'new'
@@ -1921,7 +1920,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 } else if let Some(ident) = self.ident()? {
                     let mut fields = Vec::new();
                     let mut belongs_to = vec![ident.clone()];
-                    while let Some(item) = self.index_or_field(&mut belongs_to, false)? {
+                    while let Some(item) = self.field(&mut belongs_to, false)? {
                         fields.push(item);
                     }
                     NewType::MiniExpr { ident, fields }
@@ -2163,17 +2162,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     }
 
     // TODO: somehow fix the fact that this is basically copy-pasted from
-    // follow() above, except for the very end.
-    fn index_or_field(&mut self, belongs_to: &mut Vec<Ident>, in_ternary: bool) -> Status<IndexOrField> {
+    // follow() above.
+    fn field(&mut self, belongs_to: &mut Vec<Ident>, in_ternary: bool) -> Status<Field> {
         let kind = match self.next("field access")? {
-            // follow :: '[' expression ']'
-            Token::Punct(Punctuation::LBracket) => {
-                belongs_to.clear();
-                let expr = require!(self.expression());
-                require!(self.exact(Token::Punct(Punctuation::RBracket)));
-                return success(IndexOrField::Index(Box::new(expr)))
-            }
-
             // follow :: '.' ident
             // TODO: only apply these rules if there is no whitespace around the punctuation
             Token::Punct(Punctuation::Dot) => IndexKind::Dot,
@@ -2204,7 +2195,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             self.annotate_precise(start..end, || Annotation::ScopedVar(belongs_to.clone(), ident.clone()));
             belongs_to.push(ident.clone());
         }
-        success(IndexOrField::Field(kind, ident))
+        success(Field { kind, ident })
     }
 
     /// a parenthesized, comma-separated list of expressions
