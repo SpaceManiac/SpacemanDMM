@@ -68,7 +68,7 @@ pub fn default_defines(defines: &mut DefineMap) {
                 $((stringify!($i), [$($x,)*]),)*
             ] {
                 let previous = defines.insert(name.to_string(), (location, Define::Constant { subst: value.to_vec(), docs: Default::default() }));
-                assert!(previous.is_none(), name);
+                assert!(previous.is_none(), "redefined: {}", name);
             }
         }
     }
