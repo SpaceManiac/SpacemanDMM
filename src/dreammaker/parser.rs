@@ -268,6 +268,7 @@ impl TTKind {
 #[derive(Debug)]
 enum LoopContext {
     None,
+    ForInfinite,
     ForLoop,
     ForList,
     ForRange,
@@ -1241,6 +1242,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             require!(self.statement_terminator());
             spanned(Statement::DoWhile { block, condition })
         } else if let Some(()) = self.exact_ident("for")? {
+            // for ()
             // for (Var [as Type] [in List]) Statement
             // for (Init, Test, Inc) Statement
             // for (Var in Low to High)
@@ -1353,7 +1355,10 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     block: require!(self.block(&LoopContext::ForList)),
                 })
             } else {
-                Err(self.error("for-in-list must start with variable"))
+                require!(self.exact(Token::Punct(Punctuation::RParen)));
+                spanned(Statement::ForInfinite {
+                    block: require!(self.block(&LoopContext::ForInfinite)),
+                })
             }
         } else if let Some(()) = self.exact_ident("spawn")? {
             let expr;

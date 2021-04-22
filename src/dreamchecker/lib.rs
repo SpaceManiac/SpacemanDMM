@@ -1366,6 +1366,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 allterm.finalize();
                 return allterm
             },
+            Statement::ForInfinite { block } => {
+                let mut scoped_locals = local_vars.clone();
+                let mut state = self.visit_block(block, &mut scoped_locals);
+                state.end_loop();
+                return state
+            }
             Statement::ForLoop { init, test, inc, block } => {
                 let mut scoped_locals = local_vars.clone();
                 if let Some(init) = init {
