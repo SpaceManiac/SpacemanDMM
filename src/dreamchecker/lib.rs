@@ -1898,10 +1898,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
     fn visit_follow(&mut self, location: Location, lhs: Analysis<'o>, rhs: &'o Follow, local_vars: &mut HashMap<String, LocalVar<'o>>) -> Analysis<'o> {
         match rhs {
-            Follow::Field(IndexKind::Colon, _) => Analysis::empty(),
-            Follow::Field(IndexKind::SafeColon, _) => Analysis::empty(),
-            Follow::Call(IndexKind::Colon, _, args) |
-            Follow::Call(IndexKind::SafeColon, _, args) => {
+            Follow::Field(PropertyAccessKind::Colon, _) => Analysis::empty(),
+            Follow::Field(PropertyAccessKind::SafeColon, _) => Analysis::empty(),
+            Follow::Call(PropertyAccessKind::Colon, _, args) |
+            Follow::Call(PropertyAccessKind::SafeColon, _, args) => {
                 // No analysis yet, but be sure to visit the arguments
                 for arg in args {
                     let mut argument_value = arg;
@@ -1920,7 +1920,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 Analysis::empty()
             },
 
-            Follow::Index(expr) => {
+            Follow::Index(_, expr) => {
                 self.visit_expression(location, expr, None, local_vars);
                 // TODO: differentiate between L[1] and L[non_numeric_key]
                 match lhs.static_ty {

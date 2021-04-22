@@ -564,7 +564,7 @@ impl<'o> WalkProc<'o> {
 
     fn visit_follow(&mut self, location: Location, lhs: StaticType<'o>, rhs: &'o Follow) -> StaticType<'o> {
         match rhs {
-            Follow::Index(expr) => {
+            Follow::Index(_, expr) => {
                 self.visit_expression(location, expr, None);
                 // TODO: call operator[] or operator[]=
                 // TODO: differentiate between L[1] and L[non_numeric_key]

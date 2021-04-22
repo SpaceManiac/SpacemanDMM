@@ -639,9 +639,18 @@ impl From<Expression> for Term {
     }
 }
 
+/// The possible kinds of access operators for lists
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum ListAccessKind {
+    /// `[]`
+    Normal,
+    /// `?[]`
+    Safe,
+}
+
 /// The possible kinds of index operators, for both fields and methods.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum IndexKind {
+pub enum PropertyAccessKind {
     /// `a.b`
     Dot,
     /// `a:b`
@@ -652,18 +661,18 @@ pub enum IndexKind {
     SafeColon,
 }
 
-impl IndexKind {
+impl PropertyAccessKind {
     pub fn name(self) -> &'static str {
         match self {
-            IndexKind::Dot => ".",
-            IndexKind::Colon => ":",
-            IndexKind::SafeDot => "?.",
-            IndexKind::SafeColon => "?:",
+            PropertyAccessKind::Dot => ".",
+            PropertyAccessKind::Colon => ":",
+            PropertyAccessKind::SafeDot => "?.",
+            PropertyAccessKind::SafeColon => "?:",
         }
     }
 }
 
-impl fmt::Display for IndexKind {
+impl fmt::Display for PropertyAccessKind {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.write_str(self.name())
     }
@@ -673,17 +682,17 @@ impl fmt::Display for IndexKind {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Follow {
     /// Index the value by an expression.
-    Index(Box<Expression>),
+    Index(ListAccessKind, Box<Expression>),
     /// Access a field of the value.
-    Field(IndexKind, Ident),
+    Field(PropertyAccessKind, Ident),
     /// Call a method of the value.
-    Call(IndexKind, Ident, Vec<Expression>),
+    Call(PropertyAccessKind, Ident, Vec<Expression>),
 }
 
 /// Like a `Follow` but only supports field accesses.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Field {
-    pub kind: IndexKind,
+    pub kind: PropertyAccessKind,
     pub ident: Ident,
 }
 

@@ -230,7 +230,7 @@ impl<'o> TypeExprCompiler<'o> {
     ) -> Result<TypeExpr<'o>, DMError> {
         match rhs {
             // X[_] => static type of argument X with one /list stripped
-            Follow::Index(expr) => match expr.as_term() {
+            Follow::Index(_, expr) => match expr.as_term() {
                 Some(Term::Ident(name)) if name == "_" => match lhs {
                     TypeExpr::ParamTypepath {
                         name,

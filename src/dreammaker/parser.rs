@@ -2110,23 +2110,36 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         success(Spanned::new(start, term))
     }
 
+    fn list_access(&mut self, belongs_to: &mut Vec<Ident>) -> Status<Spanned<Follow>> {
+        let first_location = self.updated_location();
+
+        // follow :: ('[' | '?[') expression ']'
+        let kind = match self.next("field access")? {
+            Token::Punct(Punctuation::LBracket) => ListAccessKind::Normal,
+            Token::Punct(Punctuation::SafeLBracket) => ListAccessKind::Safe,
+            other => return self.try_another(other),
+        };
+
+        belongs_to.clear();
+        let expr = require!(self.expression());
+        require!(self.exact(Token::Punct(Punctuation::RBracket)));
+        success(Spanned::new(first_location, Follow::Index(kind, Box::new(expr))))
+    }
+
     fn follow(&mut self, belongs_to: &mut Vec<Ident>, in_ternary: bool) -> Status<Spanned<Follow>> {
         let first_location = self.updated_location();
-        let kind = match self.next("field access")? {
-            // follow :: '[' expression ']'
-            Token::Punct(Punctuation::LBracket) => {
-                belongs_to.clear();
-                let expr = require!(self.expression());
-                require!(self.exact(Token::Punct(Punctuation::RBracket)));
-                return success(Spanned::new(first_location, Follow::Index(Box::new(expr))))
-            }
 
-            // follow :: '.' ident arglist?
+        if let Some(follow) = self.list_access(belongs_to)? {
+            return success(follow);
+        }
+
+        // follow :: '.' ident arglist?
+        let kind = match self.next("field access")? {
             // TODO: only apply these rules if there is no whitespace around the punctuation
-            Token::Punct(Punctuation::Dot) => IndexKind::Dot,
-            Token::Punct(Punctuation::CloseColon) if !belongs_to.is_empty() || !in_ternary => IndexKind::Colon,
-            Token::Punct(Punctuation::SafeDot) => IndexKind::SafeDot,
-            Token::Punct(Punctuation::SafeColon) => IndexKind::SafeColon,
+            Token::Punct(Punctuation::Dot) => PropertyAccessKind::Dot,
+            Token::Punct(Punctuation::CloseColon) if !belongs_to.is_empty() || !in_ternary => PropertyAccessKind::Colon,
+            Token::Punct(Punctuation::SafeDot) => PropertyAccessKind::SafeDot,
+            Token::Punct(Punctuation::SafeColon) => PropertyAccessKind::SafeColon,
 
             other => return self.try_another(other),
         };
@@ -2172,10 +2185,10 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         let kind = match self.next("field access")? {
             // follow :: '.' ident
             // TODO: only apply these rules if there is no whitespace around the punctuation
-            Token::Punct(Punctuation::Dot) => IndexKind::Dot,
-            Token::Punct(Punctuation::CloseColon) if !belongs_to.is_empty() || !in_ternary => IndexKind::Colon,
-            Token::Punct(Punctuation::SafeDot) => IndexKind::SafeDot,
-            Token::Punct(Punctuation::SafeColon) => IndexKind::SafeColon,
+            Token::Punct(Punctuation::Dot) => PropertyAccessKind::Dot,
+            Token::Punct(Punctuation::CloseColon) if !belongs_to.is_empty() || !in_ternary => PropertyAccessKind::Colon,
+            Token::Punct(Punctuation::SafeDot) => PropertyAccessKind::SafeDot,
+            Token::Punct(Punctuation::SafeColon) => PropertyAccessKind::SafeColon,
 
             other => return self.try_another(other),
         };
