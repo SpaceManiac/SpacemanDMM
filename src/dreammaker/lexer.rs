@@ -144,7 +144,7 @@ impl fmt::Display for Punctuation {
 /// This lookup table is used to keep `read_punct`, called for essentially each
 /// character in the input, blazing fast. The code to generate it is contained
 /// in the following test.
-static SPEEDY_TABLE: [(usize, usize); 127] =[
+static SPEEDY_TABLE: [(usize, usize); 127] = [
     (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
     (0, 0), (0, 1), (1, 2), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
     (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
