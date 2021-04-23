@@ -9,7 +9,7 @@ use super::constants::Constant;
 use super::docs::{BuiltinDocs, DocCollection};
 
 const DM_VERSION: i32 = 514;
-const DM_BUILD: i32 = 1549;
+const DM_BUILD: i32 = 1554;
 
 /// Register BYOND builtin macros to the given define map.
 pub fn default_defines(defines: &mut DefineMap) {
