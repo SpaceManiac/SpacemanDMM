@@ -786,7 +786,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         world/proc/IsSubscribed(player);
         world/proc/OpenPort(port);
         world/proc/PayCredits(player, credits, note);
-        world/proc/Profile(command, format);
+        world/proc/Profile(command, type=null, format);
         world/proc/Reboot(reason);
         world/proc/Repop();
         world/proc/SetConfig(config_set, param, value);
