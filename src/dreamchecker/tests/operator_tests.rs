@@ -54,28 +54,25 @@ fn operator_overload() {
     check_errors_match(code, OP_OVERLOAD_ERRORS);
 }
 
-pub const NOTAND_ERRORS: &[(u32, u16, &str)] = &[
-    (2, 8, "Attempting to `&` a false left side"),
-    (6, 8, "Attempting to `|` a false left side"),
-    (10, 8, "Attempting to `^` a false left side"),
+pub const NEGATED_BITMATH_ERRORS: &[(u32, u16, &str)] = &[
+    (2, 8, "Ambiguous unary operator on left side of bitwise `&` operator"),
+    (4, 8, "Ambiguous unary operator on left side of bitwise `|` operator"),
+    (6, 8, "Ambiguous unary operator on left side of bitwise `^` operator"),
+    (8, 8, "Ambiguous unary operator on left side of bitwise `&` operator"),
 ];
 
 #[test]
-fn notand() {
+fn negated_bitmath() {
     let code = r##"
 /proc/test()
     if (!1 & 0)
         return
-    if (!0 & 0)
-        return
     if (!1 | 0)
-        return
-    if (!0 | 0)
         return
     if (!1 ^ 0)
         return
-    if (!0 ^ 0)
+    if (~1 & 0)
         return
 "##.trim();
-    check_errors_match(code, NOTAND_ERRORS);
+    check_errors_match(code, NEGATED_BITMATH_ERRORS);
 }

@@ -1587,7 +1587,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
 
                 let rty = self.visit_expression(location, rhs, None, local_vars);
-                self.visit_binary(lty, rty, BinaryOp::LShift, location)
+                self.visit_binary(lty, rty, BinaryOp::LShift)
             },
             Expression::BinaryOp { op: BinaryOp::In, lhs, rhs } => {
                 // check for incorrect/ambiguous in statements
@@ -1629,7 +1629,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 };
                 let lty = self.visit_expression(location, lhs, None, local_vars);
                 let rty = self.visit_expression(location, rhs, None, local_vars);
-                self.visit_binary(lty, rty, BinaryOp::In, location)
+                self.visit_binary(lty, rty, BinaryOp::In)
             },
             Expression::BinaryOp { op: BinaryOp::Or, lhs, rhs } => {
                 // It appears that DM does this in more cases than this, but
@@ -1637,12 +1637,18 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 // ex: var/datum/cache_entry/E = cache[key] || new
                 let lty = self.visit_expression(location, lhs, type_hint, local_vars);
                 let rty = self.visit_expression(location, rhs, type_hint, local_vars);
-                self.visit_binary(lty, rty, BinaryOp::Or, location)
+                self.visit_binary(lty, rty, BinaryOp::Or)
             },
             Expression::BinaryOp { op, lhs, rhs } => {
                 let lty = self.visit_expression(location, lhs, None, local_vars);
                 let rty = self.visit_expression(location, rhs, None, local_vars);
-                self.visit_binary(lty, rty, *op, location)
+                match op {
+                    BinaryOp::BitAnd |
+                    BinaryOp::BitOr |
+                    BinaryOp::BitXor => self.check_negated_bitmath(lhs, rhs, location, *op),
+                    _ => {}
+                }
+                self.visit_binary(lty, rty, *op)
             },
             Expression::AssignOp { lhs, rhs, .. } => {
                 let lhs = self.visit_expression(location, lhs, None, local_vars);
@@ -2052,9 +2058,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     }
 
     // checks for bitmath on a negated LHS
-    fn check_faulty_bitmath(&mut self, lhs: Analysis<'o>, location: Location, operator: BinaryOp) {
-        if !lhs.static_ty.is_truthy() {
-            error(location, format!("Attempting to `{}` a false left side", operator))
+    fn check_negated_bitmath(&mut self, lhs: &Box<dm::ast::Expression>, rhs: &Box<dm::ast::Expression>, location: Location, operator: BinaryOp) {
+        if matches!(&**lhs, Expression::Base { unary, .. } if !unary.is_empty()) {
+            error(location, format!("Ambiguous unary operator on left side of bitwise `{}` operator", operator))
             .with_errortype("bitmath_negated_lhs")
             .set_severity(Severity::Warning)
             .with_note(location, format!("Did you mean to use the logical equivalent of `{}`?", operator))
@@ -2062,7 +2068,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
     }
 
-    fn visit_binary(&mut self, lhs: Analysis<'o>, rhs: Analysis<'o>, op: BinaryOp, location: Location) -> Analysis<'o> {
+    fn visit_binary(&mut self, lhs: Analysis<'o>, rhs: Analysis<'o>, op: BinaryOp) -> Analysis<'o> {
         //println!("visit_binary: don't know anything about {}", op);
         if lhs.static_ty.is_list() {
             // If the LHS of these operators is a list, so is the result.
@@ -2075,12 +2081,6 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 _ => {}
             }
         }
-        else { match op {
-            BinaryOp::BitAnd |
-            BinaryOp::BitOr |
-            BinaryOp::BitXor => self.check_faulty_bitmath(lhs, location, op),
-            _ => {}
-        } }
         Analysis::empty()
     }
 
