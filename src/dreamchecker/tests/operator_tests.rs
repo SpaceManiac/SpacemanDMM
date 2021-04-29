@@ -58,7 +58,6 @@ pub const NEGATED_BITMATH_ERRORS: &[(u32, u16, &str)] = &[
     (2, 8, "Ambiguous unary operator on left side of bitwise `&` operator"),
     (4, 8, "Ambiguous unary operator on left side of bitwise `|` operator"),
     (6, 8, "Ambiguous unary operator on left side of bitwise `^` operator"),
-    (8, 8, "Ambiguous unary operator on left side of bitwise `&` operator"),
 ];
 
 #[test]
@@ -72,6 +71,8 @@ fn negated_bitmath() {
     if (!1 ^ 0)
         return
     if (~1 & 0)
+        return
+    if (1++ & 1)
         return
 "##.trim();
     check_errors_match(code, NEGATED_BITMATH_ERRORS);

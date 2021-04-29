@@ -1645,7 +1645,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 match op {
                     BinaryOp::BitAnd |
                     BinaryOp::BitOr |
-                    BinaryOp::BitXor => self.check_negated_bitmath(lhs, rhs, location, *op),
+                    BinaryOp::BitXor => self.check_negated_bitmath(lhs, location, *op),
                     _ => {}
                 }
                 self.visit_binary(lty, rty, *op)
@@ -2058,12 +2058,13 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     }
 
     // checks for bitmath on a negated LHS
-    fn check_negated_bitmath(&mut self, lhs: &Box<dm::ast::Expression>, rhs: &Box<dm::ast::Expression>, location: Location, operator: BinaryOp) {
-        if matches!(&**lhs, Expression::Base { unary, .. } if !unary.is_empty()) {
+    fn check_negated_bitmath(&mut self, lhs: &dm::ast::Expression, location: Location, operator: BinaryOp) {
+        if matches!(lhs, Expression::Base { unary, .. } if unary.contains(&UnaryOp::Not)) {
             error(location, format!("Ambiguous unary operator on left side of bitwise `{}` operator", operator))
-            .with_errortype("bitmath_negated_lhs")
+            .with_errortype("ambig_not_bitwise_lhs")
             .set_severity(Severity::Warning)
             .with_note(location, format!("Did you mean to use the logical equivalent of `{}`?", operator))
+            .with_note(location, "Did you mean to use `~` instead of `!`?")
             .register(self.context);
         }
     }
