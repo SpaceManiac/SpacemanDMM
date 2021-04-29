@@ -54,14 +54,14 @@ fn operator_overload() {
     check_errors_match(code, OP_OVERLOAD_ERRORS);
 }
 
-pub const NEGATED_BITMATH_ERRORS: &[(u32, u16, &str)] = &[
-    (2, 8, "Ambiguous unary operator on left side of bitwise `&` operator"),
-    (4, 8, "Ambiguous unary operator on left side of bitwise `|` operator"),
-    (6, 8, "Ambiguous unary operator on left side of bitwise `^` operator"),
+pub const NOT_AMBIG_BITWISE_ERRORS: &[(u32, u16, &str)] = &[
+    (2, 8, "Ambiguous `!` on left side of bitwise `&` operator"),
+    (4, 8, "Ambiguous `!` on left side of bitwise `|` operator"),
+    (6, 8, "Ambiguous `!` on left side of bitwise `^` operator"),
 ];
 
 #[test]
-fn negated_bitmath() {
+fn ambigous_not_bitwise() {
     let code = r##"
 /proc/test()
     if (!1 & 0)
@@ -75,5 +75,5 @@ fn negated_bitmath() {
     if (1++ & 1)
         return
 "##.trim();
-    check_errors_match(code, NEGATED_BITMATH_ERRORS);
+    check_errors_match(code, NOT_AMBIG_BITWISE_ERRORS);
 }

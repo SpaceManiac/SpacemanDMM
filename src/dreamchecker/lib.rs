@@ -2060,9 +2060,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     // checks for bitmath on a negated LHS
     fn check_negated_bitmath(&mut self, lhs: &dm::ast::Expression, location: Location, operator: BinaryOp) {
         if matches!(lhs, Expression::Base { unary, .. } if unary.contains(&UnaryOp::Not)) {
-            error(location, format!("Ambiguous unary operator on left side of bitwise `{}` operator", operator))
-            .with_errortype("ambig_not_bitwise_lhs")
+            error(location, format!("Ambiguous `!` on left side of bitwise `{}` operator", operator))
+            .with_errortype("ambiguous_not_bitwise")
             .set_severity(Severity::Warning)
+            .with_note(location, format!("Did you mean to put !(x {} y)?", operator))
             .with_note(location, format!("Did you mean to use the logical equivalent of `{}`?", operator))
             .with_note(location, "Did you mean to use `~` instead of `!`?")
             .register(self.context);
