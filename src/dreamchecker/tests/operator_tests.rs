@@ -1,4 +1,3 @@
-
 extern crate dreamchecker as dc;
 
 use dc::test_helpers::check_errors_match;
@@ -53,4 +52,30 @@ fn operator_overload() {
     T++
 "##.trim();
     check_errors_match(code, OP_OVERLOAD_ERRORS);
+}
+
+pub const NOTAND_ERRORS: &[(u32, u16, &str)] = &[
+    (2, 8, "Attempting to `&` a false left side"),
+    (6, 8, "Attempting to `|` a false left side"),
+    (10, 8, "Attempting to `^` a false left side"),
+];
+
+#[test]
+fn notand() {
+    let code = r##"
+/proc/test()
+    if (!1 & 0)
+        return
+    if (!0 & 0)
+        return
+    if (!1 | 0)
+        return
+    if (!0 | 0)
+        return
+    if (!1 ^ 0)
+        return
+    if (!0 ^ 0)
+        return
+"##.trim();
+    check_errors_match(code, NOTAND_ERRORS);
 }
