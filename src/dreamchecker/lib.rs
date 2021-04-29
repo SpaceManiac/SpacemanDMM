@@ -1645,7 +1645,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 match op {
                     BinaryOp::BitAnd |
                     BinaryOp::BitOr |
-                    BinaryOp::BitXor => self.check_negated_bitmath(lhs, location, *op),
+                    BinaryOp::BitXor => self.check_negated_bitwise(lhs, location, *op),
                     _ => {}
                 }
                 self.visit_binary(lty, rty, *op)
@@ -2057,8 +2057,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
     }
 
-    // checks for bitmath on a negated LHS
-    fn check_negated_bitmath(&mut self, lhs: &dm::ast::Expression, location: Location, operator: BinaryOp) {
+    // checks for bitwise operations on a negated LHS
+    fn check_negated_bitwise(&mut self, lhs: &dm::ast::Expression, location: Location, operator: BinaryOp) {
         if matches!(lhs, Expression::Base { unary, .. } if unary.contains(&UnaryOp::Not)) {
             error(location, format!("Ambiguous `!` on left side of bitwise `{}` operator", operator))
             .with_errortype("ambiguous_not_bitwise")
