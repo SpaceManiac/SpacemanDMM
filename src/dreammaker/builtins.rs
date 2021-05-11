@@ -9,7 +9,7 @@ use super::constants::Constant;
 use super::docs::{BuiltinDocs, DocCollection};
 
 const DM_VERSION: i32 = 514;
-const DM_BUILD: i32 = 1549;
+const DM_BUILD: i32 = 1554;
 
 /// Register BYOND builtin macros to the given define map.
 pub fn default_defines(defines: &mut DefineMap) {
@@ -786,7 +786,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         world/proc/IsSubscribed(player);
         world/proc/OpenPort(port);
         world/proc/PayCredits(player, credits, note);
-        world/proc/Profile(command, format);
+        world/proc/Profile(command, type=null, format);
         world/proc/Reboot(reason);
         world/proc/Repop();
         world/proc/SetConfig(config_set, param, value);
