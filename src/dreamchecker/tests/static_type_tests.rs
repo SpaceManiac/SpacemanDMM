@@ -50,3 +50,44 @@ fn return_type() {
 "##.trim();
     check_errors_match(code, RETURN_TYPE_ERRORS);
 }
+
+pub const RELATIVE_PROC_PATHS_ERRORS: &[(u32, u16, &str)] = &[
+    (13, 17, "failed to resolve path .fake"),
+];
+
+// In particular we'll test the examples documented in SS13's callback.dm. None should error.
+#[test]
+fn relative_proc_paths() {
+    let code = r##"
+/proc/global_one()
+    return /proc/global_two         // absolute paths should always work
+
+/proc/global_two()
+    return .global_one              // global proc while in another global proc
+
+/mob/proc/test()
+    return
+
+/mob/proc/other()
+    var/proc_path
+    proc_path = .test               // proc defined on current(src) object (when in a /proc/ and not an override)
+    proc_path = .fake               // Doesn't exist, should error
+    return proc_path
+
+/mob/subtype/test()
+    . = .proc/foo                   // Proc defined on current object (when in an override not a /proc/)
+    return ..()
+
+/mob/subtype/proc/foo()
+    var/proc_path
+    proc_path = /proc/global_one    // global proc while in a datum proc
+    proc_path = .test               // Proc overridden at src
+    proc_path = .proc/other         // Proc defined in parent
+    proc_path = .proc/test          // Proc defined in parent and also overridden in current.
+    return proc_path
+
+/mob/subtype/deepertype/proc/bar()
+    return .test              // Proc overridden in parent type (but not current type)
+"##.trim();
+    check_errors_match(code, RELATIVE_PROC_PATHS_ERRORS);
+}
