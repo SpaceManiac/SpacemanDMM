@@ -1642,6 +1642,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Expression::BinaryOp { op, lhs, rhs } => {
                 let lty = self.visit_expression(location, lhs, None, local_vars);
                 let rty = self.visit_expression(location, rhs, None, local_vars);
+                match op {
+                    BinaryOp::BitAnd |
+                    BinaryOp::BitOr |
+                    BinaryOp::BitXor => self.check_negated_bitwise(lhs, location, *op),
+                    _ => {}
+                }
                 self.visit_binary(lty, rty, *op)
             },
             Expression::AssignOp { lhs, rhs, .. } => {
@@ -2048,6 +2054,19 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             (UnaryOp::BitNot, Type::Number) => Type::Number.into(),
             */
             _ => Analysis::empty(),
+        }
+    }
+
+    // checks for bitwise operations on a negated LHS
+    fn check_negated_bitwise(&mut self, lhs: &dm::ast::Expression, location: Location, operator: BinaryOp) {
+        if matches!(lhs, Expression::Base { unary, .. } if unary.contains(&UnaryOp::Not)) {
+            error(location, format!("Ambiguous `!` on left side of bitwise `{}` operator", operator))
+            .with_errortype("ambiguous_not_bitwise")
+            .set_severity(Severity::Warning)
+            .with_note(location, format!("Did you mean to put !(x {} y)?", operator))
+            .with_note(location, format!("Did you mean to use the logical equivalent of `{}`?", operator))
+            .with_note(location, "Did you mean to use `~` instead of `!`?")
+            .register(self.context);
         }
     }
 

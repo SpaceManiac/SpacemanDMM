@@ -40,6 +40,7 @@ Raised by DreamChecker:
 * `must_not_sleep` - `SpacemanDMM_should_not_sleep` directive
 * `redefined_proc` - `SpacemanDMM_can_be_redefined` directive
 * `ambiguous_in_lhs` - Raised on ambiguous operations on the left hand side of an `in` operation
+* `ambiguous_not_bitwise` - Raised on an ambiguous `!` on the left hand side of a bitwise operation
 * `no_typehint_implicit_new` - Raised on the use of `new` where no typehint is avaliable
 * `field_access_static_type` - Raised on using `.field_name` on a variable with no typehint
 * `proc_call_static_type` - Raised on using `.proc_name()` on a variable with no typehint

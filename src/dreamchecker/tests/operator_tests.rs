@@ -1,4 +1,3 @@
-
 extern crate dreamchecker as dc;
 
 use dc::test_helpers::check_errors_match;
@@ -53,4 +52,28 @@ fn operator_overload() {
     T++
 "##.trim();
     check_errors_match(code, OP_OVERLOAD_ERRORS);
+}
+
+pub const NOT_AMBIG_BITWISE_ERRORS: &[(u32, u16, &str)] = &[
+    (2, 8, "Ambiguous `!` on left side of bitwise `&` operator"),
+    (4, 8, "Ambiguous `!` on left side of bitwise `|` operator"),
+    (6, 8, "Ambiguous `!` on left side of bitwise `^` operator"),
+];
+
+#[test]
+fn ambigous_not_bitwise() {
+    let code = r##"
+/proc/test()
+    if (!1 & 0)
+        return
+    if (!1 | 0)
+        return
+    if (!1 ^ 0)
+        return
+    if (~1 & 0)
+        return
+    if (1++ & 1)
+        return
+"##.trim();
+    check_errors_match(code, NOT_AMBIG_BITWISE_ERRORS);
 }
