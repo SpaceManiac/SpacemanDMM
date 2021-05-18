@@ -160,6 +160,7 @@ struct Engine<'a> {
 
     client_caps: ClientCaps,
     extools_dll: Option<String>,
+    debug_server_dll: Option<String>,
 }
 
 impl<'a> Engine<'a> {
@@ -182,6 +183,7 @@ impl<'a> Engine<'a> {
 
             client_caps: Default::default(),
             extools_dll: None,
+            debug_server_dll: None,
         }
     }
 
@@ -1916,6 +1918,7 @@ handle_method_call! {
             files: self.context.clone_file_list(),
             objtree: self.objtree.clone(),
             extools_dll: self.extools_dll.clone(),
+            debug_server_dll: self.debug_server_dll.clone(),
         };
         let (port, handle) = debugger::start_server(self.context.config().debugger.engine, params.dreamseeker_exe, db).map_err(invalid_request)?;
         self.threads.push(handle);
@@ -1976,6 +1979,9 @@ handle_notification! {
     on DidChangeConfiguration(&mut self, params) {
         if let Some(extools_dll) = params.settings["dreammaker"]["extoolsDLL"].as_str() {
             self.extools_dll = Some(extools_dll.to_owned());
+        }
+        if let Some(debug_server_dll) = params.settings["dreammaker"]["debugServerDll"].as_str() {
+            self.debug_server_dll = Some(debug_server_dll.to_owned());
         }
     }
 }

@@ -114,6 +114,7 @@ pub fn debugger_main<I: Iterator<Item = String>>(mut args: I) {
         files: ctx.clone_file_list(),
         objtree,
         extools_dll: None,
+        debug_server_dll: None,
     };
     let mut debugger = Debugger::new(ctx.config().debugger.engine, dreamseeker_exe, db, Box::new(std::io::stdout()));
     jrpc_io::run_until_stdin_eof(|message| debugger.handle_input(message));
@@ -124,6 +125,7 @@ pub struct DebugDatabaseBuilder {
     pub files: dm::FileList,
     pub objtree: Arc<ObjectTree>,
     pub extools_dll: Option<String>,
+    pub debug_server_dll: Option<String>,
 }
 
 impl DebugDatabaseBuilder {
@@ -133,6 +135,7 @@ impl DebugDatabaseBuilder {
             files,
             objtree,
             extools_dll: _,
+            debug_server_dll: _,
         } = self;
         let mut line_numbers: HashMap<dm::FileId, Vec<(i64, String, String, usize)>> =
             HashMap::new();
@@ -238,6 +241,7 @@ struct Debugger {
     engine: DebugEngine,
     dreamseeker_exe: String,
     extools_dll: Option<String>,
+    debug_server_dll: Option<String>,
     db: DebugDatabase,
     launched: Option<Launched>,
     client: DebugClient,
@@ -255,6 +259,7 @@ impl Debugger {
             engine,
             dreamseeker_exe,
             extools_dll: db.extools_dll.take(),
+            debug_server_dll: db.debug_server_dll.take(),
             db: db.build(),
             launched: None,
             client: DebugClient::Extools(ExtoolsHolder::default()),
@@ -420,9 +425,14 @@ handle_request! {
 
                     // Set EXTOOLS_DLL based on configuration or on bundle if available.
                     #[allow(unused_mut)]
-                    let mut extools_dll = self.extools_dll.as_ref().map(|x| std::path::Path::new(x).to_path_buf());
+                    let mut extools_dll = None;
 
-                    debug_output!(in self.seq, "[main] configured override: {:?}", extools_dll);
+                    #[cfg(debug_assertions)] {
+                        if let Some(dll) = self.extools_dll.as_ref() {
+                            debug_output!(in self.seq, "[main] configured override: {:?}", dll);
+                            extools_dll = Some(dll.into());
+                        }
+                    }
 
                     #[cfg(extools_bundle)] {
                         if extools_dll.is_none() {
@@ -441,17 +451,24 @@ handle_request! {
                     self.client = DebugClient::Auxtools(auxtools);
 
                     #[allow(unused_mut)]
-                    let mut auxtools_dll = None;
+                    let mut debug_server_dll = None;
+
+                    #[cfg(debug_assertions)] {
+                        if let Some(dll) = self.debug_server_dll.as_ref() {
+                            debug_output!(in self.seq, "[main] configured override: {:?}", dll);
+                            debug_server_dll = Some(dll.into());
+                        }
+                    }
 
                     #[cfg(extools_bundle)] {
-                        if auxtools_dll.is_none() {
-                            auxtools_dll = Some(self::auxtools_bundle::extract()?);
+                        if debug_server_dll.is_none() {
+                            debug_server_dll = Some(self::auxtools_bundle::extract()?);
                         }
                     }
 
                     EngineParams::Auxtools {
                         port,
-                        dll: auxtools_dll,
+                        dll: debug_server_dll,
                     }
                 }
             })
