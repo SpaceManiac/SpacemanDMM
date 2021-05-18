@@ -1643,9 +1643,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 let lty = self.visit_expression(location, lhs, None, local_vars);
                 let rty = self.visit_expression(location, rhs, None, local_vars);
                 match op {
-                    BinaryOp::BitAnd |
-                    BinaryOp::BitOr |
-                    BinaryOp::BitXor => self.check_negated_bitwise(lhs, location, *op),
+                    BinaryOp::BitAnd => self.check_negated_bitwise(lhs, location, BinaryOp::BitAnd, BinaryOp::And),
+                    BinaryOp::BitOr => self.check_negated_bitwise(lhs, location, BinaryOp::BitOr, BinaryOp::Or),
+                    BinaryOp::BitXor => self.check_negated_bitwise(lhs, location, BinaryOp::BitXor, BinaryOp::NotEq),
                     _ => {}
                 }
                 self.visit_binary(lty, rty, *op)
@@ -2058,15 +2058,15 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     }
 
     // checks for bitwise operations on a negated LHS
-    fn check_negated_bitwise(&mut self, lhs: &dm::ast::Expression, location: Location, operator: BinaryOp) {
+    fn check_negated_bitwise(&mut self, lhs: &dm::ast::Expression, location: Location, bit_op: BinaryOp, bool_op: BinaryOp) {
         if matches!(lhs, Expression::Base { unary, .. } if unary.contains(&UnaryOp::Not)) {
-            error(location, format!("Ambiguous `!` on left side of bitwise `{}` operator", operator))
-            .with_errortype("ambiguous_not_bitwise")
-            .set_severity(Severity::Warning)
-            .with_note(location, format!("Did you mean to put !(x {} y)?", operator))
-            .with_note(location, format!("Did you mean to use the logical equivalent of `{}`?", operator))
-            .with_note(location, "Did you mean to use `~` instead of `!`?")
-            .register(self.context);
+            error(location, format!("Ambiguous `!` on left side of bitwise `{}` operator", bit_op))
+                .with_errortype("ambiguous_not_bitwise")
+                .set_severity(Severity::Warning)
+                .with_note(location, format!("Did you mean `!(x {} y)`?", bit_op))
+                .with_note(location, format!("Did you mean `!x {} y`?", bool_op))
+                .with_note(location, format!("Did you mean `~x {} y`?", bit_op))
+                .register(self.context);
         }
     }
 
