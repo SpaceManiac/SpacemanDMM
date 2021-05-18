@@ -1713,10 +1713,10 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     }
 
     fn expression(&mut self) -> Status<Expression> {
-        self.expression_ex(false)
+        self.expression_ex(None, false)
     }
 
-    fn expression_ex(&mut self, in_ternary: bool) -> Status<Expression> {
+    fn expression_ex(&mut self, strength: Option<Strength>, in_ternary: bool) -> Status<Expression> {
         let mut expr = leading!(self.group(in_ternary));
         loop {
             // try to read the next operator
@@ -1729,14 +1729,22 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 }
             };
 
+            // If we're a sub-expression within a ternary expression, don't try to read further than our parent's precedence would allow
+            if let Some(strength) = strength {
+                if info.strength > strength {
+                    self.put_back(Token::Punct(info.token));
+                    break;
+                }
+            }
+
             // trampoline high-strength expression parts as the lhs of the newly found op
-            expr = require!(self.expression_part(expr, info,
+            expr = require!(self.expression_part(expr, info, strength,
                 in_ternary || info.strength == Strength::Conditional));
         }
         success(expr)
     }
 
-    fn expression_part(&mut self, lhs: Expression, prev_op: OpInfo, in_ternary: bool) -> Status<Expression> {
+    fn expression_part(&mut self, lhs: Expression, prev_op: OpInfo, strength: Option<Strength>, in_ternary: bool) -> Status<Expression> {
         use std::cmp::Ordering;
 
         let mut bits = vec![lhs];
@@ -1757,7 +1765,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             match info.strength.cmp(&prev_op.strength) {
                 Ordering::Less => {
                     // the operator is stronger than us... recurse down
-                    rhs = require!(self.expression_part(rhs, info,
+                    rhs = require!(self.expression_part(rhs, info, strength,
                         in_ternary || info.strength == Strength::Conditional));
                 }
                 Ordering::Greater => {
@@ -1781,7 +1789,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 rhs = Expression::BinaryOp {
                     op: BinaryOp::To,
                     lhs: Box::new(rhs),
-                    rhs: Box::new(require!(self.expression_ex(in_ternary))),
+                    rhs: Box::new(require!(self.expression_ex(Some(Strength::In), in_ternary))),
                 };
                 // "step" could appear here but doesn't actually do anything.
                 // In for statements it is parsed by `for_range`.
@@ -1794,10 +1802,13 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 match self.next("':'")? {
                     Token::Punct(Punctuation::Colon) |
                     Token::Punct(Punctuation::CloseColon) => {}
-                    _ => return self.parse_error(),
+                    other => {
+                        self.put_back(other);
+                        return self.parse_error()
+                    }
                 }
                 // Read the else branch.
-                let else_ = match self.expression()? {
+                let else_ = match self.expression_ex(Some(Strength::Conditional), true)? {
                     Some(else_) => else_,
                     None => {
                         self.error("missing else arm of conditional operator should be replaced with 'null'")

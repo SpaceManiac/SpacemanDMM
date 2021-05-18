@@ -42,6 +42,27 @@ fn ternary_precedence() {
 }
 
 #[test]
+fn in_after_ternary() {
+    // ((foo = (1 ? 2 : 3)) in 4)
+    assert_eq!(
+        parse_expr("foo = 1 ? 2 : 3 in 4"),
+        Expression::BinaryOp {
+            op: BinaryOp::In,
+            lhs: Box::new(Expression::AssignOp {
+                op: AssignOp::Assign,
+                lhs: Box::new(Expression::from(Term::Ident("foo".to_owned()))),
+                rhs: Box::new(Expression::TernaryOp {
+                    cond: Box::new(Expression::from(Term::Int(1))),
+                    if_: Box::new(Expression::from(Term::Int(2))),
+                    else_: Box::new(Expression::from(Term::Int(3))),
+                }),
+            }),
+            rhs: Box::new(Expression::from(Term::Int(4))),
+        }
+    )
+}
+
+#[test]
 fn ternary_nesting() {
     // 1 ? 2 : (3 ? 4 : 5)
     assert_eq!(
