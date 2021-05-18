@@ -1567,12 +1567,15 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 success(Statement::Vars(var_stmts))
             }
         } else if let Some(()) = self.exact_ident("return")? {
+            // statement :: 'return' ';'
             // statement :: 'return' expression ';'
             let expression = self.expression()?;
             success(Statement::Return(expression))
         } else if let Some(()) = self.exact_ident("CRASH")? {
+            // statement :: 'CRASH' '(' ')'
+            // statement :: 'CRASH' '(' expression ')'
             require!(self.exact(Token::Punct(Punctuation::LParen)));
-            let expression = require!(self.expression());
+            let expression = self.expression()?;
             require!(self.exact(Token::Punct(Punctuation::RParen)));
             success(Statement::Crash(expression))
         } else if let Some(()) = self.exact_ident("throw")? {

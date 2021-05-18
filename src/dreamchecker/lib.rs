@@ -1295,7 +1295,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Statement::Return(None) => { return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false } },
             Statement::Crash(expr) => {
-                self.visit_expression(location, expr, None, local_vars);
+                if let Some(expr) = expr {
+                    self.visit_expression(location, expr, None, local_vars);
+                }
                 return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false }
             },
             Statement::Throw(expr) => { self.visit_expression(location, expr, None, local_vars); },

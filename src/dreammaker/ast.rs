@@ -1092,7 +1092,7 @@ pub enum Statement {
         block: Block,
     },
     Del(Expression),
-    Crash(Expression),
+    Crash(Option<Expression>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
