@@ -38,12 +38,17 @@ impl Debugger {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                return Ok(EvaluateResponse::from(
-                    auxtools.eval(
-                        params.frameId.map(|x| x as u32),
-                        input
-                    )?
-                ));
+                let response = auxtools.eval(
+                    params.frameId.map(|x| x as u32),
+                    input,
+                    params.context,
+                )?;
+
+                return Ok(EvaluateResponse {
+                    result: response.value,
+                    variablesReference: response.variables.map(|x| x.0 as i64).unwrap_or(0),
+                    ..Default::default()
+                });
             }
         }
 

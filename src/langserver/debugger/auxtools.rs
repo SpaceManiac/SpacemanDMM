@@ -165,10 +165,11 @@ impl Auxtools {
         }
     }
 
-    pub fn eval(&mut self, frame_id: Option<u32>, command: &str) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn eval(&mut self, frame_id: Option<u32>, command: &str, context: Option<String>) -> Result<EvalResponse, Box<dyn std::error::Error>> {
         self.send_or_disconnect(Request::Eval{
             frame_id,
-            command: command.to_owned()
+            command: command.to_owned(),
+            context,
         })?;
 
         match self.read_response_or_disconnect()? {
@@ -216,9 +217,10 @@ impl Auxtools {
         }
     }
 
-    pub fn set_breakpoint(&mut self, instruction: &InstructionRef) -> Result<BreakpointSetResult, Box<dyn std::error::Error>> {
+    pub fn set_breakpoint(&mut self, instruction: InstructionRef, condition: Option<String>) -> Result<BreakpointSetResult, Box<dyn std::error::Error>> {
         self.send_or_disconnect(Request::BreakpointSet {
-            instruction: instruction.clone(),
+            instruction,
+            condition
         })?;
 
         match self.read_response_or_disconnect()? {

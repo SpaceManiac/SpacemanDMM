@@ -395,6 +395,7 @@ handle_request! {
             supportsExceptionInfoRequest: Some(true),
             supportsConfigurationDoneRequest: Some(true),
             supportsFunctionBreakpoints: Some(true),
+            supportsConditionalBreakpoints: Some(true),
             supportsDisassembleRequest: Some(true),
             exceptionBreakpointFilters: Some(vec![
                 ExceptionBreakpointsFilter {
@@ -661,13 +662,13 @@ handle_request! {
                             saved.insert((proc.clone(), override_id, offset as i64));
                             keep.insert((proc.clone(), override_id, offset as i64));
 
-                            let result = auxtools.set_breakpoint(&auxtools_types::InstructionRef {
+                            let result = auxtools.set_breakpoint(auxtools_types::InstructionRef {
                                 proc: auxtools_types::ProcRef {
                                     path: proc,
                                     override_id: override_id as u32
                                 },
                                 offset
-                            })?;
+                            }, sbp.condition)?;
 
                             breakpoints.push(match result {
                                 auxtools_types::BreakpointSetResult::Success { line } => {
@@ -811,13 +812,13 @@ handle_request! {
                     saved.insert(tup.clone());
                     keep.insert(tup.clone());
 
-                    let result = auxtools.set_breakpoint(&auxtools_types::InstructionRef {
+                    let result = auxtools.set_breakpoint(auxtools_types::InstructionRef {
                         proc: auxtools_types::ProcRef {
                             path: tup.0,
                             override_id: override_id as u32
                         },
                         offset: offset as u32,
-                    })?;
+                    }, sbp.condition)?;
 
                     breakpoints.push(match result {
                         auxtools_types::BreakpointSetResult::Success { line } => {
