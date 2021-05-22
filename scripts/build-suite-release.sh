@@ -1,8 +1,17 @@
 #!/bin/bash
 set -euo pipefail
 
+cd "$(dirname "${BASH_SOURCE[0]}")"
+cd ..
+
+# -----------------------------------------------------------------------------
+# Get tag name
 relname=$(git describe --tags --exact)
 echo "Using tag name: $relname"
+
+# -----------------------------------------------------------------------------
+# Prepare dependency DLLs
+eval "$(scripts/download-auxtools.sh)"
 
 # -----------------------------------------------------------------------------
 # Cargo build

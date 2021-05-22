@@ -12,10 +12,10 @@ mkdir -p "../target/deps"
 cd "../target/deps"
 
 AUXTOOLS_BUNDLE_DLL="$PWD/debug_server.dll"
-echo "AUXTOOLS_BUNDLE_DLL=$AUXTOOLS_BUNDLE_DLL"
-echo "AUXTOOLS_COMMIT_HASH=$DEBUG_SERVER_TAG"
+echo "export AUXTOOLS_BUNDLE_DLL=$AUXTOOLS_BUNDLE_DLL"
+echo "export AUXTOOLS_COMMIT_HASH=$DEBUG_SERVER_TAG"
 
-if ! test -f "$AUXTOOLS_BUNDLE_DLL"; then
+if ! test -f "$AUXTOOLS_BUNDLE_DLL" || ! sha256sum -c <<<"$DEBUG_SERVER_DLL_SHA256  $AUXTOOLS_BUNDLE_DLL" >/dev/null 2>/dev/null; then
     wget -q -O "$AUXTOOLS_BUNDLE_DLL" "$DEBUG_SERVER_DLL_URL" >&2
+    sha256sum -c <<<"$DEBUG_SERVER_DLL_SHA256  $AUXTOOLS_BUNDLE_DLL" >&2
 fi
-sha256sum -c <<<"$DEBUG_SERVER_DLL_SHA256  $AUXTOOLS_BUNDLE_DLL" >&2
