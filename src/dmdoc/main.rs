@@ -500,7 +500,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             if !var.value.docs.is_empty() {
                 // determine if there is a documented parent we can link to
                 let mut parent = None;
-                let mut next = ty.parent_type();
+                let mut next = ty.parent_type_without_root();
                 while let Some(current) = next {
                     if let Some(entry) = current.vars.get(name) {
                         if !entry.value.docs.is_empty() {
@@ -508,7 +508,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                             break;
                         }
                     }
-                    next = current.parent_type();
+                    next = current.parent_type_without_root();
                 }
 
                 error_entity_put(format!("{}/var/{}", ty.path, name));
@@ -556,7 +556,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             if !proc_value.docs.is_empty() {
                 // determine if there is a documented parent we can link to
                 let mut parent = None;
-                let mut next = ty.parent_type();
+                let mut next = ty.parent_type_without_root();
                 while let Some(current) = next {
                     if let Some(entry) = current.procs.get(name) {
                         if !entry.main_value().docs.is_empty() {
@@ -564,7 +564,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                             break;
                         }
                     }
-                    next = current.parent_type();
+                    next = current.parent_type_without_root();
                 }
 
                 error_entity_put(format!("{}/proc/{}", ty.path, name));
