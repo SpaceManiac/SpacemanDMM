@@ -99,6 +99,9 @@ pub struct MapRenderer {
     ///
     /// Priority is: CLI arguments > config > defaults.
     pub render_passes: HashMap<String, bool>,
+
+    /// Map from typepath to layer number.
+    pub fancy_layers: HashMap<String, f32>,
 }
 
 impl Config {
