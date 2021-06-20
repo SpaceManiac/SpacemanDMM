@@ -470,7 +470,7 @@ impl From<i32> for Layer {
 
 impl From<f32> for Layer {
     fn from(f: f32) -> Layer {
-        Layer { whole: f as i16, frac: ((f.fract() + 1.).fract() * 65536.) as u16 }
+        Layer { whole: f.floor() as i16, frac: ((f.fract() + 1.).fract() * 65536.) as u16 }
     }
 }
 
