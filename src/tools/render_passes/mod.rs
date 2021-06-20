@@ -114,7 +114,7 @@ pub const RENDER_PASSES: &[RenderPassInfo] = &[
     pass!(SmartCables, "smart-cables", "Handle smart cable layout.", true),
 ];
 
-pub fn configure(include: &str, exclude: &str) -> Vec<Box<dyn RenderPass>> {
+pub fn configure(options: &dm::config::MapRenderer, include: &str, exclude: &str) -> Vec<Box<dyn RenderPass>> {
     let include: Vec<&str> = include.split(",").collect();
     let exclude: Vec<&str> = exclude.split(",").collect();
     let include_all = include.iter().any(|&name| name == "all");
@@ -130,6 +130,8 @@ pub fn configure(include: &str, exclude: &str) -> Vec<Box<dyn RenderPass>> {
             true
         } else if exclude_all {
             false
+        } else if let Some(&value) = options.render_passes.get(pass.name) {
+            value
         } else {
             pass.default
         };

@@ -25,6 +25,7 @@ pub struct Config {
     pub langserver: Langserver,
     pub dmdoc: DMDoc,
     pub debugger: Debugger,
+    pub map_renderer: MapRenderer,
 }
 
 /// General error display options
@@ -81,12 +82,23 @@ pub enum WarningLevel {
     Unset = 6,
 }
 
+/// Available debug engines.
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
 pub enum DebugEngine {
     #[serde(alias = "extools")]
     Extools,
     #[serde(alias = "auxtools")]
     Auxtools,
+}
+
+/// Config for the map renderer.
+#[derive(Debug, Default, Deserialize, Clone)]
+#[serde(default)]
+pub struct MapRenderer {
+    /// Map from render pass name to whether it should be enabled/disabled.
+    ///
+    /// Priority is: CLI arguments > config > defaults.
+    pub render_passes: HashMap<String, bool>,
 }
 
 impl Config {

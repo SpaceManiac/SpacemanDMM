@@ -238,7 +238,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                 ..
             } = *context;
 
-            let render_passes = &dmm_tools::render_passes::configure(enable, disable);
+            let render_passes = &dmm_tools::render_passes::configure(&context.dm_context.config().map_renderer, enable, disable);
             let paths: Vec<&Path> = files.iter().map(|p| p.as_ref()).collect();
             let errors: RwLock<HashSet<String>> = Default::default();
 
