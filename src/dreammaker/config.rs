@@ -102,6 +102,9 @@ pub struct MapRenderer {
 
     /// Map from typepath to layer number.
     pub fancy_layers: HashMap<String, f32>,
+
+    /// List of typepath to just hide
+    pub force_hide_types: Vec<String>,
 }
 
 impl Config {
