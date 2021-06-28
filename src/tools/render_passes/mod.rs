@@ -195,7 +195,7 @@ pub struct HideInvisible {
 
 impl RenderPass for HideInvisible {
     fn configure(&mut self, renderer_config: &dm::config::MapRenderer) {
-        self.overrides = renderer_config.force_hide_types.clone().into_iter().collect::<Vec<_>>();
+        self.overrides = renderer_config.hide_invisible.clone();
         // Put longer typepaths earlier in the list so that `/foo/bar` can override `/foo`.
         self.overrides.sort_unstable_by_key(|k| usize::MAX - k.len());
         // Append `/` to each typepath for faster starts_with later.
@@ -211,7 +211,7 @@ impl RenderPass for HideInvisible {
     }
 
     fn early_filter(&self, atom: &Atom, objtree: &ObjectTree) -> bool {
-        // Remove it if it is in our list of atoms to hite
+        // Remove it if it is in our list of atoms to hide
         for pathtype in self.overrides.iter() {
             // Note: You *cannot* just `return !atom.istype(pathtype)`
             // If you do that, you skip the rest of the loop iterations
