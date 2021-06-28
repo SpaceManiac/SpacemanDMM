@@ -115,6 +115,7 @@ pub const RENDER_PASSES: &[RenderPassInfo] = &[
     pass!(IconSmoothing2016, "icon-smoothing-2016", "Emulate the icon smoothing subsystem (xxalpha, 2016).", false),
     pass!(IconSmoothing, "icon-smoothing", "Emulate the icon smoothing subsystem (Rohesie, 2020).", true),
     pass!(SmartCables, "smart-cables", "Handle smart cable layout.", true),
+    pass!(WiresAndPipes, "only-wires-and-pipes", "Renders only power cables and atmospheric pipes.", false),
 ];
 
 pub fn configure(renderer_config: &dm::config::MapRenderer, include: &str, exclude: &str) -> Vec<Box<dyn RenderPass>> {
@@ -188,13 +189,36 @@ impl RenderPass for HideAreas {
 }
 
 #[derive(Default)]
-pub struct HideInvisible;
+pub struct HideInvisible {
+    overrides: Vec<String>,
+}
+
 impl RenderPass for HideInvisible {
+    fn configure(&mut self, renderer_config: &dm::config::MapRenderer) {
+        self.overrides = renderer_config.hide_invisible.clone();
+        // Put longer typepaths earlier in the list so that `/foo/bar` can override `/foo`.
+        self.overrides.sort_unstable_by_key(|k| usize::MAX - k.len());
+        // Append `/` to each typepath for faster starts_with later.
+        for key in self.overrides.iter_mut() {
+            if !key.ends_with('/') {
+                key.push('/');
+            }
+        }
+    }
+
     fn path_filter(&self, path: &str) -> bool {
         !subpath(path, "/obj/effect/spawner/xmastree/")
     }
 
     fn early_filter(&self, atom: &Atom, objtree: &ObjectTree) -> bool {
+        // Remove it if it is in our list of atoms to hide
+        for pathtype in self.overrides.iter() {
+            // Note: You *cannot* just `return !atom.istype(pathtype)`
+            // If you do that, you skip the rest of the loop iterations
+            if atom.istype(pathtype) {
+                return false;
+            }
+        }
         // invisible objects and syndicate balloons are not to show
         if atom.get_var("invisibility", objtree).to_float().unwrap_or(0.) > 60. ||
             atom.istype("/obj/effect/mapping_helpers/")
@@ -388,6 +412,14 @@ pub struct Pipes;
 impl RenderPass for Pipes {
     fn late_filter(&self, atom: &Atom, _: &ObjectTree) -> bool {
         atom.istype("/obj/machinery/atmospherics/pipe/")
+    }
+}
+
+#[derive(Default)]
+pub struct WiresAndPipes;
+impl RenderPass for WiresAndPipes {
+    fn late_filter(&self, atom: &Atom, _: &ObjectTree) -> bool {
+        atom.istype("/obj/machinery/atmospherics/pipe/") || atom.istype("/obj/structure/cable/")
     }
 }
 
