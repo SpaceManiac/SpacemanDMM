@@ -934,7 +934,7 @@ impl fmt::Display for VarTypeFlags {
 }
 
 /// A type which may be ascribed to a `var`.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, Eq, Hash)]
 pub struct VarType {
     pub flags: VarTypeFlags,
     pub type_path: TreePath,

@@ -272,7 +272,7 @@ impl Context {
 // Location handling
 
 /// File, line, and column information for an error.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Default)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Default, Hash)]
 pub struct Location {
     /// The index into the file table.
     pub file: FileId,

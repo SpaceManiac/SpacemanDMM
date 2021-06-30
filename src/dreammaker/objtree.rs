@@ -46,7 +46,7 @@ impl SymbolIdSource {
 
 pub type Vars = LinkedHashMap<String, Constant>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub struct VarDeclaration {
     pub var_type: VarType,
     pub location: Location,
