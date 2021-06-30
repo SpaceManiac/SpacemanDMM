@@ -6,7 +6,7 @@ use lsp_types::*;
 
 use dm::ast::PathOp;
 use dm::annotation::Annotation;
-use dm::objtree::{TypeRef, TypeVar, TypeProc, ProcValue};
+use dm::objtree::{TypeRef, NavigatePathResult, TypeVar, TypeProc, ProcValue};
 
 use crate::{Engine, Span, is_constructor_name};
 use crate::symbol_search::contains;
@@ -206,7 +206,7 @@ impl<'a> Engine<'a> {
                 decl = Some("verb");
                 break;
             }
-            if let Some(next) = ty.navigate(op, name) {
+            if let Some(next) = ty.navigate(op, name).map(NavigatePathResult::ty) {
                 ty = next;
             } else {
                 break;
