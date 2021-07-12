@@ -108,3 +108,19 @@ fn no_can_be_redefined() {
 "##.trim();
     check_errors_match(code, NO_CAN_BE_REDEFINED_ERRORS);
 }
+
+pub const BUILT_IN_SLEEP: &[(u32, u16, &str)] = &[
+    (4, 17, "/mob/living/proc/Move sets SpacemanDMM_should_not_sleep but calls blocking built-in(s)"),
+];
+
+#[test]
+fn built_in_sleep() {
+    let code = r##"
+/mob/Move()
+    set SpacemanDMM_should_not_sleep = TRUE
+
+/mob/living/Move()
+    sleep(1)
+"##.trim();
+    check_errors_match(code, BUILT_IN_SLEEP);
+}

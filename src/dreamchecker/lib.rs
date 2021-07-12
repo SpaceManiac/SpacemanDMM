@@ -405,17 +405,19 @@ struct ProcDirective<'o> {
     can_be_disabled: bool,
     set_at_definition: bool,
     can_be_global: bool,
+    can_be_builtin: bool,
     directive_string: &'static str,
 }
 
 impl<'o> ProcDirective<'o> {
-    pub fn new(directive_string: &'static str, can_be_disabled: bool, set_at_definition: bool, can_be_global: bool) -> ProcDirective<'o> {
+    pub fn new(directive_string: &'static str, can_be_disabled: bool, set_at_definition: bool, can_be_global: bool, can_be_builtin: bool) -> ProcDirective<'o> {
         ProcDirective {
             directive: Default::default(),
             directive_string,
             can_be_disabled,
             set_at_definition,
             can_be_global,
+            can_be_builtin,
         }
     }
 
@@ -587,14 +589,14 @@ impl<'o> AnalyzeObjectTree<'o> {
             context,
             objtree,
             return_type,
-            must_call_parent: ProcDirective::new("SpacemanDMM_should_call_parent", true, false, false),
-            must_not_override: ProcDirective::new("SpacemanDMM_should_not_override", false, false, false),
-            private: ProcDirective::new("SpacemanDMM_private_proc", false, true, false),
-            protected: ProcDirective::new("SpacemanDMM_protected_proc", false, true, false),
-            must_not_sleep: ProcDirective::new("SpacemanDMM_should_not_sleep", false, true, true),
-            sleep_exempt: ProcDirective::new("SpacemanDMM_allowed_to_sleep", false, true, true),
-            must_be_pure: ProcDirective::new("SpacemanDMM_should_be_pure", false, true, true),
-            can_be_redefined: ProcDirective::new("SpacemanDMM_can_be_redefined", false, false, false),
+            must_call_parent: ProcDirective::new("SpacemanDMM_should_call_parent", true, false, false, true),
+            must_not_override: ProcDirective::new("SpacemanDMM_should_not_override", false, false, false, false),
+            private: ProcDirective::new("SpacemanDMM_private_proc", false, true, false, false),
+            protected: ProcDirective::new("SpacemanDMM_protected_proc", false, true, false, false),
+            must_not_sleep: ProcDirective::new("SpacemanDMM_should_not_sleep", false, true, true, true),
+            sleep_exempt: ProcDirective::new("SpacemanDMM_allowed_to_sleep", false, true, true, true),
+            must_be_pure: ProcDirective::new("SpacemanDMM_should_be_pure", false, true, true, true),
+            can_be_redefined: ProcDirective::new("SpacemanDMM_can_be_redefined", false, false, false, false),
             used_kwargs: Default::default(),
             call_tree: Default::default(),
             sleeping_procs: Default::default(),
@@ -635,11 +637,13 @@ impl<'o> AnalyzeObjectTree<'o> {
 
         if procdirective.set_at_definition {
             if let Some(procdef) = &mut proc.get_declaration() {
-                if procdef.location != proc.get().location {
-                    error(location, format!("Can't define procs {} outside their initial definition", directive))
-                        .set_severity(Severity::Warning)
-                        .register(self.context);
-                    return
+                if !(procdef.location.is_builtins() && procdirective.can_be_builtin) {
+                    if procdef.location != proc.get().location {
+                        error(location, format!("Can't define procs {} outside their initial definition", directive))
+                            .set_severity(Severity::Warning)
+                            .register(self.context);
+                        return
+                    }
                 }
             }
         }
