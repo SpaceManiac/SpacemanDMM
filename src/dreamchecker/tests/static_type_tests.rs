@@ -15,6 +15,8 @@ fn field_access() {
     var/list/L = list()
     L[1].name
     L?[1].name
+    var/atom/movable/particle_holder = new
+    particle_holder.particles.height
 "##.trim();
     check_errors_match(code, FIELD_ACCESS_ERRORS);
 }
