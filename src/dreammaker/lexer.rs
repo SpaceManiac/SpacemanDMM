@@ -1177,11 +1177,11 @@ impl<'ctx> Iterator for Lexer<'ctx> {
                 Some(SingleQuote) => Some(locate(Resource(self.read_resource()))),
                 Some(DoubleQuote) => Some(locate(self.read_string(b"\"", false))),
                 Some(BlockString) => Some(locate(self.read_string(b"\"}", false))),
-                Some(LBracket) => {
+                Some(lbr @ LBracket | lbr @ SafeLBracket) => {
                     if let Some(interp) = self.interp_stack.last_mut() {
                         interp.bracket_depth += 1;
                     }
-                    Some(locate(Punct(LBracket)))
+                    Some(locate(Punct(lbr)))
                 }
                 Some(RBracket) => {
                     if let Some(mut interp) = self.interp_stack.pop() {
