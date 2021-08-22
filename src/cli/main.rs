@@ -464,6 +464,7 @@ fn clamp(val: usize, min: usize, max: usize) -> usize {
 
 fn output_json<T: serde::Serialize>(t: &T) {
     let stdout = std::io::stdout();
-    serde_json::to_writer(stdout.lock(), t).unwrap();
-    println!();
+    let mut stdout = stdout.lock();
+    serde_json::to_writer(&mut stdout, t).unwrap();
+    stdout.write_all(b"\n").unwrap();
 }
