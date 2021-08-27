@@ -6,7 +6,7 @@ body {
     line-height: 1.3;
     max-width: 73%;
     overflow-y: scroll;
-    font-family: Arial;
+    font-family: Arial, Helvetica, sans-serif;
 }
 pre, code {
     background: white;
@@ -18,7 +18,7 @@ pre {
     white-space: pre-wrap;
 }
 code {
-    font-family: Consolas;
+    font-family: Consolas, "DejaVu Sans Mono", "Courier New", Courier, monospace;
 }
 a {
     color: #333333;
