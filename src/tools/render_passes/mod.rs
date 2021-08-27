@@ -121,14 +121,18 @@ pub const RENDER_PASSES: &[RenderPassInfo] = &[
 pub fn configure(renderer_config: &dm::config::MapRenderer, include: &str, exclude: &str) -> Vec<Box<dyn RenderPass>> {
     let include: Vec<&str> = include.split(",").collect();
     let exclude: Vec<&str> = exclude.split(",").collect();
-    let include_all = include.iter().any(|&name| name == "all");
-    let exclude_all = exclude.iter().any(|&name| name == "all");
+    configure_list(renderer_config, &include, &exclude)
+}
+
+pub fn configure_list<T: AsRef<str>>(renderer_config: &dm::config::MapRenderer, include: &[T], exclude: &[T]) -> Vec<Box<dyn RenderPass>> {
+    let include_all = include.iter().any(|name| name.as_ref() == "all");
+    let exclude_all = exclude.iter().any(|name| name.as_ref() == "all");
 
     let mut output = Vec::new();
     for pass in RENDER_PASSES {
-        let included = if include.iter().any(|&name| name == pass.name) {
+        let included = if include.iter().any(|name| name.as_ref() == pass.name) {
             true
-        } else if exclude.iter().any(|&name| name == pass.name) {
+        } else if exclude.iter().any(|name| name.as_ref() == pass.name) {
             false
         } else if include_all {
             true

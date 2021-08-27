@@ -151,7 +151,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
         } else {
             let key = format!("bad icon: {:?}, state: {:?}", sprite.icon, sprite.icon_state);
             if !ctx.errors.read().unwrap().contains(&key) {
-                println!("{}", key);
+                eprintln!("{}", key);
                 ctx.errors.write().unwrap().insert(key);
             }
         }

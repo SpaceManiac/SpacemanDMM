@@ -14,11 +14,13 @@ extern crate dmm_tools;
 
 use std::collections::HashMap;
 use std::fmt;
-use std::path::Path;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::RwLock;
 use std::collections::HashSet;
 
+use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use structopt::StructOpt;
 
 use dm::objtree::ObjectTree;
@@ -67,7 +69,7 @@ impl Context {
                 _ => dm::DEFAULT_ENV.into(),
             },
         };
-        println!("parsing {}", environment.display());
+        eprintln!("parsing {}", environment.display());
 
         if let Some(parent) = environment.parent() {
             self.icon_cache.set_icons_root(&parent);
@@ -175,6 +177,8 @@ enum Command {
         /// The list of maps to show info on.
         files: Vec<String>,
     },
+    /// Read a JSON RenderManyCommand from stdin, execute it, and print a RenderManyCommandResult.
+    RenderMany,
 }
 
 fn run(opt: &Opt, command: &Command, context: &mut Context) {
@@ -329,7 +333,6 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                 };
 
                 if parallel {
-                    use rayon::iter::{IntoParallelIterator, ParallelIterator};
                     ((min.z - 1)..(max.z)).into_par_iter().for_each(do_z_level);
                 } else {
                     ((min.z - 1)..(max.z)).into_iter().for_each(do_z_level);
@@ -337,7 +340,6 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             };
 
             if parallel {
-                use rayon::iter::{IntoParallelIterator, ParallelIterator};
                 // Suboptimal due to mixing I/O in with what's meant for CPU
                 // tasks, but it should get the job done for now.
                 paths.into_par_iter().for_each(perform_job);
@@ -404,16 +406,26 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             output_json(&report);
         },
         // --------------------------------------------------------------------
+        Command::RenderMany => {
+            let stdin = std::io::stdin();
+            let command: RenderManyCommand = serde_json::from_reader(stdin.lock()).unwrap();
+            context.objtree(opt);
+            let result = render_many(context, command);
+            let stdout = std::io::stdout();
+            serde_json::to_writer(stdout.lock(), &result).unwrap();
+        }
+        // --------------------------------------------------------------------
     }
 }
 
 // ----------------------------------------------------------------------------
 // Argument parsing helpers
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Deserialize)]
 struct CoordArg {
     x: usize,
     y: usize,
+    #[serde(default)]
     z: usize,
 }
 
@@ -467,4 +479,159 @@ fn output_json<T: serde::Serialize>(t: &T) {
     let mut stdout = stdout.lock();
     serde_json::to_writer(&mut stdout, t).unwrap();
     stdout.write_all(b"\n").unwrap();
+}
+
+// ----------------------------------------------------------------------------
+// Render Many implementation
+
+#[derive(Deserialize)]
+struct RenderManyCommand {
+    /// Directory to write results to.
+    output_directory: PathBuf,
+
+    /// `.dmm` files to render.
+    ///
+    /// Including a file multiple times in this list is less efficient than
+    /// combining its chunks into one entry in this list.
+    files: Vec<RenderManyFile>,
+
+    /// Render passes to enable, or `["all"]` for all not explicitly disabled.
+    #[serde(default)]
+    enable: Vec<String>,
+
+    /// Render passes to disable, or `["all"]` for all not explicitly enabled.
+    #[serde(default)]
+    disable: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct RenderManyFile {
+    /// The path to the `.dmm` file to render.
+    path: PathBuf,
+    /// Defaults to one chunk per z-level if omitted.
+    chunks: Option<Vec<RenderManyChunk>>,
+}
+
+#[derive(Deserialize, Debug)]
+struct RenderManyChunk {
+    /// The z-level to render.
+    z: usize,
+    /// Defaults to 1.
+    min_x: Option<usize>,
+    /// Defaults to 1.
+    min_y: Option<usize>,
+    /// Defaults to the X size of the map.
+    max_x: Option<usize>,
+    /// Defaults to the Y size of the map.
+    max_y: Option<usize>,
+}
+
+#[derive(Serialize)]
+struct RenderManyCommandResult {
+    /// Results for each file in the same order as the input.
+    files: Vec<RenderManyFileResult>,
+}
+
+#[derive(Serialize)]
+struct RenderManyFileResult {
+    /// Results for each chunk in the same order as the input.
+    ///
+    /// If `chunks` was omitted in the input, this has one chunk per z-level.
+    chunks: Vec<RenderManyChunkResult>,
+}
+
+#[derive(Serialize)]
+struct RenderManyChunkResult {
+    /// The filename, not including the output directory, that the chunk was written to.
+    filename: PathBuf,
+}
+
+fn render_many(context: &Context, command: RenderManyCommand) -> RenderManyCommandResult {
+    // Parse the object tree and otherwise prepare the context.
+    if context
+        .dm_context
+        .errors()
+        .iter()
+        .filter(|e| e.severity() <= dm::Severity::Error)
+        .next()
+        .is_some()
+    {
+        eprintln!("there were some parsing errors; render may be inaccurate")
+    }
+    let Context {
+        ref objtree,
+        ref icon_cache,
+        ref exit_status,
+        ..
+    } = *context;
+    let render_passes = &dmm_tools::render_passes::configure_list(&context.dm_context.config().map_renderer, &command.enable, &command.disable);
+    let errors: RwLock<HashSet<String>> = Default::default();
+
+    // Prepare output directory.
+    let output_directory = command.output_directory;
+    if let Err(e) = std::fs::create_dir_all(&output_directory) {
+        eprintln!("failed to create output directory {}:\n{}", output_directory.display(), e);
+        exit_status.fetch_add(1, Ordering::Relaxed);
+        panic!();
+    }
+
+
+    // Iterate over the maps
+    let result_files: Vec<_> = command.files.into_par_iter().enumerate().map(|(file_idx, file)| {
+        eprintln!("{}: load {}", file_idx, file.path.display());
+        let stem = file.path.file_stem().unwrap().to_string_lossy();
+        let map = dmm::Map::from_file(&file.path).unwrap();  // TODO: error handling
+        let (dim_x, dim_y, dim_z) = map.dim_xyz();
+
+        // If `chunks` was not specified, render one chunk per z-level.
+        let chunks = file.chunks.unwrap_or_else(|| (1..=dim_z).map(|z| RenderManyChunk {
+            z,
+            min_x: None,
+            min_y: None,
+            max_x: None,
+            max_y: None,
+        }).collect());
+
+        let result_chunks: Vec<_> = chunks.into_par_iter().enumerate().map(|(chunk_idx, chunk)| {
+            eprintln!("{}/{}: render {:?}", file_idx, chunk_idx, chunk);
+
+            // Render the image.
+            let bump = Default::default();
+            let minimap_context = minimap::Context {
+                objtree,
+                map: &map,
+                level: map.z_level(chunk.z - 1),
+                // Default and clamp to [1, max].
+                min: (chunk.min_x.unwrap_or(1).max(1) - 1, chunk.min_y.unwrap_or(1).max(1) - 1),
+                max: (chunk.max_x.unwrap_or(dim_x).min(dim_x) - 1, chunk.max_y.unwrap_or(dim_y).min(dim_y) - 1),
+                render_passes,
+                errors: &errors,
+                bump: &bump,
+            };
+            let image = minimap::generate(minimap_context, icon_cache).unwrap();  // TODO: error handling
+
+            // Write it to file.
+            let filename = PathBuf::from(format!(
+                "{}_z{}_chunk{}.png",
+                stem,
+                chunk.z,
+                chunk_idx,
+            ));
+            eprintln!("{}/{}: save {}", file_idx, chunk_idx, filename.display());
+            let outfile = output_directory.join(&filename);
+            image.to_file(&outfile).unwrap();  // TODO: error handling
+
+            RenderManyChunkResult {
+                filename,
+            }
+        }).collect();
+
+        RenderManyFileResult {
+            chunks: result_chunks,
+        }
+    }).collect();
+
+    RenderManyCommandResult {
+        files: result_files,
+    }
 }
