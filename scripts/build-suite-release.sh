@@ -35,7 +35,7 @@ cp \
     target/x86_64-pc-windows-gnu/release/{dreamchecker,dmdoc,dmm-tools,dm-langserver}.exe \
     "$DEST"
 echo "# SpacemanDMM $relname" | tee "$DEST/$relname.sha256"
-sha256sum "$DEST"/* | tee -a "$DEST/$relname.sha256"
+sha256sum "$DEST"/{dmdoc,dm-langserver,dmm-tools,dreamchecker}{,.exe} | tee -a "$DEST/$relname.sha256"
 gpg2 --sign --armor --detach "$DEST/$relname.sha256"
 gpg2 --verify "$DEST/$relname.sha256.asc"
 ls -lh --color=auto "$DEST"
