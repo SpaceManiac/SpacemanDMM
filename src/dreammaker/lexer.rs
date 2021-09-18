@@ -482,6 +482,10 @@ enum Directive {
     Stringy,
 }
 
+fn has_bom(slice: &[u8]) -> bool {
+    slice.starts_with(b"\xEF\xBB\xBF")
+}
+
 fn buffer_read<R: Read>(file: FileId, mut read: R) -> Result<Vec<u8>, DMError> {
     let mut buffer = Vec::new();
 
@@ -630,9 +634,17 @@ impl<'ctx> HasLocation for Lexer<'ctx> {
 impl<'ctx> Lexer<'ctx> {
     /// Create a new lexer from a byte stream.
     pub fn new<I: Into<Cow<'ctx, [u8]>>>(context: &'ctx Context, file_number: FileId, input: I) -> Self {
+        let mut cow = input.into();
+        if has_bom(&cow) {
+            cow = match cow {
+                Cow::Borrowed(b) => Cow::from(&b[3..]),
+                Cow::Owned(mut o) => { o.drain(..3); Cow::Owned(o) }
+            };
+        }
+
         Lexer {
             context,
-            input: LocationTracker::new(file_number, input.into()),
+            input: LocationTracker::new(file_number, cow),
             next: None,
             final_newline: false,
             at_line_head: true,
