@@ -638,7 +638,7 @@ impl<'ctx> Lexer<'ctx> {
         if has_bom(&cow) {
             cow = match cow {
                 Cow::Borrowed(b) => Cow::from(&b[3..]),
-                Cow::Owned(o) => Cow::from(o[3..].to_owned())
+                Cow::Owned(mut o) => { o.drain(..3); Cow::Owned(o) }
             };
         }
 
