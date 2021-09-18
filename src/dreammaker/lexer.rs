@@ -483,7 +483,7 @@ enum Directive {
 }
 
 fn has_bom(slice: &[u8]) -> bool {
-    slice.len() > 3 && slice[0] == 0xEF && slice[1] == 0xBB && slice[2] == 0xBF
+    slice.starts_with(b"\xEF\xBB\xBF")
 }
 
 fn buffer_read<R: Read>(file: FileId, mut read: R) -> Result<Vec<u8>, DMError> {
@@ -636,7 +636,10 @@ impl<'ctx> Lexer<'ctx> {
     pub fn new<I: Into<Cow<'ctx, [u8]>>>(context: &'ctx Context, file_number: FileId, input: I) -> Self {
         let mut cow = input.into();
         if has_bom(&cow) {
-            cow = Cow::from(cow[3..].to_owned());
+            cow = match cow {
+                Cow::Borrowed(b) => Cow::from(&b[3..]),
+                Cow::Owned(o) => Cow::from(o[3..].to_owned())
+            };
         }
 
         Lexer {
