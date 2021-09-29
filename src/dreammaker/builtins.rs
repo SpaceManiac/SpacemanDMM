@@ -1113,6 +1113,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
         particles/var/transform;
         particles/var/lifespan;
         particles/var/fade;
+        particles/var/fadein;
         particles/var/position;
         particles/var/velocity;
         particles/var/color;
