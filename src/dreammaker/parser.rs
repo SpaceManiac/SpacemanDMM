@@ -1056,7 +1056,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             path.remove(0);
             DMError::new(leading_loc, "'var/' is unnecessary here")
                 .set_severity(Severity::Hint)
-                .with_errortype("var_in_proc_paramater")
+                .with_errortype("var_in_proc_parameter")
                 .register(self.context);
         }
         let mut var_type: VarType = path.into_iter().collect();
