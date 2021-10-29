@@ -4,7 +4,7 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::ops::Range;
 
-use linked_hash_map::LinkedHashMap;
+use indexmap::IndexMap;
 
 use super::{DMError, Location, HasLocation, Context, Severity, FileId};
 use super::lexer::{LocatedToken, Token, Punctuation};
@@ -1701,7 +1701,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         self.annotate(start, || Annotation::TypePath(parts.clone()));
 
         // parse vars if we find them
-        let mut vars = LinkedHashMap::default();
+        let mut vars = IndexMap::default();
         if let Some(()) = self.exact(Token::Punct(Punctuation::LBrace))? {
             self.separated(Punctuation::Semicolon, Punctuation::RBrace, Some(()), |this| {
                 let key = require!(this.ident());

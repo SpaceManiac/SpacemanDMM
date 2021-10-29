@@ -5,7 +5,8 @@ use std::io;
 use std::fmt;
 
 use ndarray::{self, Array3, Axis};
-use linked_hash_map::LinkedHashMap;
+use indexmap::IndexMap;
+use ahash::RandomState;
 
 use dm::DMError;
 use dm::constants::Constant;
@@ -118,11 +119,18 @@ pub struct ZLevel<'a> {
 }
 
 // TODO: port to ast::Prefab<Constant>
-#[derive(Debug, Default, Hash, Eq, PartialEq, Clone)]
+#[derive(Debug, Default, Eq, PartialEq, Clone)]
 pub struct Prefab {
     pub path: String,
     // insertion order, sort of most of the time alphabetical but not quite
-    pub vars: LinkedHashMap<String, Constant>,
+    pub vars: IndexMap<String, Constant, RandomState>,
+}
+
+impl std::hash::Hash for Prefab {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		self.path.hash(state);
+        self.vars.keys().for_each(|key| {key.hash(state)});
+	}
 }
 
 impl Map {

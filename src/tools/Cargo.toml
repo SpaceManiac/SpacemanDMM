@@ -13,6 +13,8 @@ ndarray = "0.13.0"
 rand = "0.7.0"
 dreammaker = { path = "../dreammaker" }
 lodepng = "3.0.0"
+indexmap = "1.7.0"
+ahash = "0.7.6"
 
 [dependencies.bytemuck]
 version = "1.5"
@@ -21,10 +23,6 @@ features = ["derive"]
 [dependencies.bumpalo]
 version = "3.0.0"
 features = ["collections"]
-
-[dependencies.linked-hash-map]
-git = "https://github.com/SpaceManiac/linked-hash-map"
-branch = "get-key-value"
 
 [dependencies.png]
 version = "0.16.0"

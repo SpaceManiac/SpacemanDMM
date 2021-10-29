@@ -16,9 +16,9 @@ checksum = "aae1277d39aeec15cb388266ecc24b11c80469deae6067e17a1a7aa9e5c1f234"
 
 [[package]]
 name = "ahash"
-version = "0.7.4"
+version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43bb833f0bf979d8475d38fbf09ed3b8a55e1885fe93ad3f93239fc6a4f17b98"
+checksum = "fcb51a0695d8f838b1ee009b3fbf66bda078cd64590202a864a8f3e8c4315c47"
 dependencies = [
  "getrandom 0.2.3",
  "once_cell",
@@ -351,12 +351,13 @@ dependencies = [
 name = "dmm-tools"
 version = "0.1.0"
 dependencies = [
+ "ahash",
  "bumpalo",
  "bytemuck",
  "dreammaker",
  "gfx_core",
+ "indexmap",
  "inflate",
- "linked-hash-map",
  "lodepng",
  "ndarray",
  "png",
@@ -388,12 +389,13 @@ dependencies = [
 name = "dreammaker"
 version = "0.1.0"
 dependencies = [
+ "ahash",
  "bitflags",
  "builtins-proc-macro",
  "color_space",
  "guard",
+ "indexmap",
  "interval-tree",
- "linked-hash-map",
  "lodepng",
  "ordered-float",
  "phf",
@@ -616,6 +618,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "indexmap"
+version = "1.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc633605454125dec4b66843673f01c7df2b89479b32e0ed634e43a91cff62a5"
+dependencies = [
+ "autocfg",
+ "hashbrown",
+]
+
+[[package]]
 name = "inflate"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -694,11 +706,6 @@ dependencies = [
  "pkg-config",
  "vcpkg",
 ]
-
-[[package]]
-name = "linked-hash-map"
-version = "0.5.2"
-source = "git+https://github.com/SpaceManiac/linked-hash-map?branch=get-key-value#7e6de06f9817fbb17a257af3777b0852f46cb894"
 
 [[package]]
 name = "lodepng"

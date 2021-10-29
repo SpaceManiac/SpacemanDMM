@@ -20,10 +20,8 @@ toml = "0.5.5"
 guard = "0.5.0"
 phf = { version = "0.8.0", features = ["macros"] }
 color_space = "0.5.3"
-
-[dependencies.linked-hash-map]
-git = "https://github.com/SpaceManiac/linked-hash-map"
-branch = "get-key-value"
+ahash = "0.7.6"
+indexmap = "1.7.0"
 
 [dev-dependencies]
 walkdir = "2.0.1"

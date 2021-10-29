@@ -3,7 +3,8 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use linked_hash_map::LinkedHashMap;
+use indexmap::IndexMap;
+use ahash::RandomState;
 
 use super::ast::{Expression, VarType, VarSuffix, PathOp, Parameter, Block, ProcDeclKind, Ident};
 use super::constants::{Constant, Pop};
@@ -44,7 +45,7 @@ impl SymbolIdSource {
 // ----------------------------------------------------------------------------
 // Variables
 
-pub type Vars = LinkedHashMap<String, Constant>;
+pub type Vars = IndexMap<String, Constant, RandomState>;
 
 #[derive(Debug, Clone)]
 pub struct VarDeclaration {
@@ -118,9 +119,9 @@ pub struct Type {
     pub location: Location,
     location_specificity: usize,
     /// Variables which this type has declarations or overrides for.
-    pub vars: LinkedHashMap<String, TypeVar>,
+    pub vars: IndexMap<String, TypeVar, RandomState>,
     /// Procs and verbs which this type has declarations or overrides for.
-    pub procs: LinkedHashMap<String, TypeProc>,
+    pub procs: IndexMap<String, TypeProc, RandomState>,
     parent_path: NodeIndex,
     parent_type: NodeIndex,
     pub docs: DocCollection,
@@ -898,10 +899,10 @@ impl ObjectTree {
     ) -> &mut TypeVar {
         // TODO: warn and merge docs for repeats
         match self[ty].vars.entry(name.to_owned()) {
-            linked_hash_map::Entry::Vacant(slot) => {
+            indexmap::map::Entry::Vacant(slot) => {
                 slot.insert(TypeVar { value, declaration })
             },
-            linked_hash_map::Entry::Occupied(slot) => {
+            indexmap::map::Entry::Occupied(slot) => {
                 let type_var = slot.into_mut();
                 if let Some(declaration) = declaration {
                     type_var.declaration = Some(declaration);

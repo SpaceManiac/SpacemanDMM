@@ -3,7 +3,8 @@ use std::fmt;
 use std::ops;
 use std::path::Path;
 
-use linked_hash_map::LinkedHashMap;
+use indexmap::IndexMap;
+use ahash::RandomState;
 use ordered_float::OrderedFloat;
 use color_space::{Hsl, Hsv, Lch, Rgb};
 
@@ -15,10 +16,18 @@ use super::{Context, DMError, HasLocation, Location, Severity};
 /// An absolute typepath and optional variables.
 ///
 /// The path may involve `/proc` or `/verb` references.
-#[derive(Clone, Hash, Eq, PartialEq, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Pop {
     pub path: TreePath,
-    pub vars: LinkedHashMap<Ident, Constant>,
+    pub vars: IndexMap<Ident, Constant, RandomState>,
+}
+
+
+impl std::hash::Hash for Pop {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		self.path.hash(state);
+        self.vars.keys().for_each(|key| {key.hash(state)});
+	}
 }
 
 impl From<TreePath> for Pop {
@@ -809,9 +818,9 @@ impl<'a> ConstantFolder<'a> {
         Ok(Pop { path, vars })
     }
 
-    fn vars(&mut self, input: LinkedHashMap<Ident, Expression>) -> Result<LinkedHashMap<Ident, Constant>, DMError> {
+    fn vars(&mut self, input: IndexMap<Ident, Expression, RandomState>) -> Result<IndexMap<Ident, Constant, RandomState>, DMError> {
         // Visit the vars recursively.
-        let mut vars = LinkedHashMap::new();
+        let mut vars = IndexMap::with_hasher(RandomState::default());
         for (k, v) in input {
             // TODO: find a type annotation by looking up 'k' on the prefab's type
             vars.insert(k, self.expr(v, None)?);
