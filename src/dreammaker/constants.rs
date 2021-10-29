@@ -24,10 +24,10 @@ pub struct Pop {
 
 
 impl std::hash::Hash for Pop {
-	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-		self.path.hash(state);
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.path.hash(state);
         self.vars.keys().for_each(|key| {key.hash(state)});
-	}
+    }
 }
 
 impl From<TreePath> for Pop {

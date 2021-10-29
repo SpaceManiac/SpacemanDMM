@@ -127,10 +127,10 @@ pub struct Prefab {
 }
 
 impl std::hash::Hash for Prefab {
-	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-		self.path.hash(state);
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.path.hash(state);
         self.vars.keys().for_each(|key| {key.hash(state)});
-	}
+    }
 }
 
 impl Map {
