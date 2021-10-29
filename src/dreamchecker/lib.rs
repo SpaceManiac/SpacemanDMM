@@ -11,6 +11,8 @@ use dm::ast::*;
 
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
+use ahash::RandomState;
+
 mod type_expr;
 use type_expr::TypeExpr;
 
@@ -1142,7 +1144,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     }
 
     pub fn run(&mut self, block: &'o [Spanned<Statement>]) {
-        let mut local_vars = HashMap::<String, LocalVar>::new();
+        let mut local_vars = HashMap::<String, LocalVar, RandomState>::with_hasher(RandomState::default());
         local_vars.insert(".".to_owned(), Analysis::empty().into());
         local_vars.insert("args".to_owned(), Analysis::from_static_type_impure(self.objtree.expect("/list")).into());
         local_vars.insert("usr".to_owned(), Analysis::from_static_type(self.objtree.expect("/mob")).into());
@@ -1207,7 +1209,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
     }
 
-    fn visit_block(&mut self, block: &'o [Spanned<Statement>], local_vars: &mut HashMap<String, LocalVar<'o>>) -> ControlFlow {
+    fn visit_block(&mut self, block: &'o [Spanned<Statement>], local_vars: &mut HashMap<String, LocalVar<'o>, RandomState>) -> ControlFlow {
         let mut term = ControlFlow::allfalse();
         for stmt in block.iter() {
             if term.terminates() {
@@ -1253,7 +1255,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
     }
 
-    fn visit_statement(&mut self, location: Location, statement: &'o Statement, local_vars: &mut HashMap<String, LocalVar<'o>>) -> ControlFlow {
+    fn visit_statement(&mut self, location: Location, statement: &'o Statement, local_vars: &mut HashMap<String, LocalVar<'o>, RandomState>) -> ControlFlow {
         match statement {
             Statement::Expr(expr) => {
                 match expr {
@@ -1542,11 +1544,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         return ControlFlow::allfalse()
     }
 
-    fn visit_var_stmt(&mut self, location: Location, var: &'o VarStatement, local_vars: &mut HashMap<String, LocalVar<'o>>) {
+    fn visit_var_stmt(&mut self, location: Location, var: &'o VarStatement, local_vars: &mut HashMap<String, LocalVar<'o>, RandomState>) {
         self.visit_var(location, &var.var_type, &var.name, var.value.as_ref(), local_vars)
     }
 
-    fn visit_var(&mut self, location: Location, var_type: &VarType, name: &str, value: Option<&'o Expression>, local_vars: &mut HashMap<String, LocalVar<'o>>) {
+    fn visit_var(&mut self, location: Location, var_type: &VarType, name: &str, value: Option<&'o Expression>, local_vars: &mut HashMap<String, LocalVar<'o>, RandomState>) {
         // Calculate type hint
         let static_type = self.env.static_type(location, &var_type.type_path);
         // Visit the expression if it's there
@@ -1560,7 +1562,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         local_vars.insert(name.to_owned(), LocalVar { location, analysis });
     }
 
-    fn visit_expression(&mut self, location: Location, expression: &'o Expression, type_hint: Option<TypeRef<'o>>, local_vars: &mut HashMap<String, LocalVar<'o>>) -> Analysis<'o> {
+    fn visit_expression(&mut self, location: Location, expression: &'o Expression, type_hint: Option<TypeRef<'o>>, local_vars: &mut HashMap<String, LocalVar<'o>, RandomState>) -> Analysis<'o> {
         match expression {
             Expression::Base { unary, term, follow } => {
                 let base_type_hint = if follow.is_empty() && unary.is_empty() {
@@ -1669,7 +1671,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
     }
 
-    fn visit_term(&mut self, location: Location, term: &'o Term, type_hint: Option<TypeRef<'o>>, local_vars: &mut HashMap<String, LocalVar<'o>>) -> Analysis<'o> {
+    fn visit_term(&mut self, location: Location, term: &'o Term, type_hint: Option<TypeRef<'o>>, local_vars: &mut HashMap<String, LocalVar<'o>, RandomState>) -> Analysis<'o> {
         match term {
             Term::Null => Analysis::null(),
             Term::Int(number) => Analysis::from_value(self.objtree, Constant::from(*number), type_hint),
@@ -1904,7 +1906,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
     }
 
-    fn visit_follow(&mut self, location: Location, lhs: Analysis<'o>, rhs: &'o Follow, local_vars: &mut HashMap<String, LocalVar<'o>>) -> Analysis<'o> {
+    fn visit_follow(&mut self, location: Location, lhs: Analysis<'o>, rhs: &'o Follow, local_vars: &mut HashMap<String, LocalVar<'o>, RandomState>) -> Analysis<'o> {
         match rhs {
             Follow::Field(PropertyAccessKind::Colon, _) => Analysis::empty(),
             Follow::Field(PropertyAccessKind::SafeColon, _) => Analysis::empty(),
@@ -2014,7 +2016,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     }
 
     // checks operatorX overloads on types
-    fn check_operator_overload(&mut self, rhs: Analysis<'o>, location: Location, operator: &str, local_vars: &mut HashMap<String, LocalVar<'o>>) -> Analysis<'o> {
+    fn check_operator_overload(&mut self, rhs: Analysis<'o>, location: Location, operator: &str, local_vars: &mut HashMap<String, LocalVar<'o>, RandomState>) -> Analysis<'o> {
         if let Some(impurity) = rhs.is_impure {
             if impurity {
                 self.env.impure_procs.insert_violator(self.proc_ref, &format!("{} done on non-local var", operator), location);
@@ -2041,7 +2043,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         return Analysis::empty()
     }
 
-    fn visit_unary(&mut self, rhs: Analysis<'o>, op: &UnaryOp, location: Location, local_vars: &mut HashMap<String, LocalVar<'o>>) -> Analysis<'o> {
+    fn visit_unary(&mut self, rhs: Analysis<'o>, op: &UnaryOp, location: Location, local_vars: &mut HashMap<String, LocalVar<'o>, RandomState>) -> Analysis<'o> {
         match op {
             // !x just evaluates the "truthiness" of x and negates it, returning 1 or 0
             UnaryOp::Not => Analysis::from(assumption_set![Assumption::IsNum(true)]),
@@ -2131,7 +2133,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
     }
 
-    fn visit_call(&mut self, location: Location, src: TypeRef<'o>, proc: ProcRef<'o>, args: &'o [Expression], is_exact: bool, local_vars: &mut HashMap<String, LocalVar<'o>>) -> Analysis<'o> {
+    fn visit_call(&mut self, location: Location, src: TypeRef<'o>, proc: ProcRef<'o>, args: &'o [Expression], is_exact: bool, local_vars: &mut HashMap<String, LocalVar<'o>, RandomState>) -> Analysis<'o> {
         self.env.call_tree.entry(self.proc_ref).or_default().push((proc, location, self.inside_newcontext != 0));
         if let Some((privateproc, true, decllocation)) = self.env.private.get_self_or_parent(proc) {
             if self.ty != privateproc.ty() {
@@ -2145,9 +2147,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         // identify and register kwargs used
         let mut any_kwargs_yet = false;
 
-        let mut param_name_map = HashMap::new();
-        let mut param_expr_map = HashMap::new();
-        let mut param_idx_map = HashMap::new();
+        let mut param_name_map = HashMap::with_hasher(RandomState::default());
+        let mut param_expr_map = HashMap::with_hasher(RandomState::default());
+        let mut param_idx_map = HashMap::with_hasher(RandomState::default());
         let mut param_idx = 0;
         let mut arglist_used = false;
 
@@ -2286,7 +2288,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
     }
 
-    fn visit_arguments(&mut self, location: Location, args: &'o [Expression], local_vars: &mut HashMap<String, LocalVar<'o>>) {
+    fn visit_arguments(&mut self, location: Location, args: &'o [Expression], local_vars: &mut HashMap<String, LocalVar<'o>, RandomState>) {
         for arg in args {
             let mut argument_value = arg;
             if let Expression::AssignOp { op: AssignOp::Assign, lhs, rhs } = arg {

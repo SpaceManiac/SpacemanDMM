@@ -10,6 +10,8 @@ use crate::dmi::{Dir, Image};
 use crate::render_passes::RenderPass;
 use crate::icon_cache::IconCache;
 
+use ahash::RandomState;
+
 const TILE_SIZE: u32 = 32;
 
 // ----------------------------------------------------------------------------
@@ -23,7 +25,7 @@ pub struct Context<'a> {
     pub min: (usize, usize),
     pub max: (usize, usize),
     pub render_passes: &'a [Box<dyn RenderPass>],
-    pub errors: &'a RwLock<HashSet<String>>,
+    pub errors: &'a RwLock<HashSet<String, RandomState>>,
     pub bump: &'a bumpalo::Bump,
 }
 
@@ -197,7 +199,7 @@ fn get_atom_list<'a>(
     objtree: &'a ObjectTree,
     prefabs: &'a [Prefab],
     render_passes: &[Box<dyn RenderPass>],
-    errors: &RwLock<HashSet<String>>,
+    errors: &RwLock<HashSet<String, RandomState>>,
 ) -> Vec<Atom<'a>> {
     let mut result = Vec::new();
 
