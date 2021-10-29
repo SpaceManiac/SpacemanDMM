@@ -5,6 +5,8 @@ use std::path::{PathBuf, Path};
 use std::cell::{RefCell, Ref, RefMut};
 use std::collections::HashMap;
 
+use ahash::RandomState;
+
 use termcolor::{ColorSpec, Color};
 
 use crate::config::Config;
@@ -30,7 +32,7 @@ pub struct FileList {
     /// The list of loaded files.
     files: RefCell<Vec<PathBuf>>,
     /// Reverse mapping from paths to file numbers.
-    reverse_files: RefCell<HashMap<PathBuf, FileId>>,
+    reverse_files: RefCell<HashMap<PathBuf, FileId, RandomState>>,
 }
 
 /// A diagnostics context, tracking loaded files and any observed errors.

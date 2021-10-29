@@ -6,6 +6,8 @@ use std::ops::Range;
 
 use indexmap::IndexMap;
 
+use ahash::RandomState;
+
 use super::{DMError, Location, HasLocation, Context, Severity, FileId};
 use super::lexer::{LocatedToken, Token, Punctuation};
 use super::objtree::{ObjectTree, NodeIndex};
@@ -1701,7 +1703,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         self.annotate(start, || Annotation::TypePath(parts.clone()));
 
         // parse vars if we find them
-        let mut vars = IndexMap::default();
+        let mut vars = IndexMap::with_hasher(RandomState::default());
         if let Some(()) = self.exact(Token::Punct(Punctuation::LBrace))? {
             self.separated(Punctuation::Semicolon, Punctuation::RBrace, Some(()), |this| {
                 let key = require!(this.ident());

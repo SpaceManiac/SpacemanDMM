@@ -5,6 +5,8 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::borrow::Cow;
 
+use ahash::RandomState;
+
 use interval_tree::{IntervalTree, range};
 
 use super::{DMError, Location, HasLocation, FileId, Context, Severity};
@@ -166,7 +168,7 @@ impl std::ops::DerefMut for DefineHistory {
 /// stack is exhausted.
 #[derive(Debug, Clone, Default)]
 pub struct DefineMap {
-    inner: HashMap<String, Vec<(Location, Define)>>,
+    inner: HashMap<String, Vec<(Location, Define)>, RandomState>,
 }
 
 impl DefineMap {
@@ -378,7 +380,7 @@ pub struct Preprocessor<'ctx> {
     env_file: PathBuf,
 
     include_stack: IncludeStack<'ctx>,
-    include_locations: HashMap<FileId, Location>,
+    include_locations: HashMap<FileId, Location, RandomState>,
     last_input_loc: Location,
     output: VecDeque<Token>,
     ifdef_stack: Vec<Ifdef>,
@@ -392,7 +394,7 @@ pub struct Preprocessor<'ctx> {
     scripts: Vec<PathBuf>,
 
     last_printable_input_loc: Location,
-    danger_idents: HashMap<Ident, Location>,
+    danger_idents: HashMap<Ident, Location, RandomState>,
     in_interp_string: u32,
 
     docs_in: VecDeque<(Location, DocComment)>,

@@ -5,6 +5,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 
+use ahash::RandomState;
 use serde::Deserialize;
 
 use crate::error::Severity;
@@ -18,7 +19,7 @@ pub struct Config {
 
     // diagnostic configuration
     display: WarningDisplay,
-    diagnostics: HashMap<String, WarningLevel>,
+    diagnostics: HashMap<String, WarningLevel, RandomState>,
     pub code_standards: CodeStandards,
 
     // tool-specific configuration
@@ -98,10 +99,10 @@ pub struct MapRenderer {
     /// Map from render pass name to whether it should be enabled/disabled.
     ///
     /// Priority is: CLI arguments > config > defaults.
-    pub render_passes: HashMap<String, bool>,
+    pub render_passes: HashMap<String, bool, RandomState>,
 
     /// Map from typepath to layer number.
-    pub fancy_layers: HashMap<String, f32>,
+    pub fancy_layers: HashMap<String, f32, RandomState>,
 
     /// List of typepath to just hide
     pub hide_invisible: Vec<String>,
