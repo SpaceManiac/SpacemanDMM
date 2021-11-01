@@ -398,6 +398,19 @@ impl<'o> WalkProc<'o> {
         }
     }
 
+    fn visit_ident(&mut self, location: Location, unscoped_name: &'o str) -> StaticType<'o> {
+        if let Some(var) = self.local_vars.get(unscoped_name) {
+            self.tab.use_symbol(var.symbol, location);
+            return var.ty.clone();
+        }
+        if let Some(decl) = self.ty.get_var_declaration(unscoped_name) {
+            self.tab.use_symbol(decl.id, location);
+            self.static_type(location, &decl.var_type.type_path)
+        } else {
+            StaticType::None
+        }
+    }
+
     fn visit_term(&mut self, location: Location, term: &'o Term, type_hint: Option<TypeRef<'o>>) -> StaticType<'o> {
         match term {
             Term::Null => StaticType::None,
@@ -421,18 +434,7 @@ impl<'o> WalkProc<'o> {
                 StaticType::None
             },
 
-            Term::Ident(unscoped_name) => {
-                if let Some(var) = self.local_vars.get(unscoped_name) {
-                    self.tab.use_symbol(var.symbol, location);
-                    return var.ty.clone();
-                }
-                if let Some(decl) = self.ty.get_var_declaration(unscoped_name) {
-                    self.tab.use_symbol(decl.id, location);
-                    self.static_type(location, &decl.var_type.type_path)
-                } else {
-                    StaticType::None
-                }
-            },
+            Term::Ident(unscoped_name) => self.visit_ident(location, unscoped_name),
             Term::Call(unscoped_name, args) => {
                 let src = self.ty;
                 if let Some(proc) = self.ty.get_proc(unscoped_name) {
@@ -471,7 +473,14 @@ impl<'o> WalkProc<'o> {
                         None
                     },
                     NewType::Prefab(prefab) => self.visit_prefab(location, prefab),
-                    NewType::MiniExpr { .. } => None,  // TODO: evaluate
+                    NewType::MiniExpr { ident, fields } => {
+                        let mut current = self.visit_ident(location, ident);
+                        for field in fields.iter() {
+                            current = self.visit_field(location, current, &field.ident);
+                        }
+                        // The whole point is it's dynamic, so don't try anything
+                        None
+                    },
                 };
 
                 // call to the New() method
@@ -562,6 +571,19 @@ impl<'o> WalkProc<'o> {
         }
     }
 
+    fn visit_field(&mut self, location: Location, lhs: StaticType<'o>, name: &'o str) -> StaticType<'o> {
+        if let Some(ty) = lhs.basic_type() {
+            if let Some(decl) = ty.get_var_declaration(name) {
+                self.tab.use_symbol(decl.id, location);
+                self.static_type(location, &decl.var_type.type_path)
+            } else {
+                StaticType::None
+            }
+        } else {
+            StaticType::None
+        }
+    }
+
     fn visit_follow(&mut self, location: Location, lhs: StaticType<'o>, rhs: &'o Follow) -> StaticType<'o> {
         match rhs {
             Follow::Index(_, expr) => {
@@ -573,18 +595,7 @@ impl<'o> WalkProc<'o> {
                     _ => StaticType::None,
                 }
             },
-            Follow::Field(_, name) => {
-                if let Some(ty) = lhs.basic_type() {
-                    if let Some(decl) = ty.get_var_declaration(name) {
-                        self.tab.use_symbol(decl.id, location);
-                        self.static_type(location, &decl.var_type.type_path)
-                    } else {
-                        StaticType::None
-                    }
-                } else {
-                    StaticType::None
-                }
-            },
+            Follow::Field(_, name) => self.visit_field(location, lhs, name),
             Follow::Call(_, name, arguments) => {
                 if let Some(ty) = lhs.basic_type() {
                     if let Some(proc) = ty.get_proc(name) {
