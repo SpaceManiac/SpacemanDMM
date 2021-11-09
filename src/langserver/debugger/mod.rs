@@ -460,7 +460,7 @@ handle_request! {
                         }
                     }
 
-                    #[cfg(extools_bundle)] {
+                    #[cfg(auxtools_bundle)] {
                         if debug_server_dll.is_none() {
                             debug_server_dll = Some(self::auxtools_bundle::extract()?);
                         }
