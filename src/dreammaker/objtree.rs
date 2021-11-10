@@ -296,16 +296,27 @@ impl<'a> TypeRef<'a> {
         }
     }
 
+    // Get child node by name whether its a type, proc, or verb.
+    pub fn get_child_type_or_proc(self, name: &str) -> Option<NavigatePathResult<'a>> {
+        if let Some(child) = self.child(name) {
+            return Some(NavigatePathResult::Type(child));
+        }
+        if let Some(proc_ref) = self.get_proc(name) {
+            return Some(NavigatePathResult::ProcPath(proc_ref, ProcDeclKind::Proc));
+        }
+        return None
+    }
+
     /// Navigate the tree according to the given path operator.
-    pub fn navigate(self, op: PathOp, name: &str) -> Option<TypeRef<'a>> {
+    pub fn navigate(self, op: PathOp, name: &str) -> Option<NavigatePathResult<'a>> {
         match op {
             // '/' always looks for a direct child
-            PathOp::Slash => self.child(name),
+            PathOp::Slash => self.get_child_type_or_proc(name),
             // '.' looks for a child of us or of any of our parents
             PathOp::Dot => {
                 let mut next = Some(self);
                 while let Some(current) = next {
-                    if let Some(child) = current.child(name) {
+                    if let Some(child) = current.get_child_type_or_proc(name) {
                         return Some(child);
                     }
                     next = current.parent_path();
@@ -314,7 +325,7 @@ impl<'a> TypeRef<'a> {
             },
             // ':' looks for a child of us or of any of our children
             PathOp::Colon => {
-                if let Some(child) = self.child(name) {
+                if let Some(child) = self.get_child_type_or_proc(name) {
                     return Some(child);
                 }
                 for &idx in self.children.values() {
@@ -341,11 +352,7 @@ impl<'a> TypeRef<'a> {
             let name = s.as_ref();
             if let Some(current) = next {
                 // Check if it's `proc` or `verb` in the path.
-                // Note that this doesn't catch this confusing corner case:
-                //    /proc/foo()
-                //    /proc/bar()
-                //        return .foo
-                // It also doesn't yet handle the difference between `:proc`,
+                // Note that this doesn't yet handle the difference between `:proc`,
                 // `.proc`, and `/proc`, treating everything as `.proc`.
                 if let Some(kind) = ProcDeclKind::from_name(s.as_ref()) {
                     if let Some((_, name)) = iter.next() {
@@ -360,12 +367,17 @@ impl<'a> TypeRef<'a> {
                 }
 
                 // Otherwise keep navigating as normal.
-                next = current.navigate(op, name.as_ref());
+                let next_step = current.navigate(op, name.as_ref());
+                match next_step {
+                    Some(ret @ NavigatePathResult::Type(_)) => next = Some(ret.ty()),
+                    Some(_) => return next_step,
+                    None => next = None,
+                }
             } else {
                 return None;
             }
         }
-        next.map(NavigatePathResult::Type)
+        return next.map(NavigatePathResult::Type)
     }
 
     /// Checks whether this type is a subtype of the given type.
