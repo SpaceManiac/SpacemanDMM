@@ -84,6 +84,7 @@ impl<'a, T: fmt::Display + ?Sized> fmt::Display for Around<'a, T> {
 }
 
 pub type Ident = String;
+pub type Ident2 = Box<str>;
 
 /// The DM path operators.
 ///
@@ -329,8 +330,8 @@ pub enum NewType {
     Prefab(Box<Prefab>),
     /// A "mini-expression" in which to find the prefab to instantiate.
     MiniExpr {
-        ident: Ident,
-        fields: Vec<Field>,
+        ident: Ident2,
+        fields: Box<[Field]>,
     },
 }
 
@@ -341,11 +342,11 @@ pub enum Expression {
     /// then its follows, then its unary operators in reverse order.
     Base {
         /// The unary operations applied to this value, in reverse order.
-        unary: Vec<UnaryOp>,
+        unary: Box<[UnaryOp]>,
         /// The term of the expression.
         term: Box<Spanned<Term>>,
         /// The follow operations applied to this value.
-        follow: Vec<Spanned<Follow>>,
+        follow: Box<[Spanned<Follow>]>,
     },
     /// A binary operation.
     BinaryOp {
@@ -435,12 +436,14 @@ impl Expression {
         match self {
             Expression::Base { unary, term, follow: _ } => {
                 guard!(let Some(truthy) = term.elem.is_truthy() else {
-                    return None
+                    return None;
                 });
                 let mut negation = false;
-                for u in unary {
+                for u in unary.iter() {
                     if let UnaryOp::Not = u {
                         negation = !negation;
+                    } else {
+                        return None;
                     }
                 }
                 if negation {
@@ -538,7 +541,7 @@ pub enum Term {
         /// The type to be instantiated.
         type_: NewType,
         /// The list of arguments to pass to the `New()` proc.
-        args: Option<Vec<Expression>>,
+        args: Option<Box<[Expression]>>,
     },
     /// A `list` call. Associations are represented by assignment expressions.
     List(Vec<Expression>),
@@ -1011,7 +1014,7 @@ impl VarSuffix {
         } else {
             Some(Expression::from(Term::New {
                 type_: NewType::Prefab(Box::new(Prefab::from(vec![(PathOp::Slash, "list".to_owned())]))),
-                args: Some(args),
+                args: Some(args.into_boxed_slice()),
             }))
         }
     }

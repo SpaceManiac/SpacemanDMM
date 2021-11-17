@@ -1900,9 +1900,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }*/
 
         success(Expression::Base {
-            unary: unary_ops,
+            unary: unary_ops.into_boxed_slice(),
             term: Box::new(term),
-            follow,
+            follow: follow.into_boxed_slice(),
         })
     }
 
@@ -1934,9 +1934,10 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         NewType::Prefab(require!(self.prefab_ex(vec![(PathOp::Dot, ident)])))
                     } else {
                         // bare dot
-                        let fields = Vec::new();
-                        let ident = ".".to_owned();
-                        NewType::MiniExpr { ident, fields }
+                        NewType::MiniExpr {
+                            ident: ".".into(),
+                            fields: Default::default(),
+                        }
                     }
                 } else if let Some(ident) = self.ident()? {
                     let mut fields = Vec::new();
@@ -1944,7 +1945,10 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     while let Some(item) = self.field(&mut belongs_to, false)? {
                         fields.push(item);
                     }
-                    NewType::MiniExpr { ident, fields }
+                    NewType::MiniExpr {
+                        ident: ident.into(),
+                        fields: fields.into_boxed_slice(),
+                    }
                 } else if let Some(path) = self.prefab()? {
                     NewType::Prefab(path)
                 } else {
@@ -1953,11 +1957,11 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
                 // try to read an arglist
                 // TODO: communicate what type is being new'd somehow
-                let a = self.arguments(&[], "New")?;
+                let args = self.arguments(&[], "New")?;
 
                 Term::New {
                     type_: t,
-                    args: a,
+                    args: args.map(Vec::into_boxed_slice),
                 }
             },
 

@@ -562,10 +562,10 @@ impl<'a> ConstantFolder<'a> {
                     None
                 };
                 let mut term = self.term(term.elem, base_type_hint)?;
-                for each in follow {
+                for each in Vec::from(follow).into_iter() {
                     term = self.follow(term, each.elem)?;
                 }
-                for each in unary.into_iter().rev() {
+                for each in Vec::from(unary).into_iter().rev() {
                     term = self.unary(term, each)?;
                 }
                 term
@@ -717,7 +717,7 @@ impl<'a> ConstantFolder<'a> {
                     NewType::MiniExpr { .. } => return Err(self.error("non-constant new expression")),
                 },
                 args: match args {
-                    Some(args) => Some(self.arguments(args)?),
+                    Some(args) => Some(self.arguments(args.into())?),
                     None => None,
                 },
             },
