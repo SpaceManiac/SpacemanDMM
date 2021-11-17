@@ -3,11 +3,11 @@ strict digraph {
     node [color="#408080"; style="filled"; fillcolor="white"]
     edge [color="#408080"]
 
-    "langserver" -> "dreamchecker"
+    "dm-langserver" -> "dreamchecker"
     "dreamchecker" -> "dreammaker"
     "dreammaker" -> "interval-tree"
     "dmdoc" -> "dreammaker"
     "dmm-tools" -> "dreammaker"
-    "cli" -> "dmm-tools"
-    "editor" -> "dmm-tools"
+    "dmm-tools-cli" -> "dmm-tools"
+    #"spaceman-dmm" -> "dmm-tools"
 }

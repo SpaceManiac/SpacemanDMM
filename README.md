@@ -10,7 +10,7 @@ basis and binaries are occasionally posted to the [releases] page.
 the map renderer.
 
 The documentation and static analysis tools can be run as part of a continuous
-integration build; see [/tg/station's `.travis.yml`][ci] for an example.
+integration build; see [/tg/station's CI suite][ci] for an example.
 
 Support is currently provided in /tg/station13's coderbus (ping `SpaceManiac`)
 and on the [issue tracker]. Pull requests are welcome.
@@ -18,10 +18,10 @@ and on the [issue tracker]. Pull requests are welcome.
 [DreamMaker]: https://secure.byond.com/
 [language server]: https://langserver.org/
 [releases]: https://github.com/SpaceManiac/SpacemanDMM/releases
-[ci]: https://github.com/tgstation/tgstation/blob/master/.travis.yml
+[ci]: https://github.com/tgstation/tgstation/blob/master/.github/workflows/ci_suite.yml#L45
 [issue tracker]: https://github.com/SpaceManiac/SpacemanDMM/issues
 
-## [Language Server](src/langserver/)
+## [Language Server](crates/dm-langserver/)
 
 The language server provides autocomplete, go-to-definition, and
 [other code intelligence][ls-readme] for the DreamMaker language. The preferred
@@ -37,7 +37,7 @@ implementation is compatible with most [language server clients][lsc].
 [vsc-src]: https://github.com/SpaceManiac/vscode-dm-langclient
 [st3-src]: https://github.com/SpaceManiac/sublime-dm-langclient
 
-## [Map Renderer](src/cli/)
+## [Map Renderer](crates/dmm-tools-cli/)
 
 The map renderer produces full-scale PNGs of `.dmm` map files, including
 configurable emulation of in-game graphical enhancements not usually visible in
@@ -57,7 +57,7 @@ For examples of the maps produced, visit the [SS13 WebMap][meta].
 [/tg/station13]: https://github.com/tgstation/tgstation/
 [meta]: https://affectedarc07.github.io/SS13WebMap/TG/MetaStation/
 
-## [Documentation Generator](src/dmdoc/)
+## [Documentation Generator](crates/dmdoc/)
 
 `dmdoc` is a simple Doxygen-esque documentation generator for DreamMaker code.
 Files, macros, types, vars, and procs can be documented. Documentation comments
@@ -73,7 +73,7 @@ For an example of the generated documentation, see
 
 [tgdocs]: https://codedocs.tgstation13.org/
 
-## [Static Analysis](src/dreamchecker/)
+## [Static Analysis](crates/dreamchecker/)
 
 DreamChecker is SpacemanDMM's static analysis tool. It can generate several
 type-safety diagnostics which DreamMaker does not, and extends the langauge
@@ -91,7 +91,7 @@ in `target/release/`. List and build individual binaries with
 the individual packages.
 
 [rust]: https://www.rust-lang.org/en-US/install.html
-[source readme]: ./src/README.md
+[source readme]: ./crates/README.md
 
 ### Docker
 

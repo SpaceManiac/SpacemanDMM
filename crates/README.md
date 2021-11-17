@@ -1,4 +1,4 @@
-# SpacemanDMM`/src`
+# SpacemanDMM`/crates`
 
 SpacemanDMM consists of several packages. Each may be built by running
 `cargo build -p <name>` from the repository root. If no `-p` flag is
@@ -22,7 +22,9 @@ optimization flags, taking longer to compile but producing faster executables.
 
 * [dmm-tools-cli](dmm-tools-cli/) - the command-line interface to `dmm-tools`.
 
+<!--
 * [spaceman-dmm](spaceman-dmm/) - a very early prototype of a map editor meant as an
   alternative to DreamMaker's default.
+-->
 
 [language server]: https://langserver.org/
