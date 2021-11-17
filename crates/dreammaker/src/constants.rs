@@ -70,10 +70,16 @@ pub enum Constant {
     String(String),
     /// A resource literal.
     Resource(String),
-    /// An integer literal.
-    Int(i32),
-    /// A floating-point literal.
+    /// A floating-point (or integer) literal, following BYOND's rules.
     Float(f32),
+}
+
+impl Constant {
+    const BIT_MASK: u32 = 0xffffff;
+
+    fn from_bit_op(x: u32) -> Constant {
+        Constant::Float((x & Constant::BIT_MASK) as f32)
+    }
 }
 
 // Manual Hash and Eq impls using OrderedFloat, so that we get the desired
@@ -89,7 +95,6 @@ impl std::hash::Hash for Constant {
             Constant::Prefab(pop) => pop.hash(state),
             Constant::String(s) => s.hash(state),
             Constant::Resource(s) => s.hash(state),
-            Constant::Int(i) => i.hash(state),
             Constant::Float(f) => OrderedFloat(*f).hash(state),
         }
     }
@@ -105,10 +110,7 @@ impl std::cmp::PartialEq for Constant {
             (Constant::Prefab(pop1), Constant::Prefab(pop2)) => pop1 == pop2,
             (Constant::String(s1), Constant::String(s2)) => s1 == s2,
             (Constant::Resource(s1), Constant::Resource(s2)) => s1 == s2,
-            (Constant::Int(i1), Constant::Int(i2)) => i1 == i2,
             (Constant::Float(f1), Constant::Float(f2)) => OrderedFloat(*f1) == OrderedFloat(*f2),
-            (Constant::Int(i), Constant::Float(f)) |
-            (Constant::Float(f), Constant::Int(i)) => OrderedFloat(*f) == OrderedFloat(*i as f32),
             _ => false,
         }
     }
@@ -165,7 +167,6 @@ impl Constant {
     pub fn to_bool(&self) -> bool {
         match *self {
             Constant::Null(_) => false,
-            Constant::Int(i) => i != 0,
             Constant::Float(f) => f != 0.,
             Constant::String(ref s) => !s.is_empty(),
             _ => true,
@@ -174,7 +175,6 @@ impl Constant {
 
     pub fn to_float(&self) -> Option<f32> {
         match *self {
-            Constant::Int(i) => Some(i as f32),
             Constant::Float(f) => Some(f),
             _ => None,
         }
@@ -182,7 +182,6 @@ impl Constant {
 
     pub fn to_int(&self) -> Option<i32> {
         match *self {
-            Constant::Int(i) => Some(i),
             Constant::Float(f) => Some(f as i32),
             _ => None,
         }
@@ -242,7 +241,8 @@ impl Constant {
 
     pub fn index(&self, key: &Constant) -> Option<&Constant> {
         match (self, key) {
-            (&Constant::List(ref elements), &Constant::Int(i)) => return elements.get(i as usize).map(|&(ref k, _)| k),
+            // Narrowing conversion is intentional.
+            (&Constant::List(ref elements), &Constant::Float(i)) => return elements.get(i as usize).map(|&(ref k, _)| k),
             (&Constant::List(ref elements), key) => for &(ref k, ref v) in elements {
                 if key == k {
                     return v.as_ref();
@@ -255,7 +255,6 @@ impl Constant {
 
     pub fn negate(&self) -> Result<Constant, EvalError> {
         Ok(match *self {
-            Constant::Int(i) => Constant::Int(-i),
             Constant::Float(i) => Constant::Float(-i),
             _ => return Err(EvalError),
         })
@@ -270,7 +269,7 @@ impl Default for Constant {
 
 impl From<i32> for Constant {
     fn from(value: i32) -> Constant {
-        Constant::Int(value)
+        Constant::Float(value as f32)
     }
 }
 
@@ -283,8 +282,8 @@ impl From<f32> for Constant {
 impl From<bool> for Constant {
     fn from(value: bool) -> Constant {
         match value {
-            true => Constant::Int(1),
-            false => Constant::Int(0),
+            true => Constant::Float(1.),
+            false => Constant::Float(0.),
         }
     }
 }
@@ -380,7 +379,6 @@ impl fmt::Display for Constant {
             Constant::Prefab(ref val) => write!(f, "{}", val),
             Constant::String(ref val) => crate::lexer::Quote(val).fmt(f),
             Constant::Resource(ref val) => write!(f, "'{}'", val),
-            Constant::Int(val) => crate::lexer::FormatFloat(val as f32).fmt(f),
             Constant::Float(val) => crate::lexer::FormatFloat(val).fmt(f),
         }
     }
@@ -648,11 +646,10 @@ impl<'a> ConstantFolder<'a> {
 
         Ok(match (op, term) {
             // int ops
-            (UnaryOp::Neg, Int(i)) => Int(-i),
-            (UnaryOp::BitNot, Int(i)) => Int(!i),
-            (UnaryOp::Not, Int(i)) => Int(if i != 0 { 0 } else { 1 }),
-            // float ops
             (UnaryOp::Neg, Float(i)) => Float(-i),
+            (UnaryOp::BitNot, Float(f)) => Constant::from_bit_op(!(f as u32)),
+            (UnaryOp::Not, c) => Constant::from(!c.to_bool()),
+            // float ops
             // unsupported
             (op, term) => return Err(self.error(format!("non-constant unary operation: {}", op.around(&term)))),
         })
@@ -664,9 +661,6 @@ impl<'a> ConstantFolder<'a> {
         macro_rules! numeric {
             ($name:ident $oper:tt) => {
                 match (op, lhs, rhs) {
-                    (BinaryOp::$name, Int(lhs), Int(rhs)) => return Ok(Constant::from(lhs $oper rhs)),
-                    (BinaryOp::$name, Int(lhs), Float(rhs)) => return Ok(Constant::from((lhs as f32) $oper rhs)),
-                    (BinaryOp::$name, Float(lhs), Int(rhs)) => return Ok(Constant::from(lhs $oper (rhs as f32))),
                     (BinaryOp::$name, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs $oper rhs)),
                     (_, lhs_, rhs_) => { lhs = lhs_; rhs = rhs_; }
                 }
@@ -682,17 +676,6 @@ impl<'a> ConstantFolder<'a> {
         numeric!(Greater >);
         numeric!(GreaterEq >=);
         match (op, lhs, rhs) {
-            (BinaryOp::Pow, Int(lhs), Int(rhs)) => {
-                use std::convert::TryFrom;
-                if let Ok(rhs2) = u32::try_from(rhs) {
-                    if let Some(result) = lhs.checked_pow(rhs2) {
-                        return Ok(Constant::from(result));
-                    }
-                }
-                return Ok(Constant::from((lhs as f32).powf(rhs as f32)));
-            }
-            (BinaryOp::Pow, Int(lhs), Float(rhs)) => return Ok(Constant::from((lhs as f32).powf(rhs))),
-            (BinaryOp::Pow, Float(lhs), Int(rhs)) => return Ok(Constant::from(lhs.powi(rhs))),
             (BinaryOp::Pow, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs.powf(rhs))),
             (_, lhs_, rhs_) => {
                 lhs = lhs_;
@@ -703,7 +686,7 @@ impl<'a> ConstantFolder<'a> {
         macro_rules! integer {
             ($name:ident $oper:tt) => {
                 match (op, lhs, rhs) {
-                    (BinaryOp::$name, Int(lhs), Int(rhs)) => return Ok(Int(lhs $oper rhs)),
+                    (BinaryOp::$name, Float(lhs), Float(rhs)) => return Ok(Constant::from_bit_op((lhs as u32) $oper (rhs as u32))),
                     (_, lhs_, rhs_) => { lhs = lhs_; rhs = rhs_; }
                 }
             }
@@ -759,9 +742,7 @@ impl<'a> ConstantFolder<'a> {
                         return Err(self.error(format!("malformed defined() call, must have 1 argument and instead has {}", args.len())));
                     }
                     match args[0].as_term() {
-                        Some(Term::Ident(ref ident)) => {
-                            Constant::Int(if defines.contains_key(ident) { 1 } else { 0 })
-                        },
+                        Some(Term::Ident(ref ident)) => Constant::from(defines.contains_key(ident)),
                         _ => return Err(self.error("malformed defined() call, argument given isn't an Ident.")),
                     }
                 }
@@ -772,7 +753,7 @@ impl<'a> ConstantFolder<'a> {
             Term::Ident(ident) => self.ident(ident, false)?,
             Term::String(v) => Constant::String(v),
             Term::Resource(v) => Constant::Resource(v),
-            Term::Int(v) => Constant::Int(v),
+            Term::Int(v) => Constant::Float(v as f32),
             Term::Float(v) => Constant::from(v),
             Term::Expr(expr) => self.expr(*expr, type_hint)?,
             _ => return Err(self.error("non-constant expression".to_owned())),

@@ -548,7 +548,7 @@ impl<'s> Default for Sprite<'s> {
 
 fn plane_of<'s, T: GetVar<'s> + ?Sized>(objtree: &'s ObjectTree, atom: &T) -> i32 {
     match atom.get_var("plane", objtree) {
-        &Constant::Int(i) => i,
+        Constant::Float(i) => *i as i32,
         other => {
             eprintln!("not a plane: {:?} on {:?}", other, atom.get_path());
             0
@@ -558,7 +558,6 @@ fn plane_of<'s, T: GetVar<'s> + ?Sized>(objtree: &'s ObjectTree, atom: &T) -> i3
 
 pub(crate) fn layer_of<'s, T: GetVar<'s> + ?Sized>(objtree: &'s ObjectTree, atom: &T) -> Layer {
     match atom.get_var("layer", objtree) {
-        &Constant::Int(i) => Layer::from(i),
         &Constant::Float(f) => Layer::from(f),
         other => {
             eprintln!("not a layer: {:?} on {:?}", other, atom.get_path());
@@ -569,7 +568,7 @@ pub(crate) fn layer_of<'s, T: GetVar<'s> + ?Sized>(objtree: &'s ObjectTree, atom
 
 pub fn color_of<'s, T: GetVar<'s> + ?Sized>(objtree: &'s ObjectTree, atom: &T) -> [u8; 4] {
     let alpha = match atom.get_var("alpha", objtree) {
-        &Constant::Int(i) if i >= 0 && i <= 255 => i as u8,
+        &Constant::Float(i) if i >= 0. && i <= 255. => i as u8,
         _ => 255,
     };
 

@@ -380,8 +380,8 @@ impl RenderPass for Pretty {
             add_to(overlays, atom, "fire_0");
             add_to(overlays, atom, "fire_off");
         } else if atom.istype("/obj/structure/tank_dispenser/") {
-            if let &Constant::Int(oxygen) = atom.get_var("oxygentanks", objtree) {
-                match oxygen {
+            if let &Constant::Float(oxygen) = atom.get_var("oxygentanks", objtree) {
+                match oxygen as i32 {
                     4..=std::i32::MAX => add_to(overlays, atom, "oxygen-4"),
                     3 => add_to(overlays, atom, "oxygen-3"),
                     2 => add_to(overlays, atom, "oxygen-2"),
@@ -389,8 +389,8 @@ impl RenderPass for Pretty {
                     _ => {}
                 }
             }
-            if let &Constant::Int(plasma) = atom.get_var("plasmatanks", objtree) {
-                match plasma {
+            if let &Constant::Float(plasma) = atom.get_var("plasmatanks", objtree) {
+                match plasma as i32 {
                     5..=std::i32::MAX => add_to(overlays, atom, "plasma-5"),
                     4 => add_to(overlays, atom, "plasma-4"),
                     3 => add_to(overlays, atom, "plasma-3"),

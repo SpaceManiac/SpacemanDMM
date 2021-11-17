@@ -210,7 +210,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
     }
     macro_rules! int {
         ($e:expr) => {
-            Constant::Int($e)
+            Constant::Float($e as f32)
         };
     }
     macro_rules! string {

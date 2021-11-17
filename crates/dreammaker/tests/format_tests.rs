@@ -41,8 +41,8 @@ fn lists() {
     use dm::constants::Constant::{self, *};
 
     assert_eq!(List(vec![
-        (Constant::string("KNOCKDOWN"), Some(Int(0))),
-        (Constant::string("THROW"), Some(Int(0))),
+        (Constant::string("KNOCKDOWN"), Some(Float(0.))),
+        (Constant::string("THROW"), Some(Float(0.))),
     ]).to_string(), r#"list("KNOCKDOWN" = 0, "THROW" = 0)"#);
     assert_eq!(List(vec![
         (Constant::string("neutral"), None),
