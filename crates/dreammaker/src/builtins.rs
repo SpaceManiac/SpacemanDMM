@@ -203,7 +203,7 @@ pub fn register_builtins(tree: &mut ObjectTree) {
     macro_rules! path {
         ($(/$elem:ident)*) => {
             Constant::Prefab(super::constants::Pop {
-                path: vec![$(stringify!($elem).to_owned()),*],
+                path: vec![$(stringify!($elem).into()),*].into_boxed_slice(),
                 vars: Default::default(),
             })
         }

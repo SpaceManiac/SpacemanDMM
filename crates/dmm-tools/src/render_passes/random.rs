@@ -74,7 +74,7 @@ impl RenderPass for Random {
                     }
 
                     if let Constant::Prefab(pop) = lootspawn {
-                        if let Some(ty) = objtree.type_by_path(&pop.path) {
+                        if let Some(ty) = objtree.type_by_path(pop.path.iter()) {
                             // Usually pixel offsets would be set here, but
                             // that's not currently supported.
                             output.push(Atom::from(ty));

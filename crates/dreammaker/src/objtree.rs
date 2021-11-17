@@ -6,7 +6,7 @@ use std::fmt;
 use indexmap::IndexMap;
 use ahash::RandomState;
 
-use super::ast::{Expression, VarType, VarSuffix, PathOp, Parameter, Block, ProcDeclKind, Ident};
+use super::ast::{Expression, VarType, VarTypeBuilder, VarSuffix, PathOp, Parameter, Block, ProcDeclKind, Ident};
 use super::constants::{Constant, Pop};
 use super::docs::DocCollection;
 use super::{DMError, Location, Context, Severity};
@@ -742,7 +742,7 @@ impl ObjectTree {
     pub fn type_by_constant(&self, constant: &Constant) -> Option<TypeRef> {
         match *constant {
             Constant::String(ref string_path) => self.find(string_path),
-            Constant::Prefab(Pop { ref path, .. }) => self.type_by_path(path),
+            Constant::Prefab(Pop { ref path, .. }) => self.type_by_path(path.iter()),
             _ => None,
         }
     }
@@ -1017,7 +1017,7 @@ impl ObjectTree {
             type_path.push(prev.to_owned());
             prev = each;
         }
-        let mut var_type = VarType {
+        let mut var_type = VarTypeBuilder {
             flags,
             type_path,
         };
@@ -1036,7 +1036,7 @@ impl ObjectTree {
             },
             declaration: if is_declaration {
                 Some(VarDeclaration {
-                    var_type,
+                    var_type: var_type.build(),
                     location,
                     id: symbols.allocate(),
                 })

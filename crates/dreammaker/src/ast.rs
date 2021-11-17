@@ -83,8 +83,47 @@ impl<'a, T: fmt::Display + ?Sized> fmt::Display for Around<'a, T> {
     }
 }
 
+// Original `Ident` is an alias for `String`.
 pub type Ident = String;
-pub type Ident2 = Box<str>;
+
+// Ident2 is an opaque type which promises a limited interface.
+// It's a `Box<str>` for now (smaller than `Ident` by 8 bytes),
+// but could be replaced by interning later.
+#[derive(Clone, Eq, PartialEq)]
+pub struct Ident2 {
+    inner: Box<str>,
+}
+
+impl<'a> From<&'a str> for Ident2 {
+    fn from(v: &'a str) -> Self {
+        Ident2 { inner: v.into() }
+    }
+}
+
+impl From<String> for Ident2 {
+    fn from(v: String) -> Self {
+        Ident2 { inner: v.into() }
+    }
+}
+
+impl std::ops::Deref for Ident2 {
+    type Target = str;
+    fn deref(&self) -> &str {
+        &*self.inner
+    }
+}
+
+impl fmt::Display for Ident2 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.inner.fmt(f)
+    }
+}
+
+impl fmt::Debug for Ident2 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.inner.fmt(f)
+    }
+}
 
 /// The DM path operators.
 ///
@@ -116,11 +155,11 @@ impl fmt::Display for PathOp {
 }
 
 /// A (typically absolute) tree path where the path operator is irrelevant.
-pub type TreePath = Vec<Ident>;
+pub type TreePath = Box<[Ident]>;
 
-pub struct FormatTreePath<'a>(pub &'a [Ident]);
+pub struct FormatTreePath<'a, T>(pub &'a [T]);
 
-impl<'a> fmt::Display for FormatTreePath<'a> {
+impl<'a, T: fmt::Display> fmt::Display for FormatTreePath<'a, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for each in self.0.iter() {
             write!(f, "/{}", each)?;
@@ -954,31 +993,11 @@ impl VarType {
     pub fn is_normal(&self) -> bool {
         self.flags.is_normal()
     }
-
-    pub fn suffix(&mut self, suffix: &VarSuffix) {
-        if !suffix.list.is_empty() {
-            self.type_path.insert(0, "list".to_owned());
-        }
-    }
 }
 
 impl FromIterator<String> for VarType {
     fn from_iter<T: IntoIterator<Item=String>>(iter: T) -> Self {
-        let mut flags = VarTypeFlags::default();
-        let type_path = iter
-            .into_iter()
-            .skip_while(|p| {
-                if let Some(flag) = VarTypeFlags::from_name(p) {
-                    flags |= flag;
-                    true
-                } else {
-                    false
-                }
-            }).collect();
-        VarType {
-            flags,
-            type_path,
-        }
+        VarTypeBuilder::from_iter(iter).build()
     }
 }
 
@@ -990,6 +1009,49 @@ impl fmt::Display for VarType {
             fmt.write_str("/")?;
         }
         Ok(())
+    }
+}
+
+/// Builder for `VarType` with useful mutation methods.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct VarTypeBuilder {
+    pub flags: VarTypeFlags,
+    pub type_path: Vec<Ident>,
+}
+
+impl VarTypeBuilder {
+    pub fn suffix(&mut self, suffix: &VarSuffix) {
+        if !suffix.list.is_empty() {
+            self.type_path.insert(0, "list".to_owned());
+        }
+    }
+
+    pub fn build(self) -> VarType {
+        VarType {
+            flags: self.flags,
+            type_path: self.type_path.into_boxed_slice(),
+        }
+    }
+}
+
+impl FromIterator<String> for VarTypeBuilder {
+    fn from_iter<T: IntoIterator<Item=String>>(iter: T) -> Self {
+        let mut flags = VarTypeFlags::default();
+        let type_path = iter
+            .into_iter()
+            .skip_while(|p| {
+                if let Some(flag) = VarTypeFlags::from_name(p) {
+                    flags |= flag;
+                    true
+                } else {
+                    false
+                }
+            })
+            .collect();
+        VarTypeBuilder {
+            flags,
+            type_path,
+        }
     }
 }
 
@@ -1052,7 +1114,7 @@ pub enum Statement {
     },
     ForList {
         var_type: Option<VarType>,
-        name: Ident,
+        name: Ident2,
         /// If zero, uses the declared type of the variable.
         input_type: Option<InputType>,
         /// Defaults to 'world'.
@@ -1061,7 +1123,7 @@ pub enum Statement {
     },
     ForRange {
         var_type: Option<VarType>,
-        name: Ident,
+        name: Ident2,
         start: Box<Expression>,
         end: Box<Expression>,
         step: Option<Box<Expression>>,
@@ -1085,7 +1147,7 @@ pub enum Statement {
     },
     TryCatch {
         try_block: Block,
-        catch_params: Vec<TreePath>,
+        catch_params: Box<[TreePath]>,
         catch_block: Block,
     },
     Continue(Option<Ident>),

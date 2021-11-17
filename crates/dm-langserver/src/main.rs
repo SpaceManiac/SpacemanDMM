@@ -713,12 +713,12 @@ impl<'a> Engine<'a> {
             next = self.objtree.find("/mob");
         } else {
             next = match self.find_unscoped_var(iter, next, proc_name, first) {
-                UnscopedVar::Parameter { param, .. } => self.objtree.type_by_path(&param.var_type.type_path),
+                UnscopedVar::Parameter { param, .. } => self.objtree.type_by_path(param.var_type.type_path.iter()),
                 UnscopedVar::Variable { ty, .. } => match ty.get_var_declaration(first) {
-                    Some(decl) => self.objtree.type_by_path(&decl.var_type.type_path),
+                    Some(decl) => self.objtree.type_by_path(decl.var_type.type_path.iter()),
                     None => None,
                 },
-                UnscopedVar::Local { var_type, .. } => self.objtree.type_by_path(&var_type.type_path),
+                UnscopedVar::Local { var_type, .. } => self.objtree.type_by_path(var_type.type_path.iter()),
                 UnscopedVar::None => None,
             };
         }
@@ -727,7 +727,7 @@ impl<'a> Engine<'a> {
         for var_name in priors {
             if let Some(current) = next.take() {
                 if let Some(decl) = current.get_var_declaration(var_name) {
-                    next = self.objtree.type_by_path(&decl.var_type.type_path);
+                    next = self.objtree.type_by_path(decl.var_type.type_path.iter());
                 }
             } else {
                 break;

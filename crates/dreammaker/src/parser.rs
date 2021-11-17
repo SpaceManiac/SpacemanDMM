@@ -589,14 +589,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         self.tree_entries(self.tree.root().index(), None, None, Token::Eof)
     }
 
-    fn tree_block(&mut self, current: NodeIndex, proc_kind: Option<ProcDeclKind>, var_type: Option<VarType>) -> Status<()> {
+    fn tree_block(&mut self, current: NodeIndex, proc_kind: Option<ProcDeclKind>, var_type: Option<VarTypeBuilder>) -> Status<()> {
         leading!(self.exact(Token::Punct(Punctuation::LBrace)));
         Ok(Some(require!(
             self.tree_entries(current, proc_kind, var_type, Token::Punct(Punctuation::RBrace))
         )))
     }
 
-    fn tree_entries(&mut self, current: NodeIndex, proc_kind: Option<ProcDeclKind>, var_type: Option<VarType>, terminator: Token) -> Status<()> {
+    fn tree_entries(&mut self, current: NodeIndex, proc_kind: Option<ProcDeclKind>, var_type: Option<VarTypeBuilder>, terminator: Token) -> Status<()> {
         loop {
             let message: Cow<'static, str> = match terminator {
                 Token::Eof => "newline".into(),
@@ -694,7 +694,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }
     }
 
-    fn tree_entry(&mut self, mut current: NodeIndex, mut proc_kind: Option<ProcDeclKind>, mut var_type: Option<VarType>) -> Status<()> {
+    fn tree_entry(&mut self, mut current: NodeIndex, mut proc_kind: Option<ProcDeclKind>, mut var_type: Option<VarTypeBuilder>) -> Status<()> {
         // tree_entry :: path ';'
         // tree_entry :: path tree_block
         // tree_entry :: path '=' expression ';'
@@ -731,7 +731,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             ($what:expr) => {
                 let each = $what;
                 if each == "var" {
-                    var_type = Some(VarType::default());
+                    var_type = Some(VarTypeBuilder::default());
                 } else if let Some(var_type) = var_type.as_mut() {
                     if let Some(flag) = VarTypeFlags::from_name(each) {
                         var_type.flags |= flag;
@@ -821,7 +821,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
                 if let Some(mut var_type) = var_type {
                     var_type.suffix(&var_suffix);
-                    self.tree.declare_var(current, last_part, location, docs, var_type, Some(expression));
+                    self.tree.declare_var(current, last_part, location, docs, var_type.build(), Some(expression));
                 } else {
                     self.tree.override_var(current, last_part, location, docs, expression);
                 }
@@ -853,7 +853,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         var_type.suffix(&var_suffix);
                         let node = self.tree[current].path.to_owned();
                         self.annotate(entry_start, || Annotation::Variable(reconstruct_path(&node, proc_kind, Some(&var_type), last_part)));
-                        self.tree.declare_var(current, last_part, self.location, docs, var_type, var_suffix.into_initializer());
+                        self.tree.declare_var(current, last_part, self.location, docs, var_type.build(), var_suffix.into_initializer());
                     }
                 } else if ProcDeclKind::from_name(last_part).is_some() {
                     self.error("`proc;` item has no effect")
@@ -1061,7 +1061,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 .with_errortype("var_in_proc_parameter")
                 .register(self.context);
         }
-        let mut var_type: VarType = path.into_iter().collect();
+        let mut var_type: VarTypeBuilder = path.into_iter().collect();
         if var_type.flags.is_static() {
             DMError::new(leading_loc, "'static/' has no effect here")
                 .set_severity(Severity::Warning)
@@ -1088,7 +1088,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }
 
         success(Parameter {
-            var_type,
+            var_type: var_type.build(),
             name,
             default,
             input_type,
@@ -1315,7 +1315,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                                 require!(self.exact(Token::Punct(Punctuation::RParen)));
                                 return spanned(Statement::ForList {
                                     var_type: None,
-                                    name,
+                                    name: name.into(),
                                     input_type: None,
                                     in_list: Some(Box::new(rhs)),
                                     block: require!(self.block(&LoopContext::ForList)),
@@ -1351,7 +1351,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 require!(self.exact(Token::Punct(Punctuation::RParen)));
                 spanned(Statement::ForList {
                     var_type,
-                    name,
+                    name: name.into(),
                     input_type,
                     in_list: in_list.map(Box::new),
                     block: require!(self.block(&LoopContext::ForList)),
@@ -1408,7 +1408,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             if let Some(()) = self.exact(Token::Punct(Punctuation::LParen))? {
                 catch_params = require!(self.separated(Punctuation::Comma, Punctuation::RParen, None, |this| {
                     // TODO: improve upon this cheap approximation
-                    success(leading!(this.tree_path(true)).1)
+                    success(leading!(this.tree_path(true)).1.into_boxed_slice())
                 }));
             } else {
                 catch_params = Vec::new();
@@ -1416,7 +1416,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             let catch_block = require!(self.block(loop_ctx));
             spanned(Statement::TryCatch {
                 try_block,
-                catch_params,
+                catch_params: catch_params.into_boxed_slice(),
                 catch_block,
             })
         // SINGLE-LINE STATEMENTS
@@ -1509,7 +1509,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     None => return Err(self.error("'var' must be followed by a name")),
                 };
 
-                let mut var_type = tree_path.into_iter().collect::<VarType>();
+                let mut var_type = tree_path.into_iter().collect::<VarTypeBuilder>();
                 if var_type.flags.is_tmp() {
                     DMError::new(type_path_start, "var/tmp has no effect here")
                         .set_severity(Severity::Warning)
@@ -1538,7 +1538,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 var_type.suffix(&var_suffix);
 
                 if self.annotations.is_some() {
-                    vars.push((self.location, var_type.clone(), name.clone()));
+                    vars.push((self.location, var_type.clone().build(), name.clone()));
                 }
 
                 let value = if let Some(()) = self.exact(Token::Punct(Punctuation::Assign))? {
@@ -1558,7 +1558,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         .register(self.context);
                 }
 
-                var_stmts.push(VarStatement { var_type, name, value });
+                var_stmts.push(VarStatement { var_type: var_type.build(), name, value });
                 if in_for || self.exact(Token::Punct(Punctuation::Comma))?.is_none() {
                     break;
                 }
@@ -1616,7 +1616,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         // {...}
         success(Statement::ForRange {
             var_type,
-            name,
+            name: name.into(),
             start,
             end,
             step: step.map(Box::new),
@@ -2339,7 +2339,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     }
 }
 
-fn reconstruct_path(node: &str, proc_kind: Option<ProcDeclKind>, var_type: Option<&VarType>, last: &str) -> Vec<Ident> {
+fn reconstruct_path(node: &str, proc_kind: Option<ProcDeclKind>, var_type: Option<&VarTypeBuilder>, last: &str) -> Vec<Ident> {
     let mut result = Vec::new();
     for entry in node.split('/').skip(1) {
         result.push(entry.to_owned());

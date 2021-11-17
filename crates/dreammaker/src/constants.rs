@@ -628,9 +628,9 @@ impl<'a> ConstantFolder<'a> {
             // its const variables (but not non-const variables).
             (Constant::Null(Some(type_hint)), Follow::Field(_, field_name)) => {
                 let mut full_path = String::new();
-                for each in type_hint {
+                for each in type_hint.iter() {
                     full_path.push('/');
-                    full_path.push_str(&each);
+                    full_path.push_str(each);
                 }
                 match self.tree.as_mut().and_then(|t| t.find(&full_path)).map(|t| t.index()) {
                     Some(idx) => self.recursive_lookup(idx, &field_name, true),
@@ -795,7 +795,7 @@ impl<'a> ConstantFolder<'a> {
                 FormatTypePath(&prefab.path), relative_to))),
         };
 
-        let path = found.to_path();
+        let path = found.to_path().into_boxed_slice();
         Ok(Pop { path, vars })
     }
 

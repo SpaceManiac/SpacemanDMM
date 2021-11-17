@@ -150,7 +150,7 @@ impl<'o> AssumptionSet<'o> {
             },
             Constant::New { type_, args: _ } => {
                 if let Some(pop) = type_.as_ref() {
-                    if let Some(ty) = objtree.type_by_path(&pop.path) {
+                    if let Some(ty) = objtree.type_by_path(pop.path.iter()) {
                         AssumptionSet::from_valid_instance(ty)
                     } else {
                         AssumptionSet::default()
@@ -162,7 +162,7 @@ impl<'o> AssumptionSet<'o> {
                 }
             },
             Constant::Prefab(pop) => {
-                if let Some(ty) = objtree.type_by_path(&pop.path) {
+                if let Some(ty) = objtree.type_by_path(pop.path.iter()) {
                     assumption_set![Assumption::Truthy(false), Assumption::IsPath(true, ty)]
                 } else {
                     AssumptionSet::default()
@@ -1701,7 +1701,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Term::Prefab(prefab) => {
                 if let Some(nav) = self.ty.navigate_path(&prefab.path) {
                     let ty = nav.ty();  // TODO: handle proc/verb paths here
-                    let pop = dm::constants::Pop::from(ty.path.split("/").skip(1).map(ToOwned::to_owned).collect::<Vec<_>>());
+                    let pop = dm::constants::Pop::from(ty.path.split("/").skip(1).map(ToOwned::to_owned).collect::<Vec<_>>().into_boxed_slice());
                     Analysis {
                         static_ty: StaticType::None,
                         aset: assumption_set![Assumption::IsPath(true, nav.ty())].into(),
