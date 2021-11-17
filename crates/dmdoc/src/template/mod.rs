@@ -5,7 +5,7 @@ use tera::Tera;
 
 pub fn builtin() -> Result<Tera, tera::Error> {
     #[cfg(debug_assertions)] {
-        Tera::new(concat!(env!("CARGO_MANIFEST_DIR"), "/template/*.html"))
+        Tera::new(concat!(env!("CARGO_MANIFEST_DIR"), "/src/template/*.html"))
     }
 
     #[cfg(not(debug_assertions))] {
@@ -25,7 +25,7 @@ pub fn save_resources(output_path: &Path) -> std::io::Result<()> {
     #[cfg(debug_assertions)]
     macro_rules! resources {
         ($($name:expr,)*) => {
-            let env = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/template"));
+            let env = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/src/template"));
             $(
                 std::fs::copy(&env.join($name), &output_path.join($name))?;
             )*

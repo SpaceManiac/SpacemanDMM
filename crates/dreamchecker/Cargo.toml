@@ -4,14 +4,6 @@ version = "1.7.1"
 authors = ["Tad Hardesty <tad@platymuus.com>"]
 edition = "2018"
 
-[lib]
-name = "dreamchecker"
-path = "lib.rs"
-
-[[bin]]
-name = "dreamchecker"
-path = "main.rs"
-
 [dependencies]
 dreammaker = { path = "../dreammaker" }
 guard = "0.5.0"

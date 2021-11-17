@@ -6,7 +6,7 @@ edition = "2018"
 
 [[bin]]
 name = "editor"
-path = "main.rs"
+path = "src/main.rs"
 
 [dependencies]
 dreammaker = { path = "../dreammaker" }

@@ -158,16 +158,16 @@ pub fn configure(_objtree: &ObjectTree) -> Vec<Tool> {
     Tool::new("Place", place::Place::default())
         .help("Click to add an instance to the tile.")
         .show_objtree()
-        .png(include_bytes!("../../res/pencil.png"))
+        .png(include_bytes!("../res/pencil.png"))
         .build(&mut tools);
     Tool::new("Rectangle", Dummy)
         .help("Click and drag to fill a rectangular area.")
         .show_objtree()
-        .png(include_bytes!("../../res/resize.png"))
+        .png(include_bytes!("../res/resize.png"))
         .build(&mut tools);
     Tool::new("Select", Dummy)
         .help("Click and drag to select a region. Drag again to move it.")
-        .png(include_bytes!("../../res/select.png"))
+        .png(include_bytes!("../res/select.png"))
         .build(&mut tools);
     tools
 }

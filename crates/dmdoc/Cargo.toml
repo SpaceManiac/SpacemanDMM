@@ -5,10 +5,6 @@ authors = ["Tad Hardesty <tad@platymuus.com>"]
 homepage = "https://github.com/SpaceManiac/SpacemanDMM/blob/master/src/dmdoc/README.md"
 edition = "2018"
 
-[[bin]]
-name = "dmdoc"
-path = "main.rs"
-
 [dependencies]
 dreammaker = { path = "../dreammaker" }
 pulldown-cmark = "0.7.0"

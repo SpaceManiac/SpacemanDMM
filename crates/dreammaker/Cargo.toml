@@ -4,9 +4,6 @@ version = "0.1.0"
 authors = ["Tad Hardesty <tad@platymuus.com>"]
 edition = "2018"
 
-[lib]
-path = "lib.rs"
-
 [dependencies]
 interval-tree = { path = "../interval-tree" }
 builtins-proc-macro = { path = "../builtins-proc-macro" }

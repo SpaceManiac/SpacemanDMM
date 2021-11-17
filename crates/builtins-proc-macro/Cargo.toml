@@ -5,7 +5,6 @@ authors = ["Tad Hardesty <tad@platymuus.com>"]
 edition = "2018"
 
 [lib]
-path = "lib.rs"
 proc-macro = true
 
 [dependencies]

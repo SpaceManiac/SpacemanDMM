@@ -8,8 +8,5 @@ keywords = ["datastructure", "interval", "tree", "map"]
 license-file = "LICENSE"
 edition = "2018"
 
-[lib]
-path = "lib.rs"
-
 [dev-dependencies]
 rand = "0.7.0"

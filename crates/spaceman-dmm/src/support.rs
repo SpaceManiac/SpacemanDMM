@@ -18,7 +18,7 @@ pub fn run(title: String, clear_color: [f32; 4]) -> EditorScene {
     let context = glutin::ContextBuilder::new().with_vsync(true);
     let window = glutin::WindowBuilder::new()
         .with_title(title)
-        .with_window_icon(glutin::Icon::from_rgba(include_bytes!("res/gasmask.raw").to_vec(), 16, 16).ok())
+        .with_window_icon(glutin::Icon::from_rgba(include_bytes!("../res/gasmask.raw").to_vec(), 16, 16).ok())
         .with_min_dimensions(glutin::dpi::LogicalSize::new(640.0, 480.0))
         .with_dimensions(glutin::dpi::LogicalSize::new(1300.0, 730.0));
     let (window, mut device, mut factory, mut main_color, mut main_depth) =
