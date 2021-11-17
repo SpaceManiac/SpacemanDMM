@@ -100,11 +100,11 @@ impl RenderPass for Random {
         const LEGIT_POSTERS: u32 = 35;
 
         if atom.istype("/obj/structure/sign/poster/contraband/random/") {
-            sprite.icon_state = bumpalo::format!(in bump, "poster{}", rng.gen_range(1, 1 + CONTRABAND_POSTERS)).into_bump_str();
+            sprite.icon_state = bumpalo::format!(in bump, "poster{}", rng.gen_range(1..=CONTRABAND_POSTERS)).into_bump_str();
         } else if atom.istype("/obj/structure/sign/poster/official/random/") {
-            sprite.icon_state = bumpalo::format!(in bump, "poster{}_legit", rng.gen_range(1, 1 + LEGIT_POSTERS)).into_bump_str();
+            sprite.icon_state = bumpalo::format!(in bump, "poster{}_legit", rng.gen_range(1..=LEGIT_POSTERS)).into_bump_str();
         } else if atom.istype("/obj/structure/sign/poster/random/") {
-            let i = 1 + rng.gen_range(0, CONTRABAND_POSTERS + LEGIT_POSTERS);
+            let i = 1 + rng.gen_range(0..CONTRABAND_POSTERS + LEGIT_POSTERS);
             if i <= CONTRABAND_POSTERS {
                 sprite.icon_state = bumpalo::format!(in bump, "poster{}", i).into_bump_str();
             } else {
@@ -112,7 +112,7 @@ impl RenderPass for Random {
             }
         } else if atom.istype("/obj/item/kirbyplants/random/") || atom.istype("/obj/item/twohanded/required/kirbyplants/random/") {
             sprite.icon = "icons/obj/flora/plants.dmi";
-            let random = rng.gen_range(0, 26);
+            let random = rng.gen_range(0..26);
             if random == 0 {
                 sprite.icon_state = "applebush";
             } else {
@@ -170,7 +170,7 @@ impl RenderPass for Random {
 
 fn pickweight<'a>(list: &[&'a (Constant, Option<Constant>)]) -> &'a Constant {
     let mut total: i32 = list.iter().map(|(_, v)| v.as_ref().unwrap_or(Constant::null()).to_int().unwrap_or(1)).sum();
-    total = rand::thread_rng().gen_range(1, total + 1);
+    total = rand::thread_rng().gen_range(1..=total);
     for (k, v) in list.iter() {
         total -= v.as_ref().unwrap_or(Constant::null()).to_int().unwrap_or(1);
         if total <= 0 {

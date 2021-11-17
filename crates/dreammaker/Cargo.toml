@@ -15,7 +15,7 @@ serde = { version = "1.0.103", features = ["derive"] }
 serde_derive = "1.0.103"
 toml = "0.5.5"
 guard = "0.5.0"
-phf = { version = "0.8.0", features = ["macros"] }
+phf = { version = "0.10.0", features = ["macros"] }
 color_space = "0.5.3"
 ahash = "0.7.6"
 indexmap = "1.7.0"
