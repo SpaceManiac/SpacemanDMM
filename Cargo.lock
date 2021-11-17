@@ -224,23 +224,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cli"
-version = "1.3.1"
-dependencies = [
- "ahash",
- "chrono",
- "dmm-tools",
- "dreammaker",
- "git2",
- "rayon",
- "serde",
- "serde_derive",
- "serde_json",
- "structopt",
- "structopt-derive",
-]
-
-[[package]]
 name = "color_space"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -377,6 +360,23 @@ dependencies = [
  "png",
  "rand 0.7.3",
  "walkdir",
+]
+
+[[package]]
+name = "dmm-tools-cli"
+version = "1.3.1"
+dependencies = [
+ "ahash",
+ "chrono",
+ "dmm-tools",
+ "dreammaker",
+ "git2",
+ "rayon",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "structopt",
+ "structopt-derive",
 ]
 
 [[package]]

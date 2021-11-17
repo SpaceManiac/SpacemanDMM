@@ -10,19 +10,19 @@ optimization flags, taking longer to compile but producing faster executables.
 * [dreammaker](dreammaker/) - a pure-Rust parsing suite for the DreamMaker
   programming language.
 
-* [dm-langserver](langserver/) - a [language server] based upon that parser.
+* [dm-langserver](dm-langserver/) - a [language server] based upon that parser.
 
 * [dmdoc](dmdoc/) - a doxygen-esque documentation generator for DreamMaker codebases.
 
 * [dreamchecker](dreamchecker/) - extended whole-program analysis and type
   checking tools for DM codebases.
 
-* [dmm-tools](tools/) - additional libraries for working with DreamMaker icon
+* [dmm-tools](dmm-tools/) - additional libraries for working with DreamMaker icon
   and map files, including a renderer.
 
-* [cli](cli/) - the command-line interface to `dmm-tools`.
+* [dmm-tools-cli](dmm-tools-cli/) - the command-line interface to `dmm-tools`.
 
-* [spaceman-dmm](editor/) - a very early prototype of a map editor meant as an
+* [spaceman-dmm](spaceman-dmm/) - a very early prototype of a map editor meant as an
   alternative to DreamMaker's default.
 
 [language server]: https://langserver.org/

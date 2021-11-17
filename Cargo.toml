@@ -1,13 +1,14 @@
 [workspace]
 members = [
-    "src/cli",
-    "src/dmdoc",
-    "src/dreamchecker",
-    "src/dreammaker",
-#    "src/editor",
-    "src/interval-tree",
-    "src/langserver",
-    "src/tools",
+    "crates/builtins-proc-macro",
+    "crates/dm-langserver",
+    "crates/dmdoc",
+    "crates/dmm-tools",
+    "crates/dmm-tools-cli",
+    "crates/dreamchecker",
+    "crates/dreammaker",
+    "crates/interval-tree",
+    #"crates/spaceman-dmm",
 ]
 
 [profile.dev]
