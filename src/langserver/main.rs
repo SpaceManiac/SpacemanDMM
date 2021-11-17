@@ -46,6 +46,8 @@ use dm::FileId;
 use dm::annotation::{Annotation, AnnotationTree};
 use dm::objtree::TypeRef;
 
+use ahash::RandomState;
+
 fn main() {
     std::env::set_var("RUST_BACKTRACE", "1");
 
@@ -155,8 +157,8 @@ struct Engine<'a> {
     objtree: Arc<dm::objtree::ObjectTree>,
     references_table: Option<find_references::ReferencesTable>,
 
-    annotations: HashMap<Url, (FileId, FileId, Rc<AnnotationTree>)>,
-    diagnostics_set: HashSet<Url>,
+    annotations: HashMap<Url, (FileId, FileId, Rc<AnnotationTree>), RandomState>,
+    diagnostics_set: HashSet<Url, RandomState>,
 
     client_caps: ClientCaps,
     extools_dll: Option<String>,
@@ -400,7 +402,7 @@ impl<'a> Engine<'a> {
         self.issue_notification::<extras::WindowStatus>(Default::default());
 
         // initial diagnostics pump
-        let mut map: HashMap<_, Vec<_>> = HashMap::new();
+        let mut map: HashMap<_, Vec<_>, RandomState> = HashMap::with_hasher(RandomState::default());
         for error in self.context.errors().iter() {
             let loc = error.location();
             let related_information = if !self.client_caps.related_info || error.notes().is_empty() {
@@ -448,7 +450,7 @@ impl<'a> Engine<'a> {
             }
         }
 
-        let mut new_diagnostics_set = HashSet::new();
+        let mut new_diagnostics_set = HashSet::with_hasher(RandomState::default());
         for (url, diagnostics) in map {
             self.diagnostics_set.remove(&url);  // don't erase below
             new_diagnostics_set.insert(url.clone());

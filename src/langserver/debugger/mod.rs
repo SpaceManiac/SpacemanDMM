@@ -47,6 +47,8 @@ use dreammaker::config::DebugEngine;
 
 use auxtools::Auxtools;
 
+use ahash::RandomState;
+
 use self::dap_types::*;
 use self::extools::ExtoolsHolder;
 use self::launched::{Launched, EngineParams};
@@ -137,8 +139,8 @@ impl DebugDatabaseBuilder {
             extools_dll: _,
             debug_server_dll: _,
         } = self;
-        let mut line_numbers: HashMap<dm::FileId, Vec<(i64, String, String, usize)>> =
-            HashMap::new();
+        let mut line_numbers: HashMap<dm::FileId, Vec<(i64, String, String, usize)>, RandomState> =
+            HashMap::with_hasher(RandomState::default());
 
         objtree.root().recurse(&mut |ty| {
             for (name, proc) in ty.procs.iter() {
@@ -178,7 +180,7 @@ pub struct DebugDatabase {
     root_dir: std::path::PathBuf,
     files: dm::FileList,
     objtree: Arc<ObjectTree>,
-    line_numbers: HashMap<dm::FileId, Vec<(i64, String, String, usize)>>,
+    line_numbers: HashMap<dm::FileId, Vec<(i64, String, String, usize)>, RandomState>,
 }
 
 fn get_proc<'o>(
@@ -1152,7 +1154,7 @@ handle_request! {
                 if mod2 == 1 {
                     // arguments
                     let mut variables = Vec::with_capacity(2 + frame.args.len());
-                    let mut seen = std::collections::HashMap::new();
+                    let mut seen = std::collections::HashMap::with_hasher(RandomState::default());
 
                     seen.insert("src", 0);
                     variables.push(Variable {
@@ -1197,7 +1199,7 @@ handle_request! {
 
                     // If VSC receives two Variables with the same name, it only
                     // displays the first one. Avert this by adding suffixes.
-                    let mut seen = std::collections::HashMap::new();
+                    let mut seen = std::collections::HashMap::with_hasher(RandomState::default());
                     variables.extend(frame.locals.iter().enumerate().map(|(i, vt)| Variable {
                         name: match frame.local_names.get(i) {
                             Some(local) => {
@@ -1224,7 +1226,7 @@ handle_request! {
 
                 // If VSC receives two Variables with the same name, it only
                 // displays the first one. Avert this by adding suffixes.
-                let mut seen = std::collections::HashMap::new();
+                let mut seen = std::collections::HashMap::with_hasher(RandomState::default());
 
                 for aux_var in aux_variables {
                     let name = match seen.entry(aux_var.name.clone()).and_modify(|e| *e += 1).or_default() {

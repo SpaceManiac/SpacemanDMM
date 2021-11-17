@@ -6,6 +6,8 @@
 use std::collections::HashMap;
 use serde_json::Value;
 
+use ahash::RandomState;
+
 pub trait Request {
     type Params;
     type Result;
@@ -1527,7 +1529,7 @@ pub struct Message {
     /**
      * An object used as a dictionary for looking up the variables in the format string.
      */
-    pub variables: Option<HashMap<String, String>>,
+    pub variables: Option<HashMap<String, String, RandomState>>,
 
     /**
      * If true send to telemetry.

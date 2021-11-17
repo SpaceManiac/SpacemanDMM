@@ -5,7 +5,8 @@ use std::fmt;
 use std::iter::FromIterator;
 use phf::phf_map;
 
-use linked_hash_map::LinkedHashMap;
+use indexmap::IndexMap;
+use ahash::RandomState;
 
 use crate::error::Location;
 
@@ -286,7 +287,7 @@ augmented! {
 #[derive(Clone, PartialEq, Debug)]
 pub struct Prefab {
     pub path: TypePath,
-    pub vars: LinkedHashMap<Ident, Expression>,
+    pub vars: IndexMap<Ident, Expression, RandomState>,
 }
 
 impl From<TypePath> for Prefab {
@@ -299,7 +300,7 @@ impl From<TypePath> for Prefab {
 }
 
 /// Formatting helper for variable arrays.
-pub struct FormatVars<'a, E>(pub &'a LinkedHashMap<Ident, E>);
+pub struct FormatVars<'a, E>(pub &'a IndexMap<Ident, E, RandomState>);
 
 impl<'a, E: fmt::Display> fmt::Display for FormatVars<'a, E> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

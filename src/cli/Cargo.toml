@@ -18,6 +18,7 @@ serde_json = "1.0.9"
 rayon = "1.0.0"
 dreammaker = { path = "../dreammaker" }
 dmm-tools = { path = "../tools", features = ["png"] }
+ahash = "0.7.6"
 
 [build-dependencies]
 chrono = "0.4.0"

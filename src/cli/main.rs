@@ -26,6 +26,8 @@ use structopt::StructOpt;
 use dm::objtree::ObjectTree;
 use dmm_tools::*;
 
+use ahash::RandomState;
+
 // ----------------------------------------------------------------------------
 // Main driver
 
@@ -244,7 +246,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
 
             let render_passes = &dmm_tools::render_passes::configure(&context.dm_context.config().map_renderer, enable, disable);
             let paths: Vec<&Path> = files.iter().map(|p| p.as_ref()).collect();
-            let errors: RwLock<HashSet<String>> = Default::default();
+            let errors: RwLock<HashSet<String, RandomState>> = Default::default();
 
             let perform_job = move |path: &Path| {
                 let mut filename;
@@ -393,7 +395,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                 num_keys: usize,
             }
 
-            let mut report = HashMap::new();
+            let mut report = HashMap::with_hasher(RandomState::default());
             for path in files.iter() {
                 let path = std::path::Path::new(path);
                 let map = dmm::Map::from_file(path).unwrap();
@@ -565,7 +567,7 @@ fn render_many(context: &Context, command: RenderManyCommand) -> RenderManyComma
         ..
     } = *context;
     let render_passes = &dmm_tools::render_passes::configure_list(&context.dm_context.config().map_renderer, &command.enable, &command.disable);
-    let errors: RwLock<HashSet<String>> = Default::default();
+    let errors: RwLock<HashSet<String, RandomState>> = Default::default();
 
     // Prepare output directory.
     let output_directory = command.output_directory;

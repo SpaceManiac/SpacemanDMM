@@ -8,12 +8,14 @@ use dm::constants::Constant;
 use dm::objtree::{ObjectTree, ProcRef};
 use dm::{DMError, Location};
 
+use ahash::RandomState;
+
 use crate::{Analysis, StaticType};
 
 pub struct TypeExprContext<'o, 't> {
     pub objtree: &'o ObjectTree,
-    pub param_name_map: HashMap<&'t str, Analysis<'o>>,
-    pub param_idx_map: HashMap<usize, Analysis<'o>>,
+    pub param_name_map: HashMap<&'t str, Analysis<'o>, RandomState>,
+    pub param_idx_map: HashMap<usize, Analysis<'o>, RandomState>,
 }
 
 impl<'o, 't> TypeExprContext<'o, 't> {

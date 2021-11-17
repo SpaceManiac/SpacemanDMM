@@ -8,6 +8,8 @@
 use std::collections::HashMap;
 use serde_json::Value as Json;
 
+use ahash::RandomState;
+
 // ----------------------------------------------------------------------------
 // Extools data structures
 
@@ -328,7 +330,7 @@ impl Request for GetAllFields {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct GetAllFieldsResponse(pub HashMap<String, ValueText>);
+pub struct GetAllFieldsResponse(pub HashMap<String, ValueText, RandomState>);
 
 impl Response for GetAllFieldsResponse {
     const TYPE: &'static str = "get all fields";

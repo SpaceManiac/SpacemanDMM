@@ -7,6 +7,8 @@ use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::error::Error;
 
+use ahash::RandomState;
+
 use super::SequenceNumber;
 use super::dap_types;
 use super::extools_types::*;
@@ -138,7 +140,7 @@ pub struct Extools {
     seq: Arc<SequenceNumber>,
     sender: ExtoolsSender,
     threads: Arc<Mutex<HashMap<i64, ThreadInfo>>>,
-    bytecode: HashMap<(String, usize), Vec<DisassembledInstruction>>,
+    bytecode: HashMap<(String, usize), Vec<DisassembledInstruction>, RandomState>,
     get_type_rx: mpsc::Receiver<GetTypeResponse>,
     bytecode_rx: mpsc::Receiver<DisassembledProc>,
     get_field_rx: mpsc::Receiver<GetAllFieldsResponse>,
@@ -170,7 +172,7 @@ impl Extools {
             seq,
             sender,
             threads: Arc::new(Mutex::new(HashMap::new())),
-            bytecode: HashMap::new(),
+            bytecode: HashMap::with_hasher(RandomState::default()),
             bytecode_rx,
             get_type_rx,
             get_field_rx,
@@ -297,7 +299,7 @@ impl Extools {
         Ok(self.get_type_rx.recv_timeout(RECV_TIMEOUT)?.0)
     }
 
-    pub fn get_all_fields(&self, reference: Ref) -> Result<HashMap<String, ValueText>, Box<dyn Error>> {
+    pub fn get_all_fields(&self, reference: Ref) -> Result<HashMap<String, ValueText, RandomState>, Box<dyn Error>> {
         self.sender.send(GetAllFields(reference));
         Ok(self.get_field_rx.recv_timeout(RECV_TIMEOUT)?.0)
     }
