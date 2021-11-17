@@ -2186,14 +2186,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     let past = std::mem::replace(belongs_to, Vec::new());
                     self.annotate_precise(start..end, || Annotation::ScopedCall(past, ident.clone()));
                 }
-                Follow::Call(kind, ident, args)
+                Follow::Call(kind, ident.into(), args.into())
             },
             None => {
                 if !belongs_to.is_empty() {
                     self.annotate_precise(start..end, || Annotation::ScopedVar(belongs_to.clone(), ident.clone()));
                     belongs_to.push(ident.clone());
                 }
-                Follow::Field(kind, ident)
+                Follow::Field(kind, ident.into())
             },
         };
         success(Spanned::new(first_location, follow))
@@ -2233,7 +2233,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             self.annotate_precise(start..end, || Annotation::ScopedVar(belongs_to.clone(), ident.clone()));
             belongs_to.push(ident.clone());
         }
-        success(Field { kind, ident })
+        success(Field { kind, ident: ident.into() })
     }
 
     /// a parenthesized, comma-separated list of expressions

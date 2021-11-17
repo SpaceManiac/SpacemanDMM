@@ -94,6 +94,12 @@ pub struct Ident2 {
     inner: Box<str>,
 }
 
+impl PartialEq<str> for Ident2 {
+    fn eq(&self, other: &str) -> bool {
+        &*self.inner == other
+    }
+}
+
 impl<'a> From<&'a str> for Ident2 {
     fn from(v: &'a str) -> Self {
         Ident2 { inner: v.into() }
@@ -727,16 +733,16 @@ pub enum Follow {
     /// Index the value by an expression.
     Index(ListAccessKind, Box<Expression>),
     /// Access a field of the value.
-    Field(PropertyAccessKind, Ident),
+    Field(PropertyAccessKind, Ident2),
     /// Call a method of the value.
-    Call(PropertyAccessKind, Ident, Vec<Expression>),
+    Call(PropertyAccessKind, Ident2, Box<[Expression]>),
 }
 
 /// Like a `Follow` but only supports field accesses.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Field {
     pub kind: PropertyAccessKind,
-    pub ident: Ident,
+    pub ident: Ident2,
 }
 
 impl From<Field> for Follow {
