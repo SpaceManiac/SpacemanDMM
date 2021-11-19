@@ -10,25 +10,8 @@ use ahash::RandomState;
 
 use crate::error::Location;
 
-#[derive(Copy, Clone, Eq, Debug)]
-pub struct Spanned<T> {
-    // TODO: add a Span type and use it here
-    pub location: Location,
-    pub elem: T,
-}
-
-impl<T: PartialEq> PartialEq for Spanned<T> {
-    fn eq(&self, other: &Self) -> bool {
-        // Skips the location: allows easy recursive Eq checks
-        self.elem == other.elem
-    }
-}
-
-impl<T> Spanned<T> {
-    pub fn new(location: Location, elem: T) -> Spanned<T> {
-        Spanned { location, elem }
-    }
-}
+// ----------------------------------------------------------------------------
+// Simple enums
 
 /// The unary operators, both prefix and postfix.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -46,6 +29,27 @@ impl UnaryOp {
     /// Prepare to display this unary operator around (to the left or right of)
     /// its operand.
     pub fn around<'a, T: fmt::Display + ?Sized>(self, expr: &'a T) -> impl fmt::Display + 'a {
+        /// A formatting wrapper created by `UnaryOp::around`.
+        struct Around<'a, T: 'a + ?Sized> {
+            op: UnaryOp,
+            expr: &'a T,
+        }
+
+        impl<'a, T: fmt::Display + ?Sized> fmt::Display for Around<'a, T> {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                use self::UnaryOp::*;
+                match self.op {
+                    Neg => write!(f, "-{}", self.expr),
+                    Not => write!(f, "!{}", self.expr),
+                    BitNot => write!(f, "~{}", self.expr),
+                    PreIncr => write!(f, "++{}", self.expr),
+                    PostIncr => write!(f, "{}++", self.expr),
+                    PreDecr => write!(f, "--{}", self.expr),
+                    PostDecr => write!(f, "{}--", self.expr),
+                }
+            }
+        }
+
         Around { op: self, expr }
     }
 
@@ -59,75 +63,6 @@ impl UnaryOp {
             PreIncr | PostIncr => "++",
             PreDecr | PostDecr => "--",
         }
-    }
-}
-
-/// A formatting wrapper created by `UnaryOp::around`.
-struct Around<'a, T: 'a + ?Sized> {
-    op: UnaryOp,
-    expr: &'a T,
-}
-
-impl<'a, T: fmt::Display + ?Sized> fmt::Display for Around<'a, T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use self::UnaryOp::*;
-        match self.op {
-            Neg => write!(f, "-{}", self.expr),
-            Not => write!(f, "!{}", self.expr),
-            BitNot => write!(f, "~{}", self.expr),
-            PreIncr => write!(f, "++{}", self.expr),
-            PostIncr => write!(f, "{}++", self.expr),
-            PreDecr => write!(f, "--{}", self.expr),
-            PostDecr => write!(f, "{}--", self.expr),
-        }
-    }
-}
-
-// Original `Ident` is an alias for `String`.
-pub type Ident = String;
-
-// Ident2 is an opaque type which promises a limited interface.
-// It's a `Box<str>` for now (smaller than `Ident` by 8 bytes),
-// but could be replaced by interning later.
-#[derive(Clone, Eq, PartialEq)]
-pub struct Ident2 {
-    inner: Box<str>,
-}
-
-impl PartialEq<str> for Ident2 {
-    fn eq(&self, other: &str) -> bool {
-        &*self.inner == other
-    }
-}
-
-impl<'a> From<&'a str> for Ident2 {
-    fn from(v: &'a str) -> Self {
-        Ident2 { inner: v.into() }
-    }
-}
-
-impl From<String> for Ident2 {
-    fn from(v: String) -> Self {
-        Ident2 { inner: v.into() }
-    }
-}
-
-impl std::ops::Deref for Ident2 {
-    type Target = str;
-    fn deref(&self) -> &str {
-        &*self.inner
-    }
-}
-
-impl fmt::Display for Ident2 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.inner.fmt(f)
-    }
-}
-
-impl fmt::Debug for Ident2 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.inner.fmt(f)
     }
 }
 
@@ -157,34 +92,6 @@ impl PathOp {
 impl fmt::Display for PathOp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(self.name())
-    }
-}
-
-/// A (typically absolute) tree path where the path operator is irrelevant.
-pub type TreePath = Box<[Ident]>;
-
-pub struct FormatTreePath<'a, T>(pub &'a [T]);
-
-impl<'a, T: fmt::Display> fmt::Display for FormatTreePath<'a, T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for each in self.0.iter() {
-            write!(f, "/{}", each)?;
-        }
-        Ok(())
-    }
-}
-
-/// A series of identifiers separated by path operators.
-pub type TypePath = Vec<(PathOp, Ident)>;
-
-pub struct FormatTypePath<'a>(pub &'a [(PathOp, Ident)]);
-
-impl<'a> fmt::Display for FormatTypePath<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for each in self.0.iter() {
-            write!(f, "{}{}", each.0, each.1)?;
-        }
-        Ok(())
     }
 }
 
@@ -288,12 +195,6 @@ impl fmt::Display for AssignOp {
     }
 }
 
-/// The ternary operator, represented uniformly for convenience.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub enum TernaryOp {
-    Conditional,
-}
-
 macro_rules! augmented {
     ($($bin:ident = $aug:ident;)*) => {
         impl BinaryOp {
@@ -328,6 +229,391 @@ augmented! {
     LShift = LShiftAssign;
     RShift = RShiftAssign;
 }
+
+/// The ternary operator, represented uniformly for convenience.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum TernaryOp {
+    Conditional,
+}
+
+/// The possible kinds of access operators for lists
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum ListAccessKind {
+    /// `[]`
+    Normal,
+    /// `?[]`
+    Safe,
+}
+
+/// The possible kinds of index operators, for both fields and methods.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum PropertyAccessKind {
+    /// `a.b`
+    Dot,
+    /// `a:b`
+    Colon,
+    /// `a?.b`
+    SafeDot,
+    /// `a?:b`
+    SafeColon,
+}
+
+impl PropertyAccessKind {
+    pub fn name(self) -> &'static str {
+        match self {
+            PropertyAccessKind::Dot => ".",
+            PropertyAccessKind::Colon => ":",
+            PropertyAccessKind::SafeDot => "?.",
+            PropertyAccessKind::SafeColon => "?:",
+        }
+    }
+}
+
+impl fmt::Display for PropertyAccessKind {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str(self.name())
+    }
+}
+
+/// The proc declaration kind, either `proc` or `verb`.
+///
+/// DM requires referencing proc paths to include whether the target is
+/// declared as a proc or verb, even though the two modes are functionally
+/// identical in many other respects.
+#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
+pub enum ProcDeclKind {
+    Proc,
+    Verb,
+}
+
+impl ProcDeclKind {
+    /// Attempt to convert a string to a declaration kind.
+    pub fn from_name(name: &str) -> Option<ProcDeclKind> {
+        match name {
+            "proc" => Some(ProcDeclKind::Proc),
+            "verb" => Some(ProcDeclKind::Verb),
+            _ => None,
+        }
+    }
+
+    /// Return whether `self` is `ProcDeclKind::Verb`.
+    pub fn is_verb(self) -> bool {
+        self == ProcDeclKind::Verb
+    }
+
+    /// Return the string representation of this declaration kind.
+    pub fn name(self) -> &'static str {
+        match self {
+            ProcDeclKind::Proc => "proc",
+            ProcDeclKind::Verb => "verb",
+        }
+    }
+}
+
+impl fmt::Display for ProcDeclKind {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str(self.name())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SettingMode {
+    /// As in `set name = "Use"`.
+    Assign,
+    /// As in `set src in usr`.
+    In,
+}
+
+impl SettingMode {
+    /// Return the string representation of this setting mode.
+    pub fn name(self) -> &'static str {
+        match self {
+            SettingMode::Assign => "=",
+            SettingMode::In => "in",
+        }
+    }
+}
+
+impl fmt::Display for SettingMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Bitflags
+
+macro_rules! type_table {
+    ($(#[$attr:meta])* pub struct $name:ident; $($txt:expr, $i:ident, $val:expr;)*) => {
+        bitflags! {
+            $(#[$attr])*
+            /// A type specifier for verb arguments and input() calls.
+            pub struct $name: u32 {
+                $(const $i = $val;)*
+            }
+        }
+
+        impl $name {
+            pub fn from_str(text: &str) -> Option<Self> {
+                match text {
+                    $(
+                        $txt => Some($name::$i),
+                    )*
+                    _ => None,
+                }
+            }
+        }
+
+        impl fmt::Display for $name {
+            fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+                let mut first = true;
+                $(
+                    if self.contains($name::$i) {
+                        write!(fmt, "{}{}", if first { "" } else { "|" }, $txt)?;
+                        first = false;
+                    }
+                )*
+                if first {
+                    fmt.write_str("()")?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+type_table! {
+    /// A type specifier for verb arguments and input() calls.
+    pub struct InputType;
+
+    // These values can be known with an invocation such as:
+    //     src << as(command_text)
+    "mob",          MOB,          1 << 0;
+    "obj",          OBJ,          1 << 1;
+    "text",         TEXT,         1 << 2;
+    "num",          NUM,          1 << 3;
+    "file",         FILE,         1 << 4;
+    "turf",         TURF,         1 << 5;
+    "key",          KEY,          1 << 6;
+    "null",         NULL,         1 << 7;
+    "area",         AREA,         1 << 8;
+    "icon",         ICON,         1 << 9;
+    "sound",        SOUND,        1 << 10;
+    "message",      MESSAGE,      1 << 11;
+    "anything",     ANYTHING,     1 << 12;
+    "password",     PASSWORD,     1 << 15;
+    "command_text", COMMAND_TEXT, 1 << 16;
+    "color",        COLOR,        1 << 17;
+}
+
+bitflags! {
+    #[derive(Default)]
+    pub struct VarTypeFlags: u8 {
+        // DM flags
+        const STATIC = 1 << 0;
+        const CONST = 1 << 2;
+        const TMP = 1 << 3;
+        // SpacemanDMM flags
+        const FINAL = 1 << 4;
+        const PRIVATE = 1 << 5;
+        const PROTECTED = 1 << 6;
+    }
+}
+
+impl VarTypeFlags {
+    pub fn from_name(name: &str) -> Option<VarTypeFlags> {
+        match name {
+            // DM flags
+            "global" | "static" => Some(VarTypeFlags::STATIC),
+            "const" => Some(VarTypeFlags::CONST),
+            "tmp" => Some(VarTypeFlags::TMP),
+            // SpacemanDMM flags
+            "SpacemanDMM_final" => Some(VarTypeFlags::FINAL),
+            "SpacemanDMM_private" => Some(VarTypeFlags::PRIVATE),
+            "SpacemanDMM_protected" => Some(VarTypeFlags::PROTECTED),
+            // Fallback
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub fn is_static(&self) -> bool {
+        self.contains(VarTypeFlags::STATIC)
+    }
+
+    #[inline]
+    pub fn is_const(&self) -> bool {
+        self.contains(VarTypeFlags::CONST)
+    }
+
+    #[inline]
+    pub fn is_tmp(&self) -> bool {
+        self.contains(VarTypeFlags::TMP)
+    }
+
+    #[inline]
+    pub fn is_final(&self) -> bool {
+        self.contains(VarTypeFlags::FINAL)
+    }
+
+    #[inline]
+    pub fn is_private(&self) -> bool {
+        self.contains(VarTypeFlags::PRIVATE)
+    }
+
+    #[inline]
+    pub fn is_protected(&self) -> bool {
+        self.contains(VarTypeFlags::PROTECTED)
+    }
+
+    #[inline]
+    pub fn is_const_evaluable(&self) -> bool {
+        self.contains(VarTypeFlags::CONST) || !self.intersects(VarTypeFlags::STATIC | VarTypeFlags::PROTECTED)
+    }
+
+    #[inline]
+    pub fn is_normal(&self) -> bool {
+        !self.intersects(VarTypeFlags::CONST | VarTypeFlags::STATIC | VarTypeFlags::PROTECTED)
+    }
+
+    pub fn to_vec(&self) -> Vec<&'static str> {
+        let mut v = Vec::new();
+        if self.is_static() { v.push("static"); }
+        if self.is_const() { v.push("const"); }
+        if self.is_tmp() { v.push("tmp"); }
+        if self.is_final() { v.push("SpacemanDMM_final"); }
+        if self.is_private() { v.push("SpacemanDMM_private"); }
+        if self.is_protected() { v.push("SpacemanDMM_protected"); }
+        v
+    }
+}
+
+impl fmt::Display for VarTypeFlags {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        if self.is_static() {
+            fmt.write_str("static/")?;
+        }
+        if self.is_const() {
+            fmt.write_str("const/")?;
+        }
+        if self.is_tmp() {
+            fmt.write_str("tmp/")?;
+        }
+        if self.is_final() {
+            fmt.write_str("SpacemanDMM_final/")?;
+        }
+        if self.is_private() {
+            fmt.write_str("SpacemanDMM_private/")?;
+        }
+        if self.is_protected() {
+            fmt.write_str("SpacemanDMM_protected/")?;
+        }
+        Ok(())
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Helper types
+
+// Original `Ident` is an alias for `String`.
+pub type Ident = String;
+
+// Ident2 is an opaque type which promises a limited interface.
+// It's a `Box<str>` for now (smaller than `Ident` by 8 bytes),
+// but could be replaced by interning later.
+#[derive(Clone, Eq, PartialEq)]
+pub struct Ident2 {
+    inner: Box<str>,
+}
+
+impl PartialEq<str> for Ident2 {
+    fn eq(&self, other: &str) -> bool {
+        &*self.inner == other
+    }
+}
+
+impl<'a> From<&'a str> for Ident2 {
+    fn from(v: &'a str) -> Self {
+        Ident2 { inner: v.into() }
+    }
+}
+
+impl From<String> for Ident2 {
+    fn from(v: String) -> Self {
+        Ident2 { inner: v.into() }
+    }
+}
+
+impl std::ops::Deref for Ident2 {
+    type Target = str;
+    fn deref(&self) -> &str {
+        &*self.inner
+    }
+}
+
+impl fmt::Display for Ident2 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.inner.fmt(f)
+    }
+}
+
+impl fmt::Debug for Ident2 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.inner.fmt(f)
+    }
+}
+
+/// An AST element with an additional location attached.
+#[derive(Copy, Clone, Eq, Debug)]
+pub struct Spanned<T> {
+    // TODO: add a Span type and use it here
+    pub location: Location,
+    pub elem: T,
+}
+
+impl<T: PartialEq> PartialEq for Spanned<T> {
+    fn eq(&self, other: &Self) -> bool {
+        // Skips the location: allows easy recursive Eq checks
+        self.elem == other.elem
+    }
+}
+
+impl<T> Spanned<T> {
+    pub fn new(location: Location, elem: T) -> Spanned<T> {
+        Spanned { location, elem }
+    }
+}
+
+/// A (typically absolute) tree path where the path operator is irrelevant.
+pub type TreePath = Box<[Ident]>;
+
+pub struct FormatTreePath<'a, T>(pub &'a [T]);
+
+impl<'a, T: fmt::Display> fmt::Display for FormatTreePath<'a, T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for each in self.0.iter() {
+            write!(f, "/{}", each)?;
+        }
+        Ok(())
+    }
+}
+
+/// A series of identifiers separated by path operators.
+pub type TypePath = Vec<(PathOp, Ident)>;
+
+pub struct FormatTypePath<'a>(pub &'a [(PathOp, Ident)]);
+
+impl<'a> fmt::Display for FormatTypePath<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for each in self.0.iter() {
+            write!(f, "{}{}", each.0, each.1)?;
+        }
+        Ok(())
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Terms and Expressions
 
 /// A typepath optionally followed by a set of variables.
 #[derive(Clone, PartialEq, Debug)]
@@ -688,45 +974,6 @@ impl From<Expression> for Term {
     }
 }
 
-/// The possible kinds of access operators for lists
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum ListAccessKind {
-    /// `[]`
-    Normal,
-    /// `?[]`
-    Safe,
-}
-
-/// The possible kinds of index operators, for both fields and methods.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum PropertyAccessKind {
-    /// `a.b`
-    Dot,
-    /// `a:b`
-    Colon,
-    /// `a?.b`
-    SafeDot,
-    /// `a?:b`
-    SafeColon,
-}
-
-impl PropertyAccessKind {
-    pub fn name(self) -> &'static str {
-        match self {
-            PropertyAccessKind::Dot => ".",
-            PropertyAccessKind::Colon => ":",
-            PropertyAccessKind::SafeDot => "?.",
-            PropertyAccessKind::SafeColon => "?:",
-        }
-    }
-}
-
-impl fmt::Display for PropertyAccessKind {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.write_str(self.name())
-    }
-}
-
 /// An expression part which is applied to a term or another follow.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Follow {
@@ -751,47 +998,6 @@ impl From<Field> for Follow {
     }
 }
 
-/// The proc declaration kind, either `proc` or `verb`.
-///
-/// DM requires referencing proc paths to include whether the target is
-/// declared as a proc or verb, even though the two modes are functionally
-/// identical in many other respects.
-#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
-pub enum ProcDeclKind {
-    Proc,
-    Verb,
-}
-
-impl ProcDeclKind {
-    /// Attempt to convert a string to a declaration kind.
-    pub fn from_name(name: &str) -> Option<ProcDeclKind> {
-        match name {
-            "proc" => Some(ProcDeclKind::Proc),
-            "verb" => Some(ProcDeclKind::Verb),
-            _ => None,
-        }
-    }
-
-    /// Return whether `self` is `ProcDeclKind::Verb`.
-    pub fn is_verb(self) -> bool {
-        self == ProcDeclKind::Verb
-    }
-
-    /// Return the string representation of this declaration kind.
-    pub fn name(self) -> &'static str {
-        match self {
-            ProcDeclKind::Proc => "proc",
-            ProcDeclKind::Verb => "verb",
-        }
-    }
-}
-
-impl fmt::Display for ProcDeclKind {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.write_str(self.name())
-    }
-}
-
 /// A parameter declaration in the header of a proc.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Parameter {
@@ -808,175 +1014,6 @@ impl fmt::Display for Parameter {
         write!(fmt, "{}{}", self.var_type, self.name)?;
         if let Some(input_type) = self.input_type {
             write!(fmt, " as {}", input_type)?;
-        }
-        Ok(())
-    }
-}
-
-macro_rules! type_table {
-    ($(#[$attr:meta])* pub struct $name:ident; $($txt:expr, $i:ident, $val:expr;)*) => {
-        bitflags! {
-            $(#[$attr])*
-            /// A type specifier for verb arguments and input() calls.
-            pub struct $name: u32 {
-                $(const $i = $val;)*
-            }
-        }
-
-        impl $name {
-            pub fn from_str(text: &str) -> Option<Self> {
-                match text {
-                    $(
-                        $txt => Some($name::$i),
-                    )*
-                    _ => None,
-                }
-            }
-        }
-
-        impl fmt::Display for $name {
-            fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-                let mut first = true;
-                $(
-                    if self.contains($name::$i) {
-                        write!(fmt, "{}{}", if first { "" } else { "|" }, $txt)?;
-                        first = false;
-                    }
-                )*
-                if first {
-                    fmt.write_str("()")?;
-                }
-                Ok(())
-            }
-        }
-    }
-}
-
-type_table! {
-    /// A type specifier for verb arguments and input() calls.
-    pub struct InputType;
-
-    // These values can be known with an invocation such as:
-    //     src << as(command_text)
-    "mob",          MOB,          1 << 0;
-    "obj",          OBJ,          1 << 1;
-    "text",         TEXT,         1 << 2;
-    "num",          NUM,          1 << 3;
-    "file",         FILE,         1 << 4;
-    "turf",         TURF,         1 << 5;
-    "key",          KEY,          1 << 6;
-    "null",         NULL,         1 << 7;
-    "area",         AREA,         1 << 8;
-    "icon",         ICON,         1 << 9;
-    "sound",        SOUND,        1 << 10;
-    "message",      MESSAGE,      1 << 11;
-    "anything",     ANYTHING,     1 << 12;
-    "password",     PASSWORD,     1 << 15;
-    "command_text", COMMAND_TEXT, 1 << 16;
-    "color",        COLOR,        1 << 17;
-}
-
-bitflags! {
-    #[derive(Default)]
-    pub struct VarTypeFlags: u8 {
-        // DM flags
-        const STATIC = 1 << 0;
-        const CONST = 1 << 2;
-        const TMP = 1 << 3;
-        // SpacemanDMM flags
-        const FINAL = 1 << 4;
-        const PRIVATE = 1 << 5;
-        const PROTECTED = 1 << 6;
-    }
-}
-
-impl VarTypeFlags {
-    pub fn from_name(name: &str) -> Option<VarTypeFlags> {
-        match name {
-            // DM flags
-            "global" | "static" => Some(VarTypeFlags::STATIC),
-            "const" => Some(VarTypeFlags::CONST),
-            "tmp" => Some(VarTypeFlags::TMP),
-            // SpacemanDMM flags
-            "SpacemanDMM_final" => Some(VarTypeFlags::FINAL),
-            "SpacemanDMM_private" => Some(VarTypeFlags::PRIVATE),
-            "SpacemanDMM_protected" => Some(VarTypeFlags::PROTECTED),
-            // Fallback
-            _ => None,
-        }
-    }
-
-    #[inline]
-    pub fn is_static(&self) -> bool {
-        self.contains(VarTypeFlags::STATIC)
-    }
-
-    #[inline]
-    pub fn is_const(&self) -> bool {
-        self.contains(VarTypeFlags::CONST)
-    }
-
-    #[inline]
-    pub fn is_tmp(&self) -> bool {
-        self.contains(VarTypeFlags::TMP)
-    }
-
-    #[inline]
-    pub fn is_final(&self) -> bool {
-        self.contains(VarTypeFlags::FINAL)
-    }
-
-    #[inline]
-    pub fn is_private(&self) -> bool {
-        self.contains(VarTypeFlags::PRIVATE)
-    }
-
-    #[inline]
-    pub fn is_protected(&self) -> bool {
-        self.contains(VarTypeFlags::PROTECTED)
-    }
-
-    #[inline]
-    pub fn is_const_evaluable(&self) -> bool {
-        self.contains(VarTypeFlags::CONST) || !self.intersects(VarTypeFlags::STATIC | VarTypeFlags::PROTECTED)
-    }
-
-    #[inline]
-    pub fn is_normal(&self) -> bool {
-        !self.intersects(VarTypeFlags::CONST | VarTypeFlags::STATIC | VarTypeFlags::PROTECTED)
-    }
-
-    pub fn to_vec(&self) -> Vec<&'static str> {
-        let mut v = Vec::new();
-        if self.is_static() { v.push("static"); }
-        if self.is_const() { v.push("const"); }
-        if self.is_tmp() { v.push("tmp"); }
-        if self.is_final() { v.push("SpacemanDMM_final"); }
-        if self.is_private() { v.push("SpacemanDMM_private"); }
-        if self.is_protected() { v.push("SpacemanDMM_protected"); }
-        v
-    }
-}
-
-impl fmt::Display for VarTypeFlags {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        if self.is_static() {
-            fmt.write_str("static/")?;
-        }
-        if self.is_const() {
-            fmt.write_str("const/")?;
-        }
-        if self.is_tmp() {
-            fmt.write_str("tmp/")?;
-        }
-        if self.is_final() {
-            fmt.write_str("SpacemanDMM_final/")?;
-        }
-        if self.is_private() {
-            fmt.write_str("SpacemanDMM_private/")?;
-        }
-        if self.is_protected() {
-            fmt.write_str("SpacemanDMM_protected/")?;
         }
         Ok(())
     }
@@ -1088,6 +1125,9 @@ impl VarSuffix {
     }
 }
 
+// ----------------------------------------------------------------------------
+// Statements
+
 /// A block of statements.
 pub type Block = Box<[Spanned<Statement>]>;
 
@@ -1174,35 +1214,14 @@ pub struct VarStatement {
     pub value: Option<Expression>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum SettingMode {
-    /// As in `set name = "Use"`.
-    Assign,
-    /// As in `set src in usr`.
-    In,
-}
-
-impl SettingMode {
-    /// Return the string representation of this setting mode.
-    pub fn name(self) -> &'static str {
-        match self {
-            SettingMode::Assign => "=",
-            SettingMode::In => "in",
-        }
-    }
-}
-
-impl fmt::Display for SettingMode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(self.name())
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum Case {
     Exact(Expression),
     Range(Expression, Expression),
 }
+
+// ----------------------------------------------------------------------------
+// Miscellaneous
 
 pub const KNOWN_SETTING_NAMES: &[&str] = &[
     "name",
