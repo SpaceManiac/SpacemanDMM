@@ -5,9 +5,6 @@ use std::fmt;
 use std::iter::FromIterator;
 use phf::phf_map;
 
-use indexmap::IndexMap;
-use ahash::RandomState;
-
 use crate::error::Location;
 
 // ----------------------------------------------------------------------------
@@ -544,6 +541,12 @@ impl From<String> for Ident2 {
     }
 }
 
+impl From<Ident2> for String {
+    fn from(v: Ident2) -> Self {
+        v.inner.into()
+    }
+}
+
 impl std::ops::Deref for Ident2 {
     type Target = str;
     fn deref(&self) -> &str {
@@ -619,7 +622,7 @@ impl<'a> fmt::Display for FormatTypePath<'a> {
 #[derive(Clone, PartialEq, Debug)]
 pub struct Prefab {
     pub path: TypePath,
-    pub vars: IndexMap<Ident, Expression, RandomState>,
+    pub vars: Box<[(Ident2, Expression)]>,
 }
 
 impl From<TypePath> for Prefab {
@@ -632,21 +635,22 @@ impl From<TypePath> for Prefab {
 }
 
 /// Formatting helper for variable arrays.
-pub struct FormatVars<'a, E>(pub &'a IndexMap<Ident, E, RandomState>);
+pub struct FormatVars<'a, T>(pub &'a T);
 
-impl<'a, E: fmt::Display> fmt::Display for FormatVars<'a, E> {
+impl<'a, T, K, V> fmt::Display for FormatVars<'a, T>
+where
+    &'a T: IntoIterator<Item=(K, V)>,
+    K: fmt::Display,
+    V: fmt::Display,
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if !self.0.is_empty() {
-            write!(f, " {{")?;
-            let mut first = true;
-            for (k, v) in self.0.iter() {
-                if !first {
-                    write!(f, "; ")?;
-                }
-                first = false;
-                write!(f, "{} = {}", k, v)?;
-            }
-            write!(f, "}}")?;
+        let mut first = true;
+        for (k, v) in self.0 {
+            write!(f, "{}{} = {}", if first { " {" } else { "; " }, k, v)?;
+            first = false;
+        }
+        if !first {
+            f.write_str("}")?;
         }
         Ok(())
     }

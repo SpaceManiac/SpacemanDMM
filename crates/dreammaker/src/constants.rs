@@ -769,7 +769,7 @@ impl<'a> ConstantFolder<'a> {
     }
 
     fn prefab(&mut self, prefab: Prefab) -> Result<Pop, DMError> {
-        let vars = self.vars(prefab.vars)?;
+        let vars = self.vars(prefab.vars.into())?;
 
         // If the path is all slashes, it's absolute, and doesn't need to be
         // further resolved.
@@ -797,12 +797,12 @@ impl<'a> ConstantFolder<'a> {
         Ok(Pop { path, vars })
     }
 
-    fn vars(&mut self, input: IndexMap<Ident, Expression, RandomState>) -> Result<IndexMap<Ident, Constant, RandomState>, DMError> {
+    fn vars(&mut self, input: Vec<(Ident2, Expression)>) -> Result<IndexMap<Ident, Constant, RandomState>, DMError> {
         // Visit the vars recursively.
         let mut vars = IndexMap::with_hasher(RandomState::default());
         for (k, v) in input {
             // TODO: find a type annotation by looking up 'k' on the prefab's type
-            vars.insert(k, self.expr(v, None)?);
+            vars.insert(String::from(k), self.expr(v, None)?);
         }
         Ok(vars)
     }
