@@ -555,8 +555,8 @@ impl<'a> HasLocation for ConstantFolder<'a> {
 impl<'a> ConstantFolder<'a> {
     fn expr(&mut self, expression: Expression, type_hint: Option<&TreePath>) -> Result<Constant, DMError> {
         Ok(match expression {
-            Expression::Base { unary, term, follow } => {
-                let base_type_hint = if follow.is_empty() && unary.is_empty() {
+            Expression::Base { term, follow } => {
+                let base_type_hint = if follow.is_empty() {
                     type_hint
                 } else {
                     None
@@ -564,9 +564,6 @@ impl<'a> ConstantFolder<'a> {
                 let mut term = self.term(term.elem, base_type_hint)?;
                 for each in Vec::from(follow).into_iter() {
                     term = self.follow(term, each.elem)?;
-                }
-                for each in Vec::from(unary).into_iter().rev() {
-                    term = self.unary(term, each)?;
                 }
                 term
             },
@@ -637,6 +634,7 @@ impl<'a> ConstantFolder<'a> {
                     None => Err(self.error(format!("unknown typepath {}", full_path))),
                 }
             }
+            (term, Follow::Unary(op)) => self.unary(term, op),
             (term, follow) => Err(self.error(format!("non-constant expression follower: {} {:?}", term, follow))),
         }
     }

@@ -1852,15 +1852,15 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     // parse an Expression::Base (unary ops, term, follows)
     fn group(&mut self, in_ternary: bool) -> Status<Expression> {
-        // read unary ops
+        // Read prefix unary ops
         let mut unary_ops = Vec::new();
         loop {
             match self.next("operator")? {
-                Token::Punct(Punctuation::Sub) => unary_ops.push(UnaryOp::Neg),
-                Token::Punct(Punctuation::Not) => unary_ops.push(UnaryOp::Not),
-                Token::Punct(Punctuation::BitNot) => unary_ops.push(UnaryOp::BitNot),
-                Token::Punct(Punctuation::PlusPlus) => unary_ops.push(UnaryOp::PreIncr),
-                Token::Punct(Punctuation::MinusMinus) => unary_ops.push(UnaryOp::PreDecr),
+                Token::Punct(Punctuation::Sub) => unary_ops.push(Spanned::new(self.location, Follow::Unary(UnaryOp::Neg))),
+                Token::Punct(Punctuation::Not) => unary_ops.push(Spanned::new(self.location, Follow::Unary(UnaryOp::Not))),
+                Token::Punct(Punctuation::BitNot) => unary_ops.push(Spanned::new(self.location, Follow::Unary(UnaryOp::BitNot))),
+                Token::Punct(Punctuation::PlusPlus) => unary_ops.push(Spanned::new(self.location, Follow::Unary(UnaryOp::PreIncr))),
+                Token::Punct(Punctuation::MinusMinus) => unary_ops.push(Spanned::new(self.location, Follow::Unary(UnaryOp::PreDecr))),
                 other => {
                     self.put_back(other);
                     break;
@@ -1875,12 +1875,12 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             require!(self.term(&mut belongs_to))
         };
 
-        // Read follows
+        // Read postfix unary ops and field-access follows
         let mut follow = Vec::new();
         loop {
             match self.next("operator")? {
-                Token::Punct(Punctuation::PlusPlus) => unary_ops.push(UnaryOp::PostIncr),
-                Token::Punct(Punctuation::MinusMinus) => unary_ops.push(UnaryOp::PostDecr),
+                Token::Punct(Punctuation::PlusPlus) => follow.push(Spanned::new(self.location, Follow::Unary(UnaryOp::PostIncr))),
+                Token::Punct(Punctuation::MinusMinus) => follow.push(Spanned::new(self.location, Follow::Unary(UnaryOp::PostDecr))),
                 other => {
                     self.put_back(other);
                     match self.follow(&mut belongs_to, in_ternary)? {
@@ -1891,6 +1891,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             }
         }
 
+        // Add prefix unary operators to the follows in reverse order
+        follow.extend(unary_ops.into_iter().rev());
+
         // This has the effect of stripping unnecessary parentheses, which
         // simplifies later logic.
         /*if unary_ops.is_empty() && follow.is_empty() {
@@ -1900,7 +1903,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }*/
 
         success(Expression::Base {
-            unary: unary_ops.into_boxed_slice(),
             term: Box::new(term),
             follow: follow.into_boxed_slice(),
         })

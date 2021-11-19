@@ -358,8 +358,8 @@ impl<'o> WalkProc<'o> {
 
     fn visit_expression(&mut self, location: Location, expression: &'o Expression, type_hint: Option<TypeRef<'o>>) -> StaticType<'o> {
         match expression {
-            Expression::Base { unary, term, follow } => {
-                let base_type_hint = if follow.is_empty() && unary.is_empty() {
+            Expression::Base { term, follow } => {
+                let base_type_hint = if follow.is_empty() {
                     type_hint
                 } else {
                     None
@@ -367,9 +367,6 @@ impl<'o> WalkProc<'o> {
                 let mut ty = self.visit_term(term.location, &term.elem, base_type_hint);
                 for each in follow.iter() {
                     ty = self.visit_follow(each.location, ty, &each.elem);
-                }
-                for each in unary.iter().rev() {
-                    ty = self.visit_unary(ty, *each);
                 }
                 ty
             },
@@ -588,6 +585,7 @@ impl<'o> WalkProc<'o> {
 
     fn visit_follow(&mut self, location: Location, lhs: StaticType<'o>, rhs: &'o Follow) -> StaticType<'o> {
         match rhs {
+            Follow::Unary(op) => self.visit_unary(lhs, *op),
             Follow::Index(_, expr) => {
                 self.visit_expression(location, expr, None);
                 // TODO: call operator[] or operator[]=

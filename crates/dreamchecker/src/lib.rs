@@ -1258,7 +1258,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         match statement {
             Statement::Expr(expr) => {
                 match expr {
-                    Expression::Base { unary, term, follow } => {
+                    Expression::Base { term, follow } => {
                         if let Term::Call(call, vec) = &term.elem {
                             if !follow.iter().any(|f| match f.elem { Follow::Call(..) => true, _ => false }) {
                                 if let Some(proc) = self.ty.get_proc(call) {
@@ -1563,8 +1563,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
     fn visit_expression(&mut self, location: Location, expression: &'o Expression, type_hint: Option<TypeRef<'o>>, local_vars: &mut HashMap<String, LocalVar<'o>, RandomState>) -> Analysis<'o> {
         match expression {
-            Expression::Base { unary, term, follow } => {
-                let base_type_hint = if follow.is_empty() && unary.is_empty() {
+            Expression::Base { term, follow } => {
+                let base_type_hint = if follow.is_empty() {
                     type_hint
                 } else {
                     None
@@ -1572,9 +1572,6 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 let mut ty = self.visit_term(term.location, &term.elem, base_type_hint, local_vars);
                 for each in follow.iter() {
                     ty = self.visit_follow(each.location, ty, &each.elem, local_vars);
-                }
-                for each in unary.iter().rev() {
-                    ty = self.visit_unary(ty, each, location, local_vars);
                 }
                 ty
             },
@@ -1595,14 +1592,17 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Expression::BinaryOp { op: BinaryOp::In, lhs, rhs } => {
                 // check for incorrect/ambiguous in statements
                 match &**lhs {
-                    Expression::Base { unary, term, follow } => {
-                        if unary.len() > 0 {
-                            error(location, format!("ambiguous `{}` on left side of an `in`", unary[0].name()))
-                                .set_severity(Severity::Warning)
-                                .with_errortype("ambiguous_in_lhs")
-                                .with_note(location, format!("add parentheses to fix: `{}`", unary[0].around("(a in b)")))
-                                .with_note(location, format!("add parentheses to disambiguate: `({}) in b`", unary[0].around("a")))
-                                .register(self.context);
+                    Expression::Base { term, follow } => {
+                        for each in follow.iter() {
+                            if let Follow::Unary(unary) = each.elem {
+                                error(location, format!("ambiguous `{}` on left side of an `in`", unary.name()))
+                                    .set_severity(Severity::Warning)
+                                    .with_errortype("ambiguous_in_lhs")
+                                    .with_note(location, format!("add parentheses to fix: `{}`", unary.around("(a in b)")))
+                                    .with_note(location, format!("add parentheses to disambiguate: `({}) in b`", unary.around("a")))
+                                    .register(self.context);
+                                break;
+                            }
                         }
                     },
                     Expression::BinaryOp { op, lhs, rhs } => {
@@ -1907,6 +1907,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
     fn visit_follow(&mut self, location: Location, lhs: Analysis<'o>, rhs: &'o Follow, local_vars: &mut HashMap<String, LocalVar<'o>, RandomState>) -> Analysis<'o> {
         match rhs {
+            Follow::Unary(op) => self.visit_unary(lhs, op, location, local_vars),
+
             Follow::Field(PropertyAccessKind::Colon, _) => Analysis::empty(),
             Follow::Field(PropertyAccessKind::SafeColon, _) => Analysis::empty(),
             Follow::Call(PropertyAccessKind::Colon, _, args) |
@@ -2062,7 +2064,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
     // checks for bitwise operations on a negated LHS
     fn check_negated_bitwise(&mut self, lhs: &dm::ast::Expression, location: Location, bit_op: BinaryOp, bool_op: BinaryOp) {
-        if matches!(lhs, Expression::Base { unary, .. } if unary.contains(&UnaryOp::Not)) {
+        guard!(let Expression::Base { follow, .. } = lhs else { return });
+        let any_not = follow.iter().any(|f| matches!(f.elem, Follow::Unary(UnaryOp::Not)));
+        if any_not {
             error(location, format!("Ambiguous `!` on left side of bitwise `{}` operator", bit_op))
                 .with_errortype("ambiguous_not_bitwise")
                 .set_severity(Severity::Warning)
@@ -2102,9 +2106,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 self.check_filter_flag(lhs, can_be_zero, location, typevalue, valid_flags, flagfieldname, exclusive);
                 self.check_filter_flag(rhs, can_be_zero, location, typevalue, valid_flags, flagfieldname, exclusive);
             },
-            Expression::Base{ unary, term, follow: _ } => {
-                if unary.len() > 0 {
-                    error(location, "filter() flag fields cannot have unary ops")
+            Expression::Base{ term, follow } => {
+                if follow.len() > 0 {
+                    error(location, "filter() flag fields cannot have unary ops or field accesses")
                         .register(self.context);
                     return
                 }

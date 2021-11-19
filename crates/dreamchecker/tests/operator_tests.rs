@@ -49,7 +49,7 @@ fn ambig_in_ternary_cond() {
 }
 
 pub const OP_OVERLOAD_ERRORS: &[(u32, u16, &str)] = &[
-    (6, 5, "Attempting operator++ on a /mob which does not overload operator++"),
+    (6, 6, "Attempting operator++ on a /mob which does not overload operator++"),
 ];
 
 #[test]

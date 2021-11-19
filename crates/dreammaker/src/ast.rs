@@ -672,8 +672,6 @@ pub enum Expression {
     /// An expression containing a term directly. The term is evaluated first,
     /// then its follows, then its unary operators in reverse order.
     Base {
-        /// The unary operations applied to this value, in reverse order.
-        unary: Box<[UnaryOp]>,
         /// The term of the expression.
         term: Box<Spanned<Term>>,
         /// The follow operations applied to this value.
@@ -711,9 +709,8 @@ pub enum Expression {
 impl Expression {
     /// If this expression consists of a single term, return it.
     pub fn as_term(&self) -> Option<&Term> {
-        match *self {
-            Expression::Base { ref unary, ref follow, ref term }
-                if unary.is_empty() && follow.is_empty() => Some(&term.elem),
+        match self {
+            &Expression::Base { ref term, ref follow } if follow.is_empty() => Some(&term.elem),
             _ => None,
         }
     }
@@ -721,8 +718,8 @@ impl Expression {
     /// If this expression consists of a single term, return it.
     pub fn into_term(self) -> Option<Term> {
         match self {
-            Expression::Base { unary, follow, term } => {
-                if unary.is_empty() && follow.is_empty() {
+            Expression::Base { term, follow } => {
+                if follow.is_empty() {
                     Some(term.elem)
                 } else {
                     None
@@ -765,23 +762,17 @@ impl Expression {
 
     pub fn is_truthy(&self) -> Option<bool> {
         match self {
-            Expression::Base { unary, term, follow: _ } => {
-                guard!(let Some(truthy) = term.elem.is_truthy() else {
+            Expression::Base { term, follow } => {
+                guard!(let Some(mut truthy) = term.elem.is_truthy() else {
                     return None;
                 });
-                let mut negation = false;
-                for u in unary.iter() {
-                    if let UnaryOp::Not = u {
-                        negation = !negation;
-                    } else {
-                        return None;
+                for follow in follow.iter() {
+                    match follow.elem {
+                        Follow::Unary(UnaryOp::Not) => truthy = !truthy,
+                        _ => return None,
                     }
                 }
-                if negation {
-                    Some(!truthy)
-                } else {
-                    Some(truthy)
-                }
+                Some(truthy)
             },
             Expression::BinaryOp { op, lhs, rhs } => {
                 guard!(let Some(lhtruth) = lhs.is_truthy() else {
@@ -825,9 +816,8 @@ impl From<Term> for Expression {
         match term {
             Term::Expr(expr) => *expr,
             term => Expression::Base {
-                unary: Default::default(),
-                follow: Default::default(),
                 term: Box::new(Spanned::new(Default::default(), term)),
+                follow: Default::default(),
             },
         }
     }
@@ -961,13 +951,13 @@ impl Term {
 impl From<Expression> for Term {
     fn from(expr: Expression) -> Term {
         match expr {
-            Expression::Base { term, unary, follow } => if unary.is_empty() && follow.is_empty() {
+            Expression::Base { term, follow } => if follow.is_empty() {
                 match term.elem {
                     Term::Expr(expr) => Term::from(*expr),
                     other => other,
                 }
             } else {
-                Term::Expr(Box::new(Expression::Base { term, unary, follow }))
+                Term::Expr(Box::new(Expression::Base { term, follow }))
             },
             other => Term::Expr(Box::new(other)),
         }
@@ -983,6 +973,8 @@ pub enum Follow {
     Field(PropertyAccessKind, Ident2),
     /// Call a method of the value.
     Call(PropertyAccessKind, Ident2, Box<[Expression]>),
+    /// Apply a unary operator to the value.
+    Unary(UnaryOp),
 }
 
 /// Like a `Follow` but only supports field accesses.

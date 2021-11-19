@@ -138,17 +138,9 @@ impl<'o> TypeExprCompiler<'o> {
     ) -> Result<TypeExpr<'o>, DMError> {
         match expr {
             Expression::Base {
-                unary,
                 term,
                 follow,
             } => {
-                if let Some(op) = unary.first() {
-                    return Err(DMError::new(
-                        location,
-                        format!("type expr: bad unary {}", op.name()),
-                    ));
-                }
-
                 let mut ty = self.visit_term(term.location, &term.elem)?;
                 for each in follow.iter() {
                     ty = self.visit_follow(each.location, ty, &each.elem)?;
@@ -271,7 +263,7 @@ impl<'o> TypeExprCompiler<'o> {
                 )),
             },
 
-            _ => Err(DMError::new(location, "type expr: bad follow node")),
+            _ => Err(DMError::new(location, format!("type expr: bad follow node {:?}", rhs))),
         }
     }
 }
