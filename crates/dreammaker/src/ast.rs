@@ -220,11 +220,14 @@ augmented! {
     Sub = SubAssign;
     Mul = MulAssign;
     Div = DivAssign;
+    Mod = ModAssign;
     BitAnd = BitAndAssign;
     BitOr = BitOrAssign;
     BitXor = BitXorAssign;
     LShift = LShiftAssign;
     RShift = RShiftAssign;
+    And = AndAssign;
+    Or = OrAssign;
 }
 
 /// The ternary operator, represented uniformly for convenience.
