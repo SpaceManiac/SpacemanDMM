@@ -526,6 +526,12 @@ pub struct Ident2 {
     inner: Box<str>,
 }
 
+impl Ident2 {
+    pub fn as_str(&self) -> &str {
+        &*self.inner
+    }
+}
+
 impl PartialEq<str> for Ident2 {
     fn eq(&self, other: &str) -> bool {
         &*self.inner == other
@@ -1142,7 +1148,7 @@ pub enum Statement {
     },
     DoWhile {
         block: Block,
-        condition: Spanned<Expression>,
+        condition: Box<Spanned<Expression>>,
     },
     If {
         arms: Vec<(Spanned<Expression>, Block)>,
@@ -1162,7 +1168,7 @@ pub enum Statement {
     Var(Box<VarStatement>),
     Vars(Vec<VarStatement>),
     Setting {
-        name: Ident,
+        name: Ident2,
         mode: SettingMode,
         value: Expression
     },

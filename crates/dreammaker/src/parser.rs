@@ -1237,7 +1237,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             let condition = Spanned::new(self.location(), require!(self.expression()));
             require!(self.exact(Token::Punct(Punctuation::RParen)));
             require!(self.statement_terminator());
-            spanned(Statement::DoWhile { block, condition })
+            spanned(Statement::DoWhile { block, condition: Box::new(condition) })
         } else if let Some(()) = self.exact_ident("for")? {
             // for ()
             // for (Var [as Type] [in List]) Statement
@@ -1426,7 +1426,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             };
             let value = require!(self.expression());
             require!(self.statement_terminator());
-            spanned(Statement::Setting { name, mode, value })
+            spanned(Statement::Setting { name: name.into(), mode, value })
         } else if let Some(()) = self.exact_ident("break")? {
             let label = self.ident()?;
             require!(self.statement_terminator());
