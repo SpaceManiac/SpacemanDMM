@@ -5,7 +5,7 @@
 
 extern crate dreammaker as dm;
 use dm::{Context, DMError, Location, Severity};
-use dm::objtree::{ObjectTree, TypeRef, ProcRef, Code};
+use dm::objtree::{ObjectTree, TypeRef, ProcRef};
 use dm::constants::{Constant, ConstFn};
 use dm::ast::*;
 
@@ -330,15 +330,11 @@ fn run_inner(context: &Context, objtree: &ObjectTree, cli: bool) {
 
     let mut analyzer = AnalyzeObjectTree::new(context, objtree);
 
-    let mut present = 0;
-    let mut invalid = 0;
-    let mut builtin = 0;
-
     cli_println!("============================================================");
     cli_println!("Gathering proc settings...\n");
     objtree.root().recurse(&mut |ty| {
         for proc in ty.iter_self_procs() {
-            if let Code::Present(ref code) = proc.get().code {
+            if let Some(ref code) = proc.get().code {
                 analyzer.gather_settings(proc, code);
             }
         }
@@ -348,19 +344,11 @@ fn run_inner(context: &Context, objtree: &ObjectTree, cli: bool) {
     cli_println!("Analyzing proc bodies...\n");
     objtree.root().recurse(&mut |ty| {
         for proc in ty.iter_self_procs() {
-            match proc.get().code {
-                Code::Present(ref code) => {
-                    present += 1;
-                    analyzer.check_proc(proc, code);
-                }
-                Code::Invalid => invalid += 1,
-                Code::Builtin => builtin += 1,
-                Code::Disabled => panic!("proc parsing was enabled, but also disabled. this is a bug"),
+            if let Some(ref code) = proc.get().code {
+                analyzer.check_proc(proc, code);
             }
         }
     });
-
-    cli_println!("Procs analyzed: {}. Errored: {}. Builtins: {}.\n", present, invalid, builtin);
 
     cli_println!("============================================================");
     cli_println!("Analyzing proc override validity...\n");

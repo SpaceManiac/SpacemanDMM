@@ -85,15 +85,7 @@ pub struct ProcValue {
     pub location: Location,
     pub parameters: Vec<Parameter>,
     pub docs: DocCollection,
-    pub code: Code,
-}
-
-#[derive(Debug, Clone)]
-pub enum Code {
-    Present(Block),
-    Invalid,
-    Builtin,
-    Disabled,
+    pub code: Option<Block>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -742,7 +734,7 @@ impl ObjectTree {
         for node in self.graph.iter_mut() {
             for (_, typroc) in node.procs.iter_mut() {
                 for proc in typroc.value.iter_mut() {
-                    proc.code = Code::Disabled;
+                    proc.code = None;
                 }
             }
         }
@@ -1102,7 +1094,7 @@ impl ObjectTreeBuilder {
         name: &str,
         declaration: Option<ProcDeclKind>,
         parameters: Vec<Parameter>,
-        code: Code,
+        code: Option<Block>,
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let node = &mut self.inner.graph[parent.index()];
         let proc = node.procs.entry(name.to_owned()).or_insert_with(Default::default);
@@ -1213,7 +1205,7 @@ impl ObjectTreeBuilder {
             elems.iter().copied(),
             elems.len() + 1,
             params.iter().copied().map(|param| Parameter { name: param.into(), .. Default::default() }).collect(),
-            Code::Builtin,
+            None,
         ).unwrap().1
     }
 
@@ -1225,7 +1217,7 @@ impl ObjectTreeBuilder {
         mut path: I,
         len: usize,
         parameters: Vec<Parameter>,
-        code: Code,
+        code: Option<Block>,
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let (parent, mut proc_name) = self.get_from_path(location, &mut path, len)?;
         let mut declaration = None;

@@ -948,7 +948,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     fn proc_params_and_body(&mut self, current: NodeIndex, proc_kind: Option<ProcDeclKind>, name: &str, entry_start: Location, absolute: bool) -> Status<()> {
         use super::lexer::Token::*;
         use super::lexer::Punctuation::*;
-        use super::objtree::Code;
 
         leading!(self.exact(Punct(LParen)));
 
@@ -995,14 +994,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             match result {
                 Err(err) => {
                     self.context.register_error(err);
-                    Code::Invalid
+                    None
                 },
                 Ok(code) => {
-                    Code::Present(code)
+                    Some(code)
                 }
             }
         } else {
-            Code::Disabled
+            None
         };
 
         match self.tree.register_proc(self.context, location, current, name, proc_kind, parameters, code) {

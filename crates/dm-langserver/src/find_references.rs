@@ -57,7 +57,7 @@ impl ReferencesTable {
             }
 
             for proc in ty.iter_self_procs() {
-                if let dm::objtree::Code::Present(ref code) = proc.code {
+                if let Some(ref code) = proc.code {
                     WalkProc::from_proc(&mut tab, objtree, proc).run(proc, code);
                 }
             }
