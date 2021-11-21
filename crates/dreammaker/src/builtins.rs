@@ -200,12 +200,16 @@ pub fn default_defines(defines: &mut DefineMap) {
 
 /// Register BYOND builtins into the specified object tree.
 pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
+    fn path(path: &'static [&'static str]) -> Constant {
+        Constant::Prefab(Box::new(super::constants::Pop {
+            path: path.iter().copied().map(String::from).collect::<Box<[_]>>(),
+            vars: Default::default(),
+        }))
+    }
+
     macro_rules! path {
         ($(/$elem:ident)*) => {
-            Constant::Prefab(super::constants::Pop {
-                path: vec![$(stringify!($elem).into()),*].into_boxed_slice(),
-                vars: Default::default(),
-            })
+            path(&[$(stringify!($elem),)*])
         }
     }
     macro_rules! int {

@@ -56,20 +56,20 @@ pub enum Constant {
     /// A `new` call.
     New {
         /// The type to be instantiated.
-        type_: Option<Pop>,
+        type_: Option<Box<Pop>>,
         /// The list of arugments to pass to the `New()` proc.
-        args: Option<Vec<(Constant, Option<Constant>)>>,
+        args: Option<Box<[(Constant, Option<Constant>)]>>,
     },
     /// A `list` literal. Elements have optional associations.
-    List(Vec<(Constant, Option<Constant>)>),
+    List(Box<[(Constant, Option<Constant>)]>),
     /// A call to a constant type constructor.
-    Call(ConstFn, Vec<(Constant, Option<Constant>)>),
+    Call(ConstFn, Box<[(Constant, Option<Constant>)]>),
     /// A prefab literal.
-    Prefab(Pop),
+    Prefab(Box<Pop>),
     /// A string literal.
-    String(String),
+    String(Box<str>),
     /// A resource literal.
-    Resource(String),
+    Resource(Box<str>),
     /// A floating-point (or integer) literal, following BYOND's rules.
     Float(f32),
 }
@@ -144,15 +144,13 @@ impl Constant {
     // ------------------------------------------------------------------------
     // Constructors
 
-    pub const EMPTY_STRING: &'static Constant = &Constant::String(String::new());
-
     pub fn null() -> &'static Constant {
         static NULL: Constant = Constant::Null(None);
         &NULL
     }
 
     #[inline]
-    pub fn string<S: Into<String>>(s: S) -> Constant {
+    pub fn string<S: Into<Box<str>>>(s: S) -> Constant {
         Constant::String(s.into())
     }
 
@@ -212,7 +210,7 @@ impl Constant {
 
     pub fn eq_string(&self, string: &str) -> bool {
         match *self {
-            Constant::String(ref s) => s == string,
+            Constant::String(ref s) => &**s == string,
             _ => false,
         }
     }
@@ -220,7 +218,7 @@ impl Constant {
     pub fn eq_resource(&self, resource: &str) -> bool {
         match self {
             Constant::String(ref s) |
-            Constant::Resource(ref s) => s == resource,
+            Constant::Resource(ref s) => &**s == resource,
             _ => false,
         }
     }
@@ -230,7 +228,7 @@ impl Constant {
 
     pub fn contains_key(&self, key: &Constant) -> bool {
         if let Constant::List(ref elements) = *self {
-            for &(ref k, _) in elements {
+            for &(ref k, _) in elements.iter() {
                 if key == k {
                     return true;
                 }
@@ -243,7 +241,7 @@ impl Constant {
         match (self, key) {
             // Narrowing conversion is intentional.
             (&Constant::List(ref elements), &Constant::Float(i)) => return elements.get(i as usize).map(|&(ref k, _)| k),
-            (&Constant::List(ref elements), key) => for &(ref k, ref v) in elements {
+            (&Constant::List(ref elements), key) => for &(ref k, ref v) in elements.iter() {
                 if key == k {
                     return v.as_ref();
                 }
@@ -292,7 +290,7 @@ impl PartialEq<str> for Constant {
     fn eq(&self, other: &str) -> bool {
         match self {
             Constant::String(ref s) |
-            Constant::Resource(ref s) => s == other,
+            Constant::Resource(ref s) => &**s == other,
             _ => false,
         }
     }
@@ -585,7 +583,7 @@ impl<'a> ConstantFolder<'a> {
     /// list of expressions, keyword arguments disallowed
     #[allow(dead_code)]
     fn expr_vec(&mut self, v: Vec<Expression>) -> Result<Vec<Constant>, DMError> {
-        let mut out = Vec::new();
+        let mut out = Vec::with_capacity(v.len());
         for each in v {
             out.push(self.expr(each, None)?);
         }
@@ -593,8 +591,8 @@ impl<'a> ConstantFolder<'a> {
     }
 
     /// arguments or keyword arguments
-    fn arguments(&mut self, v: Box<[Expression]>) -> Result<Vec<(Constant, Option<Constant>)>, DMError> {
-        let mut out = Vec::new();
+    fn arguments(&mut self, v: Box<[Expression]>) -> Result<Box<[(Constant, Option<Constant>)]>, DMError> {
+        let mut out = Vec::with_capacity(v.len());
         for each in Vec::from(v).into_iter() {
             out.push(match each {
                 // handle associations
@@ -604,7 +602,7 @@ impl<'a> ConstantFolder<'a> {
                     rhs,
                 } => {
                     let key = match Term::from(*lhs) {
-                        Term::Ident(ident) => Constant::String(ident),
+                        Term::Ident(ident) => Constant::String(ident.into()),
                         other => self.term(other, None)?,
                     };
                     (key, Some(self.expr(*rhs, None)?))
@@ -612,7 +610,7 @@ impl<'a> ConstantFolder<'a> {
                 key => (self.expr(key, None)?, None),
             });
         }
-        Ok(out)
+        Ok(out.into())
     }
 
     fn follow(&mut self, term: Constant, follow: Follow) -> Result<Constant, DMError> {
@@ -696,7 +694,7 @@ impl<'a> ConstantFolder<'a> {
         integer!(RShift >>);
 
         match (op, lhs, rhs) {
-            (BinaryOp::Add, String(lhs), String(rhs)) => Ok(String(lhs + &rhs)),
+            (BinaryOp::Add, String(lhs), String(rhs)) => Ok(String((std::string::String::from(lhs) + &rhs).into())),
             (BinaryOp::Eq, lhs, rhs) => Ok(Constant::from(lhs == rhs)),
             (BinaryOp::NotEq, lhs, rhs) => Ok(Constant::from(lhs != rhs)),
             (BinaryOp::And, lhs, rhs) => Ok(if lhs.to_bool() { rhs } else { lhs }),
@@ -709,7 +707,7 @@ impl<'a> ConstantFolder<'a> {
         Ok(match term {
             Term::Null => Constant::Null(type_hint.cloned()),
             Term::NewPrefab { prefab, args } => Constant::New {
-                type_: Some(self.prefab(*prefab)?),
+                type_: Some(Box::new(self.prefab(*prefab)?)),
                 args: match args {
                     Some(args) => Some(self.arguments(args)?),
                     None => None,
@@ -737,7 +735,7 @@ impl<'a> ConstantFolder<'a> {
                 "cos" => self.trig_op(args, f32::cos)?,
                 "arcsin" => self.trig_op(args, f32::asin)?,
                 "arccos" => self.trig_op(args, f32::acos)?,
-                "rgb" => Constant::String(self.rgb(args)?),
+                "rgb" => Constant::String(self.rgb(args)?.into()),
                 "defined" if self.defines.is_some() => {
                     let defines = self.defines.unwrap();  // annoying, but keeps the match clean
                     if args.len() != 1 {
@@ -751,10 +749,10 @@ impl<'a> ConstantFolder<'a> {
                 // other functions are no-goes
                 _ => return Err(self.error(format!("non-constant function call: {}", ident))),
             },
-            Term::Prefab(prefab) => Constant::Prefab(self.prefab(*prefab)?),
+            Term::Prefab(prefab) => Constant::Prefab(Box::new(self.prefab(*prefab)?)),
             Term::Ident(ident) => self.ident(ident, false)?,
-            Term::String(v) => Constant::String(v),
-            Term::Resource(v) => Constant::Resource(v),
+            Term::String(v) => Constant::String(v.into()),
+            Term::Resource(v) => Constant::Resource(v.into()),
             Term::Int(v) => Constant::Float(v as f32),
             Term::Float(v) => Constant::from(v),
             Term::Expr(expr) => self.expr(*expr, type_hint)?,
@@ -865,7 +863,7 @@ impl<'a> ConstantFolder<'a> {
         let mut color_args = ColorArgs::default();
 
         // Get the value of the `space` kwarg if present, or collect which kwargs are set to automatically determine the color space.
-        for (value, potential_kwarg_value) in &arguments {
+        for (value, potential_kwarg_value) in arguments.iter() {
             // Check for kwargs if we're in the right form
             if let Some(kwarg_value) = potential_kwarg_value {
                 if let Some(kwarg) = value.as_str() {

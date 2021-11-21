@@ -43,9 +43,9 @@ fn lists() {
     assert_eq!(List(vec![
         (Constant::string("KNOCKDOWN"), Some(Float(0.))),
         (Constant::string("THROW"), Some(Float(0.))),
-    ]).to_string(), r#"list("KNOCKDOWN" = 0, "THROW" = 0)"#);
+    ].into()).to_string(), r#"list("KNOCKDOWN" = 0, "THROW" = 0)"#);
     assert_eq!(List(vec![
         (Constant::string("neutral"), None),
         (Constant::string("Syndicate"), None),
-    ]).to_string(), r#"list("neutral","Syndicate")"#);
+    ].into()).to_string(), r#"list("neutral","Syndicate")"#);
 }

@@ -7,7 +7,7 @@ use indexmap::IndexMap;
 use ahash::RandomState;
 
 use super::ast::{Expression, VarType, VarTypeBuilder, VarSuffix, PathOp, Parameter, Block, ProcDeclKind, Ident};
-use super::constants::{Constant, Pop};
+use super::constants::Constant;
 use super::docs::DocCollection;
 use super::{DMError, Location, Context, Severity};
 
@@ -730,9 +730,9 @@ impl ObjectTree {
     }
 
     pub fn type_by_constant(&self, constant: &Constant) -> Option<TypeRef> {
-        match *constant {
-            Constant::String(ref string_path) => self.find(string_path),
-            Constant::Prefab(Pop { ref path, .. }) => self.type_by_path(path.iter()),
+        match constant {
+            Constant::String(string_path) => self.find(string_path),
+            Constant::Prefab(pop) => self.type_by_path(pop.path.iter()),
             _ => None,
         }
     }
@@ -827,6 +827,7 @@ impl ObjectTreeBuilder {
             } else {
                 let constant_buf;
                 let mut parent_type_buf;
+                let empty_string;
                 let parent_type = if path == "/atom" {
                     "/datum"
                 } else if path == "/turf" || path == "/area" {
@@ -855,7 +856,8 @@ impl ObjectTreeBuilder {
                                 Err(e) => Err(e),
                             }
                         } else if path == "/client" {
-                            Ok(Constant::EMPTY_STRING)
+                            empty_string = Constant::String("".into());
+                            Ok(&empty_string)
                         } else {
                             // A weird situation which should not happen.
                             Err(DMError::new(location, format!("missing {}/parent_type", path)))
@@ -865,9 +867,9 @@ impl ObjectTreeBuilder {
                             Ok(Constant::String(s)) => {
                                 parent_type = s;
                             }
-                            Ok(Constant::Prefab(Pop { ref path, ref vars })) if vars.is_empty() => {
+                            Ok(Constant::Prefab(ref pop)) if pop.vars.is_empty() => {
                                 parent_type_buf = String::new();
-                                for piece in path.iter() {
+                                for piece in pop.path.iter() {
                                     parent_type_buf.push('/');
                                     parent_type_buf.push_str(&piece);
                                 }

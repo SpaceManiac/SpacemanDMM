@@ -1677,8 +1677,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Term::Null => Analysis::null(),
             Term::Int(number) => Analysis::from_value(self.objtree, Constant::from(*number), type_hint),
             Term::Float(number) => Analysis::from_value(self.objtree, Constant::from(*number), type_hint),
-            Term::String(text) => Analysis::from_value(self.objtree, Constant::String(text.to_owned()), type_hint),
-            Term::Resource(text) => Analysis::from_value(self.objtree, Constant::Resource(text.to_owned()), type_hint),
+            Term::String(text) => Analysis::from_value(self.objtree, Constant::String(text.as_str().into()), type_hint),
+            Term::Resource(text) => Analysis::from_value(self.objtree, Constant::Resource(text.as_str().into()), type_hint),
             Term::As(_) => assumption_set![Assumption::IsNum(true)].into(),
 
             Term::Ident(unscoped_name) => {
@@ -1707,7 +1707,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     Analysis {
                         static_ty: StaticType::None,
                         aset: assumption_set![Assumption::IsPath(true, nav.ty())].into(),
-                        value: Some(Constant::Prefab(pop)),
+                        value: Some(Constant::Prefab(Box::new(pop))),
                         fix_hint: None,
                         is_impure: None,
                     }
@@ -2247,7 +2247,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     .register(self.context);
                 return Analysis::empty()
             });
-            guard!(let Some(arglist) = VALID_FILTER_TYPES.get(typevalue.as_str()) else {
+            guard!(let Some(arglist) = VALID_FILTER_TYPES.get(&typevalue) else {
                 error(location, format!("filter() called with invalid type keyword parameter value '{}'", typevalue))
                     .register(self.context);
                 return Analysis::empty()
@@ -2259,7 +2259,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         .register(self.context);
                 }
             }
-            if let Some((flagfieldname, exclusive, can_be_zero, valid_flags)) = VALID_FILTER_FLAGS.get(typevalue.as_str()) {
+            if let Some((flagfieldname, exclusive, can_be_zero, valid_flags)) = VALID_FILTER_FLAGS.get(&typevalue) {
                 if let Some(flagsvalue) = param_expr_map.get(flagfieldname) {
                     self.check_filter_flag(flagsvalue, *can_be_zero, location, typevalue, valid_flags, flagfieldname, *exclusive);
                 }
