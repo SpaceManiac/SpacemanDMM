@@ -847,11 +847,11 @@ pub enum Term {
     /// A prefab literal (path + vars).
     Prefab(Box<Prefab>),
     /// An interpolated string, alternating string/expr/string/expr.
-    InterpString(String, Box<[(Option<Expression>, String)]>),
+    InterpString(Ident2, Box<[(Option<Expression>, Box<str>)]>),
 
     // Function calls with recursive contents ---------------------------------
     /// An unscoped function call.
-    Call(Ident, Box<[Expression]>),
+    Call(Ident2, Box<[Expression]>),
     /// A `.()` call.
     SelfCall(Box<[Expression]>),
     /// A `..()` call. If arguments is empty, the proc's arguments are passed.

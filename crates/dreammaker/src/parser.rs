@@ -2043,7 +2043,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 match self.arguments(&[], &i)? {
                     Some(args) => {
                         self.annotate_precise(start..first_token, || Annotation::UnscopedCall(i.clone()));
-                        Term::Call(i, args)
+                        Term::Call(i.into(), args)
                     },
                     None => {
                         belongs_to.push(i.clone());
@@ -2115,16 +2115,16 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     let expr = self.expression()?;
                     match self.next("']'")? {
                         Token::InterpStringPart(part) => {
-                            parts.push((expr, part));
+                            parts.push((expr, part.into()));
                         },
                         Token::InterpStringEnd(end) => {
-                            parts.push((expr, end));
+                            parts.push((expr, end.into()));
                             break;
                         },
                         _ => return self.parse_error(),
                     }
                 }
-                Term::InterpString(begin, parts.into())
+                Term::InterpString(begin.into(), parts.into())
             },
 
             other => return self.try_another(other),
