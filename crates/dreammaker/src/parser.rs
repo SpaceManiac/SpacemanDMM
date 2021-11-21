@@ -1958,7 +1958,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
                 Term::New {
                     type_: t,
-                    args: args.map(Vec::into_boxed_slice),
+                    args,
                 }
             },
 
@@ -2119,7 +2119,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         _ => return self.parse_error(),
                     }
                 }
-                Term::InterpString(begin, parts)
+                Term::InterpString(begin, parts.into())
             },
 
             other => return self.try_another(other),
@@ -2234,7 +2234,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     }
 
     /// a parenthesized, comma-separated list of expressions
-    fn arguments(&mut self, parents: &[Ident], proc: &str) -> Status<Vec<Expression>> {
+    fn arguments(&mut self, parents: &[Ident], proc: &str) -> Status<Box<[Expression]>> {
         leading!(self.exact(Token::Punct(Punctuation::LParen)));
         let start = self.location;
 
@@ -2258,13 +2258,13 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Annotation::ProcArguments(parents.to_owned(), proc.to_owned(), arguments.len())
         });
         match result {
-            Ok(Some(_)) => success(arguments),
+            Ok(Some(_)) => success(arguments.into()),
             Ok(None) => Ok(None),
             Err(e) => Err(e),
         }
     }
 
-    fn pick_arguments(&mut self) -> Status<Vec<(Option<Expression>, Expression)>> {
+    fn pick_arguments(&mut self) -> Status<Box<[(Option<Expression>, Expression)]>> {
         leading!(self.exact(Token::Punct(Punctuation::LParen)));
         success(require!(self.separated(
             Punctuation::Comma,
@@ -2278,7 +2278,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     success((None, expr))
                 }
             }
-        )))
+        )).into())
     }
 
     fn separated<R: Clone, F: FnMut(&mut Self) -> Status<R>>(

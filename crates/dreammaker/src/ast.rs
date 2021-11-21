@@ -861,15 +861,15 @@ pub enum Term {
     /// A prefab literal (path + vars).
     Prefab(Box<Prefab>),
     /// An interpolated string, alternating string/expr/string/expr.
-    InterpString(String, Vec<(Option<Expression>, String)>),
+    InterpString(String, Box<[(Option<Expression>, String)]>),
 
     // Function calls with recursive contents ---------------------------------
     /// An unscoped function call.
-    Call(Ident, Vec<Expression>),
+    Call(Ident, Box<[Expression]>),
     /// A `.()` call.
-    SelfCall(Vec<Expression>),
+    SelfCall(Box<[Expression]>),
     /// A `..()` call. If arguments is empty, the proc's arguments are passed.
-    ParentCall(Vec<Expression>),
+    ParentCall(Box<[Expression]>),
     /// A `new` call.
     New {
         /// The type to be instantiated.
@@ -878,22 +878,22 @@ pub enum Term {
         args: Option<Box<[Expression]>>,
     },
     /// A `list` call. Associations are represented by assignment expressions.
-    List(Vec<Expression>),
+    List(Box<[Expression]>),
     /// An `input` call.
     Input {
-        args: Vec<Expression>,
+        args: Box<[Expression]>,
         input_type: Option<InputType>, // as
         in_list: Option<Box<Expression>>, // in
     },
     /// A `locate` call.
     Locate {
-        args: Vec<Expression>,
+        args: Box<[Expression]>,
         in_list: Option<Box<Expression>>, // in
     },
     /// A `pick` call, possibly with weights.
-    Pick(Vec<(Option<Expression>, Expression)>),
+    Pick(Box<[(Option<Expression>, Expression)]>),
     /// A use of the `call()()` primitive.
-    DynamicCall(Vec<Expression>, Vec<Expression>),
+    DynamicCall(Box<[Expression]>, Box<[Expression]>),
 }
 
 impl Term {

@@ -593,9 +593,9 @@ impl<'a> ConstantFolder<'a> {
     }
 
     /// arguments or keyword arguments
-    fn arguments(&mut self, v: Vec<Expression>) -> Result<Vec<(Constant, Option<Constant>)>, DMError> {
+    fn arguments(&mut self, v: Box<[Expression]>) -> Result<Vec<(Constant, Option<Constant>)>, DMError> {
         let mut out = Vec::new();
-        for each in v {
+        for each in Vec::from(v).into_iter() {
             out.push(match each {
                 // handle associations
                 Expression::AssignOp {
@@ -758,10 +758,10 @@ impl<'a> ConstantFolder<'a> {
         })
     }
 
-    fn trig_op(&mut self, mut args: Vec<Expression>, op: fn(f32) -> f32) -> Result<Constant, DMError> {
+    fn trig_op(&mut self, args: Box<[Expression]>, op: fn(f32) -> f32) -> Result<Constant, DMError> {
         if args.len() != 1 {
             Err(self.error(format!("trig function requires exactly 1 argument, instead found {}", args.len())))
-        } else if let Some(f) = self.expr(args.remove(0), None)?.to_float() {
+        } else if let Some(f) = self.expr(Vec::from(args).swap_remove(0), None)?.to_float() {
             Ok(Constant::Float(op(f)))
         } else {
             Err(self.error("trig function requires numeric argument"))
@@ -830,7 +830,7 @@ impl<'a> ConstantFolder<'a> {
         Err(self.error(format!("unknown variable: {}", ident)))
     }
 
-    fn rgb(&mut self, args: Vec<Expression>) -> Result<String, DMError> {
+    fn rgb(&mut self, args: Box<[Expression]>) -> Result<String, DMError> {
         enum ColorSpace {
             Rgb = 0,
             Hsv = 1,

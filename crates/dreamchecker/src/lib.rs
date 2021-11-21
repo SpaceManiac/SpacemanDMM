@@ -1745,7 +1745,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     Analysis::empty()
                 } else if unscoped_name == "SpacemanDMM_debug" {
                     eprintln!("SpacemanDMM_debug:");
-                    for arg in args {
+                    for arg in args.iter() {
                         eprintln!("    {:?}", self.visit_expression(location, arg, None, local_vars));
                     }
                     Analysis::empty()
