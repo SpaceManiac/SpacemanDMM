@@ -83,7 +83,7 @@ pub struct ProcDeclaration {
 #[derive(Debug, Clone)]
 pub struct ProcValue {
     pub location: Location,
-    pub parameters: Vec<Parameter>,
+    pub parameters: Box<[Parameter]>,
     pub docs: DocCollection,
     pub code: Option<Block>,
 }
@@ -1116,7 +1116,7 @@ impl ObjectTreeBuilder {
 
         let value = ProcValue {
             location,
-            parameters,
+            parameters: parameters.into(),
             docs: Default::default(),
             code
         };
