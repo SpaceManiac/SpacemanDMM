@@ -254,7 +254,8 @@ impl<'o> WalkProc<'o> {
                 }
                 self.visit_block(block);
             },
-            Statement::ForList { in_list, block, var_type, name, .. } => {
+            Statement::ForList(for_list) => {
+                let ForListStatement { var_type, name, in_list, block, .. } = &**for_list;
                 if let Some(in_list) = in_list {
                     self.visit_expression(location, in_list, None);
                 }

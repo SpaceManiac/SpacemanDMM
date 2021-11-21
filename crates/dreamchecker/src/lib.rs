@@ -1392,7 +1392,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 state.end_loop();
                 return state
             },
-            Statement::ForList { in_list, block, var_type, name, .. } => {
+            Statement::ForList(for_list) => {
+                let ForListStatement { var_type, name, input_type, in_list, block } = &**for_list;
                 let mut scoped_locals = local_vars.clone();
                 if let Some(in_list) = in_list {
                     let list = self.visit_expression(location, in_list, None, &mut scoped_locals);

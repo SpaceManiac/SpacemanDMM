@@ -1157,15 +1157,7 @@ pub enum Statement {
         inc: Option<Box<Statement>>,
         block: Block,
     },
-    ForList {
-        var_type: Option<VarType>,
-        name: Ident2,
-        /// If zero, uses the declared type of the variable.
-        input_type: Option<InputType>,
-        /// Defaults to 'world'.
-        in_list: Option<Box<Expression>>,
-        block: Block,
-    },
+    ForList(Box<ForListStatement>),
     ForRange(Box<ForRangeStatement>),
     Var(Box<VarStatement>),
     Vars(Vec<VarStatement>),
@@ -1210,6 +1202,17 @@ pub struct VarStatement {
 pub enum Case {
     Exact(Expression),
     Range(Expression, Expression),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ForListStatement {
+    pub var_type: Option<VarType>,
+    pub name: Ident2,
+    /// If zero, uses the declared type of the variable.
+    pub input_type: Option<InputType>,
+    /// Defaults to 'world'.
+    pub in_list: Option<Expression>,
+    pub block: Block,
 }
 
 #[derive(Debug, Clone, PartialEq)]

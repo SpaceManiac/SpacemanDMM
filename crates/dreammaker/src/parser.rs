@@ -1308,13 +1308,13 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                             rhs => {
                                 // I love code duplication, don't you?
                                 require!(self.exact(Token::Punct(Punctuation::RParen)));
-                                return spanned(Statement::ForList {
+                                return spanned(Statement::ForList(Box::new(ForListStatement {
                                     var_type: None,
                                     name: name.into(),
                                     input_type: None,
-                                    in_list: Some(Box::new(rhs)),
+                                    in_list: Some(rhs),
                                     block: require!(self.block(&LoopContext::ForList)),
-                                });
+                                })));
                             }
                         }
                     },
@@ -1344,13 +1344,13 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 };
 
                 require!(self.exact(Token::Punct(Punctuation::RParen)));
-                spanned(Statement::ForList {
+                spanned(Statement::ForList(Box::new(ForListStatement {
                     var_type,
                     name: name.into(),
                     input_type,
-                    in_list: in_list.map(Box::new),
+                    in_list,
                     block: require!(self.block(&LoopContext::ForList)),
-                })
+                })))
             } else {
                 require!(self.exact(Token::Punct(Punctuation::RParen)));
                 spanned(Statement::ForInfinite {
