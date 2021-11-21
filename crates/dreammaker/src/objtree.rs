@@ -91,7 +91,7 @@ pub struct ProcValue {
 #[derive(Debug, Clone)]
 pub enum Code {
     Present(Block),
-    Invalid(DMError),
+    Invalid,
     Builtin,
     Disabled,
 }

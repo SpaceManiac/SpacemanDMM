@@ -353,7 +353,7 @@ fn run_inner(context: &Context, objtree: &ObjectTree, cli: bool) {
                     present += 1;
                     analyzer.check_proc(proc, code);
                 }
-                Code::Invalid(_) => invalid += 1,
+                Code::Invalid => invalid += 1,
                 Code::Builtin => builtin += 1,
                 Code::Disabled => panic!("proc parsing was enabled, but also disabled. this is a bug"),
             }

@@ -994,9 +994,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             }
             match result {
                 Err(err) => {
-                    let err2 = err.clone();
                     self.context.register_error(err);
-                    Code::Invalid(err2)
+                    Code::Invalid
                 },
                 Ok(code) => {
                     Code::Present(code)
