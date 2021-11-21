@@ -6,7 +6,7 @@ use std::ops::Range;
 
 use super::{DMError, Location, HasLocation, Context, Severity, FileId};
 use super::lexer::{LocatedToken, Token, Punctuation};
-use super::objtree::{ObjectTree, NodeIndex};
+use super::objtree::{ObjectTreeBuilder, ObjectTree, NodeIndex};
 use super::annotation::*;
 use super::ast::*;
 use super::docs::*;
@@ -281,7 +281,7 @@ enum LoopContext {
 pub struct Parser<'ctx, 'an, 'inp> {
     context: &'ctx Context,
     annotations: Option<&'an mut AnnotationTree>,
-    tree: ObjectTree,
+    tree: ObjectTreeBuilder,
     fatal_errored: bool,
 
     input: Box<dyn Iterator<Item=LocatedToken> + 'inp>,
@@ -313,7 +313,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         Parser {
             context,
             annotations: None,
-            tree: ObjectTree::default(),
+            tree: Default::default(),
             fatal_errored: false,
 
             input: Box::new(input.into_iter()),
@@ -358,7 +358,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     #[doc(hidden)]
     pub fn parse_object_tree_without_builtins(mut self) -> ObjectTree {
         self.run();
-        self.tree
+        self.tree.skip_finish()
     }
 
     pub fn parse_with_module_docs(mut self) -> (ObjectTree, BTreeMap<FileId, Vec<(u32, DocComment)>>) {
@@ -385,7 +385,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }
     }
 
-    fn finalize_object_tree(mut self) -> ObjectTree {
+    fn finalize_object_tree(self) -> ObjectTree {
         let procs_total = self.procs_good + self.procs_bad;
         if self.procs_bad > 0 {
             eprintln!(
@@ -396,8 +396,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             );
         }
 
-        self.tree.finalize(self.context, self.fatal_errored);
-        self.tree
+        self.tree.finish(self.context, self.fatal_errored)
     }
 
     // ------------------------------------------------------------------------
@@ -582,7 +581,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     // Object tree - root
 
     fn root(&mut self) -> Status<()> {
-        self.tree_entries(self.tree.root().index(), None, None, Token::Eof)
+        self.tree_entries(self.tree.root_index(), None, None, Token::Eof)
     }
 
     fn tree_block(&mut self, current: NodeIndex, proc_kind: Option<ProcDeclKind>, var_type: Option<VarTypeBuilder>) -> Status<()> {
@@ -705,11 +704,11 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         // read and calculate the current path
         let (absolute, mut path) = leading!(self.tree_path(false));
 
-        if absolute && current != self.tree.root().index() {
-            DMError::new(entry_start, format!("nested absolute path inside {}", &self.tree[current].path))
+        if absolute && current != self.tree.root_index() {
+            DMError::new(entry_start, format!("nested absolute path inside {}", self.tree.get_path(current)))
                 .set_severity(Severity::Warning)
                 .register(self.context);
-            current = self.tree.root().index();
+            current = self.tree.root_index();
         }
 
         let path_len = path.len();
@@ -740,7 +739,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     self.error("cannot have sub-blocks of `proc/` block")
                         .register(self.context);
                 } else {
-                    let len = self.tree[current].path.chars().filter(|&c| c == '/').count() + path_len;
+                    let len = self.tree.get_path(current).chars().filter(|&c| c == '/').count() + path_len;
                     current = self.tree.subtype_or_add(self.location, current, each, len);
 
                     if !absolute && self.context.config().code_standards.disallow_relative_type_definitions {
@@ -788,10 +787,10 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     require!(self.tree_block(current, proc_kind, var_type.clone()));
                 } else {
                     let (comment, ()) = require!(self.doc_comment(|this| this.tree_block(current, proc_kind, var_type.clone())));
-                    self.tree[current].docs.extend(comment);
+                    self.tree.extend_docs(current, comment);
                 }
 
-                let node = self.tree[current].path.to_owned();
+                let node = self.tree.get_path(current).to_owned();
                 self.annotate(start, || Annotation::TreeBlock(reconstruct_path(&node, proc_kind, var_type.as_ref(), "")));
                 SUCCESS
             }
@@ -808,7 +807,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
                     // We have to annotate prior to consuming the statement terminator, as we
                     // will otherwise consume following whitespace resulting in a bad annotation range
-                    let node = this.tree[current].path.to_owned();
+                    let node = this.tree.get_path(current).to_owned();
                     this.annotate(entry_start, || Annotation::Variable(reconstruct_path(&node, proc_kind, var_type.as_ref(), last_part)));
 
                     require!(this.statement_terminator());
@@ -847,7 +846,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     } else {
                         let docs = std::mem::take(&mut self.docs_following);
                         var_type.suffix(&var_suffix);
-                        let node = self.tree[current].path.to_owned();
+                        let node = self.tree.get_path(current).to_owned();
                         self.annotate(entry_start, || Annotation::Variable(reconstruct_path(&node, proc_kind, Some(&var_type), last_part)));
                         self.tree.declare_var(current, last_part, self.location, docs, var_type.build(), var_suffix.into_initializer());
                     }
@@ -861,9 +860,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 } else {
                     handle_relative_type_error!();
                     let docs = std::mem::take(&mut self.docs_following);
-                    let len = self.tree[current].path.chars().filter(|&c| c == '/').count() + path_len;
+                    let len = self.tree.get_path(current).chars().filter(|&c| c == '/').count() + path_len;
                     current = self.tree.subtype_or_add(self.location, current, last_part, len);
-                    self.tree[current].docs.extend(docs);
+                    self.tree.extend_docs(current, docs);
                 }
 
                 SUCCESS
@@ -1012,7 +1011,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 proc.docs.extend(comment);
                 // manually performed for borrowck reasons
                 if let Some(dest) = self.annotations.as_mut() {
-                    let new_stack = reconstruct_path(&self.tree[current].path, proc_kind, None, name);
+                    let new_stack = reconstruct_path(&self.tree.get_path(current), proc_kind, None, name);
                     dest.insert(entry_start..body_start, Annotation::ProcHeader(new_stack.to_vec(), idx));
                     dest.insert(body_start..self.location, Annotation::ProcBody(new_stack.to_vec(), idx));
                 }

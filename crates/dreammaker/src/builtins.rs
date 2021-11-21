@@ -199,7 +199,7 @@ pub fn default_defines(defines: &mut DefineMap) {
 }
 
 /// Register BYOND builtins into the specified object tree.
-pub fn register_builtins(tree: &mut ObjectTree) {
+pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
     macro_rules! path {
         ($(/$elem:ident)*) => {
             Constant::Prefab(super::constants::Pop {

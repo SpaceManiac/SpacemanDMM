@@ -652,21 +652,11 @@ impl Default for ObjectTree {
     }
 }
 
-pub enum EntryType {
-    ProcDecl,
-    Subtype,
-    VarDecl,
-}
-
 impl ObjectTree {
     pub fn with_builtins() -> ObjectTree {
-        let mut objtree = ObjectTree::default();
-        objtree.register_builtins();
-        objtree
-    }
-
-    pub(crate) fn register_builtins(&mut self) {
-        super::builtins::register_builtins(self);
+        let mut builder = ObjectTreeBuilder::default();
+        builder.register_builtins();
+        builder.skip_finish()
     }
 
     // ------------------------------------------------------------------------
@@ -747,19 +737,75 @@ impl ObjectTree {
         }
     }
 
+    /// Drop all code ASTs to attempt to reduce memory usage.
+    pub fn drop_code(&mut self) {
+        for node in self.graph.iter_mut() {
+            for (_, typroc) in node.procs.iter_mut() {
+                for proc in typroc.value.iter_mut() {
+                    proc.code = Code::Disabled;
+                }
+            }
+        }
+    }
+}
+
+impl std::ops::Index<NodeIndex> for ObjectTree {
+    type Output = Type;
+
+    fn index(&self, ix: NodeIndex) -> &Type {
+        self.graph.get(ix.index()).expect("node index out of range")
+    }
+}
+
+impl std::ops::IndexMut<NodeIndex> for ObjectTree {
+    fn index_mut(&mut self, ix: NodeIndex) -> &mut Type {
+        self.graph.get_mut(ix.index()).expect("node index out of range")
+    }
+}
+
+#[derive(Default)]
+pub struct ObjectTreeBuilder {
+    inner: ObjectTree,
+}
+
+impl ObjectTreeBuilder {
+    // ------------------------------------------------------------------------
+    // Parsing
+
+    pub fn get_path(&self, index: NodeIndex) -> &str {
+        &self.inner[index].path
+    }
+
+    pub fn extend_docs(&mut self, index: NodeIndex, collection: DocCollection) {
+        self.inner[index].docs.extend(collection)
+    }
+
+    pub fn root_index(&self) -> NodeIndex {
+        NodeIndex(0)
+    }
+
+    pub fn register_builtins(&mut self) {
+        super::builtins::register_builtins(self);
+    }
+
     // ------------------------------------------------------------------------
     // Finalization
 
-    pub(crate) fn finalize(&mut self, context: &Context, parser_fatal_errored: bool) {
+    pub fn skip_finish(self) -> ObjectTree {
+        self.inner
+    }
+
+    pub(crate) fn finish(mut self, context: &Context, parser_fatal_errored: bool) -> ObjectTree {
         self.assign_parent_types(context);
         if !parser_fatal_errored {
-            super::constants::evaluate_all(context, self);
+            super::constants::evaluate_all(context, &mut self.inner);
         }
+        self.inner
     }
 
     fn assign_parent_types(&mut self, context: &Context) {
-        for (path, &type_idx) in self.types.iter() {
-            let mut location = self[type_idx].location;
+        for (path, &type_idx) in self.inner.types.iter() {
+            let mut location = self.inner[type_idx].location;
             let idx = if path == "/datum" || path == "/list" || path == "/savefile" || path == "/world" {
                 // These types have no parent and cannot have one added. In the official compiler:
                 // - setting list or savefile/parent_type is denied with the same error as setting something's parent type to them;
@@ -767,7 +813,7 @@ impl ObjectTree {
                 // - setting world/parent_type compiles but has no runtime effect.
 
                 // Here, let's try to error if anything is set.
-                if let Some(var) = self[type_idx].vars.get("parent_type") {
+                if let Some(var) = self.inner[type_idx].vars.get("parent_type") {
                     // This check won't catch invalid redeclarations like `/datum/var/parent_type`, but that's fine for now.
                     if var.value.expression.is_some() {
                         context.register_error(DMError::new(
@@ -793,7 +839,7 @@ impl ObjectTree {
                         0 => "/datum",
                         idx => &path[..idx],
                     };
-                    if let Some(var) = self[type_idx].vars.get("parent_type") {
+                    if let Some(var) = self.inner[type_idx].vars.get("parent_type") {
                         location = var.value.location;
 
                         // At this point, accept either expressions (user code)
@@ -841,7 +887,7 @@ impl ObjectTree {
                 if path == "/client" && parent_type == "" {
                     // client has no parent by default, but can be safely reparented to /datum
                     NodeIndex::new(0)
-                } else if let Some(&idx) = self.types.get(parent_type) {
+                } else if let Some(&idx) = self.inner.types.get(parent_type) {
                     idx
                 } else {
                     context.register_error(DMError::new(
@@ -852,7 +898,7 @@ impl ObjectTree {
                 }
             };
 
-            self.graph[type_idx.index()].parent_type = idx;
+            self.inner.graph[type_idx.index()].parent_type = idx;
         }
     }
 
@@ -860,8 +906,8 @@ impl ObjectTree {
     // Parsing
 
     pub(crate) fn subtype_or_add(&mut self, location: Location, parent: NodeIndex, child: &str, len: usize) -> NodeIndex {
-        if let Some(&target) = self[parent].children.get(child) {
-            let node = &mut self[target];
+        if let Some(&target) = self.inner[parent].children.get(child) {
+            let node = &mut self.inner[target];
             if node.location_specificity > len {
                 node.location_specificity = len;
                 node.location = location;
@@ -870,9 +916,9 @@ impl ObjectTree {
         }
 
         // time to add a new child
-        let path = format!("{}/{}", self[parent].path, child);
-        let node = NodeIndex::new(self.graph.len());
-        self.graph.push(Type {
+        let path = format!("{}/{}", self.inner[parent].path, child);
+        let node = NodeIndex::new(self.inner.graph.len());
+        self.inner.graph.push(Type {
             name: child.to_owned(),
             path: path.clone(),
             vars: Default::default(),
@@ -881,12 +927,12 @@ impl ObjectTree {
             location_specificity: len,
             parent_type: NodeIndex::end(),
             docs: Default::default(),
-            id: self.symbols.allocate(),
+            id: self.inner.symbols.allocate(),
             children: Default::default(),
             parent_path: parent,
         });
-        self[parent].children.insert(child.to_owned(), node);
-        self.types.insert(path, node);
+        self.inner[parent].children.insert(child.to_owned(), node);
+        self.inner.types.insert(path, node);
         node
     }
 
@@ -898,7 +944,7 @@ impl ObjectTree {
         declaration: Option<VarDeclaration>,
     ) -> &mut TypeVar {
         // TODO: warn and merge docs for repeats
-        match self[ty].vars.entry(name.to_owned()) {
+        match self.inner[ty].vars.entry(name.to_owned()) {
             indexmap::map::Entry::Vacant(slot) => {
                 slot.insert(TypeVar { value, declaration })
             },
@@ -922,7 +968,7 @@ impl ObjectTree {
         var_type: VarType,
         expression: Option<Expression>,
     ) -> &mut TypeVar {
-        let id = self.symbols.allocate();
+        let id = self.inner.symbols.allocate();
         self.insert_var(ty, name, VarValue {
             location,
             expression,
@@ -1023,8 +1069,8 @@ impl ObjectTree {
         };
         var_type.suffix(&suffix);
 
-        let symbols = &mut self.symbols;
-        let node = &mut self.graph[parent.index()];
+        let symbols = &mut self.inner.symbols;
+        let node = &mut self.inner.graph[parent.index()];
         // TODO: warn and merge docs for repeats
         Ok(Some(node.vars.entry(prev.to_owned()).or_insert_with(|| TypeVar {
             value: VarValue {
@@ -1056,7 +1102,7 @@ impl ObjectTree {
         parameters: Vec<Parameter>,
         code: Code,
     ) -> Result<(usize, &mut ProcValue), DMError> {
-        let node = &mut self.graph[parent.index()];
+        let node = &mut self.inner.graph[parent.index()];
         let proc = node.procs.entry(name.to_owned()).or_insert_with(Default::default);
         if let Some(kind) = declaration {
             if let Some(ref decl) = proc.declaration {
@@ -1067,7 +1113,7 @@ impl ObjectTree {
                 proc.declaration = Some(ProcDeclaration {
                     location,
                     kind,
-                    id: self.symbols.allocate(),
+                    id: self.inner.symbols.allocate(),
                     is_private: false,
                     is_protected: false,
                 });
@@ -1131,8 +1177,8 @@ impl ObjectTree {
         let (parent, child) = self.get_from_path(location, &mut path, len)?;
         assert!(!is_var_decl(child) && !is_proc_decl(child));
         let idx = self.subtype_or_add(location, parent, child, len);
-        self[idx].docs.extend(comment);
-        Ok(&mut self[idx])
+        self.inner[idx].docs.extend(comment);
+        Ok(&mut self.inner[idx])
     }
 
     pub(crate) fn add_builtin_var(
@@ -1198,31 +1244,6 @@ impl ObjectTree {
         }
 
         self.register_proc(context, location, parent, proc_name, declaration, parameters, code)
-    }
-
-    /// Drop all code ASTs to attempt to reduce memory usage.
-    pub fn drop_code(&mut self) {
-        for node in self.graph.iter_mut() {
-            for (_, typroc) in node.procs.iter_mut() {
-                for proc in typroc.value.iter_mut() {
-                    proc.code = Code::Disabled;
-                }
-            }
-        }
-    }
-}
-
-impl std::ops::Index<NodeIndex> for ObjectTree {
-    type Output = Type;
-
-    fn index(&self, ix: NodeIndex) -> &Type {
-        self.graph.get(ix.index()).expect("node index out of range")
-    }
-}
-
-impl std::ops::IndexMut<NodeIndex> for ObjectTree {
-    fn index_mut(&mut self, ix: NodeIndex) -> &mut Type {
-        self.graph.get_mut(ix.index()).expect("node index out of range")
     }
 }
 
