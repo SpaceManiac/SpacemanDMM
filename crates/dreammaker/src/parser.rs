@@ -1609,14 +1609,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         // )
         require!(self.exact(Token::Punct(Punctuation::RParen)));
         // {...}
-        success(Statement::ForRange {
+        success(Statement::ForRange(Box::new(ForRangeStatement {
             var_type,
             name: name.into(),
-            start,
-            end,
-            step: step.map(Box::new),
+            start: *start,
+            end: *end,
+            step,
             block: require!(self.block(&LoopContext::ForRange)),
-        })
+        })))
     }
 
     fn comma_or_semicolon(&mut self) -> Status<()> {

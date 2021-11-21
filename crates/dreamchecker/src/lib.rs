@@ -1430,7 +1430,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 state.end_loop();
                 return state
             },
-            Statement::ForRange { var_type, name, start, end, step, block } => {
+            Statement::ForRange(for_range) => {
+                let ForRangeStatement { var_type, name, start, end, step, block } = &**for_range;
                 let mut scoped_locals = local_vars.clone();
                 self.visit_expression(location, end, None, &mut scoped_locals);
                 if let Some(step) = step {
@@ -1442,7 +1443,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 let mut state = self.visit_block(block, &mut scoped_locals);
                 if let Some(startterm) = start.as_term() {
                     if let Some(endterm) = end.as_term() {
-                        if let Some(validity) = startterm.valid_for_range(endterm, step.as_deref()) {
+                        if let Some(validity) = startterm.valid_for_range(endterm, step.as_ref()) {
                             if !validity {
                                 error(location,"for range loop body is never reached due to invalid range")
                                     .register(self.context);

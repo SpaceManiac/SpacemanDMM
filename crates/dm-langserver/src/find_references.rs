@@ -263,7 +263,8 @@ impl<'o> WalkProc<'o> {
                 }
                 self.visit_block(block);
             },
-            Statement::ForRange { var_type, name, start, end, step, block } => {
+            Statement::ForRange(for_range) => {
+                let ForRangeStatement { var_type, name, start, end, step, block } = &**for_range;
                 self.visit_expression(location, end, None);
                 if let Some(step) = step {
                     self.visit_expression(location, step, None);

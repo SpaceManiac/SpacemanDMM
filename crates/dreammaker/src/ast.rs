@@ -1166,14 +1166,7 @@ pub enum Statement {
         in_list: Option<Box<Expression>>,
         block: Block,
     },
-    ForRange {
-        var_type: Option<VarType>,
-        name: Ident2,
-        start: Box<Expression>,
-        end: Box<Expression>,
-        step: Option<Box<Expression>>,
-        block: Block,
-    },
+    ForRange(Box<ForRangeStatement>),
     Var(Box<VarStatement>),
     Vars(Vec<VarStatement>),
     Setting {
@@ -1217,6 +1210,16 @@ pub struct VarStatement {
 pub enum Case {
     Exact(Expression),
     Range(Expression, Expression),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ForRangeStatement {
+    pub var_type: Option<VarType>,
+    pub name: Ident2,
+    pub start: Expression,
+    pub end: Expression,
+    pub step: Option<Expression>,
+    pub block: Block,
 }
 
 // ----------------------------------------------------------------------------
