@@ -1923,17 +1923,23 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 //   * new 2 + 2() - DM gives "expected end of statement"
                 // The following is what seems a reasonable approximation.
 
-                // try to read an ident or path
-                let t = if self.dot()?.is_some() {
+                // Try to read an ident or path, then read the arguments.
+                if self.dot()?.is_some() {
                     if let Some(ident) = self.ident()? {
                         // prefab
                         // TODO: arrange for this ident to end up in the prefab's annotation
-                        NewType::Prefab(require!(self.prefab_ex(vec![(PathOp::Dot, ident)])))
+                        Term::NewPrefab {
+                            prefab: require!(self.prefab_ex(vec![(PathOp::Dot, ident)])),
+                            args: self.arguments(&[], "New")?,
+                        }
                     } else {
                         // bare dot
-                        NewType::MiniExpr {
-                            ident: ".".into(),
-                            fields: Default::default(),
+                        Term::NewMiniExpr {
+                            expr: Box::new(MiniExpr {
+                                ident: ".".into(),
+                                fields: Default::default(),
+                            }),
+                            args: self.arguments(&[], "New")?,
                         }
                     }
                 } else if let Some(ident) = self.ident()? {
@@ -1942,23 +1948,22 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     while let Some(item) = self.field(&mut belongs_to, false)? {
                         fields.push(item);
                     }
-                    NewType::MiniExpr {
-                        ident: ident.into(),
-                        fields: fields.into_boxed_slice(),
+                    Term::NewMiniExpr {
+                        expr: Box::new(MiniExpr {
+                            ident: ident.into(),
+                            fields: fields.into_boxed_slice(),
+                        }),
+                        args: self.arguments(&[], "New")?,
                     }
-                } else if let Some(path) = self.prefab()? {
-                    NewType::Prefab(path)
+                } else if let Some(prefab) = self.prefab()? {
+                    Term::NewPrefab {
+                        prefab,
+                        args: self.arguments(&[], "New")?,
+                    }
                 } else {
-                    NewType::Implicit
-                };
-
-                // try to read an arglist
-                // TODO: communicate what type is being new'd somehow
-                let args = self.arguments(&[], "New")?;
-
-                Term::New {
-                    type_: t,
-                    args,
+                    Term::NewImplicit {
+                        args: self.arguments(&[], "New")?,
+                    }
                 }
             },
 

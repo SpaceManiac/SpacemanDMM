@@ -464,45 +464,22 @@ impl<'o> WalkProc<'o> {
                 }
             },
 
-            Term::New { type_, args } => {
-                // TODO: use /proc/new
-                // determine the type being new'd
-                let typepath = match type_ {
-                    NewType::Implicit => if let Some(hint) = type_hint {
-                        Some(hint)
-                    } else {
-                        None
-                    },
-                    NewType::Prefab(prefab) => self.visit_prefab(location, prefab),
-                    NewType::MiniExpr { ident, fields } => {
-                        let mut current = self.visit_ident(location, ident);
-                        for field in fields.iter() {
-                            current = self.visit_field(location, current, &field.ident);
-                        }
-                        // The whole point is it's dynamic, so don't try anything
-                        None
-                    },
-                };
-
-                // call to the New() method
-                if let Some(typepath) = typepath {
-                    if let Some(new_proc) = typepath.get_proc("New") {
-                        self.visit_call(
-                            location,
-                            typepath,
-                            new_proc,
-                            args.as_ref().map_or(&[], |v| &v[..]),
-                            // New calls are exact: `new /datum()` will always call
-                            // `/datum/New()` and never an override.
-                            true);
-                    }
-                    // If we had a diagnostic context here, we'd error for
-                    // types other than `/list`, which has no `New()`.
-                    StaticType::Type(typepath)
-                } else {
-                    StaticType::None
-                }
+            Term::NewImplicit { args } => {
+                self.visit_new(location, type_hint, args)
             },
+            Term::NewPrefab { prefab, args } => {
+                let typepath = self.visit_prefab(location, prefab);
+                self.visit_new(location, typepath, args)
+            },
+            Term::NewMiniExpr { expr, .. } => {
+                let mut current = self.visit_ident(location, &expr.ident);
+                for field in expr.fields.iter() {
+                    current = self.visit_field(location, current, &field.ident);
+                }
+                // The whole point is it's dynamic, so don't try anything
+                StaticType::None
+            },
+
             Term::List(args) => {
                 // TODO: use /proc/list
                 self.visit_arguments(location, args);
@@ -543,6 +520,26 @@ impl<'o> WalkProc<'o> {
                 self.visit_arguments(location, args_2);
                 StaticType::None
             },
+        }
+    }
+
+    fn visit_new(&mut self, location: Location, typepath: Option<TypeRef<'o>>, args: &'o Option<Box<[Expression]>>) -> StaticType<'o> {
+        if let Some(typepath) = typepath {
+            if let Some(new_proc) = typepath.get_proc("New") {
+                self.visit_call(
+                    location,
+                    typepath,
+                    new_proc,
+                    args.as_ref().map_or(&[], |v| &v[..]),
+                    // New calls are exact: `new /datum()` will always call
+                    // `/datum/New()` and never an override.
+                    true);
+            }
+            // If we had a diagnostic context here, we'd error for
+            // types other than `/list`, which has no `New()`.
+            StaticType::Type(typepath)
+        } else {
+            StaticType::None
         }
     }
 

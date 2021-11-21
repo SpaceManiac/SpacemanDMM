@@ -665,20 +665,6 @@ where
     }
 }
 
-/// The different forms of the `new` command.
-#[derive(Clone, PartialEq, Debug)]
-pub enum NewType {
-    /// Implicit type, taken from context.
-    Implicit,
-    /// A prefab to be instantiated.
-    Prefab(Box<Prefab>),
-    /// A "mini-expression" in which to find the prefab to instantiate.
-    MiniExpr {
-        ident: Ident2,
-        fields: Box<[Field]>,
-    },
-}
-
 /// The structure of an expression, a tree of terms and operators.
 #[derive(Clone, PartialEq, Debug)]
 pub enum Expression {
@@ -870,10 +856,22 @@ pub enum Term {
     SelfCall(Box<[Expression]>),
     /// A `..()` call. If arguments is empty, the proc's arguments are passed.
     ParentCall(Box<[Expression]>),
-    /// A `new` call.
-    New {
+    /// A `new()` call.
+    NewImplicit {
+        /// The list of arguments to pass to the `New()` proc.
+        args: Option<Box<[Expression]>>,
+    },
+    /// A `new /type()` call.
+    NewPrefab {
         /// The type to be instantiated.
-        type_: NewType,
+        prefab: Box<Prefab>,
+        /// The list of arguments to pass to the `New()` proc.
+        args: Option<Box<[Expression]>>,
+    },
+    /// A `new foo.bar()` call.
+    NewMiniExpr {
+        /// The miniature expression.
+        expr: Box<MiniExpr>,
         /// The list of arguments to pass to the `New()` proc.
         args: Option<Box<[Expression]>>,
     },
@@ -918,7 +916,9 @@ impl Term {
             // Paths/prefabs are truthy.
             Term::Prefab(_) => Some(true),
             // `new()` and `list()` return the newly-created reference.
-            Term::New{type_: _, args: _} => Some(true),
+            Term::NewImplicit { .. } => Some(true),
+            Term::NewPrefab { .. } => Some(true),
+            Term::NewMiniExpr { .. } => Some(true),
             Term::List(_) => Some(true),
 
             // Truthy if any of the literal parts are non-empty.
@@ -975,6 +975,12 @@ impl From<Expression> for Term {
             other => Term::Expr(Box::new(other)),
         }
     }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct MiniExpr {
+    pub ident: Ident2,
+    pub fields: Box<[Field]>,
 }
 
 /// An expression part which is applied to a term or another follow.
@@ -1122,8 +1128,8 @@ impl VarSuffix {
         if args.is_empty() {
             None
         } else {
-            Some(Expression::from(Term::New {
-                type_: NewType::Prefab(Box::new(Prefab::from(vec![(PathOp::Slash, "list".to_owned())]))),
+            Some(Expression::from(Term::NewPrefab {
+                prefab: Box::new(Prefab::from(vec![(PathOp::Slash, "list".to_owned())])),
                 args: Some(args.into_boxed_slice()),
             }))
         }

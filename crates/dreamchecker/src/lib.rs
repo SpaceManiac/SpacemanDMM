@@ -1776,51 +1776,31 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
             },
 
-            Term::New { type_, args } => {
-                // determine the type being new'd
-                let typepath = match type_ {
-                    NewType::Implicit => if let Some(hint) = type_hint {
-                        Some(hint)
-                    } else {
-                        error(location, "no type hint available on implicit new()")
-                            .with_errortype("no_typehint_implicit_new")
-                            .register(self.context);
-                        None
-                    },
-                    NewType::Prefab(prefab) => {
-                        if let Some(nav) = self.ty.navigate_path(&prefab.path) {
-                            // TODO: handle proc/verb paths here
-                            Some(nav.ty())
-                        } else {
-                            error(location, format!("failed to resolve path {}", FormatTypePath(&prefab.path)))
-                                .register(self.context);
-                            None
-                        }
-                    },
-                    NewType::MiniExpr { .. } => None,  // TODO: evaluate
-                };
-
-                // call to the New() method
-                if let Some(typepath) = typepath {
-                    if let Some(new_proc) = typepath.get_proc("New") {
-                        self.visit_call(
-                            location,
-                            typepath,
-                            new_proc,
-                            args.as_ref().map_or(&[], |v| &v[..]),
-                            // New calls are exact: `new /datum()` will always call
-                            // `/datum/New()` and never an override.
-                            true,
-                            local_vars);
-                    } else if typepath.path != "/list" {
-                        error(location, format!("couldn't find {}/proc/New", typepath.path))
-                            .register(self.context);
-                    }
-                    assumption_set![Assumption::IsType(true, typepath)].into()
+            Term::NewImplicit { args } => {
+                if let Some(hint) = type_hint {
+                    self.visit_new(location, hint, args, local_vars)
                 } else {
+                    error(location, "no type hint available on implicit new()")
+                        .with_errortype("no_typehint_implicit_new")
+                        .register(self.context);
                     Analysis::empty()
                 }
             },
+            Term::NewPrefab { prefab, args } => {
+                if let Some(nav) = self.ty.navigate_path(&prefab.path) {
+                    // TODO: handle proc/verb paths here
+                    self.visit_new(location, nav.ty(), args, local_vars)
+                } else {
+                    error(location, format!("failed to resolve path {}", FormatTypePath(&prefab.path)))
+                        .register(self.context);
+                        Analysis::empty()
+                }
+            },
+            Term::NewMiniExpr { .. } => {
+                // TODO: evaluate
+                Analysis::empty()
+            },
+
             Term::List(args) => {
                 self.visit_arguments(location, args, local_vars);
                 Analysis::from_static_type(self.objtree.expect("/list"))
@@ -1889,6 +1869,24 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 Analysis::empty()  // TODO
             },
         }
+    }
+
+    fn visit_new(&mut self, location: Location, typepath: TypeRef<'o>, args: &'o Option<Box<[Expression]>>, local_vars: &mut HashMap<String, LocalVar<'o>, RandomState>) -> Analysis<'o> {
+        if let Some(new_proc) = typepath.get_proc("New") {
+            self.visit_call(
+                location,
+                typepath,
+                new_proc,
+                args.as_ref().map_or(&[], |v| &v[..]),
+                // New calls are exact: `new /datum()` will always call
+                // `/datum/New()` and never an override.
+                true,
+                local_vars);
+        } else if typepath.path != "/list" {
+            error(location, format!("couldn't find {}/proc/New", typepath.path))
+                .register(self.context);
+        }
+        assumption_set![Assumption::IsType(true, typepath)].into()
     }
 
     fn check_type_sleepers(&mut self, ty: TypeRef<'o>, location: Location, unscoped_name: &str) {

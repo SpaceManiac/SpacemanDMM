@@ -708,17 +708,21 @@ impl<'a> ConstantFolder<'a> {
     fn term(&mut self, term: Term, type_hint: Option<&TreePath>) -> Result<Constant, DMError> {
         Ok(match term {
             Term::Null => Constant::Null(type_hint.cloned()),
-            Term::New { type_, args } => Constant::New {
-                type_: match type_ {
-                    NewType::Prefab(e) => Some(self.prefab(*e)?),
-                    NewType::Implicit => None,
-                    NewType::MiniExpr { .. } => return Err(self.error("non-constant new expression")),
-                },
+            Term::NewPrefab { prefab, args } => Constant::New {
+                type_: Some(self.prefab(*prefab)?),
                 args: match args {
-                    Some(args) => Some(self.arguments(args.into())?),
+                    Some(args) => Some(self.arguments(args)?),
                     None => None,
                 },
             },
+            Term::NewImplicit { args } => Constant::New {
+                type_: None,
+                args: match args {
+                    Some(args) => Some(self.arguments(args)?),
+                    None => None,
+                },
+            },
+            Term::NewMiniExpr { .. } => return Err(self.error("non-constant new expression")),
             Term::List(vec) => Constant::List(self.arguments(vec)?),
             Term::Call(ident, args) => match &*ident {
                 // constructors which remain as they are
