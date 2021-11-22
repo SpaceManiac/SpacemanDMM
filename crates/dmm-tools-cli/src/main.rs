@@ -59,7 +59,6 @@ struct Context {
     icon_cache: IconCache,
     exit_status: AtomicIsize,
     parallel: bool,
-    procs: bool,
 }
 
 impl Context {
@@ -86,10 +85,7 @@ impl Context {
             }
         };
         let indents = dm::indents::IndentProcessor::new(&self.dm_context, pp);
-        let mut parser = dm::parser::Parser::new(&self.dm_context, indents);
-        if self.procs {
-            parser.enable_procs();
-        }
+        let parser = dm::parser::Parser::new(&self.dm_context, indents);
         self.objtree = parser.parse_object_tree();
     }
 }
