@@ -502,7 +502,9 @@ fn buffer_read<R: Read>(file: FileId, mut read: R) -> Result<Vec<u8>, DMError> {
 /// an I/O error occurs.
 pub fn buffer_file(file: FileId, path: &std::path::Path) -> Result<Vec<u8>, DMError> {
     let mut buffer = match std::fs::metadata(path) {
-        Ok(metadata) => Vec::with_capacity(metadata.len() as usize),
+        // Add an extra byte for the final read() that ultimately returns EOF.
+        // Otherwise the capacity is doubled at the last moment.
+        Ok(metadata) => Vec::with_capacity(1 + metadata.len() as usize),
         Err(_) => Vec::new(),
     };
 
