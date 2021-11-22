@@ -205,7 +205,7 @@ impl DefineMap {
     /// Returns `None` if the key was not present, or its most recent location
     /// if it was.
     pub fn insert(&mut self, key: String, value: (Location, Define)) -> Option<Location> {
-        let stack = self.inner.entry(key).or_insert_with(Default::default);
+        let stack = self.inner.entry(key).or_insert_with(|| Vec::with_capacity(1));
         let result = stack.last().map(|&(loc, _)| loc);
         stack.push(value);
         result
