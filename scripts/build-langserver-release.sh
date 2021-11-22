@@ -11,7 +11,7 @@ eval "$(scripts/download-auxtools.sh)"
 
 # -----------------------------------------------------------------------------
 # Cargo build
-touch src/langserver/build.rs
+touch crates/dm-langserver/build.rs
 
 echo '==== Linux build ===='
 cargo build --release --target x86_64-unknown-linux-musl -p dm-langserver

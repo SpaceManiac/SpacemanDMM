@@ -16,7 +16,7 @@ eval "$(scripts/download-auxtools.sh)"
 
 # -----------------------------------------------------------------------------
 # Cargo build
-touch src/*/build.rs
+touch crates/*/build.rs
 
 echo '==== Linux build ===='
 cargo build --release --target x86_64-unknown-linux-musl
