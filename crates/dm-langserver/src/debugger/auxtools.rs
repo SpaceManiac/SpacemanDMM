@@ -10,7 +10,6 @@ use std::{
     thread::JoinHandle,
 };
 
-use super::dap_types;
 use super::SequenceNumber;
 
 enum StreamState {

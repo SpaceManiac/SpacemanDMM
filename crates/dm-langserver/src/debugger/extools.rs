@@ -10,7 +10,6 @@ use std::error::Error;
 use ahash::RandomState;
 
 use super::SequenceNumber;
-use super::dap_types;
 use super::extools_types::*;
 
 pub const DEFAULT_PORT: u16 = 2448;

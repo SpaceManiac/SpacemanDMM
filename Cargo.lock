@@ -283,6 +283,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dap-types"
+version = "0.0.0"
+dependencies = [
+ "ahash",
+ "serde",
+ "serde_derive",
+ "serde_json",
+]
+
+[[package]]
 name = "deflate"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -313,6 +323,7 @@ dependencies = [
  "ahash",
  "bincode",
  "chrono",
+ "dap-types",
  "dreamchecker",
  "dreammaker",
  "git2",

@@ -80,7 +80,7 @@ macro_rules! handle_request {
     ($(on $what:ident(&mut $self:ident, $p:pat) $b:block)*) => {
         impl Debugger {
             fn handle_request_table(command: &str) -> Option<fn(&mut Self, serde_json::Value) -> Result<serde_json::Value, Box<dyn Error>>> {
-                use crate::debugger::dap_types::*;
+                use dap_types::*;
                 $(if command == <$what>::COMMAND {
                     Some(|this, arguments| {
                         let params: <$what as Request>::Params = serde_json::from_value(arguments)?;
@@ -94,8 +94,8 @@ macro_rules! handle_request {
 
             $(
                 #[allow(non_snake_case)]
-                fn $what(&mut $self, $p: <$what as crate::debugger::dap_types::Request>::Params)
-                -> Result<<$what as crate::debugger::dap_types::Request>::Result, Box<dyn Error>>
+                fn $what(&mut $self, $p: <$what as dap_types::Request>::Params)
+                -> Result<<$what as dap_types::Request>::Result, Box<dyn Error>>
                 {
                     let _v = $b;
                     #[allow(unreachable_code)] { Ok(_v) }

@@ -1,11 +1,12 @@
 //! Serde types for the Debug Adapter Protocol.
 //!
 //! * https://microsoft.github.io/debug-adapter-protocol/specification
+#![deny(unsafe_code)]
 #![allow(non_snake_case)]
 
 use std::collections::HashMap;
 use serde_json::Value;
-
+use serde_derive::{Serialize, Deserialize};
 use ahash::RandomState;
 
 pub trait Request {

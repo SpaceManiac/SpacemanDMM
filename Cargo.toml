@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/builtins-proc-macro",
+    "crates/dap-types",
     "crates/dm-langserver",
     "crates/dmdoc",
     "crates/dmm-tools",

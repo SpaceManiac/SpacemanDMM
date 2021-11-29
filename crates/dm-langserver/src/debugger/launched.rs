@@ -1,7 +1,7 @@
 //! Child process lifecycle management.
 #![allow(unsafe_code)]
 
-use super::{dap_types, SequenceNumber};
+use super::SequenceNumber;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 
@@ -171,14 +171,14 @@ fn pipe_output<R: std::io::Read + Send + 'static>(seq: Arc<SequenceNumber>, keyw
                 match buf_stream.read_until(b'\n', &mut line) {
                     Ok(0) => break,
                     Ok(_) => {
-                        seq.issue_event(super::dap_types::OutputEvent {
+                        seq.issue_event(dap_types::OutputEvent {
                             output: String::from_utf8_lossy(&line).into_owned(),
                             category: Some(keyword.to_owned()),
                             ..Default::default()
                         });
                     }
                     Err(e) => {
-                        seq.issue_event(super::dap_types::OutputEvent {
+                        seq.issue_event(dap_types::OutputEvent {
                             output: format!("[launched {}] {}", keyword, e),
                             category: Some("console".to_owned()),
                             ..Default::default()

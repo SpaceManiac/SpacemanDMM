@@ -1,4 +1,4 @@
-use super::dap_types::*;
+use dap_types::*;
 use super::*;
 
 const EXTOOLS_HELP: &str = "

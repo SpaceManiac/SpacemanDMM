@@ -30,7 +30,6 @@ macro_rules! debug_output {
 mod auxtools;
 mod auxtools_bundle;
 mod auxtools_types;
-mod dap_types;
 mod evaluate;
 mod extools;
 mod extools_bundle;
@@ -49,7 +48,7 @@ use auxtools::Auxtools;
 
 use ahash::RandomState;
 
-use self::dap_types::*;
+use dap_types::*;
 use self::extools::ExtoolsHolder;
 use self::launched::{Launched, EngineParams};
 use crate::jrpc_io;
