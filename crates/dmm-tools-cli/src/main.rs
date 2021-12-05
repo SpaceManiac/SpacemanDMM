@@ -102,6 +102,7 @@ struct Opt {
     environment: Option<String>,
 
     #[structopt(short="v", long="verbose")]
+    #[allow(dead_code)]
     verbose: bool,
 
     /// Set the number of threads to be used for parallel execution when

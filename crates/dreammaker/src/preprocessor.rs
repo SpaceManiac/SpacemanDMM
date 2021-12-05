@@ -263,11 +263,11 @@ impl DefineMap {
 enum Include<'ctx> {
     File {
         path: PathBuf,
-        file: FileId,
+        //file: FileId,
         lexer: Lexer<'ctx>,
     },
     Expansion {
-        name: Ident,
+        //name: Ident,
         location: Location,
         tokens: VecDeque<Token>,
     },
@@ -277,7 +277,7 @@ impl<'ctx> Include<'ctx> {
     fn from_path(context: &'ctx Context, path: PathBuf) -> Result<Include<'ctx>, DMError> {
         let idx = context.register_file(&path);
         Ok(Include::File {
-            file: idx,
+            //file: idx,
             lexer: Lexer::from_file(context, idx, &path)?,
             path,
         })
@@ -286,7 +286,7 @@ impl<'ctx> Include<'ctx> {
     fn from_buffer(context: &'ctx Context, path: PathBuf, buffer: Cow<'ctx, [u8]>) -> Include<'ctx> {
         let idx = context.register_file(&path);
         Include::File {
-            file: idx,
+            //file: idx,
             lexer: Lexer::new(context, idx, buffer),
             path,
         }
@@ -513,7 +513,7 @@ impl<'ctx> Preprocessor<'ctx> {
         let idx = self.context.register_file(&path);
         self.include_stack.stack.push(Include::File {
             lexer: Lexer::from_read(self.context, idx, read)?,
-            file: idx,
+            //file: idx,
             path,
         });
         Ok(idx)
@@ -651,7 +651,7 @@ impl<'ctx> Preprocessor<'ctx> {
             self.include_locations.insert(file_id, self.last_input_loc);
             Ok(Include::File {
                 path,
-                file: file_id,
+                //file: file_id,
                 lexer: Lexer::from_read(&self.context, file_id, read)?,
             })
         }
@@ -1008,7 +1008,7 @@ impl<'ctx> Preprocessor<'ctx> {
                     Some((location, Define::Constant { subst, docs: _ })) => {
                         self.annotate_macro(ident, location);
                         self.include_stack.stack.push(Include::Expansion {
-                            name: ident.to_owned(),
+                            //name: ident.to_owned(),
                             tokens: subst.into_iter().collect(),
                             location: self.last_input_loc,
                         });
@@ -1155,7 +1155,7 @@ impl<'ctx> Preprocessor<'ctx> {
                             }
                         }
                         self.include_stack.stack.push(Include::Expansion {
-                            name: ident.to_owned(),
+                            //name: ident.to_owned(),
                             tokens: expansion,
                             location: self.last_input_loc,
                         });
