@@ -245,8 +245,8 @@ impl Context {
 
     /// Pretty-print all registered diagnostics to standard error.
     ///
-    /// Returns `true` if no errors were printed, `false` if any were.
-    pub fn print_all_errors(&self, min_severity: Severity) -> bool {
+    /// Returns `true` if any errors were printed, `false` if none were.
+    fn print_all_errors(&self, min_severity: Severity) -> bool {
         let stderr = termcolor::StandardStream::stderr(termcolor::ColorChoice::Auto);
         let stderr = &mut stderr.lock();
         let errors = self.errors();
@@ -261,7 +261,6 @@ impl Context {
     }
 
     /// Print messages and panic if there were any errors.
-    #[inline]
     #[doc(hidden)]
     pub fn assert_success(&self) {
         if self.print_all_errors(Severity::Info) {

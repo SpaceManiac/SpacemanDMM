@@ -145,6 +145,102 @@ impl ClientCaps {
     }
 }
 
+#[derive(Default)]
+struct DiagnosticsTracker {
+    sent: HashSet<Url, RandomState>,
+}
+
+impl DiagnosticsTracker {
+    fn file_url(root: Option<&Url>, file_list: &dm::FileList, file: dm::FileId) -> Option<Url> {
+        let fname_string = file_list.get_path(file).display().to_string();
+        if let Some(ref root) = root {
+            root.join(&fname_string).ok()
+        } else {
+            Url::parse(&fname_string).ok()
+        }
+    }
+
+    fn build(root: Option<&Url>, file_list: &dm::FileList, errors: &[dm::DMError], related_info: bool) -> HashMap<Url, Vec<lsp_types::Diagnostic>, RandomState> {
+        let mut map: HashMap<_, Vec<_>, RandomState> = HashMap::with_hasher(RandomState::default());
+        for error in errors.iter() {
+            let loc = error.location();
+            let related_information = if !related_info || error.notes().is_empty() {
+                None
+            } else {
+                let mut notes = Vec::with_capacity(error.notes().len());
+                for note in error.notes().iter() {
+                    guard!(let Some(uri) = DiagnosticsTracker::file_url(root, file_list, note.location().file) else { continue });
+                    notes.push(lsp_types::DiagnosticRelatedInformation {
+                        location: lsp_types::Location {
+                            uri,
+                            range: location_to_range(note.location()),
+                        },
+                        message: note.description().to_owned(),
+                    });
+                }
+                Some(notes)
+            };
+            let diag = lsp_types::Diagnostic {
+                message: error.description().to_owned(),
+                severity: Some(convert_severity(error.severity())),
+                range: location_to_range(loc),
+                source: component_to_source(error.component()),
+                code: convert_errorcode(error.errortype()),
+                related_information,
+                .. Default::default()
+            };
+            guard!(let Some(uri) = DiagnosticsTracker::file_url(root, file_list, loc.file) else { continue });
+            map.entry(uri)
+                .or_insert_with(Default::default)
+                .push(diag);
+
+            if !related_info {
+                // Fallback in case the client does not support related info
+                for note in error.notes().iter() {
+                    let diag = lsp_types::Diagnostic {
+                        message: note.description().to_owned(),
+                        severity: Some(lsp_types::DiagnosticSeverity::Information),
+                        range: location_to_range(note.location()),
+                        source: component_to_source(error.component()),
+                        .. Default::default()
+                    };
+                    guard!(let Some(uri) = DiagnosticsTracker::file_url(root, file_list, note.location().file) else { continue });
+                    map.entry(uri)
+                        .or_insert_with(Default::default)
+                        .push(diag);
+                }
+            }
+        }
+        map
+    }
+
+    fn send(&mut self, map: HashMap<Url, Vec<lsp_types::Diagnostic>, RandomState>) {
+        let mut new_sent = HashSet::with_capacity_and_hasher(map.len(), RandomState::default());
+        for (url, diagnostics) in map {
+            self.sent.remove(&url);  // don't erase below
+            new_sent.insert(url.clone());
+            issue_notification::<lsp_types::notification::PublishDiagnostics>(
+                lsp_types::PublishDiagnosticsParams {
+                    uri: url,
+                    diagnostics,
+                    version: None,
+                },
+            );
+        }
+
+        // erase diagnostics for files which no longer have any
+        for url in std::mem::replace(&mut self.sent, new_sent) {
+            issue_notification::<lsp_types::notification::PublishDiagnostics>(
+                lsp_types::PublishDiagnosticsParams {
+                    uri: url.clone(),
+                    diagnostics: Vec::new(),
+                    version: None,
+                },
+            );
+        }
+    }
+}
+
 struct Engine<'a> {
     docs: document::DocumentStore,
 
@@ -159,7 +255,7 @@ struct Engine<'a> {
     references_table: background::Background<find_references::ReferencesTable>,
 
     annotations: HashMap<Url, (FileId, FileId, Rc<AnnotationTree>), RandomState>,
-    diagnostics_set: HashSet<Url, RandomState>,
+    diagnostics_tracker: DiagnosticsTracker,
 
     client_caps: ClientCaps,
     extools_dll: Option<String>,
@@ -182,7 +278,7 @@ impl<'a> Engine<'a> {
             references_table: Default::default(),
 
             annotations: Default::default(),
-            diagnostics_set: Default::default(),
+            diagnostics_tracker: Default::default(),
 
             client_caps: Default::default(),
             extools_dll: None,
@@ -407,77 +503,13 @@ impl<'a> Engine<'a> {
         self.issue_notification::<extras::WindowStatus>(Default::default());
 
         // initial diagnostics pump
-        let mut map: HashMap<_, Vec<_>, RandomState> = HashMap::with_hasher(RandomState::default());
-        for error in self.context.errors().iter() {
-            let loc = error.location();
-            let related_information = if !self.client_caps.related_info || error.notes().is_empty() {
-                None
-            } else {
-                let mut notes = Vec::with_capacity(error.notes().len());
-                for note in error.notes().iter() {
-                    notes.push(lsp_types::DiagnosticRelatedInformation {
-                        location: lsp_types::Location {
-                            uri: self.file_url(note.location().file)?,
-                            range: location_to_range(note.location()),
-                        },
-                        message: note.description().to_owned(),
-                    });
-                }
-                Some(notes)
-            };
-            let diag = lsp_types::Diagnostic {
-                message: error.description().to_owned(),
-                severity: Some(convert_severity(error.severity())),
-                range: location_to_range(loc),
-                source: component_to_source(error.component()),
-                code: convert_errorcode(error.errortype()),
-                related_information,
-                .. Default::default()
-            };
-            map.entry(self.file_url(loc.file)?)
-                .or_insert_with(Default::default)
-                .push(diag);
-
-            if !self.client_caps.related_info {
-                // Fallback in case the client does not support related info
-                for note in error.notes().iter() {
-                    let diag = lsp_types::Diagnostic {
-                        message: note.description().to_owned(),
-                        severity: Some(lsp_types::DiagnosticSeverity::Information),
-                        range: location_to_range(note.location()),
-                        source: component_to_source(error.component()),
-                        .. Default::default()
-                    };
-                    map.entry(self.file_url(note.location().file)?)
-                        .or_insert_with(Default::default)
-                        .push(diag);
-                }
-            }
-        }
-
-        let mut new_diagnostics_set = HashSet::with_hasher(RandomState::default());
-        for (url, diagnostics) in map {
-            self.diagnostics_set.remove(&url);  // don't erase below
-            new_diagnostics_set.insert(url.clone());
-            self.issue_notification::<lsp_types::notification::PublishDiagnostics>(
-                lsp_types::PublishDiagnosticsParams {
-                    uri: url,
-                    diagnostics,
-                    version: None,
-                },
-            );
-        }
-
-        // erase diagnostics for files which no longer have any
-        for url in std::mem::replace(&mut self.diagnostics_set, new_diagnostics_set) {
-            self.issue_notification::<lsp_types::notification::PublishDiagnostics>(
-                lsp_types::PublishDiagnosticsParams {
-                    uri: url.clone(),
-                    diagnostics: Vec::new(),
-                    version: None,
-                },
-            );
-        }
+        let map = DiagnosticsTracker::build(
+            self.root.as_ref(),
+            self.context.file_list(),
+            &self.context.errors(),
+            self.client_caps.related_info,
+        );
+        self.diagnostics_tracker.send(map);
 
         let elapsed = start.elapsed(); start += elapsed;
         eprint!(" - diagnostics {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
