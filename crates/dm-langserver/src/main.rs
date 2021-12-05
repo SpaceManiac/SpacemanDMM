@@ -469,7 +469,9 @@ impl<'a> Engine<'a> {
         };
 
         let elapsed = start.elapsed(); start += elapsed;
-        eprint!("setup {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+        if elapsed.as_millis() > 0 {
+            eprint!("setup {}.{:03}s - ", elapsed.as_secs(), elapsed.subsec_millis());
+        }
 
         // Parse the environment.
         let fatal_errored;
@@ -484,7 +486,7 @@ impl<'a> Engine<'a> {
         {
             let disk = ctx.get_io_time();
             let parse = elapsed - disk;
-            eprint!(" - disk {}.{:03}s - parse {}.{:03}s", disk.as_secs(), disk.subsec_millis(), parse.as_secs(), parse.subsec_millis());
+            eprint!("disk {}.{:03}s - parse {}.{:03}s", disk.as_secs(), disk.subsec_millis(), parse.as_secs(), parse.subsec_millis());
         }
 
         // Background thread: prepare the Find All References database.
