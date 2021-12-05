@@ -1097,7 +1097,10 @@ impl ObjectTreeBuilder {
         code: Option<Block>,
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let node = &mut self.inner.graph[parent.index()];
-        let proc = node.procs.entry(name.to_owned()).or_insert_with(Default::default);
+        let proc = node.procs.entry(name.to_owned()).or_insert_with(|| TypeProc {
+            value: Vec::with_capacity(1),
+            declaration: None,
+        });
         if let Some(kind) = declaration {
             if let Some(ref decl) = proc.declaration {
                 DMError::new(location, format!("duplicate definition of {}/{}", kind, name))
