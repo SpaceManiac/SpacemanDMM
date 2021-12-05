@@ -612,36 +612,10 @@ impl<'a> std::hash::Hash for ProcRef<'a> {
 // ----------------------------------------------------------------------------
 // The object tree itself
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ObjectTree {
     graph: Vec<Type>,
     types: BTreeMap<String, NodeIndex>,
-    symbols: SymbolIdSource,
-}
-
-impl Default for ObjectTree {
-    fn default() -> Self {
-        let mut tree = ObjectTree {
-            graph: Default::default(),
-            types: Default::default(),
-            symbols: SymbolIdSource::new(SymbolIdCategory::ObjectTree),
-        };
-        tree.graph.push(Type {
-            name: String::new(),
-            path: String::new(),
-            location: Default::default(),
-            location_specificity: 0,
-            vars: Default::default(),
-            procs: Default::default(),
-            parent_type: NodeIndex::end(),
-            docs: Default::default(),
-            id: tree.symbols.allocate(),
-
-            children: Default::default(),
-            parent_path: NodeIndex::end(),
-        });
-        tree
-    }
 }
 
 impl ObjectTree {
@@ -755,9 +729,37 @@ impl std::ops::IndexMut<NodeIndex> for ObjectTree {
     }
 }
 
-#[derive(Default)]
 pub struct ObjectTreeBuilder {
     inner: ObjectTree,
+    symbols: SymbolIdSource,
+}
+
+impl Default for ObjectTreeBuilder {
+    fn default() -> Self {
+        let mut symbols = SymbolIdSource::new(SymbolIdCategory::ObjectTree);
+        let mut tree = ObjectTree {
+            graph: Default::default(),
+            types: Default::default(),
+        };
+        tree.graph.push(Type {
+            name: String::new(),
+            path: String::new(),
+            location: Default::default(),
+            location_specificity: 0,
+            vars: Default::default(),
+            procs: Default::default(),
+            parent_type: NodeIndex::end(),
+            docs: Default::default(),
+            id: symbols.allocate(),
+
+            children: Default::default(),
+            parent_path: NodeIndex::end(),
+        });
+        ObjectTreeBuilder {
+            inner: tree,
+            symbols,
+        }
+    }
 }
 
 impl ObjectTreeBuilder {
@@ -921,7 +923,7 @@ impl ObjectTreeBuilder {
             location_specificity: len,
             parent_type: NodeIndex::end(),
             docs: Default::default(),
-            id: self.inner.symbols.allocate(),
+            id: self.symbols.allocate(),
             children: Default::default(),
             parent_path: parent,
         });
@@ -962,7 +964,7 @@ impl ObjectTreeBuilder {
         var_type: VarType,
         expression: Option<Expression>,
     ) -> &mut TypeVar {
-        let id = self.inner.symbols.allocate();
+        let id = self.symbols.allocate();
         self.insert_var(ty, name, VarValue {
             location,
             expression,
@@ -1063,7 +1065,7 @@ impl ObjectTreeBuilder {
         };
         var_type.suffix(&suffix);
 
-        let symbols = &mut self.inner.symbols;
+        let symbols = &mut self.symbols;
         let node = &mut self.inner.graph[parent.index()];
         // TODO: warn and merge docs for repeats
         Ok(Some(node.vars.entry(prev.to_owned()).or_insert_with(|| TypeVar {
@@ -1110,7 +1112,7 @@ impl ObjectTreeBuilder {
                 proc.declaration = Some(ProcDeclaration {
                     location,
                     kind,
-                    id: self.inner.symbols.allocate(),
+                    id: self.symbols.allocate(),
                     is_private: false,
                     is_protected: false,
                 });
