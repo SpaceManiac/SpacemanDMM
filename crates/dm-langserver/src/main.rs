@@ -36,7 +36,7 @@ mod debugger;
 use std::path::PathBuf;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::collections::hash_map::Entry;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::rc::Rc;
 
 use url::Url;
@@ -255,7 +255,7 @@ struct Engine<'a> {
     references_table: background::Background<find_references::ReferencesTable>,
 
     annotations: HashMap<Url, (FileId, FileId, Rc<AnnotationTree>), RandomState>,
-    diagnostics_tracker: DiagnosticsTracker,
+    diagnostics_tracker: Arc<Mutex<DiagnosticsTracker>>,
 
     client_caps: ClientCaps,
     extools_dll: Option<String>,
@@ -278,7 +278,7 @@ impl<'a> Engine<'a> {
             references_table: Default::default(),
 
             annotations: Default::default(),
-            diagnostics_tracker: Default::default(),
+            diagnostics_tracker: Arc::new(Mutex::new(Default::default())),
 
             client_caps: Default::default(),
             extools_dll: None,
@@ -307,7 +307,7 @@ impl<'a> Engine<'a> {
         )
     }
 
-    fn show_status<S>(&mut self, message: S) where
+    fn show_status<S>(&self, message: S) where
         S: Into<String>
     {
         self.issue_notification::<extras::WindowStatus>(extras::WindowStatusParams {
@@ -359,7 +359,7 @@ impl<'a> Engine<'a> {
     // ------------------------------------------------------------------------
     // Object tree explorer
 
-    fn update_objtree(&mut self) {
+    fn update_objtree(&self) {
         if self.client_caps.object_tree {
             let root = self.recurse_objtree(self.objtree.root());
             // offload serialization costs to another thread
@@ -441,6 +441,12 @@ impl<'a> Engine<'a> {
             self.show_status("loading");
         }
 
+        let print_thread_total = move || {
+            let elapsed = original_start.elapsed();
+            eprintln!(" - total {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+        };
+
+        // Set up the preprocessor.
         let ctx = self.context;
         ctx.reset_io_time();
         ctx.autodetect_config(&environment);
@@ -465,6 +471,7 @@ impl<'a> Engine<'a> {
         let elapsed = start.elapsed(); start += elapsed;
         eprint!("setup {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
 
+        // Parse the environment.
         let fatal_errored;
         {
             let mut parser = dm::parser::Parser::new(ctx, dm::indents::IndentProcessor::new(ctx, &mut pp));
@@ -480,46 +487,75 @@ impl<'a> Engine<'a> {
             eprint!(" - disk {}.{:03}s - parse {}.{:03}s", disk.as_secs(), disk.subsec_millis(), parse.as_secs(), parse.subsec_millis());
         }
 
-        if self.client_caps.object_tree {
-            self.update_objtree();
-            let elapsed = start.elapsed(); start += elapsed;
-            eprint!(" - object tree {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
-        }
-
+        // Background thread: prepare the Find All References database.
         let references_objtree = self.objtree.clone();
         self.references_table.spawn(move || {
             let table = find_references::ReferencesTable::new(&references_objtree);
             let elapsed = start.elapsed();
-            eprint!(" - references {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+            eprint!("references {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+            print_thread_total();
             table
         });
 
-        if ctx.config().langserver.dreamchecker && !fatal_errored {
-            dreamchecker::run(&self.context, &self.objtree);
-            let elapsed = start.elapsed(); start += elapsed;
-            eprint!(" - dreamchecker {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
-        }
-        self.defines = Some(pp.finalize());
-        self.issue_notification::<extras::WindowStatus>(Default::default());
+        // Lock the diagnostics tracker now to avoid dreamchecker winning the race.
+        let mut diagnostics_lock = self.diagnostics_tracker.lock().unwrap();
 
-        // initial diagnostics pump
+        // Background thread: If enabled, and parse was OK, run dreamchecker.
+        if ctx.config().langserver.dreamchecker && !fatal_errored {
+            self.show_status("checking");
+            let context = self.context.clone();
+            let objtree = self.objtree.clone();
+            let root = self.root.clone();
+            let related_info = self.client_caps.related_info;
+            let diagnostics_tracker = self.diagnostics_tracker.clone();
+            std::thread::spawn(move || {
+                dreamchecker::run(&context, &objtree);
+                let elapsed = start.elapsed(); start += elapsed;
+                eprint!("dreamchecker {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+                print_thread_total();
+
+                let map = DiagnosticsTracker::build(
+                    root.as_ref(),
+                    context.file_list(),
+                    &context.errors(),
+                    related_info,
+                );
+                diagnostics_tracker.lock().unwrap().send(map);
+
+                issue_notification::<extras::WindowStatus>(Default::default());
+            });
+        } else {
+            self.issue_notification::<extras::WindowStatus>(Default::default());
+        }
+
+        // Send the first round of diagnostics from parsing.
         let map = DiagnosticsTracker::build(
             self.root.as_ref(),
             self.context.file_list(),
             &self.context.errors(),
             self.client_caps.related_info,
         );
-        self.diagnostics_tracker.send(map);
+        diagnostics_lock.send(map);
+        drop(diagnostics_lock);
+
+        self.defines = Some(pp.finalize());
 
         let elapsed = start.elapsed(); start += elapsed;
         eprint!(" - diagnostics {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+
+        // If enabled, send the JSON for the object tree panel.
+        if self.client_caps.object_tree {
+            self.update_objtree();
+            let elapsed = start.elapsed(); start += elapsed;
+            eprint!(" - object tree {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+        }
 
         /*if let Some(objtree) = Arc::get_mut(&mut self.objtree) {
             objtree.drop_code();
         }*/
 
-        let elapsed = original_start.elapsed();
-        eprintln!(" - total {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+        // Print the total time.
+        print_thread_total();
 
         Ok(())
     }

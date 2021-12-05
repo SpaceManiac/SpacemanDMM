@@ -36,7 +36,7 @@ pub struct FileList {
 }
 
 /// A diagnostics context, tracking loaded files and any observed errors.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Context {
     files: FileList,
     /// A list of errors, warnings, and other diagnostics generated.
