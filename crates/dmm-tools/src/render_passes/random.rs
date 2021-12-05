@@ -17,7 +17,7 @@ impl RenderPass for Random {
             if let Some(root) = objtree.find("/obj/machinery/vending/snack") {
                 let mut machines = Vec::new();
                 for child in root.children() {
-                    if child.name != "random" {
+                    if child.name() != "random" {
                         machines.push(child.get());
                     }
                 }
@@ -30,7 +30,7 @@ impl RenderPass for Random {
             if let Some(root) = objtree.find("/obj/machinery/vending/cola") {
                 let mut machines = Vec::new();
                 for child in root.children() {
-                    if child.name != "random" {
+                    if child.name() != "random" {
                         machines.push(child.get());
                     }
                 }
@@ -43,7 +43,7 @@ impl RenderPass for Random {
             if let Some(root) = objtree.find("/obj/item/bedsheet") {
                 let mut sheets = vec![root.get()];  // basic bedsheet is included
                 for child in root.children() {
-                    if child.name != "random" {
+                    if child.name() != "random" {
                         sheets.push(child.get());
                     }
                 }

@@ -283,7 +283,7 @@ impl<'a> Engine<'a> {
 
     fn recurse_objtree(&self, ty: TypeRef) -> extras::ObjectTreeType {
         let mut entry = extras::ObjectTreeType {
-            name: ty.name.to_owned(),
+            name: ty.name().to_owned(),
             kind: lsp_types::SymbolKind::Class,
             location: self.convert_location(ty.location, &ty.docs, &[&ty.path]).ok(),
             vars: Vec::new(),
@@ -1148,12 +1148,12 @@ handle_method_call! {
         }
 
         for ty in self.objtree.iter_types() {
-            if query.matches_type(&ty.name, &ty.path) && !ty.is_root() {
+            if query.matches_type(ty.name(), &ty.path) && !ty.is_root() {
                 results.push(SymbolInformation {
-                    name: ty.name.clone(),
+                    name: ty.name().to_owned(),
                     kind: SymbolKind::Class,
                     location: self.convert_location(ty.location, &ty.docs, &[&ty.path])?,
-                    container_name: Some(ty.path[..ty.path.len() - ty.name.len() - 1].to_owned()),
+                    container_name: Some(ty.parent_path_str().to_owned()),
                     deprecated: None,
                 });
             }

@@ -243,9 +243,9 @@ impl<'a> Engine<'a> {
         if exact {
             // child types
             for child in ty.children() {
-                if contains(&child.name, query) {
+                if contains(child.name(), query) {
                     results.push(CompletionItem {
-                        label: child.name.to_owned(),
+                        label: child.name().to_owned(),
                         kind: Some(CompletionItemKind::Class),
                         documentation: item_documentation(&child.docs),
                         .. Default::default()
@@ -331,9 +331,9 @@ impl<'a> Engine<'a> {
 
                 // child types
                 for child in ty.children() {
-                    if contains(&child.name, query) {
+                    if contains(child.name(), query) {
                         results.push(CompletionItem {
-                            label: child.name.to_owned(),
+                            label: child.name().to_owned(),
                             kind: Some(CompletionItemKind::Class),
                             documentation: item_documentation(&child.docs),
                             .. Default::default()

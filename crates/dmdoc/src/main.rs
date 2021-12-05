@@ -461,8 +461,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         if context.config().dmdoc.use_typepath_names {
             parsed_type.name = ty
                 .get()
-                .name
-                .as_str()
+                .name()
                 .into();
         } else {
             parsed_type.name = ty

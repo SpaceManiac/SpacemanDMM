@@ -106,8 +106,8 @@ impl TypeProc {
 
 #[derive(Debug)]
 pub struct Type {
-    pub name: String,
     pub path: String,
+    path_last_slash: usize,
     pub location: Location,
     location_specificity: usize,
     /// Variables which this type has declarations or overrides for.
@@ -122,6 +122,18 @@ pub struct Type {
 }
 
 impl Type {
+    pub fn name(&self) -> &str {
+        if self.is_root() {
+            ""
+        } else {
+            &self.path[self.path_last_slash + 1..]
+        }
+    }
+
+    pub fn parent_path_str(&self) -> &str {
+        &self.path[..self.path_last_slash]
+    }
+
     pub fn parent_type_index(&self) -> Option<NodeIndex> {
         if self.parent_type == NodeIndex::end() {
             None
@@ -742,8 +754,8 @@ impl Default for ObjectTreeBuilder {
             types: Default::default(),
         };
         tree.graph.push(Type {
-            name: String::new(),
             path: String::new(),
+            path_last_slash: usize::MAX,
             location: Default::default(),
             location_specificity: 0,
             vars: Default::default(),
@@ -915,8 +927,8 @@ impl ObjectTreeBuilder {
         let path = format!("{}/{}", self.inner[parent].path, child);
         let node = NodeIndex::new(self.inner.graph.len());
         self.inner.graph.push(Type {
-            name: child.to_owned(),
             path: path.clone(),
+            path_last_slash: self.inner[parent].path.len(),
             vars: Default::default(),
             procs: Default::default(),
             location,
