@@ -29,6 +29,7 @@ mod find_references;
 mod extras;
 mod completion;
 mod color;
+mod background;
 
 mod debugger;
 
@@ -155,7 +156,7 @@ struct Engine<'a> {
     context: &'a dm::Context,
     defines: Option<dm::preprocessor::DefineHistory>,
     objtree: Arc<dm::objtree::ObjectTree>,
-    references_table: Option<find_references::ReferencesTable>,
+    references_table: background::Background<find_references::ReferencesTable>,
 
     annotations: HashMap<Url, (FileId, FileId, Rc<AnnotationTree>), RandomState>,
     diagnostics_set: HashSet<Url, RandomState>,
@@ -178,7 +179,7 @@ impl<'a> Engine<'a> {
             context,
             defines: None,
             objtree: Default::default(),
-            references_table: None,
+            references_table: Default::default(),
 
             annotations: Default::default(),
             diagnostics_set: Default::default(),
@@ -389,9 +390,13 @@ impl<'a> Engine<'a> {
             eprint!(" - object tree {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
         }
 
-        self.references_table = Some(find_references::ReferencesTable::new(&self.objtree));
-        let elapsed = start.elapsed(); start += elapsed;
-        eprint!(" - references {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+        let references_objtree = self.objtree.clone();
+        self.references_table.spawn(move || {
+            let table = find_references::ReferencesTable::new(&references_objtree);
+            let elapsed = start.elapsed();
+            eprint!(" - references {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+            table
+        });
 
         if ctx.config().langserver.dreamchecker && !fatal_errored {
             dreamchecker::run(&self.context, &self.objtree);
@@ -1535,7 +1540,8 @@ handle_method_call! {
 
         let mut result = &[][..];
         if let Some(id) = symbol_id {
-            if let Some(ref table) = self.references_table {
+            self.references_table.poll();
+            if let Some(table) = self.references_table.value() {
                 result = table.find_references(id, params.context.include_declaration);
             }
         }
@@ -1556,7 +1562,8 @@ handle_method_call! {
 
         let mut result = &[][..];
         if let Some(id) = symbol_id {
-            if let Some(ref table) = self.references_table {
+            self.references_table.poll();
+            if let Some(table) = self.references_table.value() {
                 result = table.find_implementations(id);
             }
         }
