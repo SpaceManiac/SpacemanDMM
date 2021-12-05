@@ -750,7 +750,7 @@ impl Default for ObjectTreeBuilder {
     fn default() -> Self {
         let mut symbols = SymbolIdSource::new(SymbolIdCategory::ObjectTree);
         let mut tree = ObjectTree {
-            graph: Default::default(),
+            graph: Vec::with_capacity(0x4000),
             types: Default::default(),
         };
         tree.graph.push(Type {
