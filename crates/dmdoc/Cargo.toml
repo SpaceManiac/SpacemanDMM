@@ -2,7 +2,7 @@
 name = "dmdoc"
 version = "1.4.1"
 authors = ["Tad Hardesty <tad@platymuus.com>"]
-homepage = "https://github.com/SpaceManiac/SpacemanDMM/blob/master/src/dmdoc/README.md"
+homepage = "https://github.com/SpaceManiac/SpacemanDMM/blob/master/crates/dmdoc/README.md"
 edition = "2018"
 
 [dependencies]
