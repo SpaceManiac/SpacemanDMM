@@ -400,10 +400,10 @@ impl fmt::Display for ConstFn {
 // The constant evaluator
 
 pub fn evaluate_str(location: Location, input: &[u8]) -> Result<Constant, DMError> {
-    use super::lexer::{Lexer, from_utf8_or_latin1_borrowed};
+    use super::lexer::{Lexer, LocationTracker, from_utf8_or_latin1_borrowed};
 
     let ctx = Context::default();
-    let mut lexer = Lexer::new(&ctx, location.file, input);
+    let mut lexer = Lexer::from_input(&ctx, LocationTracker::from_location(location, input.into()));
     let expr = crate::parser::parse_expression(&ctx, location, &mut lexer)?;
     let leftover = lexer.remaining();
     if !leftover.is_empty() {

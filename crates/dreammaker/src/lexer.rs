@@ -482,10 +482,6 @@ enum Directive {
     Stringy,
 }
 
-fn has_bom(slice: &[u8]) -> bool {
-    slice.starts_with(b"\xEF\xBB\xBF")
-}
-
 fn buffer_read<R: Read>(file: FileId, mut read: R) -> Result<Vec<u8>, DMError> {
     let mut buffer = Vec::new();
 
@@ -537,6 +533,18 @@ pub struct LocationTracker<'a> {
 }
 
 impl<'a> LocationTracker<'a> {
+    pub fn skip_utf8_bom(input: Cow<'a, [u8]>) -> Cow<'a, [u8]> {
+        const BOM: &[u8] = b"\xEF\xBB\xBF";
+        if input.starts_with(BOM) {
+            match input {
+                Cow::Borrowed(b) => Cow::Borrowed(&b[BOM.len()..]),
+                Cow::Owned(mut o) => { o.drain(..BOM.len()); Cow::Owned(o) }
+            }
+        } else {
+            input
+        }
+    }
+
     pub fn new(file: FileId, inner: Cow<'a, [u8]>) -> LocationTracker<'a> {
         LocationTracker {
             inner,
@@ -547,6 +555,17 @@ impl<'a> LocationTracker<'a> {
                 column: 0,
             },
             at_line_end: true,
+        }
+    }
+
+    /// `location` will be taken as the location of the first character of `inner`.
+    pub fn from_location(location: Location, inner: Cow<'a, [u8]>) -> LocationTracker<'a> {
+        let location = location.pred();
+        LocationTracker {
+            inner,
+            offset: 0,
+            location,
+            at_line_end: location.column == !0,
         }
     }
 
@@ -634,19 +653,10 @@ impl<'ctx> HasLocation for Lexer<'ctx> {
 }
 
 impl<'ctx> Lexer<'ctx> {
-    /// Create a new lexer from a byte stream.
-    pub fn new<I: Into<Cow<'ctx, [u8]>>>(context: &'ctx Context, file_number: FileId, input: I) -> Self {
-        let mut cow = input.into();
-        if has_bom(&cow) {
-            cow = match cow {
-                Cow::Borrowed(b) => Cow::from(&b[3..]),
-                Cow::Owned(mut o) => { o.drain(..3); Cow::Owned(o) }
-            };
-        }
-
+    pub fn from_input(context: &'ctx Context, input: LocationTracker<'ctx>) -> Self {
         Lexer {
             context,
-            input: LocationTracker::new(file_number, cow),
+            input,
             next: None,
             final_newline: false,
             at_line_head: true,
@@ -654,6 +664,12 @@ impl<'ctx> Lexer<'ctx> {
             directive: Directive::None,
             interp_stack: Vec::new(),
         }
+    }
+
+    /// Create a new lexer from a byte stream.
+    pub fn new<I: Into<Cow<'ctx, [u8]>>>(context: &'ctx Context, file_number: FileId, input: I) -> Self {
+        let inner = LocationTracker::skip_utf8_bom(input.into());
+        Lexer::from_input(context, LocationTracker::new(file_number, inner))
     }
 
     /// Create a new lexer from a reader.

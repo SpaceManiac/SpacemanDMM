@@ -519,7 +519,22 @@ impl DMError {
 
 impl fmt::Display for DMError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}:{}:{}", self.location.line, self.location.column, self.description)
+        // Like `pretty_print_error` above, but without filename information.
+        write!(f, "{}:{}: {}: {}", self.location.line, self.location.column, self.severity, self.description)?;
+        for note in self.notes.iter() {
+            if note.location == self.location {
+                write!(f, "\n- {}", note.description, )?;
+            } else {
+                write!(
+                    f,
+                    "\n- {}:{}: {}",
+                    note.location.line,
+                    note.location.column,
+                    note.description,
+                )?;
+            }
+        }
+        Ok(())
     }
 }
 

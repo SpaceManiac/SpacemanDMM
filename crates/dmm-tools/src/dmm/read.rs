@@ -37,6 +37,27 @@ pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
     let mut escaping = false;
     let mut skip_whitespace = false;
 
+    let mut curr_key_start_location = Location::default();
+
+    let mut curr_datum_start_location = Location::default();
+    macro_rules! set_curr_datum_start_location {
+        () => {
+            if curr_datum.is_empty() {
+                curr_datum_start_location = chars.location();
+            }
+        }
+    }
+
+    macro_rules! insert_current_var {
+        () => {
+            curr_prefab.vars.insert(
+                from_utf8_or_latin1(take(&mut curr_var)),
+                dm::constants::evaluate_str(curr_datum_start_location, &take(&mut curr_datum))
+                    .map_err(|e| e.with_note(curr_key_start_location, format!("within key: \"{}\"", super::FormatKey(curr_key_length, super::Key(curr_key)))))?
+            );
+        }
+    }
+
     while let Some(ch) = chars.next() {
         if ch == b'\n' || ch == b'\r' {
             in_comment_line = false;
@@ -63,15 +84,19 @@ pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
             if in_varedit_block {
                 if in_quote_block {
                     if ch == b'\\' {
+                        set_curr_datum_start_location!();
                         curr_datum.push(ch);
                         escaping = true;
                     } else if escaping {
+                        set_curr_datum_start_location!();
                         curr_datum.push(ch);
                         escaping = false;
                     } else if ch == b'"' {
+                        set_curr_datum_start_location!();
                         curr_datum.push(ch);
                         in_quote_block = false;
                     } else {
+                        set_curr_datum_start_location!();
                         curr_datum.push(ch);
                     }
                 } else { // in_quote_block
@@ -82,6 +107,7 @@ pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
                     skip_whitespace = false;
 
                     if ch == b'"' {
+                        set_curr_datum_start_location!();
                         curr_datum.push(ch);
                         in_quote_block = true;
                     } else if ch == b'=' && curr_var.is_empty() {
@@ -93,20 +119,15 @@ pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
                         curr_var.truncate(length);
                         skip_whitespace = true;
                     } else if ch == b';' {
-                        curr_prefab.vars.insert(
-                            from_utf8_or_latin1(take(&mut curr_var)),
-                            dm::constants::evaluate_str(chars.location(), &take(&mut curr_datum))?,
-                        );
+                        insert_current_var!();
                         skip_whitespace = true;
                     } else if ch == b'}' {
                         if !curr_var.is_empty() {
-                            curr_prefab.vars.insert(
-                                from_utf8_or_latin1(take(&mut curr_var)),
-                                dm::constants::evaluate_str(chars.location(), &take(&mut curr_datum))?,
-                            );
+                            insert_current_var!();
                         }
                         in_varedit_block = false;
                     } else {
+                        set_curr_datum_start_location!();
                         curr_datum.push(ch);
                     }
                 }
@@ -130,6 +151,7 @@ pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
                 in_data_block = false;
                 after_data_block = true;
             } else {
+                set_curr_datum_start_location!();
                 curr_datum.push(ch);
             }
         } else if in_key_block {
@@ -138,6 +160,9 @@ pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
                 assert!(map.key_length == 0 || map.key_length == curr_key_length);
                 map.key_length = curr_key_length;
             } else {
+                if curr_key == 0 {
+                    curr_key_start_location = chars.location();
+                }
                 curr_key = advance_key(chars.location(), curr_key, ch)?;
                 curr_key_length += 1;
             }
