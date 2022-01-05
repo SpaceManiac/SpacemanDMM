@@ -300,6 +300,10 @@ impl Location {
         } else if self.line != 0 {
             self.column = !0;
             self.line -= 1;
+        } else if self.file == FILEID_BAD {
+            // This file ID generally comes from using Location::default().
+            // In that case hopefully it's a test or something, so just let it
+            // stay 0:0.
         } else if self.file.0 != 0 {
             self.column = !0;
             self.line = !0;
