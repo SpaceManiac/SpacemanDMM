@@ -1483,6 +1483,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 self.visit_expression(location, input, None, local_vars);
                 for (case, ref block) in cases.iter() {
                     let mut scoped_locals = local_vars.clone();
+                    if let [dm::ast::Case::Exact(Expression::BinaryOp{op: BinaryOp::Or, ..})] = case.elem[..] {
+                        error(case.location, format!("Elements in a switch-case branch separated by ||, this is likely in error and should be replaced by a comma"))
+                            .set_severity(Severity::Warning)
+                            .register(self.context);
+                    }
                     for case_part in case.elem.iter() {
                         match case_part {
                             dm::ast::Case::Exact(expr) => { self.visit_expression(case.location, expr, None, &mut scoped_locals); },
