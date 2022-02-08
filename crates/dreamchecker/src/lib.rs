@@ -15,6 +15,8 @@ use ahash::RandomState;
 
 mod type_expr;
 use type_expr::TypeExpr;
+mod switch_rand_range;
+use switch_rand_range::check_switch_rand_range;
 
 #[doc(hidden)]  // Intended for the tests only.
 pub mod test_helpers;
@@ -1475,11 +1477,17 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 self.inside_newcontext = self.inside_newcontext.wrapping_sub(1);
             },
             Statement::Switch { input, cases, default } => {
+                check_switch_rand_range(input, cases, default, location, self.context);
                 let mut allterm = ControlFlow::alltrue();
                 self.visit_control_condition(location, input);
                 self.visit_expression(location, input, None, local_vars);
                 for (case, ref block) in cases.iter() {
                     let mut scoped_locals = local_vars.clone();
+                    if let [dm::ast::Case::Exact(Expression::BinaryOp{op: BinaryOp::Or, ..})] = case.elem[..] {
+                        error(case.location, "Elements in a switch-case branch separated by ||, this is likely in error and should be replaced by a comma")
+                            .set_severity(Severity::Warning)
+                            .register(self.context);
+                    }
                     for case_part in case.elem.iter() {
                         match case_part {
                             dm::ast::Case::Exact(expr) => { self.visit_expression(case.location, expr, None, &mut scoped_locals); },
