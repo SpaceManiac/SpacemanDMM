@@ -485,7 +485,7 @@ impl<'a> Engine<'a> {
         let elapsed = start.elapsed(); start += elapsed;
         {
             let disk = ctx.get_io_time();
-            let parse = elapsed - disk;
+            let parse = elapsed.saturating_sub(disk);
             eprint!("disk {}.{:03}s - parse {}.{:03}s", disk.as_secs(), disk.subsec_millis(), parse.as_secs(), parse.subsec_millis());
         }
 
