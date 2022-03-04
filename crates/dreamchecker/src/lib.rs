@@ -2218,6 +2218,17 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             }
 
             let analysis = self.visit_expression(location, argument_value, None, local_vars);
+
+            if proc.is_builtin() && proc.name() == "initial" && analysis.static_ty.is_list() {
+                if let Expression::Base{term: _, follow} = arg {
+                    for each in follow.iter() {
+                        if let Spanned{location, elem: Follow::Field(_, ident)} = each {
+                            error(*location, format!("built-in proc initial() called on list type var `{}`", ident)).register(self.context);
+                        }
+                    }
+                }
+            }
+
             if let Some(kw) = this_kwarg {
                 param_name_map.insert(kw.as_str(), analysis);
                 param_expr_map.insert(kw.as_str(), argument_value);
