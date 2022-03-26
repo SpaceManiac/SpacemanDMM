@@ -695,7 +695,8 @@ impl<'o> AnalyzeObjectTree<'o> {
                             .with_blocking_builtins(self.sleeping_procs.get_violators(*child_violator).unwrap())
                             .register(self.context)
                     }
-                } else if let Some(calledvec) = self.call_tree.get(&nextproc) {
+                } 
+                if let Some(calledvec) = self.call_tree.get(&nextproc) {
                     for (proccalled, location, new_context) in calledvec.iter() {
                         let mut newstack = callstack.clone();
                         newstack.add_step(*proccalled, *location, *new_context);
@@ -745,7 +746,8 @@ impl<'o> AnalyzeObjectTree<'o> {
                             .with_blocking_builtins(self.impure_procs.get_violators(*child_violator).unwrap())
                             .register(self.context)
                     }
-                } else if let Some(calledvec) = self.call_tree.get(&nextproc) {
+                } 
+                if let Some(calledvec) = self.call_tree.get(&nextproc) {
                     for (proccalled, location, new_context) in calledvec.iter() {
                         let mut newstack = callstack.clone();
                         newstack.add_step(*proccalled, *location, *new_context);
