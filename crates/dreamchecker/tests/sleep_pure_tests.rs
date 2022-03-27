@@ -170,7 +170,7 @@ fn sleep5() {
         sleep(1)
 
 /datum/hijack/proxy()
-    sleep(1)
+        sleep(1)
 "##.trim();
     check_errors_match(code, SLEEP_ERROR5);
 }
