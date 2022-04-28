@@ -15,6 +15,8 @@ use std::io::{self, Write};
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use dm::objtree::ObjectTree;
+use pulldown_cmark::{BrokenLink, CowStr};
 
 use tera::Value;
 
@@ -176,203 +178,6 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     let diagnostic_count: std::cell::Cell<i32> = Default::default();
     let error_entity: std::cell::Cell<Option<String>> = Default::default();
     let error_entity_put = |string: String| error_entity.set(Some(string));
-    let error_entity_print = || {
-        diagnostic_count.set(diagnostic_count.get() + 1);
-        if let Some(name) = error_entity.take() {
-            eprintln!("{}:", name);
-        }
-    };
-
-    // (normalized, reference) -> (href, tooltip)
-    let broken_link_callback = &|_: &str, reference: &str| -> Option<(String, String)> {
-        // macros
-        if let Some(module) = macro_to_module_map.get(reference) {
-            return Some((format!("{}.html#define/{}", module, reference), reference.to_owned()));
-        } else if macro_exists.contains(reference) {
-            error_entity_print();
-            eprintln!("    [{}]: macro not documented", reference);
-            return None;
-        } else if reference.ends_with(".dm") || reference.ends_with(".txt") || reference.ends_with(".md") {
-            let mod_path = module_path(reference.as_ref());
-            if modules_which_exist.contains(&mod_path) {
-                return Some((format!("{}.html", mod_path), reference.to_owned()));
-            }
-            error_entity_print();
-            eprintln!("    [{}]: module {}", reference, if Path::new(reference).exists() { "not documented" } else { "does not exist" });
-            return None;
-        }
-
-        // parse "proc" or "var" reference out
-        let mut ty_path = reference;
-        let mut proc_name = None;
-        let mut var_name = None;
-        let mut entity_exists = false;
-        if let Some(idx) = reference.find("/proc/") {
-            // `[/ty/proc/procname]`
-            let name = &reference[idx + "/proc/".len()..];
-            proc_name = Some(name);
-            ty_path = &reference[..idx];
-            if let Some(ty) = objtree.find(ty_path) {
-                entity_exists = ty.procs.contains_key(name);
-            }
-        } else if let Some(idx) = reference.find("/verb/") {
-            // `[/ty/verb/procname]`
-            let name = &reference[idx + "/verb/".len()..];
-            proc_name = Some(name);
-            ty_path = &reference[..idx];
-            if let Some(ty) = objtree.find(ty_path) {
-                // there are no builtin verbs
-                entity_exists = ty.procs.contains_key(name);
-            }
-        } else if let Some(idx) = reference.find("/var/") {
-            // `[/ty/var/varname]`
-            let name = &reference[idx + "/var/".len()..];
-            var_name = Some(name);
-            ty_path = &reference[..idx];
-            if let Some(ty) = objtree.find(ty_path) {
-                entity_exists = ty.vars.contains_key(name);
-            }
-        } else if let Some(_) = objtree.find(reference) {
-            entity_exists = true;
-        } else if let Some(idx) = reference.rfind('/') {
-            let (parent, rest) = (&reference[..idx], &reference[idx + 1..]);
-            if let Some(ty) = objtree.find(parent) {
-                if ty.procs.contains_key(rest) && !ty.vars.contains_key(rest) {
-                    // correct `[/ty/procname]` to `[/ty/proc/procname]`
-                    proc_name = Some(rest);
-                    ty_path = parent;
-                    error_entity_print();
-                    eprintln!("    [{}]: correcting to [{}/proc/{}]", reference, parent, rest);
-                    entity_exists = true;
-                } else if ty.vars.contains_key(rest) {
-                    // correct `[/ty/varname]` to `[/ty/var/varname]`
-                    var_name = Some(rest);
-                    ty_path = parent;
-                    error_entity_print();
-                    eprintln!("    [{}]: correcting to [{}/var/{}]", reference, parent, rest);
-                    entity_exists = true;
-                }
-            }
-        } else if objtree.root().vars.contains_key(reference) {
-            ty_path = "";
-            var_name = Some(reference);
-            error_entity_print();
-            eprintln!("    [{0}]: correcting to [/var/{0}]", reference);
-            entity_exists = true;
-        }
-        // else `[/ty]`
-
-        // Determine external doc URL
-        let mut external_url = None;
-        if entity_exists {
-            // TODO: .location.is_builtins() is not the best way to find this out,
-            // for example if it's overridden in the DM code but not re-documented.
-            if let Some(ty) = objtree.find(ty_path) {
-                if let Some(var_name) = var_name {
-                    if let Some(var) = ty.get_value(var_name) {
-                        if var.location.is_builtins() {
-                            external_url = Some(match var.docs.builtin_docs {
-                                BuiltinDocs::None => format!("{}{}/var/{}", DM_REFERENCE_BASE, ty.path, var_name),
-                                BuiltinDocs::ReferenceHash(hash) => format!("{}{}", DM_REFERENCE_BASE, hash),
-                            })
-                        }
-                    }
-                } else if let Some(proc_name) = proc_name {
-                    if let Some(proc) = ty.get_proc(proc_name) {
-                        if proc.location.is_builtins() {
-                            external_url = Some(match proc.docs.builtin_docs {
-                                BuiltinDocs::None => format!("{}{}/proc/{}", DM_REFERENCE_BASE, ty.path, proc_name),
-                                BuiltinDocs::ReferenceHash(hash) => format!("{}{}", DM_REFERENCE_BASE, hash),
-                            })
-                        }
-                    }
-                } else {
-                    if ty.location.is_builtins() {
-                        external_url = Some(match ty.docs.builtin_docs {
-                            BuiltinDocs::None => format!("{}{}", DM_REFERENCE_BASE, ty.path),
-                            BuiltinDocs::ReferenceHash(hash) => format!("{}{}", DM_REFERENCE_BASE, hash),
-                        })
-                    }
-                }
-            }
-        }
-
-        let mut progress = String::new();
-        let mut best = 0;
-
-        if ty_path.is_empty() {
-            progress.push_str("/global");
-            if let Some(info) = types_with_docs.get("") {
-                if let Some(proc_name) = proc_name {
-                    if info.proc_docs.contains(proc_name) {
-                        best = progress.len();
-                    }
-                } else if let Some(var_name) = var_name {
-                    if info.var_docs.contains(var_name) {
-                        best = progress.len();
-                    }
-                } else {
-                    best = progress.len();
-                }
-            }
-        } else {
-            for bit in ty_path.trim_start_matches('/').split('/') {
-                progress.push_str("/");
-                progress.push_str(bit);
-                if let Some(info) = types_with_docs.get(progress.as_str()) {
-                    if let Some(proc_name) = proc_name {
-                        if info.proc_docs.contains(proc_name) {
-                            best = progress.len();
-                        }
-                    } else if let Some(var_name) = var_name {
-                        if info.var_docs.contains(var_name) {
-                            best = progress.len();
-                        }
-                    } else {
-                        best = progress.len();
-                    }
-                }
-            }
-        }
-
-        if best > 0 {
-            use std::fmt::Write;
-
-            if best < progress.len() {
-                error_entity_print();
-                if entity_exists {
-                    eprint!("    [{}]: not documented, guessing [{}", reference, &progress[..best]);
-                } else {
-                    eprint!("    [{}]: unknown crosslink, guessing [{}", reference, &progress[..best]);
-                }
-                if let Some(proc_name) = proc_name {
-                    let _ = eprint!("/proc/{}", proc_name);
-                } else if let Some(var_name) = var_name {
-                    let _ = eprint!("/var/{}", var_name);
-                }
-                eprintln!("]");
-                progress.truncate(best);
-            }
-
-            let mut href = format!("{}.html", &progress[1..]);
-            if let Some(proc_name) = proc_name {
-                let _ = write!(href, "#proc/{}", proc_name);
-            } else if let Some(var_name) = var_name {
-                let _ = write!(href, "#var/{}", var_name);
-            }
-            Some((href, progress))
-        } else if let Some(external) = external_url {
-            Some((external, reference.to_owned()))
-        } else {
-            error_entity_print();
-            if entity_exists {
-                eprintln!("    [{}]: not documented", reference);
-            } else {
-                eprintln!("    [{}]: unknown crosslink", reference);
-            }
-            None
-        }
-    };
 
     // if macros have docs, that counts as a module too
     for (range, (name, define)) in define_history.iter() {
@@ -401,6 +206,9 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             continue;
         }
         error_entity_put(format!("#define {}", name));
+        let broken_link_callback = &mut |link: BrokenLink| -> Option<(CowStr, CowStr)> {
+            broken_link_fixer(link, &macro_to_module_map, &macro_exists, &diagnostic_count, &error_entity, &modules_which_exist, &objtree, &types_with_docs)
+        };
         let docs = DocBlock::parse(&docs.text(), Some(broken_link_callback));
         let module = module_entry(&mut modules1, &context.file_path(range.start.file));
         module.items_wip.push((
@@ -447,6 +255,9 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(index_path) = index_path {
         let buf = read_as_markdown(index_path.as_ref())?.expect("file for --index must be .md or .txt");
         error_entity_put(index_path.to_owned());
+        let broken_link_callback = &mut |link: BrokenLink| -> Option<(CowStr, CowStr)> {
+            broken_link_fixer(link, &macro_to_module_map, &macro_exists, &diagnostic_count, &error_entity, &modules_which_exist, &objtree, &types_with_docs)
+        };
         index_docs = Some(DocBlock::parse_with_title(&buf, Some(broken_link_callback)));
     }
 
@@ -479,6 +290,9 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         let mut substance = false;
         if !ty.docs.is_empty() {
             error_entity_put(ty.path.to_owned());
+            let broken_link_callback = &mut |link: BrokenLink| -> Option<(CowStr, CowStr)> {
+                broken_link_fixer(link, &macro_to_module_map, &macro_exists, &diagnostic_count, &error_entity, &modules_which_exist, &objtree, &types_with_docs)
+            };
             let (title, block) = DocBlock::parse_with_title(&ty.docs.text(), Some(broken_link_callback));
             if let Some(title) = title {
                 parsed_type.name = title.into();
@@ -511,6 +325,9 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                 }
 
                 error_entity_put(format!("{}/var/{}", ty.path, name));
+                let broken_link_callback = &mut |link: BrokenLink| -> Option<(CowStr, CowStr)> {
+                    broken_link_fixer(link, &macro_to_module_map, &macro_exists, &diagnostic_count, &error_entity, &modules_which_exist, &objtree, &types_with_docs)
+                };
                 let block = DocBlock::parse(&var.value.docs.text(), Some(broken_link_callback));
 
                 // if the var is global, add it to the module tree
@@ -567,6 +384,9 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                 }
 
                 error_entity_put(format!("{}/proc/{}", ty.path, name));
+                let broken_link_callback = &mut |link: BrokenLink| -> Option<(CowStr, CowStr)> {
+                    broken_link_fixer(link, &macro_to_module_map, &macro_exists, &diagnostic_count, &error_entity, &modules_which_exist, &objtree, &types_with_docs)
+                };
                 let block = DocBlock::parse(&proc_value.docs.text(), Some(broken_link_callback));
 
                 // if the proc is global, add it to the module tree
@@ -662,6 +482,9 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         macro_rules! push_docs { () => {  // oof
             if !docs.is_empty() {
                 let doc = std::mem::replace(&mut docs, Default::default());
+                let broken_link_callback = &mut |link: BrokenLink| -> Option<(CowStr, CowStr)> {
+                    broken_link_fixer(link, &macro_to_module_map, &macro_exists, &diagnostic_count, &error_entity, &modules_which_exist, &objtree, &types_with_docs)
+                };
                 if _first {
                     _first = false;
                     let (title, block) = DocBlock::parse_with_title(&doc.text(), Some(broken_link_callback));
@@ -904,6 +727,215 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+// reference & other captures -> (href, tooltip)
+fn broken_link_fixer<'str>(
+    link: BrokenLink,
+    macro_to_module_map: &BTreeMap<&str, String>,
+    macro_exists: &BTreeSet<&str>,
+    diagnostic_count: &std::cell::Cell<i32>,
+    error_entity: &std::cell::Cell<Option<String>>,
+    modules_which_exist: &BTreeSet<String>,
+    objtree: &ObjectTree,
+    types_with_docs: &BTreeMap<&str, TypeHasDocs>,
+    ) -> Option<(CowStr<'str>, CowStr<'str>)>
+    {
+        let referie = link.reference.into_string();
+        let reference = referie.as_str();
+        let error_entity_print = || {
+            diagnostic_count.set(diagnostic_count.get() + 1);
+            if let Some(name) = error_entity.take() {
+                eprintln!("{}:", name);
+            }
+        };
+        // macros
+        if let Some(module) = macro_to_module_map.get(reference) {
+            return Some((format!("{}.html#define/{}", module, reference).to_owned().into(), reference.to_owned().into()));
+        } else if macro_exists.contains(reference) {
+            error_entity_print();
+            eprintln!("    [{}]: macro not documented", reference);
+            return None;
+        } else if reference.ends_with(".dm") || reference.ends_with(".txt") || reference.ends_with(".md") {
+            let mod_path = module_path(reference.as_ref());
+            if modules_which_exist.contains(&mod_path) {
+                return Some((format!("{}.html", mod_path).to_owned().into(), reference.to_owned().into()));
+            }
+            error_entity_print();
+            eprintln!("    [{}]: module {}", reference, if Path::new(reference).exists() { "not documented" } else { "does not exist" });
+            return None;
+        }
+
+        // parse "proc" or "var" reference out
+        let mut ty_path = reference;
+        let mut proc_name = None;
+        let mut var_name = None;
+        let mut entity_exists = false;
+        if let Some(idx) = reference.find("/proc/") {
+            // `[/ty/proc/procname]`
+            let name = &reference[idx + "/proc/".len()..];
+            proc_name = Some(name);
+            ty_path = &reference[..idx];
+            if let Some(ty) = objtree.find(ty_path) {
+                entity_exists = ty.procs.contains_key(name);
+            }
+        } else if let Some(idx) = reference.find("/verb/") {
+            // `[/ty/verb/procname]`
+            let name = &reference[idx + "/verb/".len()..];
+            proc_name = Some(name);
+            ty_path = &reference[..idx];
+            if let Some(ty) = objtree.find(ty_path) {
+                // there are no builtin verbs
+                entity_exists = ty.procs.contains_key(name);
+            }
+        } else if let Some(idx) = reference.find("/var/") {
+            // `[/ty/var/varname]`
+            let name = &reference[idx + "/var/".len()..];
+            var_name = Some(name);
+            ty_path = &reference[..idx];
+            if let Some(ty) = objtree.find(ty_path) {
+                entity_exists = ty.vars.contains_key(name);
+            }
+        } else if let Some(_) = objtree.find(reference) {
+            entity_exists = true;
+        } else if let Some(idx) = reference.rfind('/') {
+            let (parent, rest) = (&reference[..idx], &reference[idx + 1..]);
+            if let Some(ty) = objtree.find(parent) {
+                if ty.procs.contains_key(rest) && !ty.vars.contains_key(rest) {
+                    // correct `[/ty/procname]` to `[/ty/proc/procname]`
+                    proc_name = Some(rest);
+                    ty_path = parent;
+                    error_entity_print();
+                    eprintln!("    [{}]: correcting to [{}/proc/{}]", reference, parent, rest);
+                    entity_exists = true;
+                } else if ty.vars.contains_key(rest) {
+                    // correct `[/ty/varname]` to `[/ty/var/varname]`
+                    var_name = Some(rest);
+                    ty_path = parent;
+                    error_entity_print();
+                    eprintln!("    [{}]: correcting to [{}/var/{}]", reference, parent, rest);
+                    entity_exists = true;
+                }
+            }
+        } else if objtree.root().vars.contains_key(reference) {
+            ty_path = "";
+            var_name = Some(reference);
+            error_entity_print();
+            eprintln!("    [{0}]: correcting to [/var/{0}]", reference);
+            entity_exists = true;
+        }
+        // else `[/ty]`
+
+        // Determine external doc URL
+        let mut external_url = None;
+        if entity_exists {
+            // TODO: .location.is_builtins() is not the best way to find this out,
+            // for example if it's overridden in the DM code but not re-documented.
+            if let Some(ty) = objtree.find(ty_path) {
+                if let Some(var_name) = var_name {
+                    if let Some(var) = ty.get_value(var_name) {
+                        if var.location.is_builtins() {
+                            external_url = Some(match var.docs.builtin_docs {
+                                BuiltinDocs::None => format!("{}{}/var/{}", DM_REFERENCE_BASE, ty.path, var_name),
+                                BuiltinDocs::ReferenceHash(hash) => format!("{}{}", DM_REFERENCE_BASE, hash),
+                            })
+                        }
+                    }
+                } else if let Some(proc_name) = proc_name {
+                    if let Some(proc) = ty.get_proc(proc_name) {
+                        if proc.location.is_builtins() {
+                            external_url = Some(match proc.docs.builtin_docs {
+                                BuiltinDocs::None => format!("{}{}/proc/{}", DM_REFERENCE_BASE, ty.path, proc_name),
+                                BuiltinDocs::ReferenceHash(hash) => format!("{}{}", DM_REFERENCE_BASE, hash),
+                            })
+                        }
+                    }
+                } else {
+                    if ty.location.is_builtins() {
+                        external_url = Some(match ty.docs.builtin_docs {
+                            BuiltinDocs::None => format!("{}{}", DM_REFERENCE_BASE, ty.path),
+                            BuiltinDocs::ReferenceHash(hash) => format!("{}{}", DM_REFERENCE_BASE, hash),
+                        })
+                    }
+                }
+            }
+        }
+
+        let mut progress = String::new();
+        let mut best = 0;
+
+        if ty_path.is_empty() {
+            progress.push_str("/global");
+            if let Some(info) = types_with_docs.get("") {
+                if let Some(proc_name) = proc_name {
+                    if info.proc_docs.contains(proc_name) {
+                        best = progress.len();
+                    }
+                } else if let Some(var_name) = var_name {
+                    if info.var_docs.contains(var_name) {
+                        best = progress.len();
+                    }
+                } else {
+                    best = progress.len();
+                }
+            }
+        } else {
+            for bit in ty_path.trim_start_matches('/').split('/') {
+                progress.push_str("/");
+                progress.push_str(bit);
+                if let Some(info) = types_with_docs.get(progress.as_str()) {
+                    if let Some(proc_name) = proc_name {
+                        if info.proc_docs.contains(proc_name) {
+                            best = progress.len();
+                        }
+                    } else if let Some(var_name) = var_name {
+                        if info.var_docs.contains(var_name) {
+                            best = progress.len();
+                        }
+                    } else {
+                        best = progress.len();
+                    }
+                }
+            }
+        }
+
+        if best > 0 {
+            use std::fmt::Write;
+
+            if best < progress.len() {
+                error_entity_print();
+                if entity_exists {
+                    eprint!("    [{}]: not documented, guessing [{}", reference, &progress[..best]);
+                } else {
+                    eprint!("    [{}]: unknown crosslink, guessing [{}", reference, &progress[..best]);
+                }
+                if let Some(proc_name) = proc_name {
+                    let _ = eprint!("/proc/{}", proc_name);
+                } else if let Some(var_name) = var_name {
+                    let _ = eprint!("/var/{}", var_name);
+                }
+                eprintln!("]");
+                progress.truncate(best);
+            }
+
+            let mut href = format!("{}.html", &progress[1..]);
+            if let Some(proc_name) = proc_name {
+                let _ = write!(href, "#proc/{}", proc_name);
+            } else if let Some(var_name) = var_name {
+                let _ = write!(href, "#var/{}", var_name);
+            }
+            Some((href.into(), progress.into()))
+        } else if let Some(external) = external_url {
+            Some((external.into(), reference.to_owned().into()))
+        } else {
+            error_entity_print();
+            if entity_exists {
+                eprintln!("    [{}]: not documented", reference);
+            } else {
+                eprintln!("    [{}]: unknown crosslink", reference);
+            }
+            None
+        }
 }
 
 // ----------------------------------------------------------------------------

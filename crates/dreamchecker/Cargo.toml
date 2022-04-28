@@ -6,10 +6,10 @@ edition = "2018"
 
 [dependencies]
 dreammaker = { path = "../dreammaker" }
-guard = "0.5.0"
+guard = "0.5.1"
 serde_json = "1.0"
 ahash = "0.7.6"
 
 [build-dependencies]
-chrono = "0.4.0"
-git2 = { version = "0.13", default-features = false }
+chrono = "0.4.19"
+git2 = { version = "0.14.2", default-features = false }

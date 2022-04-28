@@ -3,11 +3,9 @@
 use std::ops::Range;
 use std::collections::VecDeque;
 
-use pulldown_cmark::{self, Parser, Tag, Event};
+use pulldown_cmark::{self, Parser, Tag, Event, BrokenLinkCallback, HeadingLevel};
 
-pub type BrokenLinkCallback<'a> = Option<&'a dyn Fn(&str, &str) -> Option<(String, String)>>;
-
-pub fn render(markdown: &str, broken_link_callback: BrokenLinkCallback) -> String {
+pub fn render<'string, 'func>(markdown: &'string str, broken_link_callback: BrokenLinkCallback<'string, 'func>) -> String {
     let mut buf = String::new();
     push_html(&mut buf, parser(markdown, broken_link_callback));
     buf
@@ -22,19 +20,19 @@ pub struct DocBlock {
 }
 
 impl DocBlock {
-    pub fn parse(markdown: &str, broken_link_callback: BrokenLinkCallback) -> Self {
+    pub fn parse<'string, 'func>(markdown: &'string str, broken_link_callback: BrokenLinkCallback<'string, 'func>) -> Self {
         parse_main(parser(markdown, broken_link_callback).peekable())
     }
 
-    pub fn parse_with_title(markdown: &str, broken_link_callback: BrokenLinkCallback) -> (Option<String>, Self) {
+    pub fn parse_with_title<'string, 'func>(markdown: &'string str, broken_link_callback: BrokenLinkCallback<'string, 'func>) -> (Option<String>, Self) {
         let mut parser = parser(markdown, broken_link_callback).peekable();
         (
-            if let Some(&Event::Start(Tag::Heading(1))) = parser.peek() {
+            if let Some(&Event::Start(Tag::Heading(HeadingLevel::H1, _, _))) = parser.peek() {
                 parser.next();
                 let mut pieces = Vec::new();
                 loop {
                     match parser.next() {
-                        None | Some(Event::End(Tag::Heading(1))) => break,
+                        None | Some(Event::End(Tag::Heading(HeadingLevel::H1, _, _))) => break,
                         Some(other) => pieces.push(other),
                     }
                 }
@@ -54,7 +52,7 @@ impl DocBlock {
     }
 }
 
-fn parser<'a>(markdown: &'a str, broken_link_callback: BrokenLinkCallback<'a>) -> Parser<'a> {
+fn parser<'string, 'func>(markdown: &'string str, broken_link_callback: BrokenLinkCallback<'string, 'func>) -> Parser<'string, 'func> {
     Parser::new_with_broken_link_callback(
         markdown,
         pulldown_cmark::Options::ENABLE_TABLES | pulldown_cmark::Options::ENABLE_STRIKETHROUGH,
@@ -116,7 +114,7 @@ impl<'a, I: Iterator<Item=Event<'a>>> Iterator for HeadingLinker<'a, I> {
         }
 
         let original = self.inner.next();
-        if let Some(Event::Start(Tag::Heading(heading))) = original {
+        if let Some(Event::Start(Tag::Heading(heading, _, _))) = original {
             let mut text_buf = String::new();
 
             while let Some(event) = self.inner.next() {
@@ -124,7 +122,7 @@ impl<'a, I: Iterator<Item=Event<'a>>> Iterator for HeadingLinker<'a, I> {
                     text_buf.push_str(text.as_ref());
                 }
 
-                if let Event::End(Tag::Heading(_)) = event {
+                if let Event::End(Tag::Heading(_, _, _)) = event {
                     break;
                 }
 
