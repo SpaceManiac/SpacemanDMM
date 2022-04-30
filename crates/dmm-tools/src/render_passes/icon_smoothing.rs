@@ -118,7 +118,7 @@ fn find_type_in_direction(objtree: &ObjectTree, adjacency: &Neighborhood, source
                     if smoothlist_contains(elements, path) {
                         return true;
                     }
-                    path = &path[..path.rfind("/").unwrap()];
+                    path = &path[..path.rfind('/').unwrap()];
                 }
             }
         } else {

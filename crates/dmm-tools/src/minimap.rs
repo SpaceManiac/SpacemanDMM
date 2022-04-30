@@ -573,7 +573,7 @@ pub fn color_of<'s, T: GetVar<'s> + ?Sized>(objtree: &'s ObjectTree, atom: &T) -
     };
 
     match atom.get_var("color", objtree) {
-        &Constant::String(ref color) if color.starts_with("#") => {
+        &Constant::String(ref color) if color.starts_with('#') => {
             let mut sum = 0;
             for ch in color[1..color.len()].chars() {
                 sum = 16 * sum + ch.to_digit(16).unwrap_or(0);

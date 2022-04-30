@@ -443,7 +443,7 @@ impl std::str::FromStr for CoordArg {
 
     fn from_str(s: &str) -> Result<Self, String> {
         match s
-            .split(",")
+            .split(',')
             .map(|x| x.parse())
             .collect::<Result<Vec<_>, std::num::ParseIntError>>()
         {

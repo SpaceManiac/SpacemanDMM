@@ -744,7 +744,7 @@ impl<'ctx> Preprocessor<'ctx> {
                         expect_token!((path_str) = Token::String(path_str));
                         let include_loc = _last_expected_loc;
                         expect_token!(() = Token::Punct(Punctuation::Newline));
-                        let path = PathBuf::from(path_str.replace("\\", "/"));
+                        let path = PathBuf::from(path_str.replace('\\', "/"));
 
                         for candidate in vec![
                             // 1. relative to file in which `#include` appears.

@@ -119,8 +119,8 @@ pub const RENDER_PASSES: &[RenderPassInfo] = &[
 ];
 
 pub fn configure(renderer_config: &dm::config::MapRenderer, include: &str, exclude: &str) -> Vec<Box<dyn RenderPass>> {
-    let include: Vec<&str> = include.split(",").collect();
-    let exclude: Vec<&str> = exclude.split(",").collect();
+    let include: Vec<&str> = include.split(',').collect();
+    let exclude: Vec<&str> = exclude.split(',').collect();
     configure_list(renderer_config, &include, &exclude)
 }
 

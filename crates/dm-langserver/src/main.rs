@@ -959,7 +959,7 @@ impl<'a> Engine<'a> {
                         }
                         let _ = write!(message, "{}", each);
                     }
-                    message.push_str(")");
+                    message.push(')');
                     defstring = message.clone();
                 }
 

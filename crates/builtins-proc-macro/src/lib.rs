@@ -159,7 +159,7 @@ pub fn builtins_table(input: TokenStream) -> TokenStream {
             if ident == "doc" {
                 markdown_span = Some(attr_span);
                 markdown.push_str(&syn::parse2::<DocComment>(attr.tokens).unwrap().0.value());
-                markdown.push_str("\n");
+                markdown.push('\n');
             } else {
                 attr_calls.extend(quote_spanned! { attr_span => .docs.#path });
                 attr_calls.extend(attr.tokens);

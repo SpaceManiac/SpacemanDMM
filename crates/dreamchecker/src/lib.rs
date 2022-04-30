@@ -1701,7 +1701,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Term::Prefab(prefab) => {
                 if let Some(nav) = self.ty.navigate_path(&prefab.path) {
                     let ty = nav.ty();  // TODO: handle proc/verb paths here
-                    let pop = dm::constants::Pop::from(ty.path.split("/").skip(1).map(ToOwned::to_owned).collect::<Vec<_>>().into_boxed_slice());
+                    let pop = dm::constants::Pop::from(ty.path.split('/').skip(1).map(ToOwned::to_owned).collect::<Vec<_>>().into_boxed_slice());
                     Analysis {
                         static_ty: StaticType::None,
                         aset: assumption_set![Assumption::IsPath(true, nav.ty())].into(),
