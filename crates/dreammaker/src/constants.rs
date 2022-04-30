@@ -151,8 +151,8 @@ impl Constant {
     // ------------------------------------------------------------------------
     // Constructors
 
-    pub fn null() -> &'static Constant {
-        static NULL: Constant = Constant::Null(None);
+    pub const fn null<'a>() -> &'a Constant {
+        const NULL: Constant = Constant::Null(None);
         &NULL
     }
 

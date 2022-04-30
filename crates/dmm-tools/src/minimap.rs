@@ -318,7 +318,7 @@ pub trait GetVar<'a> {
     fn get_path(&self) -> &str;
 
     fn get_var(&self, key: &str, objtree: &'a ObjectTree) -> &'a Constant {
-        self.get_var_inner(key, objtree).unwrap_or(Constant::null())
+        self.get_var_inner(key, objtree).unwrap_or_else(Constant::null)
     }
 
     fn get_var_notnull(&self, key: &str, objtree: &'a ObjectTree) -> Option<&'a Constant> {
@@ -345,7 +345,7 @@ impl<'a> GetVar<'a> for Atom<'a> {
         let mut current = Some(self.type_);
         while let Some(t) = current.take() {
             if let Some(v) = t.vars.get(key) {
-                return Some(v.value.constant.as_ref().unwrap_or(Constant::null()));
+                return Some(v.value.constant.as_ref().unwrap_or_else(Constant::null));
             }
             current = objtree.parent_of(t);
         }
@@ -365,7 +365,7 @@ impl<'a> GetVar<'a> for &'a Prefab {
         let mut current = objtree.find(&self.path);
         while let Some(t) = current.take() {
             if let Some(v) = t.get().vars.get(key) {
-                return Some(v.value.constant.as_ref().unwrap_or(Constant::null()));
+                return Some(v.value.constant.as_ref().unwrap_or_else(Constant::null));
             }
             current = t.parent_type();
         }
@@ -382,7 +382,7 @@ impl<'a> GetVar<'a> for &'a Type {
         let mut current = Some(*self);
         while let Some(t) = current.take() {
             if let Some(v) = t.vars.get(key) {
-                return Some(v.value.constant.as_ref().unwrap_or(Constant::null()));
+                return Some(v.value.constant.as_ref().unwrap_or_else(Constant::null));
             }
             current = objtree.parent_of(t);
         }
@@ -399,7 +399,7 @@ impl<'a> GetVar<'a> for TypeRef<'a> {
         let mut current = Some(*self);
         while let Some(t) = current.take() {
             if let Some(v) = t.get().vars.get(key) {
-                return Some(v.value.constant.as_ref().unwrap_or(Constant::null()));
+                return Some(v.value.constant.as_ref().unwrap_or_else(Constant::null));
             }
             current = t.parent_type();
         }
