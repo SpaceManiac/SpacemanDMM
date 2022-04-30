@@ -50,11 +50,15 @@ impl RenderPass for SmartCables {
             }
 
             for atom in turf {
-                if atom.istype("/obj/structure/cable/") {
-                    if atom.get_var("cable_layer", objtree).as_str().unwrap_or("l2") == cable_layer {
-                        linked_dirs |= check_dir.to_int();
-                        break;
-                    }
+                if atom.istype("/obj/structure/cable/")
+                    && atom
+                        .get_var("cable_layer", objtree)
+                        .as_str()
+                        .unwrap_or("l2")
+                        == cable_layer
+                {
+                    linked_dirs |= check_dir.to_int();
+                    break;
                 }
             }
         }
