@@ -2183,7 +2183,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         let follow = match self.arguments(belongs_to, &ident)? {
             Some(args) => {
                 if !belongs_to.is_empty() {
-                    let past = std::mem::replace(belongs_to, Vec::new());
+                    let past = std::mem::take(belongs_to);
                     self.annotate_precise(start..end, || Annotation::ScopedCall(past, ident.clone()));
                 }
                 Follow::Call(kind, ident.into(), args.into())

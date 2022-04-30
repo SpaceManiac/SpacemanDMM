@@ -11,7 +11,7 @@ use super::{Map, Key, KeyType, Prefab};
 
 #[inline]
 fn take<T: Default>(t: &mut T) -> T {
-    std::mem::replace(t, T::default())
+    std::mem::take(t)
 }
 
 pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
