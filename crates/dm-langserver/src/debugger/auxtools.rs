@@ -57,7 +57,7 @@ impl Auxtools {
                 AuxtoolsThread {
                     seq,
                     responses: responses_sender,
-                    last_error: last_error,
+                    last_error,
                 }.run(stream);
             })
         };
@@ -85,7 +85,7 @@ impl Auxtools {
             AuxtoolsThread {
                 seq,
                 responses: responses_sender,
-                last_error: last_error,
+                last_error,
             }.spawn_listener(listener, connection_sender)
         };
 

@@ -609,7 +609,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                 ModuleItem::Type {
                     path: ty.get().pretty_path(),
                     teaser: block.teaser().to_owned(),
-                    substance: substance,
+                    substance,
                 },
             ));
         }

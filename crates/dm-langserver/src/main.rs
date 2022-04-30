@@ -1778,7 +1778,7 @@ handle_method_call! {
                         active_signature: Some(0),
                         active_parameter: Some(idx as i64),
                         signatures: vec![SignatureInformation {
-                            label: label,
+                            label,
                             parameters: Some(params),
                             documentation: None,
                         }],

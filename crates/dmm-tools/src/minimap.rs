@@ -268,7 +268,7 @@ impl<'a> Atom<'a> {
 impl<'a> From<&'a Type> for Atom<'a> {
     fn from(type_: &'a Type) -> Self {
         Atom {
-            type_: type_,
+            type_,
             prefab: None,
             sprite: Sprite::default(),
         }

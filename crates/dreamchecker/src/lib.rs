@@ -297,7 +297,7 @@ impl<'o> From<StaticType<'o>> for Analysis<'o> {
 
         Analysis {
             aset,
-            static_ty: static_ty,
+            static_ty,
             fix_hint: None,
             value: None,
             is_impure: None,
@@ -2195,7 +2195,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                                     .entry(name.clone())
                                     .and_modify(|ca| ca.others += 1)
                                     .or_insert(CalledAt {
-                                        location: location,
+                                        location,
                                         others: 0,
                                     });
                             }
