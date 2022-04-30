@@ -41,7 +41,7 @@ enum ExtoolsHolderInner {
         cancel_tx: mpsc::Sender<()>,
         conn_rx: mpsc::Receiver<Extools>,
     },
-    Active(Extools),
+    Active(Box<Extools>),
 }
 
 impl Default for ExtoolsHolder {
@@ -114,7 +114,7 @@ impl ExtoolsHolder {
             ExtoolsHolderInner::Listening { conn_rx, .. } |
             ExtoolsHolderInner::Attaching { conn_rx, .. } => {
                 if let Ok(conn) = conn_rx.try_recv() {
-                    self.0 = ExtoolsHolderInner::Active(conn);
+                    self.0 = ExtoolsHolderInner::Active(Box::new(conn));
                 }
             }
             _ => {}

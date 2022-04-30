@@ -56,7 +56,7 @@ impl Parse for ProcArgument {
 
 enum EntryBody {
     None,
-    Variable(Option<Expr>),
+    Variable(Option<Box<Expr>>),
     Proc(Punctuated<ProcArgument, Token![,]>),
 }
 
@@ -64,7 +64,7 @@ impl EntryBody {
     fn parse_with_path(path: &[Ident], input: ParseStream) -> Result<Self> {
         if input.peek(Token![=]) {
             input.parse::<Token![=]>()?;
-            Ok(EntryBody::Variable(Some(input.parse::<Expr>()?)))
+            Ok(EntryBody::Variable(Some(Box::new(input.parse::<Expr>()?))))
         } else if input.peek(syn::token::Paren) {
             let content;
             parenthesized!(content in input);
