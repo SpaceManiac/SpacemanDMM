@@ -1046,7 +1046,7 @@ handle_request! {
                         },
                         Scope {
                             name: "Globals".to_owned(),
-                            variablesReference: 0x0e_000001,
+                            variablesReference: 0x0e00_0001,
                             .. Default::default()
                         },
                     ]
@@ -1093,7 +1093,7 @@ handle_request! {
             DebugClient::Extools(extools) => {
                 let extools = extools.get()?;
 
-                if params.variablesReference >= 0x01_000000 {
+                if params.variablesReference >= 0x0100_0000 {
                     let (var, ref_) = extools_types::ValueText::from_variables_reference(params.variablesReference);
                     let mut variables = Vec::new();
 
