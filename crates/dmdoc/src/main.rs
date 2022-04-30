@@ -232,7 +232,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             if let Some(ty) = objtree.find(ty_path) {
                 entity_exists = ty.vars.contains_key(name);
             }
-        } else if let Some(_) = objtree.find(reference) {
+        } else if objtree.find(reference).is_some() {
             entity_exists = true;
         } else if let Some(idx) = reference.rfind('/') {
             let (parent, rest) = (&reference[..idx], &reference[idx + 1..]);
@@ -286,13 +286,11 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                             })
                         }
                     }
-                } else {
-                    if ty.location.is_builtins() {
-                        external_url = Some(match ty.docs.builtin_docs {
-                            BuiltinDocs::None => format!("{}{}", DM_REFERENCE_BASE, ty.path),
-                            BuiltinDocs::ReferenceHash(hash) => format!("{}{}", DM_REFERENCE_BASE, hash),
-                        })
-                    }
+                } else if ty.location.is_builtins() {
+                    external_url = Some(match ty.docs.builtin_docs {
+                        BuiltinDocs::None => format!("{}{}", DM_REFERENCE_BASE, ty.path),
+                        BuiltinDocs::ReferenceHash(hash) => format!("{}{}", DM_REFERENCE_BASE, hash),
+                    })
                 }
             }
         }
@@ -317,7 +315,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             }
         } else {
             for bit in ty_path.trim_start_matches('/').split('/') {
-                progress.push_str("/");
+                progress.push('/');
                 progress.push_str(bit);
                 if let Some(info) = types_with_docs.get(progress.as_str()) {
                     if let Some(proc_name) = proc_name {
@@ -431,7 +429,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
 
             if let Some(buf) = read_as_markdown(path)? {
                 if Some(path) != index_path.as_ref().map(Path::new) {
-                    let module = module_entry(&mut modules1, &path);
+                    let module = module_entry(&mut modules1, path);
                     module.items_wip.push((0, ModuleItem::DocComment(DocComment {
                         kind: CommentKind::Block,
                         target: DocTarget::EnclosingItem,
@@ -446,7 +444,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     let mut index_docs = None;
     if let Some(index_path) = index_path {
         let buf = read_as_markdown(index_path.as_ref())?.expect("file for --index must be .md or .txt");
-        error_entity_put(index_path.to_owned());
+        error_entity_put(index_path);
         index_docs = Some(DocBlock::parse_with_title(&buf, Some(broken_link_callback)));
     }
 
@@ -609,7 +607,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                 ModuleItem::Type {
                     path: ty.get().pretty_path(),
                     teaser: block.teaser().to_owned(),
-                    substance: substance,
+                    substance,
                 },
             ));
         }
@@ -661,7 +659,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         let mut _first = true;
         macro_rules! push_docs { () => {  // oof
             if !docs.is_empty() {
-                let doc = std::mem::replace(&mut docs, Default::default());
+                let doc = std::mem::take(&mut docs);
                 if _first {
                     _first = false;
                     let (title, block) = DocBlock::parse_with_title(&doc.text(), Some(broken_link_callback));
@@ -732,10 +730,10 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     let mut tera = template::builtin()?;
 
     // register tera extensions
-    let linkify_typenames = all_type_names.clone();
+    let linkify_typenames = all_type_names;
     tera.register_filter("linkify_type", move |value: &Value, _: &HashMap<String, Value>| {
         match *value {
-            tera::Value::String(ref s) => Ok(linkify_type(&linkify_typenames, s.split("/").skip_while(|b| b.is_empty())).into()),
+            tera::Value::String(ref s) => Ok(linkify_type(&linkify_typenames, s.split('/').skip_while(|b| b.is_empty())).into()),
             tera::Value::Array(ref a) => Ok(linkify_type(&linkify_typenames, a.iter().filter_map(|v| v.as_str())).into()),
             _ => Err("linkify_type() input must be string".into()),
         }
@@ -833,7 +831,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                 children: Vec::new(),
             })),
             types: build_index_tree(type_docs.iter().map(|(path, ty)| IndexTree {
-                htmlname: &ty.htmlname,
+                htmlname: ty.htmlname,
                 full_name: path,
                 self_name: if ty.name.is_empty() {
                     last_element(path)
@@ -914,22 +912,21 @@ fn module_path(path: &Path) -> String {
     if path.file_name().map_or(false, |x| x.to_string_lossy().eq_ignore_ascii_case("README")) {
         path.pop();
     }
-    path.display().to_string().replace("\\", "/")
+    path.display().to_string().replace('\\', "/")
 }
 
 fn module_entry<'a, 'b>(modules: &'a mut BTreeMap<String, Module1<'b>>, path: &Path) -> &'a mut Module1<'b> {
-    modules.entry(module_path(path)).or_insert_with(|| {
-        let mut module = Module1::default();
-        module.htmlname = module_path(path);
-        module.orig_filename = path.display().to_string().replace("\\", "/");
-        module
+    modules.entry(module_path(path)).or_insert_with(|| Module1 {
+        htmlname: module_path(path),
+        orig_filename: path.display().to_string().replace('\\', "/"),
+        .. Default::default()
     })
 }
 
 fn is_visible(entry: &walkdir::DirEntry) -> bool {
     entry.file_name()
         .to_str()
-        .map(|s| !s.starts_with("."))
+        .map(|s| !s.starts_with('.'))
         .unwrap_or(true)
 }
 
@@ -946,9 +943,9 @@ fn linkify_type<'a, I: Iterator<Item=&'a str>>(all_type_names: &BTreeSet<String>
     let mut all_progress = String::new();
     let mut progress = String::new();
     for bit in iter {
-        all_progress.push_str("/");
+        all_progress.push('/');
         all_progress.push_str(bit);
-        progress.push_str("/");
+        progress.push('/');
         progress.push_str(bit);
         if all_type_names.contains(&all_progress) {
             use std::fmt::Write;
@@ -1011,7 +1008,7 @@ fn git_info(git: &mut Git) -> Result<(), git2::Error> {
     }
 
     // figure out the remote URL, convert from SSH to HTTPS
-    let mut iter = upstream_name.splitn(2, "/");
+    let mut iter = upstream_name.splitn(2, '/');
     let remote_name = req!(iter.next());
     if let Some(name) = iter.next() {
         git.remote_branch = name.to_owned();
@@ -1019,12 +1016,12 @@ fn git_info(git: &mut Git) -> Result<(), git2::Error> {
 
     let remote = repo.find_remote(remote_name)?;
     let mut url = req!(remote.url());
-    if url.ends_with("/") {
+    if url.ends_with('/') {
         url = &url[..url.len() - 1];
     }
     if url.ends_with(".git") {
         url = &url[..url.len() - 4];
-        if url.ends_with("/") {
+        if url.ends_with('/') {
             url = &url[..url.len() - 1];
         }
     }
@@ -1033,8 +1030,8 @@ fn git_info(git: &mut Git) -> Result<(), git2::Error> {
     } else if url.starts_with("ssh://") {
         git.web_url = url.replace("ssh://", "https://");
     } else {
-        let at = req!(url.find("@"));
-        let colon = req!(url.find(":"));
+        let at = req!(url.find('@'));
+        let colon = req!(url.find(':'));
         if colon >= at {
             git.web_url = format!("https://{}/{}", &url[at + 1..colon], &url[colon + 1..]);
         } else {
@@ -1102,7 +1099,7 @@ where
         {
             let mut i = 1;
             let mut len = 0;
-            let mut bits = each.full_name.split("/").peekable();
+            let mut bits = each.full_name.split('/').peekable();
             if bits.peek() == Some(&"") {
                 bits.next();
                 len += 1;
@@ -1157,7 +1154,7 @@ fn combine(stack: &mut Vec<IndexTree>, to: usize) {
 }
 
 fn last_element(path: &str) -> &str {
-    path.split("/").last().unwrap_or("")
+    path.split('/').last().unwrap_or("")
 }
 
 // ----------------------------------------------------------------------------

@@ -266,7 +266,7 @@ impl Metadata {
         }
         let state_index = match self.state_names.get(icon_state) {
             Some(&i) => i,
-            None if icon_state == "" => 0,
+            None if icon_state.is_empty() => 0,
             None => return None,
         };
         let state = &self.states[state_index];
@@ -285,7 +285,7 @@ impl Metadata {
 
 impl State {
     pub fn num_sprites(&self) -> usize {
-        self.dirs.len() * self.frames.len()
+        self.dirs.count() * self.frames.count()
     }
 
     pub fn index_of_dir(&self, dir: Dir) -> u32 {
@@ -306,12 +306,12 @@ impl State {
 
     #[inline]
     pub fn index_of_frame(&self, dir: Dir, frame: u32) -> u32 {
-        self.index_of_dir(dir) + frame * self.dirs.len() as u32
+        self.index_of_dir(dir) + frame * self.dirs.count() as u32
     }
 }
 
 impl Dirs {
-    pub fn len(self) -> usize {
+    pub fn count(self) -> usize {
         match self {
             Dirs::One => 1,
             Dirs::Four => 4,
@@ -321,7 +321,7 @@ impl Dirs {
 }
 
 impl Frames {
-    pub fn len(&self) -> usize {
+    pub fn count(&self) -> usize {
         match *self {
             Frames::One => 1,
             Frames::Count(n) => n,
@@ -371,7 +371,7 @@ fn parse_metadata(data: &str) -> Metadata {
             "height" => metadata.height = value.parse().unwrap(),
             "state" => {
                 if let Some(state) = state.take() {
-                    frames_so_far += state.frames.len() * state.dirs.len();
+                    frames_so_far += state.frames.count() * state.dirs.count();
                     metadata.states.push(state);
                 }
                 let unquoted = value[1..value.len() - 1].to_owned(); // TODO: unquote

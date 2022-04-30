@@ -133,8 +133,8 @@ impl ClientCaps {
             }
         }
         if let Some(ref experimental) = caps.experimental {
-            if let Some(ref dreammaker) = experimental.get("dreammaker") {
-                if let Some(ref object_tree) = dreammaker.get("objectTree") {
+            if let Some(dreammaker) = experimental.get("dreammaker") {
+                if let Some(object_tree) = dreammaker.get("objectTree") {
                     if let Some(value) = object_tree.as_bool() {
                         this.object_tree = value;
                     }
@@ -153,7 +153,7 @@ struct DiagnosticsTracker {
 impl DiagnosticsTracker {
     fn file_url(root: Option<&Url>, file_list: &dm::FileList, file: dm::FileId) -> Option<Url> {
         let fname_string = file_list.get_path(file).display().to_string();
-        if let Some(ref root) = root {
+        if let Some(root) = root {
             root.join(&fname_string).ok()
         } else {
             Url::parse(&fname_string).ok()
@@ -580,17 +580,17 @@ impl<'a> Engine<'a> {
                         Ok(path) => path,
                         Err(_) => "<outside workspace>".as_ref(),
                     };
-                    let (real_file_id, mut preprocessor) = match self.context.get_file(&stripped) {
-                        Some(id) => (id, defines.branch_at_file(id, &self.context)),
-                        None => (FileId::default(), defines.branch_at_end(&self.context)),
+                    let (real_file_id, mut preprocessor) = match self.context.get_file(stripped) {
+                        Some(id) => (id, defines.branch_at_file(id, self.context)),
+                        None => (FileId::default(), defines.branch_at_end(self.context)),
                     };
                     let contents = self.docs.read(url).map_err(invalid_request)?;
                     let file_id = preprocessor.push_file(stripped.to_owned(), contents).map_err(invalid_request)?;
                     preprocessor.enable_annotations();
                     let mut annotations = AnnotationTree::default();
                     {
-                        let indent = dm::indents::IndentProcessor::new(&self.context, &mut preprocessor);
-                        let parser = dm::parser::Parser::new(&self.context, indent);
+                        let indent = dm::indents::IndentProcessor::new(self.context, &mut preprocessor);
+                        let parser = dm::parser::Parser::new(self.context, indent);
                         parser.parse_annotations_only(&mut annotations);
                     }
                     annotations.merge(preprocessor.take_annotations().unwrap());
@@ -601,7 +601,7 @@ impl<'a> Engine<'a> {
                     let filename = url.to_string();
 
                     let contents = self.docs.get_contents(url).map_err(invalid_request)?.into_owned();
-                    let mut pp = dm::preprocessor::Preprocessor::from_buffer(&self.context, filename.clone().into(), contents);
+                    let mut pp = dm::preprocessor::Preprocessor::from_buffer(self.context, filename.clone().into(), contents);
                     let file_id = self.context.get_file(filename.as_ref()).expect("file didn't exist?");
                     // Clear old errors for this file. Hacky, but it will work for now.
                     self.context.errors_mut().retain(|error| error.location().file != file_id);
@@ -609,8 +609,8 @@ impl<'a> Engine<'a> {
                     pp.enable_annotations();
                     let mut annotations = AnnotationTree::default();
                     {
-                        let indent = dm::indents::IndentProcessor::new(&self.context, &mut pp);
-                        let mut parser = dm::parser::Parser::new(&self.context, indent);
+                        let indent = dm::indents::IndentProcessor::new(self.context, &mut pp);
+                        let mut parser = dm::parser::Parser::new(self.context, indent);
                         parser.annotate_to(&mut annotations);
                         // Every time anyone types anything the object tree is replaced.
                         // This is probably really inefficient, but it will do until
@@ -618,7 +618,7 @@ impl<'a> Engine<'a> {
                         self.objtree = Arc::new(parser.parse_object_tree());
                     }
                     pp.finalize();
-                    dreamchecker::run(&self.context, &self.objtree);
+                    dreamchecker::run(self.context, &self.objtree);
 
                     // Perform a diagnostics pump on this file only.
                     // Assume all errors are in this file.
@@ -694,13 +694,11 @@ impl<'a> Engine<'a> {
             // chop off proc name and 'proc/' or 'verb/' if it's there
             // TODO: factor this logic somewhere
             let mut proc_path = &proc_path[..];
-            match proc_path.split_last() {
-                Some((name, rest)) => {
-                    proc_name = Some((name.as_str(), *idx));
-                    proc_path = rest;
-                }
-                _ => {}
+            if let Some((name, rest)) = proc_path.split_last() {
+                proc_name = Some((name.as_str(), *idx));
+                proc_path = rest;
             }
+
             match proc_path.split_last() {
                 Some((kwd, rest)) if kwd == "proc" || kwd == "verb" => proc_path = rest,
                 _ => {}
@@ -744,7 +742,7 @@ impl<'a> Engine<'a> {
         }
 
         // proc parameters
-        let ty = ty.unwrap_or(self.objtree.root());
+        let ty = ty.unwrap_or_else(|| self.objtree.root());
         if let Some((proc_name, idx)) = proc_name {
             if let Some(proc) = ty.get().procs.get(proc_name) {
                 if let Some(value) = proc.value.get(idx) {
@@ -877,7 +875,7 @@ impl<'a> Engine<'a> {
         },
         Annotation::UnscopedCall(proc_name) => {
             let (ty, _) = self.find_type_context(&iter);
-            let mut next = ty.or(Some(self.objtree.root()));
+            let mut next = ty.or_else(|| Some(self.objtree.root()));
             while let Some(ty) = next {
                 if let Some(proc) = ty.procs.get(proc_name) {
                     if let Some(ref decl) = proc.declaration {
@@ -959,7 +957,7 @@ impl<'a> Engine<'a> {
                         }
                         let _ = write!(message, "{}", each);
                     }
-                    message.push_str(")");
+                    message.push(')');
                     defstring = message.clone();
                 }
 
@@ -1238,7 +1236,7 @@ handle_method_call! {
             }
             for (var_name, tv) in ty.vars.iter() {
                 if let Some(decl) = tv.declaration.as_ref() {
-                    if query.matches_var(&var_name) {
+                    if query.matches_var(var_name) {
                         results.push(SymbolInformation {
                             name: var_name.clone(),
                             kind: SymbolKind::Field,
@@ -1252,7 +1250,7 @@ handle_method_call! {
 
             for (proc_name, pv) in ty.procs.iter() {
                 if let Some(decl) = pv.declaration.as_ref() {
-                    if query.matches_proc(&proc_name, decl.kind) {
+                    if query.matches_proc(proc_name, decl.kind) {
                         results.push(SymbolInformation {
                             name: proc_name.clone(),
                             kind: if ty.is_root() {
@@ -1383,18 +1381,15 @@ handle_method_call! {
                 }
                 Annotation::UnscopedVar(var_name) if symbol_id.is_some() => {
                     let (ty, proc_name) = self.find_type_context(&iter);
-                    match self.find_unscoped_var(&iter, ty, proc_name, var_name) {
-                        UnscopedVar::Variable { ty, .. } => {
-                            if let Some(_decl) = ty.get_var_declaration(var_name) {
-                                results.append(&mut self.construct_var_hover(var_name, Some(ty), false)?);
-                            }
-                        },
-                        _ => {}
+                    if let UnscopedVar::Variable { ty, .. } = self.find_unscoped_var(&iter, ty, proc_name, var_name) {
+                        if let Some(_decl) = ty.get_var_declaration(var_name) {
+                            results.append(&mut self.construct_var_hover(var_name, Some(ty), false)?);
+                        }
                     }
                 }
                 Annotation::UnscopedCall(proc_name) if symbol_id.is_some() => {
                     let (ty, _) = self.find_type_context(&iter);
-                    let next = ty.or(Some(self.objtree.root()));
+                    let next = ty.or_else(|| Some(self.objtree.root()));
                     results.append(&mut self.construct_proc_hover(proc_name, next, false)?);
                 }
                 Annotation::ScopedCall(priors, proc_name) if symbol_id.is_some() => {
@@ -1468,7 +1463,7 @@ handle_method_call! {
         },
         Annotation::UnscopedCall(proc_name) => {
             let (ty, _) = self.find_type_context(&iter);
-            let mut next = ty.or(Some(self.objtree.root()));
+            let mut next = ty.or_else(|| Some(self.objtree.root()));
             while let Some(ty) = next {
                 if let Some(proc) = ty.procs.get(proc_name) {
                     results.push(self.convert_location(proc.main_value().location, &proc.main_value().docs, &[&ty.path, "/proc/", proc_name])?);
@@ -1713,7 +1708,7 @@ handle_method_call! {
                 // TODO: unscoped_completions calls find_type_context again
                 self.unscoped_completions(&mut results, &iter, "");
             } else {
-                self.tree_completions(&mut results, true, ty.unwrap_or(self.objtree.root()), "");
+                self.tree_completions(&mut results, true, ty.unwrap_or_else(|| self.objtree.root()), "");
             }
         }
 
@@ -1778,7 +1773,7 @@ handle_method_call! {
                         active_signature: Some(0),
                         active_parameter: Some(idx as i64),
                         signatures: vec![SignatureInformation {
-                            label: label,
+                            label,
                             parameters: Some(params),
                             documentation: None,
                         }],
@@ -1936,7 +1931,7 @@ handle_method_call! {
     on ColorPresentationRequest(&mut self, params) {
         let content = self.docs.get_contents(&params.text_document.uri).map_err(invalid_request)?;
         let chunk = document::get_range(&content, params.range)?;
-        let color_format = color::ColorFormat::parse(&chunk).unwrap_or_default();
+        let color_format = color::ColorFormat::parse(chunk).unwrap_or_default();
         // TODO: return compatible alternate presentations for converting
         // between "#..." and rgb().
         vec![

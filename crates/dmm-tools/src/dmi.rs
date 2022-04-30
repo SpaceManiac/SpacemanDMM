@@ -12,7 +12,10 @@ use ndarray::Array2;
 pub use dm::dmi::*;
 use std::ops::{Index, IndexMut};
 
-type Rect = (u32, u32, u32, u32);
+/// Absolute x and y.
+pub type Coordinate = (u32, u32);
+/// Start x, Start y, End x, End y - relative to Coordinate.
+pub type Rect = (u32, u32, u32, u32);
 
 // ----------------------------------------------------------------------------
 // Icon file and metadata handling
@@ -156,7 +159,7 @@ impl Image {
         Ok(())
     }
 
-    pub fn composite(&mut self, other: &Image, pos: (u32, u32), crop: Rect, color: [u8; 4]) {
+    pub fn composite(&mut self, other: &Image, pos: Coordinate, crop: Rect, color: [u8; 4]) {
         let other_dat = other.data.as_slice().unwrap();
         let self_dat = self.data.as_slice_mut().unwrap();
         let mut sy = crop.1;

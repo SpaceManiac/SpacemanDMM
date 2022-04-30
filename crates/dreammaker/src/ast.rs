@@ -7,6 +7,12 @@ use phf::phf_map;
 
 use crate::error::Location;
 
+/// Arguments for [`Term::Pick`]
+pub type PickArgs = [(Option<Expression>, Expression)];
+
+/// Cases for [`Term::Switch`]
+pub type SwitchCases = [(Spanned<Vec<Case>>, Block)];
+
 // ----------------------------------------------------------------------------
 // Simple enums
 
@@ -25,7 +31,7 @@ pub enum UnaryOp {
 impl UnaryOp {
     /// Prepare to display this unary operator around (to the left or right of)
     /// its operand.
-    pub fn around<'a, T: fmt::Display + ?Sized>(self, expr: &'a T) -> impl fmt::Display + 'a {
+    pub fn around<T: fmt::Display + ?Sized>(self, expr: &'_ T) -> impl fmt::Display + '_ {
         /// A formatting wrapper created by `UnaryOp::around`.
         struct Around<'a, T: 'a + ?Sized> {
             op: UnaryOp,
@@ -353,13 +359,15 @@ macro_rules! type_table {
             }
         }
 
-        impl $name {
-            pub fn from_str(text: &str) -> Option<Self> {
-                match text {
+        impl std::str::FromStr for $name {
+            type Err = ();
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                match s {
                     $(
-                        $txt => Some($name::$i),
+                        $txt => Ok($name::$i),
                     )*
-                    _ => None,
+                    _ => Err(()),
                 }
             }
         }
@@ -743,17 +751,14 @@ impl Expression {
                 if !rhterm.is_static() {
                     return false
                 }
-                match op {
-                    BinaryOp::Eq |
+                matches!(op, BinaryOp::Eq |
                     BinaryOp::NotEq |
                     BinaryOp::Less |
                     BinaryOp::Greater |
                     BinaryOp::LessEq |
                     BinaryOp::GreaterEq |
                     BinaryOp::And |
-                    BinaryOp::Or => true,
-                    _ => false,
-                }
+                    BinaryOp::Or)
             },
             _ => false,
         }
@@ -793,7 +798,7 @@ impl Expression {
                         _ => None,
                     }
                 } else {
-                    return None
+                    None
                 }
             },
             Expression::TernaryOp { cond, if_, else_ } => {
@@ -889,7 +894,7 @@ pub enum Term {
         in_list: Option<Box<Expression>>, // in
     },
     /// A `pick` call, possibly with weights.
-    Pick(Box<[(Option<Expression>, Expression)]>),
+    Pick(Box<PickArgs>),
     /// A use of the `call()()` primitive.
     DynamicCall(Box<[Expression]>, Box<[Expression]>),
 }
@@ -1124,7 +1129,7 @@ impl VarSuffix {
     pub fn into_initializer(self) -> Option<Expression> {
         // `var/L[10]` is equivalent to `var/list/L = new /list(10)`
         // `var/L[2][][3]` is equivalent to `var/list/list/list = new /list(2, 3)`
-        let args: Vec<_> = self.list.into_iter().filter_map(|x| x).collect();
+        let args: Vec<_> = self.list.into_iter().flatten().collect();
         if args.is_empty() {
             None
         } else {
@@ -1184,7 +1189,7 @@ pub enum Statement {
     },
     Switch {
         input: Box<Expression>,
-        cases: Box<[(Spanned<Vec<Case>>, Block)]>,
+        cases: Box<SwitchCases>,
         default: Option<Block>,
     },
     TryCatch {

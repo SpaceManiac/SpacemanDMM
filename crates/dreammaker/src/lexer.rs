@@ -434,11 +434,11 @@ impl LocatedToken {
 }
 
 fn is_digit(ch: u8) -> bool {
-    ch >= b'0' && ch <= b'9'
+    (b'0'..=b'9').contains(&ch)
 }
 
 fn is_ident(ch: u8) -> bool {
-    (ch >= b'a' && ch <= b'z') || (ch >= b'A' && ch <= b'Z') || ch == b'_'
+    (b'a'..=b'z').contains(&ch) || (b'A'..=b'Z').contains(&ch) || ch == b'_'
 }
 
 fn from_latin1(bytes: &[u8]) -> String {
@@ -1261,7 +1261,7 @@ impl<'ctx> Iterator for Lexer<'ctx> {
                     _ => {
                         if !found_illegal {
                             let mut msg = format!("illegal byte 0x{:x}", first);
-                            if first >= b' ' && first <= b'~' {
+                            if (b' '..=b'~').contains(&first) {
                                 use std::fmt::Write;
                                 let _ = write!(msg, " ({:?})", first as char);
                             }

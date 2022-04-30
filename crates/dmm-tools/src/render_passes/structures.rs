@@ -16,9 +16,9 @@ impl RenderPass for Spawners {
                 for &(ref key, _) in elements.iter() {
                     // TODO: use a more civilized lookup method
                     let type_key;
-                    let reference = match key {
-                        &Constant::String(ref s) => s,
-                        &Constant::Prefab(ref fab) => {
+                    let reference = match *key {
+                        Constant::String(ref s) => s,
+                        Constant::Prefab(ref fab) => {
                             type_key = dm::ast::FormatTreePath(&fab.path).to_string();
                             type_key.as_str()
                         },

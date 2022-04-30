@@ -644,7 +644,7 @@ impl ObjectTree {
         (0..self.graph.len()).map(NodeIndex::new)
     }
 
-    pub fn iter_types<'a>(&'a self) -> impl Iterator<Item=TypeRef<'a>> + 'a {
+    pub fn iter_types(&self) -> impl Iterator<Item=TypeRef<'_>> + '_ {
         self.node_indices().map(move |idx| TypeRef::new(self, idx))
     }
 
@@ -877,7 +877,7 @@ impl ObjectTreeBuilder {
                                 parent_type_buf = String::new();
                                 for piece in pop.path.iter() {
                                     parent_type_buf.push('/');
-                                    parent_type_buf.push_str(&piece);
+                                    parent_type_buf.push_str(piece);
                                 }
                                 parent_type = &parent_type_buf;
                             }
@@ -892,7 +892,7 @@ impl ObjectTreeBuilder {
                     parent_type
                 };
 
-                if path == "/client" && parent_type == "" {
+                if path == "/client" && parent_type.is_empty() {
                     // client has no parent by default, but can be safely reparented to /datum
                     NodeIndex::new(0)
                 } else if let Some(&idx) = self.inner.types.get(parent_type) {
@@ -1100,6 +1100,8 @@ impl ObjectTreeBuilder {
         })))
     }
 
+    // It's fine.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn register_proc(
         &mut self,
         context: &Context,

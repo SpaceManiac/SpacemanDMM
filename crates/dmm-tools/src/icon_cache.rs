@@ -31,7 +31,7 @@ impl IconCache {
             None => {
                 let arc = match &self.icons_root {
                     Some(root) => load(&root.join(path)),
-                    None => load(&path),
+                    None => load(path),
                 }.map(Arc::new);
                 self.lock.write().unwrap().insert(path.to_owned(), arc.clone());
                 arc

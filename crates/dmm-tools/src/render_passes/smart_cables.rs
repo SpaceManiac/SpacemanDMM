@@ -50,11 +50,15 @@ impl RenderPass for SmartCables {
             }
 
             for atom in turf {
-                if atom.istype("/obj/structure/cable/") {
-                    if atom.get_var("cable_layer", objtree).as_str().unwrap_or("l2") == cable_layer {
-                        linked_dirs |= check_dir.to_int();
-                        break;
-                    }
+                if atom.istype("/obj/structure/cable/")
+                    && atom
+                        .get_var("cable_layer", objtree)
+                        .as_str()
+                        .unwrap_or("l2")
+                        == cable_layer
+                {
+                    linked_dirs |= check_dir.to_int();
+                    break;
                 }
             }
         }
@@ -87,6 +91,8 @@ impl RenderPass for SmartCables {
 
 fn should_have_node(turf: &[Atom]) -> bool {
     for atom in turf {
+        // Readability, simple elif chain isn't duplicate code
+        #[allow(clippy::if_same_then_else)]
         if atom.istype("/obj/structure/grille/") || atom.istype("/obj/structure/cable_bridge/") {
             return true;
         } else if atom.istype("/obj/machinery/power/") {

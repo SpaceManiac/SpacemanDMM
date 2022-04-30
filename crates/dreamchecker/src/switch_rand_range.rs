@@ -8,8 +8,8 @@ use dm::{Context, DMError, Location, Severity};
  * If some cases lie outside of the [L, H] range or the whole [L, H] range is not covered by all the cases a warning is issued.
  */
 pub fn check_switch_rand_range(
-    input: &Box<Expression>,
-    cases: &Box<[(Spanned<Vec<Case>>, Block)]>,
+    input: &Expression,
+    cases: &SwitchCases,
     default: &Option<Block>,
     location: Location,
     context: &Context,
@@ -25,7 +25,7 @@ pub fn check_switch_rand_range(
     for case_block in cases.iter() {
         let location = case_block.0.location;
         for case in case_block.0.elem.iter() {
-            if let Some((start, end)) = get_case_range(&case, location) {
+            if let Some((start, end)) = get_case_range(case, location) {
                 let start = start.ceil() as i32;
                 let end = end.floor() as i32;
                 if start <= rand_end && end >= rand_start {

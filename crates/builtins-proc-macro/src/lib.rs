@@ -56,7 +56,7 @@ impl Parse for ProcArgument {
 
 enum EntryBody {
     None,
-    Variable(Option<Expr>),
+    Variable(Option<Box<Expr>>),
     Proc(Punctuated<ProcArgument, Token![,]>),
 }
 
@@ -64,7 +64,7 @@ impl EntryBody {
     fn parse_with_path(path: &[Ident], input: ParseStream) -> Result<Self> {
         if input.peek(Token![=]) {
             input.parse::<Token![=]>()?;
-            Ok(EntryBody::Variable(Some(input.parse::<Expr>()?)))
+            Ok(EntryBody::Variable(Some(Box::new(input.parse::<Expr>()?))))
         } else if input.peek(syn::token::Paren) {
             let content;
             parenthesized!(content in input);
@@ -87,7 +87,7 @@ impl Parse for BuiltinEntry {
         let header: Header = input.parse()?;
         let body = EntryBody::parse_with_path(&header.path, input)?;
 
-        input.parse::<Token![;]>()?.span;
+        input.parse::<Token![;]>()?;
         Ok(BuiltinEntry {
             header,
             body,
@@ -159,7 +159,7 @@ pub fn builtins_table(input: TokenStream) -> TokenStream {
             if ident == "doc" {
                 markdown_span = Some(attr_span);
                 markdown.push_str(&syn::parse2::<DocComment>(attr.tokens).unwrap().0.value());
-                markdown.push_str("\n");
+                markdown.push('\n');
             } else {
                 attr_calls.extend(quote_spanned! { attr_span => .docs.#path });
                 attr_calls.extend(attr.tokens);
@@ -197,5 +197,5 @@ pub fn builtins_table(input: TokenStream) -> TokenStream {
         output.push(line);
     }
 
-    output.into_iter().flat_map(|x| TokenStream::from(x)).collect()
+    output.into_iter().flat_map(TokenStream::from).collect()
 }
