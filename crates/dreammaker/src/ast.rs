@@ -8,7 +8,7 @@ use phf::phf_map;
 use crate::error::Location;
 
 /// Arguments for [`Term::Pick`]
-pub type PickArgs = Box<[(Option<Expression>, Expression)]>;
+pub type PickArgs = [(Option<Expression>, Expression)];
 
 /// Cases for [`Term::Switch`]
 pub type SwitchCases = [(Spanned<Vec<Case>>, Block)];
@@ -895,7 +895,7 @@ pub enum Term {
         in_list: Option<Box<Expression>>, // in
     },
     /// A `pick` call, possibly with weights.
-    Pick(PickArgs),
+    Pick(Box<PickArgs>),
     /// A use of the `call()()` primitive.
     DynamicCall(Box<[Expression]>, Box<[Expression]>),
 }

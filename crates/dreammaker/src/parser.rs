@@ -2269,7 +2269,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }
     }
 
-    fn pick_arguments(&mut self) -> Status<ast::PickArgs> {
+    fn pick_arguments(&mut self) -> Status<Box<ast::PickArgs>> {
         leading!(self.exact(Token::Punct(Punctuation::LParen)));
         success(require!(self.separated(
             Punctuation::Comma,
