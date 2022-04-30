@@ -482,8 +482,8 @@ impl<'o> CallStack<'o> {
 
 trait DMErrorExt {
     fn with_callstack(self, stack: &CallStack) -> Self;
-    fn with_blocking_builtins(self, blockers: &Vec<(String, Location)>) -> Self;
-    fn with_impure_operations(self, impures: &Vec<(String, Location)>) -> Self;
+    fn with_blocking_builtins(self, blockers: &[(String, Location)]) -> Self;
+    fn with_impure_operations(self, impures: &[(String, Location)]) -> Self;
 }
 
 impl DMErrorExt for DMError {
@@ -494,14 +494,14 @@ impl DMErrorExt for DMError {
         self
     }
 
-    fn with_blocking_builtins(mut self, blockers: &Vec<(String, Location)>) -> DMError {
+    fn with_blocking_builtins(mut self, blockers: &[(String, Location)]) -> DMError {
         for (procname, location) in blockers.iter() {
             self.add_note(*location, format!("{}() called here", procname));
         }
         self
     }
 
-    fn with_impure_operations(mut self, impures: &Vec<(String, Location)>) -> DMError {
+    fn with_impure_operations(mut self, impures: &[(String, Location)]) -> DMError {
         for (impure, location) in impures.iter() {
             self.add_note(*location, format!("{} happens here", impure));
         }
@@ -1701,7 +1701,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     let pop = dm::constants::Pop::from(ty.path.split('/').skip(1).map(ToOwned::to_owned).collect::<Vec<_>>().into_boxed_slice());
                     Analysis {
                         static_ty: StaticType::None,
-                        aset: assumption_set![Assumption::IsPath(true, nav.ty())].into(),
+                        aset: assumption_set![Assumption::IsPath(true, nav.ty())],
                         value: Some(Constant::Prefab(Box::new(pop))),
                         fix_hint: None,
                         is_impure: None,

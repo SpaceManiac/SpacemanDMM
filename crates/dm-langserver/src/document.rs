@@ -8,7 +8,6 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use url::Url;
 
-use jsonrpc;
 use lsp_types::{TextDocumentItem, TextDocumentIdentifier,
     VersionedTextDocumentIdentifier, TextDocumentContentChangeEvent};
 

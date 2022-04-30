@@ -29,6 +29,8 @@ pub struct Context<'a> {
     pub bump: &'a bumpalo::Bump,
 }
 
+// This should eventually be faliable and not just shrug it's shoulders at errors and log them.
+#[allow(clippy::result_unit_err)]
 pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
     let Context {
         objtree,

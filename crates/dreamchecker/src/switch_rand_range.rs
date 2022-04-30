@@ -8,8 +8,8 @@ use dm::{Context, DMError, Location, Severity};
  * If some cases lie outside of the [L, H] range or the whole [L, H] range is not covered by all the cases a warning is issued.
  */
 pub fn check_switch_rand_range(
-    input: &Box<Expression>,
-    cases: &Box<ast::SwitchCases>,
+    input: &Expression,
+    cases: &ast::SwitchCases,
     default: &Option<Block>,
     location: Location,
     context: &Context,

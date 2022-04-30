@@ -444,7 +444,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     let mut index_docs = None;
     if let Some(index_path) = index_path {
         let buf = read_as_markdown(index_path.as_ref())?.expect("file for --index must be .md or .txt");
-        error_entity_put(index_path.to_owned());
+        error_entity_put(index_path);
         index_docs = Some(DocBlock::parse_with_title(&buf, Some(broken_link_callback)));
     }
 
@@ -730,7 +730,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     let mut tera = template::builtin()?;
 
     // register tera extensions
-    let linkify_typenames = all_type_names.clone();
+    let linkify_typenames = all_type_names;
     tera.register_filter("linkify_type", move |value: &Value, _: &HashMap<String, Value>| {
         match *value {
             tera::Value::String(ref s) => Ok(linkify_type(&linkify_typenames, s.split('/').skip_while(|b| b.is_empty())).into()),

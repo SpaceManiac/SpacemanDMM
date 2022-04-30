@@ -501,7 +501,7 @@ fn constant_ident_lookup(
         match type_.vars.get_mut(ident) {
             None => return Ok(ConstLookup::Continue(parent)),
             Some(var) => match var.value.constant.clone() {
-                Some(constant) => return Ok(ConstLookup::Found(decl.var_type.type_path.clone(), constant)),
+                Some(constant) => return Ok(ConstLookup::Found(decl.var_type.type_path, constant)),
                 None => match var.value.expression.clone() {
                     Some(expr) => {
                         if var.value.being_evaluated {

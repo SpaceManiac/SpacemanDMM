@@ -1398,15 +1398,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             let try_block = require!(self.block(loop_ctx));
             self.skip_phantom_semicolons()?;
             require!(self.exact_ident("catch"));
-            let catch_params;
-            if let Some(()) = self.exact(Token::Punct(Punctuation::LParen))? {
-                catch_params = require!(self.separated(Punctuation::Comma, Punctuation::RParen, None, |this| {
+            let catch_params = if let Some(()) = self.exact(Token::Punct(Punctuation::LParen))? {
+                require!(self.separated(Punctuation::Comma, Punctuation::RParen, None, |this| {
                     // TODO: improve upon this cheap approximation
                     success(leading!(this.tree_path(true)).1.into_boxed_slice())
-                }));
+                }))
             } else {
-                catch_params = Vec::new();
-            }
+                Vec::new()
+            };
             let catch_block = require!(self.block(loop_ctx));
             spanned(Statement::TryCatch {
                 try_block,
@@ -1592,6 +1591,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     // for(var/a = 1 to 20
     // for(var/a in 1 to 20
+    // This... isn't a boxed local, it's method arguments. Clippy??
+    #[allow(clippy::boxed_local)]
     fn for_range(
         &mut self,
         var_type: Option<VarType>,
@@ -2187,7 +2188,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     let past = std::mem::take(belongs_to);
                     self.annotate_precise(start..end, || Annotation::ScopedCall(past, ident.clone()));
                 }
-                Follow::Call(kind, ident.into(), args.into())
+                Follow::Call(kind, ident.into(), args)
             },
             None => {
                 if !belongs_to.is_empty() {
