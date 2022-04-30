@@ -568,7 +568,7 @@ pub(crate) fn layer_of<'s, T: GetVar<'s> + ?Sized>(objtree: &'s ObjectTree, atom
 
 pub fn color_of<'s, T: GetVar<'s> + ?Sized>(objtree: &'s ObjectTree, atom: &T) -> [u8; 4] {
     let alpha = match atom.get_var("alpha", objtree) {
-        &Constant::Float(i) if i >= 0. && i <= 255. => i as u8,
+        &Constant::Float(i) if (0. ..=255.).contains(&i) => i as u8,
         _ => 255,
     };
 

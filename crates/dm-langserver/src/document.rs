@@ -229,7 +229,7 @@ pub fn find_word(text: &str, offset: usize) -> &str {
 }
 
 fn is_ident(ch: char) -> bool {
-    (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_'
+    ('0'..='9').contains(&ch) || ('a'..='z').contains(&ch) || ('A'..='Z').contains(&ch) || ch == '_'
 }
 
 /// An adaptation of `std::io::Cursor` which works on an `Rc<String>`, which
