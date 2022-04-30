@@ -16,12 +16,19 @@ use super::{Context, DMError, HasLocation, Location, Severity};
 /// An absolute typepath and optional variables.
 ///
 /// The path may involve `/proc` or `/verb` references.
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct Pop {
     pub path: TreePath,
     pub vars: IndexMap<Ident, Constant, RandomState>,
 }
 
+impl PartialEq for Pop {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path && self.vars.keys().eq(other.vars.keys())
+    }
+}
+
+impl Eq for Pop {}
 
 impl std::hash::Hash for Pop {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {

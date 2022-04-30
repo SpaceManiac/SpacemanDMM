@@ -119,12 +119,20 @@ pub struct ZLevel<'a> {
 }
 
 // TODO: port to ast::Prefab<Constant>
-#[derive(Debug, Default, Eq, PartialEq, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Prefab {
     pub path: String,
     // insertion order, sort of most of the time alphabetical but not quite
     pub vars: IndexMap<String, Constant, RandomState>,
 }
+
+impl PartialEq for Prefab {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path && self.vars.keys().eq(other.vars.keys())
+    }
+}
+
+impl Eq for Prefab {}
 
 impl std::hash::Hash for Prefab {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
