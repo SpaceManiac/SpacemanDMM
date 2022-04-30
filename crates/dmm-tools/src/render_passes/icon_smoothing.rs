@@ -142,8 +142,7 @@ fn find_type_in_direction(objtree: &ObjectTree, adjacency: &Neighborhood, source
 }
 
 fn smoothlist_contains(list: &[(Constant, Option<Constant>)], desired: &str) -> bool {
-    for &(ref key, _) in list {
-        // TODO: be more specific than to_string
+    for (key, _) in list {
         if key == desired {
             return true;
         }

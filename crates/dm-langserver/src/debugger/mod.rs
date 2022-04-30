@@ -2,6 +2,8 @@
 //!
 //! * https://microsoft.github.io/debug-adapter-protocol/
 #![allow(dead_code)]
+// In BYOND references 0xAA_BBBBBB, A is the the type and B is the instance ID.
+#![allow(clippy::unusual_byte_groupings)]
 
 macro_rules! output {
     (in $seq:expr, $fmt:expr) => {
@@ -1046,7 +1048,7 @@ handle_request! {
                         },
                         Scope {
                             name: "Globals".to_owned(),
-                            variablesReference: 0x0e00_0001,
+                            variablesReference: 0x0e_000001,
                             .. Default::default()
                         },
                     ]
@@ -1093,7 +1095,7 @@ handle_request! {
             DebugClient::Extools(extools) => {
                 let extools = extools.get()?;
 
-                if params.variablesReference >= 0x0100_0000 {
+                if params.variablesReference >= 0x01_000000 {
                     let (var, ref_) = extools_types::ValueText::from_variables_reference(params.variablesReference);
                     let mut variables = Vec::new();
 

@@ -339,9 +339,8 @@ impl Drop for Extools {
 }
 
 fn parse_lineno(comment: &str) -> Option<i64> {
-    let prefix = "Line number: ";
-    if let Some(comment) = comment.strip_prefix(prefix) {
-        comment.parse::<i64>().ok()
+    if let Some(rest) = comment.strip_prefix("Line number: ") {
+        rest.parse::<i64>().ok()
     } else {
         None
     }

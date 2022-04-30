@@ -919,10 +919,7 @@ fn module_entry<'a, 'b>(modules: &'a mut BTreeMap<String, Module1<'b>>, path: &P
     modules.entry(module_path(path)).or_insert_with(|| Module1 {
         htmlname: module_path(path),
         orig_filename: path.display().to_string().replace('\\', "/"),
-        name: Default::default(),
-        teaser: Default::default(),
-        items_wip: Default::default(),
-        defines: Default::default(),
+        .. Default::default()
     })
 }
 

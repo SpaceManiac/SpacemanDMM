@@ -25,13 +25,17 @@ impl Debugger {
 
                 let (thread, frame_no) = extools.get_thread_by_frame_id(frame_id)?;
 
-                if input.starts_with('#') && (input == "#dis" || input == "#disassemble") {
-                    guard!(let Some(frame) = thread.call_stack.get(frame_no) else {
-                        return Err(Box::new(GenericError("Stack frame out of range")));
-                    });
+                if input.starts_with('#') {
+                    if input == "#dis" || input == "#disassemble" {
+                        guard!(let Some(frame) = thread.call_stack.get(frame_no) else {
+                            return Err(Box::new(GenericError("Stack frame out of range")));
+                        });
 
-                    let bytecode = extools.bytecode(&frame.proc, frame.override_id);
-                    return Ok(EvaluateResponse::from(Self::format_disassembly(bytecode)));
+                        let bytecode = extools.bytecode(&frame.proc, frame.override_id);
+                        return Ok(EvaluateResponse::from(Self::format_disassembly(bytecode)));
+                    } else {
+                        return Err(Box::new(GenericError("Unknown #command")));
+                    }
                 }
             }
 

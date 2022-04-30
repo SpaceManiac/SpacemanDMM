@@ -6,7 +6,7 @@ use ndarray::Axis;
 use dm::objtree::*;
 use dm::constants::Constant;
 use crate::dmm::{Map, ZLevel, Prefab};
-use crate::dmi::{Dir, Image, self};
+use crate::dmi::{self, Dir, Image};
 use crate::render_passes::RenderPass;
 use crate::icon_cache::IconCache;
 

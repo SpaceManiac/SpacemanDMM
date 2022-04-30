@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 
-use dm::ast::{*, self};
+use dm::ast::*;
 use dm::{Context, DMError, Location, Severity};
 
 /**
@@ -9,7 +9,7 @@ use dm::{Context, DMError, Location, Severity};
  */
 pub fn check_switch_rand_range(
     input: &Expression,
-    cases: &ast::SwitchCases,
+    cases: &SwitchCases,
     default: &Option<Block>,
     location: Location,
     context: &Context,

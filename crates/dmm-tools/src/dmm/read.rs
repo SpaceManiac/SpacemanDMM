@@ -1,6 +1,7 @@
 //! Map parser, supporting standard DMM or TGM-format files.
 use std::collections::BTreeMap;
 use std::cmp::max;
+use std::mem::take;
 
 use ndarray::Array3;
 
@@ -8,11 +9,6 @@ use dm::{DMError, Location};
 use dm::lexer::{LocationTracker, from_utf8_or_latin1};
 
 use super::{Map, Key, KeyType, Prefab};
-
-#[inline]
-fn take<T: Default>(t: &mut T) -> T {
-    std::mem::take(t)
-}
 
 pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
     let file_id = Default::default();

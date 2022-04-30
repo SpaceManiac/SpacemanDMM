@@ -590,7 +590,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     fn tree_block(&mut self, current: NodeIndex, proc_kind: Option<ProcDeclKind>, var_type: Option<VarTypeBuilder>) -> Status<()> {
         leading!(self.exact(Token::Punct(Punctuation::LBrace)));
-        self.tree_entries(current, proc_kind, var_type, Token::Punct(Punctuation::RBrace))
+        require!(self.tree_entries(current, proc_kind, var_type, Token::Punct(Punctuation::RBrace)));
+        SUCCESS
     }
 
     fn tree_entries(&mut self, current: NodeIndex, proc_kind: Option<ProcDeclKind>, var_type: Option<VarTypeBuilder>, terminator: Token) -> Status<()> {
