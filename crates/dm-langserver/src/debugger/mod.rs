@@ -49,9 +49,13 @@ use auxtools::Auxtools;
 use ahash::RandomState;
 
 use dap_types::*;
+use self::auxtools::AuxtoolsScopes;
 use self::extools::ExtoolsHolder;
 use self::launched::{Launched, EngineParams};
 use crate::jrpc_io;
+
+/// line, path, name, override_id
+pub type LineNumber = (i64, String, String, usize);
 
 pub fn start_server(
     engine: DebugEngine,
@@ -138,7 +142,7 @@ impl DebugDatabaseBuilder {
             extools_dll: _,
             debug_server_dll: _,
         } = self;
-        let mut line_numbers: HashMap<dm::FileId, Vec<(i64, String, String, usize)>, RandomState> =
+        let mut line_numbers: HashMap<dm::FileId, Vec<LineNumber>, RandomState> =
             HashMap::with_hasher(RandomState::default());
 
         objtree.root().recurse(&mut |ty| {
@@ -179,7 +183,7 @@ pub struct DebugDatabase {
     root_dir: std::path::PathBuf,
     files: dm::FileList,
     objtree: Arc<ObjectTree>,
-    line_numbers: HashMap<dm::FileId, Vec<(i64, String, String, usize)>, RandomState>,
+    line_numbers: HashMap<dm::FileId, Vec<LineNumber>, RandomState>,
 }
 
 fn get_proc<'o>(
@@ -1050,7 +1054,7 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                let (arguments, locals, globals) = auxtools.get_scopes(frameId as u32)?;
+                let AuxtoolsScopes { arguments, locals, globals } = auxtools.get_scopes(frameId as u32)?;
                 let mut scopes = Vec::with_capacity(locals.is_some() as usize + arguments.is_some() as usize + globals.is_some() as usize);
 
                 if let Some(locals) = locals {

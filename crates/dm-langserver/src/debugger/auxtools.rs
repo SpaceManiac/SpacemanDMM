@@ -36,6 +36,12 @@ pub struct AuxtoolsThread {
     last_error: Arc<RwLock<String>>,
 }
 
+pub struct AuxtoolsScopes {
+    pub arguments: Option<VariablesRef>,
+    pub locals: Option<VariablesRef>,
+    pub globals: Option<VariablesRef>,
+}
+
 impl Auxtools {
     pub fn connect(seq: Arc<SequenceNumber>, port: Option<u16>) -> std::io::Result<Self> {
         let addr: SocketAddr = (Ipv4Addr::LOCALHOST, port.unwrap_or(DEFAULT_PORT)).into();
@@ -323,7 +329,7 @@ impl Auxtools {
     }
 
     // TODO: return all the scopes
-    pub fn get_scopes(&mut self, frame_id: u32) -> Result<(Option<VariablesRef>, Option<VariablesRef>, Option<VariablesRef>), Box<dyn std::error::Error>> {
+    pub fn get_scopes(&mut self, frame_id: u32) -> Result<AuxtoolsScopes, Box<dyn std::error::Error>> {
         self.send_or_disconnect(Request::Scopes {
             frame_id
         })?;
@@ -333,7 +339,7 @@ impl Auxtools {
                 arguments,
                 locals,
                 globals,
-            } => Ok((arguments, locals, globals)),
+            } => Ok(AuxtoolsScopes { arguments, locals, globals }),
             response => Err(Box::new(UnexpectedResponse::new("Scopes", response))),
         }
     }

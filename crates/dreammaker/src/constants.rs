@@ -13,6 +13,8 @@ use super::objtree::*;
 use super::preprocessor::DefineMap;
 use super::{Context, DMError, HasLocation, Location, Severity};
 
+pub type Arguments = [(Constant, Option<Constant>)];
+
 /// An absolute typepath and optional variables.
 ///
 /// The path may involve `/proc` or `/verb` references.
@@ -65,12 +67,12 @@ pub enum Constant {
         /// The type to be instantiated.
         type_: Option<Box<Pop>>,
         /// The list of arugments to pass to the `New()` proc.
-        args: Option<Box<[(Constant, Option<Constant>)]>>,
+        args: Option<Box<Arguments>>,
     },
     /// A `list` literal. Elements have optional associations.
-    List(Box<[(Constant, Option<Constant>)]>),
+    List(Box<Arguments>),
     /// A call to a constant type constructor.
-    Call(ConstFn, Box<[(Constant, Option<Constant>)]>),
+    Call(ConstFn, Box<Arguments>),
     /// A prefab literal.
     Prefab(Box<Pop>),
     /// A string literal.
@@ -598,7 +600,7 @@ impl<'a> ConstantFolder<'a> {
     }
 
     /// arguments or keyword arguments
-    fn arguments(&mut self, v: Box<[Expression]>) -> Result<Box<[(Constant, Option<Constant>)]>, DMError> {
+    fn arguments(&mut self, v: Box<[Expression]>) -> Result<Box<Arguments>, DMError> {
         let mut out = Vec::with_capacity(v.len());
         for each in Vec::from(v).into_iter() {
             out.push(match each {

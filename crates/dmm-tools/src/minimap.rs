@@ -6,7 +6,7 @@ use ndarray::Axis;
 use dm::objtree::*;
 use dm::constants::Constant;
 use crate::dmm::{Map, ZLevel, Prefab};
-use crate::dmi::{Dir, Image};
+use crate::dmi::{Dir, Image, self};
 use crate::render_passes::RenderPass;
 use crate::icon_cache::IconCache;
 
@@ -163,7 +163,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
 }
 
 // OOB handling
-fn clip(bounds: (u32, u32), mut loc: (i32, i32), mut rect: (u32, u32, u32, u32)) -> Option<((u32, u32), (u32, u32, u32, u32))> {
+fn clip(bounds: dmi::Coordinate, mut loc: (i32, i32), mut rect: dmi::Rect) -> Option<(dmi::Coordinate, dmi::Rect)> {
     if loc.0 < 0 {
         rect.0 += (-loc.0) as u32;
         match rect.2.checked_sub((-loc.0) as u32) {

@@ -4,6 +4,8 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::ops::Range;
 
+use crate::ast;
+
 use super::{DMError, Location, HasLocation, Context, Severity, FileId};
 use super::lexer::{LocatedToken, Token, Punctuation};
 use super::objtree::{ObjectTreeBuilder, ObjectTree, NodeIndex};
@@ -2267,7 +2269,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }
     }
 
-    fn pick_arguments(&mut self) -> Status<Box<[(Option<Expression>, Expression)]>> {
+    fn pick_arguments(&mut self) -> Status<ast::PickArgs> {
         leading!(self.exact(Token::Punct(Punctuation::LParen)));
         success(require!(self.separated(
             Punctuation::Comma,

@@ -7,6 +7,12 @@ use phf::phf_map;
 
 use crate::error::Location;
 
+/// Arguments for [`Term::Pick`]
+pub type PickArgs = Box<[(Option<Expression>, Expression)]>;
+
+/// Cases for [`Term::Switch`]
+pub type SwitchCases = [(Spanned<Vec<Case>>, Block)];
+
 // ----------------------------------------------------------------------------
 // Simple enums
 
@@ -889,7 +895,7 @@ pub enum Term {
         in_list: Option<Box<Expression>>, // in
     },
     /// A `pick` call, possibly with weights.
-    Pick(Box<[(Option<Expression>, Expression)]>),
+    Pick(PickArgs),
     /// A use of the `call()()` primitive.
     DynamicCall(Box<[Expression]>, Box<[Expression]>),
 }
@@ -1184,7 +1190,7 @@ pub enum Statement {
     },
     Switch {
         input: Box<Expression>,
-        cases: Box<[(Spanned<Vec<Case>>, Block)]>,
+        cases: Box<SwitchCases>,
         default: Option<Block>,
     },
     TryCatch {
