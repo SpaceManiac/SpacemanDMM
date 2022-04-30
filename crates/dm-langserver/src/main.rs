@@ -133,8 +133,8 @@ impl ClientCaps {
             }
         }
         if let Some(ref experimental) = caps.experimental {
-            if let Some(ref dreammaker) = experimental.get("dreammaker") {
-                if let Some(ref object_tree) = dreammaker.get("objectTree") {
+            if let Some(dreammaker) = experimental.get("dreammaker") {
+                if let Some(object_tree) = dreammaker.get("objectTree") {
                     if let Some(value) = object_tree.as_bool() {
                         this.object_tree = value;
                     }
@@ -153,7 +153,7 @@ struct DiagnosticsTracker {
 impl DiagnosticsTracker {
     fn file_url(root: Option<&Url>, file_list: &dm::FileList, file: dm::FileId) -> Option<Url> {
         let fname_string = file_list.get_path(file).display().to_string();
-        if let Some(ref root) = root {
+        if let Some(root) = root {
             root.join(&fname_string).ok()
         } else {
             Url::parse(&fname_string).ok()

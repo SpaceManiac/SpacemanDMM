@@ -338,7 +338,7 @@ impl<'o> WalkProc<'o> {
     fn visit_var(&mut self, location: Location, var_type: &VarType, name: &str, value: Option<&'o Expression>) {
         let ty = self.static_type(location, &var_type.type_path);
         self.use_type(location, &ty);
-        if let Some(ref expr) = value {
+        if let Some(expr) = value {
             self.visit_expression(location, expr, ty.basic_type());
         }
         self.local_vars.insert(name.to_owned(), Local {

@@ -1549,7 +1549,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         let static_type = self.env.static_type(location, &var_type.type_path);
         // Visit the expression if it's there
         let mut analysis = match value {
-            Some(ref expr) => self.visit_expression(location, expr, static_type.basic_type(), local_vars),
+            Some(expr) => self.visit_expression(location, expr, static_type.basic_type(), local_vars),
             None => Analysis::null(),
         };
         analysis.static_ty = static_type;

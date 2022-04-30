@@ -337,7 +337,7 @@ impl<'a> GetVar<'a> for Atom<'a> {
     }
 
     fn get_var_inner(&self, key: &str, objtree: &'a ObjectTree) -> Option<&'a Constant> {
-        if let Some(ref prefab) = self.prefab {
+        if let Some(prefab) = self.prefab {
             if let Some(v) = prefab.get(key) {
                 return Some(v);
             }
