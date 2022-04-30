@@ -266,7 +266,7 @@ impl Metadata {
         }
         let state_index = match self.state_names.get(icon_state) {
             Some(&i) => i,
-            None if icon_state == "" => 0,
+            None if icon_state.is_empty() => 0,
             None => return None,
         };
         let state = &self.states[state_index];

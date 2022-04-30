@@ -94,7 +94,7 @@ impl<K: Ord + Clone, V> IntervalTree<K, V> {
     pub fn remove(&mut self, key: RangeInclusive<K>) {
         match self.root.take() {
             Some(box_to_node) => self.root = box_to_node.delete(key),
-            None => return
+            None => ()
         }
     }
 

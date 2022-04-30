@@ -81,6 +81,8 @@ impl RenderPass for IconSmoothing {
 // Older cardinal smoothing system
 
 fn calculate_adjacencies(objtree: &ObjectTree, neighborhood: &Neighborhood, atom: &Atom, smooth_flags: i32) -> i32 {
+    // Easier to read as a nested conditional
+    #[allow(clippy::collapsible_if)]
     if atom.istype("/atom/movable/") {
         if atom.get_var("can_be_unanchored", objtree).to_bool() && !atom.get_var("anchored", objtree).to_bool() {
             return 0;

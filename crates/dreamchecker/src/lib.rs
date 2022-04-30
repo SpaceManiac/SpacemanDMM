@@ -223,7 +223,7 @@ impl<'o> Analysis<'o> {
     fn from_static_type_impure(ty: TypeRef<'o>) -> Analysis<'o> {
         let mut analysis = Analysis::from(StaticType::Type(ty));
         analysis.is_impure = Some(true);
-        return analysis
+        analysis
     }
 
     fn from_value(objtree: &'o ObjectTree, value: Constant, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
@@ -664,10 +664,10 @@ impl<'o> AnalyzeObjectTree<'o> {
                 if !visited.insert(nextproc) {
                     continue
                 }
-                if let Some(_) = self.waitfor_procs.get(&nextproc) {
+                if self.waitfor_procs.get(&nextproc).is_some() {
                     continue
                 }
-                if let Some(_) = self.sleep_exempt.get(nextproc) {
+                if self.sleep_exempt.get(nextproc).is_some() {
                     continue
                 }
                 if new_context {
@@ -781,7 +781,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                 } else {
                     match name.as_str() {
                         "background" | "waitfor" | "hidden" | "instant" | "popup_menu" => {
-                            if let Err(_) = directive_value_to_truthy(value, statement.location) {
+                            if directive_value_to_truthy(value, statement.location).is_err() {
                                 error(statement.location, format!("set {} must be 0/1/TRUE/FALSE", name.as_str()))
                                     .set_severity(Severity::Warning)
                                     .with_errortype("invalid_set_value")
@@ -1034,11 +1034,11 @@ impl ControlFlow {
         }
     }
     pub fn terminates(&self) -> bool {
-        return !self.fuzzy && ( self.returns || self.continues || self.breaks )
+        !self.fuzzy && ( self.returns || self.continues || self.breaks )
     }
 
     pub fn terminates_loop(&self) -> bool {
-        return !self.fuzzy && ( self.returns || self.breaks )
+        !self.fuzzy && ( self.returns || self.breaks )
     }
 
     pub fn no_else(&mut self) {
@@ -1209,7 +1209,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             let state = self.visit_statement(stmt.location, &stmt.elem, local_vars);
             term.merge(state);
         }
-        return term
+        term
     }
 
     fn loop_condition_check(&mut self, location: Location, expression: &'o Expression) {
@@ -1537,7 +1537,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Statement::Label { name: _, block } => { self.visit_block(block, &mut local_vars.clone()); },
             Statement::Del(expr) => { self.visit_expression(location, expr, None, local_vars); },
         }
-        return ControlFlow::allfalse()
+        ControlFlow::allfalse()
     }
 
     fn visit_var_stmt(&mut self, location: Location, var: &'o VarStatement, local_vars: &mut HashMap<String, LocalVar<'o>, RandomState>) {
@@ -1619,7 +1619,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                             .register(self.context);
                     },
                     Expression::TernaryOp { cond, if_, else_ } => {
-                        error(location, format!("ambiguous ternary on left side of an `in`"))
+                        error(location, "ambiguous ternary on left side of an `in`".to_string())
                             .set_severity(Severity::Warning)
                             .with_errortype("ambiguous_in_lhs")
                             .with_note(location, "add parentheses to fix: `a ? b : (c in d)`")
@@ -1686,7 +1686,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     let mut ana = self.static_type(location, &decl.var_type.type_path)
                         .with_fix_hint(decl.location, "add additional type info here");
                     ana.is_impure = Some(true);
-                    return ana
+                    ana
                 } else {
                     error(location, format!("undefined var: {:?}", unscoped_name))
                         .register(self.context);
@@ -2036,7 +2036,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         };
         error(location, format!("Attempting {} on a {} which does not overload {}", operator, typeerror, operator))
             .register(self.context);
-        return Analysis::empty()
+        Analysis::empty()
     }
 
     fn visit_unary(&mut self, rhs: Analysis<'o>, op: &UnaryOp, location: Location, local_vars: &mut HashMap<String, LocalVar<'o>, RandomState>) -> Analysis<'o> {
@@ -2109,7 +2109,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
                 match &term.elem {
                     Term::Ident(flagname) => {
-                        if valid_flags.iter().position(|&x| x == flagname).is_none() {
+                        if !valid_flags.iter().any(|&x| x == flagname) {
                             error(location, format!("filter(type=\"{}\") called with invalid '{}' flag '{}'", typevalue, flagfieldname, flagname))
                                 .with_filter_args(location, typevalue)
                                 .register(self.context);
@@ -2203,7 +2203,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 expr => {
                     if let Some(Term::Call(callname, _)) = expr.as_term() {
                         // only interested in the first expression being arglist
-                        if callname.as_str() == "arglist" && param_name_map.len() == 0 && param_idx == 0 {
+                        if callname.as_str() == "arglist" && param_name_map.is_empty() && param_idx == 0 {
                             arglist_used = true;
                         }
                     }
@@ -2248,7 +2248,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 return Analysis::empty()
             });
             for arg in param_name_map.keys() {
-                if *arg != "type" && arglist.iter().position(|&x| x == *arg).is_none() {
+                if *arg != "type" && !arglist.iter().any(|&x| x == *arg) {
                     error(location, format!("filter(type=\"{}\") called with invalid keyword parameter '{}'", typevalue, arg))
                         .with_filter_args(location, typevalue)
                         .register(self.context);

@@ -815,9 +815,8 @@ impl<'ctx> Preprocessor<'ctx> {
                         // Skip to the end of the line, or else we'll catch
                         // stringify operators `#X` as unknown directives.
                         loop {
-                            match next!() {
-                                Token::Punct(Punctuation::Newline) => break,
-                                _ => {}
+                            if let Token::Punct(Punctuation::Newline) = next!() {
+                                break
                             }
                         }
                     }

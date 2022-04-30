@@ -892,7 +892,7 @@ impl ObjectTreeBuilder {
                     parent_type
                 };
 
-                if path == "/client" && parent_type == "" {
+                if path == "/client" && parent_type.is_empty() {
                     // client has no parent by default, but can be safely reparented to /datum
                     NodeIndex::new(0)
                 } else if let Some(&idx) = self.inner.types.get(parent_type) {

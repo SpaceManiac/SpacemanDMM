@@ -227,9 +227,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                 .dm_context
                 .errors()
                 .iter()
-                .filter(|e| e.severity() <= dm::Severity::Error)
-                .next()
-                .is_some()
+                .any(|e| e.severity() <= dm::Severity::Error)
             {
                 println!("there were some parsing errors; render may be inaccurate")
             }
@@ -551,9 +549,7 @@ fn render_many(context: &Context, command: RenderManyCommand) -> RenderManyComma
         .dm_context
         .errors()
         .iter()
-        .filter(|e| e.severity() <= dm::Severity::Error)
-        .next()
-        .is_some()
+        .any(|e| e.severity() <= dm::Severity::Error)
     {
         eprintln!("there were some parsing errors; render may be inaccurate")
     }

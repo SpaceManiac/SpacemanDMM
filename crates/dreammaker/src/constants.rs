@@ -909,27 +909,25 @@ impl<'a> ConstantFolder<'a> {
         // Only set space if it wasn't set manually by the space arg
         let space = if let Some(space) = space {
             space
-        } else {
-            if color_args.r || color_args.g || color_args.b {
-                // TODO: Add hint here for useless r/g/b kwarg
-                ColorSpace::Rgb
-            } else if color_args.h {
-                if color_args.c && color_args.y {
-                    ColorSpace::Hcy
-                } else if color_args.s {
-                    if color_args.v {
-                        ColorSpace::Hsv
-                    } else if color_args.l {
-                        ColorSpace::Hsl
-                    } else {
-                        return Err(self.error("malformed rgb() call, could not determine space: only h & s specified"));
-                    }
+        } else if color_args.r || color_args.g || color_args.b {
+            // TODO: Add hint here for useless r/g/b kwarg
+            ColorSpace::Rgb
+        } else if color_args.h {
+            if color_args.c && color_args.y {
+                ColorSpace::Hcy
+            } else if color_args.s {
+                if color_args.v {
+                    ColorSpace::Hsv
+                } else if color_args.l {
+                    ColorSpace::Hsl
                 } else {
-                    return Err(self.error("malformed rgb() call, could not determine space: only h specified"));
+                    return Err(self.error("malformed rgb() call, could not determine space: only h & s specified"));
                 }
             } else {
-                ColorSpace::Rgb  // Default
+                return Err(self.error("malformed rgb() call, could not determine space: only h specified"));
             }
+        } else {
+            ColorSpace::Rgb  // Default
         };
 
         let mut value_vec: Vec<f64> = vec![];

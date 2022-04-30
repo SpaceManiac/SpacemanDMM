@@ -200,7 +200,7 @@ impl<'a> Engine<'a> {
         // follow the path ops until we hit 'proc' or 'verb'
         let mut iter = parts.iter();
         let mut decl = None;
-        while let Some(&(op, ref name)) = iter.next() {
+        for &(op, ref name) in iter.by_ref() {
             if name == "proc" {
                 decl = Some("proc");
                 break;

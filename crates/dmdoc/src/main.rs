@@ -232,7 +232,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
             if let Some(ty) = objtree.find(ty_path) {
                 entity_exists = ty.vars.contains_key(name);
             }
-        } else if let Some(_) = objtree.find(reference) {
+        } else if objtree.find(reference).is_some() {
             entity_exists = true;
         } else if let Some(idx) = reference.rfind('/') {
             let (parent, rest) = (&reference[..idx], &reference[idx + 1..]);
@@ -286,13 +286,11 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                             })
                         }
                     }
-                } else {
-                    if ty.location.is_builtins() {
-                        external_url = Some(match ty.docs.builtin_docs {
-                            BuiltinDocs::None => format!("{}{}", DM_REFERENCE_BASE, ty.path),
-                            BuiltinDocs::ReferenceHash(hash) => format!("{}{}", DM_REFERENCE_BASE, hash),
-                        })
-                    }
+                } else if ty.location.is_builtins() {
+                    external_url = Some(match ty.docs.builtin_docs {
+                        BuiltinDocs::None => format!("{}{}", DM_REFERENCE_BASE, ty.path),
+                        BuiltinDocs::ReferenceHash(hash) => format!("{}{}", DM_REFERENCE_BASE, hash),
+                    })
                 }
             }
         }

@@ -796,7 +796,7 @@ impl Expression {
                         _ => None,
                     }
                 } else {
-                    return None
+                    None
                 }
             },
             Expression::TernaryOp { cond, if_, else_ } => {
@@ -1127,7 +1127,7 @@ impl VarSuffix {
     pub fn into_initializer(self) -> Option<Expression> {
         // `var/L[10]` is equivalent to `var/list/L = new /list(10)`
         // `var/L[2][][3]` is equivalent to `var/list/list/list = new /list(2, 3)`
-        let args: Vec<_> = self.list.into_iter().filter_map(|x| x).collect();
+        let args: Vec<_> = self.list.into_iter().flatten().collect();
         if args.is_empty() {
             None
         } else {

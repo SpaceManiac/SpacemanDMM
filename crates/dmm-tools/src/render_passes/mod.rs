@@ -454,10 +454,10 @@ impl RenderPass for FancyLayers {
         self.apply_fancy_layer(atom.get_path(), sprite);
 
         // dual layering of vents 1: hide original sprite underfloor
-        if atom.istype("/obj/machinery/atmospherics/components/unary/") {
-            if unary_aboveground(atom, objtree).is_some() {
-                sprite.layer = Layer::from(-5);
-            }
+        if atom.istype("/obj/machinery/atmospherics/components/unary/")
+            && unary_aboveground(atom, objtree).is_some()
+        {
+            sprite.layer = Layer::from(-5);
         }
     }
 

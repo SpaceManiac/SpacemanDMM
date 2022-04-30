@@ -694,13 +694,11 @@ impl<'a> Engine<'a> {
             // chop off proc name and 'proc/' or 'verb/' if it's there
             // TODO: factor this logic somewhere
             let mut proc_path = &proc_path[..];
-            match proc_path.split_last() {
-                Some((name, rest)) => {
-                    proc_name = Some((name.as_str(), *idx));
-                    proc_path = rest;
-                }
-                _ => {}
+            if let Some((name, rest)) = proc_path.split_last() {
+                proc_name = Some((name.as_str(), *idx));
+                proc_path = rest;
             }
+
             match proc_path.split_last() {
                 Some((kwd, rest)) if kwd == "proc" || kwd == "verb" => proc_path = rest,
                 _ => {}
@@ -1383,13 +1381,10 @@ handle_method_call! {
                 }
                 Annotation::UnscopedVar(var_name) if symbol_id.is_some() => {
                     let (ty, proc_name) = self.find_type_context(&iter);
-                    match self.find_unscoped_var(&iter, ty, proc_name, var_name) {
-                        UnscopedVar::Variable { ty, .. } => {
-                            if let Some(_decl) = ty.get_var_declaration(var_name) {
-                                results.append(&mut self.construct_var_hover(var_name, Some(ty), false)?);
-                            }
-                        },
-                        _ => {}
+                    if let UnscopedVar::Variable { ty, .. } = self.find_unscoped_var(&iter, ty, proc_name, var_name) {
+                        if let Some(_decl) = ty.get_var_declaration(var_name) {
+                            results.append(&mut self.construct_var_hover(var_name, Some(ty), false)?);
+                        }
                     }
                 }
                 Annotation::UnscopedCall(proc_name) if symbol_id.is_some() => {
