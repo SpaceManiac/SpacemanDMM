@@ -26,7 +26,7 @@ pub struct Pop {
 
 impl PartialEq for Pop {
     fn eq(&self, other: &Self) -> bool {
-        self.path == other.path && self.vars.keys().eq(other.vars.keys())
+        self.path == other.path && self.vars == other.vars
     }
 }
 
@@ -35,7 +35,11 @@ impl Eq for Pop {}
 impl std::hash::Hash for Pop {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.path.hash(state);
-        self.vars.keys().for_each(|key| {key.hash(state)});
+        let mut items: Vec<_> = self.vars.iter().collect();
+        items.sort_by_key(|&(k, _)| k);
+        for kvp in items {
+            kvp.hash(state);
+        }
     }
 }
 
