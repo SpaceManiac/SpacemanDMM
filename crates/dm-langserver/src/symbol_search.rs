@@ -16,16 +16,14 @@ impl Query {
         if !any_alphanumeric(query) {
             return None;
         }
-        Some(if query.starts_with('#') {
-            Query::Define(query[1..].to_lowercase())
-        } else if query.starts_with("var/") {
-            let query = &query["var/".len()..];
+        Some(if let Some(query) = query.strip_prefix('#') {
+            Query::Define(query.to_lowercase())
+        } else if let Some(query) = query.strip_prefix("var/") {
             if !any_alphanumeric(query) {
                 return None;
             }
             Query::Var(query.to_lowercase())
-        } else if query.starts_with("proc/") {
-            let query = &query["proc/".len()..];
+        } else if let Some(query) = query.strip_prefix("proc/") {
             if !any_alphanumeric(query) {
                 return None;
             }
