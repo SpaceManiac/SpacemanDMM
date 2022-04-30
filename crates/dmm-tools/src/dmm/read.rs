@@ -59,6 +59,8 @@ pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
     }
 
     while let Some(ch) = chars.next() {
+        // Readability, simple elif chain isn't duplicate code
+        #[allow(clippy::if_same_then_else)]
         if ch == b'\n' || ch == b'\r' {
             in_comment_line = false;
             comment_trigger = false;

@@ -87,6 +87,8 @@ impl RenderPass for SmartCables {
 
 fn should_have_node(turf: &[Atom]) -> bool {
     for atom in turf {
+        // Readability, simple elif chain isn't duplicate code
+        #[allow(clippy::if_same_then_else)]
         if atom.istype("/obj/structure/grille/") || atom.istype("/obj/structure/cable_bridge/") {
             return true;
         } else if atom.istype("/obj/machinery/power/") {
