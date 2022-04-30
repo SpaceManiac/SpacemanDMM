@@ -37,10 +37,7 @@ pub enum StaticType<'o> {
 
 impl<'o> StaticType<'o> {
     fn is_truthy(&self) -> bool {
-        match *self {
-            StaticType::None => false,
-            _ => true,
-        }
+        !matches!(*self, StaticType::None)
     }
 
     fn basic_type(&self) -> Option<TypeRef<'o>> {
@@ -1252,7 +1249,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 match expr {
                     Expression::Base { term, follow } => {
                         if let Term::Call(call, vec) = &term.elem {
-                            if !follow.iter().any(|f| match f.elem { Follow::Call(..) => true, _ => false }) {
+                            if !follow.iter().any(|f| matches!(f.elem, Follow::Call(..))) {
                                 if let Some(proc) = self.ty.get_proc(call) {
                                     if let Some((_, _, loc)) = self.env.must_be_pure.get_self_or_parent(proc) {
                                         error(location, format!("call to pure proc {} discards return value", call))

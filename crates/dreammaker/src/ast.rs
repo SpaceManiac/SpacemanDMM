@@ -749,17 +749,14 @@ impl Expression {
                 if !rhterm.is_static() {
                     return false
                 }
-                match op {
-                    BinaryOp::Eq |
+                matches!(op, BinaryOp::Eq |
                     BinaryOp::NotEq |
                     BinaryOp::Less |
                     BinaryOp::Greater |
                     BinaryOp::LessEq |
                     BinaryOp::GreaterEq |
                     BinaryOp::And |
-                    BinaryOp::Or => true,
-                    _ => false,
-                }
+                    BinaryOp::Or)
             },
             _ => false,
         }

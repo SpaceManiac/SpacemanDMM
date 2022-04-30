@@ -53,12 +53,9 @@ impl Query {
     }
 
     pub fn matches_on_type(&self, _path: &str) -> bool {
-        match *self {
-            Query::Anything(_) |
+        matches!(*self, Query::Anything(_) |
             Query::Proc(_) |
-            Query::Var(_) => true,
-            _ => false,
-        }
+            Query::Var(_))
     }
 
     pub fn matches_var(&self, name: &str) -> bool {

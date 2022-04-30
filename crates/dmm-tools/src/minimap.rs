@@ -572,8 +572,8 @@ pub fn color_of<'s, T: GetVar<'s> + ?Sized>(objtree: &'s ObjectTree, atom: &T) -
         _ => 255,
     };
 
-    match atom.get_var("color", objtree) {
-        &Constant::String(ref color) if color.starts_with('#') => {
+    match *atom.get_var("color", objtree) {
+        Constant::String(ref color) if color.starts_with('#') => {
             let mut sum = 0;
             for ch in color[1..color.len()].chars() {
                 sum = 16 * sum + ch.to_digit(16).unwrap_or(0);
@@ -591,7 +591,7 @@ pub fn color_of<'s, T: GetVar<'s> + ?Sized>(objtree: &'s ObjectTree, atom: &T) -
                 [255, 255, 255, alpha]  // invalid
             }
         }
-        &Constant::String(ref color) => match html_color(color) {
+        Constant::String(ref color) => match html_color(color) {
             Some([r, g, b]) => [r, g, b, alpha],
             None => [255, 255, 255, alpha],
         }

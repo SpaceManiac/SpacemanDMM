@@ -253,12 +253,11 @@ impl TTKind {
     }
 
     fn is_end(self, token: &Token) -> bool {
-        match (self, token) {
-            (TTKind::Paren, &Token::Punct(Punctuation::RParen)) => true,
-            (TTKind::Brace, &Token::Punct(Punctuation::RBrace)) => true,
-            (TTKind::Bracket, &Token::Punct(Punctuation::RBracket)) => true,
-            _ => false,
-        }
+        matches!((self, token),
+            (TTKind::Paren, &Token::Punct(Punctuation::RParen))
+            | (TTKind::Brace, &Token::Punct(Punctuation::RBrace))
+            | (TTKind::Bracket, &Token::Punct(Punctuation::RBracket))
+        )
     }
 }
 

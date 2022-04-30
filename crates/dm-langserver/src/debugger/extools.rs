@@ -126,6 +126,8 @@ impl ExtoolsHolder {
     }
 
     pub fn disconnect(&mut self) {
+        // This part of code is not complete, we don't want to use matches!
+        #[allow(clippy::single_match)]
         match std::mem::replace(&mut self.0, ExtoolsHolderInner::None) {
             ExtoolsHolderInner::Attaching { cancel_tx, .. } => { let _ = cancel_tx.send(()); },
             // TODO: ExtoolsHolderInner::Listening
