@@ -197,5 +197,5 @@ pub fn builtins_table(input: TokenStream) -> TokenStream {
         output.push(line);
     }
 
-    output.into_iter().flat_map(|x| TokenStream::from(x)).collect()
+    output.into_iter().flat_map(TokenStream::from).collect()
 }

@@ -367,7 +367,7 @@ impl Debugger {
                 }
             }
 
-            DebugClient::Auxtools(auxtools) => for stack in auxtools.get_stacks().unwrap_or(vec![]) {
+            DebugClient::Auxtools(auxtools) => for stack in auxtools.get_stacks().unwrap_or_default() {
                     if stack.id == 0 {
                         continue;
                     }
@@ -532,7 +532,7 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                self.stddef_dm_info = auxtools.get_stddef()?.map(|x| StddefDmInfo::new(x));
+                self.stddef_dm_info = auxtools.get_stddef()?.map(StddefDmInfo::new);
                 auxtools.configured()?;
             }
         }

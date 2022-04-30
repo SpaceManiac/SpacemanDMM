@@ -1008,7 +1008,7 @@ impl<'a> ConstantFolder<'a> {
         };
 
         // Extract the raw 4th alpha positional argument if it wasn't a kwarg
-        let alpha = color_args.a.or(value_vec.get(3).map(|&x| x as i32));
+        let alpha = color_args.a.or_else(|| value_vec.get(3).map(|&x| x as i32));
 
         // APPARENTLY the author thinks fractional rgb is a thing, hence the rounding
         if let Some(alpha) = alpha {

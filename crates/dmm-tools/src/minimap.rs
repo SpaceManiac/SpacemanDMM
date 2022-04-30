@@ -520,7 +520,7 @@ impl<'s> Sprite<'s> {
             category: Category::from_path(vars.get_path()),
             icon: vars.get_var("icon", objtree).as_path_str().unwrap_or(""),
             icon_state: vars.get_var("icon_state", objtree).as_str().unwrap_or(""),
-            dir: vars.get_var("dir", objtree).to_int().and_then(Dir::from_int).unwrap_or(Dir::default()),
+            dir: vars.get_var("dir", objtree).to_int().and_then(Dir::from_int).unwrap_or_default(),
             color: color_of(objtree, vars),
             ofs_x: pixel_x + pixel_w + step_x,
             ofs_y: pixel_y + pixel_z + step_y,

@@ -409,7 +409,7 @@ impl<'a> Engine<'a> {
         }
 
         // proc parameters
-        let ty = ty.unwrap_or(self.objtree.root());
+        let ty = ty.unwrap_or_else(|| self.objtree.root());
         if let Some((proc_name, idx)) = proc_name {
             if let Some(proc) = ty.get().procs.get(proc_name) {
                 if let Some(value) = proc.value.get(idx) {

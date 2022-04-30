@@ -744,7 +744,7 @@ impl<'a> Engine<'a> {
         }
 
         // proc parameters
-        let ty = ty.unwrap_or(self.objtree.root());
+        let ty = ty.unwrap_or_else(|| self.objtree.root());
         if let Some((proc_name, idx)) = proc_name {
             if let Some(proc) = ty.get().procs.get(proc_name) {
                 if let Some(value) = proc.value.get(idx) {
@@ -877,7 +877,7 @@ impl<'a> Engine<'a> {
         },
         Annotation::UnscopedCall(proc_name) => {
             let (ty, _) = self.find_type_context(&iter);
-            let mut next = ty.or(Some(self.objtree.root()));
+            let mut next = ty.or_else(|| Some(self.objtree.root()));
             while let Some(ty) = next {
                 if let Some(proc) = ty.procs.get(proc_name) {
                     if let Some(ref decl) = proc.declaration {
@@ -1394,7 +1394,7 @@ handle_method_call! {
                 }
                 Annotation::UnscopedCall(proc_name) if symbol_id.is_some() => {
                     let (ty, _) = self.find_type_context(&iter);
-                    let next = ty.or(Some(self.objtree.root()));
+                    let next = ty.or_else(|| Some(self.objtree.root()));
                     results.append(&mut self.construct_proc_hover(proc_name, next, false)?);
                 }
                 Annotation::ScopedCall(priors, proc_name) if symbol_id.is_some() => {
@@ -1468,7 +1468,7 @@ handle_method_call! {
         },
         Annotation::UnscopedCall(proc_name) => {
             let (ty, _) = self.find_type_context(&iter);
-            let mut next = ty.or(Some(self.objtree.root()));
+            let mut next = ty.or_else(|| Some(self.objtree.root()));
             while let Some(ty) = next {
                 if let Some(proc) = ty.procs.get(proc_name) {
                     results.push(self.convert_location(proc.main_value().location, &proc.main_value().docs, &[&ty.path, "/proc/", proc_name])?);
@@ -1713,7 +1713,7 @@ handle_method_call! {
                 // TODO: unscoped_completions calls find_type_context again
                 self.unscoped_completions(&mut results, &iter, "");
             } else {
-                self.tree_completions(&mut results, true, ty.unwrap_or(self.objtree.root()), "");
+                self.tree_completions(&mut results, true, ty.unwrap_or_else(|| self.objtree.root()), "");
             }
         }
 
