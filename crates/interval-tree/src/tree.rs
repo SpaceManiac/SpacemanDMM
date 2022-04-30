@@ -182,16 +182,22 @@ impl<K: Ord + Clone, V> IntervalTree<K, V> {
         self.root.as_ref().map(|n| n.max_pair())
     }
 
-/// Return an iterator for all (key,value) pairs in the tree, consuming the tree in the process.
-    pub fn into_iter(self) -> IntoIter<K, V> {
-        IntoIter::new(self)
-    }
-
 /// Merge all (key, value) pairs from another tree into this one, consuming it.
     pub fn merge(&mut self, other: IntervalTree<K, V>) {
         for (k, v) in other.into_iter() {
             self.insert(k, v);
         }
+    }
+}
+
+impl<K: Ord + Clone, V> IntoIterator for IntervalTree<K, V> {
+    type Item = <IntoIter<K, V> as Iterator>::Item;
+
+    type IntoIter = IntoIter<K, V>;
+
+    /// Return an iterator for all (key,value) pairs in the tree, consuming the tree in the process.
+    fn into_iter(self) -> Self::IntoIter {
+        Self::IntoIter::new(self)
     }
 }
 

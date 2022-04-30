@@ -359,13 +359,15 @@ macro_rules! type_table {
             }
         }
 
-        impl $name {
-            pub fn from_str(text: &str) -> Option<Self> {
-                match text {
+        impl std::str::FromStr for $name {
+            type Err = ();
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                match s {
                     $(
-                        $txt => Some($name::$i),
+                        $txt => Ok($name::$i),
                     )*
-                    _ => None,
+                    _ => Err(()),
                 }
             }
         }

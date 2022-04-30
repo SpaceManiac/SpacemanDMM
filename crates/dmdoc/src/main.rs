@@ -916,11 +916,13 @@ fn module_path(path: &Path) -> String {
 }
 
 fn module_entry<'a, 'b>(modules: &'a mut BTreeMap<String, Module1<'b>>, path: &Path) -> &'a mut Module1<'b> {
-    modules.entry(module_path(path)).or_insert_with(|| {
-        let mut module = Module1::default();
-        module.htmlname = module_path(path);
-        module.orig_filename = path.display().to_string().replace('\\', "/");
-        module
+    modules.entry(module_path(path)).or_insert_with(|| Module1 {
+        htmlname: module_path(path),
+        orig_filename: path.display().to_string().replace('\\', "/"),
+        name: Default::default(),
+        teaser: Default::default(),
+        items_wip: Default::default(),
+        defines: Default::default(),
     })
 }
 

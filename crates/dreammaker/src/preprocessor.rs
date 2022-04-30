@@ -757,6 +757,8 @@ impl<'ctx> Preprocessor<'ctx> {
                             }
                             // Double-match is used to let go of the borrow of
                             // `candidate` so it can be used in the second half.
+                            // This is how BYOND refers to it's file formats, this is how we should refer to them.
+                            #[allow(clippy::upper_case_acronyms)]
                             enum FileType {
                                 DMM,
                                 DMF,

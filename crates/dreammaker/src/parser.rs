@@ -3,6 +3,7 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::ops::Range;
+use std::str::FromStr;
 
 use crate::ast;
 
@@ -92,6 +93,8 @@ impl OpInfo {
 }
 
 #[derive(Debug, Clone, Copy)]
+// Too much effort to change now, and it matches the ast naming, so whatever
+#[allow(clippy::enum_variant_names)]
 enum Op {
     BinaryOp(BinaryOp),
     AssignOp(AssignOp),
@@ -1143,8 +1146,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
         let ident = leading!(self.ident());
         let mut as_what = match InputType::from_str(&ident) {
-            Some(what) => what,
-            None => {
+            Ok(what) => what,
+            Err(()) => {
                 self.context.register_error(self.error(format!("bad input type: '{}'", ident)));
                 InputType::empty()
             }
@@ -1152,8 +1155,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         while let Some(()) = self.exact(Token::Punct(Punctuation::BitOr))? {
             let ident = require!(self.ident());
             match InputType::from_str(&ident) {
-                Some(what) => as_what |= what,
-                None => {
+                Ok(what) => as_what |= what,
+                Err(()) => {
                     self.context.register_error(self.error(format!("bad input type: '{}'", ident)));
                 }
             }
