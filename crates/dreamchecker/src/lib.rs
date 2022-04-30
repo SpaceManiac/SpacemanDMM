@@ -2088,6 +2088,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         Analysis::empty()
     }
 
+    // It's fine.
+    #[allow(clippy::too_many_arguments)]
     fn check_filter_flag(&mut self, expr: &'o Expression, can_be_zero: bool, location: Location, typevalue: &str, valid_flags: &[&str], flagfieldname: &str, exclusive: bool) {
         match expr {
             Expression::BinaryOp{ op: BinaryOp::BitOr, lhs, rhs } => {

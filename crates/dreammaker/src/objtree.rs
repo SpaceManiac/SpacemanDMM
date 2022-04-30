@@ -1100,6 +1100,8 @@ impl ObjectTreeBuilder {
         })))
     }
 
+    // It's fine.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn register_proc(
         &mut self,
         context: &Context,
