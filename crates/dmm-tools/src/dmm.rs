@@ -213,7 +213,7 @@ impl Map {
         ZLevel { grid: self.grid.index_axis(Axis(0), z) }
     }
 
-    pub fn iter_levels<'a>(&'a self) -> impl Iterator<Item=(i32, ZLevel<'a>)> + 'a {
+    pub fn iter_levels(&self) -> impl Iterator<Item=(i32, ZLevel<'_>)> + '_ {
         self.grid.axis_iter(Axis(0)).enumerate().map(|(i, grid)| (i as i32 + 1, ZLevel { grid }))
     }
 
@@ -234,7 +234,7 @@ impl std::ops::Index<Coord3> for Map {
 
 impl<'a> ZLevel<'a> {
     /// Iterate over the z-level in row-major order starting at the top-left.
-    pub fn iter_top_down<'b>(&'b self) -> impl Iterator<Item=(Coord2, Key)> + 'b {
+    pub fn iter_top_down(&self) -> impl Iterator<Item=(Coord2, Key)> + '_ {
         let dim = self.grid.dim();
         self.grid.indexed_iter().map(move |(c, k)| (Coord2::from_raw(c, dim), *k))
     }

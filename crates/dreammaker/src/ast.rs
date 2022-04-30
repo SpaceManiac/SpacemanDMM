@@ -31,7 +31,7 @@ pub enum UnaryOp {
 impl UnaryOp {
     /// Prepare to display this unary operator around (to the left or right of)
     /// its operand.
-    pub fn around<'a, T: fmt::Display + ?Sized>(self, expr: &'a T) -> impl fmt::Display + 'a {
+    pub fn around<T: fmt::Display + ?Sized>(self, expr: &'_ T) -> impl fmt::Display + '_ {
         /// A formatting wrapper created by `UnaryOp::around`.
         struct Around<'a, T: 'a + ?Sized> {
             op: UnaryOp,

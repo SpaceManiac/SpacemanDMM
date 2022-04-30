@@ -78,7 +78,7 @@ impl Query {
     }
 }
 
-fn simplify<'a>(s: &'a str) -> impl Iterator<Item=char> + Clone + 'a {
+fn simplify(s: &str) -> impl Iterator<Item=char> + Clone + '_ {
     s.chars().flat_map(|c| c.to_lowercase()).filter(|c| c.is_alphanumeric())
 }
 

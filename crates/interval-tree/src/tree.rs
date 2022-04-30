@@ -161,7 +161,7 @@ impl<K: Ord + Clone, V> IntervalTree<K, V> {
 /// assert_eq!(t.min().unwrap().1, &[25]);
 ///
 /// ```
-    pub fn min<'a>(&'a self) -> Option<(&'a RangeInclusive<K>, &'a [V])> {
+    pub fn min(&self) -> Option<(&'_ RangeInclusive<K>, &'_ [V])> {
         self.root.as_ref().map(|n| n.min_pair())
     }
 
@@ -178,7 +178,7 @@ impl<K: Ord + Clone, V> IntervalTree<K, V> {
 /// assert_eq!(t.max().unwrap().1, &[50]);
 ///
 /// ```
-    pub fn max<'a>(&'a self) -> Option<(&'a RangeInclusive<K>, &'a [V])> {
+    pub fn max(&self) -> Option<(&'_ RangeInclusive<K>, &'_ [V])> {
         self.root.as_ref().map(|n| n.max_pair())
     }
 

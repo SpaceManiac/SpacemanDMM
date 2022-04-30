@@ -644,7 +644,7 @@ impl ObjectTree {
         (0..self.graph.len()).map(NodeIndex::new)
     }
 
-    pub fn iter_types<'a>(&'a self) -> impl Iterator<Item=TypeRef<'a>> + 'a {
+    pub fn iter_types(&self) -> impl Iterator<Item=TypeRef<'_>> + '_ {
         self.node_indices().map(move |idx| TypeRef::new(self, idx))
     }
 
