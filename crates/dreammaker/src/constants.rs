@@ -416,7 +416,7 @@ pub fn evaluate_str(location: Location, input: &[u8]) -> Result<Constant, DMErro
     let expr = crate::parser::parse_expression(&ctx, location, &mut lexer)?;
     let leftover = lexer.remaining();
     if !leftover.is_empty() {
-        return Err(DMError::new(location, format!("leftover: {:?} {}", from_utf8_or_latin1_borrowed(&input), leftover.len())));
+        return Err(DMError::new(location, format!("leftover: {:?} {}", from_utf8_or_latin1_borrowed(input), leftover.len())));
     }
     expr.simple_evaluate(location)
 }
@@ -831,7 +831,7 @@ impl<'a> ConstantFolder<'a> {
                 return Err(self.error(format!("cannot reference variable {:?} in this context", ident)));
             }
             let tree = self.tree.as_mut().unwrap();
-            match constant_ident_lookup(tree, ty, &ident, must_be_const)
+            match constant_ident_lookup(tree, ty, ident, must_be_const)
                 .map_err(|e| e.with_location(location))?
             {
                 ConstLookup::Found(_, v) => return Ok(v),

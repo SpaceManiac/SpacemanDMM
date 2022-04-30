@@ -580,17 +580,17 @@ impl<'a> Engine<'a> {
                         Ok(path) => path,
                         Err(_) => "<outside workspace>".as_ref(),
                     };
-                    let (real_file_id, mut preprocessor) = match self.context.get_file(&stripped) {
-                        Some(id) => (id, defines.branch_at_file(id, &self.context)),
-                        None => (FileId::default(), defines.branch_at_end(&self.context)),
+                    let (real_file_id, mut preprocessor) = match self.context.get_file(stripped) {
+                        Some(id) => (id, defines.branch_at_file(id, self.context)),
+                        None => (FileId::default(), defines.branch_at_end(self.context)),
                     };
                     let contents = self.docs.read(url).map_err(invalid_request)?;
                     let file_id = preprocessor.push_file(stripped.to_owned(), contents).map_err(invalid_request)?;
                     preprocessor.enable_annotations();
                     let mut annotations = AnnotationTree::default();
                     {
-                        let indent = dm::indents::IndentProcessor::new(&self.context, &mut preprocessor);
-                        let parser = dm::parser::Parser::new(&self.context, indent);
+                        let indent = dm::indents::IndentProcessor::new(self.context, &mut preprocessor);
+                        let parser = dm::parser::Parser::new(self.context, indent);
                         parser.parse_annotations_only(&mut annotations);
                     }
                     annotations.merge(preprocessor.take_annotations().unwrap());
@@ -601,7 +601,7 @@ impl<'a> Engine<'a> {
                     let filename = url.to_string();
 
                     let contents = self.docs.get_contents(url).map_err(invalid_request)?.into_owned();
-                    let mut pp = dm::preprocessor::Preprocessor::from_buffer(&self.context, filename.clone().into(), contents);
+                    let mut pp = dm::preprocessor::Preprocessor::from_buffer(self.context, filename.clone().into(), contents);
                     let file_id = self.context.get_file(filename.as_ref()).expect("file didn't exist?");
                     // Clear old errors for this file. Hacky, but it will work for now.
                     self.context.errors_mut().retain(|error| error.location().file != file_id);
@@ -609,8 +609,8 @@ impl<'a> Engine<'a> {
                     pp.enable_annotations();
                     let mut annotations = AnnotationTree::default();
                     {
-                        let indent = dm::indents::IndentProcessor::new(&self.context, &mut pp);
-                        let mut parser = dm::parser::Parser::new(&self.context, indent);
+                        let indent = dm::indents::IndentProcessor::new(self.context, &mut pp);
+                        let mut parser = dm::parser::Parser::new(self.context, indent);
                         parser.annotate_to(&mut annotations);
                         // Every time anyone types anything the object tree is replaced.
                         // This is probably really inefficient, but it will do until
@@ -618,7 +618,7 @@ impl<'a> Engine<'a> {
                         self.objtree = Arc::new(parser.parse_object_tree());
                     }
                     pp.finalize();
-                    dreamchecker::run(&self.context, &self.objtree);
+                    dreamchecker::run(self.context, &self.objtree);
 
                     // Perform a diagnostics pump on this file only.
                     // Assume all errors are in this file.
@@ -1238,7 +1238,7 @@ handle_method_call! {
             }
             for (var_name, tv) in ty.vars.iter() {
                 if let Some(decl) = tv.declaration.as_ref() {
-                    if query.matches_var(&var_name) {
+                    if query.matches_var(var_name) {
                         results.push(SymbolInformation {
                             name: var_name.clone(),
                             kind: SymbolKind::Field,
@@ -1252,7 +1252,7 @@ handle_method_call! {
 
             for (proc_name, pv) in ty.procs.iter() {
                 if let Some(decl) = pv.declaration.as_ref() {
-                    if query.matches_proc(&proc_name, decl.kind) {
+                    if query.matches_proc(proc_name, decl.kind) {
                         results.push(SymbolInformation {
                             name: proc_name.clone(),
                             kind: if ty.is_root() {
@@ -1936,7 +1936,7 @@ handle_method_call! {
     on ColorPresentationRequest(&mut self, params) {
         let content = self.docs.get_contents(&params.text_document.uri).map_err(invalid_request)?;
         let chunk = document::get_range(&content, params.range)?;
-        let color_format = color::ColorFormat::parse(&chunk).unwrap_or_default();
+        let color_format = color::ColorFormat::parse(chunk).unwrap_or_default();
         // TODO: return compatible alternate presentations for converting
         // between "#..." and rgb().
         vec![

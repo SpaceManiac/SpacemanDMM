@@ -983,7 +983,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             let result = {
                 let mut subparser: Parser<'ctx, '_, '_> = Parser::new(self.context, body_tt);
                 if let Some(a) = self.annotations.as_mut() {
-                    subparser.annotations = Some(&mut *a);
+                    subparser.annotations = Some(*a);
                 }
                 let block = subparser.block(&LoopContext::None);
                 subparser.require(block)
@@ -1011,7 +1011,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 proc.docs.extend(comment);
                 // manually performed for borrowck reasons
                 if let Some(dest) = self.annotations.as_mut() {
-                    let new_stack = reconstruct_path(&self.tree.get_path(current), proc_kind, None, name);
+                    let new_stack = reconstruct_path(self.tree.get_path(current), proc_kind, None, name);
                     dest.insert(entry_start..body_start, Annotation::ProcHeader(new_stack.to_vec(), idx));
                     dest.insert(body_start..self.location, Annotation::ProcBody(new_stack.to_vec(), idx));
                 }

@@ -328,7 +328,7 @@ fn run_inner(context: &Context, objtree: &ObjectTree, cli: bool) {
     cli_println!("============================================================");
     cli_println!("Analyzing variables...\n");
 
-    check_var_defs(&objtree, &context);
+    check_var_defs(objtree, context);
 
     let mut analyzer = AnalyzeObjectTree::new(context, objtree);
 
@@ -776,7 +776,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                         }
                     }
                 } else if name.starts_with("SpacemanDMM_") {
-                    self.add_directive_or_error(proc, &name.as_str(), value, statement.location);
+                    self.add_directive_or_error(proc, name.as_str(), value, statement.location);
                 } else if !KNOWN_SETTING_NAMES.contains(&name.as_str()) {
                     error(statement.location, format!("unknown setting {:?}", name))
                         .set_severity(Severity::Warning)
@@ -2245,7 +2245,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     .register(self.context);
                 return Analysis::empty()
             });
-            guard!(let Some(arglist) = VALID_FILTER_TYPES.get(&typevalue) else {
+            guard!(let Some(arglist) = VALID_FILTER_TYPES.get(typevalue) else {
                 error(location, format!("filter() called with invalid type keyword parameter value '{}'", typevalue))
                     .register(self.context);
                 return Analysis::empty()
@@ -2257,7 +2257,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         .register(self.context);
                 }
             }
-            if let Some((flagfieldname, exclusive, can_be_zero, valid_flags)) = VALID_FILTER_FLAGS.get(&typevalue) {
+            if let Some((flagfieldname, exclusive, can_be_zero, valid_flags)) = VALID_FILTER_FLAGS.get(typevalue) {
                 if let Some(flagsvalue) = param_expr_map.get(flagfieldname) {
                     self.check_filter_flag(flagsvalue, *can_be_zero, location, typevalue, valid_flags, flagfieldname, *exclusive);
                 }

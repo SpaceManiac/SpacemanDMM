@@ -253,7 +253,7 @@ impl Context {
         let mut printed = false;
         for err in errors.iter() {
             if err.severity <= min_severity {
-                self.pretty_print_error(stderr, &err).expect("error writing to stderr");
+                self.pretty_print_error(stderr, err).expect("error writing to stderr");
                 printed = true;
             }
         }

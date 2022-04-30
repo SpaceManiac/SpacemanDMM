@@ -641,7 +641,7 @@ impl<'ctx> Preprocessor<'ctx> {
 
         // Make sure the file hasn't already been included.
         // All DM source is effectively `#pragma once`.
-        let file_id = self.context.register_file(&register);
+        let file_id = self.context.register_file(register);
         if let Some(&loc) = self.include_locations.get(&file_id) {
             Err(DMError::new(self.last_input_loc, format!("duplicate #include {:?}", path))
                 .set_severity(Severity::Warning)
@@ -652,7 +652,7 @@ impl<'ctx> Preprocessor<'ctx> {
             Ok(Include::File {
                 path,
                 //file: file_id,
-                lexer: Lexer::from_read(&self.context, file_id, read)?,
+                lexer: Lexer::from_read(self.context, file_id, read)?,
             })
         }
     }

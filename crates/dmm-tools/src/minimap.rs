@@ -70,13 +70,13 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
             'atom: for atom in atoms.get(e).expect("bad key").iter() {
                 for pass in render_passes.iter() {
                     // Note that late_filter is NOT called during smoothing lookups.
-                    if !pass.late_filter(&atom, objtree) {
+                    if !pass.late_filter(atom, objtree) {
                         continue 'atom;
                     }
                 }
                 let mut sprite = Sprite::from_vars(objtree, atom);
                 for pass in render_passes {
-                    pass.adjust_sprite(&atom, &mut sprite, objtree, bump);
+                    pass.adjust_sprite(atom, &mut sprite, objtree, bump);
                 }
                 if sprite.icon.is_empty() {
                     println!("no icon: {}", atom.type_.path);

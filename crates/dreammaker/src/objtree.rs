@@ -877,7 +877,7 @@ impl ObjectTreeBuilder {
                                 parent_type_buf = String::new();
                                 for piece in pop.path.iter() {
                                     parent_type_buf.push('/');
-                                    parent_type_buf.push_str(&piece);
+                                    parent_type_buf.push_str(piece);
                                 }
                                 parent_type = &parent_type_buf;
                             }

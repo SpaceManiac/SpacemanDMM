@@ -661,7 +661,7 @@ handle_request! {
                 }
 
                 saved.retain(|k| {
-                    if !keep.contains(&k) {
+                    if !keep.contains(k) {
                         extools.unset_breakpoint(&k.0, k.1, k.2);
                         false
                     } else {
@@ -732,7 +732,7 @@ handle_request! {
                 }
 
                 saved.retain(|k| {
-                    if !keep.contains(&k) {
+                    if !keep.contains(k) {
                         let _ = auxtools.unset_breakpoint(&auxtools_types::InstructionRef {
                             proc: auxtools_types::ProcRef {
                                 path: k.0.clone(),
@@ -804,7 +804,7 @@ handle_request! {
                 }
 
                 saved.retain(|k| {
-                    if !keep.contains(&k) {
+                    if !keep.contains(k) {
                         extools.unset_breakpoint(&k.0, k.1, k.2);
                         false
                     } else {
@@ -861,7 +861,7 @@ handle_request! {
                 }
 
                 saved.retain(|k| {
-                    if !keep.contains(&k) {
+                    if !keep.contains(k) {
                         let _ = auxtools.unset_breakpoint(&auxtools_types::InstructionRef {
                             proc: auxtools_types::ProcRef {
                                 path: k.0.clone(),

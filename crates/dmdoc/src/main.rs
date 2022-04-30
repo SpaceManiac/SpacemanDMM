@@ -431,7 +431,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
 
             if let Some(buf) = read_as_markdown(path)? {
                 if Some(path) != index_path.as_ref().map(Path::new) {
-                    let module = module_entry(&mut modules1, &path);
+                    let module = module_entry(&mut modules1, path);
                     module.items_wip.push((0, ModuleItem::DocComment(DocComment {
                         kind: CommentKind::Block,
                         target: DocTarget::EnclosingItem,
@@ -833,7 +833,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                 children: Vec::new(),
             })),
             types: build_index_tree(type_docs.iter().map(|(path, ty)| IndexTree {
-                htmlname: &ty.htmlname,
+                htmlname: ty.htmlname,
                 full_name: path,
                 self_name: if ty.name.is_empty() {
                     last_element(path)
