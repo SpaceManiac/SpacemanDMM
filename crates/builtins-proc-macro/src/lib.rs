@@ -87,7 +87,7 @@ impl Parse for BuiltinEntry {
         let header: Header = input.parse()?;
         let body = EntryBody::parse_with_path(&header.path, input)?;
 
-        input.parse::<Token![;]>()?.span;
+        input.parse::<Token![;]>()?;
         Ok(BuiltinEntry {
             header,
             body,
