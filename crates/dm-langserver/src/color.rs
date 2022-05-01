@@ -7,7 +7,7 @@
 use regex::Regex;
 
 /// Extract ranges and colors from an input string.
-pub fn extract_colors<'a>(input: &'a str) -> impl Iterator<Item=(usize, usize, [u8; 4])> + 'a {
+pub fn extract_colors(input: &str) -> impl Iterator<Item=(usize, usize, [u8; 4])> + '_ {
     COLOR_REGEX.captures_iter(input).flat_map(|capture| {
         parse_capture(&capture).map(|rgba| {
             let totality = capture.get(0).unwrap();

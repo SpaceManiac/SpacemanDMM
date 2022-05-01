@@ -35,7 +35,7 @@ fn read<R: BufRead>(input: &mut R) -> Result<Option<String>, Box<dyn std::error:
             eprintln!("JSON-RPC read error: !parts[0].eq_ignore_ascii_case(\"content-length:\")\n{:?}", parts);
             return Ok(None);
         }
-        usize::from_str_radix(parts[1].trim(), 10)?
+        parts[1].trim().parse::<usize>()?
     };
 
     // skip blank line

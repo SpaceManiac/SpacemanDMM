@@ -2,6 +2,8 @@
 //!
 //! * https://microsoft.github.io/debug-adapter-protocol/
 #![allow(dead_code)]
+// In BYOND references 0xAA_BBBBBB, A is the the type and B is the instance ID.
+#![allow(clippy::unusual_byte_groupings)]
 
 macro_rules! output {
     (in $seq:expr, $fmt:expr) => {
@@ -49,9 +51,13 @@ use auxtools::Auxtools;
 use ahash::RandomState;
 
 use dap_types::*;
+use self::auxtools::AuxtoolsScopes;
 use self::extools::ExtoolsHolder;
 use self::launched::{Launched, EngineParams};
 use crate::jrpc_io;
+
+/// line, path, name, override_id
+pub type LineNumber = (i64, String, String, usize);
 
 pub fn start_server(
     engine: DebugEngine,
@@ -138,7 +144,7 @@ impl DebugDatabaseBuilder {
             extools_dll: _,
             debug_server_dll: _,
         } = self;
-        let mut line_numbers: HashMap<dm::FileId, Vec<(i64, String, String, usize)>, RandomState> =
+        let mut line_numbers: HashMap<dm::FileId, Vec<LineNumber>, RandomState> =
             HashMap::with_hasher(RandomState::default());
 
         objtree.root().recurse(&mut |ty| {
@@ -179,7 +185,7 @@ pub struct DebugDatabase {
     root_dir: std::path::PathBuf,
     files: dm::FileList,
     objtree: Arc<ObjectTree>,
-    line_numbers: HashMap<dm::FileId, Vec<(i64, String, String, usize)>, RandomState>,
+    line_numbers: HashMap<dm::FileId, Vec<LineNumber>, RandomState>,
 }
 
 fn get_proc<'o>(
@@ -363,7 +369,7 @@ impl Debugger {
                 }
             }
 
-            DebugClient::Auxtools(auxtools) => for stack in auxtools.get_stacks().unwrap_or(vec![]) {
+            DebugClient::Auxtools(auxtools) => for stack in auxtools.get_stacks().unwrap_or_default() {
                     if stack.id == 0 {
                         continue;
                     }
@@ -528,7 +534,7 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                self.stddef_dm_info = auxtools.get_stddef()?.map(|x| StddefDmInfo::new(x));
+                self.stddef_dm_info = auxtools.get_stddef()?.map(StddefDmInfo::new);
                 auxtools.configured()?;
             }
         }
@@ -657,7 +663,7 @@ handle_request! {
                 }
 
                 saved.retain(|k| {
-                    if !keep.contains(&k) {
+                    if !keep.contains(k) {
                         extools.unset_breakpoint(&k.0, k.1, k.2);
                         false
                     } else {
@@ -728,7 +734,7 @@ handle_request! {
                 }
 
                 saved.retain(|k| {
-                    if !keep.contains(&k) {
+                    if !keep.contains(k) {
                         let _ = auxtools.unset_breakpoint(&auxtools_types::InstructionRef {
                             proc: auxtools_types::ProcRef {
                                 path: k.0.clone(),
@@ -800,7 +806,7 @@ handle_request! {
                 }
 
                 saved.retain(|k| {
-                    if !keep.contains(&k) {
+                    if !keep.contains(k) {
                         extools.unset_breakpoint(&k.0, k.1, k.2);
                         false
                     } else {
@@ -857,7 +863,7 @@ handle_request! {
                 }
 
                 saved.retain(|k| {
-                    if !keep.contains(&k) {
+                    if !keep.contains(k) {
                         let _ = auxtools.unset_breakpoint(&auxtools_types::InstructionRef {
                             proc: auxtools_types::ProcRef {
                                 path: k.0.clone(),
@@ -1050,7 +1056,7 @@ handle_request! {
             }
 
             DebugClient::Auxtools(auxtools) => {
-                let (arguments, locals, globals) = auxtools.get_scopes(frameId as u32)?;
+                let AuxtoolsScopes { arguments, locals, globals } = auxtools.get_scopes(frameId as u32)?;
                 let mut scopes = Vec::with_capacity(locals.is_some() as usize + arguments.is_some() as usize + globals.is_some() as usize);
 
                 if let Some(locals) = locals {

@@ -117,7 +117,7 @@ impl<'a, I: Iterator<Item=Event<'a>>> Iterator for HeadingLinker<'a, I> {
         if let Some(Event::Start(Tag::Heading(heading, _, _))) = original {
             let mut text_buf = String::new();
 
-            while let Some(event) = self.inner.next() {
+            for event in self.inner.by_ref() {
                 if let Event::Text(ref text) = event {
                     text_buf.push_str(text.as_ref());
                 }

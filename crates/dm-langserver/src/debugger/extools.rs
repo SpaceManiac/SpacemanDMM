@@ -41,7 +41,7 @@ enum ExtoolsHolderInner {
         cancel_tx: mpsc::Sender<()>,
         conn_rx: mpsc::Receiver<Extools>,
     },
-    Active(Extools),
+    Active(Box<Extools>),
 }
 
 impl Default for ExtoolsHolder {
@@ -114,7 +114,7 @@ impl ExtoolsHolder {
             ExtoolsHolderInner::Listening { conn_rx, .. } |
             ExtoolsHolderInner::Attaching { conn_rx, .. } => {
                 if let Ok(conn) = conn_rx.try_recv() {
-                    self.0 = ExtoolsHolderInner::Active(conn);
+                    self.0 = ExtoolsHolderInner::Active(Box::new(conn));
                 }
             }
             _ => {}
@@ -126,6 +126,8 @@ impl ExtoolsHolder {
     }
 
     pub fn disconnect(&mut self) {
+        // This part of code is not complete, we don't want to use matches!
+        #[allow(clippy::single_match)]
         match std::mem::replace(&mut self.0, ExtoolsHolderInner::None) {
             ExtoolsHolderInner::Attaching { cancel_tx, .. } => { let _ = cancel_tx.send(()); },
             // TODO: ExtoolsHolderInner::Listening
@@ -337,9 +339,8 @@ impl Drop for Extools {
 }
 
 fn parse_lineno(comment: &str) -> Option<i64> {
-    let prefix = "Line number: ";
-    if comment.starts_with(prefix) {
-        comment[prefix.len()..].parse::<i64>().ok()
+    if let Some(rest) = comment.strip_prefix("Line number: ") {
+        rest.parse::<i64>().ok()
     } else {
         None
     }
