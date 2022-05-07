@@ -30,11 +30,7 @@ pub struct IconFile {
 
 impl IconFile {
     pub fn from_file(path: &Path) -> io::Result<IconFile> {
-        let (bitmap, metadata) = Metadata::from_file(path)?;
-        Ok(IconFile {
-            metadata,
-            image: Image::from_rgba(bitmap),
-        })
+        Self::from_raw(std::fs::read(path)?)
     }
 
     pub fn from_raw<Bytes: AsRef<[u8]>>(data: Bytes) -> io::Result<IconFile> {
@@ -133,18 +129,17 @@ impl Image {
         }
     }
 
-    /// Read an `Image` from a file.
+    /// Read an `Image` from a [u8] array.
     ///
     /// Prefer to call `IconFile::from_file`, which can read both metadata and
     /// image contents at one time.
-    pub fn from_file(path: &Path) -> io::Result<Image> {
-        let path = &::dm::fix_case(path);
+    pub fn from_raw<B: AsRef<[u8]>>(data: B) -> io::Result<Image> {
         let mut decoder = Decoder::new();
         decoder.info_raw_mut().colortype = ColorType::RGBA;
         decoder.info_raw_mut().set_bitdepth(8);
         decoder.read_text_chunks(false);
         decoder.remember_unknown_chunks(false);
-        let bitmap = match decoder.decode_file(path) {
+        let bitmap = match decoder.decode(data) {
             Ok(::lodepng::Image::RGBA(bitmap)) => bitmap,
             Ok(_) => return Err(io::Error::new(io::ErrorKind::InvalidData, "not RGBA")),
             Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidData, e)),
@@ -153,32 +148,38 @@ impl Image {
         Ok(Image::from_rgba(bitmap))
     }
 
+    /// Read an `Image` from a file.
+    ///
+    /// Prefer to call `IconFile::from_file`, which can read both metadata and
+    /// image contents at one time.
+    pub fn from_file(path: &Path) -> io::Result<Image> {
+        let path = &::dm::fix_case(path);
+        Self::from_raw(std::fs::read(path)?)
+    }
+
+    #[cfg(feature = "png")]
+    pub fn to_write<W: std::io::Write>(&self, writer: W) -> io::Result<()> {
+        {
+            let mut encoder = png::Encoder::new(writer, self.width, self.height);
+            encoder.set_color(::png::ColorType::Rgba);
+            encoder.set_depth(::png::BitDepth::Eight);
+            let mut writer = encoder.write_header()?;
+            // TODO: metadata with write_chunk()
+    
+            writer.write_image_data(bytemuck::cast_slice(self.data.as_slice().unwrap()))?;
+        }
+        Ok(())
+    }
+
     #[cfg(feature = "png")]
     pub fn to_file(&self, path: &Path) -> io::Result<()> {
-        use std::fs::File;
-
-        let mut encoder = png::Encoder::new(File::create(path)?, self.width, self.height);
-        encoder.set_color(::png::ColorType::Rgba);
-        encoder.set_depth(::png::BitDepth::Eight);
-        let mut writer = encoder.write_header()?;
-        // TODO: metadata with write_chunk()
-
-        writer.write_image_data(bytemuck::cast_slice(self.data.as_slice().unwrap()))?;
-        Ok(())
+        self.to_write(std::fs::File::create(path)?)
     }
 
     #[cfg(feature = "png")]
     pub fn to_raw(&self) -> io::Result<Vec<u8>> {
         let mut vector = Vec::new();
-        {
-            let mut encoder = png::Encoder::new(&mut vector, self.width, self.height);
-            encoder.set_color(::png::ColorType::Rgba);
-            encoder.set_depth(::png::BitDepth::Eight);
-            let mut writer = encoder.write_header()?;
-            // TODO: metadata with write_chunk()
-            
-            writer.write_image_data(bytemuck::cast_slice(self.data.as_slice().unwrap()))?;
-        }
+        self.to_write(&mut vector)?;
         Ok(vector)
     }
 

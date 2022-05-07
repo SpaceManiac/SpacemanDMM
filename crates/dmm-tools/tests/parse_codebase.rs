@@ -41,13 +41,6 @@ fn parse_all_dmm() {
 }
 
 #[test]
-fn parse_all_dmi() {
-    files_with_extension("dmi", |path| {
-        dmi::Metadata::from_file(path).unwrap();
-    });
-}
-
-#[test]
 fn parse_all_dmi_raw() {
     files_with_extension("dmi", |path| {
         let data = std::fs::read(path).unwrap();
