@@ -37,6 +37,14 @@ impl IconFile {
         })
     }
 
+    pub fn from_raw<Bytes: AsRef<[u8]>>(data: Bytes) -> io::Result<IconFile> {
+        let (bitmap, metadata) = Metadata::from_raw(data)?;
+        Ok(IconFile {
+            metadata,
+            image: Image::from_rgba(bitmap),
+        })
+    }
+
     #[inline]
     pub fn rect_of(&self, icon_state: &str, dir: Dir) -> Option<Rect> {
         self.metadata.rect_of(self.image.width, icon_state, dir, 0)
@@ -157,6 +165,21 @@ impl Image {
 
         writer.write_image_data(bytemuck::cast_slice(self.data.as_slice().unwrap()))?;
         Ok(())
+    }
+
+    #[cfg(feature = "png")]
+    pub fn to_raw(&self) -> io::Result<Vec<u8>> {
+        let mut vector = Vec::new();
+        {
+            let mut encoder = png::Encoder::new(&mut vector, self.width, self.height);
+            encoder.set_color(::png::ColorType::Rgba);
+            encoder.set_depth(::png::BitDepth::Eight);
+            let mut writer = encoder.write_header()?;
+            // TODO: metadata with write_chunk()
+            
+            writer.write_image_data(bytemuck::cast_slice(self.data.as_slice().unwrap()))?;
+        }
+        Ok(vector)
     }
 
     pub fn composite(&mut self, other: &Image, pos: Coordinate, crop: Rect, color: [u8; 4]) {

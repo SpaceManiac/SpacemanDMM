@@ -237,6 +237,22 @@ impl Metadata {
         Ok((bitmap, metadata))
     }
 
+    /// Read a u8 array (raw data of a file) as a DMI
+    pub fn from_raw<Bytes: AsRef<[u8]>>(data: Bytes) -> io::Result<(lodepng::Bitmap<lodepng::RGBA>, Metadata)> {
+        let mut decoder = Decoder::new();
+        decoder.info_raw_mut().colortype = lodepng::ColorType::RGBA;
+        decoder.info_raw_mut().set_bitdepth(8);
+        decoder.remember_unknown_chunks(false);
+        let bitmap = match decoder.decode(data) {
+            Ok(::lodepng::Image::RGBA(bitmap)) => bitmap,
+            Ok(_) => return Err(io::Error::new(io::ErrorKind::InvalidData, "not RGBA")),
+            Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidData, e)),
+        };
+
+        let metadata = Metadata::from_decoder(bitmap.width as u32, bitmap.height as u32, &decoder);
+        Ok((bitmap, metadata))
+    }
+
     fn from_decoder(width: u32, height: u32, decoder: &Decoder) -> Metadata {
         for (key, value) in decoder.info_png().text_keys() {
             if key == b"Description" {
