@@ -2,7 +2,7 @@
 //!
 //! Includes re-exports from `dreammaker::dmi`.
 
-use std::io;
+use std::{io, iter::FromIterator};
 use std::path::Path;
 use bytemuck::Pod;
 
@@ -19,6 +19,23 @@ pub type Rect = (u32, u32, u32, u32);
 
 // ----------------------------------------------------------------------------
 // Icon file and metadata handling
+
+pub struct RenderResult {
+    pub frames: Vec<Image>,
+    pub delays: Option<Vec<f32>>,
+}
+
+impl From<Vec<Image>> for RenderResult {
+    fn from(frames: Vec<Image>) -> Self {
+        Self { frames, delays: None }
+    }
+}
+
+impl FromIterator<Image> for RenderResult {
+    fn from_iter<I: IntoIterator<Item = Image>>(iter: I) -> Self {
+        Self { frames: iter.into_iter().collect(), delays: None }
+    }
+}
 
 /// An image with associated DMI metadata.
 pub struct IconFile {
@@ -55,6 +72,38 @@ impl IconFile {
             self.metadata.width,
             self.metadata.height,
         )
+    }
+
+    fn render_frames(&self, icon_state: &str, dir: Dir, frames: usize) -> Vec<Image> {
+        const NO_TINT: [u8; 4] = [0xff, 0xff, 0xff, 0xff];
+        (0..frames)
+            .map(|frame| {
+                let mut canvas = Image::new_rgba(self.metadata.width, self.metadata.height);
+                let crop = self
+                    .metadata
+                    .rect_of(self.metadata.width, icon_state, dir, frame as u32)
+                    .unwrap();
+                canvas.composite(&self.image, (0, 0), crop, NO_TINT);
+                canvas
+            })
+            .collect()
+    }
+
+    pub fn render<W: std::io::Write>(&self, icon_state: &str, dir: Dir) -> io::Result<RenderResult> {
+        let state = self.metadata.get_icon_state(icon_state).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("icon_state {} not found", icon_state),
+            )
+        })?;
+        match &state.frames {
+            Frames::One => Ok([self.image.clone()].to_vec().into()),
+            Frames::Count(frames) => Ok(self.render_frames(icon_state, dir, *frames).into()),
+            Frames::Delays(delays) => Ok(RenderResult {
+                frames: self.render_frames(icon_state, dir, delays.len()),
+                delays: Some(delays.clone()),
+            }),
+        }
     }
 }
 
@@ -99,6 +148,7 @@ impl IndexMut<u8> for Rgba8 {
 // Image manipulation
 
 /// A two-dimensional RGBA image.
+#[derive(Clone)]
 pub struct Image {
     pub width: u32,
     pub height: u32,

@@ -269,12 +269,7 @@ impl Metadata {
         if self.states.is_empty() {
             return Some((0, 0, self.width, self.height));
         }
-        let state_index = match self.state_names.get(icon_state) {
-            Some(&i) => i,
-            None if icon_state.is_empty() => 0,
-            None => return None,
-        };
-        let state = &self.states[state_index];
+        let state = self.get_icon_state(icon_state)?;
         let icon_index = state.index_of_frame(dir, frame);
 
         let icon_count = bitmap_width / self.width;
@@ -285,6 +280,15 @@ impl Metadata {
             self.width,
             self.height,
         ))
+    }
+
+    pub fn get_icon_state(&self, icon_state: &str) -> Option<&State> {
+        let state_index = match self.state_names.get(icon_state) {
+            Some(&i) => i,
+            None if icon_state.is_empty() => 0,
+            None => return None,
+        };
+        Some(&self.states[state_index])
     }
 }
 
@@ -381,6 +385,7 @@ fn parse_metadata(data: &str) -> Metadata {
                 }
                 let unquoted = value[1..value.len() - 1].to_owned(); // TODO: unquote
                 assert!(!unquoted.contains('\\') && !unquoted.contains('"'));
+                // TODO: support duplicate states somehow
                 if !metadata.state_names.contains_key(&unquoted) {
                     metadata.state_names.insert(unquoted.clone(), metadata.states.len());
                 }
