@@ -2,7 +2,7 @@
 //!
 //! Includes re-exports from `dreammaker::dmi`.
 
-use std::{io, iter::FromIterator};
+use std::{io};
 use std::path::Path;
 use bytemuck::Pod;
 
@@ -23,19 +23,9 @@ pub type Rect = (u32, u32, u32, u32);
 pub struct RenderResult {
     pub frames: Vec<Image>,
     pub delays: Option<Vec<f32>>,
+    pub size: (u32, u32)
 }
 
-impl From<Vec<Image>> for RenderResult {
-    fn from(frames: Vec<Image>) -> Self {
-        Self { frames, delays: None }
-    }
-}
-
-impl FromIterator<Image> for RenderResult {
-    fn from_iter<I: IntoIterator<Item = Image>>(iter: I) -> Self {
-        Self { frames: iter.into_iter().collect(), delays: None }
-    }
-}
 
 /// An image with associated DMI metadata.
 pub struct IconFile {
@@ -97,11 +87,20 @@ impl IconFile {
             )
         })?;
         match &state.frames {
-            Frames::One => Ok([self.image.clone()].to_vec().into()),
-            Frames::Count(frames) => Ok(self.render_frames(icon_state, dir, *frames).into()),
+            Frames::One => Ok(RenderResult {
+                frames: [self.image.clone()].to_vec(),
+                delays: None,
+                size: (self.metadata.width, self.metadata.height),
+            }),
+            Frames::Count(frames) => Ok(RenderResult {
+                frames: self.render_frames(icon_state, dir, *frames),
+                delays: None,
+                size: (self.metadata.width, self.metadata.height)
+            }),
             Frames::Delays(delays) => Ok(RenderResult {
                 frames: self.render_frames(icon_state, dir, delays.len()),
                 delays: Some(delays.clone()),
+                size: (self.metadata.width, self.metadata.height)
             }),
         }
     }
@@ -231,6 +230,22 @@ impl Image {
         let mut vector = Vec::new();
         self.to_write(&mut vector)?;
         Ok(vector)
+    }
+
+    #[cfg(feature = "gif")]
+    pub fn write_gif<W: std::io::Write>(writer: W, render: &RenderResult) -> io::Result<()> {
+        let (width, height) = render.size;
+        {
+            let mut encoder = gif::Encoder::new(writer, width as u16, height as u16, &[]).unwrap();
+            render.frames
+                .iter()
+                .map(|image| {
+                    let mut pixels = bytemuck::cast_slice(image.data.as_slice().unwrap()).to_owned();
+                    gif::Frame::from_rgba(width as u16, height as u16, &mut pixels)
+                })
+                .for_each(|frame| encoder.write_frame(&frame).unwrap());
+        }
+        Ok(())
     }
 
     pub fn composite(&mut self, other: &Image, pos: Coordinate, crop: Rect, color: [u8; 4]) {
