@@ -104,6 +104,22 @@ impl IconFile {
             }),
         }
     }
+
+    #[cfg(feature = "gif")]
+    pub fn write_gif<W: std::io::Write>(writer: W, render: &RenderResult) -> io::Result<()> {
+        let (width, height) = render.size;
+        {
+            let mut encoder = gif::Encoder::new(writer, width as u16, height as u16, &[]).unwrap();
+            render.frames
+                .iter()
+                .map(|image| {
+                    let mut pixels = bytemuck::cast_slice(image.data.as_slice().unwrap()).to_owned();
+                    gif::Frame::from_rgba(width as u16, height as u16, &mut pixels)
+                })
+                .for_each(|frame| encoder.write_frame(&frame).unwrap());
+        }
+        Ok(())
+    }
 }
 
 #[derive(Default, Clone, Copy, Pod, Zeroable, Eq, PartialEq)]
@@ -230,22 +246,6 @@ impl Image {
         let mut vector = Vec::new();
         self.to_write(&mut vector)?;
         Ok(vector)
-    }
-
-    #[cfg(feature = "gif")]
-    pub fn write_gif<W: std::io::Write>(writer: W, render: &RenderResult) -> io::Result<()> {
-        let (width, height) = render.size;
-        {
-            let mut encoder = gif::Encoder::new(writer, width as u16, height as u16, &[]).unwrap();
-            render.frames
-                .iter()
-                .map(|image| {
-                    let mut pixels = bytemuck::cast_slice(image.data.as_slice().unwrap()).to_owned();
-                    gif::Frame::from_rgba(width as u16, height as u16, &mut pixels)
-                })
-                .for_each(|frame| encoder.write_frame(&frame).unwrap());
-        }
-        Ok(())
     }
 
     pub fn composite(&mut self, other: &Image, pos: Coordinate, crop: Rect, color: [u8; 4]) {
