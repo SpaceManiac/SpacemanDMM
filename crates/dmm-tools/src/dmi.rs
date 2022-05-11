@@ -114,9 +114,20 @@ impl IconFile {
             let mut encoder = gif::Encoder::new(writer, width as u16, height as u16, &[]).unwrap();
             render.frames
                 .iter()
-                .map(|image| {
+                .enumerate()
+                .map(|(index, image)| {
                     let mut pixels = bytemuck::cast_slice(image.data.as_slice().unwrap()).to_owned();
-                    gif::Frame::from_rgba(width as u16, height as u16, &mut pixels)
+                    let mut frame = gif::Frame::from_rgba(width as u16, height as u16, &mut pixels);
+                    // gif::Frame delays are measured in "Frame delay in units of 10 ms."
+                    // aka centiseconds. We're measuring in BYOND ticks, aka deciseconds.
+                    // 1 decisecond = 10 centisecond, so we multiply by 10.
+                    // And it's a u16 for some reason so we just SHRUG and floor it.
+                    frame.delay = (if let Some(vec) = &render.delays {
+                        *vec.get(index).unwrap_or(&1.0)
+                    } else {
+                        1.0
+                    } * 10.0) as u16;
+                    frame
                 })
                 .for_each(|frame| encoder.write_frame(&frame).unwrap());
         }
