@@ -109,6 +109,8 @@ impl IconFile {
 
     #[cfg(feature = "gif")]
     pub fn write_gif<W: std::io::Write>(writer: W, render: &RenderResult) -> io::Result<()> {
+        use gif::DisposalMethod;
+
         let (width, height) = render.size;
         {
             let mut encoder = gif::Encoder::new(writer, width as u16, height as u16, &[]).unwrap();
@@ -127,6 +129,9 @@ impl IconFile {
                     } else {
                         1.0
                     } * 10.0) as u16;
+                    // the disposal method by default is "keep the previous frame under the alpha mask"
+                    // wtf
+                    frame.dispose = DisposalMethod::Background;
                     frame
                 })
                 .for_each(|frame| encoder.write_frame(&frame).unwrap());
