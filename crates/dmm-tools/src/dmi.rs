@@ -20,6 +20,7 @@ pub type Rect = (u32, u32, u32, u32);
 // ----------------------------------------------------------------------------
 // Icon file and metadata handling
 
+#[derive(Clone)]
 pub struct RenderResult {
     pub frames: Vec<Image>,
     pub delays: Option<Vec<f32>>,
