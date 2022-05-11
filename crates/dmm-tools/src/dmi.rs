@@ -79,7 +79,7 @@ impl IconFile {
             .collect()
     }
 
-    pub fn render<W: std::io::Write>(&self, icon_state: &str, dir: Dir) -> io::Result<RenderResult> {
+    pub fn render(&self, icon_state: &str, dir: Dir) -> io::Result<RenderResult> {
         let state = self.metadata.get_icon_state(icon_state).ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::NotFound,
