@@ -69,9 +69,11 @@ impl IconFile {
         (0..frames)
             .map(|frame| {
                 let mut canvas = Image::new_rgba(self.metadata.width, self.metadata.height);
+                // self.image.width = dmi file width
+                // self.metadata.width = icon state width
                 let crop = self
                     .metadata
-                    .rect_of(self.metadata.width, icon_state, dir, frame as u32)
+                    .rect_of(self.image.width, icon_state, dir, frame as u32)
                     .unwrap();
                 canvas.composite(&self.image, (0, 0), crop, NO_TINT);
                 canvas
