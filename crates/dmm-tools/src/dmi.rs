@@ -124,11 +124,11 @@ impl IconFile {
                     // aka centiseconds. We're measuring in BYOND ticks, aka deciseconds.
                     // 1 decisecond = 10 centisecond, so we multiply by 10.
                     // And it's a u16 for some reason so we just SHRUG and floor it.
-                    frame.delay = (if let Some(vec) = &render.delays {
-                        *vec.get(index).unwrap_or(&1.0)
-                    } else {
-                        1.0
-                    } * 10.0) as u16;
+                    frame.delay = (render
+                        .delays
+                        .as_ref()
+                        .map_or_else(|| 1.0, |f| *f.get(index).unwrap_or(&1.0))
+                        * 10.0) as u16;
                     // the disposal method by default is "keep the previous frame under the alpha mask"
                     // wtf
                     frame.dispose = DisposalMethod::Background;
