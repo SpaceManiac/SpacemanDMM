@@ -114,6 +114,9 @@ impl IconFile {
         let (width, height) = render.size;
         {
             let mut encoder = gif::Encoder::new(writer, width as u16, height as u16, &[]).unwrap();
+            encoder
+                .set_repeat(gif::Repeat::Infinite)
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{e}")))?;
             render.frames
                 .iter()
                 .enumerate()
