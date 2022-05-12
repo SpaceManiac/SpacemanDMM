@@ -57,7 +57,12 @@ pub mod render {
         /// based on whether it needs an animated gif or regular png,
         /// and returns the corrected path after it renders.
         pub fn render<S: AsRef<str>, P: AsRef<Path>>(&mut self, icon_state: S, target: P) -> io::Result<PathBuf> {
-            let icon_state = self.source.get_icon_state(&icon_state)?;
+            self.render_state(self.source.get_icon_state(&icon_state)?, target)
+        }
+
+        /// This is here so that duplicate icon states can be handled by not relying on the btreemap 
+        /// of state names in [`Metadata`]. 
+        pub fn render_state<P: AsRef<Path>>(&mut self, icon_state: &State, target: P) -> io::Result<PathBuf> {
             match &icon_state.frames {
                 Frames::One => self.render_to_png(icon_state, target),
                 Frames::Count(frames) => self.render_gif(icon_state, target, *frames, None),
