@@ -64,7 +64,7 @@ pub mod render {
         /// of state names in [`Metadata`]. 
         pub fn render_state<P: AsRef<Path>>(&mut self, icon_state: &State, target: P) -> io::Result<PathBuf> {
             match &icon_state.frames {
-                Frames::One => self.render_to_png(icon_state, target),
+                Frames::One | Frames::Count(1) => self.render_to_png(icon_state, target),
                 Frames::Count(frames) => self.render_gif(icon_state, target, *frames, None),
                 Frames::Delays(delays) => self.render_gif(icon_state, target, delays.len(), Some(delays)),
             }
