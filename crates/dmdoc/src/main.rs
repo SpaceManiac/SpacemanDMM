@@ -741,7 +741,7 @@ fn broken_link_fixer<'str>(
     modules_which_exist: &BTreeSet<String>,
     objtree: &ObjectTree,
     types_with_docs: &BTreeMap<&str, TypeHasDocs>,
-    ) -> Option<(CowStr<'str>, CowStr<'str>)>
+) -> Option<(CowStr<'str>, CowStr<'str>)>
     {
         let referie = link.reference.into_string();
         let reference = referie.as_str();
