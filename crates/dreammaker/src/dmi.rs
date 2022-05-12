@@ -223,11 +223,11 @@ impl Metadata {
     /// Read the bitmap and DMI metadata from a given file in a single pass.
     pub fn from_file(path: &Path) -> io::Result<(lodepng::Bitmap<lodepng::RGBA>, Metadata)> {
         let path = &crate::fix_case(path);
-        Self::from_raw(std::fs::read(path)?)
+        Self::from_bytes(&std::fs::read(path)?)
     }
 
     /// Read a u8 array (raw data of a file) as a DMI into a bitmap and metadata
-    pub fn from_raw<Bytes: AsRef<[u8]>>(data: Bytes) -> io::Result<(lodepng::Bitmap<lodepng::RGBA>, Metadata)> {
+    pub fn from_bytes(data: &[u8]) -> io::Result<(lodepng::Bitmap<lodepng::RGBA>, Metadata)> {
         let mut decoder = Decoder::new();
         decoder.info_raw_mut().colortype = lodepng::ColorType::RGBA;
         decoder.info_raw_mut().set_bitdepth(8);

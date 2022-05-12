@@ -30,11 +30,11 @@ pub struct IconFile {
 
 impl IconFile {
     pub fn from_file(path: &Path) -> io::Result<IconFile> {
-        Self::from_raw(std::fs::read(path)?)
+        Self::from_bytes(&std::fs::read(path)?)
     }
 
-    pub fn from_raw<Bytes: AsRef<[u8]>>(data: Bytes) -> io::Result<IconFile> {
-        let (bitmap, metadata) = Metadata::from_raw(data)?;
+    pub fn from_bytes(data: &[u8]) -> io::Result<IconFile> {
+        let (bitmap, metadata) = Metadata::from_bytes(data)?;
         Ok(IconFile {
             metadata,
             image: Image::from_rgba(bitmap),
@@ -129,11 +129,11 @@ impl Image {
         }
     }
 
-    /// Read an `Image` from a [u8] array.
+    /// Read an `Image` from a `&[u8]` slice.
     ///
-    /// Prefer to call `IconFile::from_file`, which can read both metadata and
+    /// Prefer to call `IconFile::from_bytes`, which can read both metadata and
     /// image contents at one time.
-    pub fn from_raw<B: AsRef<[u8]>>(data: B) -> io::Result<Image> {
+    pub fn from_bytes(data: &[u8]) -> io::Result<Image> {
         let mut decoder = Decoder::new();
         decoder.info_raw_mut().colortype = ColorType::RGBA;
         decoder.info_raw_mut().set_bitdepth(8);
@@ -154,7 +154,7 @@ impl Image {
     /// image contents at one time.
     pub fn from_file(path: &Path) -> io::Result<Image> {
         let path = &::dm::fix_case(path);
-        Self::from_raw(std::fs::read(path)?)
+        Self::from_bytes(&std::fs::read(path)?)
     }
 
     #[cfg(feature = "png")]
@@ -165,7 +165,7 @@ impl Image {
             encoder.set_depth(::png::BitDepth::Eight);
             let mut writer = encoder.write_header()?;
             // TODO: metadata with write_chunk()
-    
+
             writer.write_image_data(bytemuck::cast_slice(self.data.as_slice().unwrap()))?;
         }
         Ok(())
@@ -177,7 +177,7 @@ impl Image {
     }
 
     #[cfg(feature = "png")]
-    pub fn to_raw(&self) -> io::Result<Vec<u8>> {
+    pub fn to_bytes(&self) -> io::Result<Vec<u8>> {
         let mut vector = Vec::new();
         self.to_write(&mut vector)?;
         Ok(vector)
