@@ -166,6 +166,8 @@ pub mod render {
             self.render_dirs(icon_state, &mut canvas, 0);
 
             canvas.to_write(file)?;
+            // Always remember to clear the canvas for the next guy!
+            canvas.clear();
             Ok(path)
         }
     }
