@@ -2,8 +2,9 @@
 //!
 //! Includes re-exports from `dreammaker::dmi`.
 
+use std::cell::{RefCell, RefMut};
 use std::{io};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use bytemuck::Pod;
 
 use lodepng::{self, RGBA, Decoder, ColorType};
@@ -20,12 +21,157 @@ pub type Rect = (u32, u32, u32, u32);
 // ----------------------------------------------------------------------------
 // Icon file and metadata handling
 
+#[cfg(all(feature = "png", feature = "gif"))]
+pub mod render {
+    use super::*;
+    use gif::DisposalMethod;
+
+    static NO_TINT: [u8; 4] = [0xff, 0xff, 0xff, 0xff];
+
+    /// Used to render an IconFile to a .gif/.png easily.
+    pub struct IconRenderer<'a> {
+        /// The IconFile we render from.
+        source: &'a IconFile,
+        /// This RefCell<Image> is used to reduce memory usage and overhead (not benchmarked)
+        /// Instead of creating a new canvas to render to for each frame, we just constantly wipe the data.
+        one_dir: RefCell<Image>,
+        /// This RefCell<Image> is used to reduce memory usage and overhead (not benchmarked)
+        /// Instead of creating a new canvas to render to for each frame, we just constantly wipe the data.
+        four_dir: RefCell<Image>,
+        /// This RefCell<Image> is used to reduce memory usage and overhead (not benchmarked)
+        /// Instead of creating a new canvas to render to for each frame, we just constantly wipe the data.
+        eight_dir: RefCell<Image>,
+    }
+    
+    impl<'a> IconRenderer<'a> {
+        pub fn new(source: &'a IconFile) -> Self {
+            Self {
+                source,
+                one_dir: RefCell::new(Image::new_rgba(source.metadata.width, source.metadata.height)),
+                four_dir: RefCell::new(Image::new_rgba(source.metadata.width * 4, source.metadata.height)),
+                eight_dir: RefCell::new(Image::new_rgba(source.metadata.width * 8, source.metadata.height)),
+            }
+        }
+    
+        /// Takes a path to a file with no extension, adds the correct extension
+        /// based on whether it needs an animated gif or regular png,
+        /// and returns the corrected path after it renders.
+        pub fn render<S: AsRef<str>, P: AsRef<Path>>(&mut self, icon_state: S, target: P) -> io::Result<PathBuf> {
+            let icon_state = self.source.get_icon_state(&icon_state)?;
+            match &icon_state.frames {
+                Frames::One => self.render_to_png(icon_state, target),
+                Frames::Count(frames) => self.render_gif(icon_state, target, *frames, None),
+                Frames::Delays(delays) => self.render_gif(icon_state, target, delays.len(), Some(delays)),
+            }
+        }
+    
+        fn get_canvas(&self, dirs: Dirs) -> RefMut<Image> {
+            match dirs {
+                Dirs::One => self.one_dir.borrow_mut(),
+                Dirs::Four => self.four_dir.borrow_mut(),
+                Dirs::Eight => self.eight_dir.borrow_mut(),
+            }
+        }
+    
+        fn ordered_dirs(dirs: Dirs) -> Vec<Dir> {
+            match dirs {
+                Dirs::One => { [Dir::South].to_vec() },
+                Dirs::Four => {
+                    [
+                        Dir::South,
+                        Dir::North,
+                        Dir::East,
+                        Dir::West,
+                    ].to_vec()
+                },
+                Dirs::Eight => {
+                    [
+                        Dir::South,
+                        Dir::North,
+                        Dir::East,
+                        Dir::West,
+                        Dir::Southeast,
+                        Dir::Southwest,
+                        Dir::Northeast,
+                        Dir::Northwest,
+                    ].to_vec()
+                },
+            }
+        }
+
+        fn render_dirs(&self, icon_state: &State, canvas: &mut Image, frame: u32) {
+            for (dir_no, dir) in Self::ordered_dirs(icon_state.dirs).iter().enumerate() {
+                let frame_idx = icon_state.index_of_frame(*dir, frame as u32);
+                let frame_rect = self.source.rect_of_index(frame_idx);
+                canvas.composite(
+                    &self.source.image,
+                    (self.source.metadata.width * (dir_no as u32), 0),
+                    frame_rect,
+                    NO_TINT,
+                );
+            }
+        }
+    
+        fn render_gif<P: AsRef<Path>>(
+            &mut self,
+            icon_state: &State,
+            target: P,
+            frames: usize,
+            delays: Option<&Vec<f32>>,
+        ) -> io::Result<PathBuf> {
+            let path = target.as_ref().with_extension("gif");
+            let file = std::fs::File::create(&path)?;
+            let mut canvas = self.get_canvas(icon_state.dirs);
+
+            let mut encoder =
+                gif::Encoder::new(file, canvas.width as u16, canvas.height as u16, &[])
+                    .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{e}")))?;
+
+            encoder
+                .set_repeat(gif::Repeat::Infinite)
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{e}")))?;
+
+            for frame in 0..frames {
+                self.render_dirs(icon_state, &mut canvas, frame as u32);
+
+                let mut pixels = bytemuck::cast_slice(canvas.data.as_slice().unwrap()).to_owned();
+                let mut gif_frame =
+                    gif::Frame::from_rgba(canvas.width as u16, canvas.height as u16, &mut pixels);
+                // gif::Frame delays are measured in "Frame delay in units of 10 ms."
+                // aka centiseconds. We're measuring in BYOND ticks, aka deciseconds.
+                // And it's a u16 for some reason so we just SHRUG and floor it.
+                gif_frame.delay =
+                    (delays.map_or_else(|| 1.0, |f| *f.get(frame).unwrap_or(&1.0)) * 10.0) as u16;
+                // the disposal method by default is "keep the previous frame under the alpha mask"
+                // wtf
+                gif_frame.dispose = DisposalMethod::Background;
+                encoder.write_frame(&gif_frame).unwrap();
+                // Clear the canvas.
+                canvas.clear();
+            }
+
+            Ok(path)
+        }
+    
+        fn render_to_png<P: AsRef<Path>>(&mut self, icon_state: &State, target: P) -> io::Result<PathBuf> {
+            let path = target.as_ref().with_extension("gif");
+            let file = std::fs::File::create(&path)?;
+            let mut canvas = self.get_canvas(icon_state.dirs);
+
+            self.render_dirs(icon_state, &mut canvas, 0);
+
+            canvas.to_write(file)?;
+            Ok(path)
+        }
+    }
+}
 #[derive(Clone)]
 pub struct RenderResult {
     pub frames: Vec<Image>,
     pub delays: Option<Vec<f32>>,
     pub size: (u32, u32)
 }
+
 
 
 /// An image with associated DMI metadata.
@@ -65,82 +211,13 @@ impl IconFile {
         )
     }
 
-    fn render_frames(&self, icon_state: &str, dir: Dir, frames: usize) -> Vec<Image> {
-        const NO_TINT: [u8; 4] = [0xff, 0xff, 0xff, 0xff];
-        (0..frames)
-            .map(|frame| {
-                let mut canvas = Image::new_rgba(self.metadata.width, self.metadata.height);
-                // self.image.width = dmi file width
-                // self.metadata.width = icon state width
-                let crop = self
-                    .metadata
-                    .rect_of(self.image.width, icon_state, dir, frame as u32)
-                    .unwrap();
-                canvas.composite(&self.image, (0, 0), crop, NO_TINT);
-                canvas
-            })
-            .collect()
-    }
-
-    pub fn render(&self, icon_state: &str, dir: Dir) -> io::Result<RenderResult> {
-        let state = self.metadata.get_icon_state(icon_state).ok_or_else(|| {
+    pub fn get_icon_state<S: AsRef<str>>(&self, icon_state: S) -> io::Result<&State> {
+        self.metadata.get_icon_state(icon_state.as_ref()).ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::NotFound,
-                format!("icon_state {} not found", icon_state),
+                format!("icon_state {} not found", icon_state.as_ref()),
             )
-        })?;
-        match &state.frames {
-            Frames::One => Ok(RenderResult {
-                frames: [self.image.clone()].to_vec(),
-                delays: None,
-                size: (self.metadata.width, self.metadata.height),
-            }),
-            Frames::Count(frames) => Ok(RenderResult {
-                frames: self.render_frames(icon_state, dir, *frames),
-                delays: None,
-                size: (self.metadata.width, self.metadata.height)
-            }),
-            Frames::Delays(delays) => Ok(RenderResult {
-                frames: self.render_frames(icon_state, dir, delays.len()),
-                delays: Some(delays.clone()),
-                size: (self.metadata.width, self.metadata.height)
-            }),
-        }
-    }
-
-    #[cfg(feature = "gif")]
-    pub fn write_gif<W: std::io::Write>(writer: W, render: &RenderResult) -> io::Result<()> {
-        use gif::DisposalMethod;
-
-        let (width, height) = render.size;
-        {
-            let mut encoder = gif::Encoder::new(writer, width as u16, height as u16, &[]).unwrap();
-            encoder
-                .set_repeat(gif::Repeat::Infinite)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{e}")))?;
-            render.frames
-                .iter()
-                .enumerate()
-                .map(|(index, image)| {
-                    let mut pixels = bytemuck::cast_slice(image.data.as_slice().unwrap()).to_owned();
-                    let mut frame = gif::Frame::from_rgba(width as u16, height as u16, &mut pixels);
-                    // gif::Frame delays are measured in "Frame delay in units of 10 ms."
-                    // aka centiseconds. We're measuring in BYOND ticks, aka deciseconds.
-                    // 1 decisecond = 10 centisecond, so we multiply by 10.
-                    // And it's a u16 for some reason so we just SHRUG and floor it.
-                    frame.delay = (render
-                        .delays
-                        .as_ref()
-                        .map_or_else(|| 1.0, |f| *f.get(index).unwrap_or(&1.0))
-                        * 10.0) as u16;
-                    // the disposal method by default is "keep the previous frame under the alpha mask"
-                    // wtf
-                    frame.dispose = DisposalMethod::Background;
-                    frame
-                })
-                .for_each(|frame| encoder.write_frame(&frame).unwrap());
-        }
-        Ok(())
+        })
     }
 }
 
@@ -242,6 +319,10 @@ impl Image {
     pub fn from_file(path: &Path) -> io::Result<Image> {
         let path = &::dm::fix_case(path);
         Self::from_raw(std::fs::read(path)?)
+    }
+
+    pub fn clear(&mut self) {
+        self.data.fill(Default::default())
     }
 
     #[cfg(feature = "png")]
