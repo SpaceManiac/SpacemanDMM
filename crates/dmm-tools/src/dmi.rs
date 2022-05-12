@@ -159,7 +159,7 @@ pub mod render {
         }
     
         fn render_to_png<P: AsRef<Path>>(&mut self, icon_state: &State, target: P) -> io::Result<PathBuf> {
-            let path = target.as_ref().with_extension("gif");
+            let path = target.as_ref().with_extension("png");
             let file = std::fs::File::create(&path)?;
             let mut canvas = self.get_canvas(icon_state.dirs);
 
