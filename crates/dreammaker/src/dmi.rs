@@ -238,11 +238,11 @@ impl Metadata {
             Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidData, e)),
         };
 
-        let metadata = Metadata::from_decoder(bitmap.width as u32, bitmap.height as u32, &decoder);
+        let metadata = Metadata::from_decoder(bitmap.width as u32, bitmap.height as u32, &decoder)?;
         Ok((bitmap, metadata))
     }
 
-    fn from_decoder(width: u32, height: u32, decoder: &Decoder) -> Metadata {
+    fn from_decoder(width: u32, height: u32, decoder: &Decoder) -> io::Result<Metadata> {
         for (key, value) in decoder.info_png().text_keys() {
             if key == b"Description" {
                 if let Ok(value) = std::str::from_utf8(value) {
@@ -251,17 +251,17 @@ impl Metadata {
                 break;
             }
         }
-        Metadata {
+        Ok(Metadata {
             width,
             height,
             states: Default::default(),
             state_names: Default::default(),
-        }
+        })
     }
 
     /// Parse metadata from a `Description` string.
     #[inline]
-    pub fn meta_from_str(data: &str) -> Metadata {
+    pub fn meta_from_str(data: &str) -> io::Result<Metadata> {
         parse_metadata(data)
     }
 
@@ -346,7 +346,7 @@ impl Frames {
 // ----------------------------------------------------------------------------
 // Metadata parser
 
-fn parse_metadata(data: &str) -> Metadata {
+fn parse_metadata(data: &str) -> io::Result<Metadata> {
     let mut metadata = Metadata {
         width: 32,
         height: 32,
@@ -354,12 +354,20 @@ fn parse_metadata(data: &str) -> Metadata {
         state_names: BTreeMap::new(),
     };
     if data.is_empty() {
-        return metadata;
+        return Ok(metadata);
     }
 
     let mut lines = data.lines();
-    assert_eq!(lines.next().unwrap(), "# BEGIN DMI");
-    assert_eq!(lines.next().unwrap(), &format!("version = {}", VERSION));
+    let header = (lines.next().map(str::to_string), lines.next().map(str::to_string));
+    let expected_header = (Some("# BEGIN DMI".into()), Some(format!("version = {}", VERSION)));
+    if header != expected_header {
+        return Err(
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Wrong dmi metadata header. Expected {:?}, got {:?}", expected_header, header )
+            )
+        );
+    }
 
     let mut state: Option<State> = None;
     let mut frames_so_far = 0;
@@ -438,5 +446,5 @@ fn parse_metadata(data: &str) -> Metadata {
     }
     metadata.states.extend(state);
 
-    metadata
+    Ok(metadata)
 }
