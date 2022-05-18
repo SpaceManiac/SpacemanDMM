@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use lodepng::Decoder;
 
-const VERSION: &str = "4.0";
+const EXPECTED_VERSION_LINE: &str = "version = 4.0";
 
 /// The two-dimensional facing subset of BYOND's direction type.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -358,8 +358,8 @@ fn parse_metadata(data: &str) -> io::Result<Metadata> {
     }
 
     let mut lines = data.lines();
-    let header = (lines.next().map(str::to_string), lines.next().map(str::to_string));
-    let expected_header = (Some("# BEGIN DMI".into()), Some(format!("version = {}", VERSION)));
+    let header = (lines.next(), lines.next());
+    let expected_header = (Some("# BEGIN DMI"), Some(EXPECTED_VERSION_LINE));
     if header != expected_header {
         return Err(
             io::Error::new(
