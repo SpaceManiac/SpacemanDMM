@@ -69,6 +69,30 @@ pub mod render {
                 Frames::Delays(delays) => self.render_gif(icon_state, target, delays.len(), Some(delays)),
             }
         }
+
+        /// Instead of writing to a file, this gives a Vec<Image> of each frame/dir as it would be composited 
+        /// for a file.
+        pub fn render_to_images<S: AsRef<str>>(&mut self, icon_state: S) -> io::Result<Vec<Image>> {
+            let state = self.source.get_icon_state(&icon_state)?;
+            Ok(self.render_frames(state))
+        }
+
+        /// Helper for render_to_images- not used for render_gif because it's less efficient.
+        fn render_frames(&self, icon_state: &State) -> Vec<Image> {
+            let frames = match &icon_state.frames {
+                Frames::One => 1,
+                Frames::Count(count) => *count,
+                Frames::Delays(delays) => delays.len(),
+            };
+            let mut canvas = self.get_canvas(icon_state.dirs);
+            let mut vec = Vec::new();
+            for frame in 0..frames {
+                self.render_dirs(icon_state, &mut canvas, frame as u32);
+                vec.push(canvas.clone());
+                canvas.clear();
+            }
+            vec
+        }
     
         fn get_canvas(&self, dirs: Dirs) -> RefMut<Image> {
             match dirs {
