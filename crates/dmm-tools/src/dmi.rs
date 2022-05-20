@@ -293,7 +293,7 @@ impl IndexMut<u8> for Rgba8 {
 // Image manipulation
 
 /// A two-dimensional RGBA image.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Image {
     pub width: u32,
     pub height: u32,
