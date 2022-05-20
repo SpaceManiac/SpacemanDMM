@@ -2,7 +2,7 @@
 
 use std::io;
 use std::path::Path;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use lodepng::Decoder;
 
@@ -194,6 +194,9 @@ pub struct State {
     pub offset: usize,
     /// 0 for infinite, 1+ for finite.
     pub loop_: u32,
+    /// The number of `State`s before this with the same name.
+    /// None if this is the first state.
+    pub duplicate: Option<u32>,
     pub rewind: bool,
     pub dirs: Dirs,
     pub frames: Frames,
@@ -317,6 +320,14 @@ impl State {
     pub fn index_of_frame(&self, dir: Dir, frame: u32) -> u32 {
         self.index_of_dir(dir) + frame * self.dirs.count() as u32
     }
+
+    pub fn get_state_name_index(&self) -> String {
+        if let Some(number) = self.duplicate {
+            format!("{}{number}", self.name)
+        } else {
+            self.name.clone()
+        }
+    }
 }
 
 impl Dirs {
@@ -368,6 +379,8 @@ fn parse_metadata(data: &str) -> Metadata {
     let mut state: Option<State> = None;
     let mut frames_so_far = 0;
 
+    let mut duplicate_map: HashMap<String, u32> = HashMap::new();
+
     for line in lines {
         if line.starts_with("# END DMI") {
             break;
@@ -385,20 +398,27 @@ fn parse_metadata(data: &str) -> Metadata {
                 }
                 let unquoted = value[1..value.len() - 1].to_owned(); // TODO: unquote
                 assert!(!unquoted.contains('\\') && !unquoted.contains('"'));
-                // TODO: support duplicate states somehow
+
+                let count = duplicate_map.entry(unquoted.clone()).or_insert(0);
+
                 if !metadata.state_names.contains_key(&unquoted) {
                     metadata.state_names.insert(unquoted.clone(), metadata.states.len());
+                } else {
+                    metadata.state_names.insert(format!("{unquoted}{count}"), metadata.states.len());
                 }
 
                 state = Some(State {
                     offset: frames_so_far,
                     name: unquoted,
                     loop_: 0,
+                    duplicate: if *count > 0 { Some(*count) } else { None },
                     rewind: false,
                     movement: false,
                     dirs: Dirs::One,
                     frames: Frames::One,
                 });
+
+                *count += 1;
             }
             "dirs" => {
                 let state = state.as_mut().unwrap();
@@ -444,4 +464,52 @@ fn parse_metadata(data: &str) -> Metadata {
     metadata.states.extend(state);
 
     metadata
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn duplicate_states() {
+        let description = r##"
+# BEGIN DMI
+version = 4.0
+    width = 32
+    height = 32
+state = "duplicate"
+    dirs = 1
+    frames = 1
+state = "duplicate"
+    dirs = 1
+    frames = 1
+state = "duplicate"
+    dirs = 1
+    frames = 1
+# END DMI
+"##.trim();
+
+        let metadata = parse_metadata(description);
+        assert_eq!(metadata.state_names.len(), 3);
+        assert_eq!(
+            metadata.state_names,
+            BTreeMap::from([
+                ("duplicate".to_owned(), 0),
+                ("duplicate1".to_owned(), 1),
+                ("duplicate2".to_owned(), 2)
+            ])
+        );
+        assert_eq!(metadata.states.len(), 3);
+
+        for (no, state) in metadata.states.iter().enumerate() {
+            if no == 0 {
+                assert_eq!(state.duplicate, None)
+            } else {
+                assert_eq!(state.duplicate, Some(no as u32));
+            }
+
+            // Note: using `no` here only works by virtue of the test data being only composed of duplicates
+            assert_eq!(no, *metadata.state_names.get(&state.get_state_name_index()).unwrap())
+        }
+    }
 }
