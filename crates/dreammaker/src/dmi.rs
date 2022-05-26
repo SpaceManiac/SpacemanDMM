@@ -171,7 +171,7 @@ impl Default for Dir {
 }
 
 /// Embedded metadata describing a DMI spritesheet's layout.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Metadata {
     /// The width of the icon in pixels.
     pub width: u32,
@@ -184,7 +184,7 @@ pub struct Metadata {
 }
 
 /// The metadata belonging to a single icon state.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct State {
     /// The state's name, corresponding to the `icon_state` var.
     pub name: String,
