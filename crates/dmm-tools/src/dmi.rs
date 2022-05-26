@@ -24,6 +24,7 @@ pub type Rect = (u32, u32, u32, u32);
 #[cfg(all(feature = "png", feature = "gif"))]
 pub mod render {
     use super::*;
+    use either::Either;
     use gif::DisposalMethod;
 
     static NO_TINT: [u8; 4] = [0xff, 0xff, 0xff, 0xff];
@@ -86,7 +87,12 @@ pub mod render {
             };
             let mut canvas = self.get_canvas(icon_state.dirs);
             let mut vec = Vec::new();
-            for frame in 0..frames {
+            let range = if icon_state.rewind { 
+                Either::Left((0..frames).chain((0..frames).rev()))
+            } else {
+                Either::Right(0..frames)
+            };
+            for frame in range {
                 self.render_dirs(icon_state, &mut canvas, frame as u32);
                 vec.push(canvas.clone());
                 canvas.clear();
@@ -160,7 +166,13 @@ pub mod render {
                 .set_repeat(gif::Repeat::Infinite)
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{e}")))?;
 
-            for frame in 0..frames {
+            let range = if icon_state.rewind { 
+                Either::Left((0..frames).chain((0..frames).rev()))
+            } else {
+                Either::Right(0..frames)
+            };
+
+            for frame in range {
                 self.render_dirs(icon_state, &mut canvas, frame as u32);
 
                 let mut pixels = bytemuck::cast_slice(canvas.data.as_slice().unwrap()).to_owned();

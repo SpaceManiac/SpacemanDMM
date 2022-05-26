@@ -12,6 +12,7 @@ dreammaker = { path = "../dreammaker" }
 lodepng = "3.0.0"
 indexmap = "1.7.0"
 ahash = "0.7.6"
+either = "1.6.1"
 
 [dependencies.bytemuck]
 version = "1.5"

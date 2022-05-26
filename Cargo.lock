@@ -368,6 +368,7 @@ dependencies = [
  "bumpalo",
  "bytemuck",
  "dreammaker",
+ "either",
  "gfx_core",
  "gif",
  "indexmap",
