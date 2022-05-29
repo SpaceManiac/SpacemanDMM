@@ -4,6 +4,7 @@ use std::io;
 use std::path::Path;
 use std::collections::{BTreeMap, HashMap};
 
+use derivative::Derivative;
 use lodepng::Decoder;
 
 const VERSION: &str = "4.0";
@@ -184,13 +185,15 @@ pub struct Metadata {
 }
 
 /// The metadata belonging to a single icon state.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Derivative, Debug, Clone)]
+#[derivative(PartialEq)]
 pub struct State {
     /// The state's name, corresponding to the `icon_state` var.
     pub name: String,
     /// Whether this is a movement state (shown during gliding).
     pub movement: bool,
     /// The number of frames in the spritesheet before this state's first frame.
+    #[derivative(PartialEq="ignore")]
     pub offset: usize,
     /// 0 for infinite, 1+ for finite.
     pub loop_: u32,
