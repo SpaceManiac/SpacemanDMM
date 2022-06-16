@@ -960,12 +960,14 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         regex/proc/Replace(text, rep, start, end);
 
         database;
+        database/var/_binobj;
         database/proc/Close();
         database/proc/Error();
         database/proc/ErrorMsg();
         database/proc/Open(filename);
         database/proc/New(filename);
 
+        database/query/var/database/database;
         database/query/proc/Add(text, item1, item2 /*...*/);
         database/query/proc/Close();
         database/query/proc/Columns(column);
