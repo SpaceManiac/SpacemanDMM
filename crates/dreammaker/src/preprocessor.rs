@@ -624,7 +624,9 @@ impl<'ctx> Preprocessor<'ctx> {
 
     /// Something other than a `#define` was encountered, docs are not for us.
     fn flush_docs(&mut self) {
-        self.docs_out.extend(self.docs_in.drain(..));
+        if !self.docs_out.is_empty() {
+            self.docs_out.extend(self.docs_in.drain(..));
+        }
     }
 
     // ------------------------------------------------------------------------
