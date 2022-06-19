@@ -30,6 +30,7 @@ pub mod render {
     static NO_TINT: [u8; 4] = [0xff, 0xff, 0xff, 0xff];
 
     /// Used to render an IconFile to a .gif/.png easily.
+    #[derive(Debug)]
     pub struct IconRenderer<'a> {
         /// The IconFile we render from.
         source: &'a IconFile,
