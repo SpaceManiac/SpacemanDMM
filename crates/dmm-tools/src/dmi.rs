@@ -208,7 +208,7 @@ pub mod render {
         }
     }
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RenderResult {
     pub frames: Vec<Image>,
     pub delays: Option<Vec<f32>>,
@@ -218,6 +218,7 @@ pub struct RenderResult {
 
 
 /// An image with associated DMI metadata.
+#[derive(Debug)]
 pub struct IconFile {
     /// The icon's metadata.
     pub metadata: Metadata,
@@ -264,7 +265,7 @@ impl IconFile {
     }
 }
 
-#[derive(Default, Clone, Copy, Pod, Zeroable, Eq, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, Pod, Zeroable, Eq, PartialEq)]
 #[repr(C)]
 pub struct Rgba8 {
     pub r: u8,
@@ -305,7 +306,7 @@ impl IndexMut<u8> for Rgba8 {
 // Image manipulation
 
 /// A two-dimensional RGBA image.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Image {
     pub width: u32,
     pub height: u32,
