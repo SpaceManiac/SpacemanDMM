@@ -2,9 +2,8 @@
 //!
 //! Includes re-exports from `dreammaker::dmi`.
 
-use std::cell::{RefCell, RefMut};
-use std::{io};
-use std::path::{Path, PathBuf};
+use std::io;
+use std::path::Path;
 use bytemuck::Pod;
 
 use lodepng::{self, RGBA, Decoder, ColorType};
@@ -26,6 +25,7 @@ pub mod render {
     use super::*;
     use either::Either;
     use gif::DisposalMethod;
+    use std::path::PathBuf;
 
     static NO_TINT: [u8; 4] = [0xff, 0xff, 0xff, 0xff];
 
@@ -34,37 +34,26 @@ pub mod render {
     pub struct IconRenderer<'a> {
         /// The IconFile we render from.
         source: &'a IconFile,
-        /// This RefCell<Image> is used to reduce memory usage and overhead (not benchmarked)
-        /// Instead of creating a new canvas to render to for each frame, we just constantly wipe the data.
-        one_dir: RefCell<Image>,
-        /// This RefCell<Image> is used to reduce memory usage and overhead (not benchmarked)
-        /// Instead of creating a new canvas to render to for each frame, we just constantly wipe the data.
-        four_dir: RefCell<Image>,
-        /// This RefCell<Image> is used to reduce memory usage and overhead (not benchmarked)
-        /// Instead of creating a new canvas to render to for each frame, we just constantly wipe the data.
-        eight_dir: RefCell<Image>,
     }
     
+    /// Public API
     impl<'a> IconRenderer<'a> {
         pub fn new(source: &'a IconFile) -> Self {
             Self {
                 source,
-                one_dir: RefCell::new(Image::new_rgba(source.metadata.width, source.metadata.height)),
-                four_dir: RefCell::new(Image::new_rgba(source.metadata.width * 4, source.metadata.height)),
-                eight_dir: RefCell::new(Image::new_rgba(source.metadata.width * 8, source.metadata.height)),
             }
         }
     
         /// Takes a path to a file with no extension, adds the correct extension
         /// based on whether it needs an animated gif or regular png,
         /// and returns the corrected path after it renders.
-        pub fn render<S: AsRef<str>, P: AsRef<Path>>(&mut self, icon_state: S, target: P) -> io::Result<PathBuf> {
+        pub fn render<S: AsRef<str>, P: AsRef<Path>>(&self, icon_state: S, target: P) -> io::Result<PathBuf> {
             self.render_state(self.source.get_icon_state(&icon_state)?, target)
         }
 
         /// This is here so that duplicate icon states can be handled by not relying on the btreemap 
         /// of state names in [`Metadata`]. 
-        pub fn render_state<P: AsRef<Path>>(&mut self, icon_state: &State, target: P) -> io::Result<PathBuf> {
+        pub fn render_state<P: AsRef<Path>>(&self, icon_state: &State, target: P) -> io::Result<PathBuf> {
             match &icon_state.frames {
                 Frames::One | Frames::Count(1) => self.render_to_png(icon_state, target),
                 Frames::Count(frames) => self.render_gif(icon_state, target, *frames, None),
@@ -74,11 +63,14 @@ pub mod render {
 
         /// Instead of writing to a file, this gives a Vec<Image> of each frame/dir as it would be composited 
         /// for a file.
-        pub fn render_to_images<S: AsRef<str>>(&mut self, icon_state: S) -> io::Result<Vec<Image>> {
+        pub fn render_to_images<S: AsRef<str>>(&self, icon_state: S) -> io::Result<Vec<Image>> {
             let state = self.source.get_icon_state(&icon_state)?;
             Ok(self.render_frames(state))
         }
+    }
 
+    /// Private helpers
+    impl<'a> IconRenderer<'a> {
         /// Helper for render_to_images- not used for render_gif because it's less efficient.
         fn render_frames(&self, icon_state: &State) -> Vec<Image> {
             let frames = match &icon_state.frames {
@@ -101,14 +93,17 @@ pub mod render {
             vec
         }
     
-        fn get_canvas(&self, dirs: Dirs) -> RefMut<Image> {
+        /// Returns a new canvas of the appropriate size
+        fn get_canvas(&self, dirs: Dirs) -> Image {
             match dirs {
-                Dirs::One => self.one_dir.borrow_mut(),
-                Dirs::Four => self.four_dir.borrow_mut(),
-                Dirs::Eight => self.eight_dir.borrow_mut(),
+                Dirs::One => Image::new_rgba(self.source.metadata.width, self.source.metadata.height),
+                Dirs::Four => Image::new_rgba(self.source.metadata.width * 4, self.source.metadata.height),
+                Dirs::Eight => Image::new_rgba(self.source.metadata.width * 8, self.source.metadata.height),
             }
         }
     
+        /// Gives a [`Vec<Dir>`] of each [`Dir`] matching our [`Dirs`] setting,
+        /// in the same order BYOND uses.
         fn ordered_dirs(dirs: Dirs) -> Vec<Dir> {
             match dirs {
                 Dirs::One => { [Dir::South].to_vec() },
@@ -135,6 +130,7 @@ pub mod render {
             }
         }
 
+        /// Renders each direction to the same canvas, offsetting them to the right 
         fn render_dirs(&self, icon_state: &State, canvas: &mut Image, frame: u32) {
             for (dir_no, dir) in Self::ordered_dirs(icon_state.dirs).iter().enumerate() {
                 let frame_idx = icon_state.index_of_frame(*dir, frame as u32);
@@ -148,8 +144,9 @@ pub mod render {
             }
         }
     
+        /// Renders the whole file to a gif, animated states becoming frames
         fn render_gif<P: AsRef<Path>>(
-            &mut self,
+            &self,
             icon_state: &State,
             target: P,
             frames: usize,
@@ -194,8 +191,9 @@ pub mod render {
 
             Ok(path)
         }
-    
-        fn render_to_png<P: AsRef<Path>>(&mut self, icon_state: &State, target: P) -> io::Result<PathBuf> {
+
+        /// Renders the whole file to a png, discarding all but the first frame of animations
+        fn render_to_png<P: AsRef<Path>>(&self, icon_state: &State, target: P) -> io::Result<PathBuf> {
             let path = target.as_ref().with_extension("png");
             let file = std::fs::File::create(&path)?;
             let mut canvas = self.get_canvas(icon_state.dirs);
@@ -209,14 +207,6 @@ pub mod render {
         }
     }
 }
-#[derive(Clone, Debug)]
-pub struct RenderResult {
-    pub frames: Vec<Image>,
-    pub delays: Option<Vec<f32>>,
-    pub size: (u32, u32)
-}
-
-
 
 /// An image with associated DMI metadata.
 #[derive(Debug)]
