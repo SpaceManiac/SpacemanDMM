@@ -256,15 +256,6 @@ impl IconFile {
             )
         })
     }
-
-    pub fn is_animated<S: AsRef<str>>(&self, icon_state: S) -> io::Result<bool> {
-        let state = self.get_icon_state(icon_state)?;
-        match state.frames {
-            Frames::One => Ok(false),
-            Frames::Count(_) => Ok(true),
-            Frames::Delays(_) => Ok(true),
-        }
-    }
 }
 
 #[derive(Default, Debug, Clone, Copy, Pod, Zeroable, Eq, PartialEq)]

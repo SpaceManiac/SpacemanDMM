@@ -299,6 +299,14 @@ impl Metadata {
 }
 
 impl State {
+    pub fn is_animated(&self) -> bool {
+        match self.frames {
+            Frames::One => false,
+            Frames::Count(_) => true,
+            Frames::Delays(_) => true,
+        }
+    }
+
     pub fn num_sprites(&self) -> usize {
         self.dirs.count() * self.frames.count()
     }
