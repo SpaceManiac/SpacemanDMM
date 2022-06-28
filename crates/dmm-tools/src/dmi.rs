@@ -25,7 +25,6 @@ pub mod render {
     use super::*;
     use either::Either;
     use gif::DisposalMethod;
-    use std::path::PathBuf;
 
     static NO_TINT: [u8; 4] = [0xff, 0xff, 0xff, 0xff];
 
@@ -34,6 +33,13 @@ pub mod render {
     pub struct IconRenderer<'a> {
         /// The IconFile we render from.
         source: &'a IconFile,
+    }
+
+    /// [`IconRenderer::render`] will return this to indicate if it wrote to the stream using 
+    /// [`gif::Encoder`] or `[`png::Encoder`].
+    pub enum RenderType {
+        Png,
+        Gif
     }
     
     /// Public API
@@ -44,16 +50,16 @@ pub mod render {
             }
         }
     
-        /// Takes a path to a file with no extension, adds the correct extension
-        /// based on whether it needs an animated gif or regular png,
-        /// and returns the corrected path after it renders.
-        pub fn render<S: AsRef<str>, P: AsRef<Path>>(&self, icon_state: S, target: P) -> io::Result<PathBuf> {
+        /// Renders with either [`gif::Encoder`] or [`png::Encoder`] depending on whether the icon state is animated
+        /// or not.
+        /// Returns a [`RenderType`] to help you determine how to treat the written data.
+        pub fn render<S: AsRef<str>, W: std::io::Write>(&self, icon_state: S, target: W) -> io::Result<RenderType> {
             self.render_state(self.source.get_icon_state(&icon_state)?, target)
         }
 
         /// This is here so that duplicate icon states can be handled by not relying on the btreemap 
         /// of state names in [`Metadata`]. 
-        pub fn render_state<P: AsRef<Path>>(&self, icon_state: &State, target: P) -> io::Result<PathBuf> {
+        pub fn render_state<W: std::io::Write>(&self, icon_state: &State, target: W) -> io::Result<RenderType> {
             match &icon_state.frames {
                 Frames::One | Frames::Count(1) => self.render_to_png(icon_state, target),
                 Frames::Count(frames) => self.render_gif(icon_state, target, *frames, None),
@@ -145,19 +151,17 @@ pub mod render {
         }
     
         /// Renders the whole file to a gif, animated states becoming frames
-        fn render_gif<P: AsRef<Path>>(
+        fn render_gif<W: std::io::Write>(
             &self,
             icon_state: &State,
-            target: P,
+            target: W,
             frames: usize,
             delays: Option<&Vec<f32>>,
-        ) -> io::Result<PathBuf> {
-            let path = target.as_ref().with_extension("gif");
-            let file = std::fs::File::create(&path)?;
+        ) -> io::Result<RenderType> {
             let mut canvas = self.get_canvas(icon_state.dirs);
 
             let mut encoder =
-                gif::Encoder::new(file, canvas.width as u16, canvas.height as u16, &[])
+                gif::Encoder::new(target, canvas.width as u16, canvas.height as u16, &[])
                     .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{e}")))?;
 
             encoder
@@ -189,21 +193,19 @@ pub mod render {
                 canvas.clear();
             }
 
-            Ok(path)
+            Ok(RenderType::Gif)
         }
 
         /// Renders the whole file to a png, discarding all but the first frame of animations
-        fn render_to_png<P: AsRef<Path>>(&self, icon_state: &State, target: P) -> io::Result<PathBuf> {
-            let path = target.as_ref().with_extension("png");
-            let file = std::fs::File::create(&path)?;
+        fn render_to_png<W: std::io::Write>(&self, icon_state: &State, target: W) -> io::Result<RenderType> {
             let mut canvas = self.get_canvas(icon_state.dirs);
 
             self.render_dirs(icon_state, &mut canvas, 0);
 
-            canvas.to_write(file)?;
+            canvas.to_write(target)?;
             // Always remember to clear the canvas for the next guy!
             canvas.clear();
-            Ok(path)
+            Ok(RenderType::Png)
         }
     }
 }
@@ -253,6 +255,15 @@ impl IconFile {
                 format!("icon_state {} not found", icon_state.as_ref()),
             )
         })
+    }
+
+    pub fn is_animated<S: AsRef<str>>(&self, icon_state: S) -> io::Result<bool> {
+        let state = self.get_icon_state(icon_state)?;
+        match state.frames {
+            Frames::One => Ok(false),
+            Frames::Count(_) => Ok(true),
+            Frames::Delays(_) => Ok(true),
+        }
     }
 }
 
