@@ -420,13 +420,7 @@ fn parse_metadata(data: &str) -> io::Result<Metadata> {
 
                 let count = duplicate_map.entry(unquoted.clone()).or_insert(0);
 
-                if !metadata.state_names.contains_key(&unquoted) {
-                    metadata.state_names.insert(unquoted.clone(), metadata.states.len());
-                } else {
-                    metadata.state_names.insert(format!("{unquoted}{count}"), metadata.states.len());
-                }
-
-                state = Some(State {
+                let new_state = State {
                     offset: frames_so_far,
                     name: unquoted,
                     loop_: 0,
@@ -435,7 +429,15 @@ fn parse_metadata(data: &str) -> io::Result<Metadata> {
                     movement: false,
                     dirs: Dirs::One,
                     frames: Frames::One,
-                });
+                };
+
+                let key = new_state.get_state_name_index();
+
+                if let std::collections::btree_map::Entry::Vacant(e) = metadata.state_names.entry(key) {
+                    e.insert(metadata.states.len());
+                }
+
+                state = Some(new_state);
 
                 *count += 1;
             }
