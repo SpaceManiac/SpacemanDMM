@@ -301,7 +301,7 @@ impl Metadata {
 impl State {
     pub fn is_animated(&self) -> bool {
         match self.frames {
-            Frames::One => false,
+            Frames::One | Frames::Count(1) => false,
             Frames::Count(_) => true,
             Frames::Delays(_) => true,
         }

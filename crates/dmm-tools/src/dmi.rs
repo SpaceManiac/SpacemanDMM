@@ -60,6 +60,7 @@ pub mod render {
         /// This is here so that duplicate icon states can be handled by not relying on the btreemap 
         /// of state names in [`Metadata`]. 
         pub fn render_state<W: std::io::Write>(&self, icon_state: &State, target: W) -> io::Result<RenderType> {
+            // Note: we don't use [`State::is_animated()`] here because we actually need to destructure the tuples.
             match &icon_state.frames {
                 Frames::One | Frames::Count(1) => self.render_to_png(icon_state, target),
                 Frames::Count(frames) => self.render_gif(icon_state, target, *frames, None),
