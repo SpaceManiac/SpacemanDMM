@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, HashMap};
 use derivative::Derivative;
 use lodepng::Decoder;
 
-const VERSION: &str = "4.0";
+const EXPECTED_VERSION_LINE: &str = "version = 4.0";
 
 /// The two-dimensional facing subset of BYOND's direction type.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -214,7 +214,7 @@ pub enum Dirs {
 }
 
 /// How many frames of animation a state has, and their durations.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Frames {
     /// Without an explicit setting, only one frame.
     One,
@@ -229,11 +229,11 @@ impl Metadata {
     /// Read the bitmap and DMI metadata from a given file in a single pass.
     pub fn from_file(path: &Path) -> io::Result<(lodepng::Bitmap<lodepng::RGBA>, Metadata)> {
         let path = &crate::fix_case(path);
-        Self::from_raw(std::fs::read(path)?)
+        Self::from_bytes(&std::fs::read(path)?)
     }
 
     /// Read a u8 array (raw data of a file) as a DMI into a bitmap and metadata
-    pub fn from_raw<Bytes: AsRef<[u8]>>(data: Bytes) -> io::Result<(lodepng::Bitmap<lodepng::RGBA>, Metadata)> {
+    pub fn from_bytes<B: AsRef<[u8]>>(data: B) -> io::Result<(lodepng::Bitmap<lodepng::RGBA>, Metadata)> {
         let mut decoder = Decoder::new();
         decoder.info_raw_mut().colortype = lodepng::ColorType::RGBA;
         decoder.info_raw_mut().set_bitdepth(8);
@@ -244,11 +244,11 @@ impl Metadata {
             Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidData, e)),
         };
 
-        let metadata = Metadata::from_decoder(bitmap.width as u32, bitmap.height as u32, &decoder);
+        let metadata = Metadata::from_decoder(bitmap.width as u32, bitmap.height as u32, &decoder)?;
         Ok((bitmap, metadata))
     }
 
-    fn from_decoder(width: u32, height: u32, decoder: &Decoder) -> Metadata {
+    fn from_decoder(width: u32, height: u32, decoder: &Decoder) -> io::Result<Metadata> {
         for (key, value) in decoder.info_png().text_keys() {
             if key == b"Description" {
                 if let Ok(value) = std::str::from_utf8(value) {
@@ -257,17 +257,17 @@ impl Metadata {
                 break;
             }
         }
-        Metadata {
+        Ok(Metadata {
             width,
             height,
             states: Default::default(),
             state_names: Default::default(),
-        }
+        })
     }
 
     /// Parse metadata from a `Description` string.
     #[inline]
-    pub fn meta_from_str(data: &str) -> Metadata {
+    pub fn meta_from_str(data: &str) -> io::Result<Metadata> {
         parse_metadata(data)
     }
 
@@ -372,7 +372,7 @@ impl Frames {
 // ----------------------------------------------------------------------------
 // Metadata parser
 
-fn parse_metadata(data: &str) -> Metadata {
+fn parse_metadata(data: &str) -> io::Result<Metadata> {
     let mut metadata = Metadata {
         width: 32,
         height: 32,
@@ -380,12 +380,20 @@ fn parse_metadata(data: &str) -> Metadata {
         state_names: BTreeMap::new(),
     };
     if data.is_empty() {
-        return metadata;
+        return Ok(metadata);
     }
 
     let mut lines = data.lines();
-    assert_eq!(lines.next().unwrap(), "# BEGIN DMI");
-    assert_eq!(lines.next().unwrap(), &format!("version = {}", VERSION));
+    let header = (lines.next(), lines.next());
+    let expected_header = (Some("# BEGIN DMI"), Some(EXPECTED_VERSION_LINE));
+    if header != expected_header {
+        return Err(
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Wrong dmi metadata header. Expected {:?}, got {:?}", expected_header, header )
+            )
+        );
+    }
 
     let mut state: Option<State> = None;
     let mut frames_so_far = 0;
@@ -474,7 +482,7 @@ fn parse_metadata(data: &str) -> Metadata {
     }
     metadata.states.extend(state);
 
-    metadata
+    Ok(metadata)
 }
 
 #[cfg(test)]
@@ -500,7 +508,7 @@ state = "duplicate"
 # END DMI
 "##.trim();
 
-        let metadata = parse_metadata(description);
+        let metadata = parse_metadata(description).unwrap();
         assert_eq!(metadata.state_names.len(), 3);
         assert_eq!(
             metadata.state_names,

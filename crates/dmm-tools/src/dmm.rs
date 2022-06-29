@@ -118,7 +118,6 @@ pub struct ZLevel<'a> {
     pub grid: ndarray::ArrayView<'a, Key, ndarray::Dim<[usize; 2]>>,
 }
 
-// TODO: port to ast::Prefab<Constant>
 #[derive(Debug, Default, Clone)]
 pub struct Prefab {
     pub path: String,
@@ -128,7 +127,7 @@ pub struct Prefab {
 
 impl PartialEq for Prefab {
     fn eq(&self, other: &Self) -> bool {
-        self.path == other.path && self.vars.keys().eq(other.vars.keys())
+        self.path == other.path && self.vars == other.vars
     }
 }
 
@@ -137,7 +136,11 @@ impl Eq for Prefab {}
 impl std::hash::Hash for Prefab {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.path.hash(state);
-        self.vars.keys().for_each(|key| {key.hash(state)});
+        let mut items: Vec<_> = self.vars.iter().collect();
+        items.sort_by_key(|&(k, _)| k);
+        for kvp in items {
+            kvp.hash(state);
+        }
     }
 }
 

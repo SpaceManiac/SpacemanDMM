@@ -7,16 +7,16 @@ edition = "2018"
 
 [dependencies]
 dreammaker = { path = "../dreammaker" }
-pulldown-cmark = "0.7.0"
-tera = "1.0.2"
-serde = "1.0.71"
-serde_derive = "1.0.27"
-walkdir = "2.2.0"
-git2 = { version = "0.13", default-features = false }
+pulldown-cmark = "0.9.1"
+tera = "1.15.0"
+serde = "1.0.136"
+serde_derive = "1.0.136"
+walkdir = "2.3.2"
+git2 = { version = "0.14.2", default-features = false }
 
 [dev-dependencies]
-walkdir = "2.2.0"
+walkdir = "2.3.2"
 
 [build-dependencies]
-chrono = "0.4.0"
-git2 = { version = "0.13", default-features = false }
+chrono = "0.4.19"
+git2 = { version = "0.14.2", default-features = false }
