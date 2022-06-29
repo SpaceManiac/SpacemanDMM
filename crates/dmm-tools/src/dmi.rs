@@ -45,9 +45,9 @@ pub mod render {
 
     #[derive(Debug)]
     pub struct RenderStateGuard<'a> {
+        pub render_type: RenderType,
         renderer: &'a IconRenderer<'a>,
         state: &'a State,
-        render_type: RenderType,
     }
 
     impl<'a> RenderStateGuard<'a> {
