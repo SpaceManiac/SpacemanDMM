@@ -37,9 +37,30 @@ pub mod render {
 
     /// [`IconRenderer::render`] will return this to indicate if it wrote to the stream using 
     /// [`gif::Encoder`] or `[`png::Encoder`].
+    #[derive(Debug, Clone, Copy)]
     pub enum RenderType {
         Png,
         Gif
+    }
+
+    #[derive(Debug)]
+    pub struct RenderStateGuard<'a> {
+        renderer: &'a IconRenderer<'a>,
+        state: &'a State,
+        render_type: RenderType,
+    }
+
+    impl<'a> RenderStateGuard<'a> {
+        pub fn render<W: std::io::Write>(self, target: W) -> io::Result<()> {
+            match self.render_type {
+                RenderType::Png => {
+                    self.renderer.render_to_png(self.state, target)
+                },
+                RenderType::Gif => {
+                    self.renderer.render_gif(self.state, target)
+                },
+            }
+        }
     }
     
     /// Public API
@@ -49,22 +70,28 @@ pub mod render {
                 source,
             }
         }
-    
+
         /// Renders with either [`gif::Encoder`] or [`png::Encoder`] depending on whether the icon state is animated
         /// or not.
         /// Returns a [`RenderType`] to help you determine how to treat the written data.
-        pub fn render<S: AsRef<str>, W: std::io::Write>(&self, icon_state: S, target: W) -> io::Result<RenderType> {
-            self.render_state(self.source.get_icon_state(&icon_state)?, target)
+        pub fn prepare_render<S: AsRef<str>>(&self, icon_state: S) -> io::Result<RenderStateGuard> {
+            self.prepare_render_state(self.source.get_icon_state(&icon_state)?)
         }
 
         /// This is here so that duplicate icon states can be handled by not relying on the btreemap 
         /// of state names in [`Metadata`]. 
-        pub fn render_state<W: std::io::Write>(&self, icon_state: &State, target: W) -> io::Result<RenderType> {
-            // Note: we don't use [`State::is_animated()`] here because we actually need to destructure the tuples.
-            match &icon_state.frames {
-                Frames::One | Frames::Count(1) => self.render_to_png(icon_state, target),
-                Frames::Count(frames) => self.render_gif(icon_state, target, *frames, None),
-                Frames::Delays(delays) => self.render_gif(icon_state, target, delays.len(), Some(delays)),
+        pub fn prepare_render_state(&'a self, icon_state: &'a State) -> io::Result<RenderStateGuard> {
+            match icon_state.is_animated() {
+                false => Ok(RenderStateGuard {
+                    renderer: self,
+                    state: icon_state,
+                    render_type: RenderType::Png,
+                }),
+                true => Ok(RenderStateGuard {
+                    renderer: self,
+                    state: icon_state,
+                    render_type: RenderType::Gif,
+                }),
             }
         }
 
@@ -156,9 +183,18 @@ pub mod render {
             &self,
             icon_state: &State,
             target: W,
-            frames: usize,
-            delays: Option<&Vec<f32>>,
-        ) -> io::Result<RenderType> {
+        ) -> io::Result<()> {
+
+            if !icon_state.is_animated() {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "Tried to render gif with one frame"));
+            }
+
+            let (frames, delays) = match &icon_state.frames {
+                Frames::Count(frames) => (*frames, None),
+                Frames::Delays(delays) => (delays.len(), Some(delays)),
+                _ => unreachable!(),
+            };
+
             let mut canvas = self.get_canvas(icon_state.dirs);
 
             let mut encoder =
@@ -194,11 +230,11 @@ pub mod render {
                 canvas.clear();
             }
 
-            Ok(RenderType::Gif)
+            Ok(())
         }
 
         /// Renders the whole file to a png, discarding all but the first frame of animations
-        fn render_to_png<W: std::io::Write>(&self, icon_state: &State, target: W) -> io::Result<RenderType> {
+        fn render_to_png<W: std::io::Write>(&self, icon_state: &State, target: W) -> io::Result<()> {
             let mut canvas = self.get_canvas(icon_state.dirs);
 
             self.render_dirs(icon_state, &mut canvas, 0);
@@ -206,7 +242,7 @@ pub mod render {
             canvas.to_write(target)?;
             // Always remember to clear the canvas for the next guy!
             canvas.clear();
-            Ok(RenderType::Png)
+            Ok(())
         }
     }
 }
