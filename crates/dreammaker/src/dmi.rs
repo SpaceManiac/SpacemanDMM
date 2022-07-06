@@ -181,7 +181,7 @@ pub struct Metadata {
     /// The list of states in the order they appear in the spritesheet.
     pub states: Vec<State>,
     /// A lookup table from state name to its position in `states`.
-    pub state_names: BTreeMap<String, usize>,
+    pub state_names: BTreeMap<(String, u32), usize>,
 }
 
 /// The metadata belonging to a single icon state.
@@ -198,8 +198,7 @@ pub struct State {
     /// 0 for infinite, 1+ for finite.
     pub loop_: u32,
     /// The number of `State`s before this with the same name.
-    /// None if this is the first state.
-    pub duplicate: Option<u32>,
+    pub duplicate_index: u32,
     pub rewind: bool,
     pub dirs: Dirs,
     pub frames: Frames,
@@ -289,7 +288,7 @@ impl Metadata {
     }
 
     pub fn get_icon_state(&self, icon_state: &str) -> Option<&State> {
-        let state_index = match self.state_names.get(icon_state) {
+        let state_index = match self.state_names.get(&(icon_state.to_owned(), 0)) {
             Some(&i) => i,
             None if icon_state.is_empty() => 0,
             None => return None,
@@ -332,12 +331,8 @@ impl State {
         self.index_of_dir(dir) + frame * self.dirs.count() as u32
     }
 
-    pub fn get_state_name_index(&self) -> String {
-        if let Some(number) = self.duplicate {
-            format!("{}{number}", self.name)
-        } else {
-            self.name.clone()
-        }
+    pub fn get_state_name_index(&self) -> (String, u32){
+        (self.name.clone(), self.duplicate_index)
     }
 }
 
@@ -404,9 +399,7 @@ fn parse_metadata(data: &str) -> io::Result<Metadata> {
         if line.starts_with("# END DMI") {
             break;
         }
-        let mut split = line.trim().splitn(2, " = ");
-        let key = split.next().unwrap();
-        let value = split.next().unwrap();
+        let (key, value) = line.trim().split_once(" = ").unwrap();
         match key {
             "width" => metadata.width = value.parse().unwrap(),
             "height" => metadata.height = value.parse().unwrap(),
@@ -424,7 +417,7 @@ fn parse_metadata(data: &str) -> io::Result<Metadata> {
                     offset: frames_so_far,
                     name: unquoted,
                     loop_: 0,
-                    duplicate: if *count > 0 { Some(*count) } else { None },
+                    duplicate_index: *count,
                     rewind: false,
                     movement: false,
                     dirs: Dirs::One,
@@ -515,18 +508,18 @@ state = "duplicate"
         assert_eq!(
             metadata.state_names,
             BTreeMap::from([
-                ("duplicate".to_owned(), 0),
-                ("duplicate1".to_owned(), 1),
-                ("duplicate2".to_owned(), 2)
+                (("duplicate".to_owned(), 0), 0),
+                (("duplicate".to_owned(), 1), 1),
+                (("duplicate".to_owned(), 2), 2)
             ])
         );
         assert_eq!(metadata.states.len(), 3);
 
         for (no, state) in metadata.states.iter().enumerate() {
             if no == 0 {
-                assert_eq!(state.duplicate, None)
+                assert_eq!(state.duplicate_index, 0)
             } else {
-                assert_eq!(state.duplicate, Some(no as u32));
+                assert_eq!(state.duplicate_index, no as u32);
             }
 
             // Note: using `no` here only works by virtue of the test data being only composed of duplicates
