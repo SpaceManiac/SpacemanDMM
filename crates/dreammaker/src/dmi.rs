@@ -1,5 +1,6 @@
 //! DMI metadata parsing and representation.
 
+use std::fmt::Display;
 use std::io;
 use std::path::Path;
 use std::collections::{BTreeMap, HashMap};
@@ -8,6 +9,28 @@ use derivative::Derivative;
 use lodepng::Decoder;
 
 const EXPECTED_VERSION_LINE: &str = "version = 4.0";
+
+/// Index into the state name table
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
+pub struct StateIndex(String, u32);
+
+impl Display for StateIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {})", self.0, self.1)
+    }
+}
+
+impl From<String> for StateIndex {
+    fn from(s: String) -> Self {
+        StateIndex(s, 0)
+    }
+}
+
+impl From<&str> for StateIndex {
+    fn from(s: &str) -> Self {
+        StateIndex(s.to_owned(), 0)
+    }
+}
 
 /// The two-dimensional facing subset of BYOND's direction type.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -181,7 +204,7 @@ pub struct Metadata {
     /// The list of states in the order they appear in the spritesheet.
     pub states: Vec<State>,
     /// A lookup table from state name to its position in `states`.
-    pub state_names: BTreeMap<(String, u32), usize>,
+    pub state_names: BTreeMap<StateIndex, usize>,
 }
 
 /// The metadata belonging to a single icon state.
@@ -232,7 +255,7 @@ impl Metadata {
     }
 
     /// Read a u8 array (raw data of a file) as a DMI into a bitmap and metadata
-    pub fn from_bytes<B: AsRef<[u8]>>(data: B) -> io::Result<(lodepng::Bitmap<lodepng::RGBA>, Metadata)> {
+    pub fn from_bytes(data: &[u8]) -> io::Result<(lodepng::Bitmap<lodepng::RGBA>, Metadata)> {
         let mut decoder = Decoder::new();
         decoder.info_raw_mut().colortype = lodepng::ColorType::RGBA;
         decoder.info_raw_mut().set_bitdepth(8);
@@ -270,7 +293,7 @@ impl Metadata {
         parse_metadata(data)
     }
 
-    pub fn rect_of(&self, bitmap_width: u32, icon_state: &str, dir: Dir, frame: u32) -> Option<(u32, u32, u32, u32)> {
+    pub fn rect_of(&self, bitmap_width: u32, icon_state: &StateIndex, dir: Dir, frame: u32) -> Option<(u32, u32, u32, u32)> {
         if self.states.is_empty() {
             return Some((0, 0, self.width, self.height));
         }
@@ -287,10 +310,9 @@ impl Metadata {
         ))
     }
 
-    pub fn get_icon_state(&self, icon_state: &str) -> Option<&State> {
-        let state_index = match self.state_names.get(&(icon_state.to_owned(), 0)) {
+    pub fn get_icon_state(&self, icon_state: &StateIndex) -> Option<&State> {
+        let state_index = match self.state_names.get(icon_state) {
             Some(&i) => i,
-            None if icon_state.is_empty() => 0,
             None => return None,
         };
         Some(&self.states[state_index])
@@ -331,8 +353,8 @@ impl State {
         self.index_of_dir(dir) + frame * self.dirs.count() as u32
     }
 
-    pub fn get_state_name_index(&self) -> (String, u32){
-        (self.name.clone(), self.duplicate_index)
+    pub fn get_state_name_index(&self) -> StateIndex {
+        StateIndex(self.name.clone(), self.duplicate_index)
     }
 }
 
@@ -508,9 +530,9 @@ state = "duplicate"
         assert_eq!(
             metadata.state_names,
             BTreeMap::from([
-                (("duplicate".to_owned(), 0), 0),
-                (("duplicate".to_owned(), 1), 1),
-                (("duplicate".to_owned(), 2), 2)
+                (StateIndex("duplicate".to_owned(), 0), 0),
+                (StateIndex("duplicate".to_owned(), 1), 1),
+                (StateIndex("duplicate".to_owned(), 2), 2)
             ])
         );
         assert_eq!(metadata.states.len(), 3);

@@ -46,7 +46,7 @@ impl IconFile {
     }
 
     #[inline]
-    pub fn rect_of(&self, icon_state: &str, dir: Dir) -> Option<Rect> {
+    pub fn rect_of(&self, icon_state: &StateIndex, dir: Dir) -> Option<Rect> {
         self.metadata.rect_of(self.image.width, icon_state, dir, 0)
     }
 
@@ -61,8 +61,8 @@ impl IconFile {
         )
     }
 
-    pub fn get_icon_state(&self, icon_state: &str) -> io::Result<&State> {
-        self.metadata.get_icon_state(icon_state.as_ref()).ok_or_else(|| {
+    pub fn get_icon_state(&self, icon_state: &StateIndex) -> io::Result<&State> {
+        self.metadata.get_icon_state(icon_state).ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::NotFound,
                 format!("icon_state {} not found", icon_state),

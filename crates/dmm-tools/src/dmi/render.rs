@@ -50,7 +50,7 @@ impl<'a> IconRenderer<'a> {
     /// Renders with either [`gif::Encoder`] or [`png::Encoder`] depending on whether the icon state is animated
     /// or not.
     /// Returns a [`RenderType`] to help you determine how to treat the written data.
-    pub fn prepare_render(&self, icon_state: &str) -> io::Result<RenderStateGuard> {
+    pub fn prepare_render(&self, icon_state: &StateIndex) -> io::Result<RenderStateGuard> {
         self.prepare_render_state(self.source.get_icon_state(icon_state)?)
     }
 
@@ -73,7 +73,7 @@ impl<'a> IconRenderer<'a> {
 
     /// Instead of writing to a file, this gives a Vec<Image> of each frame/dir as it would be composited 
     /// for a file.
-    pub fn render_to_images(&self, icon_state: &str) -> io::Result<Vec<Image>> {
+    pub fn render_to_images(&self, icon_state: &StateIndex) -> io::Result<Vec<Image>> {
         let state = self.source.get_icon_state(icon_state)?;
         Ok(self.render_frames(state))
     }
