@@ -141,7 +141,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
             None => continue,
         };
 
-        if let Some(rect) = icon_file.rect_of(sprite.icon_state, sprite.dir) {
+        if let Some(rect) = icon_file.rect_of(&sprite.icon_state.into(), sprite.dir) {
             let pixel_x = sprite.ofs_x;
             let pixel_y = sprite.ofs_y + icon_file.metadata.height as i32;
             let loc = (

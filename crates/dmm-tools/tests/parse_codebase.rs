@@ -46,3 +46,4 @@ fn parse_all_dmi() {
         dmi::Metadata::from_file(path).unwrap();
     });
 }
+

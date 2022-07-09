@@ -1,12 +1,40 @@
 //! DMI metadata parsing and representation.
 
+use std::fmt::Display;
 use std::io;
 use std::path::Path;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
+use derivative::Derivative;
 use lodepng::Decoder;
 
 const EXPECTED_VERSION_LINE: &str = "version = 4.0";
+
+/// Index into the state name table
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
+pub struct StateIndex(String, u32);
+
+impl Display for StateIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.1 == 0 {
+            write!(f, "{}", self.0)
+        } else {
+            write!(f, "{} ({})", self.0, self.1)
+        }
+    }
+}
+
+impl From<String> for StateIndex {
+    fn from(s: String) -> Self {
+        StateIndex(s, 0)
+    }
+}
+
+impl From<&str> for StateIndex {
+    fn from(s: &str) -> Self {
+        StateIndex(s.to_owned(), 0)
+    }
+}
 
 /// The two-dimensional facing subset of BYOND's direction type.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -180,20 +208,24 @@ pub struct Metadata {
     /// The list of states in the order they appear in the spritesheet.
     pub states: Vec<State>,
     /// A lookup table from state name to its position in `states`.
-    pub state_names: BTreeMap<String, usize>,
+    pub state_names: BTreeMap<StateIndex, usize>,
 }
 
 /// The metadata belonging to a single icon state.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Derivative, Debug, Clone)]
+#[derivative(PartialEq)]
 pub struct State {
     /// The state's name, corresponding to the `icon_state` var.
     pub name: String,
     /// Whether this is a movement state (shown during gliding).
     pub movement: bool,
     /// The number of frames in the spritesheet before this state's first frame.
+    #[derivative(PartialEq="ignore")]
     pub offset: usize,
     /// 0 for infinite, 1+ for finite.
     pub loop_: u32,
+    /// The number of `State`s before this with the same name.
+    pub duplicate_index: u32,
     pub rewind: bool,
     pub dirs: Dirs,
     pub frames: Frames,
@@ -265,16 +297,11 @@ impl Metadata {
         parse_metadata(data)
     }
 
-    pub fn rect_of(&self, bitmap_width: u32, icon_state: &str, dir: Dir, frame: u32) -> Option<(u32, u32, u32, u32)> {
+    pub fn rect_of(&self, bitmap_width: u32, icon_state: &StateIndex, dir: Dir, frame: u32) -> Option<(u32, u32, u32, u32)> {
         if self.states.is_empty() {
             return Some((0, 0, self.width, self.height));
         }
-        let state_index = match self.state_names.get(icon_state) {
-            Some(&i) => i,
-            None if icon_state.is_empty() => 0,
-            None => return None,
-        };
-        let state = &self.states[state_index];
+        let state = self.get_icon_state(icon_state)?;
         let icon_index = state.index_of_frame(dir, frame);
 
         let icon_count = bitmap_width / self.width;
@@ -286,9 +313,25 @@ impl Metadata {
             self.height,
         ))
     }
+
+    pub fn get_icon_state(&self, icon_state: &StateIndex) -> Option<&State> {
+        let state_index = match self.state_names.get(icon_state) {
+            Some(&i) => i,
+            None => return None,
+        };
+        Some(&self.states[state_index])
+    }
 }
 
 impl State {
+    pub fn is_animated(&self) -> bool {
+        match self.frames {
+            Frames::One | Frames::Count(1) => false,
+            Frames::Count(_) => true,
+            Frames::Delays(_) => true,
+        }
+    }
+
     pub fn num_sprites(&self) -> usize {
         self.dirs.count() * self.frames.count()
     }
@@ -312,6 +355,10 @@ impl State {
     #[inline]
     pub fn index_of_frame(&self, dir: Dir, frame: u32) -> u32 {
         self.index_of_dir(dir) + frame * self.dirs.count() as u32
+    }
+
+    pub fn get_state_name_index(&self) -> StateIndex {
+        StateIndex(self.name.clone(), self.duplicate_index)
     }
 }
 
@@ -372,13 +419,13 @@ fn parse_metadata(data: &str) -> io::Result<Metadata> {
     let mut state: Option<State> = None;
     let mut frames_so_far = 0;
 
+    let mut duplicate_map: HashMap<String, u32> = HashMap::new();
+
     for line in lines {
         if line.starts_with("# END DMI") {
             break;
         }
-        let mut split = line.trim().splitn(2, " = ");
-        let key = split.next().unwrap();
-        let value = split.next().unwrap();
+        let (key, value) = line.trim().split_once(" = ").unwrap();
         match key {
             "width" => metadata.width = value.parse().unwrap(),
             "height" => metadata.height = value.parse().unwrap(),
@@ -389,19 +436,29 @@ fn parse_metadata(data: &str) -> io::Result<Metadata> {
                 }
                 let unquoted = value[1..value.len() - 1].to_owned(); // TODO: unquote
                 assert!(!unquoted.contains('\\') && !unquoted.contains('"'));
-                if !metadata.state_names.contains_key(&unquoted) {
-                    metadata.state_names.insert(unquoted.clone(), metadata.states.len());
-                }
 
-                state = Some(State {
+                let count = duplicate_map.entry(unquoted.clone()).or_insert(0);
+
+                let new_state = State {
                     offset: frames_so_far,
                     name: unquoted,
                     loop_: 0,
+                    duplicate_index: *count,
                     rewind: false,
                     movement: false,
                     dirs: Dirs::One,
                     frames: Frames::One,
-                });
+                };
+
+                let key = new_state.get_state_name_index();
+
+                if let std::collections::btree_map::Entry::Vacant(e) = metadata.state_names.entry(key) {
+                    e.insert(metadata.states.len());
+                }
+
+                state = Some(new_state);
+
+                *count += 1;
             }
             "dirs" => {
                 let state = state.as_mut().unwrap();
@@ -447,4 +504,52 @@ fn parse_metadata(data: &str) -> io::Result<Metadata> {
     metadata.states.extend(state);
 
     Ok(metadata)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn duplicate_states() {
+        let description = r##"
+# BEGIN DMI
+version = 4.0
+    width = 32
+    height = 32
+state = "duplicate"
+    dirs = 1
+    frames = 1
+state = "duplicate"
+    dirs = 1
+    frames = 1
+state = "duplicate"
+    dirs = 1
+    frames = 1
+# END DMI
+"##.trim();
+
+        let metadata = parse_metadata(description).unwrap();
+        assert_eq!(metadata.state_names.len(), 3);
+        assert_eq!(
+            metadata.state_names,
+            BTreeMap::from([
+                (StateIndex("duplicate".to_owned(), 0), 0),
+                (StateIndex("duplicate".to_owned(), 1), 1),
+                (StateIndex("duplicate".to_owned(), 2), 2)
+            ])
+        );
+        assert_eq!(metadata.states.len(), 3);
+
+        for (no, state) in metadata.states.iter().enumerate() {
+            if no == 0 {
+                assert_eq!(state.duplicate_index, 0)
+            } else {
+                assert_eq!(state.duplicate_index, no as u32);
+            }
+
+            // Note: using `no` here only works by virtue of the test data being only composed of duplicates
+            assert_eq!(no, *metadata.state_names.get(&state.get_state_name_index()).unwrap())
+        }
+    }
 }

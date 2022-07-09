@@ -20,7 +20,11 @@ pub type Rect = (u32, u32, u32, u32);
 // ----------------------------------------------------------------------------
 // Icon file and metadata handling
 
+#[cfg(all(feature = "png", feature = "gif"))]
+pub mod render;
+
 /// An image with associated DMI metadata.
+#[derive(Debug)]
 pub struct IconFile {
     /// The icon's metadata.
     pub metadata: Metadata,
@@ -42,7 +46,7 @@ impl IconFile {
     }
 
     #[inline]
-    pub fn rect_of(&self, icon_state: &str, dir: Dir) -> Option<Rect> {
+    pub fn rect_of(&self, icon_state: &StateIndex, dir: Dir) -> Option<Rect> {
         self.metadata.rect_of(self.image.width, icon_state, dir, 0)
     }
 
@@ -56,9 +60,18 @@ impl IconFile {
             self.metadata.height,
         )
     }
+
+    pub fn get_icon_state(&self, icon_state: &StateIndex) -> io::Result<&State> {
+        self.metadata.get_icon_state(icon_state).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("icon_state {} not found", icon_state),
+            )
+        })
+    }
 }
 
-#[derive(Default, Clone, Copy, Pod, Zeroable, Eq, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, Pod, Zeroable, Eq, PartialEq)]
 #[repr(C)]
 pub struct Rgba8 {
     pub r: u8,
@@ -99,6 +112,7 @@ impl IndexMut<u8> for Rgba8 {
 // Image manipulation
 
 /// A two-dimensional RGBA image.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Image {
     pub width: u32,
     pub height: u32,
@@ -129,7 +143,7 @@ impl Image {
         }
     }
 
-    /// Read an `Image` from a `&[u8]` slice.
+    /// Read an `Image` from a [u8] array.
     ///
     /// Prefer to call `IconFile::from_bytes`, which can read both metadata and
     /// image contents at one time.
@@ -157,6 +171,10 @@ impl Image {
         Self::from_bytes(&std::fs::read(path)?)
     }
 
+    pub fn clear(&mut self) {
+        self.data.fill(Default::default())
+    }
+
     #[cfg(feature = "png")]
     pub fn to_write<W: std::io::Write>(&self, writer: W) -> io::Result<()> {
         {
@@ -165,7 +183,6 @@ impl Image {
             encoder.set_depth(::png::BitDepth::Eight);
             let mut writer = encoder.write_header()?;
             // TODO: metadata with write_chunk()
-
             writer.write_image_data(bytemuck::cast_slice(self.data.as_slice().unwrap()))?;
         }
         Ok(())
