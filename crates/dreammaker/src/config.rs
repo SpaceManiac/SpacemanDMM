@@ -48,6 +48,7 @@ pub struct Langserver {
 pub struct CodeStandards {
     pub disallow_relative_proc_definitions: bool,
     pub disallow_relative_type_definitions: bool,
+    pub disallow_turf_contents_iteration: bool,
 }
 
 /// DMDoc config options

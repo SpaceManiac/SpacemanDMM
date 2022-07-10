@@ -95,6 +95,7 @@ The `[code_standards]` section has the following options:
 
 * `disallow_relative_proc_definitions` - Raised on relative pathed proc definitions
 * `disallow_relative_type_definitions` - Raised on relative pathed subtype defintions
+* `disallow_turf_contents_iteration` - Raised on attempting to use a for loop over a turf or turf.contents
 
 ### DM Doc
 
