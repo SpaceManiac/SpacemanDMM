@@ -120,6 +120,10 @@ impl Config {
         Ok(toml::from_str(&config_toml)?)
     }
 
+    pub fn read_toml_string(toml: String) -> Result<Config, Error> {
+        Ok(toml::from_str(&toml)?)
+    }
+
     fn config_warninglevel(&self, error: &DMError) -> Option<&WarningLevel> {
         if let Some(errortype) = error.errortype() {
             return self.diagnostics.get(errortype)
