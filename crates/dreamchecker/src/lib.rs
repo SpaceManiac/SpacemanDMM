@@ -692,7 +692,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                             .with_blocking_builtins(self.sleeping_procs.get_violators(*child_violator).unwrap())
                             .register(self.context)
                     }
-                } 
+                }
                 if let Some(calledvec) = self.call_tree.get(&nextproc) {
                     for (proccalled, location, new_context) in calledvec.iter() {
                         let mut newstack = callstack.clone();
@@ -743,7 +743,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                             .with_blocking_builtins(self.impure_procs.get_violators(*child_violator).unwrap())
                             .register(self.context)
                     }
-                } 
+                }
                 if let Some(calledvec) = self.call_tree.get(&nextproc) {
                     for (proccalled, location, new_context) in calledvec.iter() {
                         let mut newstack = callstack.clone();
@@ -1390,7 +1390,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                             let ty = self.visit_term(term.location, &term.elem, None, &mut scoped_locals);
                             if ty.static_ty == StaticType::Type(self.objtree.expect("/turf")) {
                                 if follow.is_empty() {
-                                    error(location, "iterating over turf contents")
+                                    error(term.location, "iterating over turf contents")
                                         .set_severity(Severity::Error)
                                         .register(self.context);
                                 }
@@ -1398,7 +1398,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                                 if follow.len() == 1 {
                                     if let Follow::Field(_, ident) = &follow.first().unwrap().elem {
                                         if ident == "contents" {
-                                            error(location, "iterating over turf contents")
+                                            error(term.location, "iterating over turf contents")
                                                 .set_severity(Severity::Error)
                                                 .register(self.context);
                                         }
