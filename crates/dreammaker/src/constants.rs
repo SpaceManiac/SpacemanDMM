@@ -13,20 +13,33 @@ use super::objtree::*;
 use super::preprocessor::DefineMap;
 use super::{Context, DMError, HasLocation, Location, Severity};
 
+pub type Arguments = [(Constant, Option<Constant>)];
+
 /// An absolute typepath and optional variables.
 ///
 /// The path may involve `/proc` or `/verb` references.
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct Pop {
     pub path: TreePath,
     pub vars: IndexMap<Ident, Constant, RandomState>,
 }
 
+impl PartialEq for Pop {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path && self.vars == other.vars
+    }
+}
+
+impl Eq for Pop {}
 
 impl std::hash::Hash for Pop {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.path.hash(state);
-        self.vars.keys().for_each(|key| {key.hash(state)});
+        let mut items: Vec<_> = self.vars.iter().collect();
+        items.sort_by_key(|&(k, _)| k);
+        for kvp in items {
+            kvp.hash(state);
+        }
     }
 }
 
@@ -58,12 +71,12 @@ pub enum Constant {
         /// The type to be instantiated.
         type_: Option<Box<Pop>>,
         /// The list of arugments to pass to the `New()` proc.
-        args: Option<Box<[(Constant, Option<Constant>)]>>,
+        args: Option<Box<Arguments>>,
     },
     /// A `list` literal. Elements have optional associations.
-    List(Box<[(Constant, Option<Constant>)]>),
+    List(Box<Arguments>),
     /// A call to a constant type constructor.
-    Call(ConstFn, Box<[(Constant, Option<Constant>)]>),
+    Call(ConstFn, Box<Arguments>),
     /// A prefab literal.
     Prefab(Box<Pop>),
     /// A string literal.
@@ -144,8 +157,8 @@ impl Constant {
     // ------------------------------------------------------------------------
     // Constructors
 
-    pub fn null() -> &'static Constant {
-        static NULL: Constant = Constant::Null(None);
+    pub const fn null<'a>() -> &'a Constant {
+        const NULL: Constant = Constant::Null(None);
         &NULL
     }
 
@@ -407,7 +420,7 @@ pub fn evaluate_str(location: Location, input: &[u8]) -> Result<Constant, DMErro
     let expr = crate::parser::parse_expression(&ctx, location, &mut lexer)?;
     let leftover = lexer.remaining();
     if !leftover.is_empty() {
-        return Err(DMError::new(location, format!("leftover: {:?} {}", from_utf8_or_latin1_borrowed(&input), leftover.len())));
+        return Err(DMError::new(location, format!("leftover: {:?} {}", from_utf8_or_latin1_borrowed(input), leftover.len())));
     }
     expr.simple_evaluate(location)
 }
@@ -492,7 +505,7 @@ fn constant_ident_lookup(
         match type_.vars.get_mut(ident) {
             None => return Ok(ConstLookup::Continue(parent)),
             Some(var) => match var.value.constant.clone() {
-                Some(constant) => return Ok(ConstLookup::Found(decl.var_type.type_path.clone(), constant)),
+                Some(constant) => return Ok(ConstLookup::Found(decl.var_type.type_path, constant)),
                 None => match var.value.expression.clone() {
                     Some(expr) => {
                         if var.value.being_evaluated {
@@ -591,7 +604,7 @@ impl<'a> ConstantFolder<'a> {
     }
 
     /// arguments or keyword arguments
-    fn arguments(&mut self, v: Box<[Expression]>) -> Result<Box<[(Constant, Option<Constant>)]>, DMError> {
+    fn arguments(&mut self, v: Box<[Expression]>) -> Result<Box<Arguments>, DMError> {
         let mut out = Vec::with_capacity(v.len());
         for each in Vec::from(v).into_iter() {
             out.push(match each {
@@ -822,7 +835,7 @@ impl<'a> ConstantFolder<'a> {
                 return Err(self.error(format!("cannot reference variable {:?} in this context", ident)));
             }
             let tree = self.tree.as_mut().unwrap();
-            match constant_ident_lookup(tree, ty, &ident, must_be_const)
+            match constant_ident_lookup(tree, ty, ident, must_be_const)
                 .map_err(|e| e.with_location(location))?
             {
                 ConstLookup::Found(_, v) => return Ok(v),
@@ -900,27 +913,25 @@ impl<'a> ConstantFolder<'a> {
         // Only set space if it wasn't set manually by the space arg
         let space = if let Some(space) = space {
             space
-        } else {
-            if color_args.r || color_args.g || color_args.b {
-                // TODO: Add hint here for useless r/g/b kwarg
-                ColorSpace::Rgb
-            } else if color_args.h {
-                if color_args.c && color_args.y {
-                    ColorSpace::Hcy
-                } else if color_args.s {
-                    if color_args.v {
-                        ColorSpace::Hsv
-                    } else if color_args.l {
-                        ColorSpace::Hsl
-                    } else {
-                        return Err(self.error("malformed rgb() call, could not determine space: only h & s specified"));
-                    }
+        } else if color_args.r || color_args.g || color_args.b {
+            // TODO: Add hint here for useless r/g/b kwarg
+            ColorSpace::Rgb
+        } else if color_args.h {
+            if color_args.c && color_args.y {
+                ColorSpace::Hcy
+            } else if color_args.s {
+                if color_args.v {
+                    ColorSpace::Hsv
+                } else if color_args.l {
+                    ColorSpace::Hsl
                 } else {
-                    return Err(self.error("malformed rgb() call, could not determine space: only h specified"));
+                    return Err(self.error("malformed rgb() call, could not determine space: only h & s specified"));
                 }
             } else {
-                ColorSpace::Rgb  // Default
+                return Err(self.error("malformed rgb() call, could not determine space: only h specified"));
             }
+        } else {
+            ColorSpace::Rgb  // Default
         };
 
         let mut value_vec: Vec<f64> = vec![];
@@ -999,7 +1010,7 @@ impl<'a> ConstantFolder<'a> {
         };
 
         // Extract the raw 4th alpha positional argument if it wasn't a kwarg
-        let alpha = color_args.a.or(value_vec.get(3).map(|&x| x as i32));
+        let alpha = color_args.a.or_else(|| value_vec.get(3).map(|&x| x as i32));
 
         // APPARENTLY the author thinks fractional rgb is a thing, hence the rounding
         if let Some(alpha) = alpha {

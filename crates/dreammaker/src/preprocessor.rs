@@ -624,7 +624,9 @@ impl<'ctx> Preprocessor<'ctx> {
 
     /// Something other than a `#define` was encountered, docs are not for us.
     fn flush_docs(&mut self) {
-        self.docs_out.extend(self.docs_in.drain(..));
+        if !self.docs_in.is_empty() {
+            self.docs_out.extend(self.docs_in.drain(..));
+        }
     }
 
     // ------------------------------------------------------------------------
@@ -641,7 +643,7 @@ impl<'ctx> Preprocessor<'ctx> {
 
         // Make sure the file hasn't already been included.
         // All DM source is effectively `#pragma once`.
-        let file_id = self.context.register_file(&register);
+        let file_id = self.context.register_file(register);
         if let Some(&loc) = self.include_locations.get(&file_id) {
             Err(DMError::new(self.last_input_loc, format!("duplicate #include {:?}", path))
                 .set_severity(Severity::Warning)
@@ -652,7 +654,7 @@ impl<'ctx> Preprocessor<'ctx> {
             Ok(Include::File {
                 path,
                 //file: file_id,
-                lexer: Lexer::from_read(&self.context, file_id, read)?,
+                lexer: Lexer::from_read(self.context, file_id, read)?,
             })
         }
     }
@@ -744,7 +746,7 @@ impl<'ctx> Preprocessor<'ctx> {
                         expect_token!((path_str) = Token::String(path_str));
                         let include_loc = _last_expected_loc;
                         expect_token!(() = Token::Punct(Punctuation::Newline));
-                        let path = PathBuf::from(path_str.replace("\\", "/"));
+                        let path = PathBuf::from(path_str.replace('\\', "/"));
 
                         for candidate in vec![
                             // 1. relative to file in which `#include` appears.
@@ -757,6 +759,8 @@ impl<'ctx> Preprocessor<'ctx> {
                             }
                             // Double-match is used to let go of the borrow of
                             // `candidate` so it can be used in the second half.
+                            // This is how BYOND refers to it's file formats, this is how we should refer to them.
+                            #[allow(clippy::upper_case_acronyms)]
                             enum FileType {
                                 DMM,
                                 DMF,
@@ -815,9 +819,8 @@ impl<'ctx> Preprocessor<'ctx> {
                         // Skip to the end of the line, or else we'll catch
                         // stringify operators `#X` as unknown directives.
                         loop {
-                            match next!() {
-                                Token::Punct(Punctuation::Newline) => break,
-                                _ => {}
+                            if let Token::Punct(Punctuation::Newline) = next!() {
+                                break
                             }
                         }
                     }

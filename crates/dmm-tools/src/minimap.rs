@@ -6,7 +6,7 @@ use ndarray::Axis;
 use dm::objtree::*;
 use dm::constants::Constant;
 use crate::dmm::{Map, ZLevel, Prefab};
-use crate::dmi::{Dir, Image};
+use crate::dmi::{self, Dir, Image};
 use crate::render_passes::RenderPass;
 use crate::icon_cache::IconCache;
 
@@ -29,6 +29,8 @@ pub struct Context<'a> {
     pub bump: &'a bumpalo::Bump,
 }
 
+// This should eventually be faliable and not just shrug it's shoulders at errors and log them.
+#[allow(clippy::result_unit_err)]
 pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
     let Context {
         objtree,
@@ -70,13 +72,13 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
             'atom: for atom in atoms.get(e).expect("bad key").iter() {
                 for pass in render_passes.iter() {
                     // Note that late_filter is NOT called during smoothing lookups.
-                    if !pass.late_filter(&atom, objtree) {
+                    if !pass.late_filter(atom, objtree) {
                         continue 'atom;
                     }
                 }
                 let mut sprite = Sprite::from_vars(objtree, atom);
                 for pass in render_passes {
-                    pass.adjust_sprite(&atom, &mut sprite, objtree, bump);
+                    pass.adjust_sprite(atom, &mut sprite, objtree, bump);
                 }
                 if sprite.icon.is_empty() {
                     println!("no icon: {}", atom.type_.path);
@@ -139,7 +141,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
             None => continue,
         };
 
-        if let Some(rect) = icon_file.rect_of(sprite.icon_state, sprite.dir) {
+        if let Some(rect) = icon_file.rect_of(&sprite.icon_state.into(), sprite.dir) {
             let pixel_x = sprite.ofs_x;
             let pixel_y = sprite.ofs_y + icon_file.metadata.height as i32;
             let loc = (
@@ -163,7 +165,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
 }
 
 // OOB handling
-fn clip(bounds: (u32, u32), mut loc: (i32, i32), mut rect: (u32, u32, u32, u32)) -> Option<((u32, u32), (u32, u32, u32, u32))> {
+fn clip(bounds: dmi::Coordinate, mut loc: (i32, i32), mut rect: dmi::Rect) -> Option<(dmi::Coordinate, dmi::Rect)> {
     if loc.0 < 0 {
         rect.0 += (-loc.0) as u32;
         match rect.2.checked_sub((-loc.0) as u32) {
@@ -268,7 +270,7 @@ impl<'a> Atom<'a> {
 impl<'a> From<&'a Type> for Atom<'a> {
     fn from(type_: &'a Type) -> Self {
         Atom {
-            type_: type_,
+            type_,
             prefab: None,
             sprite: Sprite::default(),
         }
@@ -318,7 +320,7 @@ pub trait GetVar<'a> {
     fn get_path(&self) -> &str;
 
     fn get_var(&self, key: &str, objtree: &'a ObjectTree) -> &'a Constant {
-        self.get_var_inner(key, objtree).unwrap_or(Constant::null())
+        self.get_var_inner(key, objtree).unwrap_or_else(Constant::null)
     }
 
     fn get_var_notnull(&self, key: &str, objtree: &'a ObjectTree) -> Option<&'a Constant> {
@@ -337,7 +339,7 @@ impl<'a> GetVar<'a> for Atom<'a> {
     }
 
     fn get_var_inner(&self, key: &str, objtree: &'a ObjectTree) -> Option<&'a Constant> {
-        if let Some(ref prefab) = self.prefab {
+        if let Some(prefab) = self.prefab {
             if let Some(v) = prefab.get(key) {
                 return Some(v);
             }
@@ -345,7 +347,7 @@ impl<'a> GetVar<'a> for Atom<'a> {
         let mut current = Some(self.type_);
         while let Some(t) = current.take() {
             if let Some(v) = t.vars.get(key) {
-                return Some(v.value.constant.as_ref().unwrap_or(Constant::null()));
+                return Some(v.value.constant.as_ref().unwrap_or_else(Constant::null));
             }
             current = objtree.parent_of(t);
         }
@@ -365,7 +367,7 @@ impl<'a> GetVar<'a> for &'a Prefab {
         let mut current = objtree.find(&self.path);
         while let Some(t) = current.take() {
             if let Some(v) = t.get().vars.get(key) {
-                return Some(v.value.constant.as_ref().unwrap_or(Constant::null()));
+                return Some(v.value.constant.as_ref().unwrap_or_else(Constant::null));
             }
             current = t.parent_type();
         }
@@ -382,7 +384,7 @@ impl<'a> GetVar<'a> for &'a Type {
         let mut current = Some(*self);
         while let Some(t) = current.take() {
             if let Some(v) = t.vars.get(key) {
-                return Some(v.value.constant.as_ref().unwrap_or(Constant::null()));
+                return Some(v.value.constant.as_ref().unwrap_or_else(Constant::null));
             }
             current = objtree.parent_of(t);
         }
@@ -399,7 +401,7 @@ impl<'a> GetVar<'a> for TypeRef<'a> {
         let mut current = Some(*self);
         while let Some(t) = current.take() {
             if let Some(v) = t.get().vars.get(key) {
-                return Some(v.value.constant.as_ref().unwrap_or(Constant::null()));
+                return Some(v.value.constant.as_ref().unwrap_or_else(Constant::null));
             }
             current = t.parent_type();
         }
@@ -520,7 +522,7 @@ impl<'s> Sprite<'s> {
             category: Category::from_path(vars.get_path()),
             icon: vars.get_var("icon", objtree).as_path_str().unwrap_or(""),
             icon_state: vars.get_var("icon_state", objtree).as_str().unwrap_or(""),
-            dir: vars.get_var("dir", objtree).to_int().and_then(Dir::from_int).unwrap_or(Dir::default()),
+            dir: vars.get_var("dir", objtree).to_int().and_then(Dir::from_int).unwrap_or_default(),
             color: color_of(objtree, vars),
             ofs_x: pixel_x + pixel_w + step_x,
             ofs_y: pixel_y + pixel_z + step_y,
@@ -568,12 +570,12 @@ pub(crate) fn layer_of<'s, T: GetVar<'s> + ?Sized>(objtree: &'s ObjectTree, atom
 
 pub fn color_of<'s, T: GetVar<'s> + ?Sized>(objtree: &'s ObjectTree, atom: &T) -> [u8; 4] {
     let alpha = match atom.get_var("alpha", objtree) {
-        &Constant::Float(i) if i >= 0. && i <= 255. => i as u8,
+        &Constant::Float(i) if (0. ..=255.).contains(&i) => i as u8,
         _ => 255,
     };
 
-    match atom.get_var("color", objtree) {
-        &Constant::String(ref color) if color.starts_with("#") => {
+    match *atom.get_var("color", objtree) {
+        Constant::String(ref color) if color.starts_with('#') => {
             let mut sum = 0;
             for ch in color[1..color.len()].chars() {
                 sum = 16 * sum + ch.to_digit(16).unwrap_or(0);
@@ -591,7 +593,7 @@ pub fn color_of<'s, T: GetVar<'s> + ?Sized>(objtree: &'s ObjectTree, atom: &T) -
                 [255, 255, 255, alpha]  // invalid
             }
         }
-        &Constant::String(ref color) => match html_color(color) {
+        Constant::String(ref color) => match html_color(color) {
             Some([r, g, b]) => [r, g, b, alpha],
             None => [255, 255, 255, alpha],
         }

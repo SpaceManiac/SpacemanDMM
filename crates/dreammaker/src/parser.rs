@@ -3,6 +3,9 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::ops::Range;
+use std::str::FromStr;
+
+use crate::ast;
 
 use super::{DMError, Location, HasLocation, Context, Severity, FileId};
 use super::lexer::{LocatedToken, Token, Punctuation};
@@ -90,6 +93,8 @@ impl OpInfo {
 }
 
 #[derive(Debug, Clone, Copy)]
+// Too much effort to change now, and it matches the ast naming, so whatever
+#[allow(clippy::enum_variant_names)]
 enum Op {
     BinaryOp(BinaryOp),
     AssignOp(AssignOp),
@@ -251,12 +256,11 @@ impl TTKind {
     }
 
     fn is_end(self, token: &Token) -> bool {
-        match (self, token) {
-            (TTKind::Paren, &Token::Punct(Punctuation::RParen)) => true,
-            (TTKind::Brace, &Token::Punct(Punctuation::RBrace)) => true,
-            (TTKind::Bracket, &Token::Punct(Punctuation::RBracket)) => true,
-            _ => false,
-        }
+        matches!((self, token),
+            (TTKind::Paren, &Token::Punct(Punctuation::RParen))
+            | (TTKind::Brace, &Token::Punct(Punctuation::RBrace))
+            | (TTKind::Bracket, &Token::Punct(Punctuation::RBracket))
+        )
     }
 }
 
@@ -586,9 +590,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     fn tree_block(&mut self, current: NodeIndex, proc_kind: Option<ProcDeclKind>, var_type: Option<VarTypeBuilder>) -> Status<()> {
         leading!(self.exact(Token::Punct(Punctuation::LBrace)));
-        Ok(Some(require!(
-            self.tree_entries(current, proc_kind, var_type, Token::Punct(Punctuation::RBrace))
-        )))
+        require!(self.tree_entries(current, proc_kind, var_type, Token::Punct(Punctuation::RBrace)));
+        SUCCESS
     }
 
     fn tree_entries(&mut self, current: NodeIndex, proc_kind: Option<ProcDeclKind>, var_type: Option<VarTypeBuilder>, terminator: Token) -> Status<()> {
@@ -981,7 +984,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             let result = {
                 let mut subparser: Parser<'ctx, '_, '_> = Parser::new(self.context, body_tt);
                 if let Some(a) = self.annotations.as_mut() {
-                    subparser.annotations = Some(&mut *a);
+                    subparser.annotations = Some(*a);
                 }
                 let block = subparser.block(&LoopContext::None);
                 subparser.require(block)
@@ -1009,7 +1012,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 proc.docs.extend(comment);
                 // manually performed for borrowck reasons
                 if let Some(dest) = self.annotations.as_mut() {
-                    let new_stack = reconstruct_path(&self.tree.get_path(current), proc_kind, None, name);
+                    let new_stack = reconstruct_path(self.tree.get_path(current), proc_kind, None, name);
                     dest.insert(entry_start..body_start, Annotation::ProcHeader(new_stack.to_vec(), idx));
                     dest.insert(body_start..self.location, Annotation::ProcBody(new_stack.to_vec(), idx));
                 }
@@ -1142,8 +1145,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
         let ident = leading!(self.ident());
         let mut as_what = match InputType::from_str(&ident) {
-            Some(what) => what,
-            None => {
+            Ok(what) => what,
+            Err(()) => {
                 self.context.register_error(self.error(format!("bad input type: '{}'", ident)));
                 InputType::empty()
             }
@@ -1151,8 +1154,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         while let Some(()) = self.exact(Token::Punct(Punctuation::BitOr))? {
             let ident = require!(self.ident());
             match InputType::from_str(&ident) {
-                Some(what) => as_what |= what,
-                None => {
+                Ok(what) => as_what |= what,
+                Err(()) => {
                     self.context.register_error(self.error(format!("bad input type: '{}'", ident)));
                 }
             }
@@ -1397,15 +1400,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             let try_block = require!(self.block(loop_ctx));
             self.skip_phantom_semicolons()?;
             require!(self.exact_ident("catch"));
-            let catch_params;
-            if let Some(()) = self.exact(Token::Punct(Punctuation::LParen))? {
-                catch_params = require!(self.separated(Punctuation::Comma, Punctuation::RParen, None, |this| {
+            let catch_params = if let Some(()) = self.exact(Token::Punct(Punctuation::LParen))? {
+                require!(self.separated(Punctuation::Comma, Punctuation::RParen, None, |this| {
                     // TODO: improve upon this cheap approximation
                     success(leading!(this.tree_path(true)).1.into_boxed_slice())
-                }));
+                }))
             } else {
-                catch_params = Vec::new();
-            }
+                Vec::new()
+            };
             let catch_block = require!(self.block(loop_ctx));
             spanned(Statement::TryCatch {
                 try_block,
@@ -1591,6 +1593,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     // for(var/a = 1 to 20
     // for(var/a in 1 to 20
+    // This... isn't a boxed local, it's method arguments. Clippy??
+    #[allow(clippy::boxed_local)]
     fn for_range(
         &mut self,
         var_type: Option<VarType>,
@@ -2183,10 +2187,10 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         let follow = match self.arguments(belongs_to, &ident)? {
             Some(args) => {
                 if !belongs_to.is_empty() {
-                    let past = std::mem::replace(belongs_to, Vec::new());
+                    let past = std::mem::take(belongs_to);
                     self.annotate_precise(start..end, || Annotation::ScopedCall(past, ident.clone()));
                 }
-                Follow::Call(kind, ident.into(), args.into())
+                Follow::Call(kind, ident.into(), args)
             },
             None => {
                 if !belongs_to.is_empty() {
@@ -2267,7 +2271,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }
     }
 
-    fn pick_arguments(&mut self) -> Status<Box<[(Option<Expression>, Expression)]>> {
+    fn pick_arguments(&mut self) -> Status<Box<ast::PickArgs>> {
         leading!(self.exact(Token::Punct(Punctuation::LParen)));
         success(require!(self.separated(
             Punctuation::Comma,

@@ -33,6 +33,8 @@ impl Debugger {
 
                         let bytecode = extools.bytecode(&frame.proc, frame.override_id);
                         return Ok(EvaluateResponse::from(Self::format_disassembly(bytecode)));
+                    } else {
+                        return Err(Box::new(GenericError("Unknown #command")));
                     }
                 }
             }

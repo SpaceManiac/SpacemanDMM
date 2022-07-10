@@ -180,13 +180,11 @@ impl From<Severity> for WarningLevel {
 
 impl PartialEq<Severity> for WarningLevel {
     fn eq(&self, other: &Severity) -> bool {
-        match (self, other) {
-            (WarningLevel::Error, Severity::Error) => true,
-            (WarningLevel::Warning, Severity::Warning) => true,
-            (WarningLevel::Info, Severity::Info) => true,
-            (WarningLevel::Hint, Severity::Hint) => true,
-            _ => false,
-        }
+        matches!((self, other),
+            (WarningLevel::Error, Severity::Error)
+            | (WarningLevel::Warning, Severity::Warning)
+            | (WarningLevel::Info, Severity::Info)
+            | (WarningLevel::Hint, Severity::Hint))
     }
 }
 

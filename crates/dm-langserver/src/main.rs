@@ -133,8 +133,8 @@ impl ClientCaps {
             }
         }
         if let Some(ref experimental) = caps.experimental {
-            if let Some(ref dreammaker) = experimental.get("dreammaker") {
-                if let Some(ref object_tree) = dreammaker.get("objectTree") {
+            if let Some(dreammaker) = experimental.get("dreammaker") {
+                if let Some(object_tree) = dreammaker.get("objectTree") {
                     if let Some(value) = object_tree.as_bool() {
                         this.object_tree = value;
                     }
@@ -153,7 +153,7 @@ struct DiagnosticsTracker {
 impl DiagnosticsTracker {
     fn file_url(root: Option<&Url>, file_list: &dm::FileList, file: dm::FileId) -> Option<Url> {
         let fname_string = file_list.get_path(file).display().to_string();
-        if let Some(ref root) = root {
+        if let Some(root) = root {
             root.join(&fname_string).ok()
         } else {
             Url::parse(&fname_string).ok()
@@ -199,7 +199,7 @@ impl DiagnosticsTracker {
                 for note in error.notes().iter() {
                     let diag = lsp_types::Diagnostic {
                         message: note.description().to_owned(),
-                        severity: Some(lsp_types::DiagnosticSeverity::Information),
+                        severity: Some(lsp_types::DiagnosticSeverity::INFORMATION),
                         range: location_to_range(note.location()),
                         source: component_to_source(error.component()),
                         .. Default::default()
@@ -245,7 +245,7 @@ struct Engine<'a> {
     docs: document::DocumentStore,
 
     status: InitStatus,
-    parent_pid: u64,
+    parent_pid: u32,
     threads: Vec<std::thread::JoinHandle<()>>,
     root: Option<Url>,
 
@@ -381,7 +381,7 @@ impl<'a> Engine<'a> {
     fn recurse_objtree(&self, ty: TypeRef) -> extras::ObjectTreeType {
         let mut entry = extras::ObjectTreeType {
             name: ty.name().to_owned(),
-            kind: lsp_types::SymbolKind::Class,
+            kind: lsp_types::SymbolKind::CLASS,
             location: self.convert_location(ty.location, &ty.docs, &[&ty.path]).ok(),
             vars: Vec::new(),
             procs: Vec::new(),
@@ -393,7 +393,7 @@ impl<'a> Engine<'a> {
             let is_declaration = var.declaration.is_some();
             entry.vars.push(extras::ObjectTreeVar {
                 name: name.to_owned(),
-                kind: lsp_types::SymbolKind::Field,
+                kind: lsp_types::SymbolKind::FIELD,
                 location: self.convert_location(var.value.location, &var.value.docs, &[&ty.path, "/var/", name]).ok(),
                 is_declaration,
             });
@@ -406,7 +406,7 @@ impl<'a> Engine<'a> {
             for value in proc.value.iter() {
                 entry.procs.push(extras::ObjectTreeProc {
                     name: name.to_owned(),
-                    kind: lsp_types::SymbolKind::Method,
+                    kind: lsp_types::SymbolKind::METHOD,
                     location: self.convert_location(value.location, &value.docs, &[&ty.path, "/proc/", name]).ok(),
                     is_verb,
                 });
@@ -485,7 +485,7 @@ impl<'a> Engine<'a> {
         let elapsed = start.elapsed(); start += elapsed;
         {
             let disk = ctx.get_io_time();
-            let parse = elapsed - disk;
+            let parse = elapsed.saturating_sub(disk);
             eprint!("disk {}.{:03}s - parse {}.{:03}s", disk.as_secs(), disk.subsec_millis(), parse.as_secs(), parse.subsec_millis());
         }
 
@@ -580,17 +580,17 @@ impl<'a> Engine<'a> {
                         Ok(path) => path,
                         Err(_) => "<outside workspace>".as_ref(),
                     };
-                    let (real_file_id, mut preprocessor) = match self.context.get_file(&stripped) {
-                        Some(id) => (id, defines.branch_at_file(id, &self.context)),
-                        None => (FileId::default(), defines.branch_at_end(&self.context)),
+                    let (real_file_id, mut preprocessor) = match self.context.get_file(stripped) {
+                        Some(id) => (id, defines.branch_at_file(id, self.context)),
+                        None => (FileId::default(), defines.branch_at_end(self.context)),
                     };
                     let contents = self.docs.read(url).map_err(invalid_request)?;
                     let file_id = preprocessor.push_file(stripped.to_owned(), contents).map_err(invalid_request)?;
                     preprocessor.enable_annotations();
                     let mut annotations = AnnotationTree::default();
                     {
-                        let indent = dm::indents::IndentProcessor::new(&self.context, &mut preprocessor);
-                        let parser = dm::parser::Parser::new(&self.context, indent);
+                        let indent = dm::indents::IndentProcessor::new(self.context, &mut preprocessor);
+                        let parser = dm::parser::Parser::new(self.context, indent);
                         parser.parse_annotations_only(&mut annotations);
                     }
                     annotations.merge(preprocessor.take_annotations().unwrap());
@@ -601,7 +601,7 @@ impl<'a> Engine<'a> {
                     let filename = url.to_string();
 
                     let contents = self.docs.get_contents(url).map_err(invalid_request)?.into_owned();
-                    let mut pp = dm::preprocessor::Preprocessor::from_buffer(&self.context, filename.clone().into(), contents);
+                    let mut pp = dm::preprocessor::Preprocessor::from_buffer(self.context, filename.clone().into(), contents);
                     let file_id = self.context.get_file(filename.as_ref()).expect("file didn't exist?");
                     // Clear old errors for this file. Hacky, but it will work for now.
                     self.context.errors_mut().retain(|error| error.location().file != file_id);
@@ -609,8 +609,8 @@ impl<'a> Engine<'a> {
                     pp.enable_annotations();
                     let mut annotations = AnnotationTree::default();
                     {
-                        let indent = dm::indents::IndentProcessor::new(&self.context, &mut pp);
-                        let mut parser = dm::parser::Parser::new(&self.context, indent);
+                        let indent = dm::indents::IndentProcessor::new(self.context, &mut pp);
+                        let mut parser = dm::parser::Parser::new(self.context, indent);
                         parser.annotate_to(&mut annotations);
                         // Every time anyone types anything the object tree is replaced.
                         // This is probably really inefficient, but it will do until
@@ -618,7 +618,7 @@ impl<'a> Engine<'a> {
                         self.objtree = Arc::new(parser.parse_object_tree());
                     }
                     pp.finalize();
-                    dreamchecker::run(&self.context, &self.objtree);
+                    dreamchecker::run(self.context, &self.objtree);
 
                     // Perform a diagnostics pump on this file only.
                     // Assume all errors are in this file.
@@ -660,7 +660,7 @@ impl<'a> Engine<'a> {
                             for note in error.notes().iter() {
                                 let diag = lsp_types::Diagnostic {
                                     message: note.description().to_owned(),
-                                    severity: Some(lsp_types::DiagnosticSeverity::Information),
+                                    severity: Some(lsp_types::DiagnosticSeverity::INFORMATION),
                                     range: location_to_range(note.location()),
                                     source: component_to_source(error.component()),
                                     .. Default::default()
@@ -694,13 +694,11 @@ impl<'a> Engine<'a> {
             // chop off proc name and 'proc/' or 'verb/' if it's there
             // TODO: factor this logic somewhere
             let mut proc_path = &proc_path[..];
-            match proc_path.split_last() {
-                Some((name, rest)) => {
-                    proc_name = Some((name.as_str(), *idx));
-                    proc_path = rest;
-                }
-                _ => {}
+            if let Some((name, rest)) = proc_path.split_last() {
+                proc_name = Some((name.as_str(), *idx));
+                proc_path = rest;
             }
+
             match proc_path.split_last() {
                 Some((kwd, rest)) if kwd == "proc" || kwd == "verb" => proc_path = rest,
                 _ => {}
@@ -744,7 +742,7 @@ impl<'a> Engine<'a> {
         }
 
         // proc parameters
-        let ty = ty.unwrap_or(self.objtree.root());
+        let ty = ty.unwrap_or_else(|| self.objtree.root());
         if let Some((proc_name, idx)) = proc_name {
             if let Some(proc) = ty.get().procs.get(proc_name) {
                 if let Some(value) = proc.value.get(idx) {
@@ -877,7 +875,7 @@ impl<'a> Engine<'a> {
         },
         Annotation::UnscopedCall(proc_name) => {
             let (ty, _) = self.find_type_context(&iter);
-            let mut next = ty.or(Some(self.objtree.root()));
+            let mut next = ty.or_else(|| Some(self.objtree.root()));
             while let Some(ty) = next {
                 if let Some(proc) = ty.procs.get(proc_name) {
                     if let Some(ref decl) = proc.declaration {
@@ -959,7 +957,7 @@ impl<'a> Engine<'a> {
                         }
                         let _ = write!(message, "{}", each);
                     }
-                    message.push_str(")");
+                    message.push(')');
                     defstring = message.clone();
                 }
 
@@ -1056,7 +1054,7 @@ impl<'a> Engine<'a> {
             },
             Call::Notification(notification) => {
                 if let Err(e) = self.handle_notification(notification) {
-                    self.show_message(MessageType::Error, e.message);
+                    self.show_message(MessageType::ERROR, e.message);
                 }
                 None
             },
@@ -1156,20 +1154,21 @@ handle_method_call! {
 
         InitializeResult {
             capabilities: ServerCapabilities {
-                definition_provider: Some(true),
-                workspace_symbol_provider: Some(true),
+                definition_provider: Some(OneOf::Left(true)),
+                workspace_symbol_provider: Some(OneOf::Left(true)),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
-                document_symbol_provider: Some(true),
-                references_provider: Some(true),
+                document_symbol_provider: Some(OneOf::Left(true)),
+                references_provider: Some(OneOf::Left(true)),
                 implementation_provider: Some(ImplementationProviderCapability::Simple(true)),
                 type_definition_provider: Some(TypeDefinitionProviderCapability::Simple(true)),
                 text_document_sync: Some(TextDocumentSyncCapability::Options(TextDocumentSyncOptions {
                     open_close: Some(true),
-                    change: Some(TextDocumentSyncKind::Incremental),
+                    change: Some(TextDocumentSyncKind::INCREMENTAL),
                     .. Default::default()
                 })),
                 completion_provider: Some(CompletionOptions {
                     trigger_characters: Some(vec![".".to_owned(), ":".to_owned(), "/".to_owned()]),
+                    all_commit_characters: None,
                     resolve_provider: None,
                     work_done_progress_options: Default::default(),
                 }),
@@ -1213,9 +1212,10 @@ handle_method_call! {
                 if query.matches_define(name) {
                     results.push(SymbolInformation {
                         name: name.to_owned(),
-                        kind: SymbolKind::Constant,
+                        kind: SymbolKind::CONSTANT,
                         location: self.convert_location(range.start, define.docs(), &["/DM/preprocessor/", name])?,
                         container_name: None,
+                        tags: None,
                         deprecated: None,
                     });
                 }
@@ -1226,9 +1226,10 @@ handle_method_call! {
             if query.matches_type(ty.name(), &ty.path) && !ty.is_root() {
                 results.push(SymbolInformation {
                     name: ty.name().to_owned(),
-                    kind: SymbolKind::Class,
+                    kind: SymbolKind::CLASS,
                     location: self.convert_location(ty.location, &ty.docs, &[&ty.path])?,
                     container_name: Some(ty.parent_path_str().to_owned()),
+                    tags: None,
                     deprecated: None,
                 });
             }
@@ -1238,12 +1239,13 @@ handle_method_call! {
             }
             for (var_name, tv) in ty.vars.iter() {
                 if let Some(decl) = tv.declaration.as_ref() {
-                    if query.matches_var(&var_name) {
+                    if query.matches_var(var_name) {
                         results.push(SymbolInformation {
                             name: var_name.clone(),
-                            kind: SymbolKind::Field,
+                            kind: SymbolKind::FIELD,
                             location: self.convert_location(decl.location, &tv.value.docs, &[&ty.path, "/var/", var_name])?,
                             container_name: Some(ty.path.clone()),
+                            tags: None,
                             deprecated: None,
                         });
                     }
@@ -1252,18 +1254,19 @@ handle_method_call! {
 
             for (proc_name, pv) in ty.procs.iter() {
                 if let Some(decl) = pv.declaration.as_ref() {
-                    if query.matches_proc(&proc_name, decl.kind) {
+                    if query.matches_proc(proc_name, decl.kind) {
                         results.push(SymbolInformation {
                             name: proc_name.clone(),
                             kind: if ty.is_root() {
-                                SymbolKind::Function
+                                SymbolKind::FUNCTION
                             } else if is_constructor_name(proc_name.as_str()) {
-                                SymbolKind::Constructor
+                                SymbolKind::CONSTRUCTOR
                             } else {
-                                SymbolKind::Method
+                                SymbolKind::METHOD
                             },
                             location: self.convert_location(decl.location, &pv.main_value().docs, &[&ty.path, "/proc/", proc_name])?,
                             container_name: Some(ty.path.clone()),
+                            tags: None,
                             deprecated: None,
                         });
                     }
@@ -1383,18 +1386,15 @@ handle_method_call! {
                 }
                 Annotation::UnscopedVar(var_name) if symbol_id.is_some() => {
                     let (ty, proc_name) = self.find_type_context(&iter);
-                    match self.find_unscoped_var(&iter, ty, proc_name, var_name) {
-                        UnscopedVar::Variable { ty, .. } => {
-                            if let Some(_decl) = ty.get_var_declaration(var_name) {
-                                results.append(&mut self.construct_var_hover(var_name, Some(ty), false)?);
-                            }
-                        },
-                        _ => {}
+                    if let UnscopedVar::Variable { ty, .. } = self.find_unscoped_var(&iter, ty, proc_name, var_name) {
+                        if let Some(_decl) = ty.get_var_declaration(var_name) {
+                            results.append(&mut self.construct_var_hover(var_name, Some(ty), false)?);
+                        }
                     }
                 }
                 Annotation::UnscopedCall(proc_name) if symbol_id.is_some() => {
                     let (ty, _) = self.find_type_context(&iter);
-                    let next = ty.or(Some(self.objtree.root()));
+                    let next = ty.or_else(|| Some(self.objtree.root()));
                     results.append(&mut self.construct_proc_hover(proc_name, next, false)?);
                 }
                 Annotation::ScopedCall(priors, proc_name) if symbol_id.is_some() => {
@@ -1468,7 +1468,7 @@ handle_method_call! {
         },
         Annotation::UnscopedCall(proc_name) => {
             let (ty, _) = self.find_type_context(&iter);
-            let mut next = ty.or(Some(self.objtree.root()));
+            let mut next = ty.or_else(|| Some(self.objtree.root()));
             while let Some(ty) = next {
                 if let Some(proc) = ty.procs.get(proc_name) {
                     results.push(self.convert_location(proc.main_value().location, &proc.main_value().docs, &[&ty.path, "/proc/", proc_name])?);
@@ -1713,7 +1713,7 @@ handle_method_call! {
                 // TODO: unscoped_completions calls find_type_context again
                 self.unscoped_completions(&mut results, &iter, "");
             } else {
-                self.tree_completions(&mut results, true, ty.unwrap_or(self.objtree.root()), "");
+                self.tree_completions(&mut results, true, ty.unwrap_or_else(|| self.objtree.root()), "");
             }
         }
 
@@ -1762,7 +1762,7 @@ handle_method_call! {
 
                         if self.client_caps.label_offset_support {
                             params.push(ParameterInformation {
-                                label: ParameterLabel::LabelOffsets([start as u64, end as u64]),
+                                label: ParameterLabel::LabelOffsets([start as u32, end as u32]),
                                 documentation: None,
                             });
                         } else {
@@ -1776,11 +1776,12 @@ handle_method_call! {
 
                     result = Some(SignatureHelp {
                         active_signature: Some(0),
-                        active_parameter: Some(idx as i64),
+                        active_parameter: Some(idx as u32),
                         signatures: vec![SignatureInformation {
-                            label: label,
+                            label,
                             parameters: Some(params),
                             documentation: None,
+                            active_parameter: None,
                         }],
                     });
                     break;
@@ -1834,7 +1835,8 @@ handle_method_call! {
                         result.push(DocumentSymbol {
                             name,
                             detail,
-                            kind: SymbolKind::Class,
+                            kind: SymbolKind::CLASS,
+                            tags: None,
                             deprecated: None,
                             range,
                             selection_range,
@@ -1845,7 +1847,8 @@ handle_method_call! {
                         result.push(DocumentSymbol {
                             name: path.last().unwrap().to_owned(),
                             detail: None,
-                            kind: SymbolKind::Field,
+                            kind: SymbolKind::FIELD,
+                            tags: None,
                             deprecated: None,
                             range,
                             selection_range,
@@ -1856,17 +1859,18 @@ handle_method_call! {
                         if path.is_empty() { continue }
                         let (name, detail) = name_and_detail(path);
                         let kind = if path.len() == 1 || (path.len() == 2 && path[0] == "proc") {
-                            SymbolKind::Function
+                            SymbolKind::FUNCTION
                         } else if is_constructor_name(&name) {
-                            SymbolKind::Constructor
+                            SymbolKind::CONSTRUCTOR
                         } else {
-                            SymbolKind::Method
+                            SymbolKind::METHOD
                         };
                         result.push(DocumentSymbol {
                             name,
                             detail,
                             kind,
                             deprecated: None,
+                            tags: None,
                             range,
                             selection_range,
                             children: Some(find_document_symbols(iter, end)),
@@ -1876,7 +1880,8 @@ handle_method_call! {
                         result.push(DocumentSymbol {
                             name: name.to_owned(),
                             detail: None,
-                            kind: SymbolKind::Variable,
+                            kind: SymbolKind::VARIABLE,
+                            tags: None,
                             deprecated: None,
                             range,
                             selection_range,
@@ -1887,7 +1892,8 @@ handle_method_call! {
                         result.push(DocumentSymbol {
                             name: name.to_owned(),
                             detail: None,
-                            kind: SymbolKind::Constant,
+                            kind: SymbolKind::CONSTANT,
+                            tags: None,
                             deprecated: None,
                             range,
                             selection_range,
@@ -1923,10 +1929,10 @@ handle_method_call! {
                     end: document::offset_to_position(&content, end),
                 },
                 color: Color {
-                    red: (r as f64) / 255.,
-                    green: (g as f64) / 255.,
-                    blue: (b as f64) / 255.,
-                    alpha: (a as f64) / 255.,
+                    red: (r as f32) / 255.,
+                    green: (g as f32) / 255.,
+                    blue: (b as f32) / 255.,
+                    alpha: (a as f32) / 255.,
                 },
             });
         }
@@ -1936,7 +1942,7 @@ handle_method_call! {
     on ColorPresentationRequest(&mut self, params) {
         let content = self.docs.get_contents(&params.text_document.uri).map_err(invalid_request)?;
         let chunk = document::get_range(&content, params.range)?;
-        let color_format = color::ColorFormat::parse(&chunk).unwrap_or_default();
+        let color_format = color::ColorFormat::parse(chunk).unwrap_or_default();
         // TODO: return compatible alternate presentations for converting
         // between "#..." and rgb().
         vec![
@@ -2109,10 +2115,10 @@ fn path_to_url(path: PathBuf) -> Result<Url, jsonrpc::Error> {
 
 fn convert_severity(severity: dm::Severity) -> lsp_types::DiagnosticSeverity {
     match severity {
-        dm::Severity::Error => lsp_types::DiagnosticSeverity::Error,
-        dm::Severity::Warning => lsp_types::DiagnosticSeverity::Warning,
-        dm::Severity::Info => lsp_types::DiagnosticSeverity::Information,
-        dm::Severity::Hint => lsp_types::DiagnosticSeverity::Hint,
+        dm::Severity::Error => lsp_types::DiagnosticSeverity::ERROR,
+        dm::Severity::Warning => lsp_types::DiagnosticSeverity::WARNING,
+        dm::Severity::Info => lsp_types::DiagnosticSeverity::INFORMATION,
+        dm::Severity::Hint => lsp_types::DiagnosticSeverity::HINT,
     }
 }
 
@@ -2143,8 +2149,8 @@ fn is_constructor_name(name: &str) -> bool {
 
 fn location_to_position(loc: dm::Location) -> lsp_types::Position  {
     lsp_types::Position {
-        line: loc.line.saturating_sub(1) as u64,
-        character: loc.column.saturating_sub(1) as u64,
+        line: loc.line.saturating_sub(1) as u32,
+        character: loc.column.saturating_sub(1) as u32,
     }
 }
 

@@ -169,10 +169,10 @@ impl RenderPass for Random {
 }
 
 fn pickweight<'a>(list: &[&'a (Constant, Option<Constant>)]) -> &'a Constant {
-    let mut total: i32 = list.iter().map(|(_, v)| v.as_ref().unwrap_or(Constant::null()).to_int().unwrap_or(1)).sum();
+    let mut total: i32 = list.iter().map(|(_, v)| v.as_ref().unwrap_or_else(Constant::null).to_int().unwrap_or(1)).sum();
     total = rand::thread_rng().gen_range(1..=total);
     for (k, v) in list.iter() {
-        total -= v.as_ref().unwrap_or(Constant::null()).to_int().unwrap_or(1);
+        total -= v.as_ref().unwrap_or_else(Constant::null).to_int().unwrap_or(1);
         if total <= 0 {
             return k;
         }

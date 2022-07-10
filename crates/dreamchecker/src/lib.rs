@@ -37,10 +37,7 @@ pub enum StaticType<'o> {
 
 impl<'o> StaticType<'o> {
     fn is_truthy(&self) -> bool {
-        match *self {
-            StaticType::None => false,
-            _ => true,
-        }
+        !matches!(*self, StaticType::None)
     }
 
     fn basic_type(&self) -> Option<TypeRef<'o>> {
@@ -226,7 +223,7 @@ impl<'o> Analysis<'o> {
     fn from_static_type_impure(ty: TypeRef<'o>) -> Analysis<'o> {
         let mut analysis = Analysis::from(StaticType::Type(ty));
         analysis.is_impure = Some(true);
-        return analysis
+        analysis
     }
 
     fn from_value(objtree: &'o ObjectTree, value: Constant, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
@@ -297,7 +294,7 @@ impl<'o> From<StaticType<'o>> for Analysis<'o> {
 
         Analysis {
             aset,
-            static_ty: static_ty,
+            static_ty,
             fix_hint: None,
             value: None,
             is_impure: None,
@@ -328,7 +325,7 @@ fn run_inner(context: &Context, objtree: &ObjectTree, cli: bool) {
     cli_println!("============================================================");
     cli_println!("Analyzing variables...\n");
 
-    check_var_defs(&objtree, &context);
+    check_var_defs(objtree, context);
 
     let mut analyzer = AnalyzeObjectTree::new(context, objtree);
 
@@ -485,8 +482,8 @@ impl<'o> CallStack<'o> {
 
 trait DMErrorExt {
     fn with_callstack(self, stack: &CallStack) -> Self;
-    fn with_blocking_builtins(self, blockers: &Vec<(String, Location)>) -> Self;
-    fn with_impure_operations(self, impures: &Vec<(String, Location)>) -> Self;
+    fn with_blocking_builtins(self, blockers: &[(String, Location)]) -> Self;
+    fn with_impure_operations(self, impures: &[(String, Location)]) -> Self;
 }
 
 impl DMErrorExt for DMError {
@@ -497,14 +494,14 @@ impl DMErrorExt for DMError {
         self
     }
 
-    fn with_blocking_builtins(mut self, blockers: &Vec<(String, Location)>) -> DMError {
+    fn with_blocking_builtins(mut self, blockers: &[(String, Location)]) -> DMError {
         for (procname, location) in blockers.iter() {
             self.add_note(*location, format!("{}() called here", procname));
         }
         self
     }
 
-    fn with_impure_operations(mut self, impures: &Vec<(String, Location)>) -> DMError {
+    fn with_impure_operations(mut self, impures: &[(String, Location)]) -> DMError {
         for (impure, location) in impures.iter() {
             self.add_note(*location, format!("{} happens here", impure));
         }
@@ -667,10 +664,10 @@ impl<'o> AnalyzeObjectTree<'o> {
                 if !visited.insert(nextproc) {
                     continue
                 }
-                if let Some(_) = self.waitfor_procs.get(&nextproc) {
+                if self.waitfor_procs.get(&nextproc).is_some() {
                     continue
                 }
-                if let Some(_) = self.sleep_exempt.get(nextproc) {
+                if self.sleep_exempt.get(nextproc).is_some() {
                     continue
                 }
                 if new_context {
@@ -695,7 +692,8 @@ impl<'o> AnalyzeObjectTree<'o> {
                             .with_blocking_builtins(self.sleeping_procs.get_violators(*child_violator).unwrap())
                             .register(self.context)
                     }
-                } else if let Some(calledvec) = self.call_tree.get(&nextproc) {
+                } 
+                if let Some(calledvec) = self.call_tree.get(&nextproc) {
                     for (proccalled, location, new_context) in calledvec.iter() {
                         let mut newstack = callstack.clone();
                         newstack.add_step(*proccalled, *location, *new_context);
@@ -745,7 +743,8 @@ impl<'o> AnalyzeObjectTree<'o> {
                             .with_blocking_builtins(self.impure_procs.get_violators(*child_violator).unwrap())
                             .register(self.context)
                     }
-                } else if let Some(calledvec) = self.call_tree.get(&nextproc) {
+                } 
+                if let Some(calledvec) = self.call_tree.get(&nextproc) {
                     for (proccalled, location, new_context) in calledvec.iter() {
                         let mut newstack = callstack.clone();
                         newstack.add_step(*proccalled, *location, *new_context);
@@ -774,7 +773,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                         }
                     }
                 } else if name.starts_with("SpacemanDMM_") {
-                    self.add_directive_or_error(proc, &name.as_str(), value, statement.location);
+                    self.add_directive_or_error(proc, name.as_str(), value, statement.location);
                 } else if !KNOWN_SETTING_NAMES.contains(&name.as_str()) {
                     error(statement.location, format!("unknown setting {:?}", name))
                         .set_severity(Severity::Warning)
@@ -782,7 +781,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                 } else {
                     match name.as_str() {
                         "background" | "waitfor" | "hidden" | "instant" | "popup_menu" => {
-                            if let Err(_) = directive_value_to_truthy(value, statement.location) {
+                            if directive_value_to_truthy(value, statement.location).is_err() {
                                 error(statement.location, format!("set {} must be 0/1/TRUE/FALSE", name.as_str()))
                                     .set_severity(Severity::Warning)
                                     .with_errortype("invalid_set_value")
@@ -1035,11 +1034,11 @@ impl ControlFlow {
         }
     }
     pub fn terminates(&self) -> bool {
-        return !self.fuzzy && ( self.returns || self.continues || self.breaks )
+        !self.fuzzy && ( self.returns || self.continues || self.breaks )
     }
 
     pub fn terminates_loop(&self) -> bool {
-        return !self.fuzzy && ( self.returns || self.breaks )
+        !self.fuzzy && ( self.returns || self.breaks )
     }
 
     pub fn no_else(&mut self) {
@@ -1210,7 +1209,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             let state = self.visit_statement(stmt.location, &stmt.elem, local_vars);
             term.merge(state);
         }
-        return term
+        term
     }
 
     fn loop_condition_check(&mut self, location: Location, expression: &'o Expression) {
@@ -1250,7 +1249,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 match expr {
                     Expression::Base { term, follow } => {
                         if let Term::Call(call, vec) = &term.elem {
-                            if !follow.iter().any(|f| match f.elem { Follow::Call(..) => true, _ => false }) {
+                            if !follow.iter().any(|f| matches!(f.elem, Follow::Call(..))) {
                                 if let Some(proc) = self.ty.get_proc(call) {
                                     if let Some((_, _, loc)) = self.env.must_be_pure.get_self_or_parent(proc) {
                                         error(location, format!("call to pure proc {} discards return value", call))
@@ -1538,7 +1537,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Statement::Label { name: _, block } => { self.visit_block(block, &mut local_vars.clone()); },
             Statement::Del(expr) => { self.visit_expression(location, expr, None, local_vars); },
         }
-        return ControlFlow::allfalse()
+        ControlFlow::allfalse()
     }
 
     fn visit_var_stmt(&mut self, location: Location, var: &'o VarStatement, local_vars: &mut HashMap<String, LocalVar<'o>, RandomState>) {
@@ -1550,7 +1549,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         let static_type = self.env.static_type(location, &var_type.type_path);
         // Visit the expression if it's there
         let mut analysis = match value {
-            Some(ref expr) => self.visit_expression(location, expr, static_type.basic_type(), local_vars),
+            Some(expr) => self.visit_expression(location, expr, static_type.basic_type(), local_vars),
             None => Analysis::null(),
         };
         analysis.static_ty = static_type;
@@ -1620,7 +1619,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                             .register(self.context);
                     },
                     Expression::TernaryOp { cond, if_, else_ } => {
-                        error(location, format!("ambiguous ternary on left side of an `in`"))
+                        error(location, "ambiguous ternary on left side of an `in`".to_string())
                             .set_severity(Severity::Warning)
                             .with_errortype("ambiguous_in_lhs")
                             .with_note(location, "add parentheses to fix: `a ? b : (c in d)`")
@@ -1687,7 +1686,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     let mut ana = self.static_type(location, &decl.var_type.type_path)
                         .with_fix_hint(decl.location, "add additional type info here");
                     ana.is_impure = Some(true);
-                    return ana
+                    ana
                 } else {
                     error(location, format!("undefined var: {:?}", unscoped_name))
                         .register(self.context);
@@ -1699,10 +1698,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Term::Prefab(prefab) => {
                 if let Some(nav) = self.ty.navigate_path(&prefab.path) {
                     let ty = nav.ty();  // TODO: handle proc/verb paths here
-                    let pop = dm::constants::Pop::from(ty.path.split("/").skip(1).map(ToOwned::to_owned).collect::<Vec<_>>().into_boxed_slice());
+                    let pop = dm::constants::Pop::from(ty.path.split('/').skip(1).map(ToOwned::to_owned).collect::<Vec<_>>().into_boxed_slice());
                     Analysis {
                         static_ty: StaticType::None,
-                        aset: assumption_set![Assumption::IsPath(true, nav.ty())].into(),
+                        aset: assumption_set![Assumption::IsPath(true, nav.ty())],
                         value: Some(Constant::Prefab(Box::new(pop))),
                         fix_hint: None,
                         is_impure: None,
@@ -2037,7 +2036,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         };
         error(location, format!("Attempting {} on a {} which does not overload {}", operator, typeerror, operator))
             .register(self.context);
-        return Analysis::empty()
+        Analysis::empty()
     }
 
     fn visit_unary(&mut self, rhs: Analysis<'o>, op: &UnaryOp, location: Location, local_vars: &mut HashMap<String, LocalVar<'o>, RandomState>) -> Analysis<'o> {
@@ -2089,6 +2088,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         Analysis::empty()
     }
 
+    // It's fine.
+    #[allow(clippy::too_many_arguments)]
     fn check_filter_flag(&mut self, expr: &'o Expression, can_be_zero: bool, location: Location, typevalue: &str, valid_flags: &[&str], flagfieldname: &str, exclusive: bool) {
         match expr {
             Expression::BinaryOp{ op: BinaryOp::BitOr, lhs, rhs } => {
@@ -2110,7 +2111,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
                 match &term.elem {
                     Term::Ident(flagname) => {
-                        if valid_flags.iter().position(|&x| x == flagname).is_none() {
+                        if !valid_flags.iter().any(|&x| x == flagname) {
                             error(location, format!("filter(type=\"{}\") called with invalid '{}' flag '{}'", typevalue, flagfieldname, flagname))
                                 .with_filter_args(location, typevalue)
                                 .register(self.context);
@@ -2193,7 +2194,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                                     .entry(name.clone())
                                     .and_modify(|ca| ca.others += 1)
                                     .or_insert(CalledAt {
-                                        location: location,
+                                        location,
                                         others: 0,
                                     });
                             }
@@ -2204,7 +2205,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 expr => {
                     if let Some(Term::Call(callname, _)) = expr.as_term() {
                         // only interested in the first expression being arglist
-                        if callname.as_str() == "arglist" && param_name_map.len() == 0 && param_idx == 0 {
+                        if callname.as_str() == "arglist" && param_name_map.is_empty() && param_idx == 0 {
                             arglist_used = true;
                         }
                     }
@@ -2254,19 +2255,19 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     .register(self.context);
                 return Analysis::empty()
             });
-            guard!(let Some(arglist) = VALID_FILTER_TYPES.get(&typevalue) else {
+            guard!(let Some(arglist) = VALID_FILTER_TYPES.get(typevalue) else {
                 error(location, format!("filter() called with invalid type keyword parameter value '{}'", typevalue))
                     .register(self.context);
                 return Analysis::empty()
             });
             for arg in param_name_map.keys() {
-                if *arg != "type" && arglist.iter().position(|&x| x == *arg).is_none() {
+                if *arg != "type" && !arglist.iter().any(|&x| x == *arg) {
                     error(location, format!("filter(type=\"{}\") called with invalid keyword parameter '{}'", typevalue, arg))
                         .with_filter_args(location, typevalue)
                         .register(self.context);
                 }
             }
-            if let Some((flagfieldname, exclusive, can_be_zero, valid_flags)) = VALID_FILTER_FLAGS.get(&typevalue) {
+            if let Some((flagfieldname, exclusive, can_be_zero, valid_flags)) = VALID_FILTER_FLAGS.get(typevalue) {
                 if let Some(flagsvalue) = param_expr_map.get(flagfieldname) {
                     self.check_filter_flag(flagsvalue, *can_be_zero, location, typevalue, valid_flags, flagfieldname, *exclusive);
                 }

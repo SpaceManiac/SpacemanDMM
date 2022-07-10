@@ -2,9 +2,9 @@
 set -euo pipefail
 
 # Settings
-DEBUG_SERVER_TAG=v2.2.2
-DEBUG_SERVER_DLL_URL=https://github.com/willox/auxtools/releases/download/v2.2.2/debug_server.dll
-DEBUG_SERVER_DLL_SHA256=847c3bfbd35f2eb57f43d0ba08df323c0f0beb1f7d518e7e54791a1aff13a56f
+DEBUG_SERVER_TAG=v2.2.3
+DEBUG_SERVER_DLL_URL=https://github.com/willox/auxtools/releases/download/v2.2.3/debug_server.dll
+DEBUG_SERVER_DLL_SHA256=dd10daa07607b278536152bf5c79906180958c4b765b486c18a021418103893e
 
 # -----------------------------------------------------------------------------
 cd "$(dirname "${BASH_SOURCE[0]}")"

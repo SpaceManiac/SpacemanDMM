@@ -118,18 +118,29 @@ pub struct ZLevel<'a> {
     pub grid: ndarray::ArrayView<'a, Key, ndarray::Dim<[usize; 2]>>,
 }
 
-// TODO: port to ast::Prefab<Constant>
-#[derive(Debug, Default, Eq, PartialEq, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Prefab {
     pub path: String,
     // insertion order, sort of most of the time alphabetical but not quite
     pub vars: IndexMap<String, Constant, RandomState>,
 }
 
+impl PartialEq for Prefab {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path && self.vars == other.vars
+    }
+}
+
+impl Eq for Prefab {}
+
 impl std::hash::Hash for Prefab {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.path.hash(state);
-        self.vars.keys().for_each(|key| {key.hash(state)});
+        let mut items: Vec<_> = self.vars.iter().collect();
+        items.sort_by_key(|&(k, _)| k);
+        for kvp in items {
+            kvp.hash(state);
+        }
     }
 }
 
@@ -205,7 +216,7 @@ impl Map {
         ZLevel { grid: self.grid.index_axis(Axis(0), z) }
     }
 
-    pub fn iter_levels<'a>(&'a self) -> impl Iterator<Item=(i32, ZLevel<'a>)> + 'a {
+    pub fn iter_levels(&self) -> impl Iterator<Item=(i32, ZLevel<'_>)> + '_ {
         self.grid.axis_iter(Axis(0)).enumerate().map(|(i, grid)| (i as i32 + 1, ZLevel { grid }))
     }
 
@@ -226,7 +237,7 @@ impl std::ops::Index<Coord3> for Map {
 
 impl<'a> ZLevel<'a> {
     /// Iterate over the z-level in row-major order starting at the top-left.
-    pub fn iter_top_down<'b>(&'b self) -> impl Iterator<Item=(Coord2, Key)> + 'b {
+    pub fn iter_top_down(&self) -> impl Iterator<Item=(Coord2, Key)> + '_ {
         let dim = self.grid.dim();
         self.grid.indexed_iter().map(move |(c, k)| (Coord2::from_raw(c, dim), *k))
     }
@@ -322,9 +333,9 @@ impl fmt::Display for FormatKey {
 const BASE_52: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 fn base_52_reverse(ch: u8) -> Result<KeyType, String> {
-    if ch >= b'a' && ch <= b'z' {
+    if (b'a'..=b'z').contains(&ch) {
         Ok(ch as KeyType - b'a' as KeyType)
-    } else if ch >= b'A' && ch <= b'Z' {
+    } else if (b'A'..=b'Z').contains(&ch) {
         Ok(26 + ch as KeyType - b'A' as KeyType)
     } else {
         Err(format!("Not a base-52 character: {:?}", ch as char))
@@ -332,7 +343,7 @@ fn base_52_reverse(ch: u8) -> Result<KeyType, String> {
 }
 
 fn advance_key(current: KeyType, next_digit: KeyType) -> Result<KeyType, &'static str> {
-    current.checked_mul(52).and_then(|b| b.checked_add(next_digit)).ok_or_else(|| {
+    current.checked_mul(52).and_then(|b| b.checked_add(next_digit)).ok_or({
         // https://secure.byond.com/forum/?post=2340796#comment23770802
         "Key overflow, max is 'ymo'"
     })

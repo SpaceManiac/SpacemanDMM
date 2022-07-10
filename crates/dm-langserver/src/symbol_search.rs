@@ -16,16 +16,14 @@ impl Query {
         if !any_alphanumeric(query) {
             return None;
         }
-        Some(if query.starts_with('#') {
-            Query::Define(query[1..].to_lowercase())
-        } else if query.starts_with("var/") {
-            let query = &query["var/".len()..];
+        Some(if let Some(query) = query.strip_prefix('#') {
+            Query::Define(query.to_lowercase())
+        } else if let Some(query) = query.strip_prefix("var/") {
             if !any_alphanumeric(query) {
                 return None;
             }
             Query::Var(query.to_lowercase())
-        } else if query.starts_with("proc/") {
-            let query = &query["proc/".len()..];
+        } else if let Some(query) = query.strip_prefix("proc/") {
             if !any_alphanumeric(query) {
                 return None;
             }
@@ -55,12 +53,9 @@ impl Query {
     }
 
     pub fn matches_on_type(&self, _path: &str) -> bool {
-        match *self {
-            Query::Anything(_) |
+        matches!(*self, Query::Anything(_) |
             Query::Proc(_) |
-            Query::Var(_) => true,
-            _ => false,
-        }
+            Query::Var(_))
     }
 
     pub fn matches_var(&self, name: &str) -> bool {
@@ -80,7 +75,7 @@ impl Query {
     }
 }
 
-fn simplify<'a>(s: &'a str) -> impl Iterator<Item=char> + Clone + 'a {
+fn simplify(s: &str) -> impl Iterator<Item=char> + Clone + '_ {
     s.chars().flat_map(|c| c.to_lowercase()).filter(|c| c.is_alphanumeric())
 }
 

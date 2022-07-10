@@ -590,7 +590,7 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         savefile    yes   yes          yes   yes  yes  yes
         client      yes   yes          yes   yes  yes  yes  yes
 
-        All other root types have an implicit `parent_type = /datum`.
+        Most other root types have an implicit `parent_type = /datum`.
         */
         datum;
         datum/var/const/type;  // not editable
@@ -960,12 +960,14 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         regex/proc/Replace(text, rep, start, end);
 
         database;
+        database/var/_binobj;
         database/proc/Close();
         database/proc/Error();
         database/proc/ErrorMsg();
         database/proc/Open(filename);
         database/proc/New(filename);
 
+        database/query/var/database/database;
         database/query/proc/Add(text, item1, item2 /*...*/);
         database/query/proc/Close();
         database/query/proc/Columns(column);
@@ -1063,6 +1065,34 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         savefile/proc/ImportText(/* path=cd, file */);
         savefile/proc/Lock(timeout);
         savefile/proc/Unlock();
+
+        //512 stuff
+
+        // /dm_filter is a hidden type that can be used to manipulate filter
+        // instances without using the runtime search operator (:). It does
+        // not descend from datum, cannot be subtyped, and can only be created
+        // successfully by a valid call to proc/filter(...). All filter types
+        // create the same kind of /dm_filter, but with different properties.
+        dm_filter;
+        dm_filter/var/const/type;
+        dm_filter/var/x;
+        dm_filter/var/y;
+        dm_filter/var/icon;
+        dm_filter/var/render_source;
+        dm_filter/var/flags;
+        dm_filter/var/size;
+        dm_filter/var/threshold;
+        dm_filter/var/offset;
+        dm_filter/var/alpha;
+        dm_filter/var/color;
+        dm_filter/var/space;
+        dm_filter/var/transform;
+        dm_filter/var/blend_mode;
+        dm_filter/var/density;
+        dm_filter/var/factor;
+        dm_filter/var/repeat;
+        dm_filter/var/radius;
+        dm_filter/var/falloff;
 
         // 513 stuff
         proc/arctan(A,B);

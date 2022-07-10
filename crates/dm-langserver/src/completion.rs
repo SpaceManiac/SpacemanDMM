@@ -66,7 +66,7 @@ fn item_var(ty: TypeRef, name: &str, var: &TypeVar) -> CompletionItem {
 
     CompletionItem {
         label: name.to_owned(),
-        kind: Some(CompletionItemKind::Field),
+        kind: Some(CompletionItemKind::FIELD),
         detail: Some(detail),
         documentation: item_documentation(&var.value.docs),
         .. Default::default()
@@ -77,11 +77,11 @@ fn item_proc(ty: TypeRef, name: &str, proc: &TypeProc) -> CompletionItem {
     CompletionItem {
         label: name.to_owned(),
         kind: Some(if ty.is_root() {
-            CompletionItemKind::Function
+            CompletionItemKind::FUNCTION
         } else if is_constructor_name(name) {
-            CompletionItemKind::Constructor
+            CompletionItemKind::CONSTRUCTOR
         } else {
-            CompletionItemKind::Method
+            CompletionItemKind::METHOD
         }),
         detail: Some(format!("on {}", ty.pretty_path())),
         documentation: item_documentation(&proc.main_value().docs),
@@ -200,7 +200,7 @@ impl<'a> Engine<'a> {
         // follow the path ops until we hit 'proc' or 'verb'
         let mut iter = parts.iter();
         let mut decl = None;
-        while let Some(&(op, ref name)) = iter.next() {
+        for &(op, ref name) in iter.by_ref() {
             if name == "proc" {
                 decl = Some("proc");
                 break;
@@ -234,7 +234,7 @@ impl<'a> Engine<'a> {
             if contains(name, query) {
                 results.push(CompletionItem {
                     label: name.to_owned(),
-                    kind: Some(CompletionItemKind::Keyword),
+                    kind: Some(CompletionItemKind::KEYWORD),
                     .. Default::default()
                 })
             }
@@ -246,7 +246,7 @@ impl<'a> Engine<'a> {
                 if contains(child.name(), query) {
                     results.push(CompletionItem {
                         label: child.name().to_owned(),
-                        kind: Some(CompletionItemKind::Class),
+                        kind: Some(CompletionItemKind::CLASS),
                         documentation: item_documentation(&child.docs),
                         .. Default::default()
                     });
@@ -323,7 +323,7 @@ impl<'a> Engine<'a> {
                     if contains(name, query) {
                         results.push(CompletionItem {
                             label: name.to_owned(),
-                            kind: Some(CompletionItemKind::Keyword),
+                            kind: Some(CompletionItemKind::KEYWORD),
                             .. Default::default()
                         })
                     }
@@ -334,7 +334,7 @@ impl<'a> Engine<'a> {
                     if contains(child.name(), query) {
                         results.push(CompletionItem {
                             label: child.name().to_owned(),
-                            kind: Some(CompletionItemKind::Class),
+                            kind: Some(CompletionItemKind::CLASS),
                             documentation: item_documentation(&child.docs),
                             .. Default::default()
                         });
@@ -387,7 +387,7 @@ impl<'a> Engine<'a> {
                 if contains(name, query) {
                     results.push(CompletionItem {
                         label: name.to_owned(),
-                        kind: Some(CompletionItemKind::Keyword),
+                        kind: Some(CompletionItemKind::KEYWORD),
                         .. Default::default()
                     });
                 }
@@ -400,7 +400,7 @@ impl<'a> Engine<'a> {
                 if contains(name, query) {
                     results.push(CompletionItem {
                         label: name.clone(),
-                        kind: Some(CompletionItemKind::Variable),
+                        kind: Some(CompletionItemKind::VARIABLE),
                         detail: Some("(local)".to_owned()),
                         .. Default::default()
                     });
@@ -409,7 +409,7 @@ impl<'a> Engine<'a> {
         }
 
         // proc parameters
-        let ty = ty.unwrap_or(self.objtree.root());
+        let ty = ty.unwrap_or_else(|| self.objtree.root());
         if let Some((proc_name, idx)) = proc_name {
             if let Some(proc) = ty.get().procs.get(proc_name) {
                 if let Some(value) = proc.value.get(idx) {
@@ -417,7 +417,7 @@ impl<'a> Engine<'a> {
                         if contains(&param.name, query) {
                             results.push(CompletionItem {
                                 label: param.name.clone(),
-                                kind: Some(CompletionItemKind::Variable),
+                                kind: Some(CompletionItemKind::VARIABLE),
                                 detail: Some("(parameter)".to_owned()),
                                 .. Default::default()
                             });
@@ -434,7 +434,7 @@ impl<'a> Engine<'a> {
                 if contains(name, query) {
                     results.push(CompletionItem {
                         label: name.to_owned(),
-                        kind: Some(CompletionItemKind::Constant),
+                        kind: Some(CompletionItemKind::CONSTANT),
                         detail: Some(define.display_with_name(name).to_string()),
                         documentation: item_documentation(define.docs()),
                         .. Default::default()

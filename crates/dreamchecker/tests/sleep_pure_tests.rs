@@ -149,6 +149,32 @@ fn sleep4() {
     check_errors_match(code, SLEEP_ERROR4);
 }
 
+// Test overrides and for regression of issue #267
+pub const SLEEP_ERROR5: &[(u32, u16, &str)] = &[
+        (7, 19, "/datum/sub/proc/checker sets SpacemanDMM_should_not_sleep but calls blocking proc /proc/sleeper"),
+];
+
+#[test]
+fn sleep5() {
+    let code = r##"
+/datum/proc/checker()
+        set SpacemanDMM_should_not_sleep = 1
+
+/datum/proc/proxy()
+        sleeper()
+
+/datum/sub/checker()
+        proxy()
+
+/proc/sleeper()
+        sleep(1)
+
+/datum/hijack/proxy()
+        sleep(1)
+"##.trim();
+    check_errors_match(code, SLEEP_ERROR5);
+}
+
 pub const PURE_ERRORS: &[(u32, u16, &str)] = &[
     (12, 16, "/mob/proc/test2 sets SpacemanDMM_should_be_pure but calls a /proc/impure that does impure operations"),
 ];

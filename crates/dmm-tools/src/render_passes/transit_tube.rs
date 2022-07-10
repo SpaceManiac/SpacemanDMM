@@ -34,7 +34,7 @@ impl RenderPass for TransitTube {
             }
         };
 
-        let dir = atom.get_var("dir", objtree).to_int().and_then(Dir::from_int).unwrap_or(Dir::default());
+        let dir = atom.get_var("dir", objtree).to_int().and_then(Dir::from_int).unwrap_or_default();
         if atom.istype("/obj/structure/transit_tube/station/reverse/") {
             fulfill(&match dir {
                 North => [East],

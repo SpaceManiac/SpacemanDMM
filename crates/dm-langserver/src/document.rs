@@ -8,7 +8,6 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use url::Url;
 
-use jsonrpc;
 use lsp_types::{TextDocumentItem, TextDocumentIdentifier,
     VersionedTextDocumentIdentifier, TextDocumentContentChangeEvent};
 
@@ -43,15 +42,7 @@ impl DocumentStore {
         doc_id: VersionedTextDocumentIdentifier,
         changes: Vec<TextDocumentContentChangeEvent>,
     ) -> Result<Url, jsonrpc::Error> {
-        // "If a versioned text document identifier is sent from the server to
-        // the client and the file is not open in the editor (the server has
-        // not received an open notification before) the server can send `null`
-        // to indicate that the version is known and the content on disk is the
-        // truth (as speced with document content ownership)."
-        let new_version = match doc_id.version {
-            Some(version) => version,
-            None => return Err(invalid_request("document version is missing")),
-        };
+        let new_version = doc_id.version;
 
         let document = match self.map.get_mut(&doc_id.uri) {
             Some(doc) => doc,
@@ -107,12 +98,12 @@ impl DocumentStore {
 
 /// The internal representation of document contents received from the client.
 struct Document {
-    version: i64,
+    version: i32,
     text: Rc<String>,
 }
 
 impl Document {
-    fn new(version: i64, text: String) -> Document {
+    fn new(version: i32, text: String) -> Document {
         Document {
             version,
             text: Rc::new(text),
@@ -140,7 +131,7 @@ impl Document {
 
 /// Find the offset into the given text at which the given zero-indexed line
 /// number begins.
-fn line_offset(text: &str, line_number: u64) -> Result<usize, jsonrpc::Error> {
+fn line_offset(text: &str, line_number: u32) -> Result<usize, jsonrpc::Error> {
     // Hopefully this logic isn't too far off.
     let mut start_pos = 0;
     for _ in 0..line_number {
@@ -152,14 +143,14 @@ fn line_offset(text: &str, line_number: u64) -> Result<usize, jsonrpc::Error> {
     Ok(start_pos)
 }
 
-fn total_offset(text: &str, line: u64, mut character: u64) -> Result<usize, jsonrpc::Error> {
+fn total_offset(text: &str, line: u32, mut character: u32) -> Result<usize, jsonrpc::Error> {
     let start = line_offset(text, line)?;
 
     // column is measured in UTF-16 code units, which is really inconvenient.
     let mut chars = text[start..].chars();
     while character > 0 {
         if let Some(ch) = chars.next() {
-            character = character.saturating_sub(ch.len_utf16() as u64);
+            character = character.saturating_sub(ch.len_utf16() as u32);
         } else {
             break
         }
@@ -181,7 +172,7 @@ pub fn offset_to_position(text: &str, offset: usize) -> lsp_types::Position {
 
     let mut character = 0;
     for ch in text[line_start..offset].chars() {
-        character += ch.len_utf16() as u64;
+        character += ch.len_utf16() as u32;
     }
 
     lsp_types::Position { line, character }
@@ -229,7 +220,7 @@ pub fn find_word(text: &str, offset: usize) -> &str {
 }
 
 fn is_ident(ch: char) -> bool {
-    (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_'
+    ('0'..='9').contains(&ch) || ('a'..='z').contains(&ch) || ('A'..='Z').contains(&ch) || ch == '_'
 }
 
 /// An adaptation of `std::io::Cursor` which works on an `Rc<String>`, which

@@ -73,7 +73,7 @@ impl Context {
         eprintln!("parsing {}", environment.display());
 
         if let Some(parent) = environment.parent() {
-            self.icon_cache.set_icons_root(&parent);
+            self.icon_cache.set_icons_root(parent);
         }
 
         self.dm_context.autodetect_config(&environment);
@@ -227,9 +227,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                 .dm_context
                 .errors()
                 .iter()
-                .filter(|e| e.severity() <= dm::Severity::Error)
-                .next()
-                .is_some()
+                .any(|e| e.severity() <= dm::Severity::Error)
             {
                 println!("there were some parsing errors; render may be inaccurate")
             }
@@ -285,12 +283,12 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                     println!("{}generating z={}", prefix, 1 + z);
                     let bump = Default::default();
                     let minimap_context = minimap::Context {
-                        objtree: &objtree,
+                        objtree,
                         map: &map,
                         level: map.z_level(z),
                         min: (min.x - 1, min.y - 1),
                         max: (max.x - 1, max.y - 1),
-                        render_passes: &render_passes,
+                        render_passes,
                         errors: &errors,
                         bump: &bump,
                     };
@@ -443,7 +441,7 @@ impl std::str::FromStr for CoordArg {
 
     fn from_str(s: &str) -> Result<Self, String> {
         match s
-            .split(",")
+            .split(',')
             .map(|x| x.parse())
             .collect::<Result<Vec<_>, std::num::ParseIntError>>()
         {
@@ -551,9 +549,7 @@ fn render_many(context: &Context, command: RenderManyCommand) -> RenderManyComma
         .dm_context
         .errors()
         .iter()
-        .filter(|e| e.severity() <= dm::Severity::Error)
-        .next()
-        .is_some()
+        .any(|e| e.severity() <= dm::Severity::Error)
     {
         eprintln!("there were some parsing errors; render may be inaccurate")
     }

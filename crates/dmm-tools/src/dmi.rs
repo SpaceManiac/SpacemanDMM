@@ -12,12 +12,19 @@ use ndarray::Array2;
 pub use dm::dmi::*;
 use std::ops::{Index, IndexMut};
 
-type Rect = (u32, u32, u32, u32);
+/// Absolute x and y.
+pub type Coordinate = (u32, u32);
+/// Start x, Start y, End x, End y - relative to Coordinate.
+pub type Rect = (u32, u32, u32, u32);
 
 // ----------------------------------------------------------------------------
 // Icon file and metadata handling
 
+#[cfg(all(feature = "png", feature = "gif"))]
+pub mod render;
+
 /// An image with associated DMI metadata.
+#[derive(Debug)]
 pub struct IconFile {
     /// The icon's metadata.
     pub metadata: Metadata,
@@ -27,7 +34,11 @@ pub struct IconFile {
 
 impl IconFile {
     pub fn from_file(path: &Path) -> io::Result<IconFile> {
-        let (bitmap, metadata) = Metadata::from_file(path)?;
+        Self::from_bytes(&std::fs::read(path)?)
+    }
+
+    pub fn from_bytes(data: &[u8]) -> io::Result<IconFile> {
+        let (bitmap, metadata) = Metadata::from_bytes(data)?;
         Ok(IconFile {
             metadata,
             image: Image::from_rgba(bitmap),
@@ -35,7 +46,7 @@ impl IconFile {
     }
 
     #[inline]
-    pub fn rect_of(&self, icon_state: &str, dir: Dir) -> Option<Rect> {
+    pub fn rect_of(&self, icon_state: &StateIndex, dir: Dir) -> Option<Rect> {
         self.metadata.rect_of(self.image.width, icon_state, dir, 0)
     }
 
@@ -49,9 +60,18 @@ impl IconFile {
             self.metadata.height,
         )
     }
+
+    pub fn get_icon_state(&self, icon_state: &StateIndex) -> io::Result<&State> {
+        self.metadata.get_icon_state(icon_state).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("icon_state {} not found", icon_state),
+            )
+        })
+    }
 }
 
-#[derive(Default, Clone, Copy, Pod, Zeroable, Eq, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, Pod, Zeroable, Eq, PartialEq)]
 #[repr(C)]
 pub struct Rgba8 {
     pub r: u8,
@@ -92,6 +112,7 @@ impl IndexMut<u8> for Rgba8 {
 // Image manipulation
 
 /// A two-dimensional RGBA image.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Image {
     pub width: u32,
     pub height: u32,
@@ -122,18 +143,17 @@ impl Image {
         }
     }
 
-    /// Read an `Image` from a file.
+    /// Read an `Image` from a [u8] array.
     ///
-    /// Prefer to call `IconFile::from_file`, which can read both metadata and
+    /// Prefer to call `IconFile::from_bytes`, which can read both metadata and
     /// image contents at one time.
-    pub fn from_file(path: &Path) -> io::Result<Image> {
-        let path = &::dm::fix_case(path);
+    pub fn from_bytes(data: &[u8]) -> io::Result<Image> {
         let mut decoder = Decoder::new();
         decoder.info_raw_mut().colortype = ColorType::RGBA;
         decoder.info_raw_mut().set_bitdepth(8);
         decoder.read_text_chunks(false);
         decoder.remember_unknown_chunks(false);
-        let bitmap = match decoder.decode_file(path) {
+        let bitmap = match decoder.decode(data) {
             Ok(::lodepng::Image::RGBA(bitmap)) => bitmap,
             Ok(_) => return Err(io::Error::new(io::ErrorKind::InvalidData, "not RGBA")),
             Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidData, e)),
@@ -142,21 +162,45 @@ impl Image {
         Ok(Image::from_rgba(bitmap))
     }
 
+    /// Read an `Image` from a file.
+    ///
+    /// Prefer to call `IconFile::from_file`, which can read both metadata and
+    /// image contents at one time.
+    pub fn from_file(path: &Path) -> io::Result<Image> {
+        let path = &::dm::fix_case(path);
+        Self::from_bytes(&std::fs::read(path)?)
+    }
+
+    pub fn clear(&mut self) {
+        self.data.fill(Default::default())
+    }
+
     #[cfg(feature = "png")]
-    pub fn to_file(&self, path: &Path) -> io::Result<()> {
-        use std::fs::File;
-
-        let mut encoder = png::Encoder::new(File::create(path)?, self.width, self.height);
-        encoder.set_color(::png::ColorType::Rgba);
-        encoder.set_depth(::png::BitDepth::Eight);
-        let mut writer = encoder.write_header()?;
-        // TODO: metadata with write_chunk()
-
-        writer.write_image_data(bytemuck::cast_slice(self.data.as_slice().unwrap()))?;
+    pub fn to_write<W: std::io::Write>(&self, writer: W) -> io::Result<()> {
+        {
+            let mut encoder = png::Encoder::new(writer, self.width, self.height);
+            encoder.set_color(::png::ColorType::Rgba);
+            encoder.set_depth(::png::BitDepth::Eight);
+            let mut writer = encoder.write_header()?;
+            // TODO: metadata with write_chunk()
+            writer.write_image_data(bytemuck::cast_slice(self.data.as_slice().unwrap()))?;
+        }
         Ok(())
     }
 
-    pub fn composite(&mut self, other: &Image, pos: (u32, u32), crop: Rect, color: [u8; 4]) {
+    #[cfg(feature = "png")]
+    pub fn to_file(&self, path: &Path) -> io::Result<()> {
+        self.to_write(std::fs::File::create(path)?)
+    }
+
+    #[cfg(feature = "png")]
+    pub fn to_bytes(&self) -> io::Result<Vec<u8>> {
+        let mut vector = Vec::new();
+        self.to_write(&mut vector)?;
+        Ok(vector)
+    }
+
+    pub fn composite(&mut self, other: &Image, pos: Coordinate, crop: Rect, color: [u8; 4]) {
         let other_dat = other.data.as_slice().unwrap();
         let self_dat = self.data.as_slice_mut().unwrap();
         let mut sy = crop.1;

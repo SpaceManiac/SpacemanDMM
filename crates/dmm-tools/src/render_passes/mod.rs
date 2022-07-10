@@ -119,8 +119,8 @@ pub const RENDER_PASSES: &[RenderPassInfo] = &[
 ];
 
 pub fn configure(renderer_config: &dm::config::MapRenderer, include: &str, exclude: &str) -> Vec<Box<dyn RenderPass>> {
-    let include: Vec<&str> = include.split(",").collect();
-    let exclude: Vec<&str> = exclude.split(",").collect();
+    let include: Vec<&str> = include.split(',').collect();
+    let exclude: Vec<&str> = exclude.split(',').collect();
     configure_list(renderer_config, &include, &exclude)
 }
 
@@ -454,10 +454,10 @@ impl RenderPass for FancyLayers {
         self.apply_fancy_layer(atom.get_path(), sprite);
 
         // dual layering of vents 1: hide original sprite underfloor
-        if atom.istype("/obj/machinery/atmospherics/components/unary/") {
-            if unary_aboveground(atom, objtree).is_some() {
-                sprite.layer = Layer::from(-5);
-            }
+        if atom.istype("/obj/machinery/atmospherics/components/unary/")
+            && unary_aboveground(atom, objtree).is_some()
+        {
+            sprite.layer = Layer::from(-5);
         }
     }
 
