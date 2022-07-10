@@ -2220,11 +2220,34 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
             let analysis = self.visit_expression(location, argument_value, None, local_vars);
 
-            if proc.is_builtin() && proc.name() == "initial" && analysis.static_ty.is_list() {
-                if let Expression::Base{term: _, follow} = arg {
-                    for each in follow.iter() {
-                        if let Spanned{location, elem: Follow::Field(_, ident)} = each {
-                            error(*location, format!("built-in proc initial() called on list type var `{}`", ident)).register(self.context);
+            if proc.is_builtin() && proc.name() == "initial" && analysis.static_ty != StaticType::None {
+                if let Expression::Base{term, follow} = arg {
+                    if let Some(Spanned{location, elem: Follow::Field(_, ident)}) = follow.last() {
+                        match analysis.static_ty {
+                            StaticType::List { list: _, keys: _ } => {
+                                error(*location, format!("initial() called on var/list/{}, but it always returns null for lists", ident))
+                                    .register(self.context);
+                            }
+                            StaticType::Type(ty) => {
+                                error(*location, format!("initial() called on var{}/{}, but it always returns null for types", ty.pretty_path() , ident))
+                                    .register(self.context);
+                            }
+                            _ => {}
+                        }
+                    } else {
+                        let term_analysis = self.visit_term(term.location, &term.elem, None, local_vars);
+                        if let Term::Ident(name) = &term.elem {
+                            match term_analysis.static_ty {
+                                StaticType::List { list: _, keys: _ } => {
+                                    error(term.location, format!("initial() called on var/list/{}, but it always returns null for lists", name))
+                                        .register(self.context);
+                                }
+                                StaticType::Type(ty) => {
+                                    error(term.location, format!("initial() called on var{}/{}, but it always returns null for types", ty.pretty_path() , name))
+                                        .register(self.context);
+                                }
+                                _ => {}
+                            }
                         }
                     }
                 }
