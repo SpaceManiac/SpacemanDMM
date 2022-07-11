@@ -487,9 +487,11 @@ fn parse_metadata(data: &str) -> io::Result<Metadata> {
                     } else {
                         state.frames = Frames::Delays(vector);
                     },
-                    Frames::Count(n) => if !vector.iter().all(|&n| n == 1.) {
+                    Frames::Count(n) => {
                         vector.truncate(n);
-                        state.frames = Frames::Delays(vector);
+                        if !vector.iter().all(|&n| n == 1.) {
+                            state.frames = Frames::Delays(vector);
+                        }
                     },
                     Frames::Delays(_) => panic!(),
                 }
@@ -529,7 +531,7 @@ state = "duplicate"
 # END DMI
 "##.trim();
 
-        let metadata = parse_metadata(description).unwrap();
+        let metadata = parse_metadata(description).expect("Metadata is valid");
         assert_eq!(metadata.state_names.len(), 3);
         assert_eq!(
             metadata.state_names,
@@ -551,5 +553,33 @@ state = "duplicate"
             // Note: using `no` here only works by virtue of the test data being only composed of duplicates
             assert_eq!(no, *metadata.state_names.get(&state.get_state_name_index()).unwrap())
         }
+    }
+
+    #[test]
+    /// Sometimes, Dream Maker just doesn't get rid of extra delay
+    /// information when a state has the number of frames edited.
+    ///
+    /// This means we need to truncate our delay list to the number of frames specified by the frames key.
+    /// 
+    /// This always worked fine- however, we also simplify `delays = 1,1,...` to `Frames::Count(delays.len())`.
+    ///
+    /// The bug in our code was that we checked if our `delays = 1,1,...` *before* truncating the array
+    /// in the truncation case, so we would output `Frames::Delays([1,1])` for this metadata.
+    fn delay_overflow_edge_case() {
+        let description = r##"
+# BEGIN DMI
+version = 4.0
+    width = 32
+    height = 32
+state = "one"
+    dirs = 1
+    frames = 2
+    delay = 1,1,0.5,0.5
+# END DMI
+"##.trim();
+
+        let metadata = parse_metadata(description).expect("Metadata is valid");
+        let state = metadata.get_icon_state(&StateIndex("one".to_owned(), 0)).expect("Only one state, named one, should be found");
+        assert_eq!(state.frames, Frames::Count(2));
     }
 }
