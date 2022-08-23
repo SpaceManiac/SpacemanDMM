@@ -50,6 +50,8 @@ Raised by DreamChecker:
 * `control_condition_static` - Raised on a control condition such as `if`/`while` having a static condition such as `1` or `"string"`
 * `if_condition_determinate` - Raised on if condition being always true or always false
 * `loop_condition_determinate` - Raised on loop condition such as in `for` being always true or always false
+* `override_fewer_arguments` - Raised when a proc override has fewer non-keyword arguments than its parent
+* `override_changed_type` - Raised when a proc override has a non-keyword argument with a distinct (non-subtype/ancestor type) type compared to its parent proc
 
 Raised by Lexer:
 
