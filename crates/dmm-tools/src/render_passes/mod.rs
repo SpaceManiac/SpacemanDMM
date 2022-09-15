@@ -1,20 +1,20 @@
-use dm::objtree::*;
+use crate::minimap::{Atom, GetVar, Layer, Neighborhood, Sprite};
 use dm::constants::Constant;
-use crate::minimap::{Atom, GetVar, Sprite, Layer, Neighborhood};
+use dm::objtree::*;
 
-mod transit_tube;
-mod random;
-mod structures;
 mod icon_smoothing;
 mod icon_smoothing_2020;
+mod random;
 mod smart_cables;
+mod structures;
+mod transit_tube;
 
-pub use self::transit_tube::TransitTube;
-pub use self::random::Random;
-pub use self::structures::{GravityGen, Spawners};
 pub use self::icon_smoothing::IconSmoothing as IconSmoothing2016;
 pub use self::icon_smoothing_2020::IconSmoothing;
+pub use self::random::Random;
 pub use self::smart_cables::SmartCables;
+pub use self::structures::{GravityGen, Spawners};
+pub use self::transit_tube::TransitTube;
 
 /// A map rendering pass.
 ///
@@ -26,61 +26,69 @@ pub trait RenderPass: Sync {
     fn configure(&mut self, renderer_config: &dm::config::MapRenderer) {}
 
     /// Filter atoms based solely on their typepath.
-    fn path_filter(&self,
-        path: &str,
-    ) -> bool { true }
+    fn path_filter(&self, path: &str) -> bool {
+        true
+    }
 
     /// Filter atoms at the beginning of the process.
     ///
     /// Return `false` to discard the atom.
-    fn early_filter(&self,
-        atom: &Atom,
-        objtree: &ObjectTree,
-    ) -> bool { true }
+    fn early_filter(&self, atom: &Atom, objtree: &ObjectTree) -> bool {
+        true
+    }
 
     /// Expand atoms, such as spawners into the atoms they spawn.
     ///
     /// Return `false` to discard the original atom.
-    fn expand<'a>(&self,
+    fn expand<'a>(
+        &self,
         atom: &Atom<'a>,
         objtree: &'a ObjectTree,
         output: &mut Vec<Atom<'a>>,
-    ) -> bool { true }
+    ) -> bool {
+        true
+    }
 
-    fn adjust_sprite<'a>(&self,
+    fn adjust_sprite<'a>(
+        &self,
         atom: &Atom<'a>,
         sprite: &mut Sprite<'a>,
         objtree: &'a ObjectTree,
-        bump: &'a bumpalo::Bump,  // TODO: kind of a hacky way to pass this
-    ) {}
+        bump: &'a bumpalo::Bump, // TODO: kind of a hacky way to pass this
+    ) {
+    }
 
     /// Apply overlays and underlays to an atom, in the form of pseudo-atoms.
-    fn overlays<'a>(&self,
+    fn overlays<'a>(
+        &self,
         atom: &Atom<'a>,
         objtree: &'a ObjectTree,
         underlays: &mut Vec<Sprite<'a>>,
         overlays: &mut Vec<Sprite<'a>>,
-        bump: &'a bumpalo::Bump,  // TODO: kind of a hacky way to pass this
-    ) {}
+        bump: &'a bumpalo::Bump, // TODO: kind of a hacky way to pass this
+    ) {
+    }
 
-    fn neighborhood_appearance<'a>(&self,
+    fn neighborhood_appearance<'a>(
+        &self,
         atom: &Atom<'a>,
         objtree: &'a ObjectTree,
         neighborhood: &Neighborhood<'a, '_>,
         output: &mut Vec<Sprite<'a>>,
-        bump: &'a bumpalo::Bump,  // TODO: kind of a hacky way to pass this
-    ) -> bool { true }
+        bump: &'a bumpalo::Bump, // TODO: kind of a hacky way to pass this
+    ) -> bool {
+        true
+    }
 
     /// Filter atoms at the end of the process, after they have been taken into
     /// account by their neighbors.
-    fn late_filter(&self,
-        atom: &Atom,
-        objtree: &ObjectTree,
-    ) -> bool { true }
+    fn late_filter(&self, atom: &Atom, objtree: &ObjectTree) -> bool {
+        true
+    }
 
-    fn sprite_filter(&self,
-        sprite: &Sprite,
-    ) -> bool { true }
+    fn sprite_filter(&self, sprite: &Sprite) -> bool {
+        true
+    }
 }
 
 pub struct RenderPassInfo {
@@ -91,40 +99,120 @@ pub struct RenderPassInfo {
 }
 
 macro_rules! pass {
-    ($typ:ty, $name:expr, $desc:expr, $def:expr) => (RenderPassInfo {
-        name: $name,
-        desc: $desc,
-        default: $def,
-        new: || Box::new(<$typ>::default())
-    })
+    ($typ:ty, $name:expr, $desc:expr, $def:expr) => {
+        RenderPassInfo {
+            name: $name,
+            desc: $desc,
+            default: $def,
+            new: || Box::new(<$typ>::default()),
+        }
+    };
 }
 
 pub const RENDER_PASSES: &[RenderPassInfo] = &[
-    pass!(HideSpace, "hide-space", "Do not render space tiles, instead leaving transparency.", true),
+    pass!(
+        HideSpace,
+        "hide-space",
+        "Do not render space tiles, instead leaving transparency.",
+        true
+    ),
     pass!(HideAreas, "hide-areas", "Do not render area icons.", true),
-    pass!(HideInvisible, "hide-invisible", "Do not render invisible or ephemeral objects such as mapping helpers.", true),
-    pass!(Random, "random", "Replace random spawners with one of their possibilities.", true),
-    pass!(Pretty, "pretty", "Add the minor cosmetic overlays for various objects.", true),
-    pass!(Spawners, "spawners", "Replace object spawners with their spawned objects.", true),
-    pass!(Overlays, "overlays", "Add overlays and underlays to atoms which usually have them.", true),
-    pass!(TransitTube, "transit-tube", "Add overlays to connect transit tubes together.", true),
-    pass!(GravityGen, "gravity-gen", "Expand the gravity generator to the full structure.", true),
+    pass!(
+        HideInvisible,
+        "hide-invisible",
+        "Do not render invisible or ephemeral objects such as mapping helpers.",
+        true
+    ),
+    pass!(
+        Random,
+        "random",
+        "Replace random spawners with one of their possibilities.",
+        true
+    ),
+    pass!(
+        Pretty,
+        "pretty",
+        "Add the minor cosmetic overlays for various objects.",
+        true
+    ),
+    pass!(
+        Spawners,
+        "spawners",
+        "Replace object spawners with their spawned objects.",
+        true
+    ),
+    pass!(
+        Overlays,
+        "overlays",
+        "Add overlays and underlays to atoms which usually have them.",
+        true
+    ),
+    pass!(
+        TransitTube,
+        "transit-tube",
+        "Add overlays to connect transit tubes together.",
+        true
+    ),
+    pass!(
+        GravityGen,
+        "gravity-gen",
+        "Expand the gravity generator to the full structure.",
+        true
+    ),
     pass!(Wires, "only-powernet", "Render only power cables.", false),
-    pass!(Pipes, "only-pipenet", "Render only atmospheric pipes.", false),
-    pass!(FancyLayers, "fancy-layers", "Layer atoms according to in-game rules.", true),
-    pass!(IconSmoothing2016, "icon-smoothing-2016", "Emulate the icon smoothing subsystem (xxalpha, 2016).", false),
-    pass!(IconSmoothing, "icon-smoothing", "Emulate the icon smoothing subsystem (Rohesie, 2020).", true),
-    pass!(SmartCables, "smart-cables", "Handle smart cable layout.", true),
-    pass!(WiresAndPipes, "only-wires-and-pipes", "Renders only power cables and atmospheric pipes.", false),
+    pass!(
+        Pipes,
+        "only-pipenet",
+        "Render only atmospheric pipes.",
+        false
+    ),
+    pass!(
+        FancyLayers,
+        "fancy-layers",
+        "Layer atoms according to in-game rules.",
+        true
+    ),
+    pass!(
+        IconSmoothing2016,
+        "icon-smoothing-2016",
+        "Emulate the icon smoothing subsystem (xxalpha, 2016).",
+        false
+    ),
+    pass!(
+        IconSmoothing,
+        "icon-smoothing",
+        "Emulate the icon smoothing subsystem (Rohesie, 2020).",
+        true
+    ),
+    pass!(
+        SmartCables,
+        "smart-cables",
+        "Handle smart cable layout.",
+        true
+    ),
+    pass!(
+        WiresAndPipes,
+        "only-wires-and-pipes",
+        "Renders only power cables and atmospheric pipes.",
+        false
+    ),
 ];
 
-pub fn configure(renderer_config: &dm::config::MapRenderer, include: &str, exclude: &str) -> Vec<Box<dyn RenderPass>> {
+pub fn configure(
+    renderer_config: &dm::config::MapRenderer,
+    include: &str,
+    exclude: &str,
+) -> Vec<Box<dyn RenderPass>> {
     let include: Vec<&str> = include.split(',').collect();
     let exclude: Vec<&str> = exclude.split(',').collect();
     configure_list(renderer_config, &include, &exclude)
 }
 
-pub fn configure_list<T: AsRef<str>>(renderer_config: &dm::config::MapRenderer, include: &[T], exclude: &[T]) -> Vec<Box<dyn RenderPass>> {
+pub fn configure_list<T: AsRef<str>>(
+    renderer_config: &dm::config::MapRenderer,
+    include: &[T],
+    exclude: &[T],
+) -> Vec<Box<dyn RenderPass>> {
     let include_all = include.iter().any(|name| name.as_ref() == "all");
     let exclude_all = exclude.iter().any(|name| name.as_ref() == "all");
 
@@ -155,14 +243,15 @@ pub fn configure_list<T: AsRef<str>>(renderer_config: &dm::config::MapRenderer, 
 fn add_to<'a>(target: &mut Vec<Sprite<'a>>, atom: &Atom<'a>, icon_state: &'a str) {
     target.push(Sprite {
         icon_state,
-        .. atom.sprite
+        ..atom.sprite
     });
 }
 
 #[derive(Default)]
 pub struct HideSpace;
 impl RenderPass for HideSpace {
-    fn expand<'a>(&self,
+    fn expand<'a>(
+        &self,
         atom: &Atom<'a>,
         objtree: &'a ObjectTree,
         output: &mut Vec<Atom<'a>>,
@@ -201,7 +290,8 @@ impl RenderPass for HideInvisible {
     fn configure(&mut self, renderer_config: &dm::config::MapRenderer) {
         self.overrides = renderer_config.hide_invisible.clone();
         // Put longer typepaths earlier in the list so that `/foo/bar` can override `/foo`.
-        self.overrides.sort_unstable_by_key(|k| usize::MAX - k.len());
+        self.overrides
+            .sort_unstable_by_key(|k| usize::MAX - k.len());
         // Append `/` to each typepath for faster starts_with later.
         for key in self.overrides.iter_mut() {
             if !key.ends_with('/') {
@@ -224,14 +314,18 @@ impl RenderPass for HideInvisible {
             }
         }
         // invisible objects and syndicate balloons are not to show
-        if atom.get_var("invisibility", objtree).to_float().unwrap_or(0.) > 60. ||
-            atom.istype("/obj/effect/mapping_helpers/")
+        if atom
+            .get_var("invisibility", objtree)
+            .to_float()
+            .unwrap_or(0.)
+            > 60.
+            || atom.istype("/obj/effect/mapping_helpers/")
         {
             return false;
         }
-        if atom.get_var("icon", objtree) == "icons/obj/items_and_weapons.dmi" &&
-            atom.get_var("icon_state", objtree) == "syndballoon" &&
-            !atom.istype("/obj/item/toy/syndicateballoon/")
+        if atom.get_var("icon", objtree) == "icons/obj/items_and_weapons.dmi"
+            && atom.get_var("icon_state", objtree) == "syndballoon"
+            && !atom.istype("/obj/item/toy/syndicateballoon/")
         {
             return false;
         }
@@ -242,7 +336,8 @@ impl RenderPass for HideInvisible {
 #[derive(Default)]
 pub struct Overlays;
 impl RenderPass for Overlays {
-    fn adjust_sprite<'a>(&self,
+    fn adjust_sprite<'a>(
+        &self,
         atom: &Atom<'a>,
         sprite: &mut Sprite<'a>,
         objtree: &'a ObjectTree,
@@ -252,7 +347,11 @@ impl RenderPass for Overlays {
 
         if atom.istype("/obj/machinery/power/apc/") {
             // auto-set pixel location
-            match atom.get_var("dir", objtree).to_int().and_then(Dir::from_int) {
+            match atom
+                .get_var("dir", objtree)
+                .to_int()
+                .and_then(Dir::from_int)
+            {
                 Some(Dir::North) => sprite.ofs_y = 23,
                 Some(Dir::South) => sprite.ofs_y = -23,
                 Some(Dir::East) => sprite.ofs_x = 24,
@@ -275,12 +374,12 @@ impl RenderPass for Overlays {
             underlays.push(Sprite {
                 icon: "icons/turf/floors.dmi",
                 icon_state: "plating",
-                .. atom.sprite
+                ..atom.sprite
             });
             underlays.push(Sprite {
                 icon: "icons/obj/structures.dmi",
                 icon_state: "grille",
-                .. atom.sprite
+                ..atom.sprite
             });
         } else if atom.istype("/obj/structure/closet/") {
             // closet doors
@@ -291,19 +390,29 @@ impl RenderPass for Overlays {
                     "icon_state"
                 };
                 if let &Constant::String(ref door) = atom.get_var(var, objtree) {
-                    add_to(overlays, atom, bumpalo::format!(in bump, "{}_open", door).into_bump_str());
+                    add_to(
+                        overlays,
+                        atom,
+                        bumpalo::format!(in bump, "{}_open", door).into_bump_str(),
+                    );
                 }
             } else {
                 if let &Constant::String(ref door) = atom
                     .get_var_notnull("icon_door", objtree)
                     .unwrap_or_else(|| atom.get_var("icon_state", objtree))
                 {
-                    add_to(overlays, atom, bumpalo::format!(in bump, "{}_door", door).into_bump_str());
+                    add_to(
+                        overlays,
+                        atom,
+                        bumpalo::format!(in bump, "{}_door", door).into_bump_str(),
+                    );
                 }
                 if atom.get_var("welded", objtree).to_bool() {
                     add_to(overlays, atom, "welded");
                 }
-                if atom.get_var("secure", objtree).to_bool() && !atom.get_var("broken", objtree).to_bool() {
+                if atom.get_var("secure", objtree).to_bool()
+                    && !atom.get_var("broken", objtree).to_bool()
+                {
                     if atom.get_var("locked", objtree).to_bool() {
                         add_to(overlays, atom, "locked");
                     } else {
@@ -311,7 +420,9 @@ impl RenderPass for Overlays {
                     }
                 }
             }
-        } else if atom.istype("/obj/machinery/computer/") || atom.istype("/obj/machinery/power/solar_control/") {
+        } else if atom.istype("/obj/machinery/computer/")
+            || atom.istype("/obj/machinery/power/solar_control/")
+        {
             // computer screens and keyboards
             if let Some(screen) = atom.get_var("icon_screen", objtree).as_str() {
                 add_to(overlays, atom, screen);
@@ -325,7 +436,7 @@ impl RenderPass for Overlays {
                     overlays.push(Sprite {
                         icon: overlays_file,
                         icon_state: "glass_closed",
-                        .. atom.sprite
+                        ..atom.sprite
                     })
                 }
             } else {
@@ -338,10 +449,12 @@ impl RenderPass for Overlays {
             }
 
             // APC terminals
-            let mut terminal = Sprite::from_vars(objtree, &objtree.expect("/obj/machinery/power/terminal"));
+            let mut terminal =
+                Sprite::from_vars(objtree, &objtree.expect("/obj/machinery/power/terminal"));
             terminal.dir = atom.sprite.dir;
             // TODO: un-hack this
-            FancyLayers::default().apply_fancy_layer("/obj/machinery/power/terminal", &mut terminal);
+            FancyLayers::default()
+                .apply_fancy_layer("/obj/machinery/power/terminal", &mut terminal);
             underlays.push(terminal);
         }
     }
@@ -350,7 +463,8 @@ impl RenderPass for Overlays {
 #[derive(Default)]
 pub struct Pretty;
 impl RenderPass for Pretty {
-    fn adjust_sprite<'a>(&self,
+    fn adjust_sprite<'a>(
+        &self,
         atom: &Atom<'a>,
         sprite: &mut Sprite<'a>,
         _: &'a ObjectTree,
@@ -361,18 +475,20 @@ impl RenderPass for Pretty {
         }
     }
 
-    fn overlays<'a>(&self,
+    fn overlays<'a>(
+        &self,
         atom: &Atom<'a>,
         objtree: &'a ObjectTree,
         _: &mut Vec<Sprite<'a>>,
         overlays: &mut Vec<Sprite<'a>>,
         _: &bumpalo::Bump,
     ) {
-        if atom.istype("/obj/item/storage/box/") && !atom.istype("/obj/item/storage/box/papersack/") {
+        if atom.istype("/obj/item/storage/box/") && !atom.istype("/obj/item/storage/box/papersack/")
+        {
             if let Some(icon_state) = atom.get_var("illustration", objtree).as_str() {
                 overlays.push(Sprite {
                     icon_state,
-                    .. atom.sprite
+                    ..atom.sprite
                 });
             }
         } else if atom.istype("/obj/machinery/firealarm/") {
@@ -434,9 +550,14 @@ pub struct FancyLayers {
 
 impl RenderPass for FancyLayers {
     fn configure(&mut self, renderer_config: &dm::config::MapRenderer) {
-        self.overrides = renderer_config.fancy_layers.clone().into_iter().collect::<Vec<_>>();
+        self.overrides = renderer_config
+            .fancy_layers
+            .clone()
+            .into_iter()
+            .collect::<Vec<_>>();
         // Put longer typepaths earlier in the list so that `/foo/bar` can override `/foo`.
-        self.overrides.sort_unstable_by_key(|(k, _)| usize::MAX - k.len());
+        self.overrides
+            .sort_unstable_by_key(|(k, _)| usize::MAX - k.len());
         // Append `/` to each typepath for faster starts_with later.
         for (key, _) in self.overrides.iter_mut() {
             if !key.ends_with('/') {
@@ -445,7 +566,8 @@ impl RenderPass for FancyLayers {
         }
     }
 
-    fn adjust_sprite<'a>(&self,
+    fn adjust_sprite<'a>(
+        &self,
         atom: &Atom<'a>,
         sprite: &mut Sprite<'a>,
         objtree: &'a ObjectTree,
@@ -461,7 +583,8 @@ impl RenderPass for FancyLayers {
         }
     }
 
-    fn overlays<'a>(&self,
+    fn overlays<'a>(
+        &self,
         atom: &Atom<'a>,
         objtree: &'a ObjectTree,
         _underlays: &mut Vec<Sprite<'a>>,
@@ -475,7 +598,7 @@ impl RenderPass for FancyLayers {
                     icon_state: aboveground,
                     // use original layer, not modified layer above
                     layer: crate::minimap::layer_of(objtree, atom),
-                    .. atom.sprite
+                    ..atom.sprite
                 });
             }
         }
@@ -487,7 +610,10 @@ fn unary_aboveground(atom: &Atom, objtree: &ObjectTree) -> Option<&'static str> 
         &Constant::String(ref text) => match &**text {
             "vent_map-1" | "vent_map-2" | "vent_map-3" | "vent_map-4" => "vent_off",
             "vent_map_on-1" | "vent_map_on-2" | "vent_map_on-3" | "vent_map_on-4" => "vent_out",
-            "vent_map_siphon_on-1" | "vent_map_siphon_on-2" | "vent_map_siphon_on-3" | "vent_map_siphon_on-4" => "vent_in",
+            "vent_map_siphon_on-1"
+            | "vent_map_siphon_on-2"
+            | "vent_map_siphon_on-3"
+            | "vent_map_siphon_on-4" => "vent_in",
             "scrub_map-1" | "scrub_map-2" | "scrub_map-3" | "scrub_map-4" => "scrub_off",
             "scrub_map_on-1" | "scrub_map_on-2" | "scrub_map_on-3" | "scrub_map_on-4" => "scrub_on",
             _ => return None,
@@ -505,15 +631,15 @@ impl FancyLayers {
         }
 
         if subpath(p, "/turf/open/floor/plating/") || subpath(p, "/turf/open/space/") {
-            Some(Layer::from(-10))  // under everything
+            Some(Layer::from(-10)) // under everything
         } else if subpath(p, "/turf/closed/mineral/") {
-            Some(Layer::from(-3))   // above hidden stuff and plating but below walls
+            Some(Layer::from(-3)) // above hidden stuff and plating but below walls
         } else if subpath(p, "/turf/open/floor/") || subpath(p, "/turf/closed/") {
-            Some(Layer::from(-2))   // above hidden pipes and wires
+            Some(Layer::from(-2)) // above hidden pipes and wires
         } else if subpath(p, "/turf/") {
-            Some(Layer::from(-10))  // under everything
+            Some(Layer::from(-10)) // under everything
         } else if subpath(p, "/obj/effect/turf_decal/") {
-            Some(Layer::from(-1))   // above turfs
+            Some(Layer::from(-1)) // above turfs
         } else if subpath(p, "/obj/structure/disposalpipe/") {
             Some(Layer::from(-6))
         } else if subpath(p, "/obj/machinery/atmospherics/pipe/") && !p.contains("visible") {

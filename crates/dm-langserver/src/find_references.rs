@@ -2,9 +2,9 @@
 
 use std::collections::HashMap;
 
-use dm::Location;
-use dm::objtree::*;
 use dm::ast::*;
+use dm::objtree::*;
+use dm::Location;
 
 use ahash::RandomState;
 
@@ -28,10 +28,13 @@ impl ReferencesTable {
 
         // Insert the "definition" locations for the types and such
         objtree.root().recurse(&mut |ty| {
-            tab.uses.insert(ty.id, References {
-                references: vec![],
-                implementations: vec![ty.location],
-            });
+            tab.uses.insert(
+                ty.id,
+                References {
+                    references: vec![],
+                    implementations: vec![ty.location],
+                },
+            );
             for (name, var) in ty.vars.iter() {
                 if let Some(decl) = ty.get_var_declaration(name) {
                     tab.impl_symbol(decl.id, var.value.location);
@@ -49,7 +52,9 @@ impl ReferencesTable {
                 if let Some(ref expr) = var.value.expression {
                     let mut walk = WalkProc::from_ty(&mut tab, objtree, ty);
                     let type_hint = match ty.get_var_declaration(name) {
-                        Some(decl) => walk.static_type(decl.location, &decl.var_type.type_path).basic_type(),
+                        Some(decl) => walk
+                            .static_type(decl.location, &decl.var_type.type_path)
+                            .basic_type(),
                         None => None,
                     };
                     walk.visit_expression(var.value.location, expr, type_hint);
@@ -88,19 +93,30 @@ impl ReferencesTable {
 
     fn new_symbol(&mut self, location: Location) -> SymbolId {
         let id = self.symbols.allocate();
-        self.uses.insert(id, References {
-            references: vec![location],
-            implementations: vec![],
-        });
+        self.uses.insert(
+            id,
+            References {
+                references: vec![location],
+                implementations: vec![],
+            },
+        );
         id
     }
 
     fn use_symbol(&mut self, symbol: SymbolId, location: Location) {
-        self.uses.entry(symbol).or_default().references.push(location);
+        self.uses
+            .entry(symbol)
+            .or_default()
+            .references
+            .push(location);
     }
 
     fn impl_symbol(&mut self, symbol: SymbolId, location: Location) {
-        self.uses.entry(symbol).or_default().implementations.push(location);
+        self.uses
+            .entry(symbol)
+            .or_default()
+            .implementations
+            .push(location);
     }
 }
 
@@ -140,29 +156,44 @@ struct WalkProc<'o> {
 impl<'o> WalkProc<'o> {
     fn from_proc(tab: &'o mut ReferencesTable, objtree: &'o ObjectTree, proc: ProcRef<'o>) -> Self {
         let mut local_vars = HashMap::with_hasher(RandomState::default());
-        local_vars.insert("global".to_owned(), Local {
-            ty: StaticType::Type(objtree.root()),
-            symbol: objtree.root().id,
-        });
-        local_vars.insert(".".to_owned(), Local {
-            ty: StaticType::None,
-            symbol: tab.new_symbol(proc.location),
-        });
-        local_vars.insert("args".to_owned(), Local {
-            ty: StaticType::Type(objtree.expect("/list")),
-            symbol: tab.new_symbol(proc.location),
-        });
-        local_vars.insert("usr".to_owned(), Local {
-            ty: StaticType::Type(objtree.expect("/mob")),
-            symbol: tab.new_symbol(proc.location),
-        });
+        local_vars.insert(
+            "global".to_owned(),
+            Local {
+                ty: StaticType::Type(objtree.root()),
+                symbol: objtree.root().id,
+            },
+        );
+        local_vars.insert(
+            ".".to_owned(),
+            Local {
+                ty: StaticType::None,
+                symbol: tab.new_symbol(proc.location),
+            },
+        );
+        local_vars.insert(
+            "args".to_owned(),
+            Local {
+                ty: StaticType::Type(objtree.expect("/list")),
+                symbol: tab.new_symbol(proc.location),
+            },
+        );
+        local_vars.insert(
+            "usr".to_owned(),
+            Local {
+                ty: StaticType::Type(objtree.expect("/mob")),
+                symbol: tab.new_symbol(proc.location),
+            },
+        );
 
         let ty = proc.ty();
         if !ty.is_root() {
-            local_vars.insert("src".to_owned(), Local {
-                ty: StaticType::Type(ty),
-                symbol: tab.new_symbol(proc.location),
-            });
+            local_vars.insert(
+                "src".to_owned(),
+                Local {
+                    ty: StaticType::Type(ty),
+                    symbol: tab.new_symbol(proc.location),
+                },
+            );
         }
 
         WalkProc {
@@ -170,23 +201,26 @@ impl<'o> WalkProc<'o> {
             objtree,
             ty: proc.ty(),
             proc: Some(proc),
-            local_vars
+            local_vars,
         }
     }
 
     fn from_ty(tab: &'o mut ReferencesTable, objtree: &'o ObjectTree, ty: TypeRef<'o>) -> Self {
         let mut local_vars = HashMap::with_hasher(RandomState::default());
-        local_vars.insert("global".to_owned(), Local {
-            ty: StaticType::Type(objtree.root()),
-            symbol: objtree.root().id,
-        });
+        local_vars.insert(
+            "global".to_owned(),
+            Local {
+                ty: StaticType::Type(objtree.root()),
+                symbol: objtree.root().id,
+            },
+        );
 
         WalkProc {
             tab,
             objtree,
             ty,
             proc: None,
-            local_vars
+            local_vars,
         }
     }
 
@@ -197,10 +231,13 @@ impl<'o> WalkProc<'o> {
             if let Some(expr) = &param.default {
                 self.visit_expression(param.location, expr, None);
             }
-            self.local_vars.insert(param.name.to_owned(), Local {
-                ty,
-                symbol: self.tab.new_symbol(param.location)
-            });
+            self.local_vars.insert(
+                param.name.to_owned(),
+                Local {
+                    ty,
+                    symbol: self.tab.new_symbol(param.location),
+                },
+            );
         }
         self.visit_block(block);
     }
@@ -213,23 +250,27 @@ impl<'o> WalkProc<'o> {
 
     fn visit_statement(&mut self, location: Location, statement: &'o Statement) {
         match statement {
-            Statement::Expr(expr) => { self.visit_expression(location, expr, None); },
+            Statement::Expr(expr) => {
+                self.visit_expression(location, expr, None);
+            }
             Statement::Return(expr) => {
                 let dot = self.local_vars.get(".").unwrap().symbol;
                 self.tab.use_symbol(dot, location);
                 if let Some(expr) = expr {
                     self.visit_expression(location, expr, None);
                 }
-            },
-            Statement::Throw(expr) => { self.visit_expression(location, expr, None); },
+            }
+            Statement::Throw(expr) => {
+                self.visit_expression(location, expr, None);
+            }
             Statement::While { condition, block } => {
                 self.visit_expression(location, condition, None);
                 self.visit_block(block);
-            },
+            }
             Statement::DoWhile { block, condition } => {
                 self.visit_block(block);
                 self.visit_expression(condition.location, &condition.elem, None);
-            },
+            }
             Statement::If { arms, else_arm } => {
                 for (condition, ref block) in arms.iter() {
                     self.visit_expression(condition.location, &condition.elem, None);
@@ -238,11 +279,16 @@ impl<'o> WalkProc<'o> {
                 if let Some(else_arm) = else_arm {
                     self.visit_block(else_arm);
                 }
-            },
+            }
             Statement::ForInfinite { block } => {
                 self.visit_block(block);
             }
-            Statement::ForLoop { init, test, inc, block } => {
+            Statement::ForLoop {
+                init,
+                test,
+                inc,
+                block,
+            } => {
                 if let Some(init) = init {
                     self.visit_statement(location, init);
                 }
@@ -253,9 +299,15 @@ impl<'o> WalkProc<'o> {
                     self.visit_statement(location, inc);
                 }
                 self.visit_block(block);
-            },
+            }
             Statement::ForList(for_list) => {
-                let ForListStatement { var_type, name, in_list, block, .. } = &**for_list;
+                let ForListStatement {
+                    var_type,
+                    name,
+                    in_list,
+                    block,
+                    ..
+                } = &**for_list;
                 if let Some(in_list) = in_list {
                     self.visit_expression(location, in_list, None);
                 }
@@ -263,9 +315,16 @@ impl<'o> WalkProc<'o> {
                     self.visit_var(location, var_type, name, None);
                 }
                 self.visit_block(block);
-            },
+            }
             Statement::ForRange(for_range) => {
-                let ForRangeStatement { var_type, name, start, end, step, block } = &**for_range;
+                let ForRangeStatement {
+                    var_type,
+                    name,
+                    start,
+                    end,
+                    step,
+                    block,
+                } = &**for_range;
                 self.visit_expression(location, end, None);
                 if let Some(step) = step {
                     self.visit_expression(location, step, None);
@@ -274,26 +333,32 @@ impl<'o> WalkProc<'o> {
                     self.visit_var(location, var_type, name, Some(start));
                 }
                 self.visit_block(block);
-            },
+            }
             Statement::Var(var) => self.visit_var_stmt(location, var),
             Statement::Vars(vars) => {
                 for each in vars.iter() {
                     self.visit_var_stmt(location, each);
                 }
-            },
-            Statement::Setting { .. } => {},
+            }
+            Statement::Setting { .. } => {}
             Statement::Spawn { delay, block } => {
                 if let Some(delay) = delay {
                     self.visit_expression(location, delay, None);
                 }
                 self.visit_block(block);
-            },
-            Statement::Switch { input, cases, default } => {
+            }
+            Statement::Switch {
+                input,
+                cases,
+                default,
+            } => {
                 self.visit_expression(location, input, None);
                 for (case, ref block) in cases.iter() {
                     for case_part in case.elem.iter() {
                         match case_part {
-                            dm::ast::Case::Exact(expr) => { self.visit_expression(case.location, expr, None); },
+                            dm::ast::Case::Exact(expr) => {
+                                self.visit_expression(case.location, expr, None);
+                            }
                             dm::ast::Case::Range(start, end) => {
                                 self.visit_expression(case.location, start, None);
                                 self.visit_expression(case.location, end, None);
@@ -305,13 +370,17 @@ impl<'o> WalkProc<'o> {
                 if let Some(default) = default {
                     self.visit_block(default);
                 }
-            },
-            Statement::TryCatch { try_block, catch_params, catch_block } => {
+            }
+            Statement::TryCatch {
+                try_block,
+                catch_params,
+                catch_block,
+            } => {
                 self.visit_block(try_block);
                 for caught in catch_params.iter() {
                     let (var_name, mut type_path) = match caught.split_last() {
                         Some(x) => x,
-                        None => continue
+                        None => continue,
                     };
                     match type_path.split_first() {
                         Some((first, rest)) if first == "var" => type_path = rest,
@@ -321,13 +390,15 @@ impl<'o> WalkProc<'o> {
                     self.visit_var(location, &var_type, var_name, None);
                 }
                 self.visit_block(catch_block);
-            },
-            Statement::Continue(_) => {},
-            Statement::Break(_) => {},
-            Statement::Goto(_) => {},
-            Statement::Crash(_) => {},
+            }
+            Statement::Continue(_) => {}
+            Statement::Break(_) => {}
+            Statement::Goto(_) => {}
+            Statement::Crash(_) => {}
             Statement::Label { name: _, block } => self.visit_block(block),
-            Statement::Del(expr) => { self.visit_expression(location, expr, None); },
+            Statement::Del(expr) => {
+                self.visit_expression(location, expr, None);
+            }
         }
     }
 
@@ -335,21 +406,30 @@ impl<'o> WalkProc<'o> {
         self.visit_var(location, &var.var_type, &var.name, var.value.as_ref())
     }
 
-    fn visit_var(&mut self, location: Location, var_type: &VarType, name: &str, value: Option<&'o Expression>) {
+    fn visit_var(
+        &mut self,
+        location: Location,
+        var_type: &VarType,
+        name: &str,
+        value: Option<&'o Expression>,
+    ) {
         let ty = self.static_type(location, &var_type.type_path);
         self.use_type(location, &ty);
         if let Some(expr) = value {
             self.visit_expression(location, expr, ty.basic_type());
         }
-        self.local_vars.insert(name.to_owned(), Local {
-            ty,
-            symbol: self.tab.new_symbol(location),
-        });
+        self.local_vars.insert(
+            name.to_owned(),
+            Local {
+                ty,
+                symbol: self.tab.new_symbol(location),
+            },
+        );
     }
 
     fn use_type(&mut self, location: Location, ty: &StaticType<'o>) {
         match ty {
-            StaticType::None => {},
+            StaticType::None => {}
             StaticType::Type(ty) => self.tab.use_symbol(ty.id, location),
             StaticType::List { list, keys } => {
                 self.tab.use_symbol(list.id, location);
@@ -358,37 +438,42 @@ impl<'o> WalkProc<'o> {
         }
     }
 
-    fn visit_expression(&mut self, location: Location, expression: &'o Expression, type_hint: Option<TypeRef<'o>>) -> StaticType<'o> {
+    fn visit_expression(
+        &mut self,
+        location: Location,
+        expression: &'o Expression,
+        type_hint: Option<TypeRef<'o>>,
+    ) -> StaticType<'o> {
         match expression {
             Expression::Base { term, follow } => {
-                let base_type_hint = if follow.is_empty() {
-                    type_hint
-                } else {
-                    None
-                };
+                let base_type_hint = if follow.is_empty() { type_hint } else { None };
                 let mut ty = self.visit_term(term.location, &term.elem, base_type_hint);
                 for each in follow.iter() {
                     ty = self.visit_follow(each.location, ty, &each.elem);
                 }
                 ty
-            },
-            Expression::BinaryOp { op: BinaryOp::Or, lhs, rhs } => {
+            }
+            Expression::BinaryOp {
+                op: BinaryOp::Or,
+                lhs,
+                rhs,
+            } => {
                 // It appears that DM does this in more cases than this, but
                 // this is the only case I've seen it used in the wild.
                 // ex: var/datum/cache_entry/E = cache[key] || new
                 let lty = self.visit_expression(location, lhs, type_hint);
                 let rty = self.visit_expression(location, rhs, type_hint);
                 self.visit_binary(lty, rty, BinaryOp::Or)
-            },
+            }
             Expression::BinaryOp { op, lhs, rhs } => {
                 let lty = self.visit_expression(location, lhs, None);
                 let rty = self.visit_expression(location, rhs, None);
                 self.visit_binary(lty, rty, *op)
-            },
+            }
             Expression::AssignOp { lhs, rhs, .. } => {
                 let lhs = self.visit_expression(location, lhs, None);
                 self.visit_expression(location, rhs, lhs.basic_type())
-            },
+            }
             Expression::TernaryOp { cond, if_, else_ } => {
                 // TODO: be sensible
                 self.visit_expression(location, cond, None);
@@ -412,7 +497,12 @@ impl<'o> WalkProc<'o> {
         }
     }
 
-    fn visit_term(&mut self, location: Location, term: &'o Term, type_hint: Option<TypeRef<'o>>) -> StaticType<'o> {
+    fn visit_term(
+        &mut self,
+        location: Location,
+        term: &'o Term,
+        type_hint: Option<TypeRef<'o>>,
+    ) -> StaticType<'o> {
         match term {
             Term::Null => StaticType::None,
             Term::Int(_) => StaticType::None,
@@ -425,7 +515,7 @@ impl<'o> WalkProc<'o> {
             Term::Prefab(prefab) => {
                 self.visit_prefab(location, prefab);
                 StaticType::None
-            },
+            }
             Term::InterpString(_, parts) => {
                 for (ref expr, _) in parts.iter() {
                     if let Some(expr) = expr {
@@ -433,7 +523,7 @@ impl<'o> WalkProc<'o> {
                     }
                 }
                 StaticType::None
-            },
+            }
 
             Term::Ident(unscoped_name) => self.visit_ident(location, unscoped_name),
             Term::Call(unscoped_name, args) => {
@@ -443,7 +533,7 @@ impl<'o> WalkProc<'o> {
                 } else {
                     StaticType::None
                 }
-            },
+            }
             Term::SelfCall(args) => {
                 if let Some(proc) = self.proc {
                     let src = self.ty;
@@ -452,7 +542,7 @@ impl<'o> WalkProc<'o> {
                 } else {
                     StaticType::None
                 }
-            },
+            }
             Term::ParentCall(args) => {
                 if let Some(proc) = self.proc.and_then(ProcRef::parent_proc) {
                     // TODO: if args are empty, call w/ same args
@@ -462,15 +552,13 @@ impl<'o> WalkProc<'o> {
                 } else {
                     StaticType::None
                 }
-            },
+            }
 
-            Term::NewImplicit { args } => {
-                self.visit_new(location, type_hint, args)
-            },
+            Term::NewImplicit { args } => self.visit_new(location, type_hint, args),
             Term::NewPrefab { prefab, args } => {
                 let typepath = self.visit_prefab(location, prefab);
                 self.visit_new(location, typepath, args)
-            },
+            }
             Term::NewMiniExpr { expr, .. } => {
                 let mut current = self.visit_ident(location, &expr.ident);
                 for field in expr.fields.iter() {
@@ -478,7 +566,7 @@ impl<'o> WalkProc<'o> {
                 }
                 // The whole point is it's dynamic, so don't try anything
                 StaticType::None
-            },
+            }
 
             Term::List(args) => {
                 // TODO: use /proc/list
@@ -487,7 +575,7 @@ impl<'o> WalkProc<'o> {
                     list: self.objtree.expect("/list"),
                     keys: Box::new(StaticType::None),
                 }
-            },
+            }
             Term::Locate { args, in_list } => {
                 // TODO: use /proc/locate
                 self.visit_arguments(location, args);
@@ -495,15 +583,19 @@ impl<'o> WalkProc<'o> {
                     self.visit_expression(location, expr, None);
                 }
                 StaticType::None
-            },
-            Term::Input { args, input_type: _, in_list } => {
+            }
+            Term::Input {
+                args,
+                input_type: _,
+                in_list,
+            } => {
                 // TODO: use /proc/input
                 self.visit_arguments(location, args);
                 if let Some(ref expr) = in_list {
                     self.visit_expression(location, expr, None);
                 }
                 StaticType::None
-            },
+            }
             Term::Pick(args) => {
                 // TODO: use /proc/pick
                 for (weight, value) in args.iter() {
@@ -513,17 +605,22 @@ impl<'o> WalkProc<'o> {
                     self.visit_expression(location, value, None);
                 }
                 StaticType::None
-            },
+            }
             Term::DynamicCall(args_1, args_2) => {
                 // TODO: use /proc/call
                 self.visit_arguments(location, args_1);
                 self.visit_arguments(location, args_2);
                 StaticType::None
-            },
+            }
         }
     }
 
-    fn visit_new(&mut self, location: Location, typepath: Option<TypeRef<'o>>, args: &'o Option<Box<[Expression]>>) -> StaticType<'o> {
+    fn visit_new(
+        &mut self,
+        location: Location,
+        typepath: Option<TypeRef<'o>>,
+        args: &'o Option<Box<[Expression]>>,
+    ) -> StaticType<'o> {
         if let Some(typepath) = typepath {
             if let Some(new_proc) = typepath.get_proc("New") {
                 self.visit_call(
@@ -533,7 +630,8 @@ impl<'o> WalkProc<'o> {
                     args.as_ref().map_or(&[], |v| &v[..]),
                     // New calls are exact: `new /datum()` will always call
                     // `/datum/New()` and never an override.
-                    true);
+                    true,
+                );
             }
             // If we had a diagnostic context here, we'd error for
             // types other than `/list`, which has no `New()`.
@@ -558,7 +656,9 @@ impl<'o> WalkProc<'o> {
                     let mut type_hint = None;
                     if let Some(decl) = nav.ty().get_var_declaration(key) {
                         self.tab.use_symbol(decl.id, location);
-                        type_hint = self.static_type(location, &decl.var_type.type_path).basic_type();
+                        type_hint = self
+                            .static_type(location, &decl.var_type.type_path)
+                            .basic_type();
                     }
                     self.visit_expression(location, expr, type_hint);
                 }
@@ -569,7 +669,12 @@ impl<'o> WalkProc<'o> {
         }
     }
 
-    fn visit_field(&mut self, location: Location, lhs: StaticType<'o>, name: &'o str) -> StaticType<'o> {
+    fn visit_field(
+        &mut self,
+        location: Location,
+        lhs: StaticType<'o>,
+        name: &'o str,
+    ) -> StaticType<'o> {
         if let Some(ty) = lhs.basic_type() {
             if let Some(decl) = ty.get_var_declaration(name) {
                 self.tab.use_symbol(decl.id, location);
@@ -582,7 +687,12 @@ impl<'o> WalkProc<'o> {
         }
     }
 
-    fn visit_follow(&mut self, location: Location, lhs: StaticType<'o>, rhs: &'o Follow) -> StaticType<'o> {
+    fn visit_follow(
+        &mut self,
+        location: Location,
+        lhs: StaticType<'o>,
+        rhs: &'o Follow,
+    ) -> StaticType<'o> {
         match rhs {
             Follow::Unary(op) => self.visit_unary(lhs, *op),
             Follow::Index(_, expr) => {
@@ -593,7 +703,7 @@ impl<'o> WalkProc<'o> {
                     StaticType::List { keys, .. } => *keys,
                     _ => StaticType::None,
                 }
-            },
+            }
             Follow::Field(_, name) => self.visit_field(location, lhs, name),
             Follow::Call(_, name, arguments) => {
                 if let Some(ty) = lhs.basic_type() {
@@ -607,7 +717,7 @@ impl<'o> WalkProc<'o> {
                     self.visit_arguments(location, arguments);
                     StaticType::None
                 }
-            },
+            }
         }
     }
 
@@ -616,12 +726,24 @@ impl<'o> WalkProc<'o> {
         StaticType::None
     }
 
-    fn visit_binary(&mut self, _lhs: StaticType<'o>, _rhs: StaticType<'o>, _op: BinaryOp) -> StaticType<'o> {
+    fn visit_binary(
+        &mut self,
+        _lhs: StaticType<'o>,
+        _rhs: StaticType<'o>,
+        _op: BinaryOp,
+    ) -> StaticType<'o> {
         // TODO: mark usage of operatorX procs
         StaticType::None
     }
 
-    fn visit_call(&mut self, location: Location, src: TypeRef<'o>, proc: ProcRef, args: &'o [Expression], is_exact: bool) -> StaticType<'o> {
+    fn visit_call(
+        &mut self,
+        location: Location,
+        src: TypeRef<'o>,
+        proc: ProcRef,
+        args: &'o [Expression],
+        is_exact: bool,
+    ) -> StaticType<'o> {
         // register use of symbol
         if !is_exact {
             // Only include uses of the symbol by name, not `.()` or `..()`
@@ -634,10 +756,14 @@ impl<'o> WalkProc<'o> {
         // identify and register kwargs used
         for arg in args {
             let mut argument_value = arg;
-            if let Expression::AssignOp { op: AssignOp::Assign, lhs, rhs } = arg {
+            if let Expression::AssignOp {
+                op: AssignOp::Assign,
+                lhs,
+                rhs,
+            } = arg
+            {
                 match lhs.as_term() {
-                    Some(Term::Ident(_name)) |
-                    Some(Term::String(_name)) => {
+                    Some(Term::Ident(_name)) | Some(Term::String(_name)) => {
                         // Don't visit_expression the kwarg key.
                         argument_value = rhs;
 
@@ -657,10 +783,14 @@ impl<'o> WalkProc<'o> {
     fn visit_arguments(&mut self, location: Location, args: &'o [Expression]) {
         for arg in args {
             let mut argument_value = arg;
-            if let Expression::AssignOp { op: AssignOp::Assign, lhs, rhs } = arg {
+            if let Expression::AssignOp {
+                op: AssignOp::Assign,
+                lhs,
+                rhs,
+            } = arg
+            {
                 match lhs.as_term() {
-                    Some(Term::Ident(_name)) |
-                    Some(Term::String(_name)) => {
+                    Some(Term::Ident(_name)) | Some(Term::String(_name)) => {
                         // Don't visit_expression the kwarg key.
                         argument_value = rhs;
                     }

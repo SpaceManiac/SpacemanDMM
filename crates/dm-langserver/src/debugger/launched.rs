@@ -30,12 +30,12 @@ pub struct Launched {
 pub enum EngineParams {
     Extools {
         port: u16,
-        dll: Option<std::path::PathBuf>
+        dll: Option<std::path::PathBuf>,
     },
     Auxtools {
         port: u16,
-        dll: Option<std::path::PathBuf>
-    }
+        dll: Option<std::path::PathBuf>,
+    },
 }
 
 impl Launched {
@@ -47,7 +47,8 @@ impl Launched {
     ) -> std::io::Result<Launched> {
         let mut command = Command::new(dreamseeker_exe);
 
-        #[cfg(unix)] {
+        #[cfg(unix)]
+        {
             if let Some(parent) = std::path::Path::new(dreamseeker_exe).parent() {
                 command.env("LD_LIBRARY_PATH", parent);
             }
@@ -157,7 +158,11 @@ impl Launched {
     }
 }
 
-fn pipe_output<R: std::io::Read + Send + 'static>(seq: Arc<SequenceNumber>, keyword: &'static str, stream: Option<R>) -> std::io::Result<()> {
+fn pipe_output<R: std::io::Read + Send + 'static>(
+    seq: Arc<SequenceNumber>,
+    keyword: &'static str,
+    stream: Option<R>,
+) -> std::io::Result<()> {
     guard!(let Some(stream2) = stream else { return Ok(()); });
     std::thread::Builder::new()
         .name(format!("launched debuggee {} relay", keyword))

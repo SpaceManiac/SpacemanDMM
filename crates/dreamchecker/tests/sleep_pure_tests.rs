@@ -1,11 +1,12 @@
-
 extern crate dreamchecker as dc;
 
 use dc::test_helpers::check_errors_match;
 
-pub const SLEEP_ERRORS: &[(u32, u16, &str)] = &[
-    (16, 16, "/mob/proc/test3 sets SpacemanDMM_should_not_sleep but calls blocking proc /proc/sleepingproc"),
-];
+pub const SLEEP_ERRORS: &[(u32, u16, &str)] = &[(
+    16,
+    16,
+    "/mob/proc/test3 sets SpacemanDMM_should_not_sleep but calls blocking proc /proc/sleepingproc",
+)];
 
 #[test]
 fn sleep() {
@@ -41,7 +42,8 @@ fn sleep() {
 /mob/proc/test6()
     set SpacemanDMM_should_not_sleep = TRUE
     spawnthensleepproc()
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, SLEEP_ERRORS);
 }
 
@@ -75,7 +77,8 @@ fn sleep2() {
     sleep(1)
 /mob/living/thing()
     . = ..()
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, SLEEP_ERRORS2);
 }
 
@@ -106,7 +109,8 @@ fn sleep3() {
     sleep(1)
 /atom/movable/thing()
     . = ..()
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, &[
         (8, 23, "/atom/movable/proc/bar calls /atom/movable/proc/foo which has override child proc that sleeps /mob/proc/foo"),
     ]);
@@ -145,7 +149,8 @@ fn sleep4() {
 /mob/proc/test2()
     var/client/C = new /client
     C.MeasureText()
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, SLEEP_ERROR4);
 }
 
@@ -171,7 +176,8 @@ fn sleep5() {
 
 /datum/hijack/proxy()
         sleep(1)
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, SLEEP_ERROR5);
 }
 
@@ -196,15 +202,15 @@ fn pure() {
 /mob/proc/test2()
     set SpacemanDMM_should_be_pure = TRUE
     bar()
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, PURE_ERRORS);
 }
 
 // these tests are separate because the ordering the errors are reported in isn't determinate and I CBF figuring out why -spookydonut Jan 2020
 // TODO: find out why
-pub const PURE2_ERRORS: &[(u32, u16, &str)] = &[
-    (5, 5, "call to pure proc test discards return value"),
-];
+pub const PURE2_ERRORS: &[(u32, u16, &str)] =
+    &[(5, 5, "call to pure proc test discards return value")];
 
 #[test]
 fn pure2() {
@@ -216,6 +222,7 @@ fn pure2() {
     test()
 /mob/proc/test3()
     return test()
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, PURE2_ERRORS);
 }

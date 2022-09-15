@@ -32,7 +32,10 @@ fn read<R: BufRead>(input: &mut R) -> Result<Option<String>, Box<dyn std::error:
             return Ok(None);
         }
         if !parts[0].eq_ignore_ascii_case("content-length:") {
-            eprintln!("JSON-RPC read error: !parts[0].eq_ignore_ascii_case(\"content-length:\")\n{:?}", parts);
+            eprintln!(
+                "JSON-RPC read error: !parts[0].eq_ignore_ascii_case(\"content-length:\")\n{:?}",
+                parts
+            );
             return Ok(None);
         }
         parts[1].trim().parse::<usize>()?

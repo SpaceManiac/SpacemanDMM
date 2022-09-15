@@ -7,7 +7,7 @@
 use regex::Regex;
 
 /// Extract ranges and colors from an input string.
-pub fn extract_colors(input: &str) -> impl Iterator<Item=(usize, usize, [u8; 4])> + '_ {
+pub fn extract_colors(input: &str) -> impl Iterator<Item = (usize, usize, [u8; 4])> + '_ {
     COLOR_REGEX.captures_iter(input).flat_map(|capture| {
         parse_capture(&capture).map(|rgba| {
             let totality = capture.get(0).unwrap();
@@ -26,7 +26,7 @@ pub enum ColorFormat {
     },
     Rgb {
         alpha: bool,
-    }
+    },
 }
 
 impl ColorFormat {
@@ -53,18 +53,35 @@ impl ColorFormat {
 
     pub fn format(self, [r, g, b, a]: [u8; 4]) -> String {
         match self {
-            ColorFormat::Hex { single_quoted, short, alpha } => {
+            ColorFormat::Hex {
+                single_quoted,
+                short,
+                alpha,
+            } => {
                 let q = if single_quoted { '\'' } else { '"' };
-                let short = short && r % 0x11 == 0 && g % 0x11 == 0 && b % 0x11 == 0 && a % 0x11 == 0;
+                let short =
+                    short && r % 0x11 == 0 && g % 0x11 == 0 && b % 0x11 == 0 && a % 0x11 == 0;
                 let alpha = alpha || a != 255;
                 match (short, alpha) {
                     (false, false) => format!("{}#{:02x}{:02x}{:02x}{}", q, r, g, b, q),
                     (false, true) => format!("{}#{:02x}{:02x}{:02x}{:02x}{}", q, r, g, b, a, q),
-                    (true, false) => format!("{}#{:x}{:x}{:x}{}", q, r / 0x11, g / 0x11, b / 0x11, q),
-                    (true, true) => format!("{}#{:x}{:x}{:x}{:x}{}", q, r / 0x11, g / 0x11, b / 0x11, a / 0x11, q),
+                    (true, false) => {
+                        format!("{}#{:x}{:x}{:x}{}", q, r / 0x11, g / 0x11, b / 0x11, q)
+                    }
+                    (true, true) => format!(
+                        "{}#{:x}{:x}{:x}{:x}{}",
+                        q,
+                        r / 0x11,
+                        g / 0x11,
+                        b / 0x11,
+                        a / 0x11,
+                        q
+                    ),
                 }
-            },
-            ColorFormat::Rgb { alpha } if alpha || a != 255 => format!("rgb({}, {}, {}, {})", r, g, b, a),
+            }
+            ColorFormat::Rgb { alpha } if alpha || a != 255 => {
+                format!("rgb({}, {}, {}, {})", r, g, b, a)
+            }
             ColorFormat::Rgb { alpha: _ } => format!("rgb({}, {}, {})", r, g, b),
         }
     }
@@ -72,7 +89,11 @@ impl ColorFormat {
 
 impl Default for ColorFormat {
     fn default() -> ColorFormat {
-        ColorFormat::Hex { single_quoted: false, short: false, alpha: false }
+        ColorFormat::Hex {
+            single_quoted: false,
+            short: false,
+            alpha: false,
+        }
     }
 }
 
@@ -83,11 +104,19 @@ lazy_static! {
 
 fn parse_capture(capture: &regex::Captures) -> Option<[u8; 4]> {
     // Tied closely to the regex above.
-    match (capture.get(1), capture.get(2), capture.get(3), capture.get(4), capture.get(5), capture.get(6)) {
-        (Some(cap), _, _, _, _, _) |
-        (_, Some(cap), _, _, _, _) => parse_hex(cap.as_str()),
-        (_, _, Some(r), Some(g), Some(b), a) => parse_rgba(r.as_str(), g.as_str(), b.as_str(), a.map(|a| a.as_str())),
-        _ => None
+    match (
+        capture.get(1),
+        capture.get(2),
+        capture.get(3),
+        capture.get(4),
+        capture.get(5),
+        capture.get(6),
+    ) {
+        (Some(cap), _, _, _, _, _) | (_, Some(cap), _, _, _, _) => parse_hex(cap.as_str()),
+        (_, _, Some(r), Some(g), Some(b), a) => {
+            parse_rgba(r.as_str(), g.as_str(), b.as_str(), a.map(|a| a.as_str()))
+        }
+        _ => None,
     }
 }
 
@@ -97,28 +126,27 @@ fn parse_hex(hex: &str) -> Option<[u8; 4]> {
         sum = 16 * sum + ch.to_digit(16).unwrap_or(0);
     }
 
-    if hex.len() == 8 {  // #rrggbbaa
+    if hex.len() == 8 {
+        // #rrggbbaa
         Some([
             (sum >> 24) as u8,
             (sum >> 16) as u8,
             (sum >> 8) as u8,
             sum as u8,
         ])
-    } else if hex.len() == 6 {  // #rrggbb
-        Some([
-            (sum >> 16) as u8,
-            (sum >> 8) as u8,
-            sum as u8,
-            255,
-        ])
-    } else if hex.len() == 4 {  // #rgba
+    } else if hex.len() == 6 {
+        // #rrggbb
+        Some([(sum >> 16) as u8, (sum >> 8) as u8, sum as u8, 255])
+    } else if hex.len() == 4 {
+        // #rgba
         Some([
             (0x11 * ((sum >> 12) & 0xf)) as u8,
             (0x11 * ((sum >> 8) & 0xf)) as u8,
             (0x11 * ((sum >> 4) & 0xf)) as u8,
             (0x11 * (sum & 0xf)) as u8,
         ])
-    } else if hex.len() == 3 {  // #rgb
+    } else if hex.len() == 3 {
+        // #rgb
         Some([
             (0x11 * ((sum >> 8) & 0xf)) as u8,
             (0x11 * ((sum >> 4) & 0xf)) as u8,

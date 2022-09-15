@@ -1,14 +1,14 @@
+use std::collections::{BTreeMap, HashSet};
 use std::sync::RwLock;
-use std::collections::{HashSet, BTreeMap};
 
 use ndarray::Axis;
 
-use dm::objtree::*;
-use dm::constants::Constant;
-use crate::dmm::{Map, ZLevel, Prefab};
 use crate::dmi::{self, Dir, Image};
-use crate::render_passes::RenderPass;
+use crate::dmm::{Map, Prefab, ZLevel};
 use crate::icon_cache::IconCache;
+use crate::render_passes::RenderPass;
+use dm::constants::Constant;
+use dm::objtree::*;
 
 use ahash::RandomState;
 
@@ -50,7 +50,10 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
     // create atom arrays from the map dictionary
     let mut atoms = BTreeMap::new();
     for (key, prefabs) in map.dictionary.iter() {
-        atoms.insert(key, get_atom_list(objtree, prefabs, render_passes, ctx.errors));
+        atoms.insert(
+            key,
+            get_atom_list(objtree, prefabs, render_passes, ctx.errors),
+        );
     }
 
     // loads atoms from the prefabs on the map and adds overlays and smoothing
@@ -84,7 +87,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
                     println!("no icon: {}", atom.type_.path);
                     continue;
                 }
-                let atom = Atom { sprite, .. *atom };
+                let atom = Atom { sprite, ..*atom };
 
                 for pass in render_passes {
                     pass.overlays(&atom, objtree, &mut underlays, &mut overlays, bump);
@@ -93,10 +96,19 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
                 // smoothing time
                 let mut neighborhood = [&[][..]; 9];
                 for (i, (dx, dy)) in [
-                    (-1,  1), (0,  1), (1,  1),
-                    (-1,  0), (0,  0), (1,  0),
-                    (-1, -1), (0, -1), (1, -1),
-                ].iter().enumerate() {
+                    (-1, 1),
+                    (0, 1),
+                    (1, 1),
+                    (-1, 0),
+                    (0, 0),
+                    (1, 0),
+                    (-1, -1),
+                    (0, -1),
+                    (1, -1),
+                ]
+                .iter()
+                .enumerate()
+                {
                     let new_x = x as i32 + dx;
                     let new_y = y as i32 - dy;
                     let (dim_y, dim_x) = ctx.level.grid.dim();
@@ -109,7 +121,13 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
 
                 let mut normal_appearance = true;
                 for pass in render_passes {
-                    if !pass.neighborhood_appearance(&atom, objtree, &neighborhood, &mut underlays, bump) {
+                    if !pass.neighborhood_appearance(
+                        &atom,
+                        objtree,
+                        &neighborhood,
+                        &mut underlays,
+                        bump,
+                    ) {
                         normal_appearance = false;
                     }
                 }
@@ -153,7 +171,10 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
                 map_image.composite(&icon_file.image, loc, rect, sprite.color);
             }
         } else {
-            let key = format!("bad icon: {:?}, state: {:?}", sprite.icon, sprite.icon_state);
+            let key = format!(
+                "bad icon: {:?}, state: {:?}",
+                sprite.icon, sprite.icon_state
+            );
             if !ctx.errors.read().unwrap().contains(&key) {
                 eprintln!("{}", key);
                 ctx.errors.write().unwrap().insert(key);
@@ -165,12 +186,16 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
 }
 
 // OOB handling
-fn clip(bounds: dmi::Coordinate, mut loc: (i32, i32), mut rect: dmi::Rect) -> Option<(dmi::Coordinate, dmi::Rect)> {
+fn clip(
+    bounds: dmi::Coordinate,
+    mut loc: (i32, i32),
+    mut rect: dmi::Rect,
+) -> Option<(dmi::Coordinate, dmi::Rect)> {
     if loc.0 < 0 {
         rect.0 += (-loc.0) as u32;
         match rect.2.checked_sub((-loc.0) as u32) {
             Some(s) => rect.2 = s,
-            None => return None,  // out of the viewport
+            None => return None, // out of the viewport
         }
         loc.0 = 0;
     }
@@ -184,7 +209,7 @@ fn clip(bounds: dmi::Coordinate, mut loc: (i32, i32), mut rect: dmi::Rect) -> Op
         rect.1 += (-loc.1) as u32;
         match rect.3.checked_sub((-loc.1) as u32) {
             Some(s) => rect.3 = s,
-            None => return None,  // out of the viewport
+            None => return None, // out of the viewport
         }
         loc.1 = 0;
     }
@@ -320,7 +345,8 @@ pub trait GetVar<'a> {
     fn get_path(&self) -> &str;
 
     fn get_var(&self, key: &str, objtree: &'a ObjectTree) -> &'a Constant {
-        self.get_var_inner(key, objtree).unwrap_or_else(Constant::null)
+        self.get_var_inner(key, objtree)
+            .unwrap_or_else(Constant::null)
     }
 
     fn get_var_notnull(&self, key: &str, objtree: &'a ObjectTree) -> Option<&'a Constant> {
@@ -445,7 +471,7 @@ impl Category {
     }
 }
 
-#[cfg(feature="gfx_core")]
+#[cfg(feature = "gfx_core")]
 impl gfx_core::shade::BaseTyped for Category {
     fn get_base_type() -> gfx_core::shade::BaseType {
         u32::get_base_type()
@@ -468,17 +494,23 @@ impl From<i16> for Layer {
 impl From<i32> for Layer {
     fn from(whole: i32) -> Layer {
         use std::convert::TryFrom;
-        Layer { whole: i16::try_from(whole).expect("layer out of range"), frac: 0 }
+        Layer {
+            whole: i16::try_from(whole).expect("layer out of range"),
+            frac: 0,
+        }
     }
 }
 
 impl From<f32> for Layer {
     fn from(f: f32) -> Layer {
-        Layer { whole: f.floor() as i16, frac: ((f.fract() + 1.).fract() * 65536.) as u16 }
+        Layer {
+            whole: f.floor() as i16,
+            frac: ((f.fract() + 1.).fract() * 65536.) as u16,
+        }
     }
 }
 
-#[cfg(feature="gfx_core")]
+#[cfg(feature = "gfx_core")]
 impl gfx_core::shade::BaseTyped for Layer {
     fn get_base_type() -> gfx_core::shade::BaseType {
         i32::get_base_type()
@@ -498,11 +530,11 @@ pub struct Sprite<'s> {
     pub icon: &'s str,
     pub icon_state: &'s str,
     pub dir: Dir,
-    pub color: [u8; 4],  // [r, g, b, a]
+    pub color: [u8; 4], // [r, g, b, a]
 
     // position
-    pub ofs_x: i32,  // pixel_x + pixel_w + step_x
-    pub ofs_y: i32,  // pixel_y + pixel_z + step_y
+    pub ofs_x: i32, // pixel_x + pixel_w + step_x
+    pub ofs_y: i32, // pixel_y + pixel_z + step_y
 
     // sorting
     pub plane: i32,
@@ -522,7 +554,11 @@ impl<'s> Sprite<'s> {
             category: Category::from_path(vars.get_path()),
             icon: vars.get_var("icon", objtree).as_path_str().unwrap_or(""),
             icon_state: vars.get_var("icon_state", objtree).as_str().unwrap_or(""),
-            dir: vars.get_var("dir", objtree).to_int().and_then(Dir::from_int).unwrap_or_default(),
+            dir: vars
+                .get_var("dir", objtree)
+                .to_int()
+                .and_then(Dir::from_int)
+                .unwrap_or_default(),
             color: color_of(objtree, vars),
             ofs_x: pixel_x + pixel_w + step_x,
             ofs_y: pixel_y + pixel_z + step_y,
@@ -580,9 +616,11 @@ pub fn color_of<'s, T: GetVar<'s> + ?Sized>(objtree: &'s ObjectTree, atom: &T) -
             for ch in color[1..color.len()].chars() {
                 sum = 16 * sum + ch.to_digit(16).unwrap_or(0);
             }
-            if color.len() == 7 {  // #rrggbb
+            if color.len() == 7 {
+                // #rrggbb
                 [(sum >> 16) as u8, (sum >> 8) as u8, sum as u8, alpha]
-            } else if color.len() == 4 {  // #rgb
+            } else if color.len() == 4 {
+                // #rgb
                 [
                     (0x11 * ((sum >> 8) & 0xf)) as u8,
                     (0x11 * ((sum >> 4) & 0xf)) as u8,
@@ -590,13 +628,13 @@ pub fn color_of<'s, T: GetVar<'s> + ?Sized>(objtree: &'s ObjectTree, atom: &T) -
                     alpha,
                 ]
             } else {
-                [255, 255, 255, alpha]  // invalid
+                [255, 255, 255, alpha] // invalid
             }
         }
         Constant::String(ref color) => match html_color(color) {
             Some([r, g, b]) => [r, g, b, alpha],
             None => [255, 255, 255, alpha],
-        }
+        },
         // TODO: color matrix support?
         _ => [255, 255, 255, alpha],
     }

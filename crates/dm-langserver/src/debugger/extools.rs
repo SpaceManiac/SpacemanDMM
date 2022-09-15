@@ -1,16 +1,16 @@
 //! Client for the Extools debugger protocol.
 
-use std::time::Duration;
-use std::sync::{mpsc, Arc, Mutex};
-use std::net::{SocketAddr, Ipv4Addr, TcpStream, TcpListener};
 use std::collections::HashMap;
-use std::io::{Read, Write};
 use std::error::Error;
+use std::io::{Read, Write};
+use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
+use std::sync::{mpsc, Arc, Mutex};
+use std::time::Duration;
 
 use ahash::RandomState;
 
-use super::SequenceNumber;
 use super::extools_types::*;
+use super::SequenceNumber;
 
 pub const DEFAULT_PORT: u16 = 2448;
 
@@ -72,10 +72,10 @@ impl ExtoolsHolder {
                 }
             })?;
 
-        Ok((port, ExtoolsHolder(ExtoolsHolderInner::Listening {
+        Ok((
             port,
-            conn_rx,
-        })))
+            ExtoolsHolder(ExtoolsHolderInner::Listening { port, conn_rx }),
+        ))
     }
 
     pub fn attach(seq: Arc<SequenceNumber>, port: u16) -> std::io::Result<ExtoolsHolder> {
@@ -89,7 +89,9 @@ impl ExtoolsHolder {
             .name(format!("extools attaching on port {}", port))
             .spawn(move || {
                 while let Err(mpsc::TryRecvError::Empty) = cancel_rx.try_recv() {
-                    if let Ok(stream) = TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(5)) {
+                    if let Ok(stream) =
+                        TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(5))
+                    {
                         let (conn, mut thread) = Extools::from_stream(seq, stream);
                         if conn_tx.send(conn).is_ok() {
                             thread.read_loop();
@@ -106,13 +108,14 @@ impl ExtoolsHolder {
     }
 
     pub fn get(&mut self) -> Result<&mut Extools, Box<dyn Error>> {
-        self.as_ref().ok_or_else(|| Box::new(super::GenericError("No extools connection")) as Box<dyn Error>)
+        self.as_ref()
+            .ok_or_else(|| Box::new(super::GenericError("No extools connection")) as Box<dyn Error>)
     }
 
     pub fn as_ref(&mut self) -> Option<&mut Extools> {
         match &mut self.0 {
-            ExtoolsHolderInner::Listening { conn_rx, .. } |
-            ExtoolsHolderInner::Attaching { conn_rx, .. } => {
+            ExtoolsHolderInner::Listening { conn_rx, .. }
+            | ExtoolsHolderInner::Attaching { conn_rx, .. } => {
                 if let Ok(conn) = conn_rx.try_recv() {
                     self.0 = ExtoolsHolderInner::Active(Box::new(conn));
                 }
@@ -121,7 +124,7 @@ impl ExtoolsHolder {
         }
         match &mut self.0 {
             ExtoolsHolderInner::Active(conn) => Some(conn),
-            _ => None
+            _ => None,
         }
     }
 
@@ -129,7 +132,9 @@ impl ExtoolsHolder {
         // This part of code is not complete, we don't want to use matches!
         #[allow(clippy::single_match)]
         match std::mem::replace(&mut self.0, ExtoolsHolderInner::None) {
-            ExtoolsHolderInner::Attaching { cancel_tx, .. } => { let _ = cancel_tx.send(()); },
+            ExtoolsHolderInner::Attaching { cancel_tx, .. } => {
+                let _ = cancel_tx.send(());
+            }
             // TODO: ExtoolsHolderInner::Listening
             _ => {}
         }
@@ -204,22 +209,38 @@ impl Extools {
     }
 
     pub fn get_thread(&self, thread_id: i64) -> Result<ThreadInfo, Box<dyn Error>> {
-        self.threads.lock().unwrap().get(&thread_id).cloned()
-            .ok_or_else(|| Box::new(super::GenericError("Getting call stack failed")) as Box<dyn Error>)
+        self.threads
+            .lock()
+            .unwrap()
+            .get(&thread_id)
+            .cloned()
+            .ok_or_else(|| {
+                Box::new(super::GenericError("Getting call stack failed")) as Box<dyn Error>
+            })
     }
 
-    pub fn get_thread_by_frame_id(&self, frame_id: i64) -> Result<(ThreadInfo, usize), Box<dyn Error>> {
+    pub fn get_thread_by_frame_id(
+        &self,
+        frame_id: i64,
+    ) -> Result<(ThreadInfo, usize), Box<dyn Error>> {
         let frame_id = frame_id as usize;
         let threads = self.threads.lock().unwrap();
         let thread_id = (frame_id % threads.len()) as i64;
         let frame_no = frame_id / threads.len();
-        let thread = threads.get(&thread_id).cloned()
-            .ok_or_else(|| Box::new(super::GenericError("Getting call stack failed")) as Box<dyn Error>)?;
+        let thread = threads.get(&thread_id).cloned().ok_or_else(|| {
+            Box::new(super::GenericError("Getting call stack failed")) as Box<dyn Error>
+        })?;
         Ok((thread, frame_no))
     }
 
     pub fn bytecode(&mut self, proc_ref: &str, override_id: usize) -> &[DisassembledInstruction] {
-        let Extools { bytecode, sender, seq: _seq, bytecode_rx, .. } = self;
+        let Extools {
+            bytecode,
+            sender,
+            seq: _seq,
+            bytecode_rx,
+            ..
+        } = self;
         bytecode.entry((proc_ref.to_owned(), override_id)).or_insert_with(|| {
             debug_output!(in _seq, "[extools] Fetching bytecode for {}#{}", proc_ref, override_id);
             sender.send(ProcDisassemblyRequest(ProcId {
@@ -230,7 +251,12 @@ impl Extools {
         })
     }
 
-    pub fn offset_to_line(&mut self, proc_ref: &str, override_id: usize, offset: i64) -> Option<i64> {
+    pub fn offset_to_line(
+        &mut self,
+        proc_ref: &str,
+        override_id: usize,
+        offset: i64,
+    ) -> Option<i64> {
         let bc = self.bytecode(proc_ref, override_id);
         let mut comment = "";
         for instr in bc.iter() {
@@ -263,11 +289,19 @@ impl Extools {
     }
 
     pub fn set_breakpoint(&self, proc: &str, override_id: usize, offset: i64) {
-        self.sender.send(BreakpointSet(ProcOffset { proc: proc.to_owned(), override_id, offset }));
+        self.sender.send(BreakpointSet(ProcOffset {
+            proc: proc.to_owned(),
+            override_id,
+            offset,
+        }));
     }
 
     pub fn unset_breakpoint(&self, proc: &str, override_id: usize, offset: i64) {
-        self.sender.send(BreakpointUnset(ProcOffset { proc: proc.to_owned(), override_id, offset }));
+        self.sender.send(BreakpointUnset(ProcOffset {
+            proc: proc.to_owned(),
+            override_id,
+            offset,
+        }));
     }
 
     pub fn continue_execution(&self) {
@@ -300,7 +334,10 @@ impl Extools {
         Ok(self.get_type_rx.recv_timeout(RECV_TIMEOUT)?.0)
     }
 
-    pub fn get_all_fields(&self, reference: Ref) -> Result<HashMap<String, ValueText, RandomState>, Box<dyn Error>> {
+    pub fn get_all_fields(
+        &self,
+        reference: Ref,
+    ) -> Result<HashMap<String, ValueText, RandomState>, Box<dyn Error>> {
         self.sender.send(GetAllFields(reference));
         Ok(self.get_field_rx.recv_timeout(RECV_TIMEOUT)?.0)
     }
@@ -422,13 +459,13 @@ impl ExtoolsThread {
                     reason: "sleep".to_owned(),
                     threadId: Some(k),
                     preserveFocusHint: Some(true),
-                    .. Default::default()
+                    ..Default::default()
                 });
             }
         }
         self.seq.issue_event(dap_types::StoppedEvent {
             threadId: Some(0),
-            .. base
+            ..base
         });
     }
 }
@@ -524,7 +561,10 @@ impl Clone for ExtoolsSender {
     fn clone(&self) -> ExtoolsSender {
         ExtoolsSender {
             seq: self.seq.clone(),
-            stream: self.stream.try_clone().expect("TcpStream::try_clone failed in ExtoolsSender::clone")
+            stream: self
+                .stream
+                .try_clone()
+                .expect("TcpStream::try_clone failed in ExtoolsSender::clone"),
         }
     }
 }
@@ -535,9 +575,12 @@ impl ExtoolsSender {
         let mut buffer = serde_json::to_vec(&ProtocolMessage {
             type_: M::TYPE.to_owned(),
             content: Some(content),
-        }).expect("extools encode error");
+        })
+        .expect("extools encode error");
         buffer.push(0);
         // TODO: needs more synchronization
-        (&self.stream).write_all(&buffer[..]).expect("extools write error");
+        (&self.stream)
+            .write_all(&buffer[..])
+            .expect("extools write error");
     }
 }

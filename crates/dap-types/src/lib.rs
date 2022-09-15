@@ -4,10 +4,10 @@
 #![deny(unsafe_code)]
 #![allow(non_snake_case)]
 
-use std::collections::HashMap;
-use serde_json::Value;
-use serde_derive::{Serialize, Deserialize};
 use ahash::RandomState;
+use serde_derive::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::HashMap;
 
 pub trait Request {
     type Params;
@@ -176,8 +176,8 @@ pub struct ThreadEvent {
     pub reason: String,
 
     /**
-    * The identifier of the thread.
-    */
+     * The identifier of the thread.
+     */
     pub threadId: i64,
 }
 
@@ -578,7 +578,7 @@ pub struct EvaluateResponse {
     /**
      * The optional type of the evaluate result.
      */
-    #[serde(rename="type")]
+    #[serde(rename = "type")]
     pub type_: Option<String>,
 
     /**
@@ -611,13 +611,19 @@ pub struct EvaluateResponse {
 
 impl From<String> for EvaluateResponse {
     fn from(result: String) -> EvaluateResponse {
-        EvaluateResponse { result, .. Default::default() }
+        EvaluateResponse {
+            result,
+            ..Default::default()
+        }
     }
 }
 
 impl From<&str> for EvaluateResponse {
     fn from(result: &str) -> EvaluateResponse {
-        EvaluateResponse { result: result.to_owned(), .. Default::default() }
+        EvaluateResponse {
+            result: result.to_owned(),
+            ..Default::default()
+        }
     }
 }
 
@@ -929,7 +935,10 @@ pub struct SourceResponse {
 
 impl From<String> for SourceResponse {
     fn from(content: String) -> SourceResponse {
-        SourceResponse { content, mimeType: None }
+        SourceResponse {
+            content,
+            mimeType: None,
+        }
     }
 }
 
@@ -1078,9 +1087,9 @@ pub struct VariablesArguments {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum VariablesFilter {
-    #[serde(rename="indexed")]
+    #[serde(rename = "indexed")]
     Indexed,
-    #[serde(rename="named")]
+    #[serde(rename = "named")]
     Named,
 }
 
@@ -1359,16 +1368,16 @@ pub struct DisassembledInstruction {
 #[derive(Serialize, Deserialize, Debug)]
 pub enum ExceptionBreakMode {
     /// never breaks
-    #[serde(rename="never")]
+    #[serde(rename = "never")]
     Never,
     /// always breaks
-    #[serde(rename="always")]
+    #[serde(rename = "always")]
     Always,
     /// breaks when exception unhandled
-    #[serde(rename="unhandled")]
+    #[serde(rename = "unhandled")]
     Unhandled,
     /// breaks if the exception is not handled by user code
-    #[serde(rename="userUnhandled")]
+    #[serde(rename = "userUnhandled")]
     UserUnhandled,
 }
 
@@ -1661,7 +1670,6 @@ pub struct Source {
      * Optional data that a debug adapter might want to loop through the client. The client should leave the data intact and persist it across sessions. The client should not interpret the data.
      */
     pub adapterData: Option<Value>,
-
     /*/**
      * The checksums associated with this file.
      */
@@ -1670,11 +1678,11 @@ pub struct Source {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum SourcePresentationHint {
-    #[serde(rename="normal")]
+    #[serde(rename = "normal")]
     Normal,
-    #[serde(rename="emphasize")]
+    #[serde(rename = "emphasize")]
     Emphasize,
-    #[serde(rename="deemphasize")]
+    #[serde(rename = "deemphasize")]
     Deemphasize,
 }
 
@@ -1754,7 +1762,6 @@ pub struct StackFrame {
      * The module associated with this frame, if any.
      */
     moduleId?: number | string;*/
-
     /**
      * An optional hint for how to present this frame in the UI. A value of 'label' can be used to indicate that the frame is an artificial frame that is used as a visual label or separator. A value of 'subtle' can be used to change the appearance of a frame in a 'subtle' way.
      */
@@ -1763,11 +1770,11 @@ pub struct StackFrame {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum StackFramePresentationHint {
-    #[serde(rename="normal")]
+    #[serde(rename = "normal")]
     Normal,
-    #[serde(rename="label")]
+    #[serde(rename = "label")]
     Label,
-    #[serde(rename="subtle")]
+    #[serde(rename = "subtle")]
     Subtle,
 }
 
@@ -1871,7 +1878,7 @@ pub struct Variable {
     /**
      * The type of the variable's value. Typically shown in the UI when hovering over the value.
      */
-    #[serde(rename="type")]
+    #[serde(rename = "type")]
     pub type_: Option<String>,
 
     /**

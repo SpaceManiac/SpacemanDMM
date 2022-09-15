@@ -50,11 +50,11 @@ use auxtools::Auxtools;
 
 use ahash::RandomState;
 
-use dap_types::*;
 use self::auxtools::AuxtoolsScopes;
 use self::extools::ExtoolsHolder;
-use self::launched::{Launched, EngineParams};
+use self::launched::{EngineParams, Launched};
 use crate::jrpc_io;
+use dap_types::*;
 
 /// line, path, name, override_id
 pub type LineNumber = (i64, String, String, usize);
@@ -123,7 +123,12 @@ pub fn debugger_main<I: Iterator<Item = String>>(mut args: I) {
         extools_dll: None,
         debug_server_dll: None,
     };
-    let mut debugger = Debugger::new(ctx.config().debugger.engine, dreamseeker_exe, db, Box::new(std::io::stdout()));
+    let mut debugger = Debugger::new(
+        ctx.config().debugger.engine,
+        dreamseeker_exe,
+        db,
+        Box::new(std::io::stdout()),
+    );
     jrpc_io::run_until_stdin_eof(|message| debugger.handle_input(message));
 }
 
@@ -261,7 +266,12 @@ struct Debugger {
 }
 
 impl Debugger {
-    fn new(engine: DebugEngine, dreamseeker_exe: String, mut db: DebugDatabaseBuilder, stream: OutStream) -> Self {
+    fn new(
+        engine: DebugEngine,
+        dreamseeker_exe: String,
+        mut db: DebugDatabaseBuilder,
+        stream: OutStream,
+    ) -> Self {
         Debugger {
             engine,
             dreamseeker_exe,
@@ -369,7 +379,8 @@ impl Debugger {
                 }
             }
 
-            DebugClient::Auxtools(auxtools) => for stack in auxtools.get_stacks().unwrap_or_default() {
+            DebugClient::Auxtools(auxtools) => {
+                for stack in auxtools.get_stacks().unwrap_or_default() {
                     if stack.id == 0 {
                         continue;
                     }
@@ -377,7 +388,8 @@ impl Debugger {
                         reason: dap_types::ThreadEvent::REASON_EXITED.to_owned(),
                         threadId: stack.id as i64,
                     });
-                },
+                }
+            }
         }
     }
 }

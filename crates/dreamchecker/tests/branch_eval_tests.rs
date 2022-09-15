@@ -1,4 +1,3 @@
-
 extern crate dreamchecker as dc;
 
 use dc::test_helpers::*;
@@ -15,13 +14,12 @@ fn const_eval() {
     if(1)
         return
     return
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, CONST_EVAL_ERRORS);
 }
 
-pub const IF_ELSE_ERRORS: &[(u32, u16, &str)] = &[
-    (6, 5, "possible unreachable code here"),
-];
+pub const IF_ELSE_ERRORS: &[(u32, u16, &str)] = &[(6, 5, "possible unreachable code here")];
 
 #[test]
 fn if_else() {
@@ -32,16 +30,25 @@ fn if_else() {
     else
         return
     return
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, IF_ELSE_ERRORS);
 }
 
 pub const IF_ARMS_ERRORS: &[(u32, u16, &str)] = &[
     (2, 7, "control flow condition is a static term"),
     (2, 7, "if condition is always true"),
-    (4, 12, "unreachable if block, preceeding if/elseif condition(s) are always true"),
+    (
+        4,
+        12,
+        "unreachable if block, preceeding if/elseif condition(s) are always true",
+    ),
     // TODO: fix location reporting on this
-    (7, 9, "unreachable else block, preceeding if/elseif condition(s) are always true"),
+    (
+        7,
+        9,
+        "unreachable else block, preceeding if/elseif condition(s) are always true",
+    ),
 ];
 
 #[test]
@@ -54,13 +61,13 @@ fn if_arms() {
         return
     else
         return
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, IF_ARMS_ERRORS);
 }
 
-pub const DO_WHILE_ERRORS: &[(u32, u16, &str)] = &[
-    (2, 5, "do while terminates without ever reaching condition"),
-];
+pub const DO_WHILE_ERRORS: &[(u32, u16, &str)] =
+    &[(2, 5, "do while terminates without ever reaching condition")];
 
 #[test]
 fn do_while() {
@@ -69,7 +76,8 @@ fn do_while() {
     do
         return
     while(prob(50))
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, DO_WHILE_ERRORS);
 }
 
@@ -92,6 +100,7 @@ fn for_loop_condition() {
     for(var/z = 1; z <= 6; z++) // Legit, should have no error
         break
     return
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, FOR_LOOP_CONDITION_ERRORS);
 }

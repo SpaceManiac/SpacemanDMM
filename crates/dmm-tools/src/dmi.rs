@@ -2,11 +2,11 @@
 //!
 //! Includes re-exports from `dreammaker::dmi`.
 
+use bytemuck::Pod;
 use std::io;
 use std::path::Path;
-use bytemuck::Pod;
 
-use lodepng::{self, RGBA, Decoder, ColorType};
+use lodepng::{self, ColorType, Decoder, RGBA};
 use ndarray::Array2;
 
 pub use dm::dmi::*;
@@ -124,9 +124,7 @@ impl Image {
         Image {
             width,
             height,
-            data: {
-                Array2::default((width as usize, height as usize))
-            },
+            data: { Array2::default((width as usize, height as usize)) },
         }
     }
 
@@ -210,10 +208,7 @@ impl Image {
                 let src = other_dat[(sy * other.width + sx) as usize];
                 macro_rules! tint {
                     ($i:expr) => {
-                        mul255(
-                            src[$i],
-                            color[$i],
-                        )
+                        mul255(src[$i], color[$i])
                     };
                 }
                 let mut dst = &mut self_dat[(y * self.width + x) as usize];

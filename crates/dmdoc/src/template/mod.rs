@@ -4,11 +4,13 @@ use std::path::Path;
 use tera::Tera;
 
 pub fn builtin() -> Result<Tera, tera::Error> {
-    #[cfg(debug_assertions)] {
+    #[cfg(debug_assertions)]
+    {
         Tera::new(concat!(env!("CARGO_MANIFEST_DIR"), "/src/template/*.html"))
     }
 
-    #[cfg(not(debug_assertions))] {
+    #[cfg(not(debug_assertions))]
+    {
         let mut tera = Tera::default();
         tera.add_raw_templates(vec![
             ("macros.html", include_str!("macros.html")),

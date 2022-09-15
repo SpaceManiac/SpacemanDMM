@@ -1,12 +1,13 @@
 use super::*;
 
-use rand::Rng;
 use rand::seq::SliceRandom;
+use rand::Rng;
 
 #[derive(Default)]
 pub struct Random;
 impl RenderPass for Random {
-    fn expand<'a>(&self,
+    fn expand<'a>(
+        &self,
         atom: &Atom<'a>,
         objtree: &'a ObjectTree,
         output: &mut Vec<Atom<'a>>,
@@ -23,7 +24,7 @@ impl RenderPass for Random {
                 }
                 if let Some(&replacement) = machines.choose(&mut rng) {
                     output.push(Atom::from(replacement));
-                    return false;  // consumed
+                    return false; // consumed
                 }
             }
         } else if atom.istype("/obj/machinery/vending/cola/random/") {
@@ -36,12 +37,12 @@ impl RenderPass for Random {
                 }
                 if let Some(&replacement) = machines.choose(&mut rng) {
                     output.push(Atom::from(replacement));
-                    return false;  // consumed
+                    return false; // consumed
                 }
             }
         } else if atom.istype("/obj/item/bedsheet/random/") {
             if let Some(root) = objtree.find("/obj/item/bedsheet") {
-                let mut sheets = vec![root.get()];  // basic bedsheet is included
+                let mut sheets = vec![root.get()]; // basic bedsheet is included
                 for child in root.children() {
                     if child.name() != "random" {
                         sheets.push(child.get());
@@ -49,7 +50,7 @@ impl RenderPass for Random {
                 }
                 if let Some(&replacement) = sheets.choose(&mut rng) {
                     output.push(Atom::from(replacement));
-                    return false;  // consumed
+                    return false; // consumed
                 }
             }
         } else if atom.istype("/obj/effect/spawner/lootdrop/") {
@@ -83,12 +84,13 @@ impl RenderPass for Random {
                     loot_spawned += 1;
                 }
             }
-            return false;  // consumed
+            return false; // consumed
         }
         true
     }
 
-    fn adjust_sprite<'a>(&self,
+    fn adjust_sprite<'a>(
+        &self,
         atom: &Atom<'a>,
         sprite: &mut Sprite<'a>,
         objtree: &'a ObjectTree,
@@ -100,23 +102,32 @@ impl RenderPass for Random {
         const LEGIT_POSTERS: u32 = 35;
 
         if atom.istype("/obj/structure/sign/poster/contraband/random/") {
-            sprite.icon_state = bumpalo::format!(in bump, "poster{}", rng.gen_range(1..=CONTRABAND_POSTERS)).into_bump_str();
+            sprite.icon_state =
+                bumpalo::format!(in bump, "poster{}", rng.gen_range(1..=CONTRABAND_POSTERS))
+                    .into_bump_str();
         } else if atom.istype("/obj/structure/sign/poster/official/random/") {
-            sprite.icon_state = bumpalo::format!(in bump, "poster{}_legit", rng.gen_range(1..=LEGIT_POSTERS)).into_bump_str();
+            sprite.icon_state =
+                bumpalo::format!(in bump, "poster{}_legit", rng.gen_range(1..=LEGIT_POSTERS))
+                    .into_bump_str();
         } else if atom.istype("/obj/structure/sign/poster/random/") {
             let i = 1 + rng.gen_range(0..CONTRABAND_POSTERS + LEGIT_POSTERS);
             if i <= CONTRABAND_POSTERS {
                 sprite.icon_state = bumpalo::format!(in bump, "poster{}", i).into_bump_str();
             } else {
-                sprite.icon_state = bumpalo::format!(in bump, "poster{}_legit", i - CONTRABAND_POSTERS).into_bump_str();
+                sprite.icon_state =
+                    bumpalo::format!(in bump, "poster{}_legit", i - CONTRABAND_POSTERS)
+                        .into_bump_str();
             }
-        } else if atom.istype("/obj/item/kirbyplants/random/") || atom.istype("/obj/item/twohanded/required/kirbyplants/random/") {
+        } else if atom.istype("/obj/item/kirbyplants/random/")
+            || atom.istype("/obj/item/twohanded/required/kirbyplants/random/")
+        {
             sprite.icon = "icons/obj/flora/plants.dmi";
             let random = rng.gen_range(0..26);
             if random == 0 {
                 sprite.icon_state = "applebush";
             } else {
-                sprite.icon_state = bumpalo::format!(in bump, "plant-{:02}", random).into_bump_str();
+                sprite.icon_state =
+                    bumpalo::format!(in bump, "plant-{:02}", random).into_bump_str();
             }
         } else if atom.istype("/obj/structure/sign/barsign/") {
             if let Some(root) = objtree.find("/datum/barsign") {
@@ -140,7 +151,7 @@ impl RenderPass for Random {
                 }
             }
         } else if atom.istype("/obj/item/relic/") {
-	        sprite.icon_state = [
+            sprite.icon_state = [
                 "shock_kit",
                 "armor-igniter-analyzer",
                 "infra-igniter0",
@@ -150,7 +161,9 @@ impl RenderPass for Random {
                 "radio-radio",
                 "timer-multitool0",
                 "radio-igniter-tank",
-            ].choose(&mut rng).unwrap();
+            ]
+            .choose(&mut rng)
+            .unwrap();
         }
 
         if atom.istype("/obj/item/lipstick/random/") {
@@ -163,16 +176,30 @@ impl RenderPass for Random {
                 "tape_red",
                 "tape_yellow",
                 "tape_purple",
-            ].choose(&mut rng).unwrap();
+            ]
+            .choose(&mut rng)
+            .unwrap();
         }
     }
 }
 
 fn pickweight<'a>(list: &[&'a (Constant, Option<Constant>)]) -> &'a Constant {
-    let mut total: i32 = list.iter().map(|(_, v)| v.as_ref().unwrap_or_else(Constant::null).to_int().unwrap_or(1)).sum();
+    let mut total: i32 = list
+        .iter()
+        .map(|(_, v)| {
+            v.as_ref()
+                .unwrap_or_else(Constant::null)
+                .to_int()
+                .unwrap_or(1)
+        })
+        .sum();
     total = rand::thread_rng().gen_range(1..=total);
     for (k, v) in list.iter() {
-        total -= v.as_ref().unwrap_or_else(Constant::null).to_int().unwrap_or(1);
+        total -= v
+            .as_ref()
+            .unwrap_or_else(Constant::null)
+            .to_int()
+            .unwrap_or(1);
         if total <= 0 {
             return k;
         }

@@ -4,49 +4,23 @@ use std::collections::HashSet;
 
 use lsp_types::*;
 
-use dm::ast::PathOp;
 use dm::annotation::Annotation;
-use dm::objtree::{TypeRef, TypeVar, TypeProc, ProcValue};
+use dm::ast::PathOp;
+use dm::objtree::{ProcValue, TypeProc, TypeRef, TypeVar};
 
-use crate::{Engine, Span, is_constructor_name};
 use crate::symbol_search::contains;
+use crate::{is_constructor_name, Engine, Span};
 
 use ahash::RandomState;
 
 static PROC_KEYWORDS: &[&str] = &[
     // Implicit variables
-    "args",
-    "global",
-    "src",
-    "usr",
-
-    // Term
-    "null",
-    "as",
-    ".",
-    "..",
-    "new",
+    "args", "global", "src", "usr", // Term
+    "null", "as", ".", "..", "new",
     // "list", "input", "locate", "pick" appear in builtin proc list
-    "call",
-
-    // Statement
-    "return",
-    "throw",
-    "while",
-    "do",
-    "if",
-    "else",
-    "for",
-    "var",
-    "set",
-    "spawn",
-    "switch",
-    "try",
-    "catch",
-    "continue",
-    "break",
-    "goto",
-    "del",
+    "call", // Statement
+    "return", "throw", "while", "do", "if", "else", "for", "var", "set", "spawn", "switch", "try",
+    "catch", "continue", "break", "goto", "del",
     // "CRASH" appears in builtin proc list
 ];
 
@@ -69,7 +43,7 @@ fn item_var(ty: TypeRef, name: &str, var: &TypeVar) -> CompletionItem {
         kind: Some(CompletionItemKind::FIELD),
         detail: Some(detail),
         documentation: item_documentation(&var.value.docs),
-        .. Default::default()
+        ..Default::default()
     }
 }
 
@@ -124,14 +98,19 @@ fn items_ty<'a>(
         if contains(name, query) {
             results.push(CompletionItem {
                 insert_text: Some(name.to_owned()),
-                .. item_proc(ty, name, proc)
+                ..item_proc(ty, name, proc)
             });
         }
     }
 }
 
-pub fn combine_tree_path<'a, I>(iter: &I, mut absolute: bool, mut parts: &'a [String]) -> impl Iterator<Item=&'a str>
-    where I: Iterator<Item=(Span, &'a Annotation)> + Clone
+pub fn combine_tree_path<'a, I>(
+    iter: &I,
+    mut absolute: bool,
+    mut parts: &'a [String],
+) -> impl Iterator<Item = &'a str>
+where
+    I: Iterator<Item = (Span, &'a Annotation)> + Clone,
 {
     // cut off the part of the path we haven't selected
     if_annotation! { Annotation::InSequence(idx) in iter; {
@@ -166,7 +145,11 @@ pub fn combine_tree_path<'a, I>(iter: &I, mut absolute: bool, mut parts: &'a [St
 }
 
 impl<'a> Engine<'a> {
-    pub fn follow_type_path<'b, I>(&'b self, iter: &I, mut parts: &'b [(PathOp, String)]) -> Option<TypePathResult<'b>>
+    pub fn follow_type_path<'b, I>(
+        &'b self,
+        iter: &I,
+        mut parts: &'b [(PathOp, String)],
+    ) -> Option<TypePathResult<'b>>
     where
         I: Iterator<Item = (Span, &'a Annotation)> + Clone,
     {
@@ -189,7 +172,7 @@ impl<'a> Engine<'a> {
             });
         }
         let mut ty = match parts[0].0 {
-            PathOp::Colon => return None,  // never finds anything, apparently?
+            PathOp::Colon => return None, // never finds anything, apparently?
             PathOp::Slash => self.objtree.root(),
             PathOp::Dot => match self.find_type_context(iter) {
                 (Some(base), _) => base,
@@ -228,14 +211,20 @@ impl<'a> Engine<'a> {
         Some(TypePathResult { ty, decl, proc })
     }
 
-    pub fn tree_completions(&self, results: &mut Vec<CompletionItem>, exact: bool, ty: TypeRef, query: &str) {
+    pub fn tree_completions(
+        &self,
+        results: &mut Vec<CompletionItem>,
+        exact: bool,
+        ty: TypeRef,
+        query: &str,
+    ) {
         // path keywords
         for &name in ["proc", "var", "verb"].iter() {
             if contains(name, query) {
                 results.push(CompletionItem {
                     label: name.to_owned(),
                     kind: Some(CompletionItemKind::KEYWORD),
-                    .. Default::default()
+                    ..Default::default()
                 })
             }
         }
@@ -248,7 +237,7 @@ impl<'a> Engine<'a> {
                         label: child.name().to_owned(),
                         kind: Some(CompletionItemKind::CLASS),
                         documentation: item_documentation(&child.docs),
-                        .. Default::default()
+                        ..Default::default()
                     });
                 }
             }
@@ -265,7 +254,7 @@ impl<'a> Engine<'a> {
                 if contains(name, query) {
                     results.push(CompletionItem {
                         insert_text: Some(format!("{} = ", name)),
-                        .. item_var(ty, name, var)
+                        ..item_var(ty, name, var)
                     });
                 }
             }
@@ -292,7 +281,7 @@ impl<'a> Engine<'a> {
 
                     results.push(CompletionItem {
                         insert_text: Some(completion),
-                        .. item_proc(ty, name, proc)
+                        ..item_proc(ty, name, proc)
                     });
                 }
             }
@@ -324,7 +313,7 @@ impl<'a> Engine<'a> {
                         results.push(CompletionItem {
                             label: name.to_owned(),
                             kind: Some(CompletionItemKind::KEYWORD),
-                            .. Default::default()
+                            ..Default::default()
                         })
                     }
                 }
@@ -336,11 +325,11 @@ impl<'a> Engine<'a> {
                             label: child.name().to_owned(),
                             kind: Some(CompletionItemKind::CLASS),
                             documentation: item_documentation(&child.docs),
-                            .. Default::default()
+                            ..Default::default()
                         });
                     }
                 }
-            },
+            }
             // '/datum/proc/<complete procs>'
             // TODO: take the path op into acocunt (`/proc` vs `.proc`)
             Some(TypePathResult {
@@ -370,13 +359,17 @@ impl<'a> Engine<'a> {
                     }
                     next = ty.parent_type_without_root();
                 }
-            },
+            }
             _ => {}
         }
     }
 
-    pub fn unscoped_completions<'b, I>(&'b self, results: &mut Vec<CompletionItem>, iter: &I, query: &str)
-    where
+    pub fn unscoped_completions<'b, I>(
+        &'b self,
+        results: &mut Vec<CompletionItem>,
+        iter: &I,
+        query: &str,
+    ) where
         I: Iterator<Item = (Span, &'b Annotation)> + Clone,
     {
         let (ty, proc_name) = self.find_type_context(iter);
@@ -388,7 +381,7 @@ impl<'a> Engine<'a> {
                     results.push(CompletionItem {
                         label: name.to_owned(),
                         kind: Some(CompletionItemKind::KEYWORD),
-                        .. Default::default()
+                        ..Default::default()
                     });
                 }
             }
@@ -402,7 +395,7 @@ impl<'a> Engine<'a> {
                         label: name.clone(),
                         kind: Some(CompletionItemKind::VARIABLE),
                         detail: Some("(local)".to_owned()),
-                        .. Default::default()
+                        ..Default::default()
                     });
                 }
             }
@@ -419,7 +412,7 @@ impl<'a> Engine<'a> {
                                 label: param.name.clone(),
                                 kind: Some(CompletionItemKind::VARIABLE),
                                 detail: Some("(parameter)".to_owned()),
-                                .. Default::default()
+                                ..Default::default()
                             });
                         }
                     }
@@ -437,7 +430,7 @@ impl<'a> Engine<'a> {
                         kind: Some(CompletionItemKind::CONSTANT),
                         detail: Some(define.display_with_name(name).to_string()),
                         documentation: item_documentation(define.docs()),
-                        .. Default::default()
+                        ..Default::default()
                     });
                 }
             }

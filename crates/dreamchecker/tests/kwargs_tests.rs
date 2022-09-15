@@ -1,11 +1,9 @@
-
 extern crate dreamchecker as dc;
 
 use dc::test_helpers::*;
 
-pub const AFTER_KWARG_ERRORS: &[(u32, u16, &str)] = &[
-    (3, 5, "proc called with non-kwargs after kwargs: foo()"),
-];
+pub const AFTER_KWARG_ERRORS: &[(u32, u16, &str)] =
+    &[(3, 5, "proc called with non-kwargs after kwargs: foo()")];
 
 #[test]
 fn after_kwarg() {
@@ -13,18 +11,47 @@ fn after_kwarg() {
 /proc/foo(arg1, arg2, arg3)
 /proc/test()
     foo(arg2=1, 1)
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, AFTER_KWARG_ERRORS);
 }
 
 pub const FILTER_KWARGS_ERRORS: &[(u32, u16, &str)] = &[
-    (4, 5, "filter(type=\"color\") called with invalid 'space' value 'Null'"),
-    (15, 5, "filter(type=\"alpha\") called with invalid keyword parameter 'color'"),
-    (16, 5, "filter(type=\"blur\") called with invalid keyword parameter 'x'"),
-    (17, 5, "filter() called with invalid type keyword parameter value 'fakename'"),
-    (18, 5, "filter() called without mandatory keyword parameter 'type'"),
-    (19, 5, "filter() called without mandatory keyword parameter 'type'"),
-    (20, 5, "filter(type=\"wave\") called with invalid keyword parameter 'color'"),
+    (
+        4,
+        5,
+        "filter(type=\"color\") called with invalid 'space' value 'Null'",
+    ),
+    (
+        15,
+        5,
+        "filter(type=\"alpha\") called with invalid keyword parameter 'color'",
+    ),
+    (
+        16,
+        5,
+        "filter(type=\"blur\") called with invalid keyword parameter 'x'",
+    ),
+    (
+        17,
+        5,
+        "filter() called with invalid type keyword parameter value 'fakename'",
+    ),
+    (
+        18,
+        5,
+        "filter() called without mandatory keyword parameter 'type'",
+    ),
+    (
+        19,
+        5,
+        "filter() called without mandatory keyword parameter 'type'",
+    ),
+    (
+        20,
+        5,
+        "filter(type=\"wave\") called with invalid keyword parameter 'color'",
+    ),
 ];
 
 #[test]

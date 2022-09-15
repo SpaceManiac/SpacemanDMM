@@ -2,8 +2,8 @@ extern crate dreammaker as dm;
 
 use std::path::PathBuf;
 
-use dm::*;
 use dm::preprocessor::Preprocessor;
+use dm::*;
 
 fn with_test_dme<F: FnOnce(Preprocessor)>(context: &Context, f: F) {
     let dme = match std::env::var_os("TEST_DME") {
@@ -35,7 +35,8 @@ fn check_indentor() {
             &mut string,
             indents::IndentProcessor::new(&context, &mut preprocessor).map(|t| t.token),
             true,
-        ).unwrap();
+        )
+        .unwrap();
         context.assert_success();
     });
 }
@@ -44,7 +45,10 @@ fn check_indentor() {
 fn check_parser() {
     let context = Context::default();
     with_test_dme(&context, |mut preprocessor| {
-        let mut parser = parser::Parser::new(&context, indents::IndentProcessor::new(&context, &mut preprocessor));
+        let mut parser = parser::Parser::new(
+            &context,
+            indents::IndentProcessor::new(&context, &mut preprocessor),
+        );
         parser.enable_procs();
         let _tree = parser.parse_object_tree();
         context.assert_success();

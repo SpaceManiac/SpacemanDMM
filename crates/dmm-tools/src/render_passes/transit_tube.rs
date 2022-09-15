@@ -4,7 +4,8 @@ use crate::dmi::Dir;
 #[derive(Default)]
 pub struct TransitTube;
 impl RenderPass for TransitTube {
-    fn overlays<'a>(&self,
+    fn overlays<'a>(
+        &self,
         atom: &Atom<'a>,
         objtree: &'a ObjectTree,
         _: &mut Vec<Sprite<'a>>,
@@ -34,7 +35,11 @@ impl RenderPass for TransitTube {
             }
         };
 
-        let dir = atom.get_var("dir", objtree).to_int().and_then(Dir::from_int).unwrap_or_default();
+        let dir = atom
+            .get_var("dir", objtree)
+            .to_int()
+            .and_then(Dir::from_int)
+            .unwrap_or_default();
         if atom.istype("/obj/structure/transit_tube/station/reverse/") {
             fulfill(&match dir {
                 North => [East],
@@ -109,7 +114,7 @@ fn create_tube_overlay<'a>(
         icon: source.sprite.icon,
         layer: source.sprite.layer,
         icon_state: "decorative",
-        .. Default::default()
+        ..Default::default()
     };
     if let Some(shift) = shift {
         sprite.icon_state = "decorative_diag";

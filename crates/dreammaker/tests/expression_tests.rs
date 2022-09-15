@@ -1,13 +1,14 @@
 extern crate dreammaker as dm;
 
+use dm::ast::*;
 use dm::lexer::Lexer;
 use dm::parser::*;
-use dm::ast::*;
 
 fn parse_expr(f: &str) -> Expression {
     let context = Default::default();
     let lexer = Lexer::new(&context, Default::default(), f.as_bytes());
-    let result = parse_expression(&context, Default::default(), lexer).expect("failed to parse expression");
+    let result =
+        parse_expression(&context, Default::default(), lexer).expect("failed to parse expression");
     context.assert_success();
     result
 }

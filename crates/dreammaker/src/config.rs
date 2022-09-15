@@ -1,9 +1,9 @@
 //! Configuration file for diagnostics.
 
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::collections::HashMap;
 
 use ahash::RandomState;
 use serde::Deserialize;
@@ -121,7 +121,7 @@ impl Config {
 
     fn config_warninglevel(&self, error: &DMError) -> Option<&WarningLevel> {
         if let Some(errortype) = error.errortype() {
-            return self.diagnostics.get(errortype)
+            return self.diagnostics.get(errortype);
         }
         None
     }
@@ -180,11 +180,13 @@ impl From<Severity> for WarningLevel {
 
 impl PartialEq<Severity> for WarningLevel {
     fn eq(&self, other: &Severity) -> bool {
-        matches!((self, other),
+        matches!(
+            (self, other),
             (WarningLevel::Error, Severity::Error)
-            | (WarningLevel::Warning, Severity::Warning)
-            | (WarningLevel::Info, Severity::Info)
-            | (WarningLevel::Hint, Severity::Hint))
+                | (WarningLevel::Warning, Severity::Warning)
+                | (WarningLevel::Info, Severity::Info)
+                | (WarningLevel::Hint, Severity::Hint)
+        )
     }
 }
 

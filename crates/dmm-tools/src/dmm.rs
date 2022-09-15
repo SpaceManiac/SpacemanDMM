@@ -1,16 +1,16 @@
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::fmt;
 use std::fs::File;
 use std::io;
-use std::fmt;
+use std::path::Path;
 
-use ndarray::{self, Array3, Axis};
-use indexmap::IndexMap;
 use ahash::RandomState;
+use indexmap::IndexMap;
+use ndarray::{self, Array3, Axis};
 
-use dm::DMError;
-use dm::constants::Constant;
 use crate::dmi::Dir;
+use dm::constants::Constant;
+use dm::DMError;
 
 mod read;
 mod save_tgm;
@@ -42,17 +42,34 @@ impl Coord2 {
 
     #[inline]
     pub fn z(self, z: i32) -> Coord3 {
-        Coord3 { x: self.x, y: self.y, z }
+        Coord3 {
+            x: self.x,
+            y: self.y,
+            z,
+        }
     }
 
     fn to_raw(self, (dim_y, dim_x): (usize, usize)) -> (usize, usize) {
-        assert!(self.x >= 1 && self.x <= dim_x as i32, "x={} not in [1, {}]", self.x, dim_x);
-        assert!(self.y >= 1 && self.y <= dim_y as i32, "y={} not in [1, {}]", self.y, dim_y);
+        assert!(
+            self.x >= 1 && self.x <= dim_x as i32,
+            "x={} not in [1, {}]",
+            self.x,
+            dim_x
+        );
+        assert!(
+            self.y >= 1 && self.y <= dim_y as i32,
+            "y={} not in [1, {}]",
+            self.y,
+            dim_y
+        );
         (dim_y - self.y as usize, self.x as usize - 1)
     }
 
     fn from_raw((y, x): (usize, usize), (dim_y, _dim_x): (usize, usize)) -> Coord2 {
-        Coord2 { x: x as i32 + 1, y: (dim_y - y) as i32 }
+        Coord2 {
+            x: x as i32 + 1,
+            y: (dim_y - y) as i32,
+        }
     }
 }
 
@@ -61,7 +78,10 @@ impl std::ops::Add<Dir> for Coord2 {
 
     fn add(self, rhs: Dir) -> Coord2 {
         let (x, y) = rhs.offset();
-        Coord2 { x: self.x + x, y: self.y + y }
+        Coord2 {
+            x: self.x + x,
+            y: self.y + y,
+        }
     }
 }
 
@@ -86,19 +106,48 @@ impl Coord3 {
 
     #[inline]
     pub fn xy(self) -> Coord2 {
-        Coord2 { x: self.x, y: self.y }
+        Coord2 {
+            x: self.x,
+            y: self.y,
+        }
     }
 
     fn to_raw(self, (dim_z, dim_y, dim_x): (usize, usize, usize)) -> (usize, usize, usize) {
-        assert!(self.x >= 1 && self.x <= dim_x as i32, "x={} not in [1, {}]", self.x, dim_x);
-        assert!(self.y >= 1 && self.y <= dim_y as i32, "y={} not in [1, {}]", self.y, dim_y);
-        assert!(self.z >= 1 && self.z <= dim_z as i32, "y={} not in [1, {}]", self.z, dim_z);
-        (self.z as usize - 1, dim_y - self.y as usize, self.x as usize - 1)
+        assert!(
+            self.x >= 1 && self.x <= dim_x as i32,
+            "x={} not in [1, {}]",
+            self.x,
+            dim_x
+        );
+        assert!(
+            self.y >= 1 && self.y <= dim_y as i32,
+            "y={} not in [1, {}]",
+            self.y,
+            dim_y
+        );
+        assert!(
+            self.z >= 1 && self.z <= dim_z as i32,
+            "y={} not in [1, {}]",
+            self.z,
+            dim_z
+        );
+        (
+            self.z as usize - 1,
+            dim_y - self.y as usize,
+            self.x as usize - 1,
+        )
     }
 
     #[allow(dead_code)]
-    fn from_raw((z, y, x): (usize, usize, usize), (_dim_z, dim_y, _dim_x): (usize, usize, usize)) -> Coord3 {
-        Coord3 { x: x as i32 + 1, y: (dim_y - y) as i32, z: z as i32 + 1 }
+    fn from_raw(
+        (z, y, x): (usize, usize, usize),
+        (_dim_z, dim_y, _dim_x): (usize, usize, usize),
+    ) -> Coord3 {
+        Coord3 {
+            x: x as i32 + 1,
+            y: (dim_y - y) as i32,
+            z: z as i32 + 1,
+        }
     }
 }
 
@@ -149,12 +198,12 @@ impl Map {
         assert!(x > 0 && y > 0 && z > 0, "({}, {}, {})", x, y, z);
 
         let mut dictionary = BTreeMap::new();
-        dictionary.insert(Key(0), vec![
-            Prefab::from_path(turf),
-            Prefab::from_path(area),
-        ]);
+        dictionary.insert(
+            Key(0),
+            vec![Prefab::from_path(turf), Prefab::from_path(area)],
+        );
 
-        let grid = Array3::default((z, y, x));  // default = 0
+        let grid = Array3::default((z, y, x)); // default = 0
 
         Map {
             key_length: 1,
@@ -213,11 +262,16 @@ impl Map {
 
     #[inline]
     pub fn z_level(&self, z: usize) -> ZLevel {
-        ZLevel { grid: self.grid.index_axis(Axis(0), z) }
+        ZLevel {
+            grid: self.grid.index_axis(Axis(0), z),
+        }
     }
 
-    pub fn iter_levels(&self) -> impl Iterator<Item=(i32, ZLevel<'_>)> + '_ {
-        self.grid.axis_iter(Axis(0)).enumerate().map(|(i, grid)| (i as i32 + 1, ZLevel { grid }))
+    pub fn iter_levels(&self) -> impl Iterator<Item = (i32, ZLevel<'_>)> + '_ {
+        self.grid
+            .axis_iter(Axis(0))
+            .enumerate()
+            .map(|(i, grid)| (i as i32 + 1, ZLevel { grid }))
     }
 
     #[inline]
@@ -237,9 +291,11 @@ impl std::ops::Index<Coord3> for Map {
 
 impl<'a> ZLevel<'a> {
     /// Iterate over the z-level in row-major order starting at the top-left.
-    pub fn iter_top_down(&self) -> impl Iterator<Item=(Coord2, Key)> + '_ {
+    pub fn iter_top_down(&self) -> impl Iterator<Item = (Coord2, Key)> + '_ {
         let dim = self.grid.dim();
-        self.grid.indexed_iter().map(move |(c, k)| (Coord2::from_raw(c, dim), *k))
+        self.grid
+            .indexed_iter()
+            .map(move |(c, k)| (Coord2::from_raw(c, dim), *k))
     }
 }
 
@@ -343,8 +399,11 @@ fn base_52_reverse(ch: u8) -> Result<KeyType, String> {
 }
 
 fn advance_key(current: KeyType, next_digit: KeyType) -> Result<KeyType, &'static str> {
-    current.checked_mul(52).and_then(|b| b.checked_add(next_digit)).ok_or({
-        // https://secure.byond.com/forum/?post=2340796#comment23770802
-        "Key overflow, max is 'ymo'"
-    })
+    current
+        .checked_mul(52)
+        .and_then(|b| b.checked_add(next_digit))
+        .ok_or({
+            // https://secure.byond.com/forum/?post=2340796#comment23770802
+            "Key overflow, max is 'ymo'"
+        })
 }

@@ -1,6 +1,6 @@
 extern crate dreammaker as dm;
 
-use dm::lexer::{Quote, FormatFloat};
+use dm::lexer::{FormatFloat, Quote};
 
 #[test]
 fn strings() {
@@ -40,12 +40,26 @@ fn floats() {
 fn lists() {
     use dm::constants::Constant::{self, *};
 
-    assert_eq!(List(vec![
-        (Constant::string("KNOCKDOWN"), Some(Float(0.))),
-        (Constant::string("THROW"), Some(Float(0.))),
-    ].into()).to_string(), r#"list("KNOCKDOWN" = 0, "THROW" = 0)"#);
-    assert_eq!(List(vec![
-        (Constant::string("neutral"), None),
-        (Constant::string("Syndicate"), None),
-    ].into()).to_string(), r#"list("neutral","Syndicate")"#);
+    assert_eq!(
+        List(
+            vec![
+                (Constant::string("KNOCKDOWN"), Some(Float(0.))),
+                (Constant::string("THROW"), Some(Float(0.))),
+            ]
+            .into()
+        )
+        .to_string(),
+        r#"list("KNOCKDOWN" = 0, "THROW" = 0)"#
+    );
+    assert_eq!(
+        List(
+            vec![
+                (Constant::string("neutral"), None),
+                (Constant::string("Syndicate"), None),
+            ]
+            .into()
+        )
+        .to_string(),
+        r#"list("neutral","Syndicate")"#
+    );
 }

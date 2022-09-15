@@ -1,6 +1,6 @@
-use std::sync::{Arc, RwLock};
+use std::collections::{hash_map, HashMap};
 use std::path::{Path, PathBuf};
-use std::collections::{HashMap, hash_map};
+use std::sync::{Arc, RwLock};
 
 use super::dmi::IconFile;
 
@@ -15,12 +15,17 @@ impl IconCache {
         let map = self.lock.get_mut().unwrap();
         (match map.entry(path.to_owned()) {
             hash_map::Entry::Occupied(entry) => entry.into_mut().as_mut(),
-            hash_map::Entry::Vacant(entry) => entry.insert(
-                match &self.icons_root {
-                    Some(root) => load(&root.join(path)),
-                    _ => load(path),
-                }.map(Arc::new)).as_mut(),
-        }).map(|x| &**x)
+            hash_map::Entry::Vacant(entry) => entry
+                .insert(
+                    match &self.icons_root {
+                        Some(root) => load(&root.join(path)),
+                        _ => load(path),
+                    }
+                    .map(Arc::new),
+                )
+                .as_mut(),
+        })
+        .map(|x| &**x)
     }
 
     pub fn retrieve_shared(&self, path: &Path) -> Option<Arc<IconFile>> {
@@ -32,10 +37,14 @@ impl IconCache {
                 let arc = match &self.icons_root {
                     Some(root) => load(&root.join(path)),
                     None => load(path),
-                }.map(Arc::new);
-                self.lock.write().unwrap().insert(path.to_owned(), arc.clone());
+                }
+                .map(Arc::new);
+                self.lock
+                    .write()
+                    .unwrap()
+                    .insert(path.to_owned(), arc.clone());
                 arc
-            },
+            }
         }
     }
 

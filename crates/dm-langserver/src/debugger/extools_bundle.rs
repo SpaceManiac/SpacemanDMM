@@ -1,7 +1,7 @@
 #![cfg(extools_bundle)]
+use std::fs::File;
 use std::io::{Result, Write};
 use std::path::{Path, PathBuf};
-use std::fs::File;
 
 const BYTES: &[u8] = include_bytes!(env!("EXTOOLS_BUNDLE_DLL"));
 

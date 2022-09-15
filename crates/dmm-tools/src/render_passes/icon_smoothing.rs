@@ -1,9 +1,9 @@
 //! Port of icon smoothing subsystem.
 
-use dm::objtree::ObjectTree;
-use dm::constants::Constant;
 use crate::dmi::Dir;
-use crate::minimap::{Sprite, Atom, GetVar, Neighborhood};
+use crate::minimap::{Atom, GetVar, Neighborhood, Sprite};
+use dm::constants::Constant;
+use dm::objtree::ObjectTree;
 
 use super::RenderPass;
 
@@ -17,10 +17,10 @@ const N_NORTHWEST: i32 = 512;
 const N_SOUTHEAST: i32 = 64;
 const N_SOUTHWEST: i32 = 1024;
 
-const SMOOTH_TRUE: i32 = 1;  // smooth with exact specified types or just itself
-const SMOOTH_MORE: i32 = 2;  // smooth with all subtypes thereof
-const SMOOTH_DIAGONAL: i32 = 4;  // smooth diagonally
-const SMOOTH_BORDER: i32 = 8;  // smooth with the borders of the map
+const SMOOTH_TRUE: i32 = 1; // smooth with exact specified types or just itself
+const SMOOTH_MORE: i32 = 2; // smooth with all subtypes thereof
+const SMOOTH_DIAGONAL: i32 = 4; // smooth diagonally
+const SMOOTH_BORDER: i32 = 8; // smooth with the borders of the map
 
 pub struct IconSmoothing {
     pub mask: i32,
@@ -33,7 +33,8 @@ impl Default for IconSmoothing {
 }
 
 impl RenderPass for IconSmoothing {
-    fn adjust_sprite<'a>(&self,
+    fn adjust_sprite<'a>(
+        &self,
         atom: &Atom<'a>,
         sprite: &mut Sprite<'a>,
         _objtree: &'a ObjectTree,
@@ -45,7 +46,8 @@ impl RenderPass for IconSmoothing {
         }
     }
 
-    fn neighborhood_appearance<'a>(&self,
+    fn neighborhood_appearance<'a>(
+        &self,
         atom: &Atom<'a>,
         objtree: &'a ObjectTree,
         neighborhood: &Neighborhood<'a, '_>,
@@ -67,7 +69,12 @@ impl RenderPass for IconSmoothing {
     }
 }
 
-fn calculate_adjacencies(objtree: &ObjectTree, neighborhood: &Neighborhood, atom: &Atom, smooth_flags: i32) -> i32 {
+fn calculate_adjacencies(
+    objtree: &ObjectTree,
+    neighborhood: &Neighborhood,
+    atom: &Atom,
+    smooth_flags: i32,
+) -> i32 {
     // TODO: anchored check
 
     let mut adjacencies = 0;
@@ -103,32 +110,40 @@ fn calculate_adjacencies(objtree: &ObjectTree, neighborhood: &Neighborhood, atom
     adjacencies
 }
 
-fn find_type_in_direction(objtree: &ObjectTree, adjacency: &Neighborhood, source: &Atom, direction: Dir, smooth_flags: i32) -> bool {
+fn find_type_in_direction(
+    objtree: &ObjectTree,
+    adjacency: &Neighborhood,
+    source: &Atom,
+    direction: Dir,
+    smooth_flags: i32,
+) -> bool {
     let atom_list = adjacency.offset(direction);
     if atom_list.is_empty() {
         return smooth_flags & SMOOTH_BORDER != 0;
     }
 
     match source.get_var("canSmoothWith", objtree) {
-        &Constant::List(ref elements) => if smooth_flags & SMOOTH_MORE != 0 {
-            // smooth with canSmoothWith + subtypes
-            for atom in atom_list {
-                let mut path = atom.get_path();
-                while !path.is_empty() {
-                    if smoothlist_contains(elements, path) {
+        &Constant::List(ref elements) => {
+            if smooth_flags & SMOOTH_MORE != 0 {
+                // smooth with canSmoothWith + subtypes
+                for atom in atom_list {
+                    let mut path = atom.get_path();
+                    while !path.is_empty() {
+                        if smoothlist_contains(elements, path) {
+                            return true;
+                        }
+                        path = &path[..path.rfind('/').unwrap()];
+                    }
+                }
+            } else {
+                // smooth only with exact types in canSmoothWith
+                for atom in atom_list {
+                    if smoothlist_contains(elements, atom.get_path()) {
                         return true;
                     }
-                    path = &path[..path.rfind('/').unwrap()];
                 }
             }
-        } else {
-            // smooth only with exact types in canSmoothWith
-            for atom in atom_list {
-                if smoothlist_contains(elements, atom.get_path()) {
-                    return true;
-                }
-            }
-        },
+        }
         _ => {
             // smooth only with the same type
             for atom in atom_list {
@@ -136,7 +151,7 @@ fn find_type_in_direction(objtree: &ObjectTree, adjacency: &Neighborhood, source
                     return true;
                 }
             }
-        },
+        }
     }
     false
 }
@@ -150,7 +165,13 @@ fn smoothlist_contains(list: &[(Constant, Option<Constant>)], desired: &str) -> 
     false
 }
 
-fn cardinal_smooth<'a>(output: &mut Vec<Sprite<'a>>, objtree: &'a ObjectTree, bump: &'a bumpalo::Bump, source: &Atom<'a>, adjacencies: i32) {
+fn cardinal_smooth<'a>(
+    output: &mut Vec<Sprite<'a>>,
+    objtree: &'a ObjectTree,
+    bump: &'a bumpalo::Bump,
+    source: &Atom<'a>,
+    adjacencies: i32,
+) {
     for &(what, f1, n1, f2, n2, f3) in &[
         ("1", N_NORTH, "n", N_WEST, "w", N_NORTHWEST),
         ("2", N_NORTH, "n", N_EAST, "e", N_NORTHEAST),
@@ -173,7 +194,7 @@ fn cardinal_smooth<'a>(output: &mut Vec<Sprite<'a>>, objtree: &'a ObjectTree, bu
 
         let mut sprite = Sprite {
             icon_state: name.into_bump_str(),
-            .. source.sprite
+            ..source.sprite
         };
         if let Some(icon) = source.get_var("smooth_icon", objtree).as_path_str() {
             sprite.icon = icon;
@@ -182,7 +203,14 @@ fn cardinal_smooth<'a>(output: &mut Vec<Sprite<'a>>, objtree: &'a ObjectTree, bu
     }
 }
 
-fn diagonal_smooth<'a>(output: &mut Vec<Sprite<'a>>, objtree: &'a ObjectTree, bump: &'a bumpalo::Bump, neighborhood: &Neighborhood<'a, '_>, source: &Atom<'a>, adjacencies: i32) {
+fn diagonal_smooth<'a>(
+    output: &mut Vec<Sprite<'a>>,
+    objtree: &'a ObjectTree,
+    bump: &'a bumpalo::Bump,
+    neighborhood: &Neighborhood<'a, '_>,
+    source: &Atom<'a>,
+    adjacencies: i32,
+) {
     let presets = if adjacencies == N_NORTH | N_WEST {
         ["d-se", "d-se-0"]
     } else if adjacencies == N_NORTH | N_EAST {
@@ -211,7 +239,10 @@ fn diagonal_smooth<'a>(output: &mut Vec<Sprite<'a>>, objtree: &'a ObjectTree, bu
             .index(&Constant::string("space"))
             .is_some()
         {
-            output.push(Sprite::from_vars(objtree, &objtree.expect("/turf/open/space/basic")));
+            output.push(Sprite::from_vars(
+                objtree,
+                &objtree.expect("/turf/open/space/basic"),
+            ));
         } else {
             let dir = reverse_ndir(adjacencies).flip();
             let mut needs_plating = true;
@@ -227,7 +258,10 @@ fn diagonal_smooth<'a>(output: &mut Vec<Sprite<'a>>, objtree: &'a ObjectTree, bu
                 }
             }
             if needs_plating {
-                output.push(Sprite::from_vars(objtree, &objtree.expect("/turf/open/floor/plating")));
+                output.push(Sprite::from_vars(
+                    objtree,
+                    &objtree.expect("/turf/open/floor/plating"),
+                ));
             }
         }
     }
@@ -236,7 +270,7 @@ fn diagonal_smooth<'a>(output: &mut Vec<Sprite<'a>>, objtree: &'a ObjectTree, bu
     for &each in presets.iter() {
         let mut copy = Sprite {
             icon_state: each,
-            .. source.sprite
+            ..source.sprite
         };
         if let Some(icon) = source.get_var("smooth_icon", objtree).as_path_str() {
             copy.icon = icon;

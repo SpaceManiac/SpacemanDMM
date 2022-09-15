@@ -3,10 +3,10 @@ use std::fmt;
 use std::ops;
 use std::path::Path;
 
-use indexmap::IndexMap;
 use ahash::RandomState;
-use ordered_float::OrderedFloat;
 use color_space::{Hsl, Hsv, Lch, Rgb};
+use indexmap::IndexMap;
+use ordered_float::OrderedFloat;
 
 use super::ast::*;
 use super::objtree::*;
@@ -54,7 +54,12 @@ impl From<TreePath> for Pop {
 
 impl fmt::Display for Pop {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}{}", FormatTreePath(&self.path), FormatVars(&self.vars))
+        write!(
+            f,
+            "{}{}",
+            FormatTreePath(&self.path),
+            FormatVars(&self.vars)
+        )
     }
 }
 
@@ -117,7 +122,16 @@ impl std::cmp::PartialEq for Constant {
     fn eq(&self, other: &Constant) -> bool {
         match (self, other) {
             (Constant::Null(p1), Constant::Null(p2)) => p1 == p2,
-            (Constant::New { type_: type1, args: args1 }, Constant::New { type_: type2, args: args2 }) => (type1, args1) == (type2, args2),
+            (
+                Constant::New {
+                    type_: type1,
+                    args: args1,
+                },
+                Constant::New {
+                    type_: type2,
+                    args: args2,
+                },
+            ) => (type1, args1) == (type2, args2),
             (Constant::List(l1), Constant::List(l2)) => l1 == l2,
             (Constant::Call(f1, args1), Constant::Call(f2, args2)) => (f1, args1) == (f2, args2),
             (Constant::Prefab(pop1), Constant::Prefab(pop2)) => pop1 == pop2,
@@ -207,8 +221,7 @@ impl Constant {
 
     pub fn as_path_str(&self) -> Option<&str> {
         match *self {
-            Constant::String(ref s) |
-            Constant::Resource(ref s) => Some(s),
+            Constant::String(ref s) | Constant::Resource(ref s) => Some(s),
             _ => None,
         }
     }
@@ -230,8 +243,7 @@ impl Constant {
 
     pub fn eq_resource(&self, resource: &str) -> bool {
         match self {
-            Constant::String(ref s) |
-            Constant::Resource(ref s) => &**s == resource,
+            Constant::String(ref s) | Constant::Resource(ref s) => &**s == resource,
             _ => false,
         }
     }
@@ -253,12 +265,16 @@ impl Constant {
     pub fn index(&self, key: &Constant) -> Option<&Constant> {
         match (self, key) {
             // Narrowing conversion is intentional.
-            (&Constant::List(ref elements), &Constant::Float(i)) => return elements.get(i as usize).map(|&(ref k, _)| k),
-            (&Constant::List(ref elements), key) => for &(ref k, ref v) in elements.iter() {
-                if key == k {
-                    return v.as_ref();
+            (&Constant::List(ref elements), &Constant::Float(i)) => {
+                return elements.get(i as usize).map(|&(ref k, _)| k)
+            }
+            (&Constant::List(ref elements), key) => {
+                for &(ref k, ref v) in elements.iter() {
+                    if key == k {
+                        return v.as_ref();
+                    }
                 }
-            },
+            }
             _ => {}
         }
         None
@@ -302,8 +318,7 @@ impl From<bool> for Constant {
 impl PartialEq<str> for Constant {
     fn eq(&self, other: &str) -> bool {
         match self {
-            Constant::String(ref s) |
-            Constant::Resource(ref s) => &**s == other,
+            Constant::String(ref s) | Constant::Resource(ref s) => &**s == other,
             _ => false,
         }
     }
@@ -329,7 +344,10 @@ impl fmt::Display for Constant {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Constant::Null(_) => f.write_str("null"),
-            Constant::New { ref type_, ref args } => {
+            Constant::New {
+                ref type_,
+                ref args,
+            } => {
                 f.write_str("new")?;
                 if let Some(prefab) = type_ {
                     write!(f, " {}", prefab)?;
@@ -350,7 +368,7 @@ impl fmt::Display for Constant {
                     write!(f, ")")?;
                 }
                 Ok(())
-            },
+            }
             Constant::List(ref list) => {
                 write!(f, "list(")?;
                 let mut first = true;
@@ -371,7 +389,7 @@ impl fmt::Display for Constant {
                     }
                 }
                 write!(f, ")")
-            },
+            }
             Constant::Call(const_fn, ref list) => {
                 write!(f, "{}(", const_fn)?;
                 let mut first = true;
@@ -386,7 +404,7 @@ impl fmt::Display for Constant {
                     }
                 }
                 write!(f, ")")
-            },
+            }
             Constant::Prefab(ref val) => write!(f, "{}", val),
             Constant::String(ref val) => crate::lexer::Quote(val).fmt(f),
             Constant::Resource(ref val) => write!(f, "'{}'", val),
@@ -413,14 +431,21 @@ impl fmt::Display for ConstFn {
 // The constant evaluator
 
 pub fn evaluate_str(location: Location, input: &[u8]) -> Result<Constant, DMError> {
-    use super::lexer::{Lexer, LocationTracker, from_utf8_or_latin1_borrowed};
+    use super::lexer::{from_utf8_or_latin1_borrowed, Lexer, LocationTracker};
 
     let ctx = Context::default();
     let mut lexer = Lexer::from_input(&ctx, LocationTracker::from_location(location, input.into()));
     let expr = crate::parser::parse_expression(&ctx, location, &mut lexer)?;
     let leftover = lexer.remaining();
     if !leftover.is_empty() {
-        return Err(DMError::new(location, format!("leftover: {:?} {}", from_utf8_or_latin1_borrowed(input), leftover.len())));
+        return Err(DMError::new(
+            location,
+            format!(
+                "leftover: {:?} {}",
+                from_utf8_or_latin1_borrowed(input),
+                leftover.len()
+            ),
+        ));
     }
     expr.simple_evaluate(location)
 }
@@ -433,18 +458,24 @@ impl Expression {
             location,
             ty: NodeIndex::new(0),
             defines: None,
-        }.expr(self, None)
+        }
+        .expr(self, None)
     }
 }
 
 /// Evaluate an expression in the preprocessor, with `defined()` available.
-pub fn preprocessor_evaluate(location: Location, expr: Expression, defines: &DefineMap) -> Result<Constant, DMError> {
+pub fn preprocessor_evaluate(
+    location: Location,
+    expr: Expression,
+    defines: &DefineMap,
+) -> Result<Constant, DMError> {
     ConstantFolder {
         tree: None,
         location,
         ty: NodeIndex::new(0),
         defines: Some(defines),
-    }.expr(expr, None)
+    }
+    .expr(expr, None)
 }
 
 /// Evaluate all the type-level variables in an object tree into constants.
@@ -452,13 +483,11 @@ pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree) {
     for ty in tree.node_indices() {
         let keys: Vec<String> = tree[ty].vars.keys().cloned().collect();
         for key in keys {
-            if !tree[ty]
-                .get_var_declaration(&key, tree)
-                .map_or(true, |x| {
-                    x.var_type.is_const_evaluable() && (x.var_type.flags.is_const() || ty != NodeIndex::new(0))
-                })
-            {
-                continue;  // skip non-constant-evaluable vars
+            if !tree[ty].get_var_declaration(&key, tree).map_or(true, |x| {
+                x.var_type.is_const_evaluable()
+                    && (x.var_type.flags.is_const() || ty != NodeIndex::new(0))
+            }) {
+                continue; // skip non-constant-evaluable vars
             }
             match constant_ident_lookup(tree, ty, &key, false) {
                 Err(err) => context.register_error(err),
@@ -466,11 +495,7 @@ pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree) {
                 Ok(ConstLookup::Continue(_)) => {
                     context.register_error(DMError::new(
                         tree[ty].vars[&key].value.location,
-                        format!(
-                            "undefined var '{}' on type '{}'",
-                            key,
-                            tree[ty].path,
-                        ),
+                        format!("undefined var '{}' on type '{}'", key, tree[ty].path,),
                     ));
                 }
             }
@@ -492,10 +517,7 @@ fn constant_ident_lookup(
     // try to read the currently-set value if we can and
     // substitute that in, otherwise try to evaluate it.
     let (location, type_hint, expr) = {
-        let decl = match tree[ty]
-            .get_var_declaration(ident, tree)
-            .cloned()
-        {
+        let decl = match tree[ty].get_var_declaration(ident, tree).cloned() {
             Some(decl) => decl,
             None => return Ok(ConstLookup::Continue(None)), // definitely doesn't exist
         };
@@ -542,7 +564,15 @@ fn constant_ident_lookup(
         defines: None,
         location,
         ty,
-    }.expr(expr, if type_hint.is_empty() { None } else { Some(&type_hint) })?;
+    }
+    .expr(
+        expr,
+        if type_hint.is_empty() {
+            None
+        } else {
+            Some(&type_hint)
+        },
+    )?;
     // and store it into 'value', then return it
     let var = tree[ty].vars.get_mut(ident).unwrap();
     var.value.constant = Some(value.clone());
@@ -564,30 +594,28 @@ impl<'a> HasLocation for ConstantFolder<'a> {
 }
 
 impl<'a> ConstantFolder<'a> {
-    fn expr(&mut self, expression: Expression, type_hint: Option<&TreePath>) -> Result<Constant, DMError> {
+    fn expr(
+        &mut self,
+        expression: Expression,
+        type_hint: Option<&TreePath>,
+    ) -> Result<Constant, DMError> {
         Ok(match expression {
             Expression::Base { term, follow } => {
-                let base_type_hint = if follow.is_empty() {
-                    type_hint
-                } else {
-                    None
-                };
+                let base_type_hint = if follow.is_empty() { type_hint } else { None };
                 let mut term = self.term(term.elem, base_type_hint)?;
                 for each in Vec::from(follow).into_iter() {
                     term = self.follow(term, each.elem)?;
                 }
                 term
-            },
+            }
             Expression::BinaryOp { op, lhs, rhs } => {
                 let lhs = self.expr(*lhs, None)?;
                 let rhs = self.expr(*rhs, None)?;
                 self.binary(lhs, rhs, op)?
-            },
-            Expression::TernaryOp { cond, if_, else_ } => {
-                match self.expr(*cond, None)?.to_bool() {
-                    true => self.expr(*if_, type_hint)?,
-                    false => self.expr(*else_, type_hint)?,
-                }
+            }
+            Expression::TernaryOp { cond, if_, else_ } => match self.expr(*cond, None)?.to_bool() {
+                true => self.expr(*if_, type_hint)?,
+                false => self.expr(*else_, type_hint)?,
             },
             Expression::AssignOp { .. } => return Err(self.error("non-constant assignment")),
         })
@@ -619,7 +647,7 @@ impl<'a> ConstantFolder<'a> {
                         other => self.term(other, None)?,
                     };
                     (key, Some(self.expr(*rhs, None)?))
-                },
+                }
                 key => (self.expr(key, None)?, None),
             });
         }
@@ -640,13 +668,21 @@ impl<'a> ConstantFolder<'a> {
                     full_path.push('/');
                     full_path.push_str(each);
                 }
-                match self.tree.as_mut().and_then(|t| t.find(&full_path)).map(|t| t.index()) {
+                match self
+                    .tree
+                    .as_mut()
+                    .and_then(|t| t.find(&full_path))
+                    .map(|t| t.index())
+                {
                     Some(idx) => self.recursive_lookup(idx, &field_name, true),
                     None => Err(self.error(format!("unknown typepath {}", full_path))),
                 }
             }
             (term, Follow::Unary(op)) => self.unary(term, op),
-            (term, follow) => Err(self.error(format!("non-constant expression follower: {} {:?}", term, follow))),
+            (term, follow) => Err(self.error(format!(
+                "non-constant expression follower: {} {:?}",
+                term, follow
+            ))),
         }
     }
 
@@ -660,11 +696,21 @@ impl<'a> ConstantFolder<'a> {
             (UnaryOp::Not, c) => Constant::from(!c.to_bool()),
             // float ops
             // unsupported
-            (op, term) => return Err(self.error(format!("non-constant unary operation: {}", op.around(&term)))),
+            (op, term) => {
+                return Err(self.error(format!(
+                    "non-constant unary operation: {}",
+                    op.around(&term)
+                )))
+            }
         })
     }
 
-    fn binary(&mut self, mut lhs: Constant, mut rhs: Constant, op: BinaryOp) -> Result<Constant, DMError> {
+    fn binary(
+        &mut self,
+        mut lhs: Constant,
+        mut rhs: Constant,
+        op: BinaryOp,
+    ) -> Result<Constant, DMError> {
         use self::Constant::*;
 
         macro_rules! numeric {
@@ -675,7 +721,7 @@ impl<'a> ConstantFolder<'a> {
                 }
             }
         }
-        numeric!(Add +);
+        numeric!(Add+);
         numeric!(Sub -);
         numeric!(Mul *);
         numeric!(Div /);
@@ -707,12 +753,16 @@ impl<'a> ConstantFolder<'a> {
         integer!(RShift >>);
 
         match (op, lhs, rhs) {
-            (BinaryOp::Add, String(lhs), String(rhs)) => Ok(String((std::string::String::from(lhs) + &rhs).into())),
+            (BinaryOp::Add, String(lhs), String(rhs)) => {
+                Ok(String((std::string::String::from(lhs) + &rhs).into()))
+            }
             (BinaryOp::Eq, lhs, rhs) => Ok(Constant::from(lhs == rhs)),
             (BinaryOp::NotEq, lhs, rhs) => Ok(Constant::from(lhs != rhs)),
             (BinaryOp::And, lhs, rhs) => Ok(if lhs.to_bool() { rhs } else { lhs }),
             (BinaryOp::Or, lhs, rhs) => Ok(if lhs.to_bool() { lhs } else { rhs }),
-            (op, lhs, rhs) => Err(self.error(format!("non-constant {:?}: {} {} {}", op, lhs, op, rhs))),
+            (op, lhs, rhs) => {
+                Err(self.error(format!("non-constant {:?}: {} {} {}", op, lhs, op, rhs)))
+            }
         }
     }
 
@@ -750,13 +800,19 @@ impl<'a> ConstantFolder<'a> {
                 "arccos" => self.trig_op(args, f32::acos)?,
                 "rgb" => Constant::String(self.rgb(args)?.into()),
                 "defined" if self.defines.is_some() => {
-                    let defines = self.defines.unwrap();  // annoying, but keeps the match clean
+                    let defines = self.defines.unwrap(); // annoying, but keeps the match clean
                     if args.len() != 1 {
-                        return Err(self.error(format!("malformed defined() call, must have 1 argument and instead has {}", args.len())));
+                        return Err(self.error(format!(
+                            "malformed defined() call, must have 1 argument and instead has {}",
+                            args.len()
+                        )));
                     }
                     match args[0].as_term() {
                         Some(Term::Ident(ref ident)) => Constant::from(defines.contains_key(ident)),
-                        _ => return Err(self.error("malformed defined() call, argument given isn't an Ident.")),
+                        _ => {
+                            return Err(self
+                                .error("malformed defined() call, argument given isn't an Ident."))
+                        }
                     }
                 }
                 // other functions are no-goes
@@ -773,9 +829,16 @@ impl<'a> ConstantFolder<'a> {
         })
     }
 
-    fn trig_op(&mut self, args: Box<[Expression]>, op: fn(f32) -> f32) -> Result<Constant, DMError> {
+    fn trig_op(
+        &mut self,
+        args: Box<[Expression]>,
+        op: fn(f32) -> f32,
+    ) -> Result<Constant, DMError> {
         if args.len() != 1 {
-            Err(self.error(format!("trig function requires exactly 1 argument, instead found {}", args.len())))
+            Err(self.error(format!(
+                "trig function requires exactly 1 argument, instead found {}",
+                args.len()
+            )))
         } else if let Some(f) = self.expr(Vec::from(args).swap_remove(0), None)?.to_float() {
             Ok(Constant::Float(op(f)))
         } else {
@@ -789,30 +852,45 @@ impl<'a> ConstantFolder<'a> {
         // If the path is all slashes, it's absolute, and doesn't need to be
         // further resolved.
         if prefab.path.iter().all(|&(op, _)| op == PathOp::Slash) {
-            let path: TreePath = prefab.path.iter().map(|&(_, ref name)| name.to_owned()).collect();
-            return Ok(Pop { path, vars })
+            let path: TreePath = prefab
+                .path
+                .iter()
+                .map(|&(_, ref name)| name.to_owned())
+                .collect();
+            return Ok(Pop { path, vars });
         }
 
         // Otherwise, resolve it against our object tree, then stringify it.
         let tree = match self.tree.as_ref() {
             Some(tree) => tree,
-            None => return Err(self.error(format!(
-                "cannot resolve relative type path without an object tree: {}",
-                FormatTypePath(&prefab.path)))),
+            None => {
+                return Err(self.error(format!(
+                    "cannot resolve relative type path without an object tree: {}",
+                    FormatTypePath(&prefab.path)
+                )))
+            }
         };
 
         let relative_to = TypeRef::new(tree, self.ty);
         let found = match relative_to.navigate_path(&prefab.path) {
             Some(found) => found,
-            None => return Err(self.error(format!("could not resolve {} relative to {}",
-                FormatTypePath(&prefab.path), relative_to))),
+            None => {
+                return Err(self.error(format!(
+                    "could not resolve {} relative to {}",
+                    FormatTypePath(&prefab.path),
+                    relative_to
+                )))
+            }
         };
 
         let path = found.to_path().into_boxed_slice();
         Ok(Pop { path, vars })
     }
 
-    fn vars(&mut self, input: Vec<(Ident2, Expression)>) -> Result<IndexMap<Ident, Constant, RandomState>, DMError> {
+    fn vars(
+        &mut self,
+        input: Vec<(Ident2, Expression)>,
+    ) -> Result<IndexMap<Ident, Constant, RandomState>, DMError> {
         // Visit the vars recursively.
         let mut vars = IndexMap::with_hasher(RandomState::default());
         for (k, v) in input {
@@ -827,12 +905,20 @@ impl<'a> ConstantFolder<'a> {
         self.recursive_lookup(ty, &ident, must_be_const)
     }
 
-    fn recursive_lookup(&mut self, ty: NodeIndex, ident: &str, must_be_const: bool) -> Result<Constant, DMError> {
+    fn recursive_lookup(
+        &mut self,
+        ty: NodeIndex,
+        ident: &str,
+        must_be_const: bool,
+    ) -> Result<Constant, DMError> {
         let mut idx = Some(ty);
         while let Some(ty) = idx {
             let location = self.location;
             if self.tree.is_none() {
-                return Err(self.error(format!("cannot reference variable {:?} in this context", ident)));
+                return Err(self.error(format!(
+                    "cannot reference variable {:?} in this context",
+                    ident
+                )));
             }
             let tree = self.tree.as_mut().unwrap();
             match constant_ident_lookup(tree, ty, ident, must_be_const)
@@ -868,7 +954,10 @@ impl<'a> ConstantFolder<'a> {
         }
 
         if args.len() != 3 && args.len() != 4 && args.len() != 5 {
-            return Err(self.error(format!("malformed rgb() call, must have 3, 4, or 5 arguments and instead has {}", args.len())));
+            return Err(self.error(format!(
+                "malformed rgb() call, must have 3, 4, or 5 arguments and instead has {}",
+                args.len()
+            )));
         }
 
         let arguments = self.arguments(args)?;
@@ -891,21 +980,31 @@ impl<'a> ConstantFolder<'a> {
                         "c" | "chroma" => color_args.c = true,
                         "y" => color_args.y = true,
                         "a" | "alpha" => color_args.a = kwarg_value.to_int(),
-                        "space" => match kwarg_value.to_int() { // Do we have an actual colorspace specified? Set the values.
+                        "space" => match kwarg_value.to_int() {
+                            // Do we have an actual colorspace specified? Set the values.
                             Some(0) => space = Some(ColorSpace::Rgb),
                             Some(1) => space = Some(ColorSpace::Hsv),
                             Some(2) => space = Some(ColorSpace::Hsl),
                             Some(3) => space = Some(ColorSpace::Hcy),
                             _ => {
-                                return Err(self.error(format!("malformed rgb() call, bad color space: {}", kwarg_value)))
+                                return Err(self.error(format!(
+                                    "malformed rgb() call, bad color space: {}",
+                                    kwarg_value
+                                )))
                             }
-                        }
+                        },
                         _ => {
-                            return Err(self.error(format!("malformed rgb() call, bad kwarg passed: {}", kwarg)))
+                            return Err(self.error(format!(
+                                "malformed rgb() call, bad kwarg passed: {}",
+                                kwarg
+                            )))
                         }
                     }
                 } else {
-                    return Err(self.error(format!("malformed rgb() call, kwarg is not string: {}", value)));
+                    return Err(self.error(format!(
+                        "malformed rgb() call, kwarg is not string: {}",
+                        value
+                    )));
                 }
             }
         }
@@ -925,13 +1024,17 @@ impl<'a> ConstantFolder<'a> {
                 } else if color_args.l {
                     ColorSpace::Hsl
                 } else {
-                    return Err(self.error("malformed rgb() call, could not determine space: only h & s specified"));
+                    return Err(self.error(
+                        "malformed rgb() call, could not determine space: only h & s specified",
+                    ));
                 }
             } else {
-                return Err(self.error("malformed rgb() call, could not determine space: only h specified"));
+                return Err(
+                    self.error("malformed rgb() call, could not determine space: only h specified")
+                );
             }
         } else {
-            ColorSpace::Rgb  // Default
+            ColorSpace::Rgb // Default
         };
 
         let mut value_vec: Vec<f64> = vec![];
@@ -977,20 +1080,31 @@ impl<'a> ConstantFolder<'a> {
                         "a" | "alpha" => 0..=255,
                         "space" => continue, // Don't range-check the value of the space
                         _ => {
-                            return Err(self.error(format!("malformed rgb() call, bad kwarg passed: {}", kwarg)))
+                            return Err(self.error(format!(
+                                "malformed rgb() call, bad kwarg passed: {}",
+                                kwarg
+                            )))
                         }
                     };
                 } else {
-                    return Err(self.error(format!("malformed rgb() call, kwarg is not string: {}", value)));
+                    return Err(self.error(format!(
+                        "malformed rgb() call, kwarg is not string: {}",
+                        value
+                    )));
                 }
             }
 
             if let Some(i) = to_check.to_int() {
                 if !range.contains(&i) {
-                    return Err(self.error(format!("malformed rgb() call, {} is not within the valid range ({}..{})", i, range.start(), range.end()))
+                    return Err(self
+                        .error(format!(
+                            "malformed rgb() call, {} is not within the valid range ({}..{})",
+                            i,
+                            range.start(),
+                            range.end()
+                        ))
                         .set_severity(Severity::Warning)
-                        .with_location(self.location)
-                    );
+                        .with_location(self.location));
                 }
                 let clamped = std::cmp::max(::std::cmp::min(i, *range.end()), *range.start());
                 value_vec.push(clamped.into());
@@ -1004,8 +1118,12 @@ impl<'a> ConstantFolder<'a> {
         // Convert our color given a space to a rgb hexcode
         let color: Rgb = match space {
             ColorSpace::Rgb => Rgb::new(value_vec[0], value_vec[1], value_vec[2]),
-            ColorSpace::Hsv => Hsv::new(value_vec[0], value_vec[1] * 0.01, value_vec[2] * 0.01).into(),
-            ColorSpace::Hsl => Hsl::new(value_vec[0], value_vec[1] * 0.01, value_vec[2] * 0.01).into(),
+            ColorSpace::Hsv => {
+                Hsv::new(value_vec[0], value_vec[1] * 0.01, value_vec[2] * 0.01).into()
+            }
+            ColorSpace::Hsl => {
+                Hsl::new(value_vec[0], value_vec[1] * 0.01, value_vec[2] * 0.01).into()
+            }
             ColorSpace::Hcy => Lch::new(value_vec[2], value_vec[1], value_vec[0]).into(),
         };
 
@@ -1014,9 +1132,20 @@ impl<'a> ConstantFolder<'a> {
 
         // APPARENTLY the author thinks fractional rgb is a thing, hence the rounding
         if let Some(alpha) = alpha {
-            Ok(format!("#{:02x}{:02x}{:02x}{:02x}", color.r.round() as u8, color.g.round() as u8, color.b.round() as u8, alpha))
+            Ok(format!(
+                "#{:02x}{:02x}{:02x}{:02x}",
+                color.r.round() as u8,
+                color.g.round() as u8,
+                color.b.round() as u8,
+                alpha
+            ))
         } else {
-            Ok(format!("#{:02x}{:02x}{:02x}", color.r.round() as u8, color.g.round() as u8, color.b.round() as u8))
+            Ok(format!(
+                "#{:02x}{:02x}{:02x}",
+                color.r.round() as u8,
+                color.g.round() as u8,
+                color.b.round() as u8
+            ))
         }
     }
 }

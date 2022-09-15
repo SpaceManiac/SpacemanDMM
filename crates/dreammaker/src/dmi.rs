@@ -1,9 +1,9 @@
 //! DMI metadata parsing and representation.
 
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::Display;
 use std::io;
 use std::path::Path;
-use std::collections::{BTreeMap, HashMap};
 
 use derivative::Derivative;
 use lodepng::Decoder;
@@ -51,8 +51,22 @@ pub enum Dir {
 
 impl Dir {
     pub const CARDINALS: &'static [Dir] = &[Dir::North, Dir::South, Dir::East, Dir::West];
-    pub const DIAGONALS: &'static [Dir] = &[Dir::Northeast, Dir::Northwest, Dir::Southeast, Dir::Southwest];
-    pub const ALL: &'static [Dir] = &[Dir::North, Dir::South, Dir::East, Dir::West, Dir::Northeast, Dir::Northwest, Dir::Southeast, Dir::Southwest];
+    pub const DIAGONALS: &'static [Dir] = &[
+        Dir::Northeast,
+        Dir::Northwest,
+        Dir::Southeast,
+        Dir::Southwest,
+    ];
+    pub const ALL: &'static [Dir] = &[
+        Dir::North,
+        Dir::South,
+        Dir::East,
+        Dir::West,
+        Dir::Northeast,
+        Dir::Northwest,
+        Dir::Southeast,
+        Dir::Southwest,
+    ];
 
     /// Attempt to build a direction from its integer representation.
     pub fn from_int(int: i32) -> Option<Dir> {
@@ -79,11 +93,7 @@ impl Dir {
     }
 
     pub fn is_diagonal(self) -> bool {
-        !matches!(self,
-            Dir::North
-            | Dir::South
-            | Dir::East
-            | Dir::West)
+        !matches!(self, Dir::North | Dir::South | Dir::East | Dir::West)
     }
 
     pub fn flip(self) -> Dir {
@@ -220,7 +230,7 @@ pub struct State {
     /// Whether this is a movement state (shown during gliding).
     pub movement: bool,
     /// The number of frames in the spritesheet before this state's first frame.
-    #[derivative(PartialEq="ignore")]
+    #[derivative(PartialEq = "ignore")]
     pub offset: usize,
     /// 0 for infinite, 1+ for finite.
     pub loop_: u32,
@@ -297,7 +307,13 @@ impl Metadata {
         parse_metadata(data)
     }
 
-    pub fn rect_of(&self, bitmap_width: u32, icon_state: &StateIndex, dir: Dir, frame: u32) -> Option<(u32, u32, u32, u32)> {
+    pub fn rect_of(
+        &self,
+        bitmap_width: u32,
+        icon_state: &StateIndex,
+        dir: Dir,
+        frame: u32,
+    ) -> Option<(u32, u32, u32, u32)> {
         if self.states.is_empty() {
             return Some((0, 0, self.width, self.height));
         }
@@ -408,12 +424,13 @@ fn parse_metadata(data: &str) -> io::Result<Metadata> {
     let header = (lines.next(), lines.next());
     let expected_header = (Some("# BEGIN DMI"), Some(EXPECTED_VERSION_LINE));
     if header != expected_header {
-        return Err(
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("Wrong dmi metadata header. Expected {:?}, got {:?}", expected_header, header )
-            )
-        );
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "Wrong dmi metadata header. Expected {:?}, got {:?}",
+                expected_header, header
+            ),
+        ));
     }
 
     let mut state: Option<State> = None;
@@ -452,7 +469,9 @@ fn parse_metadata(data: &str) -> io::Result<Metadata> {
 
                 let key = new_state.get_state_name_index();
 
-                if let std::collections::btree_map::Entry::Vacant(e) = metadata.state_names.entry(key) {
+                if let std::collections::btree_map::Entry::Vacant(e) =
+                    metadata.state_names.entry(key)
+                {
                     e.insert(metadata.states.len());
                 }
 
@@ -473,26 +492,32 @@ fn parse_metadata(data: &str) -> io::Result<Metadata> {
             "frames" => {
                 let state = state.as_mut().unwrap();
                 match state.frames {
-                    Frames::One => {},
+                    Frames::One => {}
                     _ => panic!(),
                 }
                 state.frames = Frames::Count(value.parse().unwrap());
             }
             "delay" => {
                 let state = state.as_mut().unwrap();
-                let mut vector: Vec<f32> = value.split(',').map(str::parse).collect::<Result<Vec<_>, _>>().unwrap();
+                let mut vector: Vec<f32> = value
+                    .split(',')
+                    .map(str::parse)
+                    .collect::<Result<Vec<_>, _>>()
+                    .unwrap();
                 match state.frames {
-                    Frames::One => if vector.iter().all(|&n| n == 1.) {
-                        state.frames = Frames::Count(vector.len());
-                    } else {
-                        state.frames = Frames::Delays(vector);
-                    },
+                    Frames::One => {
+                        if vector.iter().all(|&n| n == 1.) {
+                            state.frames = Frames::Count(vector.len());
+                        } else {
+                            state.frames = Frames::Delays(vector);
+                        }
+                    }
                     Frames::Count(n) => {
                         vector.truncate(n);
                         if !vector.iter().all(|&n| n == 1.) {
                             state.frames = Frames::Delays(vector);
                         }
-                    },
+                    }
                     Frames::Delays(_) => panic!(),
                 }
             }
@@ -529,7 +554,8 @@ state = "duplicate"
     dirs = 1
     frames = 1
 # END DMI
-"##.trim();
+"##
+        .trim();
 
         let metadata = parse_metadata(description).expect("Metadata is valid");
         assert_eq!(metadata.state_names.len(), 3);
@@ -551,7 +577,13 @@ state = "duplicate"
             }
 
             // Note: using `no` here only works by virtue of the test data being only composed of duplicates
-            assert_eq!(no, *metadata.state_names.get(&state.get_state_name_index()).unwrap())
+            assert_eq!(
+                no,
+                *metadata
+                    .state_names
+                    .get(&state.get_state_name_index())
+                    .unwrap()
+            )
         }
     }
 
@@ -560,7 +592,7 @@ state = "duplicate"
     /// information when a state has the number of frames edited.
     ///
     /// This means we need to truncate our delay list to the number of frames specified by the frames key.
-    /// 
+    ///
     /// This always worked fine- however, we also simplify `delays = 1,1,...` to `Frames::Count(delays.len())`.
     ///
     /// The bug in our code was that we checked if our `delays = 1,1,...` *before* truncating the array
@@ -576,10 +608,13 @@ state = "one"
     frames = 2
     delay = 1,1,0.5,0.5
 # END DMI
-"##.trim();
+"##
+        .trim();
 
         let metadata = parse_metadata(description).expect("Metadata is valid");
-        let state = metadata.get_icon_state(&StateIndex("one".to_owned(), 0)).expect("Only one state, named one, should be found");
+        let state = metadata
+            .get_icon_state(&StateIndex("one".to_owned(), 0))
+            .expect("Only one state, named one, should be found");
         assert_eq!(state.frames, Frames::Count(2));
     }
 }

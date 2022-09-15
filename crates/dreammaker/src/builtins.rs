@@ -2,64 +2,76 @@
 
 use builtins_proc_macro::builtins_table;
 
-use super::objtree::*;
-use super::Location;
-use super::preprocessor::{DefineMap, Define};
 use super::constants::Constant;
 use super::docs::{BuiltinDocs, DocCollection};
+use super::objtree::*;
+use super::preprocessor::{Define, DefineMap};
+use super::Location;
 
 const DM_VERSION: i32 = 514;
 const DM_BUILD: i32 = 1556;
 
 /// Register BYOND builtin macros to the given define map.
 pub fn default_defines(defines: &mut DefineMap) {
-    use super::lexer::*;
     use super::lexer::Token::*;
+    use super::lexer::*;
     let location = Location::builtins();
 
     // #define EXCEPTION(value) new /exception(value)
-    defines.insert("EXCEPTION".to_owned(), (location, Define::Function {
-        params: vec!["value".to_owned()],
-        variadic: false,
-        subst: vec![
-            Ident("new".to_owned(), true),
-            Punct(Punctuation::Slash),
-            Ident("exception".to_owned(), false),
-            Punct(Punctuation::LParen),
-            Ident("value".to_owned(), false),
-            Punct(Punctuation::RParen),
-        ],
-        docs: Default::default(),
-    }));
+    defines.insert(
+        "EXCEPTION".to_owned(),
+        (
+            location,
+            Define::Function {
+                params: vec!["value".to_owned()],
+                variadic: false,
+                subst: vec![
+                    Ident("new".to_owned(), true),
+                    Punct(Punctuation::Slash),
+                    Ident("exception".to_owned(), false),
+                    Punct(Punctuation::LParen),
+                    Ident("value".to_owned(), false),
+                    Punct(Punctuation::RParen),
+                ],
+                docs: Default::default(),
+            },
+        ),
+    );
 
     // #define ASSERT(expression) if (!(expression)) { CRASH("[__FILE__]:[__LINE__]:Assertion Failed: [#X]") }
-    defines.insert("ASSERT".to_owned(), (location, Define::Function {
-        params: vec!["expression".to_owned()],
-        variadic: false,
-        subst: vec![
-            Ident("if".to_owned(), true),
-            Punct(Punctuation::LParen),
-            Punct(Punctuation::Not),
-            Punct(Punctuation::LParen),
-            Ident("expression".to_owned(), false),
-            Punct(Punctuation::RParen),
-            Punct(Punctuation::RParen),
-            Punct(Punctuation::LBrace),
-            Ident("CRASH".to_owned(), false),
-            Punct(Punctuation::LParen),
-            InterpStringBegin("".to_owned()),
-            Ident("__FILE__".to_owned(), false),
-            InterpStringPart(":".to_owned()),
-            Ident("__LINE__".to_owned(), false),
-            InterpStringPart(":Assertion Failed: ".to_owned()),
-            Punct(Punctuation::Hash),
-            Ident("expression".to_owned(), false),
-            InterpStringEnd("".to_owned()),
-            Punct(Punctuation::RParen),
-            Punct(Punctuation::RBrace),
-        ],
-        docs: Default::default(),
-    }));
+    defines.insert(
+        "ASSERT".to_owned(),
+        (
+            location,
+            Define::Function {
+                params: vec!["expression".to_owned()],
+                variadic: false,
+                subst: vec![
+                    Ident("if".to_owned(), true),
+                    Punct(Punctuation::LParen),
+                    Punct(Punctuation::Not),
+                    Punct(Punctuation::LParen),
+                    Ident("expression".to_owned(), false),
+                    Punct(Punctuation::RParen),
+                    Punct(Punctuation::RParen),
+                    Punct(Punctuation::LBrace),
+                    Ident("CRASH".to_owned(), false),
+                    Punct(Punctuation::LParen),
+                    InterpStringBegin("".to_owned()),
+                    Ident("__FILE__".to_owned(), false),
+                    InterpStringPart(":".to_owned()),
+                    Ident("__LINE__".to_owned(), false),
+                    InterpStringPart(":Assertion Failed: ".to_owned()),
+                    Punct(Punctuation::Hash),
+                    Ident("expression".to_owned(), false),
+                    InterpStringEnd("".to_owned()),
+                    Punct(Punctuation::RParen),
+                    Punct(Punctuation::RBrace),
+                ],
+                docs: Default::default(),
+            },
+        ),
+    );
 
     // constants
     macro_rules! c {

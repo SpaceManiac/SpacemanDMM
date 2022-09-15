@@ -1,9 +1,9 @@
 extern crate chrono;
 extern crate git2;
 
-use std::io::Write;
-use std::fs::File;
 use std::env;
+use std::fs::File;
+use std::io::Write;
 use std::path::PathBuf;
 
 fn main() {
@@ -13,7 +13,7 @@ fn main() {
 
     match read_commit() {
         Ok(commit) => writeln!(f, "commit: {}", commit).unwrap(),
-        Err(err) => println!("cargo:warning=Failed to fetch commit info: {}", err)
+        Err(err) => println!("cargo:warning=Failed to fetch commit info: {}", err),
     }
     writeln!(f, "build date: {}", chrono::Utc::today()).unwrap();
 
@@ -35,7 +35,10 @@ fn read_commit() -> Result<String, git2::Error> {
     let head = repo.head()?.peel_to_commit()?.id();
 
     let mut all_tags = Vec::new();
-    repo.tag_foreach(|oid, _| { all_tags.push(oid); true })?;
+    repo.tag_foreach(|oid, _| {
+        all_tags.push(oid);
+        true
+    })?;
 
     let mut best = None;
     for tag_id in all_tags {
@@ -55,7 +58,11 @@ fn read_commit() -> Result<String, git2::Error> {
 
     match best {
         None | Some(0) => {}
-        Some(ahead) => println!("cargo:rustc-env=CARGO_PKG_VERSION={}+{}", std::env::var("CARGO_PKG_VERSION").unwrap(), ahead),
+        Some(ahead) => println!(
+            "cargo:rustc-env=CARGO_PKG_VERSION={}+{}",
+            std::env::var("CARGO_PKG_VERSION").unwrap(),
+            ahead
+        ),
     }
 
     Ok(head.to_string())

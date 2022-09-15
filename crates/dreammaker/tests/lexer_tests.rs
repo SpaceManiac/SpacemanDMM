@@ -1,8 +1,8 @@
 extern crate dreammaker as dm;
 
-use dm::lexer::*;
-use dm::lexer::Token::*;
 use dm::lexer::Punctuation::*;
+use dm::lexer::Token::*;
+use dm::lexer::*;
 
 fn lex(f: &str) -> Vec<Token> {
     let context = Default::default();
@@ -33,10 +33,14 @@ fn number_literals() {
     assert_eq!(lex("0xABCDE"), vec![Int(703710), Punct(Newline)]);
     assert_eq!(lex("1e4"), vec![Float(10000.0), Punct(Newline)]);
 
-    let f = float("1.#INF"); assert!(f.is_infinite() && f > 0.);
-    let f = float("1.#IND"); assert!(f.is_nan());
-    let f = float("1#INF"); assert!(f.is_infinite() && f > 0.);
-    let f = float("1#IND"); assert!(f.is_nan());
+    let f = float("1.#INF");
+    assert!(f.is_infinite() && f > 0.);
+    let f = float("1.#IND");
+    assert!(f.is_nan());
+    let f = float("1#INF");
+    assert!(f.is_infinite() && f > 0.);
+    let f = float("1#IND");
+    assert!(f.is_nan());
 }
 
 #[test]
@@ -59,10 +63,7 @@ fn empty_block_comment() {
     // This is legal. It should not do either of the following:
     // - Error with "still skipping comments at end of file"
     // - Yield a DocComment { text: "", .. }
-    assert_eq!(
-        lex(r#"/**/"#),
-        vec![Punct(Newline)]
-    )
+    assert_eq!(lex(r#"/**/"#), vec![Punct(Newline)])
 }
 
 #[test]
@@ -79,7 +80,9 @@ fn raw_strings() {
 @{content{
 "###);
     for each in stuff.iter() {
-        if each == &Punct(Newline) { continue }
+        if each == &Punct(Newline) {
+            continue;
+        }
         assert_eq!(each, &desired);
     }
 }

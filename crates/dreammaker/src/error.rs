@@ -1,13 +1,13 @@
 //! Error, warning, and other diagnostics handling.
 
-use std::{fmt, error, io};
-use std::path::{PathBuf, Path};
-use std::cell::{RefCell, Ref, RefMut};
+use std::cell::{Ref, RefCell, RefMut};
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::{error, fmt, io};
 
 use ahash::RandomState;
 
-use termcolor::{ColorSpec, Color};
+use termcolor::{Color, ColorSpec};
 
 use crate::config::Config;
 
@@ -128,9 +128,12 @@ impl Context {
             Err(io_error) => {
                 let file = self.register_file(toml);
                 let (line, column) = io_error.line_col().unwrap_or((1, 1));
-                DMError::new(Location { file, line, column }, "Error reading configuration file")
-                    .with_boxed_cause(io_error.into_boxed_error())
-                    .register(self);
+                DMError::new(
+                    Location { file, line, column },
+                    "Error reading configuration file",
+                )
+                .with_boxed_cause(io_error.into_boxed_error())
+                .register(self);
             }
         }
     }
@@ -176,7 +179,7 @@ impl Context {
         });
         // ignore errors with severity above configured level
         if !self.config.borrow().registerable_error(&error) {
-            return
+            return;
         }
         if let Some(print_severity) = self.print_severity {
             if error.severity() <= print_severity {
@@ -200,7 +203,11 @@ impl Context {
     }
 
     /// Pretty-print a `DMError` to the given output.
-    pub fn pretty_print_error<W: termcolor::WriteColor>(&self, w: &mut W, error: &DMError) -> io::Result<()> {
+    pub fn pretty_print_error<W: termcolor::WriteColor>(
+        &self,
+        w: &mut W,
+        error: &DMError,
+    ) -> io::Result<()> {
         writeln!(
             w,
             "{}, line {}, column {}:",
@@ -216,14 +223,12 @@ impl Context {
 
         for note in error.notes().iter() {
             if note.location == error.location {
-                writeln!(w, "- {}", note.description, )?;
+                writeln!(w, "- {}", note.description,)?;
             } else if note.location.file == error.location.file {
                 writeln!(
                     w,
                     "- {}:{}: {}",
-                    note.location.line,
-                    note.location.column,
-                    note.description,
+                    note.location.line, note.location.column, note.description,
                 )?;
             } else {
                 writeln!(
@@ -239,7 +244,11 @@ impl Context {
         writeln!(w)
     }
 
-    pub fn pretty_print_error_nocolor<W: io::Write>(&self, w: &mut W, error: &DMError) -> io::Result<()> {
+    pub fn pretty_print_error_nocolor<W: io::Write>(
+        &self,
+        w: &mut W,
+        error: &DMError,
+    ) -> io::Result<()> {
         self.pretty_print_error(&mut termcolor::NoColor::new(w), error)
     }
 
@@ -253,7 +262,8 @@ impl Context {
         let mut printed = false;
         for err in errors.iter() {
             if err.severity <= min_severity {
-                self.pretty_print_error(stderr, err).expect("error writing to stderr");
+                self.pretty_print_error(stderr, err)
+                    .expect("error writing to stderr");
                 printed = true;
             }
         }
@@ -285,7 +295,11 @@ pub struct Location {
 
 impl Location {
     pub fn builtins() -> Location {
-        Location { file: FILEID_BUILTINS, line: 1, column: 1 }
+        Location {
+            file: FILEID_BUILTINS,
+            line: 1,
+            column: 1,
+        }
     }
 
     /// Pack this Location for use in `u64`-keyed structures.
@@ -352,10 +366,16 @@ impl Severity {
     fn style(self) -> ColorSpec {
         let mut spec = ColorSpec::new();
         match self {
-            Severity::Error => { spec.set_fg(Some(Color::Red)); }
-            Severity::Warning => { spec.set_fg(Some(Color::Yellow)); }
-            Severity::Info => { spec.set_fg(Some(Color::White)).set_intense(true); }
-            Severity::Hint => {},
+            Severity::Error => {
+                spec.set_fg(Some(Color::Red));
+            }
+            Severity::Warning => {
+                spec.set_fg(Some(Color::Yellow));
+            }
+            Severity::Info => {
+                spec.set_fg(Some(Color::White)).set_intense(true);
+            }
+            Severity::Hint => {}
         }
         spec
     }
@@ -524,17 +544,19 @@ impl DMError {
 impl fmt::Display for DMError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // Like `pretty_print_error` above, but without filename information.
-        write!(f, "{}:{}: {}: {}", self.location.line, self.location.column, self.severity, self.description)?;
+        write!(
+            f,
+            "{}:{}: {}: {}",
+            self.location.line, self.location.column, self.severity, self.description
+        )?;
         for note in self.notes.iter() {
             if note.location == self.location {
-                write!(f, "\n- {}", note.description, )?;
+                write!(f, "\n- {}", note.description,)?;
             } else {
                 write!(
                     f,
                     "\n- {}:{}: {}",
-                    note.location.line,
-                    note.location.column,
-                    note.description,
+                    note.location.line, note.location.column, note.description,
                 )?;
             }
         }
@@ -560,7 +582,7 @@ impl Clone for DMError {
             component: self.component,
             description: self.description.clone(),
             notes: self.notes.clone(),
-            cause: None,  // not trivially cloneable
+            cause: None, // not trivially cloneable
             errortype: self.errortype,
         }
     }

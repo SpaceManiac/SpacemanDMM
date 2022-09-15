@@ -1,10 +1,10 @@
 extern crate dreammaker as dm;
 
-use dm::Location;
-use dm::lexer::*;
 use dm::annotation::*;
-use dm::parser::Parser;
 use dm::indents::IndentProcessor;
+use dm::lexer::*;
+use dm::parser::Parser;
+use dm::Location;
 
 #[test]
 fn annotation_basic() {
@@ -19,7 +19,8 @@ fn annotation_basic() {
 
     proc/Init()
         world.log << new/obj()
-"##.trim();
+"##
+    .trim();
 
     let context = Default::default();
     let lexer = Lexer::new(&context, Default::default(), code.as_bytes());

@@ -1,12 +1,13 @@
 //! TGM map writer.
 use std::fs::File;
-use std::io::{self, Write, BufWriter};
+use std::io::{self, BufWriter, Write};
 
 use ndarray::Axis;
 
 use super::Map;
 
-const TGM_HEADER: &str = "//MAP CONVERTED BY dmm2tgm.py THIS HEADER COMMENT PREVENTS RECONVERSION, DO NOT REMOVE";
+const TGM_HEADER: &str =
+    "//MAP CONVERTED BY dmm2tgm.py THIS HEADER COMMENT PREVENTS RECONVERSION, DO NOT REMOVE";
 
 // Note: writeln! currently (2022-04-30) writes the \n character alone on all platforms
 // If that changes, this will break.

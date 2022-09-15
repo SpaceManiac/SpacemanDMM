@@ -1,8 +1,8 @@
 //! DreamChecker, a robust static analysis and typechecking engine for
 //! DreamMaker.
 
-extern crate dreammaker as dm;
 extern crate dreamchecker;
+extern crate dreammaker as dm;
 #[macro_use]
 extern crate serde_json;
 
@@ -17,14 +17,17 @@ fn main() {
     let mut parse_only = false;
 
     let mut args = std::env::args();
-    let _ = args.next();  // skip executable name
+    let _ = args.next(); // skip executable name
     while let Some(arg) = args.next() {
         if arg == "-V" || arg == "--version" {
             println!(
                 "dreamchecker {}  Copyright (C) 2017-2021  Tad Hardesty",
                 env!("CARGO_PKG_VERSION")
             );
-            println!("{}", include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")));
+            println!(
+                "{}",
+                include_str!(concat!(env!("OUT_DIR"), "/build-info.txt"))
+            );
             println!("This program comes with ABSOLUTELY NO WARRANTY. This is free software,");
             println!("and you are welcome to redistribute it under the conditions of the GNU");
             println!("General Public License version 3.");
@@ -45,9 +48,11 @@ fn main() {
 
     let dme = environment
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| dm::detect_environment_default()
-            .expect("error detecting .dme")
-            .expect("no .dme found"));
+        .unwrap_or_else(|| {
+            dm::detect_environment_default()
+                .expect("error detecting .dme")
+                .expect("no .dme found")
+        });
 
     let mut context = dm::Context::default();
     if let Some(filepath) = config_file {
@@ -59,8 +64,7 @@ fn main() {
 
     println!("============================================================");
     println!("Parsing {}...\n", dme.display());
-    let pp = dm::preprocessor::Preprocessor::new(&context, dme)
-        .expect("i/o error opening .dme");
+    let pp = dm::preprocessor::Preprocessor::new(&context, dme).expect("i/o error opening .dme");
     let indents = dm::indents::IndentProcessor::new(&context, pp);
     let mut parser = dm::parser::Parser::new(&context, indents);
     parser.enable_procs();
@@ -71,7 +75,11 @@ fn main() {
     }
 
     println!("============================================================");
-    let errors = context.errors().iter().filter(|each| each.severity() <= dm::Severity::Info).count();
+    let errors = context
+        .errors()
+        .iter()
+        .filter(|each| each.severity() <= dm::Severity::Info)
+        .count();
     println!("Found {} diagnostics", errors);
 
     if json {

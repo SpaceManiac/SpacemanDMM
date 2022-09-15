@@ -1,9 +1,9 @@
 //! The DM abstract syntax tree.
 //!
 //! Most AST types can be pretty-printed using the `Display` trait.
+use phf::phf_map;
 use std::fmt;
 use std::iter::FromIterator;
-use phf::phf_map;
 
 use crate::error::Location;
 
@@ -123,7 +123,7 @@ pub enum BinaryOp {
     And,
     Or,
     In,
-    To,  // only appears in RHS of `In`
+    To, // only appears in RHS of `In`
 }
 
 impl fmt::Display for BinaryOp {
@@ -476,7 +476,8 @@ impl VarTypeFlags {
 
     #[inline]
     pub fn is_const_evaluable(&self) -> bool {
-        self.contains(VarTypeFlags::CONST) || !self.intersects(VarTypeFlags::STATIC | VarTypeFlags::PROTECTED)
+        self.contains(VarTypeFlags::CONST)
+            || !self.intersects(VarTypeFlags::STATIC | VarTypeFlags::PROTECTED)
     }
 
     #[inline]
@@ -486,12 +487,24 @@ impl VarTypeFlags {
 
     pub fn to_vec(&self) -> Vec<&'static str> {
         let mut v = Vec::new();
-        if self.is_static() { v.push("static"); }
-        if self.is_const() { v.push("const"); }
-        if self.is_tmp() { v.push("tmp"); }
-        if self.is_final() { v.push("SpacemanDMM_final"); }
-        if self.is_private() { v.push("SpacemanDMM_private"); }
-        if self.is_protected() { v.push("SpacemanDMM_protected"); }
+        if self.is_static() {
+            v.push("static");
+        }
+        if self.is_const() {
+            v.push("const");
+        }
+        if self.is_tmp() {
+            v.push("tmp");
+        }
+        if self.is_final() {
+            v.push("SpacemanDMM_final");
+        }
+        if self.is_private() {
+            v.push("SpacemanDMM_private");
+        }
+        if self.is_protected() {
+            v.push("SpacemanDMM_protected");
+        }
         v
     }
 }
@@ -656,7 +669,7 @@ pub struct FormatVars<'a, T>(pub &'a T);
 
 impl<'a, T, K, V> fmt::Display for FormatVars<'a, T>
 where
-    &'a T: IntoIterator<Item=(K, V)>,
+    &'a T: IntoIterator<Item = (K, V)>,
     K: fmt::Display,
     V: fmt::Display,
 {
@@ -710,14 +723,17 @@ pub enum Expression {
         if_: Box<Expression>,
         /// The value otherwise.
         else_: Box<Expression>,
-    }
+    },
 }
 
 impl Expression {
     /// If this expression consists of a single term, return it.
     pub fn as_term(&self) -> Option<&Term> {
         match self {
-            &Expression::Base { ref term, ref follow } if follow.is_empty() => Some(&term.elem),
+            &Expression::Base {
+                ref term,
+                ref follow,
+            } if follow.is_empty() => Some(&term.elem),
             _ => None,
         }
     }
@@ -731,7 +747,7 @@ impl Expression {
                 } else {
                     None
                 }
-            },
+            }
             _ => None,
         }
     }
@@ -746,20 +762,23 @@ impl Expression {
                     return false
                 });
                 if !lhterm.is_static() {
-                    return false
+                    return false;
                 }
                 if !rhterm.is_static() {
-                    return false
+                    return false;
                 }
-                matches!(op, BinaryOp::Eq |
-                    BinaryOp::NotEq |
-                    BinaryOp::Less |
-                    BinaryOp::Greater |
-                    BinaryOp::LessEq |
-                    BinaryOp::GreaterEq |
-                    BinaryOp::And |
-                    BinaryOp::Or)
-            },
+                matches!(
+                    op,
+                    BinaryOp::Eq
+                        | BinaryOp::NotEq
+                        | BinaryOp::Less
+                        | BinaryOp::Greater
+                        | BinaryOp::LessEq
+                        | BinaryOp::GreaterEq
+                        | BinaryOp::And
+                        | BinaryOp::Or
+                )
+            }
             _ => false,
         }
     }
@@ -777,7 +796,7 @@ impl Expression {
                     }
                 }
                 Some(truthy)
-            },
+            }
             Expression::BinaryOp { op, lhs, rhs } => {
                 guard!(let Some(lhtruth) = lhs.is_truthy() else {
                     return None
@@ -790,17 +809,17 @@ impl Expression {
                     BinaryOp::Or => Some(lhtruth || rhtruth),
                     _ => None,
                 }
-            },
+            }
             Expression::AssignOp { op, lhs: _, rhs } => {
                 if let AssignOp::Assign = op {
                     return match rhs.as_term() {
                         Some(term) => term.is_truthy(),
                         _ => None,
-                    }
+                    };
                 } else {
                     None
                 }
-            },
+            }
             Expression::TernaryOp { cond, if_, else_ } => {
                 guard!(let Some(condtruth) = cond.is_truthy() else {
                     return None
@@ -885,7 +904,7 @@ pub enum Term {
     /// An `input` call.
     Input {
         args: Box<[Expression]>,
-        input_type: Option<InputType>, // as
+        input_type: Option<InputType>,    // as
         in_list: Option<Box<Expression>>, // in
     },
     /// A `locate` call.
@@ -901,12 +920,9 @@ pub enum Term {
 
 impl Term {
     pub fn is_static(&self) -> bool {
-        matches!(self,
-            Term::Null
-            | Term::Int(_)
-            | Term::Float(_)
-            | Term::String(_)
-            | Term::Prefab(_)
+        matches!(
+            self,
+            Term::Null | Term::Int(_) | Term::Float(_) | Term::String(_) | Term::Prefab(_)
         )
     }
 
@@ -934,7 +950,7 @@ impl Term {
                 } else {
                     None
                 }
-            },
+            }
 
             // Recurse.
             Term::Expr(e) => e.is_truthy(),
@@ -948,18 +964,18 @@ impl Term {
             if let Term::Int(o) = *other {
                 // edge case
                 if i == 0 && o == 0 {
-                    return Some(false)
+                    return Some(false);
                 }
                 if let Some(stepexp) = step {
                     if let Some(stepterm) = stepexp.as_term() {
                         if let Term::Int(_s) = stepterm {
-                            return Some(true)
+                            return Some(true);
                         }
                     } else {
-                        return Some(true)
+                        return Some(true);
                     }
                 }
-                return Some(i <= o)
+                return Some(i <= o);
             }
         }
         None
@@ -969,14 +985,16 @@ impl Term {
 impl From<Expression> for Term {
     fn from(expr: Expression) -> Term {
         match expr {
-            Expression::Base { term, follow } => if follow.is_empty() {
-                match term.elem {
-                    Term::Expr(expr) => Term::from(*expr),
-                    other => other,
+            Expression::Base { term, follow } => {
+                if follow.is_empty() {
+                    match term.elem {
+                        Term::Expr(expr) => Term::from(*expr),
+                        other => other,
+                    }
+                } else {
+                    Term::Expr(Box::new(Expression::Base { term, follow }))
                 }
-            } else {
-                Term::Expr(Box::new(Expression::Base { term, follow }))
-            },
+            }
             other => Term::Expr(Box::new(other)),
         }
     }
@@ -1055,7 +1073,7 @@ impl VarType {
 }
 
 impl FromIterator<String> for VarType {
-    fn from_iter<T: IntoIterator<Item=String>>(iter: T) -> Self {
+    fn from_iter<T: IntoIterator<Item = String>>(iter: T) -> Self {
         VarTypeBuilder::from_iter(iter).build()
     }
 }
@@ -1094,7 +1112,7 @@ impl VarTypeBuilder {
 }
 
 impl FromIterator<String> for VarTypeBuilder {
-    fn from_iter<T: IntoIterator<Item=String>>(iter: T) -> Self {
+    fn from_iter<T: IntoIterator<Item = String>>(iter: T) -> Self {
         let mut flags = VarTypeFlags::default();
         let type_path = iter
             .into_iter()
@@ -1107,10 +1125,7 @@ impl FromIterator<String> for VarTypeBuilder {
                 }
             })
             .collect();
-        VarTypeBuilder {
-            flags,
-            type_path,
-        }
+        VarTypeBuilder { flags, type_path }
     }
 }
 
@@ -1163,7 +1178,7 @@ pub enum Statement {
     },
     If {
         arms: Vec<(Spanned<Expression>, Block)>,
-        else_arm: Option<Block>
+        else_arm: Option<Block>,
     },
     ForInfinite {
         block: Block,
@@ -1181,7 +1196,7 @@ pub enum Statement {
     Setting {
         name: Ident2,
         mode: SettingMode,
-        value: Expression
+        value: Expression,
     },
     Spawn {
         delay: Option<Expression>,

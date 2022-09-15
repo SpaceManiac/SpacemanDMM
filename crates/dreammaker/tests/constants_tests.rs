@@ -17,10 +17,7 @@ fn floating_point_rgb() {
 
 #[test]
 fn rgb_base() {
-    assert_eq!(
-        eval("rgb(0, 255, 0)").unwrap(),
-        Constant::string("#00ff00"),
-    );
+    assert_eq!(eval("rgb(0, 255, 0)").unwrap(), Constant::string("#00ff00"),);
     assert_eq!(
         eval("rgb(50, 50, 50)").unwrap(),
         Constant::string("#323232"),
@@ -92,7 +89,6 @@ fn rgb_hsl() {
         Constant::string("#000000"),
     );
 }
-
 
 #[test]
 fn rgb_hcy() {
