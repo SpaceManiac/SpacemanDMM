@@ -1130,6 +1130,7 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         // 514 stuff
 
         generator;
+        generator/var/_binobj;
         generator/proc/Rand();
         generator/proc/Turn(a);
 
