@@ -976,10 +976,11 @@ impl<'ctx> Lexer<'ctx> {
                     break;
                 }
                 continue;
-            } else if ch == end[0] && !backslash {
-                // TODO: this is a hack to fix the '""}' situation
-                buf.extend_from_slice(&end[..idx]);
-                idx = 1;
+            } else if idx > 0 && ch == end[idx - 1] && end[..idx - 1] == end[1..idx] && !backslash {
+                // Handle `""}` and similar situations by holding `idx` steady
+                // and shifting the first character of `end` into `buf`.
+                buf.extend_from_slice(&end[..1]);
+                continue;
             } else {
                 buf.extend_from_slice(&end[..idx]);
                 idx = 0;

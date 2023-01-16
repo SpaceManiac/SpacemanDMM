@@ -83,3 +83,59 @@ fn raw_strings() {
         assert_eq!(each, &desired);
     }
 }
+
+#[test]
+fn heredoc_with_quotes() {
+    // 1-3 quotes in the middle of ordinary characters
+    assert_eq!(
+        lex(r#"{"foo"bar"}"#),
+        vec![
+            Token::String(r#"foo"bar"#.to_owned()),
+            Token::Punct(Punctuation::Newline),
+        ]
+    );
+    assert_eq!(
+        lex(r#"{"foo""bar"}"#),
+        vec![
+            Token::String(r#"foo""bar"#.to_owned()),
+            Token::Punct(Punctuation::Newline),
+        ]
+    );
+    assert_eq!(
+        lex(r#"{"foo"""bar"}"#),
+        vec![
+            Token::String(r#"foo"""bar"#.to_owned()),
+            Token::Punct(Punctuation::Newline),
+        ]
+    );
+
+    // 0-5 quotes at the start/end
+    assert_eq!(
+        lex(r#"{""}"#),
+        vec![
+            Token::String(r#""#.to_owned()),
+            Token::Punct(Punctuation::Newline),
+        ]
+    );
+    assert_eq!(
+        lex(r#"{"""}"#),
+        vec![
+            Token::String(r#"""#.to_owned()),
+            Token::Punct(Punctuation::Newline),
+        ]
+    );
+    assert_eq!(
+        lex(r#"{""""}"#),
+        vec![
+            Token::String(r#""""#.to_owned()),
+            Token::Punct(Punctuation::Newline),
+        ]
+    );
+    assert_eq!(
+        lex(r#"{"""""}"#),
+        vec![
+            Token::String(r#"""""#.to_owned()),
+            Token::Punct(Punctuation::Newline),
+        ]
+    );
+}
