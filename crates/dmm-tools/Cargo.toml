@@ -19,7 +19,7 @@ version = "1.12.1"
 features = ["derive"]
 
 [dependencies.bumpalo]
-version = "3.11.0"
+version = "3.11.1"
 features = ["collections"]
 
 [dependencies.png]
