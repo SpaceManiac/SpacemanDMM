@@ -22,4 +22,4 @@ ahash = "0.8.0"
 
 [build-dependencies]
 chrono = "0.4.22"
-git2 = { version = "0.15.0", default-features = false }
+git2 = { version = "0.16.1", default-features = false }
