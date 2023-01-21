@@ -12,11 +12,11 @@ tera = "1.17.0"
 serde = "1.0.144"
 serde_derive = "1.0.144"
 walkdir = "2.3.2"
-git2 = { version = "0.15.0", default-features = false }
+git2 = { version = "0.16.1", default-features = false }
 
 [dev-dependencies]
 walkdir = "2.3.2"
 
 [build-dependencies]
 chrono = "0.4.22"
-git2 = { version = "0.15.0", default-features = false }
+git2 = { version = "0.16.1", default-features = false }
