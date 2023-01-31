@@ -1,7 +1,11 @@
 //! Data structures for the parser to output mappings from input ranges to AST
 //! elements at those positions.
 
+use std::rc::Rc;
+
 use interval_tree::{IntervalTree, RangePairIter, RangeInclusive, range};
+use crate::docs::DocCollection;
+
 use super::Location;
 use super::ast::*;
 
@@ -29,7 +33,11 @@ pub enum Annotation {
 
     // a macro is called here, which is defined at this location
     MacroDefinition(Ident),
-    MacroUse(String, Location),
+    MacroUse {
+        name: String,
+        definition_location: Location,
+        docs: Option<Rc<DocCollection>>,
+    },
 
     Include(std::path::PathBuf),
     Resource(std::path::PathBuf),

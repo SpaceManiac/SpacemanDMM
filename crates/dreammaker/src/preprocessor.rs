@@ -1,5 +1,6 @@
 //! The preprocessor.
 use std::collections::{HashMap, VecDeque};
+use std::rc::Rc;
 use std::{io, fmt};
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -25,13 +26,13 @@ const MAX_RECURSION_DEPTH: usize = 32;
 pub enum Define {
     Constant {
         subst: Vec<Token>,
-        docs: DocCollection,
+        docs: Rc<DocCollection>,
     },
     Function {
         params: Vec<Ident>,
         subst: Vec<Token>,
         variadic: bool,
-        docs: DocCollection,
+        docs: Rc<DocCollection>,
     },
 }
 
@@ -532,7 +533,7 @@ impl<'ctx> Preprocessor<'ctx> {
     // ------------------------------------------------------------------------
     // Macro definition handling
 
-    fn annotate_macro(&mut self, ident: &str, def_loc: Location) {
+    fn annotate_macro(&mut self, ident: &str, definition_location: Location, docs: Option<Rc<DocCollection>>) {
         if self.include_stack.in_expansion() {
             return;
         }
@@ -540,7 +541,12 @@ impl<'ctx> Preprocessor<'ctx> {
         if let Some(annotations) = self.annotations.as_mut() {
             annotations.insert(
                 self.last_input_loc .. self.last_input_loc.add_columns(ident.len() as u16),
-                Annotation::MacroUse(ident.to_owned(), def_loc));
+                Annotation::MacroUse {
+                    name: ident.to_owned(),
+                    definition_location,
+                    docs,
+                }
+            );
         }
     }
 
@@ -897,9 +903,9 @@ impl<'ctx> Preprocessor<'ctx> {
                             }
                         }
                         let define = if params.is_empty() {
-                            Define::Constant { subst, docs }
+                            Define::Constant { subst, docs: Rc::new(docs) }
                         } else {
-                            Define::Function { params, subst, variadic, docs }
+                            Define::Function { params, subst, variadic, docs: Rc::new(docs) }
                         };
                         // DEBUG can only be defined in the root .dme file
                         if define_name != "DEBUG" || self.in_environment() {
@@ -972,7 +978,7 @@ impl<'ctx> Preprocessor<'ctx> {
 
                 // substitute special macros
                 if ident == "__FILE__" {
-                    self.annotate_macro(ident, Location::builtins());
+                    self.annotate_macro(ident, Location::builtins(), None);
                     for include in self.include_stack.stack.iter().rev() {
                         if let Include::File { ref path, .. } = *include {
                             self.output.push_back(Token::String(path.display().to_string()));
@@ -982,7 +988,7 @@ impl<'ctx> Preprocessor<'ctx> {
                     self.output.push_back(Token::String(String::new()));
                     return Ok(());
                 } else if ident == "__LINE__" {
-                    self.annotate_macro(ident, Location::builtins());
+                    self.annotate_macro(ident, Location::builtins(), None);
                     self.output.push_back(Token::Int(self.last_input_loc.line as i32));
                     return Ok(());
                 }
@@ -1008,8 +1014,8 @@ impl<'ctx> Preprocessor<'ctx> {
                 }
 
                 match expansion {
-                    Some((location, Define::Constant { subst, docs: _ })) => {
-                        self.annotate_macro(ident, location);
+                    Some((location, Define::Constant { subst, docs })) => {
+                        self.annotate_macro(ident, location, Some(docs.clone()));
                         self.include_stack.stack.push(Include::Expansion {
                             //name: ident.to_owned(),
                             tokens: subst.into_iter().collect(),
@@ -1017,7 +1023,7 @@ impl<'ctx> Preprocessor<'ctx> {
                         });
                         return Ok(());
                     }
-                    Some((location, Define::Function { ref params, ref subst, variadic, docs: _ })) => {
+                    Some((location, Define::Function { ref params, ref subst, variadic, docs })) => {
                         // if it's not followed by an LParen, it isn't really a function call
                         match next!() {
                             Token::Punct(Punctuation::LParen) => {}
@@ -1033,7 +1039,7 @@ impl<'ctx> Preprocessor<'ctx> {
                             }
                         }
 
-                        self.annotate_macro(ident, location);
+                        self.annotate_macro(ident, location, Some(docs.clone()));
 
                         // read arguments
                         let mut args = Vec::new();

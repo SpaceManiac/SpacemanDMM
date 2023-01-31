@@ -1405,6 +1405,13 @@ handle_method_call! {
                     let next = self.find_scoped_type(&iter, priors);
                     results.append(&mut self.construct_var_hover(var_name, next, true)?);
                 }
+                Annotation::MacroUse { docs, .. } => {
+                    if let Some(dc) = docs {
+                        if !dc.is_empty() {
+                            results.push(dc.text());
+                        }
+                    }
+                }
                 _ => {}
             }
         }
@@ -1536,9 +1543,8 @@ handle_method_call! {
                 }
             }
         },
-        Annotation::MacroUse(name, location) => {
-            // TODO: get docs for this macro
-            results.push(self.convert_location(*location, &Default::default(), &["/DM/preprocessor/", name])?);
+        Annotation::MacroUse { name, definition_location, .. } => {
+            results.push(self.convert_location(*definition_location, &Default::default(), &["/DM/preprocessor/", name])?);
         },
         }
 
