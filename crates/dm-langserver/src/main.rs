@@ -821,113 +821,113 @@ impl<'a> Engine<'a> {
 
         let iter = annotations.get_location(location);
         match_annotation! { iter;
-        Annotation::Variable(path) => {
-            let mut current = self.objtree.root();
-            let (var_name, most) = path.split_last().unwrap();
-            for part in most {
-                if part == "var" { break }
-                if let Some(child) = current.child(part) {
-                    current = child;
-                } else {
-                    break;
-                }
-            }
-
-            if let Some(decl) = current.get_var_declaration(var_name) {
-                symbol_id = Some(decl.id);
-            }
-        },
-        Annotation::ProcHeader(parts, _) => {
-            let mut current = self.objtree.root();
-            let (proc_name, most) = parts.split_last().unwrap();
-            for part in most {
-                if part == "proc" || part == "verb" { break }
-                if let Some(child) = current.child(part) {
-                    current = child;
-                } else {
-                    break;
-                }
-            }
-
-            if let Some(decl) = current.get_proc_declaration(proc_name) {
-                symbol_id = Some(decl.id);
-            }
-        },
-        Annotation::TreePath(absolute, parts) => {
-            if let Some(ty) = self.objtree.type_by_path(completion::combine_tree_path(&iter, *absolute, parts)) {
-                symbol_id = Some(ty.id);
-            }
-        },
-        Annotation::TypePath(parts) => {
-            match self.follow_type_path(&iter, parts) {
-                // '/datum/proc/foo'
-                Some(completion::TypePathResult { ty, decl: _, proc: Some((proc_name, _)) }) => {
-                    if let Some(decl) = ty.get_proc_declaration(proc_name) {
-                        symbol_id = Some(decl.id);
+            Annotation::Variable(path) => {
+                let mut current = self.objtree.root();
+                let (var_name, most) = path.split_last().unwrap();
+                for part in most {
+                    if part == "var" { break }
+                    if let Some(child) = current.child(part) {
+                        current = child;
+                    } else {
+                        break;
                     }
-                },
-                // 'datum/bar'
-                Some(completion::TypePathResult { ty, decl: None, proc: None }) => {
+                }
+
+                if let Some(decl) = current.get_var_declaration(var_name) {
+                    symbol_id = Some(decl.id);
+                }
+            },
+            Annotation::ProcHeader(parts, _) => {
+                let mut current = self.objtree.root();
+                let (proc_name, most) = parts.split_last().unwrap();
+                for part in most {
+                    if part == "proc" || part == "verb" { break }
+                    if let Some(child) = current.child(part) {
+                        current = child;
+                    } else {
+                        break;
+                    }
+                }
+
+                if let Some(decl) = current.get_proc_declaration(proc_name) {
+                    symbol_id = Some(decl.id);
+                }
+            },
+            Annotation::TreePath(absolute, parts) => {
+                if let Some(ty) = self.objtree.type_by_path(completion::combine_tree_path(&iter, *absolute, parts)) {
                     symbol_id = Some(ty.id);
-                },
-                _ => {}
-            }
-        },
-        Annotation::UnscopedCall(proc_name) => {
-            let (ty, _) = self.find_type_context(&iter);
-            let mut next = ty.or_else(|| Some(self.objtree.root()));
-            while let Some(ty) = next {
-                if let Some(proc) = ty.procs.get(proc_name) {
-                    if let Some(ref decl) = proc.declaration {
-                        symbol_id = Some(decl.id);
-                        break;
-                    }
                 }
-                next = ty.parent_type();
-            }
-        },
-        Annotation::UnscopedVar(var_name) => {
-            let (ty, proc_name) = self.find_type_context(&iter);
-            match self.find_unscoped_var(&iter, ty, proc_name, var_name) {
-                UnscopedVar::Parameter { .. } => {
-                    // TODO
-                },
-                UnscopedVar::Variable { ty, .. } => {
-                    if let Some(decl) = ty.get_var_declaration(var_name) {
-                        symbol_id = Some(decl.id);
-                    }
-                },
-                UnscopedVar::Local { .. } => {
-                    // TODO
-                },
-                UnscopedVar::None => {}
-            }
-        },
-        Annotation::ScopedCall(priors, proc_name) => {
-            let mut next = self.find_scoped_type(&iter, priors);
-            while let Some(ty) = next {
-                if let Some(proc) = ty.procs.get(proc_name) {
-                    if let Some(ref decl) = proc.declaration {
-                        symbol_id = Some(decl.id);
-                        break;
-                    }
+            },
+            Annotation::TypePath(parts) => {
+                match self.follow_type_path(&iter, parts) {
+                    // '/datum/proc/foo'
+                    Some(completion::TypePathResult { ty, decl: _, proc: Some((proc_name, _)) }) => {
+                        if let Some(decl) = ty.get_proc_declaration(proc_name) {
+                            symbol_id = Some(decl.id);
+                        }
+                    },
+                    // 'datum/bar'
+                    Some(completion::TypePathResult { ty, decl: None, proc: None }) => {
+                        symbol_id = Some(ty.id);
+                    },
+                    _ => {}
                 }
-                next = ty.parent_type_without_root();
-            }
-        },
-        Annotation::ScopedVar(priors, var_name) => {
-            let mut next = self.find_scoped_type(&iter, priors);
-            while let Some(ty) = next {
-                if let Some(var) = ty.vars.get(var_name) {
-                    if let Some(ref decl) = var.declaration {
-                        symbol_id = Some(decl.id);
-                        break;
+            },
+            Annotation::UnscopedCall(proc_name) => {
+                let (ty, _) = self.find_type_context(&iter);
+                let mut next = ty.or_else(|| Some(self.objtree.root()));
+                while let Some(ty) = next {
+                    if let Some(proc) = ty.procs.get(proc_name) {
+                        if let Some(ref decl) = proc.declaration {
+                            symbol_id = Some(decl.id);
+                            break;
+                        }
                     }
+                    next = ty.parent_type();
                 }
-                next = ty.parent_type_without_root();
-            }
-        },
-        // TODO: macros
+            },
+            Annotation::UnscopedVar(var_name) => {
+                let (ty, proc_name) = self.find_type_context(&iter);
+                match self.find_unscoped_var(&iter, ty, proc_name, var_name) {
+                    UnscopedVar::Parameter { .. } => {
+                        // TODO
+                    },
+                    UnscopedVar::Variable { ty, .. } => {
+                        if let Some(decl) = ty.get_var_declaration(var_name) {
+                            symbol_id = Some(decl.id);
+                        }
+                    },
+                    UnscopedVar::Local { .. } => {
+                        // TODO
+                    },
+                    UnscopedVar::None => {}
+                }
+            },
+            Annotation::ScopedCall(priors, proc_name) => {
+                let mut next = self.find_scoped_type(&iter, priors);
+                while let Some(ty) = next {
+                    if let Some(proc) = ty.procs.get(proc_name) {
+                        if let Some(ref decl) = proc.declaration {
+                            symbol_id = Some(decl.id);
+                            break;
+                        }
+                    }
+                    next = ty.parent_type_without_root();
+                }
+            },
+            Annotation::ScopedVar(priors, var_name) => {
+                let mut next = self.find_scoped_type(&iter, priors);
+                while let Some(ty) = next {
+                    if let Some(var) = ty.vars.get(var_name) {
+                        if let Some(ref decl) = var.declaration {
+                            symbol_id = Some(decl.id);
+                            break;
+                        }
+                    }
+                    next = ty.parent_type_without_root();
+                }
+            },
+            // TODO: macros
         }
 
         Ok(symbol_id)
@@ -1437,97 +1437,20 @@ handle_method_call! {
 
         let iter = annotations.get_location(location);
         match_annotation! { iter;
-        Annotation::TreePath(absolute, parts) => {
-            let full_path: Vec<&str> = completion::combine_tree_path(&iter, *absolute, parts).collect();
+            Annotation::TreePath(absolute, parts) => {
+                let full_path: Vec<&str> = completion::combine_tree_path(&iter, *absolute, parts).collect();
 
-            if let Some(ty) = self.objtree.type_by_path(full_path.iter().cloned()) {
-                results.push(self.convert_location(ty.location, &ty.docs, &[&ty.path])?);
-            } else if let Some((&proc_name, prefix)) = full_path.split_last() {
-                // If it's not a type, try to find the proc equivalent. Start
-                // at the parent type so that this is a decent shortcut for
-                // going to the parent proc.
-                // TODO: only do this if we're in a ProcHeader.
-                let mut next = self.objtree.type_by_path(prefix);
-                if let Some(ty) = next {
-                    next = ty.parent_type();
-                }
-                while let Some(ty) = next {
-                    if let Some(proc) = ty.procs.get(proc_name) {
-                        results.push(self.convert_location(proc.main_value().location, &proc.main_value().docs, &[&ty.path, "/proc/", proc_name])?);
-                        break;
-                    }
-                    next = ty.parent_type();
-                }
-            }
-        },
-        Annotation::TypePath(parts) => {
-            match self.follow_type_path(&iter, parts) {
-                // '/datum/proc/foo'
-                Some(completion::TypePathResult { ty, decl: _, proc: Some((proc_name, proc)) }) => {
-                    results.push(self.convert_location(proc.location, &proc.docs, &[&ty.path, "/proc/", proc_name])?);
-                },
-                // 'datum/bar'
-                Some(completion::TypePathResult { ty, decl: None, proc: None }) => {
+                if let Some(ty) = self.objtree.type_by_path(full_path.iter().cloned()) {
                     results.push(self.convert_location(ty.location, &ty.docs, &[&ty.path])?);
-                },
-                _ => {}
-            }
-        },
-        Annotation::UnscopedCall(proc_name) => {
-            let (ty, _) = self.find_type_context(&iter);
-            let mut next = ty.or_else(|| Some(self.objtree.root()));
-            while let Some(ty) = next {
-                if let Some(proc) = ty.procs.get(proc_name) {
-                    results.push(self.convert_location(proc.main_value().location, &proc.main_value().docs, &[&ty.path, "/proc/", proc_name])?);
-                    break;
-                }
-                next = ty.parent_type();
-            }
-        },
-        Annotation::UnscopedVar(var_name) => {
-            let (ty, proc_name) = self.find_type_context(&iter);
-            match self.find_unscoped_var(&iter, ty, proc_name, var_name) {
-                UnscopedVar::Parameter { ty, proc, param } => {
-                    results.push(self.convert_location(param.location, &Default::default(), &[&ty.path, "/proc/", proc])?);
-                },
-                UnscopedVar::Variable { ty, var } => {
-                    results.push(self.convert_location(var.value.location, &var.value.docs, &[&ty.path, "/var/", var_name])?);
-                },
-                UnscopedVar::Local { loc, .. } => {
-                    results.push(self.convert_location(dm::Location { file: real_file_id, ..loc }, &Default::default(), &[])?);
-                },
-                UnscopedVar::None => {}
-            }
-        },
-        Annotation::ScopedCall(priors, proc_name) => {
-            let mut next = self.find_scoped_type(&iter, priors);
-            while let Some(ty) = next {
-                if let Some(proc) = ty.procs.get(proc_name) {
-                    results.push(self.convert_location(proc.main_value().location, &proc.main_value().docs, &[&ty.path, "/proc/", proc_name])?);
-                    break;
-                }
-                next = ty.parent_type_without_root();
-            }
-        },
-        Annotation::ScopedVar(priors, var_name) => {
-            let mut next = self.find_scoped_type(&iter, priors);
-            while let Some(ty) = next {
-                if let Some(var) = ty.vars.get(var_name) {
-                    results.push(self.convert_location(var.value.location, &var.value.docs, &[&ty.path, "/var/", var_name])?);
-                    break;
-                }
-                next = ty.parent_type_without_root();
-            }
-        },
-        Annotation::ParentCall => {
-            if let (Some(ty), Some((proc_name, idx))) = self.find_type_context(&iter) {
-                // TODO: idx is always 0 unless there are multiple overrides in
-                // the same .dm file, due to annotations operating against a
-                // dummy ObjectTree which does not contain any definitions from
-                // other files.
-                if idx == 0 {
-                    // first proc on the type, go to the REAL parent
-                    let mut next = ty.parent_type();
+                } else if let Some((&proc_name, prefix)) = full_path.split_last() {
+                    // If it's not a type, try to find the proc equivalent. Start
+                    // at the parent type so that this is a decent shortcut for
+                    // going to the parent proc.
+                    // TODO: only do this if we're in a ProcHeader.
+                    let mut next = self.objtree.type_by_path(prefix);
+                    if let Some(ty) = next {
+                        next = ty.parent_type();
+                    }
                     while let Some(ty) = next {
                         if let Some(proc) = ty.procs.get(proc_name) {
                             results.push(self.convert_location(proc.main_value().location, &proc.main_value().docs, &[&ty.path, "/proc/", proc_name])?);
@@ -1535,17 +1458,94 @@ handle_method_call! {
                         }
                         next = ty.parent_type();
                     }
-                } else if let Some(proc) = ty.procs.get(proc_name) {
-                    // override, go to the previous version of the proc
-                    if let Some(parent) = proc.value.get(idx - 1) {
-                        results.push(self.convert_location(parent.location, &parent.docs, &[&ty.path, "/proc/", proc_name])?);
+                }
+            },
+            Annotation::TypePath(parts) => {
+                match self.follow_type_path(&iter, parts) {
+                    // '/datum/proc/foo'
+                    Some(completion::TypePathResult { ty, decl: _, proc: Some((proc_name, proc)) }) => {
+                        results.push(self.convert_location(proc.location, &proc.docs, &[&ty.path, "/proc/", proc_name])?);
+                    },
+                    // 'datum/bar'
+                    Some(completion::TypePathResult { ty, decl: None, proc: None }) => {
+                        results.push(self.convert_location(ty.location, &ty.docs, &[&ty.path])?);
+                    },
+                    _ => {}
+                }
+            },
+            Annotation::UnscopedCall(proc_name) => {
+                let (ty, _) = self.find_type_context(&iter);
+                let mut next = ty.or_else(|| Some(self.objtree.root()));
+                while let Some(ty) = next {
+                    if let Some(proc) = ty.procs.get(proc_name) {
+                        results.push(self.convert_location(proc.main_value().location, &proc.main_value().docs, &[&ty.path, "/proc/", proc_name])?);
+                        break;
+                    }
+                    next = ty.parent_type();
+                }
+            },
+            Annotation::UnscopedVar(var_name) => {
+                let (ty, proc_name) = self.find_type_context(&iter);
+                match self.find_unscoped_var(&iter, ty, proc_name, var_name) {
+                    UnscopedVar::Parameter { ty, proc, param } => {
+                        results.push(self.convert_location(param.location, &Default::default(), &[&ty.path, "/proc/", proc])?);
+                    },
+                    UnscopedVar::Variable { ty, var } => {
+                        results.push(self.convert_location(var.value.location, &var.value.docs, &[&ty.path, "/var/", var_name])?);
+                    },
+                    UnscopedVar::Local { loc, .. } => {
+                        results.push(self.convert_location(dm::Location { file: real_file_id, ..loc }, &Default::default(), &[])?);
+                    },
+                    UnscopedVar::None => {}
+                }
+            },
+            Annotation::ScopedCall(priors, proc_name) => {
+                let mut next = self.find_scoped_type(&iter, priors);
+                while let Some(ty) = next {
+                    if let Some(proc) = ty.procs.get(proc_name) {
+                        results.push(self.convert_location(proc.main_value().location, &proc.main_value().docs, &[&ty.path, "/proc/", proc_name])?);
+                        break;
+                    }
+                    next = ty.parent_type_without_root();
+                }
+            },
+            Annotation::ScopedVar(priors, var_name) => {
+                let mut next = self.find_scoped_type(&iter, priors);
+                while let Some(ty) = next {
+                    if let Some(var) = ty.vars.get(var_name) {
+                        results.push(self.convert_location(var.value.location, &var.value.docs, &[&ty.path, "/var/", var_name])?);
+                        break;
+                    }
+                    next = ty.parent_type_without_root();
+                }
+            },
+            Annotation::ParentCall => {
+                if let (Some(ty), Some((proc_name, idx))) = self.find_type_context(&iter) {
+                    // TODO: idx is always 0 unless there are multiple overrides in
+                    // the same .dm file, due to annotations operating against a
+                    // dummy ObjectTree which does not contain any definitions from
+                    // other files.
+                    if idx == 0 {
+                        // first proc on the type, go to the REAL parent
+                        let mut next = ty.parent_type();
+                        while let Some(ty) = next {
+                            if let Some(proc) = ty.procs.get(proc_name) {
+                                results.push(self.convert_location(proc.main_value().location, &proc.main_value().docs, &[&ty.path, "/proc/", proc_name])?);
+                                break;
+                            }
+                            next = ty.parent_type();
+                        }
+                    } else if let Some(proc) = ty.procs.get(proc_name) {
+                        // override, go to the previous version of the proc
+                        if let Some(parent) = proc.value.get(idx - 1) {
+                            results.push(self.convert_location(parent.location, &parent.docs, &[&ty.path, "/proc/", proc_name])?);
+                        }
                     }
                 }
-            }
-        },
-        Annotation::MacroUse { name, definition_location, .. } => {
-            results.push(self.convert_location(*definition_location, &Default::default(), &["/DM/preprocessor/", name])?);
-        },
+            },
+            Annotation::MacroUse { name, definition_location, .. } => {
+                results.push(self.convert_location(*definition_location, &Default::default(), &["/DM/preprocessor/", name])?);
+            },
         }
 
         if results.is_empty() {
@@ -1569,35 +1569,35 @@ handle_method_call! {
 
         let iter = annotations.get_location(location);
         match_annotation! { iter;
-        Annotation::UnscopedVar(var_name) => {
-            let (ty, proc_name) = self.find_type_context(&iter);
-            match self.find_unscoped_var(&iter, ty, proc_name, var_name) {
-                UnscopedVar::Parameter { param, .. } => {
-                    type_path = &param.var_type.type_path;
-                },
-                UnscopedVar::Variable { ty, .. } => {
-                    if let Some(decl) = ty.get_var_declaration(var_name) {
-                        type_path = &decl.var_type.type_path;
-                    }
-                },
-                UnscopedVar::Local { var_type, .. } => {
-                    type_path = &var_type.type_path;
-                },
-                UnscopedVar::None => {}
-            }
-        },
-        Annotation::ScopedVar(priors, var_name) => {
-            let mut next = self.find_scoped_type(&iter, priors);
-            while let Some(ty) = next {
-                if let Some(var) = ty.get().vars.get(var_name) {
-                    if let Some(ref decl) = var.declaration {
-                        type_path = &decl.var_type.type_path;
-                        break;
-                    }
+            Annotation::UnscopedVar(var_name) => {
+                let (ty, proc_name) = self.find_type_context(&iter);
+                match self.find_unscoped_var(&iter, ty, proc_name, var_name) {
+                    UnscopedVar::Parameter { param, .. } => {
+                        type_path = &param.var_type.type_path;
+                    },
+                    UnscopedVar::Variable { ty, .. } => {
+                        if let Some(decl) = ty.get_var_declaration(var_name) {
+                            type_path = &decl.var_type.type_path;
+                        }
+                    },
+                    UnscopedVar::Local { var_type, .. } => {
+                        type_path = &var_type.type_path;
+                    },
+                    UnscopedVar::None => {}
                 }
-                next = ty.parent_type_without_root();
-            }
-        },
+            },
+            Annotation::ScopedVar(priors, var_name) => {
+                let mut next = self.find_scoped_type(&iter, priors);
+                while let Some(ty) = next {
+                    if let Some(var) = ty.get().vars.get(var_name) {
+                        if let Some(ref decl) = var.declaration {
+                            type_path = &decl.var_type.type_path;
+                            break;
+                        }
+                    }
+                    next = ty.parent_type_without_root();
+                }
+            },
         }
 
         if type_path.is_empty() {
