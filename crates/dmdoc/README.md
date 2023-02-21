@@ -1,98 +1,71 @@
-# dmdoc
-
-**dmdoc** is a documentation generator for DreamMaker, the scripting language
-of the [BYOND] game engine. It produces simple static HTML files based on
-documented files, macros, types, procs, and vars.
-
-[BYOND]: https://secure.byond.com/
-
-If dmdoc is run in a Git repository, web links to source code are placed next
-to item headings in the generated output; otherwise, file and line numbers are
-shown but are not linked.
-
-## Running dmdoc
-
-dmdoc can be obtained with `cargo build -p dmdoc` or from the [releases] page.
-
-dmdoc should be run from within the DM project directory. It will
-automatically detect the `.dme` file, parse it, and generate documentation.
-
-Documentation and resource files will be saved into the `dmdoc` directory. The
-resulting documentation will be suitable for uploading to any web server. It
-may be desirable to delete this directory if it exists before running dmdoc, to
-remove old files.
-
-[releases]: https://github.com/SpaceManiac/SpacemanDMM/releases
-
-## Documenting code
-
-Types, macros, vars, and procs can be documented using any of four different
-doc comment styles. Both block and line comments are supported. Documentation
-blocks may target their enclosing item or the following item.
-
-```dm
-/// This comment applies to the following macro.
-#define BLUE rgb(0, 255, 0)
-
-/** Block comments work too. */
-/obj
-    var/affinity = BLUE  //! Enclosing comments follow their item.
-
-/proc/chemical_reaction()
-    /*! Block comments work too. */
-```
-
-Types with only a one-line note and no documented procs or vars do not get
-their own `.html` page.
-
-### Modules
-
-Enclosing-item comments which are not inside any element are applied to the
-current file. Files which have such comments, or which contain any documented
-macros, are added to the modules tree. If a file is in the modules tree, any
-documented types in that file will appear in its entry.
-
-The summary sections of module pages are sorted in line number order, with
-file-level documentation interspersed with the summary lines of documented
-items.
-
-Markdown and .txt files inside the `code` directory will also be rendered and added to
-the modules tree.
-
-The contents of `code/README.md` will be used in the main page of the generated
-documentation.
-
-### Crosslinks
-
-You can link inside any doc comment or markdown file to another documented piece of code.
-
-This is done via a crosslink, in the form `[path_to_link_to]`.
-
-Valid forms of crosslinks:
-```dm
-[DEFINE_NAME]
-[/path_to_object]
-[/path_to_object/proc/foo]
-[/path_to_object/var/bar]
-```
-
-You can also customize the link text that appears. This is by prepending the custom link text in brackets, such as: `[some define][DEFINE_NAME]`.
-
-### Titles
-
-The title of a documentation entry is determined by whichever is set first:
-* A `# Title` set at the top of a doc block, if present.
-* The type's `name` var if present and not [disabled in config].
-* The last component of the typepath.
-
-Here's an example of setting a manual title for an object:
-```dm
-/**
-  * # Fubar
-  */
-/obj/foo
-```
-
-This will cause the `/obj/foo` to have the title `Fubar` in the generated documentation. The typepath will still show up at the top of the details page.
-
-[disabled in config]: ../../CONFIGURING.md#dm-doc
+only leads further to  the fallings  
+retake the grasp on reality dodge the  
+bullet and take the high side  
+hell will catch up eventually  
+take my word or not my souls burned once already  
+Shhhhhhh did you hear that…..  
+wish I could skip this part gives me the creep's  
+not sure if it could twice but I’m trying my best to stay  out of the fallings  
+your only exception to the reality that's hit you  wait and conceal this the heights to heaven  are high  
+find out you're not tall enough for the ride  
+that grasp, not knowing its beautiful  
+baby……beautiful  
+aww the rays of the sun skin in the cool but just  enough to feel the warmth in the sun this alone  you feel like you'd be content so real…. your  cold the sun's rays are vibrantly warming  you…... awwwwwww in the way it feels  
+ that's only the smallest piece into what comes  
+once woken up and back to a dream In heaven where  you've been missed where the possibilities are  endless  
+with just a touch 
+8 
+AUTHOR NAME  
+beautiful baby. .. beautiful  
+no  
+victim 
+here  
+so  
+carry on  
+there 
+or get a lesson  
+on  
+what's now 
+the dreamer in the mix  
+now this guy he's dangerous  
+that's me a little over 15 years ago  
+he has all the looks of a crash landing  
+good kid though  
+if in fact you're in hell's callings and you were looking  for a loser in what comes no labels here  in all honestly you might want to listen  
+walking that dream created  
+hate  
+ out around every corner mostly his own friends  supposedly teammates,  
+right or wrong would be the fight in hell's fallings  
+wanted in the ventures of his creativity to build him  a conductions latest model I pull from a resource  best fit to get the job done  
+in my mind in what I know as consciousness  tweaking drives lightly 
+9 
+BOOK TITLE  
+slightly staying on the side of righteousness  put it in first pull out a cigarette  
+and lite it  
+carrying the conversation on  
+where should we stop for lunch  
+let out the clutch  
+take off ever so  
+lightly..  
+I’m an escaped convict from hell my verdict is still in  the air  
+believe it or not I escaped with poetry  
+A passion and drive hits you so hard you have to do  something either poetry or put a gun in my mouth  yeah I wouldn't believe me either  
+but made it out  
+I'm looking for more survivors but I ain't seen one yet  you're telling me I'm the only one who has made it  out of hell  
+you can imagine conversations do not go to well  that sux thought I'd be able to talk to somebody  back to the story o yeah I am the story  
+This played out narrative of myself kind of blows  but that's epic for ya he was a doctor but  his schooling was to the ones most had  
+written off you can imagine where he  
+graduated from  
+the hard Knox and that schooling was a lot like your  own 
+pushed out, sink or swim sinking  
+wasn't an option 
+10 
+AUTHOR NAME  Christopher Paul vincent
+so I was swimming  
+self image down pat I was like a dream magnificent  pushed on the streets and I wasn’t about to sink  so it was swim swimming lessons anybody  joking I learned that lesson  
+twice in a life is to much  
+one thing he never had was security  
+but he's done it with nothing and that's how he will get  there  
+that's where he's made his honors at where he  comes from  
+keeping a step ahead and off the streets everybody  was glad to see him  
+the success rate ain't high enough very few come  out as such to hold a thought let alone wrote a  novel hear more laughs in the idea I'm a get a  shovel start digging in case this one gets rejected I  can
