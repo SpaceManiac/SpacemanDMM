@@ -18,7 +18,7 @@ mod save_tgm;
 const MAX_KEY_LENGTH: u8 = 3;
 
 /// BYOND is currently limited to 65534 keys.
-/// https://secure.byond.com/forum/?post=2340796#comment23770802
+/// https://www.byond.com/forum/?post=2340796#comment23770802
 type KeyType = u16;
 
 /// An opaque map key.
@@ -344,7 +344,7 @@ fn base_52_reverse(ch: u8) -> Result<KeyType, String> {
 
 fn advance_key(current: KeyType, next_digit: KeyType) -> Result<KeyType, &'static str> {
     current.checked_mul(52).and_then(|b| b.checked_add(next_digit)).ok_or({
-        // https://secure.byond.com/forum/?post=2340796#comment23770802
+        // https://www.byond.com/forum/?post=2340796#comment23770802
         "Key overflow, max is 'ymo'"
     })
 }

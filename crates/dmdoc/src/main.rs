@@ -32,7 +32,7 @@ const BUILD_INFO: &str = concat!(
     "General Public License version 3.",
 );
 
-const DM_REFERENCE_BASE: &str = "https://secure.byond.com/docs/ref/#";
+const DM_REFERENCE_BASE: &str = "https://www.byond.com/docs/ref/#";
 
 // ----------------------------------------------------------------------------
 // Driver

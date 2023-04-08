@@ -4,7 +4,7 @@
 of the [BYOND] game engine. It produces simple static HTML files based on
 documented files, macros, types, procs, and vars.
 
-[BYOND]: https://secure.byond.com/
+[BYOND]: https://www.byond.com/
 
 If dmdoc is run in a Git repository, web links to source code are placed next
 to item headings in the generated output; otherwise, file and line numbers are

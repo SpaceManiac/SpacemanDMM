@@ -15,7 +15,7 @@ integration build; see [/tg/station's CI suite][ci] for an example.
 Support is currently provided in /tg/station13's coderbus (ping `SpaceManiac`)
 and on the [issue tracker]. Pull requests are welcome.
 
-[DreamMaker]: https://secure.byond.com/
+[DreamMaker]: https://www.byond.com/
 [language server]: https://langserver.org/
 [releases]: https://github.com/SpaceManiac/SpacemanDMM/releases
 [ci]: https://github.com/tgstation/tgstation/blob/master/.github/workflows/ci_suite.yml#L45

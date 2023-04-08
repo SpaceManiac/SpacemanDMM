@@ -3,7 +3,7 @@
 **DreamChecker** is a robust whole-program static analysis and type checking
 engine for DreamMaker, the scripting language of the [BYOND] game engine.
 
-[BYOND]: https://secure.byond.com/
+[BYOND]: https://www.byond.com/
 
 ## Running DreamChecker
 

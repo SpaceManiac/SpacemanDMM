@@ -669,7 +669,7 @@ impl<'ctx> Preprocessor<'ctx> {
         if let Some(loc) = self.danger_idents.get(name) {
             self.context.register_error(DMError::new(*loc, format!(
                 "macro {:?} used immediately before being {}:\n\
-                https://secure.byond.com/forum/?post=2072419", name, kind
+                https://www.byond.com/forum/?post=2072419", name, kind
             )).set_severity(Severity::Warning));
         }
     }
@@ -1211,7 +1211,7 @@ impl<'ctx> Iterator for Preprocessor<'ctx> {
             }
 
             if let Some(tok) = self.inner_next() {
-                // linting for https://secure.byond.com/forum/?post=2072419
+                // linting for https://www.byond.com/forum/?post=2072419
                 if !tok.token.is_whitespace() && tok.token != Token::Punct(Punctuation::Hash) {
                     if tok.location.file != self.last_printable_input_loc.file ||
                         tok.location.line > self.last_printable_input_loc.line
