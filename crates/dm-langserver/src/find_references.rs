@@ -520,6 +520,12 @@ impl<'o> WalkProc<'o> {
                 self.visit_arguments(location, args_2);
                 StaticType::None
             },
+            Term::ExternalCall { library_name, function_name, args } => {
+                self.visit_expression(location, library_name, None);
+                self.visit_expression(location, function_name, None);
+                self.visit_arguments(location, args);
+                StaticType::None
+            },
         }
     }
 
