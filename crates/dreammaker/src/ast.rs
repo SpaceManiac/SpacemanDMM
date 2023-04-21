@@ -897,6 +897,12 @@ pub enum Term {
     Pick(Box<PickArgs>),
     /// A use of the `call()()` primitive.
     DynamicCall(Box<[Expression]>, Box<[Expression]>),
+    /// A use of the `call_ext()()` primitive.
+    ExternalCall {
+        library_name: Box<Expression>,
+        function_name: Box<Expression>,
+        args: Box<[Expression]>,
+    },
 }
 
 impl Term {

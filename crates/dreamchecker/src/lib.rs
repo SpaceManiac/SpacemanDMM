@@ -692,7 +692,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                             .with_blocking_builtins(self.sleeping_procs.get_violators(*child_violator).unwrap())
                             .register(self.context)
                     }
-                } 
+                }
                 if let Some(calledvec) = self.call_tree.get(&nextproc) {
                     for (proccalled, location, new_context) in calledvec.iter() {
                         let mut newstack = callstack.clone();
@@ -743,7 +743,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                             .with_blocking_builtins(self.impure_procs.get_violators(*child_violator).unwrap())
                             .register(self.context)
                     }
-                } 
+                }
                 if let Some(calledvec) = self.call_tree.get(&nextproc) {
                     for (proccalled, location, new_context) in calledvec.iter() {
                         let mut newstack = callstack.clone();
@@ -1861,6 +1861,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Term::DynamicCall(lhs_args, rhs_args) => {
                 self.visit_arguments(location, lhs_args, local_vars);
                 self.visit_arguments(location, rhs_args, local_vars);
+                Analysis::empty()  // TODO
+            },
+            Term::ExternalCall { library_name, function_name, args } => {
+                self.visit_expression(location, library_name, None, local_vars);
+                self.visit_expression(location, function_name, None, local_vars);
+                self.visit_arguments(location, args, local_vars);
                 Analysis::empty()  // TODO
             },
         }
