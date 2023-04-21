@@ -15,7 +15,7 @@ fn main() {
         Ok(commit) => writeln!(f, "commit: {}", commit).unwrap(),
         Err(err) => println!("cargo:warning=Failed to fetch commit info: {}", err)
     }
-    writeln!(f, "build date: {}", chrono::Utc::today()).unwrap();
+    writeln!(f, "build date: {}", chrono::Utc::now().date_naive()).unwrap();
 
     // extools bundling
     println!("cargo:rerun-if-env-changed=EXTOOLS_BUNDLE_DLL");

@@ -15,7 +15,7 @@ fn main() {
     if let Ok(commit) = read_commit() {
         writeln!(f, "commit: {}", commit).unwrap();
     }
-    writeln!(f, "build date: {}", chrono::Utc::today()).unwrap();
+    writeln!(f, "build date: {}", chrono::Utc::now().date_naive()).unwrap();
 
     // windres icon
     if cfg!(windows) {
