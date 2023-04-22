@@ -24,10 +24,22 @@ pub const VAR_FINAL_ERRORS: &[(u32, u16, &str)] = &[
 ];
 
 #[test]
-fn var_final() {
+fn var_spaceman_final() {
     let code = r##"
 /mob
     var/SpacemanDMM_final/foo = 0
+
+/mob/subtype
+    foo = 1
+"##.trim();
+    check_errors_match(code, VAR_FINAL_ERRORS);
+}
+
+#[test]
+fn var_final() {
+    let code = r##"
+/mob
+    var/final/foo = 0
 
 /mob/subtype
     foo = 1

@@ -435,6 +435,7 @@ impl VarTypeFlags {
             "global" | "static" => Some(VarTypeFlags::STATIC),
             "const" => Some(VarTypeFlags::CONST),
             "tmp" => Some(VarTypeFlags::TMP),
+            "final" => Some(VarTypeFlags::FINAL),
             // SpacemanDMM flags
             "SpacemanDMM_final" => Some(VarTypeFlags::FINAL),
             "SpacemanDMM_private" => Some(VarTypeFlags::PRIVATE),
@@ -489,7 +490,7 @@ impl VarTypeFlags {
         if self.is_static() { v.push("static"); }
         if self.is_const() { v.push("const"); }
         if self.is_tmp() { v.push("tmp"); }
-        if self.is_final() { v.push("SpacemanDMM_final"); }
+        if self.is_final() { v.push("final"); }
         if self.is_private() { v.push("SpacemanDMM_private"); }
         if self.is_protected() { v.push("SpacemanDMM_protected"); }
         v
@@ -508,7 +509,7 @@ impl fmt::Display for VarTypeFlags {
             fmt.write_str("tmp/")?;
         }
         if self.is_final() {
-            fmt.write_str("SpacemanDMM_final/")?;
+            fmt.write_str("final/")?;
         }
         if self.is_private() {
             fmt.write_str("SpacemanDMM_private/")?;

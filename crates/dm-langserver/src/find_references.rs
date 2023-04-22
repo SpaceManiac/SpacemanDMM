@@ -679,7 +679,7 @@ impl<'o> WalkProc<'o> {
     }
 
     fn static_type(&mut self, location: Location, mut of: &[String]) -> StaticType<'o> {
-        while !of.is_empty() && ["static", "global", "const", "tmp"].contains(&&*of[0]) {
+        while !of.is_empty() && ["static", "global", "const", "tmp", "final", "SpacemanDMM_final", "SpacemanDMM_private", "SpacemanDMM_protected"].contains(&&*of[0]) {
             of = &of[1..];
         }
 
