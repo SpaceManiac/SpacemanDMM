@@ -114,3 +114,17 @@ fn bitop_precedence() {
         }
     );
 }
+
+#[test]
+fn pointer_ops() {
+    assert_eq!(
+        parse_expr("*&1"),
+        Expression::Base {
+            term: Box::new(Spanned::new(Default::default(), Term::Int(1))),
+            follow: vec![
+                Spanned::new(Default::default(), Follow::Unary(UnaryOp::Reference)),
+                Spanned::new(Default::default(), Follow::Unary(UnaryOp::Dereference)),
+            ].into_boxed_slice(),
+        }
+    )
+}

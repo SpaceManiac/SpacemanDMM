@@ -26,6 +26,8 @@ pub enum UnaryOp {
     PostIncr,
     PreDecr,
     PostDecr,
+    Reference,
+    Dereference,
 }
 
 impl UnaryOp {
@@ -49,6 +51,8 @@ impl UnaryOp {
                     PostIncr => write!(f, "{}++", self.expr),
                     PreDecr => write!(f, "--{}", self.expr),
                     PostDecr => write!(f, "{}--", self.expr),
+                    Reference => write!(f, "&{}", self.expr),
+                    Dereference => write!(f, "*{}", self.expr),
                 }
             }
         }
@@ -65,6 +69,8 @@ impl UnaryOp {
             BitNot => "~",
             PreIncr | PostIncr => "++",
             PreDecr | PostDecr => "--",
+            Reference => "&",
+            Dereference => "*",
         }
     }
 }
