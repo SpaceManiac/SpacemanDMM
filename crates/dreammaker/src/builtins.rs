@@ -148,7 +148,9 @@ pub fn default_defines(defines: &mut DefineMap) {
         ANIMATION_END_NOW = Int(1);
         ANIMATION_LINEAR_TRANSFORM = Int(2);
         ANIMATION_PARALLEL = Int(4);
+        ANIMATION_SLICE = Int(8); // 515
         ANIMATION_RELATIVE = Int(256);
+        ANIMATION_CONTINUE = Int(512); // 515
 
         // database
         DATABASE_OPEN = Int(0);
@@ -195,6 +197,14 @@ pub fn default_defines(defines: &mut DefineMap) {
         NORMAL_RAND = Int(1);
         LINEAR_RAND = Int(2);
         SQUARE_RAND = Int(3);
+
+
+        // json encode flags (515)
+        JSON_PRETTY_PRINT = Int(1);
+
+        // json decode flags (515)
+        JSON_STRICT = Int(1);
+        JSON_ALLOW_COMMENTS = Int(2); // default
     }
 }
 
@@ -1161,6 +1171,35 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         particles/var/rotation;
         particles/var/spin;
         particles/var/drift;
+
+        //515 stuff
+
+        proc/ceil(A);
+        proc/floor(A);
+        proc/fract(A);
+        proc/ftime(File, IsCreationTime);
+        proc/get_steps_to(Ref, Trg, Min=0);
+        proc/isinf(A);
+        proc/isnan(A);
+        proc/ispointer(Value);
+        proc/nameof(VarPathProcRef);
+        proc/noise_hash(param1/*, ...*/);
+        proc/refcount(Object);
+        proc/trimtext(Text);
+        proc/trunc(A);
+
+        client/proc/RenderIcon(object);
+
+        savefile/var/byond_build = int!(0);
+        savefile/var/byond_version = int!(0);
+
+
+        sound/var/params;
+        sound/var/pitch = int!(0);
+
+        list/proc/RemoveAll(Item1/*, ...*/);
+
+        world/proc/Tick();
     };
 }
 
