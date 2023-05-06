@@ -26,20 +26,32 @@ pub fn check_errors_match<S: Into<Cow<'static, str>>>(buffer: S, errorlist: &[(u
     let errors = context.errors();
     let mut iter = errors.iter();
     for (line, column, desc) in errorlist {
-        let nexterror = iter.next().unwrap();
-        if nexterror.location().line != *line
-            || nexterror.location().column != *column
-            || nexterror.description() != *desc
-        {
-            panic!(
-                "possible feature regression in dreamchecker, expected {}:{}:{}, found {}:{}:{}",
-                *line,
-                *column,
-                *desc,
-                nexterror.location().line,
-                nexterror.location().column,
-                nexterror.description()
-            );
+        let nexterror_option = iter.next();
+        match nexterror_option {
+            Some(nexterror) => {
+                if nexterror.location().line != *line
+                    || nexterror.location().column != *column
+                    || nexterror.description() != *desc
+                {
+                    panic!(
+                        "possible feature regression in dreamchecker, expected {}:{}:{}, found {}:{}:{}",
+                        *line,
+                        *column,
+                        *desc,
+                        nexterror.location().line,
+                        nexterror.location().column,
+                        nexterror.description()
+                    );
+                }
+            },
+            None => {
+                panic!(
+                    "possible feature regression in dreamchecker, expected {}:{}:{}, found no additional errors!",
+                    *line,
+                    *column,
+                    *desc
+                );
+            }
         }
     }
     if iter.next().is_some() {
