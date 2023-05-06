@@ -3,7 +3,7 @@ extern crate dreamchecker as dc;
 
 use dc::test_helpers::check_errors_match;
 
-pub const SLEEP_ERRORS: &[(u32, u16, &str)] = &[
+const SLEEP_ERRORS: &[(u32, u16, &str)] = &[
     (16, 16, "/mob/proc/test3 sets SpacemanDMM_should_not_sleep but calls blocking proc /proc/sleepingproc"),
 ];
 
@@ -45,7 +45,7 @@ fn sleep() {
     check_errors_match(code, SLEEP_ERRORS);
 }
 
-pub const SLEEP_ERRORS2: &[(u32, u16, &str)] = &[
+const SLEEP_ERRORS2: &[(u32, u16, &str)] = &[
     (8, 21, "/mob/living/proc/bar calls /mob/living/proc/foo which has override child proc that sleeps /mob/living/carbon/proc/foo"),
 ];
 
@@ -112,7 +112,7 @@ fn sleep3() {
     ]);
 }
 
-pub const SLEEP_ERROR4: &[(u32, u16, &str)] = &[
+const SLEEP_ERROR4: &[(u32, u16, &str)] = &[
     (1, 16, "/mob/proc/test1 sets SpacemanDMM_should_not_sleep but calls blocking built-in(s)"),
     (1, 16, "/mob/proc/test1 sets SpacemanDMM_should_not_sleep but calls blocking proc /mob/proc/test2"),
     (1, 16, "/mob/proc/test1 sets SpacemanDMM_should_not_sleep but calls blocking proc /client/proc/checksoundquery"),
@@ -150,7 +150,7 @@ fn sleep4() {
 }
 
 // Test overrides and for regression of issue #267
-pub const SLEEP_ERROR5: &[(u32, u16, &str)] = &[
+const SLEEP_ERROR5: &[(u32, u16, &str)] = &[
         (7, 19, "/datum/sub/proc/checker sets SpacemanDMM_should_not_sleep but calls blocking proc /proc/sleeper"),
 ];
 
