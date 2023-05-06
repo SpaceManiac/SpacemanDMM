@@ -47,6 +47,8 @@ fn sleep() {
 
 const SLEEP_ERRORS2: &[(u32, u16, &str)] = &[
     (8, 21, "/mob/living/proc/bar calls /mob/living/proc/foo which has override child proc that sleeps /mob/living/carbon/proc/foo"),
+    (8, 21, "/mob/living/proc/bar calls /mob/proc/thing which has override child proc that sleeps /mob/dead/proc/thing"),
+    (8, 21, "/mob/living/proc/bar calls /mob/proc/New which has override child proc that sleeps /mob/dead/proc/New"),
 ];
 
 #[test]
@@ -109,6 +111,8 @@ fn sleep3() {
 "##.trim();
     check_errors_match(code, &[
         (8, 23, "/atom/movable/proc/bar calls /atom/movable/proc/foo which has override child proc that sleeps /mob/proc/foo"),
+        (8, 23, "/atom/movable/proc/bar calls /atom/proc/thing which has override child proc that sleeps /atom/dead/proc/thing"),
+        (8, 23, "/atom/movable/proc/bar calls /atom/proc/New[1/2] which has override child proc that sleeps /atom/dead/proc/New"),
     ]);
 }
 
@@ -151,7 +155,8 @@ fn sleep4() {
 
 // Test overrides and for regression of issue #267
 const SLEEP_ERROR5: &[(u32, u16, &str)] = &[
-        (7, 19, "/datum/sub/proc/checker sets SpacemanDMM_should_not_sleep but calls blocking proc /proc/sleeper"),
+    (7, 19, "/datum/sub/proc/checker calls /datum/proc/proxy which has override child proc that sleeps /datum/hijack/proc/proxy"),
+    (7, 19, "/datum/sub/proc/checker sets SpacemanDMM_should_not_sleep but calls blocking proc /proc/sleeper"),
 ];
 
 #[test]
@@ -173,4 +178,32 @@ fn sleep5() {
         sleep(1)
 "##.trim();
     check_errors_match(code, SLEEP_ERROR5);
+}
+
+// Test overrides and for regression of issue #355
+const SLEEP_ERROR6: &[(u32, u16, &str)] = &[
+        (4, 24, "/datum/choiced/proc/is_valid sets SpacemanDMM_should_not_sleep but calls blocking proc /proc/stoplag"),
+];
+
+#[test]
+fn sleep6() {
+    let code = r##"
+/datum/proc/is_valid(value)
+    set SpacemanDMM_should_not_sleep = 1
+
+/datum/choiced/is_valid(value)
+    get_choices()
+
+/datum/choiced/proc/get_choices()
+    init_possible_values()
+
+/datum/choiced/proc/init_possible_values()
+
+/datum/choiced/ai_core_display/init_possible_values()
+    stoplag()
+
+/proc/stoplag()
+    sleep(1)
+"##.trim();
+    check_errors_match(code, SLEEP_ERROR6);
 }
