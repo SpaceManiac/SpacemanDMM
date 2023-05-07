@@ -642,17 +642,21 @@ impl<'o> AnalyzeObjectTree<'o> {
     }
 
     pub fn check_proc_call_tree(&mut self, cli: bool) {
-        // prepare for the worst case, avoiding the reallocations _is_ faster and less memory expensive
-        let total_procs = self.objtree.iter_types().flat_map(|type_ref: TypeRef| type_ref.iter_self_procs()).count();
-        let mut sleeping_procs_transitive = HashSet::<ProcRef>::with_capacity(total_procs);
-
         let total_must_not_sleep_procs = self.must_not_sleep.directive.len();
         if cli {
             println!("{} procs to anaylze call chains for sleeps", total_must_not_sleep_procs);
         }
 
+        // prepare for the worst case, avoiding the reallocations _is_ faster and less memory expensive
+        let total_procs = self.objtree.iter_types().flat_map(|type_ref: TypeRef| type_ref.iter_self_procs()).count();
+        let mut visited = HashSet::<ProcRef<'o>>::with_capacity(total_procs);
+        let mut to_visit = VecDeque::<(ProcRef<'o>, CallStack, bool, ProcRef<'o>)>::new();
         let mut last_update = SystemTime::now();
         for (index, (procref, &(_, location))) in self.must_not_sleep.directive.iter().enumerate() {
+            if !visited.insert(*procref) {
+                continue;
+            }
+
             if cli {
                 let now = SystemTime::now();
                 if let Ok(duration) = now.duration_since(last_update) {
@@ -671,11 +675,6 @@ impl<'o> AnalyzeObjectTree<'o> {
                     .register(self.context)
             }
 
-            let mut visited = HashSet::<ProcRef<'o>>::new();
-            let mut to_visit = VecDeque::<(ProcRef<'o>, CallStack, bool, ProcRef<'o>)>::new();
-
-            visited.insert(*procref);
-
             if let Some(calledvec) = self.call_tree.get(procref) {
                 for (proccalled, location, new_context) in calledvec.iter() {
                     let mut newstack = CallStack::default();
@@ -686,23 +685,20 @@ impl<'o> AnalyzeObjectTree<'o> {
 
             let procref_type_index = procref.ty().index();
             while let Some((nextproc, callstack, new_context, parent_proc)) = to_visit.pop_front() {
+                if new_context {
+                    continue
+                }
                 if !visited.insert(nextproc) {
                     continue
                 }
-                if self.waitfor_procs.get(&nextproc).is_some() {
+                if self.waitfor_procs.contains(&nextproc) {
                     continue
                 }
                 if self.sleep_exempt.get(nextproc).is_some() {
                     continue
                 }
-                if new_context {
-                    continue
-                }
-                let mut transitive = false;
-                if let Some(error) = if let Some(transitive_sleeping_proc_ref) = sleeping_procs_transitive.get(&nextproc) {
-                    transitive = true;
-                    Some(error(procref.get().location, format!("{} calls {} which transitively sleeps.", procref, nextproc)))
-                } else if let Some(sleepvec) = self.sleeping_procs.get_violators(nextproc) {
+
+                if let Some(sleepvec) = self.sleeping_procs.get_violators(nextproc) {
                     let parent_proc_type_index = parent_proc.ty().index();
                     let next_proc_type_index = nextproc.ty().index();
 
@@ -717,28 +713,15 @@ impl<'o> AnalyzeObjectTree<'o> {
                         format!("{} sets SpacemanDMM_should_not_sleep but calls blocking proc {}", procref, nextproc)
                     };
 
-                    Some(error(procref.get().location, desc)
-                        .with_blocking_builtins(sleepvec))
-                } else {
-                    None
-                } {
-                    error
+                    error(procref.get().location, desc)
+                        .with_blocking_builtins(sleepvec)
                         .with_note(location, "SpacemanDMM_should_not_sleep set here")
                         .with_errortype("must_not_sleep")
                         .with_callstack(&callstack)
                         .register(self.context);
 
-                    if callstack.call_stack.len() > 1 {
-                        let mut working_callstack = callstack.call_stack.clone();
-                        while let Some((calling_proc, _calling_location, _new_context)) = working_callstack.pop_back() {
-                            sleeping_procs_transitive.insert(calling_proc);
-                        }
-                    }
-                }
-
-                // no more recursion if we hit a transitive sleeper, we've already been there
-                if transitive {
-                    continue;
+                    // Abort now, we don't want to go unnecessarily deep
+                    continue
                 }
 
                 nextproc.recurse_children(&mut |child_proc|
@@ -754,7 +737,8 @@ impl<'o> AnalyzeObjectTree<'o> {
             }
         }
 
-        drop(sleeping_procs_transitive);
+        drop(visited);
+        drop(to_visit);
 
         for (procref, (_, location)) in self.must_be_pure.directive.iter() {
             if let Some(impurevec) = self.impure_procs.get_violators(*procref) {
