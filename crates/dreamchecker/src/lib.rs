@@ -644,7 +644,7 @@ impl<'o> AnalyzeObjectTree<'o> {
     pub fn check_proc_call_tree(&mut self, cli: bool) {
         // prepare for the worst case, avoiding the reallocations _is_ faster and less memory expensive
         let total_procs = self.objtree.iter_types().flat_map(|type_ref: TypeRef| type_ref.iter_self_procs()).count();
-        let mut sleeping_procs_transitive = Box::new(HashSet::<ProcRef>::with_capacity(total_procs));
+        let mut sleeping_procs_transitive = HashSet::<ProcRef>::with_capacity(total_procs);
 
         let total_must_not_sleep_procs = self.must_not_sleep.directive.len();
         if cli {
