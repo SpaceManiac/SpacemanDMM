@@ -10,7 +10,6 @@ use dm::constants::{Constant, ConstFn};
 use dm::ast::*;
 
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
-use std::time::SystemTime;
 
 use ahash::RandomState;
 
@@ -363,7 +362,7 @@ fn run_inner(context: &Context, objtree: &ObjectTree, cli: bool) {
 
     cli_println!("============================================================");
     cli_println!("Analyzing proc call tree...\n");
-    analyzer.check_proc_call_tree(cli);
+    analyzer.check_proc_call_tree();
 }
 
 // ----------------------------------------------------------------------------
@@ -641,30 +640,14 @@ impl<'o> AnalyzeObjectTree<'o> {
         }
     }
 
-    pub fn check_proc_call_tree(&mut self, cli: bool) {
-        let total_must_not_sleep_procs = self.must_not_sleep.directive.len();
-        if cli {
-            println!("{} procs to anaylze call chains for sleeps", total_must_not_sleep_procs);
-        }
-
+    pub fn check_proc_call_tree(&mut self) {
         // prepare for the worst case, avoiding the reallocations _is_ faster and less memory expensive
         let total_procs = self.objtree.iter_types().flat_map(|type_ref: TypeRef| type_ref.iter_self_procs()).count();
         let mut visited = HashSet::<ProcRef<'o>>::with_capacity(total_procs);
         let mut to_visit = VecDeque::<(ProcRef<'o>, CallStack, bool, ProcRef<'o>)>::new();
-        let mut last_update = SystemTime::now();
         for (index, (procref, &(_, location))) in self.must_not_sleep.directive.iter().enumerate() {
             if !visited.insert(*procref) {
                 continue;
-            }
-
-            if cli {
-                let now = SystemTime::now();
-                if let Ok(duration) = now.duration_since(last_update) {
-                    if duration.as_secs() > 10 {
-                        println!("{}/{} procs analyzed", index, total_must_not_sleep_procs);
-                        last_update = now;
-                    }
-                }
             }
 
             if let Some(sleepvec) = self.sleeping_procs.get_violators(*procref) {
