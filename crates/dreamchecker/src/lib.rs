@@ -657,7 +657,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                 let now = SystemTime::now();
                 if let Ok(duration) = now.duration_since(last_update) {
                     if duration.as_secs() > 10 {
-                        println!("{}/{} procs anaylzed", index, total_must_not_sleep_procs);
+                        println!("{}/{} procs analyzed", index, total_must_not_sleep_procs);
                         last_update = now;
                     }
                 }
