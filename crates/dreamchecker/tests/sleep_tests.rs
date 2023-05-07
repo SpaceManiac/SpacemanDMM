@@ -208,7 +208,7 @@ fn sleep6() {
     check_errors_match(code, SLEEP_ERROR6);
 }
 
-// This one is mainly for debuggable code coverage on the sleeping_procs_transitive optimization
+// When there are transitive errors for a sleeping proc (sleep_caller in this case) only the first will be returned
 #[test]
 fn sleep7() {
     let code = r##"
@@ -228,7 +228,7 @@ fn sleep7() {
 "##.trim();
     let context = parse_a_file_for_test(code);
     let errors = context.errors();
-    assert_eq!(2, errors.len());
+    assert_eq!(1, errors.len());
 
     // the parser or dreamchecker does shit in a random order and i CBA to find out why
     for error in errors.iter() {
