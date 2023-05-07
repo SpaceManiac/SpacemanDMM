@@ -62,6 +62,7 @@ be enabled:
 	#define UNLINT(X) SpacemanDMM_unlint(X)
 	#define SHOULD_NOT_OVERRIDE(X) set SpacemanDMM_should_not_override = X
 	#define SHOULD_NOT_SLEEP(X) set SpacemanDMM_should_not_sleep = X
+    #define ALLOWED_TO_SLEEP(X) set SpacemanDMM_allowed_to_sleep = X
 	#define SHOULD_BE_PURE(X) set SpacemanDMM_should_be_pure = X
 	#define PRIVATE_PROC(X) set SpacemanDMM_private_proc = X
 	#define PROTECTED_PROC(X) set SpacemanDMM_protected_proc = X
@@ -75,6 +76,7 @@ be enabled:
 	#define UNLINT(X) X
 	#define SHOULD_NOT_OVERRIDE(X)
 	#define SHOULD_NOT_SLEEP(X)
+    #define ALLOWED_TO_SLEEP(X)
 	#define SHOULD_BE_PURE(X)
 	#define PRIVATE_PROC(X)
 	#define PROTECTED_PROC(X)
