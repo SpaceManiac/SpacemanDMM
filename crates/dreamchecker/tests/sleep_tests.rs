@@ -48,7 +48,6 @@ fn sleep() {
 const SLEEP_ERRORS2: &[(u32, u16, &str)] = &[
     (8, 21, "/mob/living/proc/bar calls /mob/living/proc/foo which has override child proc that sleeps /mob/living/carbon/proc/foo"),
     (8, 21, "/mob/living/proc/bar calls /mob/proc/thing which has override child proc that sleeps /mob/dead/proc/thing"),
-    (8, 21, "/mob/living/proc/bar calls /mob/proc/New which has override child proc that sleeps /mob/dead/proc/New"),
 ];
 
 #[test]
@@ -112,7 +111,6 @@ fn sleep3() {
     check_errors_match(code, &[
         (8, 23, "/atom/movable/proc/bar calls /atom/movable/proc/foo which has override child proc that sleeps /mob/proc/foo"),
         (8, 23, "/atom/movable/proc/bar calls /atom/proc/thing which has override child proc that sleeps /atom/dead/proc/thing"),
-        (8, 23, "/atom/movable/proc/bar calls /atom/proc/New[1/2] which has override child proc that sleeps /atom/dead/proc/New"),
     ]);
 }
 
