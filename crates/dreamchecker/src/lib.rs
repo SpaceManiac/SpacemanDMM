@@ -697,10 +697,10 @@ impl<'o> AnalyzeObjectTree<'o> {
                     };
 
                     error(procref.get().location, desc)
-                        .with_blocking_builtins(sleepvec)
                         .with_note(location, "SpacemanDMM_should_not_sleep set here")
                         .with_errortype("must_not_sleep")
                         .with_callstack(&callstack)
+                        .with_blocking_builtins(sleepvec)
                         .register(self.context);
 
                     // Abort now, we don't want to go unnecessarily deep
