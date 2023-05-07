@@ -1,7 +1,7 @@
 
 extern crate dreamchecker as dc;
 
-use dc::test_helpers::check_errors_match;
+use dc::test_helpers::{check_errors_match, parse_a_file_for_test};
 
 const SLEEP_ERRORS: &[(u32, u16, &str)] = &[
     (16, 16, "/mob/proc/test3 sets SpacemanDMM_should_not_sleep but calls blocking proc /proc/sleepingproc"),
@@ -206,4 +206,55 @@ fn sleep6() {
     sleep(1)
 "##.trim();
     check_errors_match(code, SLEEP_ERROR6);
+}
+
+// This one is mainly for debuggable code coverage on the sleeping_procs_transitive optimization
+#[test]
+fn sleep7() {
+    let code = r##"
+/proc/sleeper()
+    sleep(1)
+
+/proc/sleep_caller()
+    sleeper()
+
+/proc/nosleep1()
+    set SpacemanDMM_should_not_sleep = 1
+    sleep_caller()
+
+/proc/nosleep2()
+    set SpacemanDMM_should_not_sleep = 1
+    sleep_caller()
+"##.trim();
+    let context = parse_a_file_for_test(code);
+    let errors = context.errors();
+    assert_eq!(2, errors.len());
+
+    // the parser or dreamchecker does shit in a random order and i CBA to find out why
+    for error in errors.iter() {
+        assert_eq!("must_not_sleep", error.errortype().unwrap());
+    }
+}
+
+// Testing a possible infinite loop?
+#[test]
+fn sleep8() {
+    let code = r##"
+/proc/sleeper()
+    sleep(1)
+
+/proc/sleep_caller()
+    nosleep()
+    nosleep()
+    nosleep()
+    nosleep()
+    sleeper()
+
+/proc/nosleep()
+    set SpacemanDMM_should_not_sleep = 1
+    sleep_caller()
+"##.trim();
+    check_errors_match(code, &[
+        (11, 14, "/proc/nosleep sets SpacemanDMM_should_not_sleep but calls blocking proc /proc/sleeper"),
+    ]);
 }

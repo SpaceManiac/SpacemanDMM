@@ -327,7 +327,7 @@ fn run_inner(context: &Context, objtree: &ObjectTree, cli: bool) {
 
     check_var_defs(objtree, context);
 
-    let mut analyzer = AnalyzeObjectTree::new(context, objtree);
+    let mut analyzer = AnalyzeObjectTree::new(context, objtree.clone());
 
     cli_println!("============================================================");
     cli_println!("Gathering proc settings...\n");
@@ -641,6 +641,10 @@ impl<'o> AnalyzeObjectTree<'o> {
     }
 
     pub fn check_proc_call_tree(&mut self) {
+        let mut sleeping_procs_transitive = ViolatingProcs{
+            violators: HashMap::new()
+        };
+
         for (procref, &(_, location)) in self.must_not_sleep.directive.iter() {
             if let Some(sleepvec) = self.sleeping_procs.get_violators(*procref) {
                 error(procref.get().location, format!("{} sets SpacemanDMM_should_not_sleep but calls blocking built-in(s)", procref))
@@ -668,6 +672,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                 if !visited.insert(nextproc) {
                     continue
                 }
+
                 if self.waitfor_procs.get(&nextproc).is_some() {
                     continue
                 }
@@ -684,29 +689,45 @@ impl<'o> AnalyzeObjectTree<'o> {
                 let proc_is_on_same_type_as_setting = next_proc_type_index == procref_type_index;
                 let proc_is_override = next_proc_type_index != parent_proc_type_index;
 
-                if let Some(sleepvec) = self.sleeping_procs.get_violators(nextproc) {
-                    if proc_is_on_same_type_as_setting && proc_is_override {
-                        error(procref.get().location, format!("{} sets SpacemanDMM_should_not_sleep but has override child proc that sleeps {}", procref, nextproc))
-                            .with_note(location, "SpacemanDMM_should_not_sleep set here")
-                            .with_errortype("must_not_sleep")
-                            .with_callstack(&callstack)
-                            .with_blocking_builtins(sleepvec)
-                            .register(self.context)
+                let mut sleepvec_option = sleeping_procs_transitive.get_violators(nextproc);
+                let transitive = sleepvec_option.is_some();
+                if !transitive {
+                    sleepvec_option = self.sleeping_procs.get_violators(nextproc);
+                }
+
+                if let Some(sleepvec) = sleepvec_option {
+                    let desc = if transitive {
+                        format!("{} calls {} which transitively sleeps", procref, nextproc)
+                    } else if proc_is_on_same_type_as_setting && proc_is_override {
+                        format!("{} sets SpacemanDMM_should_not_sleep but has override child proc that sleeps {}", procref, nextproc)
                     } else if proc_is_override {
-                        error(procref.get().location, format!("{} calls {} which has override child proc that sleeps {}", procref, parent_proc, nextproc))
-                            .with_note(location, "SpacemanDMM_should_not_sleep set here")
-                            .with_errortype("must_not_sleep")
-                            .with_callstack(&callstack)
-                            .with_blocking_builtins(sleepvec)
-                            .register(self.context)
+                        format!("{} calls {} which has override child proc that sleeps {}", procref, parent_proc, nextproc)
                     } else {
-                        error(procref.get().location, format!("{} sets SpacemanDMM_should_not_sleep but calls blocking proc {}", procref, nextproc))
-                            .with_note(location, "SpacemanDMM_should_not_sleep set here")
-                            .with_errortype("must_not_sleep")
-                            .with_callstack(&callstack)
-                            .with_blocking_builtins(sleepvec)
-                            .register(self.context)
+                        format!("{} sets SpacemanDMM_should_not_sleep but calls blocking proc {}", procref, nextproc)
+                    };
+
+                    error(procref.get().location, desc)
+                        .with_note(location, "SpacemanDMM_should_not_sleep set here")
+                        .with_errortype("must_not_sleep")
+                        .with_callstack(&callstack)
+                        .with_blocking_builtins(sleepvec)
+                        .register(self.context);
+
+                    if callstack.call_stack.len() > 1 {
+                        let working_sleepvec = sleepvec.clone();
+                        for (builtin, location) in working_sleepvec {
+                            let mut working_callstack = callstack.call_stack.clone();
+                            working_callstack.pop_back();
+                            for (calling_proc, _calling_location, _new_context) in working_callstack {
+                                sleeping_procs_transitive.insert_violator(calling_proc, &builtin, location);
+                            }
+                        }
                     }
+                }
+
+                // no more recursion if we hit a transitive sleeper, we've already been there
+                if transitive {
+                    continue;
                 }
 
                 nextproc.recurse_children(&mut |child_proc|
