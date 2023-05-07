@@ -328,7 +328,7 @@ fn run_inner(context: &Context, objtree: &ObjectTree, cli: bool) {
 
     check_var_defs(objtree, context);
 
-    let mut analyzer = AnalyzeObjectTree::new(context, objtree.clone());
+    let mut analyzer = AnalyzeObjectTree::new(context, objtree);
 
     cli_println!("============================================================");
     cli_println!("Gathering proc settings...\n");
