@@ -707,8 +707,10 @@ impl<'o> AnalyzeObjectTree<'o> {
                     continue
                 }
 
-                nextproc.recurse_children(&mut |child_proc|
-                    to_visit.push_back((child_proc, callstack.clone(), false, nextproc)));
+                if nextproc.ty().index() != self.objtree.root().index() && nextproc.name() != "New" {
+                    nextproc.recurse_children(&mut |child_proc|
+                        to_visit.push_back((child_proc, callstack.clone(), false, nextproc)));
+                }
 
                 if let Some(calledvec) = self.call_tree.get(&nextproc) {
                     for (proccalled, location, new_context) in calledvec.iter() {
