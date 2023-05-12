@@ -26,7 +26,10 @@ macro_rules! try_iter {
 }
 
 mod error;
+use ahash::RandomState;
 pub use error::*;
+use get_size::GetSize;
+use indexmap::IndexMap;
 
 // roughly in order of stage
 pub mod docs;
@@ -195,4 +198,24 @@ pub fn detect_environment_default() -> std::io::Result<Option<std::path::PathBuf
         // ... but without `./` preceding it.
         path.strip_prefix(".").map(|p| p.to_owned()).unwrap_or(path)
     }))
+}
+
+pub(crate) fn heap_size_of_index_map<K, V>(index_map: &IndexMap<K, V, RandomState>) -> usize where
+    K: GetSize,
+    V: GetSize, {
+    let mut total = 0;
+
+    for (k, v) in index_map.iter() {
+        // We assume that keys and value are hold inside the heap.
+        total += GetSize::get_size(k);
+        total += GetSize::get_size(v);
+    }
+
+    let additional: usize = index_map.capacity() - index_map.len();
+    total += additional * K::get_stack_size();
+    total += additional * V::get_stack_size();
+
+    total += u64::get_stack_size() * 4; // composition of RandomState
+
+    total
 }

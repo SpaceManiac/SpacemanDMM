@@ -7,6 +7,8 @@ use std::collections::HashMap;
 
 use ahash::RandomState;
 
+use get_size::GetSize;
+use get_size_derive::GetSize;
 use termcolor::{ColorSpec, Color};
 
 use crate::config::Config;
@@ -14,6 +16,8 @@ use crate::config::Config;
 /// An identifier referring to a loaded file.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct FileId(u16);
+
+impl GetSize for FileId{}
 
 const FILEID_BUILTINS: FileId = FileId(0x0000);
 const FILEID_MIN: FileId = FileId(0x0001);
@@ -273,7 +277,7 @@ impl Context {
 // Location handling
 
 /// File, line, and column information for an error.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Default)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Default, GetSize)]
 pub struct Location {
     /// The index into the file table.
     pub file: FileId,

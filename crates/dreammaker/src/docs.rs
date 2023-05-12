@@ -2,8 +2,11 @@
 
 use std::fmt;
 
+use get_size::GetSize;
+use get_size_derive::GetSize;
+
 /// A collection of documentation comments targeting the same item.
-#[derive(Default, Clone, Debug, PartialEq)]
+#[derive(Default, Clone, Debug, PartialEq, GetSize)]
 pub struct DocCollection {
     elems: Vec<DocComment>,
     pub builtin_docs: BuiltinDocs,
@@ -60,7 +63,7 @@ impl DocCollection {
 }
 
 /// A documentation comment.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, GetSize)]
 pub struct DocComment {
     pub kind: CommentKind,
     pub target: DocTarget,
@@ -95,7 +98,7 @@ impl fmt::Display for DocComment {
 }
 
 /// The possible documentation comment kinds.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, GetSize)]
 pub enum CommentKind {
     /// A block `/** */` comment.
     Block,
@@ -197,7 +200,7 @@ fn is_empty(text: &str, ignore_char: char) -> bool {
 }
 
 /// The possible items that a documentation comment may target.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, GetSize)]
 pub enum DocTarget {
     /// Starting with `*` or `/`, referring to the following item.
     FollowingItem,
@@ -206,7 +209,7 @@ pub enum DocTarget {
 }
 
 /// Information about where builtin docs can be found.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, GetSize)]
 pub enum BuiltinDocs {
     None,
     /// A DM reference hash such as "/DM/vars".

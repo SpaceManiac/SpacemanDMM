@@ -3,8 +3,13 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
+use get_size::GetSize;
+use get_size_derive::GetSize;
+
 use indexmap::IndexMap;
 use ahash::RandomState;
+
+use crate::heap_size_of_index_map;
 
 use super::ast::{Expression, VarType, VarTypeBuilder, VarSuffix, PathOp, Parameter, Block, ProcDeclKind, Ident};
 use super::constants::Constant;
@@ -17,6 +22,8 @@ use super::{DMError, Location, Context, Severity};
 /// An identifier referring to a symbol in the object tree.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct SymbolId(u32);
+
+impl GetSize for SymbolId{}
 
 #[derive(Debug)]
 pub struct SymbolIdSource(SymbolId);
@@ -47,14 +54,14 @@ impl SymbolIdSource {
 
 pub type Vars = IndexMap<String, Constant, RandomState>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, GetSize)]
 pub struct VarDeclaration {
     pub var_type: VarType,
     pub location: Location,
     pub id: SymbolId,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, GetSize)]
 pub struct VarValue {
     pub location: Location,
     /// Syntactic value, as specified in the source.
@@ -65,13 +72,13 @@ pub struct VarValue {
     pub docs: DocCollection,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, GetSize)]
 pub struct TypeVar {
     pub value: VarValue,
     pub declaration: Option<VarDeclaration>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, GetSize)]
 pub struct ProcDeclaration {
     pub location: Location,
     pub kind: ProcDeclKind,
@@ -80,7 +87,7 @@ pub struct ProcDeclaration {
     pub is_protected: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, GetSize)]
 pub struct ProcValue {
     pub location: Location,
     pub parameters: Box<[Parameter]>,
@@ -88,7 +95,7 @@ pub struct ProcValue {
     pub code: Option<Block>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, GetSize)]
 pub struct TypeProc {
     pub value: Vec<ProcValue>,
     pub declaration: Option<ProcDeclaration>,
@@ -187,6 +194,21 @@ impl Type {
             current = objtree.parent_of(ty);
         }
         None
+    }
+}
+
+impl GetSize for Type {
+    fn get_heap_size(&self) -> usize {
+        self.path.get_heap_size()
+        + self.path_last_slash.get_heap_size()
+        + self.location.get_heap_size()
+        + self.parent_path.get_heap_size()
+        + self.parent_type.get_heap_size()
+        + self.docs.get_heap_size()
+        + self.id.get_heap_size()
+        + self.children.get_heap_size()
+        + heap_size_of_index_map(&self.vars)
+        + heap_size_of_index_map(&self.procs)
     }
 }
 
@@ -624,7 +646,7 @@ impl<'a> std::hash::Hash for ProcRef<'a> {
 // ----------------------------------------------------------------------------
 // The object tree itself
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, GetSize)]
 pub struct ObjectTree {
     graph: Vec<Type>,
     types: BTreeMap<String, NodeIndex>,
@@ -1295,3 +1317,5 @@ impl NodeIndex {
         NodeIndex(std::u32::MAX)
     }
 }
+
+impl GetSize for NodeIndex{}
