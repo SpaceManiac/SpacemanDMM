@@ -256,3 +256,24 @@ fn sleep8() {
         (11, 14, "/proc/nosleep sets SpacemanDMM_should_not_sleep but calls blocking proc /proc/sleeper"),
     ]);
 }
+
+// Testing avoidance of false positive from overrides of different type chains
+#[test]
+fn sleep9() {
+    let code = r##"
+/proc/main()
+    set SpacemanDMM_should_not_sleep = 1
+    var/datum/override1/O = new
+    O.StartTest()
+
+/datum/proc/CommonProc()
+    return
+
+/datum/override1/proc/StartTest()
+    CommonProc()
+
+/datum/override2/CommonProc()
+    sleep(1)
+"##.trim();
+    check_errors_match(code, &[]);
+}
