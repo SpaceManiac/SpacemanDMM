@@ -6,7 +6,6 @@ use std::ops::Range;
 use std::str::FromStr;
 
 use crate::ast;
-use crate::syntax_tree::{SyntaxTree, TreeBlockBuilder, TreeEntryBuilder};
 
 use super::{DMError, Location, HasLocation, Context, Severity, FileId};
 use super::lexer::{LocatedToken, Token, Punctuation};

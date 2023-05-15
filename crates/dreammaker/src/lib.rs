@@ -27,7 +27,7 @@ macro_rules! try_iter {
 
 mod error;
 pub use error::*;
-use syntax_tree::SyntaxTree;
+use ast::SyntaxTree;
 
 // roughly in order of stage
 pub mod docs;
@@ -38,7 +38,6 @@ pub mod parser;
 pub mod annotation;
 pub mod ast;
 pub mod objtree;
-pub mod syntax_tree;
 mod builtins;
 pub mod constants;
 pub mod dmi;
