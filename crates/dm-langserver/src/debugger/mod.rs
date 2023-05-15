@@ -113,7 +113,7 @@ pub fn debugger_main<I: Iterator<Item = String>>(mut args: I) {
         let mut parser =
             dm::parser::Parser::new(&ctx, dm::indents::IndentProcessor::new(&ctx, &mut pp));
         parser.enable_procs();
-        Arc::new(parser.parse_object_tree())
+        Arc::new(parser.parse().object_tree())
     };
 
     let db = DebugDatabaseBuilder {
@@ -1650,7 +1650,7 @@ impl StddefDmInfo {
         let pp = dm::preprocessor::Preprocessor::from_buffer(&context, "stddef.dm".into(), &text);
         let parser =
             dm::parser::Parser::new(&context, dm::indents::IndentProcessor::new(&context, pp));
-        let objtree = parser.parse_object_tree_without_builtins();
+        let objtree = parser.parse().object_tree_without_builtins();
         StddefDmInfo { text, objtree }
     }
 }

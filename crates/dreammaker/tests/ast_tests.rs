@@ -11,7 +11,7 @@ fn with_code<F: FnOnce(Context, ObjectTree)>(code: &'static str, f: F) {
     let indents = indents::IndentProcessor::new(&context, pp);
     let mut parser = parser::Parser::new(&context, indents);
     parser.enable_procs();
-    let _tree = parser.parse_object_tree();
+    let _tree = parser.parse().object_tree();
 
     f(context, _tree)
 }

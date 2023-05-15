@@ -475,18 +475,21 @@ impl<'a> Engine<'a> {
 
         // Parse the environment.
         let fatal_errored;
+        let parse_time;
         {
             let mut parser = dm::parser::Parser::new(ctx, dm::indents::IndentProcessor::new(ctx, &mut pp));
             parser.enable_procs();
-            let (fatal_errored_2, objtree) = parser.parse_object_tree_2();
+            let (fatal_errored_2, mut syntax_tree) = parser.parse_2();
+            parse_time = start.elapsed();
             fatal_errored = fatal_errored_2;
-            self.objtree = Arc::new(objtree);
+            self.objtree = Arc::new(syntax_tree.object_tree());
         }
         let elapsed = start.elapsed(); start += elapsed;
         {
             let disk = ctx.get_io_time();
-            let parse = elapsed.saturating_sub(disk);
-            eprint!("disk {}.{:03}s - parse {}.{:03}s", disk.as_secs(), disk.subsec_millis(), parse.as_secs(), parse.subsec_millis());
+            let parse = parse_time.saturating_sub(disk);
+            let objtree = elapsed.saturating_sub(parse);
+            eprint!("disk {}.{:03}s - parse {}.{:03}s - object tree build {}.{:03}s", disk.as_secs(), disk.subsec_millis(), parse.as_secs(), parse.subsec_millis(), objtree.as_secs(), objtree.subsec_millis());
         }
 
         // Background thread: prepare the Find All References database.
@@ -549,7 +552,7 @@ impl<'a> Engine<'a> {
         if self.client_caps.object_tree {
             self.update_objtree();
             let elapsed = start.elapsed(); start += elapsed;
-            eprint!(" - object tree {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+            eprint!(" - object tree send {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
         }
 
         /*if let Some(objtree) = Arc::get_mut(&mut self.objtree) {
@@ -590,8 +593,10 @@ impl<'a> Engine<'a> {
                     let mut annotations = AnnotationTree::default();
                     {
                         let indent = dm::indents::IndentProcessor::new(self.context, &mut preprocessor);
-                        let parser = dm::parser::Parser::new(self.context, indent);
-                        parser.parse_annotations_only(&mut annotations);
+                        let mut parser = dm::parser::Parser::new(self.context, indent);
+                        parser.annotate_to(&mut annotations);
+                        let syntax_tree = parser.parse();
+                        syntax_tree.object_tree_with_annotations(&mut annotations);
                     }
                     annotations.merge(preprocessor.take_annotations().unwrap());
                     v.insert((real_file_id, file_id, Rc::new(annotations))).clone()
@@ -612,10 +617,11 @@ impl<'a> Engine<'a> {
                         let indent = dm::indents::IndentProcessor::new(self.context, &mut pp);
                         let mut parser = dm::parser::Parser::new(self.context, indent);
                         parser.annotate_to(&mut annotations);
+                        let objtree = parser.parse().object_tree_with_annotations(&mut annotations);
                         // Every time anyone types anything the object tree is replaced.
                         // This is probably really inefficient, but it will do until
                         // selective definition deletion/reintroduction is implemented.
-                        self.objtree = Arc::new(parser.parse_object_tree());
+                        self.objtree = Arc::new(objtree);
                     }
                     pp.finalize();
                     dreamchecker::run(self.context, &self.objtree);

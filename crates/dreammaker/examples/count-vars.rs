@@ -12,7 +12,7 @@ fn main() {
     let indents = dm::indents::IndentProcessor::new(&context, pp);
     let mut parser = dm::parser::Parser::new(&context, indents);
     parser.enable_procs();
-    let ot = parser.parse_object_tree();
+    let ot = parser.parse().object_tree();
 
     let mut decls = 0;
     let mut overrides = 0;

@@ -14,5 +14,5 @@ fn main() {
     let indents = dm::indents::IndentProcessor::new(&context, pp);
     let mut parser = dm::parser::Parser::new(&context, indents);
     parser.enable_procs();
-    parser.parse_object_tree();
+    parser.parse().object_tree();
 }

@@ -64,7 +64,8 @@ fn main() {
     let indents = dm::indents::IndentProcessor::new(&context, pp);
     let mut parser = dm::parser::Parser::new(&context, indents);
     parser.enable_procs();
-    let (fatal_errored, tree) = parser.parse_object_tree_2();
+    let (fatal_errored, mut syntax_tree) = parser.parse_2();
+    let tree = syntax_tree.object_tree();
 
     if !parse_only && !fatal_errored {
         dreamchecker::run_cli(&context, &tree);

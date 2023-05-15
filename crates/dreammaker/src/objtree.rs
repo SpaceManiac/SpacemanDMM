@@ -1109,7 +1109,7 @@ impl ObjectTreeBuilder {
         parent: NodeIndex,
         name: &str,
         declaration: Option<ProcDeclKind>,
-        parameters: Vec<Parameter>,
+        parameters: Box<[Parameter]>,
         code: Option<Block>,
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let node = &mut self.inner.graph[parent.index()];
@@ -1256,7 +1256,7 @@ impl ObjectTreeBuilder {
             ));
         }
 
-        self.register_proc(context, location, parent, proc_name, declaration, parameters, code)
+        self.register_proc(context, location, parent, proc_name, declaration, parameters.into_boxed_slice(), code)
     }
 }
 

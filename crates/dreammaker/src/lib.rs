@@ -27,6 +27,7 @@ macro_rules! try_iter {
 
 mod error;
 pub use error::*;
+use syntax_tree::SyntaxTree;
 
 // roughly in order of stage
 pub mod docs;
@@ -37,6 +38,7 @@ pub mod parser;
 pub mod annotation;
 pub mod ast;
 pub mod objtree;
+pub mod syntax_tree;
 mod builtins;
 pub mod constants;
 pub mod dmi;
@@ -48,7 +50,7 @@ impl Context {
     /// Will only return failure on an `io::Error`. Compilation failures will
     /// return a best-effort parse. Call `print_all_errors` to pretty-print
     /// errors to standard error.
-    pub fn parse_environment(&self, dme: &Path) -> Result<objtree::ObjectTree, DMError> {
+    pub fn parse_environment(&self, dme: &Path) -> Result<SyntaxTree, DMError> {
         Ok(parser::parse(self,
             indents::IndentProcessor::new(self,
                 preprocessor::Preprocessor::new(self, dme.to_owned())?

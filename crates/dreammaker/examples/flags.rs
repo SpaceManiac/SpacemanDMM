@@ -7,7 +7,7 @@ fn main() {
     std::env::set_current_dir("../tgstation").unwrap();
 
     let ctx = dm::Context::default();
-    let objtree = &ctx.parse_environment("tgstation.dme".as_ref()).unwrap();
+    let objtree = &ctx.parse_environment("tgstation.dme".as_ref()).unwrap().object_tree();
 
     // Used to check https://github.com/tgstation/tgstation/pull/38171
     // for mistakes transferring between `flags_1` and `item_flags`.

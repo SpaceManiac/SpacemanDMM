@@ -46,7 +46,7 @@ fn check_parser() {
     with_test_dme(&context, |mut preprocessor| {
         let mut parser = parser::Parser::new(&context, indents::IndentProcessor::new(&context, &mut preprocessor));
         parser.enable_procs();
-        let _tree = parser.parse_object_tree();
+        let _tree = parser.parse().object_tree();
         context.assert_success();
 
         println!("\n--------\nSuccess!\n--------");

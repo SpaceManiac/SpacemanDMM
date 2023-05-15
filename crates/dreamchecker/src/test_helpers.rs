@@ -14,9 +14,10 @@ pub fn parse_a_file_for_test<S: Into<Cow<'static, str>>>(buffer: S) -> Context {
 
     let mut parser = dm::parser::Parser::new(&context, indents);
     parser.enable_procs();
-    let tree = parser.parse_object_tree();
+    let mut syntax_tree = parser.parse();
+    let objtree = syntax_tree.object_tree();
 
-    run_inner(&context, &tree, false);
+    run_inner(&context, &objtree, false);
 
     context
 }

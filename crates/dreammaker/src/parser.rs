@@ -6,10 +6,10 @@ use std::ops::Range;
 use std::str::FromStr;
 
 use crate::ast;
+use crate::syntax_tree::{SyntaxTree, TreeBlockBuilder, TreeEntryBuilder};
 
 use super::{DMError, Location, HasLocation, Context, Severity, FileId};
 use super::lexer::{LocatedToken, Token, Punctuation};
-use super::objtree::{ObjectTreeBuilder, ObjectTree, NodeIndex};
 use super::annotation::*;
 use super::ast::*;
 use super::docs::*;
@@ -53,11 +53,11 @@ macro_rules! leading {
 ///
 /// Compilation failures will return a best-effort parse, and diagnostics will
 /// be registered with the provided `Context`.
-pub fn parse<I>(context: &Context, iter: I) -> ObjectTree
+pub fn parse<I>(context: &Context, iter: I) -> SyntaxTree
 where
     I: IntoIterator<Item=LocatedToken>,
 {
-    Parser::new(context, iter.into_iter()).parse_object_tree()
+    Parser::new(context, iter.into_iter()).parse()
 }
 
 /// Parse a token stream into an expression.
@@ -285,7 +285,6 @@ enum LoopContext {
 pub struct Parser<'ctx, 'an, 'inp> {
     context: &'ctx Context,
     annotations: Option<&'an mut AnnotationTree>,
-    tree: ObjectTreeBuilder,
     fatal_errored: bool,
 
     input: Box<dyn Iterator<Item=LocatedToken> + 'inp>,
@@ -317,7 +316,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         Parser {
             context,
             annotations: None,
-            tree: Default::default(),
             fatal_errored: false,
 
             input: Box::new(input.into_iter()),
@@ -347,38 +345,24 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         self.procs = true;
     }
 
-    pub fn parse_object_tree(mut self) -> ObjectTree {
-        self.tree.register_builtins();
-        self.run();
-        self.finalize_object_tree()
+    pub fn parse(mut self) -> SyntaxTree<'ctx> {
+        self.run()
     }
 
-    pub fn parse_object_tree_2(mut self) -> (bool, ObjectTree) {
-        self.tree.register_builtins();
-        self.run();
-        (self.fatal_errored, self.finalize_object_tree())
+    pub fn parse_2(mut self) -> (bool, SyntaxTree<'ctx>) {
+        let tree = self.run();
+        (self.fatal_errored, tree)
     }
 
-    #[doc(hidden)]
-    pub fn parse_object_tree_without_builtins(mut self) -> ObjectTree {
-        self.run();
-        self.tree.skip_finish()
-    }
-
-    pub fn parse_with_module_docs(mut self) -> (ObjectTree, BTreeMap<FileId, Vec<(u32, DocComment)>>) {
-        self.tree.register_builtins();
-        self.run();
+    pub fn parse_with_module_docs(mut self) -> (SyntaxTree<'ctx>, BTreeMap<FileId, Vec<(u32, DocComment)>>) {
+        let tree = self.run();
         let docs = std::mem::take(&mut self.module_docs);
-        (self.finalize_object_tree(), docs)
+        (tree, docs)
     }
 
-    pub fn parse_annotations_only(mut self, annotations: &'an mut AnnotationTree) {
-        self.annotate_to(annotations);
-        self.run();
-    }
-
-    fn run(&mut self) {
-        let root = self.root();
+    fn run(&mut self) -> SyntaxTree<'ctx> {
+        let mut tree = SyntaxTree::new(self.context);
+        let root = self.root(&mut tree);
         if let Err(mut e) = self.require(root) {
             let loc = e.location();
             e = e.set_severity(Severity::Error);
@@ -387,11 +371,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             self.fatal_errored = true;
             self.context.register_error(e);
         }
-    }
 
-    fn finalize_object_tree(self) -> ObjectTree {
-        let procs_total = self.procs_good + self.procs_bad;
         if self.procs_bad > 0 {
+            let procs_total = self.procs_good + self.procs_bad;
             eprintln!(
                 "parsed {}/{} proc bodies ({}%)",
                 self.procs_good,
@@ -400,7 +382,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             );
         }
 
-        self.tree.finish(self.context, self.fatal_errored)
+        tree.finish(self.fatal_errored);
+
+        tree
     }
 
     // ------------------------------------------------------------------------
@@ -462,6 +446,20 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     }
                     DocTarget::EnclosingItem => self.docs_enclosing.push(dc),
                     DocTarget::FollowingItem => self.docs_following.push(dc),
+                },
+                // TODO
+                Some(LocatedToken {
+                    location: _location,
+                    token: Token::MacroUse(_),
+                }) => {
+                    continue;
+                },
+                // TODO
+                Some(LocatedToken {
+                    location: _location,
+                    token: Token::MacroExit,
+                }) => {
+                    continue;
                 },
                 Some(token) => {
                     self.expected.clear();
@@ -584,17 +582,17 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     // ------------------------------------------------------------------------
     // Object tree - root
 
-    fn root(&mut self) -> Status<()> {
-        self.tree_entries(self.tree.root_index(), None, None, Token::Eof)
+    fn root(&mut self, tree: &mut SyntaxTree) -> Status<()> {
+        self.tree_entries(tree.build_root(), None, None, Token::Eof)
     }
 
-    fn tree_block(&mut self, current: NodeIndex, proc_kind: Option<ProcDeclKind>, var_type: Option<VarTypeBuilder>) -> Status<()> {
+    fn tree_block(&mut self, current: &mut TreeEntryBuilder, proc_kind: Option<ProcDeclKind>, var_type: Option<VarTypeBuilder>) -> Status<()> {
         leading!(self.exact(Token::Punct(Punctuation::LBrace)));
-        require!(self.tree_entries(current, proc_kind, var_type, Token::Punct(Punctuation::RBrace)));
+        require!(self.tree_entries(current.as_block(), proc_kind, var_type, Token::Punct(Punctuation::RBrace)));
         SUCCESS
     }
 
-    fn tree_entries(&mut self, current: NodeIndex, proc_kind: Option<ProcDeclKind>, var_type: Option<VarTypeBuilder>, terminator: Token) -> Status<()> {
+    fn tree_entries(&mut self, mut current: TreeBlockBuilder, proc_kind: Option<ProcDeclKind>, var_type: Option<VarTypeBuilder>, terminator: Token) -> Status<()> {
         loop {
             let message: Cow<'static, str> = match terminator {
                 Token::Eof => "newline".into(),
@@ -607,7 +605,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 continue;
             }
             self.put_back(next);
-            require!(self.tree_entry(current, proc_kind, var_type.clone()));
+            require!(self.tree_entry(&mut current, proc_kind, var_type.clone()));
         }
         SUCCESS
     }
@@ -692,7 +690,11 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }
     }
 
-    fn tree_entry(&mut self, mut current: NodeIndex, mut proc_kind: Option<ProcDeclKind>, mut var_type: Option<VarTypeBuilder>) -> Status<()> {
+    fn tree_entry(
+        &mut self,
+        block: &mut TreeBlockBuilder,
+        mut proc_kind: Option<ProcDeclKind>,
+        mut var_type: Option<VarTypeBuilder>) -> Status<()> {
         // tree_entry :: path ';'
         // tree_entry :: path tree_block
         // tree_entry :: path '=' expression ';'
@@ -707,15 +709,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         // read and calculate the current path
         let (absolute, mut path) = leading!(self.tree_path(false));
 
-        if absolute && current != self.tree.root_index() {
-            DMError::new(entry_start, format!("nested absolute path inside {}", self.tree.get_path(current)))
-                .set_severity(Severity::Warning)
-                .register(self.context);
-            current = self.tree.root_index();
-        }
+        let is_root = block.is_root();
 
-        let path_len = path.len();
-        let (last_part, traverse) = match path.split_last_mut() {
+        let (last_part, traverse_mut) = match path.split_last_mut() {
             Some(x) => x,
             None => {
                 self.error("what?")
@@ -723,6 +719,10 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 return SUCCESS;
             }
         };
+
+        let traverse = traverse_mut.as_ref();
+
+        let mut type_segments = Vec::default();
 
         let mut relative_type_location = None;
         macro_rules! traverse_tree {
@@ -742,9 +742,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     self.error("cannot have sub-blocks of `proc/` block")
                         .register(self.context);
                 } else {
-                    let len = self.tree.get_path(current).chars().filter(|&c| c == '/').count() + path_len;
-                    current = self.tree.subtype_or_add(self.location, current, each, len);
-
+                    type_segments.push(each.to_owned());
                     if !absolute && self.context.config().code_standards.disallow_relative_type_definitions {
                         relative_type_location = Some(self.location);
                     }
@@ -776,6 +774,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Default::default()
         };
 
+        let mut current;
+        let mut current_path = None;
         // read the contents for real
         match self.next("contents")? {
             t @ Punct(LBrace) => {
@@ -785,21 +785,24 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 handle_relative_type_error!();
                 let start = self.updated_location();
 
+                current = block.entry(type_segments, entry_start, absolute);
+
                 if proc_kind.is_some() || var_type.is_some() {
                     // Can't apply docs to `var/` or `proc/` blocks.
-                    require!(self.tree_block(current, proc_kind, var_type.clone()));
+                    require!(self.tree_block(&mut current, proc_kind, var_type.clone()));
                 } else {
-                    let (comment, ()) = require!(self.doc_comment(|this| this.tree_block(current, proc_kind, var_type.clone())));
-                    self.tree.extend_docs(current, comment);
+                    let (comment, ()) = require!(self.doc_comment(|this| this.tree_block(&mut current, proc_kind, var_type.clone())));
+                    current.extend_docs(comment);
                 }
 
-                let node = self.tree.get_path(current).to_owned();
-                self.annotate(start, || Annotation::TreeBlock(reconstruct_path(&node, proc_kind, var_type.as_ref(), "")));
-                SUCCESS
+                current_path = Some(current.get_path());
+                self.annotate(start, || Annotation::TreeBlock(reconstruct_path(current_path.as_ref().unwrap(), proc_kind, var_type.as_ref(), "")));
             }
             Punct(Assign) => {
                 // `something=` - var
                 handle_relative_type_error!();
+
+                current = block.entry(type_segments, entry_start, absolute);
                 let location = self.location;
 
                 // kind of goofy, but allows "enclosing" doc comments at the end of the line
@@ -810,8 +813,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
                     // We have to annotate prior to consuming the statement terminator, as we
                     // will otherwise consume following whitespace resulting in a bad annotation range
-                    let node = this.tree.get_path(current).to_owned();
-                    this.annotate(entry_start, || Annotation::Variable(reconstruct_path(&node, proc_kind, var_type.as_ref(), last_part)));
+                    current_path = Some(current.get_path());
+                    this.annotate(entry_start, || Annotation::Variable(reconstruct_path(current_path.as_ref().unwrap(), proc_kind, var_type.as_ref(), last_part)));
 
                     require!(this.statement_terminator());
                     success(expr)
@@ -819,23 +822,22 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
                 if let Some(mut var_type) = var_type {
                     var_type.suffix(&var_suffix);
-                    self.tree.declare_var(current, last_part, location, docs, var_type.build(), Some(expression));
+                    current.as_var(last_part.to_owned(), location, docs, Some(var_type.build()), Some(expression));
                 } else {
-                    self.tree.override_var(current, last_part, location, docs, expression);
+                    current.as_var(last_part.to_owned(), location, docs, None, Some(expression));
                 }
-
-                SUCCESS
             }
             t @ Punct(LParen) => {
                 // `something(` - proc
                 self.put_back(t);
-                require!(self.proc_params_and_body(current, proc_kind, last_part, entry_start, absolute));
-                SUCCESS
+                current = block.entry(type_segments, entry_start, absolute);
+                require!(self.proc_params_and_body(&mut current, last_part.to_owned(), proc_kind));
             }
             other => {
                 // usually `thing;` - a contentless declaration
                 // TODO: allow enclosing-targeting docs here somehow?
                 self.put_back(other);
+                current = block.entry(type_segments, entry_start, absolute);
 
                 if last_part == "var" {
                     self.error("`var;` item has no effect")
@@ -849,9 +851,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     } else {
                         let docs = std::mem::take(&mut self.docs_following);
                         var_type.suffix(&var_suffix);
-                        let node = self.tree.get_path(current).to_owned();
-                        self.annotate(entry_start, || Annotation::Variable(reconstruct_path(&node, proc_kind, Some(&var_type), last_part)));
-                        self.tree.declare_var(current, last_part, self.location, docs, var_type.build(), var_suffix.into_initializer());
+                        current_path = Some(current.get_path());
+                        self.annotate(entry_start, || Annotation::Variable(reconstruct_path(current_path.as_ref().unwrap(), proc_kind, Some(&var_type), last_part)));
+                        current.as_var(last_part.to_owned(), self.updated_location(), docs, Some(var_type.build()), var_suffix.into_initializer());
                     }
                 } else if ProcDeclKind::from_name(last_part).is_some() {
                     self.error("`proc;` item has no effect")
@@ -863,18 +865,29 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 } else {
                     handle_relative_type_error!();
                     let docs = std::mem::take(&mut self.docs_following);
-                    let len = self.tree.get_path(current).chars().filter(|&c| c == '/').count() + path_len;
-                    current = self.tree.subtype_or_add(self.location, current, last_part, len);
-                    self.tree.extend_docs(current, docs);
+                    current.extend_docs(docs);
                 }
-
-                SUCCESS
             }
         }
+
+        if absolute && !is_root {
+            DMError::new(entry_start, format!("nested absolute path inside {}", current_path.unwrap_or_else(|| current.get_path()).join("/")))
+                .set_severity(Severity::Warning)
+                .register(self.context);
+        }
+
+        current.finish(self.updated_location(), Default::default());
+        SUCCESS
     }
 
+/*
+    fn clear_pollution(&mut self) -> HashSet<String> {
+        self.active_macro_pollution.take().unwrap_or(HashSet::default())
+    } */
+
     // ------------------------------------------------------------------------
-    // Object tree - Vars
+    // Syntax tree - Vars
+
 
     // ------------------------------------------------------------------------
     // Object tree - Procs
@@ -948,7 +961,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         SUCCESS
     }
 
-    fn proc_params_and_body(&mut self, current: NodeIndex, proc_kind: Option<ProcDeclKind>, name: &str, entry_start: Location, absolute: bool) -> Status<()> {
+    fn proc_params_and_body(&mut self, current: &mut TreeEntryBuilder, name: String, proc_kind: Option<ProcDeclKind>) -> Status<()> {
         use super::lexer::Token::*;
         use super::lexer::Punctuation::*;
 
@@ -1007,24 +1020,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             None
         };
 
-        match self.tree.register_proc(self.context, location, current, name, proc_kind, parameters, code) {
-            Ok((idx, proc)) => {
-                proc.docs.extend(comment);
-                // manually performed for borrowck reasons
-                if let Some(dest) = self.annotations.as_mut() {
-                    let new_stack = reconstruct_path(self.tree.get_path(current), proc_kind, None, name);
-                    dest.insert(entry_start..body_start, Annotation::ProcHeader(new_stack.to_vec(), idx));
-                    dest.insert(body_start..self.location, Annotation::ProcBody(new_stack.to_vec(), idx));
-                }
-                if !absolute && self.context.config().code_standards.disallow_relative_proc_definitions {
-                    DMError::new(location, "relatively pathed proc defined here")
-                        .set_severity(Severity::Warning)
-                        .register(self.context);
-                }
-            }
-            Err(e) => self.context.register_error(e),
-        };
-
+        current.as_proc(name, location, proc_kind, parameters, code, comment, body_start);
         SUCCESS
     }
 
@@ -2360,9 +2356,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     }
 }
 
-fn reconstruct_path(node: &str, proc_kind: Option<ProcDeclKind>, var_type: Option<&VarTypeBuilder>, last: &str) -> Vec<Ident> {
+fn reconstruct_path(node: &Vec<String>, proc_kind: Option<ProcDeclKind>, var_type: Option<&VarTypeBuilder>, last: &str) -> Vec<Ident> {
     let mut result = Vec::new();
-    for entry in node.split('/').skip(1) {
+    for entry in node {
         result.push(entry.to_owned());
     }
     if let Some(kind) = proc_kind {

@@ -1016,9 +1016,16 @@ impl<'ctx> Preprocessor<'ctx> {
                 match expansion {
                     Some((location, Define::Constant { subst, docs })) => {
                         self.annotate_macro(ident, location, Some(docs.clone()));
+
+                        let mut tokens: VecDeque<Token> = subst.into_iter().collect();
+                        tokens.reserve(2);
+
+                        tokens.push_front(Token::MacroUse(ident.to_owned()));
+                        tokens.push_back(Token::MacroExit);
+
                         self.include_stack.stack.push(Include::Expansion {
                             //name: ident.to_owned(),
-                            tokens: subst.into_iter().collect(),
+                            tokens: tokens,
                             location: self.last_input_loc,
                         });
                         return Ok(());
@@ -1083,6 +1090,8 @@ impl<'ctx> Preprocessor<'ctx> {
 
                         // paste them into the expansion
                         let mut expansion = VecDeque::new();
+                        expansion.push_back(Token::MacroUse(ident.to_owned()));
+
                         let mut input = subst.iter().cloned();
                         while let Some(token) = input.next() {
                             match token {
@@ -1163,6 +1172,9 @@ impl<'ctx> Preprocessor<'ctx> {
                                 _ => expansion.push_back(token),
                             }
                         }
+
+                        expansion.push_back(Token::MacroExit);
+
                         self.include_stack.stack.push(Include::Expansion {
                             //name: ident.to_owned(),
                             tokens: expansion,

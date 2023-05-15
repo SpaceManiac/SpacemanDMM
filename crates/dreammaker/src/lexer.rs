@@ -260,6 +260,10 @@ pub enum Token {
     Float(f32),
     /// A documentation comment.
     DocComment(DocComment),
+    /// Start of invocation of a macro
+    MacroUse(String),
+    /// End of invocation of a macro
+    MacroExit,
 }
 
 impl Token {
@@ -360,6 +364,8 @@ impl fmt::Display for Token {
             Int(i) => FormatFloat(i as f32).fmt(f),
             Float(i) => FormatFloat(i).fmt(f),
             DocComment(ref c) => write!(f, "{}", c),
+            MacroUse(ref name) => write!(f, "{}", name),
+            MacroExit => write!(f, "__MACRO_EXIT__"),
         }
     }
 }

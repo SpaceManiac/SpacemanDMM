@@ -86,7 +86,7 @@ impl Context {
         };
         let indents = dm::indents::IndentProcessor::new(&self.dm_context, pp);
         let parser = dm::parser::Parser::new(&self.dm_context, indents);
-        self.objtree = parser.parse_object_tree();
+        self.objtree = parser.parse().object_tree();
     }
 }
 
