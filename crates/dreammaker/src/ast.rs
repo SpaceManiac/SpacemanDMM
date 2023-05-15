@@ -1,7 +1,7 @@
 //! The DM abstract syntax tree.
 //!
 //! Most AST types can be pretty-printed using the `Display` trait.
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 use std::fmt;
 use std::iter::FromIterator;
 use phf::phf_map;
@@ -14,7 +14,6 @@ use crate::{
     annotation::{AnnotationTree, Annotation},
     docs::DocCollection,
     error::Location,
-    lexer::Token,
     objtree::*
 };
 
@@ -1323,15 +1322,12 @@ pub enum TreeEntryData {
 }
 
 pub struct TreeEntry {
-    leading_path: Vec<String>,
-    start: Location,
-    end: Location,
-    absolute: bool,
-    data: TreeEntryData,
-    docs: DocCollection,
-
-    // Macro usage that affects the integrity of this TreeEntry
-    macro_pollution: HashSet<String>,
+    pub leading_path: Vec<String>,
+    pub start: Location,
+    pub end: Location,
+    pub absolute: bool,
+    pub data: TreeEntryData,
+    pub docs: DocCollection,
 }
 
 impl TreeEntry {
@@ -1344,7 +1340,6 @@ impl TreeEntry {
             absolute,
             data: TreeEntryData::Decl,
             docs: DocCollection::default(),
-            macro_pollution: HashSet::default()
         }
     }
 }
@@ -1361,22 +1356,21 @@ impl<'entry> TreeEntryBuilder<'entry> {
         path
     }
 
-    pub fn finish(mut self, end: Location, macro_pollution: HashSet<String>) {
+    pub fn finish(mut self, end: Location) {
         self.tree_entry.end = end;
-        self.tree_entry.macro_pollution = macro_pollution;
     }
 
     pub fn extend_docs(&mut self, docs: DocCollection) {
         self.tree_entry.docs.extend(docs)
     }
 
-    pub fn as_block<'s>(&'s mut self) -> TreeBlockBuilder<'s> {
+    pub fn as_block<'s>(&'s mut self, start: Location) -> EmptyTreeBlockBuilder<'s> {
         assert!(matches!(self.tree_entry.data, TreeEntryData::Decl));
-        self.tree_entry.data = TreeEntryData::Block(TreeBlock::default());
+        self.tree_entry.data = TreeEntryData::Block(TreeBlock::new(start));
 
         let parent_path = self.get_path();
         if let TreeEntryData::Block(block) = &mut self.tree_entry.data {
-            return TreeBlockBuilder {
+            return EmptyTreeBlockBuilder {
                 parent_path,
                 tree_block: block
             }
@@ -1454,22 +1448,71 @@ impl<'entry> TreeEntryBuilder<'entry> {
     }
 }
 
-#[derive(Default)]
 pub struct TreeBlock {
-    entries: Vec<TreeEntry>,
+    pub start: Location,
+    pub entries: Vec<TreeEntry>,
 }
 
-pub struct TreeBlockBuilder<'entry> {
+impl TreeBlock {
+    fn new(start: Location) -> Self {
+        TreeBlock {
+            start,
+            entries: Default::default()
+        }
+    }
+}
+
+pub trait TreeBlockBuilder<'entry> {
+    fn is_root(&self) -> bool;
+    fn entry<'s>(&'s mut self, relative_path: Vec<String>, location: Location, absolute: bool) -> TreeEntryBuilder<'s>;
+}
+
+pub struct EmptyTreeBlockBuilder<'entry> {
     parent_path: Vec<String>,
     tree_block: &'entry mut TreeBlock,
 }
 
-impl<'entry> TreeBlockBuilder<'entry> {
-    pub fn is_root(&self) -> bool {
+impl<'entry> Drop for EmptyTreeBlockBuilder<'entry> {
+    fn drop(&mut self) {
+        self.tree_block.entries.shrink_to_fit();
+    }
+}
+
+impl<'entry> TreeBlockBuilder<'entry> for EmptyTreeBlockBuilder<'entry> {
+    fn is_root(&self) -> bool {
         self.parent_path.len() == 0
     }
 
-    pub fn entry<'s>(&'s mut self, relative_path: Vec<String>, location: Location, absolute: bool) -> TreeEntryBuilder<'s> {
+    fn entry<'s>(&'s mut self, relative_path: Vec<String>, location: Location, absolute: bool) -> TreeEntryBuilder<'s> {
+        self.tree_block.entries.push(TreeEntry::new(relative_path, location, absolute));
+        TreeEntryBuilder {
+            parent_path: &self.parent_path,
+            tree_entry: self.tree_block.entries.last_mut().unwrap(),
+        }
+    }
+}
+
+pub struct RangeTreeBlockBuilder {
+    expanded_range: interval_tree::RangeInclusive<Location>,
+    navigation_path: Vec<usize>,
+    parent_path: Vec<String>,
+    tree_block: TreeBlock,
+    insert_index: usize,
+    span: usize,
+}
+
+impl RangeTreeBlockBuilder {
+    pub fn parse_range(&self) -> interval_tree::RangeInclusive<Location> {
+        self.expanded_range
+    }
+}
+
+impl<'entry> TreeBlockBuilder<'entry> for RangeTreeBlockBuilder {
+    fn is_root(&self) -> bool {
+        self.parent_path.len() == 0
+    }
+
+    fn entry<'s>(&'s mut self, relative_path: Vec<String>, location: Location, absolute: bool) -> TreeEntryBuilder<'s> {
         self.tree_block.entries.push(TreeEntry::new(relative_path, location, absolute));
         TreeEntryBuilder {
             parent_path: &self.parent_path,
@@ -1480,7 +1523,6 @@ impl<'entry> TreeBlockBuilder<'entry> {
 
 pub struct SyntaxTree<'ctx> {
     context: &'ctx Context,
-    tokens: Vec<Token>,
     define_history: Option<DefineHistory>,
     root: TreeBlock,
     parser_fatal_errored: bool,
@@ -1490,8 +1532,7 @@ impl<'ctx> SyntaxTree<'ctx> {
     pub fn new(context: &'ctx Context) -> Self {
         SyntaxTree {
             context,
-            tokens: Default::default(),
-            root: Default::default(),
+            root: TreeBlock::new(Location::builtins()),
             parser_fatal_errored: false,
             define_history: None,
         }
@@ -1501,18 +1542,98 @@ impl<'ctx> SyntaxTree<'ctx> {
         &self.root
     }
 
-    pub(crate) fn build_root<'s>(&'s mut self) -> TreeBlockBuilder<'s> {
-        TreeBlockBuilder {
+    pub(crate) fn build_root<'s>(&'s mut self) -> EmptyTreeBlockBuilder<'s> {
+        EmptyTreeBlockBuilder {
             parent_path: Vec::default(),
             tree_block: &mut self.root
         }
     }
 
-    pub(crate) fn finish(&mut self, tokens: Vec<Token>, parser_fatal_errored: bool) {
-        self.root.entries.shrink_to_fit();
-        self.tokens = tokens;
-        self.tokens.shrink_to_fit();
+    pub(crate) fn rebuild_range(&mut self, range: interval_tree::RangeInclusive<Location>) -> RangeTreeBlockBuilder {
+        debug_assert_eq!(range.start.file, range.end.file);
+
+        let mut stack = VecDeque::with_capacity(1);
+        stack.push_back(&mut self.root);
+
+        let mut builder = RangeTreeBlockBuilder {
+            expanded_range: range,
+            navigation_path: Vec::default(),
+            parent_path: Vec::default(),
+            tree_block: TreeBlock::new(Location::builtins()), // location will be properly set on insert
+            insert_index: 0,
+            span: 0,
+        };
+
+        let file_list = self.context.file_list();
+        while let Some(current_block) = stack.pop_back() {
+            let mut block_start_index = 0;
+            for (index, entry) in current_block.entries.iter_mut().enumerate() {
+                let past_relevance = entry.start > range.end;
+                if past_relevance {
+                    // if we get here, just append it to the start of the current block, because that's what's happening
+                    // it's also possible that current_block's typepath header is being messed with
+                    builder.insert_index = index;
+                    return builder;
+                }
+
+                let starts_before = file_list.include_aware_gt(&range.start, &entry.start) && file_list.include_aware_gte(&entry.end, &range.start);
+                let ends_after = file_list.include_aware_gt(&entry.end, &range.end);
+                if starts_before && ends_after {
+                    if let TreeEntryData::Block(block) = &mut entry.data {
+                        if file_list.include_aware_gt(&range.start, &block.start) {
+                            builder.navigation_path.push(index);
+                            builder.parent_path.extend(entry.leading_path.iter().cloned());
+                            stack.push_back(block);
+                            break;
+                        }
+                    }
+
+                    // rebuild the whole entry, no taking chances
+                    builder.expanded_range = interval_tree::range(entry.start, entry.end);
+                    builder.insert_index = index;
+                    builder.span = 1;
+                    return builder;
+                }
+
+                if starts_before {
+                    block_start_index = index;
+                } else if ends_after {
+                    builder.insert_index = block_start_index;
+                    builder.span = (index + 1) - block_start_index;
+                    return builder;
+                }
+            }
+        }
+
+        // if we get HERE that means we were dealing with an empty tree to begin with vOv
+        debug_assert!(builder.navigation_path.is_empty());
+        builder
+    }
+
+    pub(crate) fn finish(&mut self, block_to_merge: Option<RangeTreeBlockBuilder>, parser_fatal_errored: bool) {
         self.parser_fatal_errored = parser_fatal_errored;
+        if let Some(merge_block) = block_to_merge {
+            let mut current_block = &mut self.root;
+            for index in &merge_block.navigation_path {
+                let entry = &mut current_block.entries[*index];
+                if let TreeEntryData::Block(block) = &mut entry.data {
+                    current_block = block;
+                } else {
+                    panic!("Bad navigation path!");
+                }
+            }
+
+            for _count in 0..merge_block.span {
+                current_block.entries.remove(merge_block.insert_index);
+            }
+
+            current_block.entries.reserve(merge_block.tree_block.entries.len());
+
+            let index = merge_block.insert_index;
+            for entry in merge_block.tree_block.entries {
+                current_block.entries.insert(index, entry);
+            }
+        }
     }
 
     pub fn defines(&self) -> Option<&DefineHistory> {
@@ -1523,7 +1644,7 @@ impl<'ctx> SyntaxTree<'ctx> {
         self.define_history = Some(history);
     }
 
-    pub fn object_tree_without_builtins(&mut self) -> ObjectTree {
+    pub fn object_tree_without_builtins(&self) -> ObjectTree {
         let builder = self.generate_objtree(None, false);
         builder.finish(self.context, self.parser_fatal_errored)
     }
@@ -1537,7 +1658,7 @@ impl<'ctx> SyntaxTree<'ctx> {
         self.generate_objtree(Some(annotations), true);
     }
 
-    pub fn object_tree(&mut self) -> ObjectTree {
+    pub fn object_tree(&self) -> ObjectTree {
         let builder = self.generate_objtree(None, true);
         builder.finish(self.context, self.parser_fatal_errored)
     }

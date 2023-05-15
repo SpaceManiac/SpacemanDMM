@@ -19,6 +19,18 @@ fn var_redec() {
     check_errors_match(code, VAR_DEC_ERRORS);
 }
 
+#[test]
+fn var_override_good() {
+    let code = r##"
+/atom/movable
+    var/foo = 4
+
+/mob/subtype
+    foo = 5
+"##.trim();
+    check_errors_match(code, &[]);
+}
+
 pub const VAR_FINAL_ERRORS: &[(u32, u16, &str)] = &[
     (5, 9, "/mob/subtype overrides final var \"foo\""),
 ];

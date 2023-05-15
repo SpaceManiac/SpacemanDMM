@@ -7,6 +7,7 @@ use std::collections::HashMap;
 
 use ahash::RandomState;
 
+use interval_tree::RangeInclusive;
 use termcolor::{ColorSpec, Color};
 
 use crate::config::Config;
@@ -33,6 +34,10 @@ pub struct FileList {
     files: RefCell<Vec<PathBuf>>,
     /// Reverse mapping from paths to file numbers.
     reverse_files: RefCell<HashMap<PathBuf, FileId, RandomState>>,
+    /// Mapping of files -> files they include + sorted line numbers.
+    included_files: RefCell<Vec<Vec<(FileId, u32)>>>,
+    /// Mapping of file -> file that includes them and where.
+    reverse_included_files: RefCell<HashMap<FileId, (FileId, u32)>>,
 }
 
 /// A diagnostics context, tracking loaded files and any observed errors.
@@ -50,7 +55,7 @@ pub struct Context {
 
 impl FileList {
     /// Add a new file to the context and return its index.
-    pub fn register(&self, path: &Path) -> FileId {
+    pub fn register(&self, path: &Path, include_location: Option<Location>) -> FileId {
         if let Some(id) = self.reverse_files.borrow().get(path).cloned() {
             return id;
         }
@@ -62,7 +67,100 @@ impl FileList {
         files.push(path.to_owned());
         let id = FileId(len + FILEID_MIN.0);
         self.reverse_files.borrow_mut().insert(path.to_owned(), id);
+
+        self.included_files.borrow_mut().push(Vec::default());
+        if let Some(include_loc) = include_location {
+            let idx = include_loc.file.0 as usize;
+            let includes_vec = &mut self.included_files.borrow_mut()[idx];
+            // sorted insert. There can only be one include per line
+            let mut inserted = false;
+            let new_specifier = (include_loc.file, include_loc.line);
+            for index in 0..includes_vec.len(){
+                if includes_vec[index].1 > include_loc.line {
+                    includes_vec.insert(index, new_specifier);
+                    inserted = true;
+                    break;
+                }
+            }
+
+            if !inserted {
+                includes_vec.push(new_specifier);
+            }
+
+            self.reverse_included_files.borrow_mut().insert(id, new_specifier);
+        }
+
         id
+    }
+
+    // This fn is used a lot by reparsing so it needs to be fast af
+    pub fn include_aware_gt(&self, lhs: &Location, rhs: &Location) -> bool {
+        // common case
+        if lhs.file == rhs.file {
+            return lhs > rhs;
+        }
+
+        // Optimization: The second most common case. dm files are included by and only by the .dme
+        let reverse_included_files = self.reverse_included_files.borrow();
+        let lhs_parent_opt = reverse_included_files.get(&lhs.file);
+        let rhs_parent_opt = reverse_included_files.get(&rhs.file);
+
+        if let Some(lhs_parent) = lhs_parent_opt {
+            if let Some(rhs_parent) = rhs_parent_opt {
+                if lhs_parent.0 == rhs_parent.0 {
+                    return lhs_parent.1 > rhs_parent.1;
+                }
+
+                // super rare case to guard against, rhs was included from lhs
+                if rhs_parent.0 == lhs.file {
+                    return lhs.line > rhs_parent.1;
+                }
+
+                // proceed with true nested compare (slow, but rare)
+                // find a common ancestor
+                let mut lhs_walk = vec![lhs_parent];
+                let mut walker = lhs_parent;
+                while let Some(new_lhs_parent) = reverse_included_files.get(&walker.0) {
+                    walker = new_lhs_parent;
+                    lhs_walk.push(walker);
+                }
+
+                walker = rhs_parent;
+                while let Some(new_rhs_parent) = reverse_included_files.get(&walker.0) {
+                    if let Some(lhs_ancestor) = lhs_walk.iter().find(|lhs_known_include|lhs_known_include.0 == walker.0) {
+                        return lhs_ancestor.1 > new_rhs_parent.1;
+                    }
+
+                    walker = new_rhs_parent;
+                }
+
+                panic!("Files \"{}\" and \"{}\" do not share a common ancestor!", self.get_path(lhs.file).display(), self.get_path(rhs.file).display());
+            } else {
+                // RHS is in the .dme/root file, walk up to it and compare
+                let mut relevant_lhs = lhs_parent;
+                while let Some(new_lhs_parent) = reverse_included_files.get(&relevant_lhs.0) {
+                    relevant_lhs = new_lhs_parent;
+                }
+
+                assert_eq!(rhs.file, relevant_lhs.0);
+
+                relevant_lhs.1 > rhs.line
+            }
+        } else {
+            // Same as above case but with LHS
+            let mut relevant_rhs = rhs_parent_opt.unwrap(); // if this unwrap fails, it means both the lhs and rhs files are rooted but different somehow
+            while let Some(new_rhs_parent) = reverse_included_files.get(&relevant_rhs.0) {
+                relevant_rhs = new_rhs_parent;
+            }
+
+            assert_eq!(lhs.file, relevant_rhs.0);
+            lhs.line > relevant_rhs.1
+        }
+    }
+
+    pub fn include_aware_gte(&self, lhs: &Location, rhs: &Location) -> bool {
+        lhs == rhs
+        || self.include_aware_gt(lhs, rhs)
     }
 
     /// Look up a file's ID by its path, without inserting it.
@@ -96,8 +194,8 @@ impl Context {
     // Files
 
     /// Add a new file to the context and return its index.
-    pub fn register_file(&self, path: &Path) -> FileId {
-        self.files.register(path)
+    pub fn register_file(&self, path: &Path, parent: Option<Location>) -> FileId {
+        self.files.register(path, parent)
     }
 
     /// Look up a file's ID by its path, without inserting it.
@@ -126,7 +224,7 @@ impl Context {
         match Config::read_toml(toml) {
             Ok(config) => *self.config.borrow_mut() = config,
             Err(io_error) => {
-                let file = self.register_file(toml);
+                let file = self.register_file(toml, None);
                 let (line, column) = io_error.line_col().unwrap_or((1, 1));
                 DMError::new(Location { file, line, column }, "Error reading configuration file")
                     .with_boxed_cause(io_error.into_boxed_error())
@@ -185,7 +283,21 @@ impl Context {
                     .expect("error writing to stderr");
             }
         }
-        self.errors.borrow_mut().push(error);
+        let mut errors = self.errors.borrow_mut();
+
+        // reparses can duplicate errors, ignore them if they're an exact match
+        for existing_error in errors.iter() {
+            if error.eq(existing_error) {
+                return;
+            }
+        }
+
+        errors.push(error);
+    }
+
+    pub fn clear_errors(&self, range: &RangeInclusive<Location>) {
+        let mut errors = self.errors.borrow_mut();
+        errors.retain(|error|error.location < range.start || error.location > range.end);
     }
 
     /// Access the list of diagnostics generated so far.
@@ -423,7 +535,7 @@ pub struct DMError {
 }
 
 /// An additional note attached to an error, at some other location.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct DiagnosticNote {
     location: Location,
     description: String,
@@ -551,6 +663,20 @@ impl error::Error for DMError {
         self.cause.as_ref().map(|x| &**x as &dyn error::Error)
     }
 }
+
+impl PartialEq for DMError {
+    fn eq(&self, other: &Self) -> bool {
+        // ignore causes
+        self.location == other.location
+        && self.severity == other.severity
+        && self.component == other.component
+        && self.description == other.description
+        && self.notes == other.notes
+        && self.errortype == other.errortype
+    }
+}
+
+impl Eq for DMError{}
 
 impl Clone for DMError {
     fn clone(&self) -> DMError {

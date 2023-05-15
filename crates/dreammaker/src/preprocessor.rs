@@ -97,6 +97,10 @@ impl DefineHistory {
     /// the start of the given file.
     pub fn branch_at_file<'ctx2>(&self, file: FileId, context: &'ctx2 Context) -> Preprocessor<'ctx2> {
         let location = Location { file, line: 0, column: 0 };
+        self.branch_at(location, context)
+    }
+
+    pub fn branch_at<'ctx2>(&self, location: Location, context: &'ctx2 Context) -> Preprocessor<'ctx2> {
         let defines = DefineMap::from_history(self, location);
 
         Preprocessor {
@@ -145,6 +149,13 @@ impl DefineHistory {
             in_interp_string: 0,
             annotations: None,
         }
+    }
+
+    pub fn map_equals(&self, other: &DefineHistory) -> bool {
+        let ours = DefineMap::from_history(self, self.last_input_loc);
+        let theirs = DefineMap::from_history(other, other.last_input_loc);
+
+        ours.equals(&theirs)
     }
 }
 
@@ -238,7 +249,6 @@ impl DefineMap {
         map
     }
 
-    /*
     /// Test whether two DefineMaps are equal, ignoring definition locations.
     fn equals(&self, rhs: &DefineMap) -> bool {
         if self.len() != rhs.len() {
@@ -254,7 +264,6 @@ impl DefineMap {
             })
         })
     }
-    */
 }
 
 // ----------------------------------------------------------------------------
@@ -276,7 +285,7 @@ enum Include<'ctx> {
 
 impl<'ctx> Include<'ctx> {
     fn from_path(context: &'ctx Context, path: PathBuf) -> Result<Include<'ctx>, DMError> {
-        let idx = context.register_file(&path);
+        let idx = context.register_file(&path, None);
         Ok(Include::File {
             //file: idx,
             lexer: Lexer::from_file(context, idx, &path)?,
@@ -285,7 +294,7 @@ impl<'ctx> Include<'ctx> {
     }
 
     fn from_buffer(context: &'ctx Context, path: PathBuf, buffer: Cow<'ctx, [u8]>) -> Include<'ctx> {
-        let idx = context.register_file(&path);
+        let idx = context.register_file(&path, None);
         Include::File {
             //file: idx,
             lexer: Lexer::new(context, idx, buffer),
@@ -511,13 +520,25 @@ impl<'ctx> Preprocessor<'ctx> {
 
     /// Push a DM file to the top of this preprocessor's stack.
     pub fn push_file<R: io::Read + 'static>(&mut self, path: PathBuf, read: R) -> Result<FileId, DMError> {
-        let idx = self.context.register_file(&path);
+        let idx = self.context.register_file(&path, None);
         self.include_stack.stack.push(Include::File {
             lexer: Lexer::from_read(self.context, idx, read)?,
             //file: idx,
             path,
         });
         Ok(idx)
+    }
+
+    pub fn push_buffer<S: Into<Cow<'ctx, str>>>(&mut self, path: PathBuf, buffer: S) -> Result<(), DMError> {
+        let cow_u8 = match buffer.into() {
+            Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
+            Cow::Owned(s) => Cow::Owned(s.into_bytes()),
+        };
+
+        let include = Include::from_buffer(self.context, path, cow_u8);
+        self.include_stack.stack.push(include);
+
+        Ok(())
     }
 
     /// Enable source file annotations.
@@ -638,7 +659,7 @@ impl<'ctx> Preprocessor<'ctx> {
     // ------------------------------------------------------------------------
     // Internal utilities
 
-    fn prepare_include_file(&mut self, path: PathBuf) -> Result<Include<'ctx>, DMError> {
+    fn prepare_include_file(&mut self, path: PathBuf, include_location: Location) -> Result<Include<'ctx>, DMError> {
         // Attempt to open the file.
         let read = io::BufReader::new(File::open(&path).map_err(|e|
             DMError::new(self.last_input_loc, format!("failed to open file: #include {:?}", path))
@@ -649,7 +670,7 @@ impl<'ctx> Preprocessor<'ctx> {
 
         // Make sure the file hasn't already been included.
         // All DM source is effectively `#pragma once`.
-        let file_id = self.context.register_file(register);
+        let file_id = self.context.register_file(register, Some(include_location));
         if let Some(&loc) = self.include_locations.get(&file_id) {
             Err(DMError::new(self.last_input_loc, format!("duplicate #include {:?}", path))
                 .set_severity(Severity::Warning)
@@ -802,7 +823,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                 FileType::DMM => self.maps.push(candidate),
                                 FileType::DMF => self.skins.push(candidate),
                                 FileType::DMS => self.scripts.push(candidate),
-                                FileType::DM => match self.prepare_include_file(candidate) {
+                                FileType::DM => match self.prepare_include_file(candidate, include_loc) {
                                     Ok(include) => {
                                         // A phantom newline keeps the include
                                         // directive being indented from making

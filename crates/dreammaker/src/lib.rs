@@ -15,6 +15,15 @@ extern crate toml;
 use std::path::Path;
 use std::borrow::Cow;
 
+use annotation::AnnotationTree;
+pub use error::*;
+use ast::SyntaxTree;
+use interval_tree::RangeInclusive;
+use lexer::LocatedToken;
+
+use crate::indents::IndentProcessor;
+use crate::parser::Parser;
+
 #[allow(unused_macros)]
 macro_rules! try_iter {
     ($e:expr) => {
@@ -26,9 +35,6 @@ macro_rules! try_iter {
 }
 
 mod error;
-pub use error::*;
-use ast::SyntaxTree;
-
 // roughly in order of stage
 pub mod docs;
 pub mod lexer;
@@ -196,4 +202,49 @@ pub fn detect_environment_default() -> std::io::Result<Option<std::path::PathBuf
         // ... but without `./` preceding it.
         path.strip_prefix(".").map(|p| p.to_owned()).unwrap_or(path)
     }))
+}
+
+pub fn incremental_reparse<'ctx, S: Into<Cow<'ctx, str>>>(
+    context: &'ctx Context,
+    syntax_tree: SyntaxTree<'ctx>,
+    range: RangeInclusive<Location>,
+    file_buffer: S,
+    annotations_opt: Option<&mut AnnotationTree>) -> Result<(bool, SyntaxTree<'ctx>), DMError> {
+
+    // incremental parsing across files is not supported, do one at a time
+    // adding an #include line is still a one file change
+    assert_eq!(range.start.file, range.end.file);
+
+    // get our reference point define maps
+    let existing_defines = syntax_tree.defines().unwrap();
+    let mut preprocessor = existing_defines.branch_at(range.start, context);
+    let existing_defines_end = existing_defines.branch_at(Location {
+            file: range.end.file,
+            line: range.end.line + 1, // should be gucchi
+            column: 0,
+        }, context).finalize();
+
+    let path = context.file_list().get_path(range.start.file);
+
+    // Should not fail unless file_buffer is scuffed
+    preprocessor.push_buffer(path, file_buffer)?;
+
+    let indents = IndentProcessor::new(context, &mut preprocessor);
+
+    // preprocess before continuing
+    let tokens: Vec<LocatedToken> = indents.into_iter().collect();
+
+    let new_defines_end = preprocessor.finalize();
+
+    if !new_defines_end.map_equals(&existing_defines_end) {
+        // Slow AF, we have to re-preprocess everything after this point
+        todo!();
+    }
+
+    let mut parser = Parser::new(context, tokens);
+    if let Some(annotations) = annotations_opt {
+        parser.annotate_to(annotations);
+    }
+
+    Ok(parser.reparse_2(syntax_tree, range))
 }

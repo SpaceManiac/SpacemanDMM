@@ -5,6 +5,8 @@ use std::collections::BTreeMap;
 use std::ops::Range;
 use std::str::FromStr;
 
+use interval_tree::RangeInclusive;
+
 use crate::ast;
 
 use super::{DMError, Location, HasLocation, Context, Severity, FileId};
@@ -288,9 +290,9 @@ pub struct Parser<'ctx, 'an, 'inp> {
 
     input: Box<dyn Iterator<Item=LocatedToken> + 'inp>,
     eof: bool,
+    limit_range: Option<RangeInclusive<Location>>,
     possible_indentation_error: bool,
     next: Option<Token>,
-    tokens: Vec<Token>,
     location: Location,
     expected: Vec<Cow<'static, str>>,
 
@@ -320,9 +322,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
             input: Box::new(input.into_iter()),
             eof: false,
+            limit_range: None,
             possible_indentation_error: false,
             next: None,
-            tokens: Vec::with_capacity(14000000), // twice the size of /tg/ May '23
             location: Default::default(),
             expected: Vec::new(),
 
@@ -355,9 +357,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         (self.fatal_errored, tree)
     }
 
-    /// Attempt to reparse a pre-existing SyntaxTree. Requires that input tokens be only for the changed file
-    pub fn reparse_2(mut self, mut tree: SyntaxTree<'ctx>, from: &Location) -> (bool, SyntaxTree<'ctx>) {
-        todo!()
+    /// Attempt to reparse a pre-existing SyntaxTree. Requires that input tokens be only for the changed token range
+    pub fn reparse_2(mut self, mut tree: SyntaxTree<'ctx>, range: RangeInclusive<Location>) -> (bool, SyntaxTree<'ctx>) {
+        let mut block = tree.rebuild_range(range);
+        self.limit_range = Some(block.parse_range());
+        let root = self.root(&mut block);
+        self.finish(root, &mut tree, Some(block));
+
+        (self.fatal_errored, tree)
     }
 
     pub fn parse_with_module_docs(mut self) -> (SyntaxTree<'ctx>, BTreeMap<FileId, Vec<(u32, DocComment)>>) {
@@ -368,7 +375,15 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     fn run(&mut self) -> SyntaxTree<'ctx> {
         let mut tree = SyntaxTree::new(self.context);
-        let root = self.root(&mut tree);
+        let mut block = tree.build_root();
+        let root = self.root(&mut block);
+        drop(block);
+
+        self.finish(root, &mut tree, None);
+        tree
+    }
+
+    fn finish(&mut self, root: Status<()>, tree: &mut SyntaxTree, merge_block: Option<RangeTreeBlockBuilder>) {
         if let Err(mut e) = self.require(root) {
             let loc = e.location();
             e = e.set_severity(Severity::Error);
@@ -388,9 +403,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             );
         }
 
-        tree.finish(std::mem::replace(&mut self.tokens, Vec::default()), self.fatal_errored);
-
-        tree
+        tree.finish(merge_block, self.fatal_errored);
     }
 
     // ------------------------------------------------------------------------
@@ -440,9 +453,13 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 break Ok(next);
             }
 
-            let next_option = self.input.next();
-            if let Some(next) = &next_option {
-                self.tokens.push(next.token.to_owned());
+            let next_option: Option<LocatedToken> = self.input.next();
+            if let Some(limit) = self.limit_range {
+                if let Some(next) = &next_option {
+                    if limit.start > next.location || limit.end < next.location {
+                        continue;
+                    }
+                }
             }
 
             match next_option {
@@ -580,17 +597,19 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     // ------------------------------------------------------------------------
     // Object tree - root
 
-    fn root(&mut self, tree: &mut SyntaxTree) -> Status<()> {
-        self.tree_entries(tree.build_root(), None, None, Token::Eof)
+    fn root(&mut self, tree: &mut dyn TreeBlockBuilder) -> Status<()> {
+        self.tree_entries(tree, None, None, Token::Eof)
     }
 
     fn tree_block(&mut self, current: &mut TreeEntryBuilder, proc_kind: Option<ProcDeclKind>, var_type: Option<VarTypeBuilder>) -> Status<()> {
+        let location = self.updated_location();
         leading!(self.exact(Token::Punct(Punctuation::LBrace)));
-        require!(self.tree_entries(current.as_block(), proc_kind, var_type, Token::Punct(Punctuation::RBrace)));
+        let mut block = current.as_block(location);
+        require!(self.tree_entries(&mut block, proc_kind, var_type, Token::Punct(Punctuation::RBrace)));
         SUCCESS
     }
 
-    fn tree_entries(&mut self, mut current: TreeBlockBuilder, proc_kind: Option<ProcDeclKind>, var_type: Option<VarTypeBuilder>, terminator: Token) -> Status<()> {
+    fn tree_entries(&mut self, current: &mut dyn TreeBlockBuilder, proc_kind: Option<ProcDeclKind>, var_type: Option<VarTypeBuilder>, terminator: Token) -> Status<()> {
         loop {
             let message: Cow<'static, str> = match terminator {
                 Token::Eof => "newline".into(),
@@ -603,7 +622,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 continue;
             }
             self.put_back(next);
-            require!(self.tree_entry(&mut current, proc_kind, var_type.clone()));
+            require!(self.tree_entry(current, proc_kind, var_type.clone()));
         }
         SUCCESS
     }
@@ -690,7 +709,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     fn tree_entry(
         &mut self,
-        block: &mut TreeBlockBuilder,
+        block: &mut dyn TreeBlockBuilder,
         mut proc_kind: Option<ProcDeclKind>,
         mut var_type: Option<VarTypeBuilder>) -> Status<()> {
         // tree_entry :: path ';'
@@ -835,33 +854,39 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 // usually `thing;` - a contentless declaration
                 // TODO: allow enclosing-targeting docs here somehow?
                 self.put_back(other);
-                current = block.entry(type_segments, entry_start, absolute);
 
                 if last_part == "var" {
+                    current = block.entry(type_segments, entry_start, absolute);
                     self.error("`var;` item has no effect")
                         .set_severity(Severity::Warning)
                         .register(self.context);
                 } else if let Some(mut var_type) = var_type.take() {
                     if VarTypeFlags::from_name(last_part).is_some() {
+                        current = block.entry(type_segments, entry_start, absolute);
                         self.error(format!("`var/{};` item has no effect", last_part))
                             .set_severity(Severity::Warning)
                             .register(self.context);
                     } else {
                         let docs = std::mem::take(&mut self.docs_following);
                         var_type.suffix(&var_suffix);
+                        current = block.entry(type_segments, entry_start, absolute);
                         current_path = Some(current.get_path());
                         self.annotate(entry_start, || Annotation::Variable(reconstruct_path(current_path.as_ref().unwrap(), proc_kind, Some(&var_type), last_part)));
                         current.as_var(last_part.to_owned(), self.updated_location(), docs, Some(var_type.build()), var_suffix.into_initializer());
                     }
                 } else if ProcDeclKind::from_name(last_part).is_some() {
+                    current = block.entry(type_segments, entry_start, absolute);
                     self.error("`proc;` item has no effect")
                         .set_severity(Severity::Warning)
                         .register(self.context);
                 } else if proc_kind.is_some() {
+                    current = block.entry(type_segments, entry_start, absolute);
                     self.error("child of `proc/` without body")
                         .register(self.context);
                 } else {
                     handle_relative_type_error!();
+                    type_segments.push(last_part.to_owned());
+                    current = block.entry(type_segments, entry_start, absolute);
                     let docs = std::mem::take(&mut self.docs_following);
                     current.extend_docs(docs);
                 }
@@ -874,7 +899,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 .register(self.context);
         }
 
-        current.finish(self.updated_location(), Default::default());
+        current.finish(self.updated_location());
         SUCCESS
     }
 

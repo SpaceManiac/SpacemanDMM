@@ -88,7 +88,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     context.autodetect_config(&environment);
     context.set_print_severity(Some(dm::Severity::Error));
     let mut pp = dm::preprocessor::Preprocessor::new(&context, environment.clone())?;
-    let (mut syntax_tree, module_docs) = {
+    let (syntax_tree, module_docs) = {
         let indents = dm::indents::IndentProcessor::new(&context, &mut pp);
         let parser = dm::parser::Parser::new(&context, indents);
         parser.parse_with_module_docs()
