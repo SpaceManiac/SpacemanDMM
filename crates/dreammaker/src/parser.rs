@@ -355,6 +355,11 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         (self.fatal_errored, tree)
     }
 
+    /// Attempt to reparse a pre-existing SyntaxTree. Requires that input tokens be only for the changed file
+    pub fn reparse_2(mut self, mut tree: SyntaxTree<'ctx>, from: &Location) -> (bool, SyntaxTree<'ctx>) {
+        todo!()
+    }
+
     pub fn parse_with_module_docs(mut self) -> (SyntaxTree<'ctx>, BTreeMap<FileId, Vec<(u32, DocComment)>>) {
         let tree = self.run();
         let docs = std::mem::take(&mut self.module_docs);
@@ -453,20 +458,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     }
                     DocTarget::EnclosingItem => self.docs_enclosing.push(dc),
                     DocTarget::FollowingItem => self.docs_following.push(dc),
-                },
-                // TODO
-                Some(LocatedToken {
-                    location: _location,
-                    token: Token::MacroUse(_),
-                }) => {
-                    continue;
-                },
-                // TODO
-                Some(LocatedToken {
-                    location: _location,
-                    token: Token::MacroExit,
-                }) => {
-                    continue;
                 },
                 Some(token) => {
                     self.expected.clear();
