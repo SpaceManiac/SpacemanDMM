@@ -428,7 +428,7 @@ impl<'a> Engine<'a> {
         }
 
         // macros
-        if let Some(ref defines) = self.defines {
+        if let Some(defines) = self.syntax_tree.as_ref().map(|syntax_tree|syntax_tree.defines()).flatten() {
             // TODO: verify that the macro is in scope at the location
             for (_, &(ref name, ref define)) in defines.iter() {
                 if contains(name, query) {

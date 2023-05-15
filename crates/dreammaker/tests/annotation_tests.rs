@@ -28,9 +28,8 @@ fn annotation_basic() {
     let mut parser = Parser::new(&context, indent);
     parser.annotate_to(&mut annotations);
     let syntax_tree = parser.parse();
+    syntax_tree.annotate_only(&mut annotations);
     context.assert_success();
-    syntax_tree.object_tree_with_annotations(&mut annotations);
-    // can't check context here b/c there is guaranteed to be errors
     println!("len: {}", annotations.len());
     for each in annotations.get_location(Location {
         file: Default::default(),

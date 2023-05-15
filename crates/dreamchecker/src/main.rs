@@ -66,6 +66,7 @@ fn main() {
     parser.enable_procs();
     let (fatal_errored, mut syntax_tree) = parser.parse_2();
     let tree = syntax_tree.object_tree();
+    drop(syntax_tree);
 
     if !parse_only && !fatal_errored {
         dreamchecker::run_cli(&context, &tree);

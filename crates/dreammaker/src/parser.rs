@@ -290,6 +290,7 @@ pub struct Parser<'ctx, 'an, 'inp> {
     eof: bool,
     possible_indentation_error: bool,
     next: Option<Token>,
+    tokens: Vec<Token>,
     location: Location,
     expected: Vec<Cow<'static, str>>,
 
@@ -321,6 +322,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             eof: false,
             possible_indentation_error: false,
             next: None,
+            tokens: Vec::with_capacity(14000000), // twice the size of /tg/ May '23
             location: Default::default(),
             expected: Vec::new(),
 
@@ -381,7 +383,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             );
         }
 
-        tree.finish(self.fatal_errored);
+        tree.finish(std::mem::replace(&mut self.tokens, Vec::default()), self.fatal_errored);
 
         tree
     }
@@ -432,7 +434,13 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             if let Some(next) = self.next.take() {
                 break Ok(next);
             }
-            match self.input.next() {
+
+            let next_option = self.input.next();
+            if let Some(next) = &next_option {
+                self.tokens.push(next.token.to_owned());
+            }
+
+            match next_option {
                 Some(LocatedToken {
                     location,
                     token: Token::DocComment(dc),

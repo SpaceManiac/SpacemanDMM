@@ -6,6 +6,7 @@ use std::fmt;
 use std::iter::FromIterator;
 use phf::phf_map;
 
+use crate::preprocessor::DefineHistory;
 use crate::{
     Context,
     DMError,
@@ -13,7 +14,7 @@ use crate::{
     annotation::{AnnotationTree, Annotation},
     docs::DocCollection,
     error::Location,
-    lexer::{LocatedToken, Token},
+    lexer::Token,
     objtree::*
 };
 
@@ -1480,6 +1481,7 @@ impl<'entry> TreeBlockBuilder<'entry> {
 pub struct SyntaxTree<'ctx> {
     context: &'ctx Context,
     tokens: Vec<Token>,
+    define_history: Option<DefineHistory>,
     root: TreeBlock,
     parser_fatal_errored: bool,
 }
@@ -1491,50 +1493,63 @@ impl<'ctx> SyntaxTree<'ctx> {
             tokens: Default::default(),
             root: Default::default(),
             parser_fatal_errored: false,
+            define_history: None,
         }
-    }
-
-    pub fn object_tree_with_annotations(&self, annotations: &mut AnnotationTree) -> ObjectTree {
-        self.generate_objtree(Some(annotations), true)
-    }
-
-    pub fn object_tree(&mut self) -> ObjectTree {
-        self.generate_objtree(None, true)
     }
 
     pub fn root(&self) -> &TreeBlock {
         &self.root
     }
 
-    pub(crate) fn build_root(&mut self) -> TreeBlockBuilder {
+    pub(crate) fn build_root<'s>(&'s mut self) -> TreeBlockBuilder<'s> {
         TreeBlockBuilder {
             parent_path: Vec::default(),
             tree_block: &mut self.root
         }
     }
 
-    pub(crate) fn finish(&mut self, parser_fatal_errored: bool) {
+    pub(crate) fn finish(&mut self, tokens: Vec<Token>, parser_fatal_errored: bool) {
         self.root.entries.shrink_to_fit();
+        self.tokens = tokens;
+        self.tokens.shrink_to_fit();
         self.parser_fatal_errored = parser_fatal_errored;
     }
 
-    pub fn add_token(&mut self, token: LocatedToken) {
-        self.tokens.push(token.token)
+    pub fn defines(&self) -> Option<&DefineHistory> {
+        self.define_history.as_ref()
+    }
+
+    pub fn with_define_history(&mut self, history: DefineHistory) {
+        self.define_history = Some(history);
     }
 
     pub fn object_tree_without_builtins(&mut self) -> ObjectTree {
-        self.generate_objtree(None, false)
+        let builder = self.generate_objtree(None, false);
+        builder.finish(self.context, self.parser_fatal_errored)
     }
 
-    fn generate_objtree(&self, annotations: Option<&mut AnnotationTree>, builtins: bool) -> ObjectTree {
+    pub fn object_tree_with_annotations(&self, annotations: &mut AnnotationTree) -> ObjectTree {
+        let builder = self.generate_objtree(Some(annotations), true);
+        builder.finish(self.context, self.parser_fatal_errored)
+    }
+
+    pub fn annotate_only(&self, annotations: &mut AnnotationTree) {
+        self.generate_objtree(Some(annotations), true);
+    }
+
+    pub fn object_tree(&mut self) -> ObjectTree {
+        let builder = self.generate_objtree(None, true);
+        builder.finish(self.context, self.parser_fatal_errored)
+    }
+
+    fn generate_objtree(&self, annotations: Option<&mut AnnotationTree>, builtins: bool) -> ObjectTreeBuilder {
         let mut builder = ObjectTreeBuilder::default();
         if builtins {
             builder.register_builtins();
         }
 
         self.recurse_tree(&mut builder, annotations);
-
-        builder.finish(self.context, self.parser_fatal_errored)
+        builder
     }
 
     fn recurse_tree(&self, builder: &mut ObjectTreeBuilder, mut annotations: Option<&mut AnnotationTree>) {

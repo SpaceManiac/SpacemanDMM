@@ -250,7 +250,7 @@ struct Engine<'a> {
     root: Option<Url>,
 
     context: &'a dm::Context,
-    defines: Option<dm::preprocessor::DefineHistory>,
+    syntax_tree: Option<dm::ast::SyntaxTree<'a>>,
     objtree: Arc<dm::objtree::ObjectTree>,
     references_table: background::Background<find_references::ReferencesTable>,
 
@@ -273,7 +273,7 @@ impl<'a> Engine<'a> {
             root: None,
 
             context,
-            defines: None,
+            syntax_tree: None,
             objtree: Default::default(),
             references_table: Default::default(),
 
@@ -482,6 +482,7 @@ impl<'a> Engine<'a> {
             let (fatal_errored_2, mut syntax_tree) = parser.parse_2();
             parse_time = start.elapsed();
             fatal_errored = fatal_errored_2;
+            syntax_tree.with_define_history(pp.finalize());
             self.objtree = Arc::new(syntax_tree.object_tree());
         }
         let elapsed = start.elapsed(); start += elapsed;
@@ -543,8 +544,6 @@ impl<'a> Engine<'a> {
         diagnostics_lock.send(map);
         drop(diagnostics_lock);
 
-        self.defines = Some(pp.finalize());
-
         let elapsed = start.elapsed(); start += elapsed;
         eprint!(" - diagnostics {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
 
@@ -574,8 +573,8 @@ impl<'a> Engine<'a> {
                     let path = url_to_path(url)?;
                     let root = url_to_path(root)?;
 
-                    let defines = match self.defines {
-                        Some(ref d) => d,
+                    let defines = match self.syntax_tree.as_ref().map(|syntax_tree|syntax_tree.defines()).flatten() {
+                        Some(d) => d,
                         None => return Err(invalid_request("no preprocessor history")),
                     };
 
@@ -1213,7 +1212,7 @@ handle_method_call! {
         };
 
         let mut results = Vec::new();
-        if let Some(ref defines) = self.defines {
+        if let Some(defines) = self.syntax_tree.as_ref().map(|syntax_tree|syntax_tree.defines()).flatten() {
             for (range, &(ref name, ref define)) in defines.iter() {
                 if query.matches_define(name) {
                     results.push(SymbolInformation {
