@@ -214,14 +214,18 @@ pub fn incremental_reparse<'ctx, S: Into<Cow<'ctx, str>>>(
     // incremental parsing across files is not supported, do one at a time
     // adding an #include line is still a one file change
     assert_eq!(range.start.file, range.end.file);
+    let defines_option = syntax_tree.defines();
+    if defines_option.is_none() {
+        return Err(DMError::new(Location::builtins(), "SyntaxTree does not have define history!"));
+    }
 
     // get our reference point define maps
-    let existing_defines = syntax_tree.defines().unwrap();
+    let existing_defines = defines_option.unwrap();
     let mut preprocessor = existing_defines.branch_at(range.start, context);
     let existing_defines_end = existing_defines.branch_at(Location {
             file: range.end.file,
             line: range.end.line + 1, // should be gucchi
-            column: 0,
+            column: 1,
         }, context).finalize();
 
     let path = context.file_list().get_path(range.start.file);
@@ -236,8 +240,8 @@ pub fn incremental_reparse<'ctx, S: Into<Cow<'ctx, str>>>(
 
     let new_defines_end = preprocessor.finalize();
 
-    if !new_defines_end.map_equals(&existing_defines_end) {
-        // Slow AF, we have to re-preprocess everything after this point
+    if !new_defines_end.currently_equals(&existing_defines_end) {
+        // Uncommon, but slow AF, we have to re-preprocess everything after this point
         todo!();
     }
 

@@ -151,11 +151,11 @@ impl DefineHistory {
         }
     }
 
-    pub fn map_equals(&self, other: &DefineHistory) -> bool {
+    pub fn currently_equals(&self, other: &DefineHistory) -> bool {
         let ours = DefineMap::from_history(self, self.last_input_loc);
         let theirs = DefineMap::from_history(other, other.last_input_loc);
 
-        ours.equals(&theirs)
+        ours.currently_equals(&theirs)
     }
 }
 
@@ -249,18 +249,21 @@ impl DefineMap {
         map
     }
 
-    /// Test whether two DefineMaps are equal, ignoring definition locations.
-    fn equals(&self, rhs: &DefineMap) -> bool {
+    /// Test whether the most recent update of two DefineMaps are equal, ignoring definition locations or changes.
+    fn currently_equals(&self, rhs: &DefineMap) -> bool {
         if self.len() != rhs.len() {
             return false;
         }
 
         self.inner.iter().all(|(key, value)| {
             rhs.inner.get(key).map_or(false, |v| {
-                if value.len() != v.len() {
-                    return false;
+                let result = value.last().unwrap().1 == v.last().unwrap().1;
+
+                if !result {
+                    eprintln!("say wha");
                 }
-                value.iter().zip(v.iter()).all(|(lhs, rhs)| lhs.1 == rhs.1)
+
+                result
             })
         })
     }

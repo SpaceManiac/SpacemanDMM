@@ -1566,18 +1566,11 @@ impl<'ctx> SyntaxTree<'ctx> {
 
         let file_list = self.context.file_list();
         while let Some(current_block) = stack.pop_back() {
-            let mut block_start_index = 0;
+            let mut block_start_index = None;
+            let mut block_start_loc = Location::builtins();
             for (index, entry) in current_block.entries.iter_mut().enumerate() {
-                let past_relevance = entry.start > range.end;
-                if past_relevance {
-                    // if we get here, just append it to the start of the current block, because that's what's happening
-                    // it's also possible that current_block's typepath header is being messed with
-                    builder.insert_index = index;
-                    return builder;
-                }
-
-                let starts_before = file_list.include_aware_gt(&range.start, &entry.start) && file_list.include_aware_gte(&entry.end, &range.start);
-                let ends_after = file_list.include_aware_gt(&entry.end, &range.end);
+                let starts_before = file_list.include_aware_gte(&range.start, &entry.start);
+                let ends_after = file_list.include_aware_gte(&entry.end, &range.end);
                 if starts_before && ends_after {
                     if let TreeEntryData::Block(block) = &mut entry.data {
                         if file_list.include_aware_gt(&range.start, &block.start) {
@@ -1596,16 +1589,25 @@ impl<'ctx> SyntaxTree<'ctx> {
                 }
 
                 if starts_before {
-                    block_start_index = index;
-                } else if ends_after {
-                    builder.insert_index = block_start_index;
-                    builder.span = (index + 1) - block_start_index;
+                    block_start_index = Some(index);
+                    block_start_loc = entry.start;
+                }
+
+                if ends_after {
+                    if block_start_index.is_none() {
+                        break;
+                    }
+
+                    builder.insert_index = block_start_index.unwrap();
+                    builder.expanded_range = interval_tree::range(block_start_loc, entry.end);
+                    builder.span = (index + 1) - builder.insert_index;
                     return builder;
                 }
             }
         }
 
         // if we get HERE that means we were dealing with an empty tree to begin with vOv
+        // OR the change is between the start of the block and the first entry
         debug_assert!(builder.navigation_path.is_empty());
         builder
     }
