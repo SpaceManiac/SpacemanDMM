@@ -910,6 +910,10 @@ pub enum Term {
         function_name: Box<Expression>,
         args: Box<[Expression]>,
     },
+    /// Unscoped `::A` is a shorthand for `global.A`
+    GlobalIdent(Ident2),
+    /// Unscoped `::A(...)` is a shorthand for `global.A(...)`
+    GlobalCall(Ident2, Box<[Expression]>),
 }
 
 impl Term {
@@ -1012,6 +1016,16 @@ pub enum Follow {
     Call(PropertyAccessKind, Ident2, Box<[Expression]>),
     /// Apply a unary operator to the value.
     Unary(UnaryOp),
+    /// Any of:
+    /// - `/typepath::static_var` to read/write any type's static variables.
+    /// - `/typepath::normal_var` gets the initial value of any type var.
+    /// - `parent_type::normal_var` gets the initial value on the parent type. Only works outside procs.
+    /// - `type::normal_var` gets the initial value on the current type. Only works outside procs. Beware loops.
+    StaticField(Ident2),
+    /// `foo::bar()` is a proc reference.
+    /// If the LHS is a constant typepath, that is used.
+    /// Otherwise the **static** type of LHS is used.
+    ProcReference(Ident2),
 }
 
 /// Like a `Follow` but only supports field accesses.
