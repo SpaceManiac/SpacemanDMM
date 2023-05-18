@@ -957,6 +957,15 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         let location = self.location;
         let parameters = require!(self.separated(Comma, RParen, None, Parser::proc_parameter));
 
+        // TODO: store this information.
+        let _return_type = if let Some(()) = self.exact_ident("as")? {
+            // For now loosely interpret this as an expression, but really it
+            // should be either an absolute typepath or some |'d input types.
+            Some(require!(self.expression()))
+        } else {
+            None
+        };
+
         // split off a subparser so we can keep parsing the objtree
         // even when the proc body doesn't parse
         let mut body_start = self.location;
