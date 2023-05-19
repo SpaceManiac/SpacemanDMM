@@ -257,17 +257,10 @@ impl DefineMap {
             return false;
         }
 
-        self.inner.iter().all(|(key, value)| {
-            rhs.inner.get(key).map_or(false, |v| {
-                let result = value.last().unwrap().1 == v.last().unwrap().1;
-
-                if !result {
-                    eprintln!("say wha");
-                }
-
-                result
-            })
-        })
+        self.inner.iter().all(|(key, value)|
+            rhs.inner.get(key).map_or(
+                false,
+                |v|value.last().unwrap().1 == v.last().unwrap().1))
     }
 }
 

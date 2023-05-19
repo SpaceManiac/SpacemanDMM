@@ -20,6 +20,7 @@ use crate::{
 };
 
 pub trait SyntaxEq {
+    /// Checks if two nodes are syntatically equivalent. Does not compare locations
     fn syntax_eq(&self, other: &Self) -> bool;
 }
 
@@ -1404,7 +1405,7 @@ pub static VALID_FILTER_FLAGS: phf::Map<&'static str, (&str, bool, bool, &[&str]
     "wave" => ("flags", false, true, &[ "WAVE_SIDEWAYS", "WAVE_BOUNDED" ]),
 };
 
-#[derive(SyntaxEq)]
+#[derive(SyntaxEq, Clone)]
 pub enum TreeEntryData {
     Decl,
     Block(TreeBlock),
@@ -1412,6 +1413,7 @@ pub enum TreeEntryData {
     Var(TypeVar, String),
 }
 
+#[derive(Clone)]
 pub struct TreeEntry {
     pub leading_path: Vec<String>,
     pub start: Location,
@@ -1548,7 +1550,7 @@ impl<'entry> TreeEntryBuilder<'entry> {
     }
 }
 
-#[derive(SyntaxEq)]
+#[derive(SyntaxEq, Clone)]
 pub struct TreeBlock {
     pub start: Location,
     pub entries: Vec<TreeEntry>,
@@ -1715,6 +1717,11 @@ impl<'ctx> SyntaxTree<'ctx> {
 
     pub(crate) fn finish(&mut self, block_to_merge: Option<RangeTreeBlockBuilder>, parser_fatal_errored: bool) {
         self.parser_fatal_errored = parser_fatal_errored;
+        if parser_fatal_errored {
+            // do not accept any block_to_merge, a random LBRACE can destroy a syntax tree that can be used for future reparsing
+            return;
+        }
+
         if let Some(merge_block) = block_to_merge {
             let mut current_block = &mut self.root;
             for index in &merge_block.navigation_path {

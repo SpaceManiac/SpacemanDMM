@@ -25,26 +25,28 @@ fn with_reparse<
 
     context.clear_errors(Some(&range), Some(Component::Parser));
     context.clear_errors(None, Some(Component::ObjectTree));
+    let original_syntax_tree = syntax_tree.root().clone();
     let result = incremental_reparse(&context, syntax_tree, range, code2.trim(), None);
 
     assert!(result.is_ok());
     let (parser_error, syntax_tree_2) = result.unwrap();
 
-    // for everything we reparse, we want to fully parse it and syntax compare it as well to assert there are no differences
-    let context2 = Context::default();
-    let path2 = std::path::PathBuf::from(r"test.dm");
-    let mut pp2 = Preprocessor::from_buffer(&context2, path2, code2.trim());
-    let indents2 = indents::IndentProcessor::new(&context2, &mut pp2);
-    let mut parser2 = parser::Parser::new(&context2, indents2);
-    parser2.enable_procs();
-    let syntax_tree_2_full = parser2.parse();
-
-    assert!(syntax_tree_2.syntax_eq(&syntax_tree_2_full));
-
 
     let obj = if parser_error {
+        // parser errors should not update the previous syntax tree
+        assert!(original_syntax_tree.syntax_eq(syntax_tree_2.root()));
         None
     } else {
+        // for everything we reparse successfully, we want to fully parse it and syntax compare it as well to assert there are no differences with the updated syntax tree
+        let context2 = Context::default();
+        let path2 = std::path::PathBuf::from(r"test.dm");
+        let mut pp2 = Preprocessor::from_buffer(&context2, path2, code2.trim());
+        let indents2 = indents::IndentProcessor::new(&context2, &mut pp2);
+        let mut parser2 = parser::Parser::new(&context2, indents2);
+        parser2.enable_procs();
+        let syntax_tree_2_full = parser2.parse();
+
+        assert!(syntax_tree_2.syntax_eq(&syntax_tree_2_full));
         Some(syntax_tree_2.object_tree_without_builtins())
     };
 
@@ -62,7 +64,7 @@ fn with_double_reparse<
         code3: &'static str,
         f3: F3) {
     with_reparse(code, f1, code2, |context,syn,obj,file|{
-        let second_reparse_range = f2(context, &syn, obj, file);
+        let second_reparse_range: RangeInclusive<Location> = f2(context, &syn, obj, file);
         context.clear_errors(Some(&second_reparse_range), Some(Component::Parser));
         context.clear_errors(None, Some(Component::ObjectTree));
 
