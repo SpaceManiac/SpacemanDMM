@@ -74,7 +74,7 @@ fn with_double_reparse<
         // for everything we reparse, we want to fully parse it and syntax compare it as well to assert there are no differences
         let context2 = Context::default();
         let path2 = std::path::PathBuf::from(r"test.dm");
-        let mut pp2 = Preprocessor::from_buffer(&context2, path2, code2.trim());
+        let mut pp2 = Preprocessor::from_buffer(&context2, path2, code3.trim());
         let indents2 = indents::IndentProcessor::new(&context2, &mut pp2);
         let mut parser2 = parser::Parser::new(&context2, indents2);
         parser2.enable_procs();
