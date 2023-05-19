@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use interval_tree::RangeInclusive;
 
-use crate::ast;
+use crate::{ast, Component};
 
 use super::{DMError, Location, HasLocation, Context, Severity, FileId};
 use super::lexer::{LocatedToken, Token, Punctuation};
@@ -290,7 +290,7 @@ pub struct Parser<'ctx, 'an, 'inp> {
 
     input: Box<dyn Iterator<Item=LocatedToken> + 'inp>,
     eof: bool,
-    limit_range: Option<RangeInclusive<Location>>,
+    tree_entry_limit_range: Option<RangeInclusive<Location>>,
     possible_indentation_error: bool,
     next: Option<Token>,
     location: Location,
@@ -322,7 +322,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
             input: Box::new(input.into_iter()),
             eof: false,
-            limit_range: None,
+            tree_entry_limit_range: None,
             possible_indentation_error: false,
             next: None,
             location: Default::default(),
@@ -357,10 +357,10 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         (self.fatal_errored, tree)
     }
 
-    /// Attempt to reparse a pre-existing SyntaxTree. Requires that input tokens be only for the changed token range
+    /// Attempt to reparse a pre-existing SyntaxTree.
     pub fn reparse_2(mut self, mut tree: SyntaxTree<'ctx>, range: RangeInclusive<Location>) -> (bool, SyntaxTree<'ctx>) {
         let mut block = tree.rebuild_range(range);
-        self.limit_range = Some(block.parse_range());
+        self.tree_entry_limit_range = Some(block.parse_range());
         let root = self.root(&mut block);
         self.finish(root, &mut tree, Some(block));
 
@@ -413,13 +413,13 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     fn describe_parse_error(&mut self) -> DMError {
         let expected = self.expected.join(", ");
         if self.eof {
-            return self.error(format!("got EOF, expected one of: {}", expected));
+            return self.error(format!("got EOF, expected one of: {}", expected), Component::Parser);
         }
         match self.next("") {
             Ok(got) => {
                 let message = format!("got '{}', expected one of: {}", got, expected);
                 self.put_back(got);
-                let mut e = self.error(message);
+                let mut e = self.error(message, Component::Parser);
                 if self.possible_indentation_error {
                     let mut loc = e.location();
                     loc.line += 1;
@@ -430,7 +430,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 e
             }
             Err(err) => self
-                .error(format!("i/o error, expected one of: {}", expected))
+                .error(format!("i/o error, expected one of: {}", expected), Component::Parser)
                 .with_cause(err),
         }
     }
@@ -454,9 +454,10 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             }
 
             let next_option: Option<LocatedToken> = self.input.next();
-            if let Some(limit) = self.limit_range {
+            if let Some(limit) = self.tree_entry_limit_range {
                 if let Some(next) = &next_option {
-                    if limit.start > next.location || limit.end < next.location {
+                    // don't accept any tokens until we reach the start point
+                    if self.context.file_list().include_aware_gt(&limit.start, &next.location) {
                         continue;
                     }
                 }
@@ -615,13 +616,25 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 Token::Eof => "newline".into(),
                 ref other => format!("newline, '{}'", other).into(),
             };
+
             let next = self.next(message)?;
+
             if next == terminator || next == Token::Eof {
                 break;
             } else if next == Token::Punct(Punctuation::Semicolon) {
                 continue;
             }
+
             self.put_back(next);
+
+            if let Some(limit) = self.tree_entry_limit_range {
+                // no new entries after passing the limit
+                let location = self.updated_location();
+                if self.context.file_list().include_aware_gte(&location, &limit.end) {
+                    break;
+                }
+            }
+
             require!(self.tree_entry(current, proc_kind, var_type.clone()));
         }
         SUCCESS
@@ -649,7 +662,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 self.annotate_precise(slash_loc..slash_loc, || {
                     Annotation::IncompleteTreePath(absolute, parts.clone())
                 });
-                self.context.register_error(self.error("path has no effect"));
+                self.context.register_error(self.error("path has no effect", Component::Parser));
                 return success((absolute, Vec::new()));
             }
         }
@@ -679,7 +692,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Token::Punct(p @ Punctuation::Dot) |
             Token::Punct(p @ Punctuation::CloseColon) |
             Token::Punct(p @ Punctuation::Colon) => {
-                self.error(format!("path started by '{}', should be unprefixed", p))
+                self.error(format!("path started by '{}', should be unprefixed", p), Component::Parser)
                     .set_severity(Severity::Warning)
                     .register(self.context);
                 Ok((false, true))
@@ -698,7 +711,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Token::Punct(p @ Punctuation::Dot) |
             Token::Punct(p @ Punctuation::CloseColon) |
             Token::Punct(p @ Punctuation::Colon) => {
-                self.error(format!("path separated by '{}', should be '/'", p))
+                self.error(format!("path separated by '{}', should be '/'", p), Component::Parser)
                     .set_severity(Severity::Warning)
                     .register(self.context);
                 SUCCESS
@@ -731,7 +744,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         let (last_part, traverse_mut) = match path.split_last_mut() {
             Some(x) => x,
             None => {
-                self.error("what?")
+                self.error("what?", Component::Parser)
                     .register(self.context);
                 return SUCCESS;
             }
@@ -756,7 +769,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 } else if let Some(kind) = ProcDeclKind::from_name(each) {
                     proc_kind = Some(kind);
                 } else if proc_kind.is_some() {
-                    self.error("cannot have sub-blocks of `proc/` block")
+                    self.error("cannot have sub-blocks of `proc/` block", Component::Parser)
                         .register(self.context);
                 } else {
                     type_segments.push(each.to_owned());
@@ -769,7 +782,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         macro_rules! handle_relative_type_error {
             () => {
                 if let Some(loc) = relative_type_location {
-                    DMError::new(loc, "relatively pathed type defined here")
+                    DMError::new(loc, "relatively pathed type defined here", Component::Parser)
                         .set_severity(Severity::Warning)
                         .register(self.context);
                 }
@@ -857,13 +870,13 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
                 if last_part == "var" {
                     current = block.entry(type_segments, entry_start, absolute);
-                    self.error("`var;` item has no effect")
+                    self.error("`var;` item has no effect", Component::Parser)
                         .set_severity(Severity::Warning)
                         .register(self.context);
                 } else if let Some(mut var_type) = var_type.take() {
                     if VarTypeFlags::from_name(last_part).is_some() {
                         current = block.entry(type_segments, entry_start, absolute);
-                        self.error(format!("`var/{};` item has no effect", last_part))
+                        self.error(format!("`var/{};` item has no effect", last_part), Component::Parser)
                             .set_severity(Severity::Warning)
                             .register(self.context);
                     } else {
@@ -876,12 +889,12 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     }
                 } else if ProcDeclKind::from_name(last_part).is_some() {
                     current = block.entry(type_segments, entry_start, absolute);
-                    self.error("`proc;` item has no effect")
+                    self.error("`proc;` item has no effect", Component::Parser)
                         .set_severity(Severity::Warning)
                         .register(self.context);
                 } else if proc_kind.is_some() {
                     current = block.entry(type_segments, entry_start, absolute);
-                    self.error("child of `proc/` without body")
+                    self.error("child of `proc/` without body", Component::Parser)
                         .register(self.context);
                 } else {
                     handle_relative_type_error!();
@@ -894,7 +907,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }
 
         if absolute && !is_root {
-            DMError::new(entry_start, format!("nested absolute path inside {}", current_path.unwrap_or_else(|| current.get_path()).join("/")))
+            DMError::new(entry_start, format!("nested absolute path inside {}", current_path.unwrap_or_else(|| current.get_path()).join("/")), Component::Parser)
                 .set_severity(Severity::Warning)
                 .register(self.context);
         }
@@ -1053,8 +1066,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
         if let Some(()) = self.exact(Punct(Ellipsis))? {
             return success(Parameter {
-                name: "...".to_owned(),
                 location: self.location,
+                name: "...".to_owned(),
                 .. Default::default()
             });
         }
@@ -1071,14 +1084,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         };
         if path.first().map_or(false, |i| i == "var") {
             path.remove(0);
-            DMError::new(leading_loc, "'var/' is unnecessary here")
+            DMError::new(leading_loc, "'var/' is unnecessary here", Component::Parser)
                 .set_severity(Severity::Hint)
                 .with_errortype("var_in_proc_parameter")
                 .register(self.context);
         }
         let mut var_type: VarTypeBuilder = path.into_iter().collect();
         if var_type.flags.is_static() {
-            DMError::new(leading_loc, "'static/' has no effect here")
+            DMError::new(leading_loc, "'static/' has no effect here", Component::Parser)
                 .set_severity(Severity::Warning)
                 .with_errortype("static_in_proc_parameter")
                 .register(self.context);
@@ -1096,19 +1109,19 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
         // Allow a trailing `;` since BYOND accepts it, but this is dumb
         if let Some(()) = self.exact(Punct(Semicolon))? {
-            DMError::new(self.updated_location(), "Extraneous ';' in proc parameter")
+            DMError::new(self.updated_location(), "Extraneous ';' in proc parameter", Component::Parser)
                 .set_severity(Severity::Warning)
                 .with_errortype("semicolon_in_proc_parameter")
                 .register(self.context);
         }
 
         success(Parameter {
+            location,
             var_type: var_type.build(),
             name,
             default,
             input_type,
             in_list,
-            location,
         })
     }
 
@@ -1142,7 +1155,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             in_list = Some(require!(self.expression()));
             // in case it is out of order
             if let Some(()) = self.exact_ident("as")? {
-                self.error("'as' clause should precede 'in' clause, and is being ignored")
+                self.error("'as' clause should precede 'in' clause, and is being ignored", Component::Parser)
                     .with_errortype("in_precedes_as")
                     .set_severity(Severity::Warning)
                     .register(self.context);
@@ -1166,7 +1179,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         let mut as_what = match InputType::from_str(&ident) {
             Ok(what) => what,
             Err(()) => {
-                self.context.register_error(self.error(format!("bad input type: '{}'", ident)));
+                self.context.register_error(self.error(format!("bad input type: '{}'", ident), Component::Parser));
                 InputType::empty()
             }
         };
@@ -1175,7 +1188,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             match InputType::from_str(&ident) {
                 Ok(what) => as_what |= what,
                 Err(()) => {
-                    self.context.register_error(self.error(format!("bad input type: '{}'", ident)));
+                    self.context.register_error(self.error(format!("bad input type: '{}'", ident), Component::Parser));
                 }
             }
         }
@@ -1301,7 +1314,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         // for(a = 1 to
                         let name = match lhs.into_term() {
                             Some(Term::Ident(name)) => name,
-                            _ => return Err(self.error("for-list must start with variable")),
+                            _ => return Err(self.error("for-list must start with variable", Component::Parser)),
                         };
                         require!(self.exact_ident("to"));
                         let to_rhs = require!(self.expression());
@@ -1314,7 +1327,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     }) => {
                         let name = match lhs.into_term() {
                             Some(Term::Ident(name)) => name,
-                            _ => return Err(self.error("for-list must start with variable")),
+                            _ => return Err(self.error("for-list must start with variable", Component::Parser)),
                         };
                         // Explicit move is necessary because rustc becomes
                         // confused when matching on the *rhs lvalue, thinking
@@ -1340,9 +1353,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     },
                     Statement::Expr(expr) => match expr.into_term() {
                         Some(Term::Ident(name)) => (None, name),
-                        _ => return Err(self.error("for-list must start with variable")),
+                        _ => return Err(self.error("for-list must start with variable", Component::Parser)),
                     },
-                    _ => return Err(self.error("for-list must start with variable")),
+                    _ => return Err(self.error("for-list must start with variable", Component::Parser)),
                 };
 
                 let input_type = if let Some(()) = self.exact_ident("as")? {
@@ -1399,7 +1412,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 require!(self.exact(Token::Punct(Punctuation::LParen)));
                 let what = require!(self.separated(Punctuation::Comma, Punctuation::RParen, None, Parser::case));
                 if what.is_empty() {
-                    self.context.register_error(self.error("switch case cannot be empty"));
+                    self.context.register_error(self.error("switch case cannot be empty", Component::Parser));
                 }
                 let block = require!(self.block(loop_ctx));
                 cases.push((Spanned::new(self.location(), what), block));
@@ -1520,30 +1533,30 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 let (_, mut tree_path) = require!(self.tree_path(true));
                 let name = match tree_path.pop() {
                     Some(name) => name,
-                    None => return Err(self.error("'var' must be followed by a name")),
+                    None => return Err(self.error("'var' must be followed by a name", Component::Parser)),
                 };
 
                 let mut var_type = tree_path.into_iter().collect::<VarTypeBuilder>();
                 if var_type.flags.is_tmp() {
-                    DMError::new(type_path_start, "var/tmp has no effect here")
+                    DMError::new(type_path_start, "var/tmp has no effect here", Component::Parser)
                         .set_severity(Severity::Warning)
                         .with_errortype("tmp_no_effect")
                         .register(self.context);
                 }
                 if var_type.flags.is_final() {
-                    DMError::new(type_path_start, "var/final has no effect here")
+                    DMError::new(type_path_start, "var/final has no effect here", Component::Parser)
                         .set_severity(Severity::Warning)
                         .with_errortype("final_no_effect")
                         .register(self.context);
                 }
                 if var_type.flags.is_private() {
-                    DMError::new(type_path_start, "var/SpacemanDMM_private has no effect here")
+                    DMError::new(type_path_start, "var/SpacemanDMM_private has no effect here", Component::Parser)
                         .with_errortype("private_var")
                         .set_severity(Severity::Warning)
                         .register(self.context);
                 }
                 if var_type.flags.is_protected() {
-                    DMError::new(type_path_start, "var/SpacemanDMM_protected has no effect here")
+                    DMError::new(type_path_start, "var/SpacemanDMM_protected has no effect here", Component::Parser)
                         .with_errortype("protected_var")
                         .set_severity(Severity::Warning)
                         .register(self.context);
@@ -1566,7 +1579,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     (None, None)
                 };
                 if input_types.is_some() || in_list.is_some() {
-                    self.error("'as' clause has no effect on local variables")
+                    self.error("'as' clause has no effect on local variables", Component::Parser)
                         .set_severity(Severity::Warning)
                         .with_errortype("as_local_var")
                         .register(self.context);
@@ -1832,7 +1845,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 let else_ = match self.expression_ex(Some(Strength::Conditional), true)? {
                     Some(else_) => else_,
                     None => {
-                        self.error("missing else arm of conditional operator should be replaced with 'null'")
+                        self.error("missing else arm of conditional operator should be replaced with 'null'", Component::Parser)
                             .set_severity(Severity::Warning)
                             .register(self.context);
                         Expression::from(Term::Null)
@@ -2038,7 +2051,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 Some(args) => {
                     // warn against this mistake
                     if let Some(&Expression::BinaryOp { op: BinaryOp::In, .. } ) = args.get(0) {
-                        self.error("bad `locate(X in Y)`, should be `locate(X) in Y`")
+                        self.error("bad `locate(X in Y)`, should be `locate(X) in Y`", Component::Parser)
                             .set_severity(Severity::Warning)
                             .register(self.context);
                     }
@@ -2046,7 +2059,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     // read "in" clause
                     let in_list = if let Some(()) = self.exact(Token::Punct(Punctuation::In))? {
                         if args.len() > 1 {
-                            DMError::new(start, "bad 'locate(x, y, z) in'")
+                            DMError::new(start, "bad 'locate(x, y, z) in'", Component::Parser)
                                 .set_severity(Severity::Warning)
                                 .register(self.context);
                         }
@@ -2136,7 +2149,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             // term :: '(' expression ')'
             Token::Punct(LParen) => {
                 if let Some(()) = self.exact(Token::Punct(Punctuation::RParen))? {
-                    self.error("'()' should be replaced with 'null'")
+                    self.error("'()' should be replaced with 'null'", Component::Parser)
                         .set_severity(Severity::Warning)
                         .register(self.context);
                     Term::Null

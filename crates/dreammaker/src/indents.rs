@@ -1,7 +1,7 @@
 //! The indentation processor.
 use std::collections::VecDeque;
 
-use crate::{Location, Context, DMError};
+use crate::{Location, Context, DMError, Component};
 use crate::lexer::{LocatedToken, Token, Punctuation};
 
 /// Eliminates blank lines, parses and validates indentation, braces, and semicolons.
@@ -119,7 +119,7 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
                             DMError::new(self.last_input_loc, format!(
                                 "inconsistent indentation: {} % {} != 0",
                                 spaces, spaces_per_indent,
-                            )).register(self.context)
+                            ), Component::Parser).register(self.context)
                         }
                         new_indents = spaces / spaces_per_indent;
                         self.current = Some((spaces_per_indent, new_indents));
@@ -135,7 +135,7 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
                 DMError::new(self.last_input_loc, format!(
                     "inconsistent multiple indentation: {} > 1",
                     new_indents - indents,
-                )).register(self.context);
+                ), Component::Parser).register(self.context);
                 for _ in indents..new_indents {
                     self.push_eol(Token::Punct(Punctuation::LBrace));
                 }
@@ -164,7 +164,7 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
             Token::Punct(Punctuation::RBrace) => {
                 self.current = match self.current {
                     None => {
-                        DMError::new(self.last_input_loc, "unmatched right brace").register(self.context);
+                        DMError::new(self.last_input_loc, "unmatched right brace", Component::Parser).register(self.context);
                         None
                     }
                     Some((_, 1)) => None,

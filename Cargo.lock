@@ -114,15 +114,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "builtins-proc-macro"
-version = "0.0.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "bumpalo"
 version = "3.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -497,9 +488,9 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "bitflags",
- "builtins-proc-macro",
  "color_space",
  "derivative",
+ "dreammaker-proc-macros",
  "guard",
  "indexmap",
  "interval-tree",
@@ -511,6 +502,15 @@ dependencies = [
  "termcolor",
  "toml",
  "walkdir",
+]
+
+[[package]]
+name = "dreammaker-proc-macros"
+version = "0.2.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]

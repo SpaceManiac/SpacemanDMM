@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "crates/builtins-proc-macro",
+    "crates/dreammaker-proc-macros",
     "crates/dap-types",
     "crates/dm-langserver",
     "crates/dmdoc",
@@ -11,9 +11,6 @@ members = [
     "crates/interval-tree",
     #"crates/spaceman-dmm",
 ]
-
-[profile.dev]
-opt-level = 2
 
 [profile.release]
 lto = true

@@ -4,7 +4,7 @@
 #[macro_use] extern crate guard;
 
 extern crate dreammaker as dm;
-use dm::{Context, DMError, Location, Severity};
+use dm::{Context, DMError, Location, Severity, Component};
 use dm::objtree::{ObjectTree, TypeRef, ProcRef};
 use dm::constants::{Constant, ConstFn};
 use dm::ast::*;
@@ -768,7 +768,6 @@ impl<'o> AnalyzeObjectTree<'o> {
                         match TypeExpr::compile(proc, statement.location, value) {
                             Ok(expr) => { self.return_type.insert(proc, expr); },
                             Err(error) => error
-                                .with_component(dm::Component::DreamChecker)
                                 .register(self.context),
                         }
                     }
@@ -945,7 +944,7 @@ fn static_type<'o>(objtree: &'o ObjectTree, location: Location, mut of: &[String
 }
 
 fn error<S: Into<String>>(location: Location, desc: S) -> DMError {
-    DMError::new(location, desc).with_component(dm::Component::DreamChecker)
+    DMError::new(location, desc, dm::Component::DreamChecker)
 }
 
 // ----------------------------------------------------------------------------
@@ -983,20 +982,20 @@ pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
                     if typevar.value.location.is_builtins() {
                         continue;
                     }
-                    DMError::new(mydecl.location, format!("{} redeclares var {:?}", path, varname))
+                    DMError::new(mydecl.location, format!("{} redeclares var {:?}", path, varname), Component::DreamChecker)
                         .with_note(decl.location, format!("declared on {} here", parent.path))
                         .register(context);
                 }
 
                 if decl.var_type.flags.is_final() {
-                    DMError::new(typevar.value.location, format!("{} overrides final var {:?}", path, varname))
+                    DMError::new(typevar.value.location, format!("{} overrides final var {:?}", path, varname), Component::DreamChecker)
                         .with_errortype("final_var")
                         .with_note(decl.location, format!("declared final on {} here", parent.path))
                         .register(context);
                 }
 
                 if decl.var_type.flags.is_private() {
-                    DMError::new(typevar.value.location, format!("{} overrides private var {:?}", path, varname))
+                    DMError::new(typevar.value.location, format!("{} overrides private var {:?}", path, varname), Component::DreamChecker)
                         .with_errortype("private_var")
                         .with_note(decl.location, format!("declared private on {} here", parent.path))
                         .register(context);
@@ -2283,8 +2282,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     Analysis::from(st).with_fix_hint(location, hint)
                 },
                 Err(err) => {
-                    err.with_component(dm::Component::DreamChecker)
-                        .register(self.context);
+                    err.register(self.context);
                     Analysis::empty()
                 }
             }

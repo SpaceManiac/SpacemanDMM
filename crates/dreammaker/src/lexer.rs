@@ -4,6 +4,8 @@ use std::str::FromStr;
 use std::fmt;
 use std::borrow::Cow;
 
+use crate::Component;
+
 use super::{DMError, Location, HasLocation, FileId, Context, Severity};
 use super::docs::*;
 use super::ast::Ident;
@@ -489,7 +491,7 @@ fn buffer_read<R: Read>(file: FileId, mut read: R) -> Result<Vec<u8>, DMError> {
     if let Err(error) = read.read_to_end(&mut buffer) {
         let mut tracker = LocationTracker::new(file, buffer.as_slice().into());
         tracker.by_ref().count();
-        return Err(DMError::new(tracker.location(), "i/o error reading file").with_cause(error));
+        return Err(DMError::new(tracker.location(), "i/o error reading file", Component::Parser).with_cause(error));
     }
 
     Ok(buffer)
@@ -507,13 +509,13 @@ pub fn buffer_file(file: FileId, path: &std::path::Path) -> Result<Vec<u8>, DMEr
 
     let mut read = match std::fs::File::open(path) {
         Ok(read) => read,
-        Err(error) => return Err(DMError::new(Location { file, line: 1, column: 1 }, "i/o error opening file").with_cause(error)),
+        Err(error) => return Err(DMError::new(Location { file, line: 1, column: 1 }, "i/o error opening file", Component::Parser).with_cause(error)),
     };
 
     if let Err(error) = read.read_to_end(&mut buffer) {
         let mut tracker = LocationTracker::new(file, buffer.as_slice().into());
         tracker.by_ref().count();
-        return Err(DMError::new(tracker.location(), "i/o error reading file").with_cause(error));
+        return Err(DMError::new(tracker.location(), "i/o error reading file", Component::Parser).with_cause(error));
     }
 
     Ok(buffer)
@@ -748,7 +750,7 @@ impl<'ctx> Lexer<'ctx> {
             match self.next() {
                 Some(val) => buffer[1] = val,
                 None => {
-                    self.context.register_error(self.error("still skipping comments at end of file"));
+                    self.context.register_error(self.error("still skipping comments at end of file", Component::Parser));
                     break;
                 }
             }
@@ -799,7 +801,7 @@ impl<'ctx> Lexer<'ctx> {
                 // not listening
             } else if backslash {
                 if ch == b'\n' {
-                    self.error("backslash in line comment may be commenting out the following line")
+                    self.error("backslash in line comment may be commenting out the following line", Component::Parser)
                         .set_severity(Severity::Warning)
                         .register(self.context);
                 }
@@ -894,7 +896,7 @@ impl<'ctx> Lexer<'ctx> {
                 if let Ok(val) = f32::from_str(&buf) {
                     let val_str = val.to_string();
                     if val_str != buf {
-                        self.error(format!("precision loss of integer constant: \"{}\" to {}", buf, val))
+                        self.error(format!("precision loss of integer constant: \"{}\" to {}", buf, val), Component::Parser)
                             .set_severity(Severity::Warning)
                             .with_errortype("integer_precision_loss")
                             .register(self.context);
@@ -903,7 +905,7 @@ impl<'ctx> Lexer<'ctx> {
                 }
             }
             self.context.register_error(self.error(
-                format!("bad base-{} integer \"{}\": {}", radix, buf, original_error)));
+                format!("bad base-{} integer \"{}\": {}", radix, buf, original_error), Component::Parser));
             Token::Int(0)  // fallback
         } else {
             // ignore radix
@@ -911,7 +913,7 @@ impl<'ctx> Lexer<'ctx> {
                 Ok(val) => Token::Float(val),
                 Err(e) => {
                     self.context.register_error(self.error(
-                        format!("bad float \"{}\": {}", buf, e)));
+                        format!("bad float \"{}\": {}", buf, e), Component::Parser));
                     Token::Float(0.0)  // fallback
                 }
             }
@@ -948,7 +950,7 @@ impl<'ctx> Lexer<'ctx> {
                 Some(b'\'') => break,
                 Some(ch) => buf.push(ch),
                 None => {
-                    self.context.register_error(DMError::new(start_loc, "unterminated resource literal"));
+                    self.context.register_error(DMError::new(start_loc, "unterminated resource literal", Component::Parser));
                     break;
                 }
             }
@@ -967,7 +969,7 @@ impl<'ctx> Lexer<'ctx> {
             let ch = match self.next() {
                 Some(ch) => ch,
                 None => {
-                    self.context.register_error(DMError::new(start_loc, "unterminated string literal"));
+                    self.context.register_error(DMError::new(start_loc, "unterminated string literal", Component::Parser));
                     break;
                 }
             };
@@ -1032,7 +1034,7 @@ impl<'ctx> Lexer<'ctx> {
             match self.next() {
                 Some(ch) => buf.push(ch),
                 None => {
-                    DMError::new(start_loc, "unterminated raw string")
+                    DMError::new(start_loc, "unterminated raw string", Component::Parser)
                         .register(self.context);
                     break;
                 }
@@ -1052,7 +1054,7 @@ impl<'ctx> Lexer<'ctx> {
             // @<LF> - error
             Some(b'\n') |
             None => {
-                self.error("unterminated raw string").register(self.context);
+                self.error("unterminated raw string", Component::Parser).register(self.context);
                 Token::String(String::new())
             },
             // @(<terminator string>)<string><terminator string> - no LF in contents
@@ -1064,13 +1066,13 @@ impl<'ctx> Lexer<'ctx> {
                         Some(b')') => break,
                         Some(ch) => terminator.push(ch),
                         None => {
-                            self.error("unterminated raw string terminator").register(self.context);
+                            self.error("unterminated raw string terminator", Component::Parser).register(self.context);
                             return Token::String(String::new())
                         }
                     }
                 }
                 if terminator.is_empty() {
-                    self.error("empty raw string terminator").register(self.context);
+                    self.error("empty raw string terminator", Component::Parser).register(self.context);
                     return Token::String(String::new())
                 }
                 self.read_raw_string_inner(&terminator)
@@ -1267,7 +1269,7 @@ impl<'ctx> Iterator for Lexer<'ctx> {
                                 use std::fmt::Write;
                                 let _ = write!(msg, " ({:?})", first as char);
                             }
-                            self.context.register_error(self.error(msg));
+                            self.context.register_error(self.error(msg, Component::Parser));
                             found_illegal = true;
                         }
                         continue;

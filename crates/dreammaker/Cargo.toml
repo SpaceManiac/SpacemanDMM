@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 interval-tree = { path = "../interval-tree" }
-builtins-proc-macro = { path = "../builtins-proc-macro" }
+dreammaker-proc-macros = { path = "../dreammaker-proc-macros" }
 lodepng = "3.7.0"
 bitflags = "1.3.2"
 termcolor = "1.1.3"

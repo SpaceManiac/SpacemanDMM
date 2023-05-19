@@ -3,8 +3,12 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
+use dreammaker_proc_macros::SyntaxEq;
 use indexmap::IndexMap;
 use ahash::RandomState;
+
+use crate::Component;
+use crate::ast::SyntaxEq;
 
 use super::ast::{Expression, VarType, VarTypeBuilder, VarSuffix, PathOp, Parameter, Block, ProcDeclKind, Ident};
 use super::constants::Constant;
@@ -54,6 +58,12 @@ pub struct VarDeclaration {
     pub id: SymbolId,
 }
 
+impl SyntaxEq for VarDeclaration {
+    fn syntax_eq(&self, other: &Self) -> bool {
+        self.var_type == other.var_type
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct VarValue {
     pub location: Location,
@@ -65,7 +75,15 @@ pub struct VarValue {
     pub docs: DocCollection,
 }
 
-#[derive(Debug, Clone)]
+impl SyntaxEq for VarValue {
+    fn syntax_eq(&self, other: &Self) -> bool {
+        self.docs == other.docs
+        && self.expression.syntax_eq(&other.expression)
+        && self.constant.syntax_eq(&other.constant)
+    }
+}
+
+#[derive(Debug, Clone, SyntaxEq)]
 pub struct TypeVar {
     pub value: VarValue,
     pub declaration: Option<VarDeclaration>,
@@ -80,7 +98,15 @@ pub struct ProcDeclaration {
     pub is_protected: bool,
 }
 
-#[derive(Debug, Clone)]
+impl SyntaxEq for ProcDeclaration {
+    fn syntax_eq(&self, other: &Self) -> bool {
+        self.kind == other.kind
+        && self.is_private == other.is_private
+        && self.is_protected == other.is_protected
+    }
+}
+
+#[derive(Debug, Clone, SyntaxEq)]
 pub struct ProcValue {
     pub location: Location,
     pub parameters: Box<[Parameter]>,
@@ -88,7 +114,7 @@ pub struct ProcValue {
     pub code: Option<Block>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, SyntaxEq)]
 pub struct TypeProc {
     pub value: Vec<ProcValue>,
     pub declaration: Option<ProcDeclaration>,
@@ -825,6 +851,7 @@ impl ObjectTreeBuilder {
                         context.register_error(DMError::new(
                             var.value.location,
                             format!("not allowed to change {}/parent_type", path),
+                            Component::ObjectTree
                         ));
                     }
                 }
@@ -866,7 +893,7 @@ impl ObjectTreeBuilder {
                             Ok(&empty_string)
                         } else {
                             // A weird situation which should not happen.
-                            Err(DMError::new(location, format!("missing {}/parent_type", path)))
+                            Err(DMError::new(location, format!("missing {}/parent_type", path), Component::ObjectTree))
                         };
 
                         match constant {
@@ -882,7 +909,7 @@ impl ObjectTreeBuilder {
                                 parent_type = &parent_type_buf;
                             }
                             Ok(other) => {
-                                context.register_error(DMError::new(location, format!("value of {}/parent_type must be a string or typepath, got {}", path, other)));
+                                context.register_error(DMError::new(location, format!("value of {}/parent_type must be a string or typepath, got {}", path, other), Component::ObjectTree));
                             }
                             Err(e) => {
                                 context.register_error(e);
@@ -901,6 +928,7 @@ impl ObjectTreeBuilder {
                     context.register_error(DMError::new(
                         location,
                         format!("bad parent type for {}: {}", path, parent_type),
+                        Component::ObjectTree,
                     ));
                     NodeIndex::new(0)  // on bad parent_type, fall back to the root
                 }
@@ -1016,7 +1044,7 @@ impl ObjectTreeBuilder {
         let mut current = NodeIndex::new(0);
         let mut last = match path.next() {
             Some(name) => name,
-            None => return Err(DMError::new(location, "cannot register root path")),
+            None => return Err(DMError::new(location, "cannot register root path", Component::ObjectTree)),
         };
         if is_decl(last) {
             return Ok((current, last));
@@ -1063,7 +1091,7 @@ impl ObjectTreeBuilder {
                 }
             }
         } else if is_proc_decl(prev) {
-            return Err(DMError::new(location, "proc looks like a var"));
+            return Err(DMError::new(location, "proc looks like a var", Component::ObjectTree));
         }
 
         let mut type_path = Vec::new();
@@ -1119,7 +1147,7 @@ impl ObjectTreeBuilder {
         });
         if let Some(kind) = declaration {
             if let Some(ref decl) = proc.declaration {
-                DMError::new(location, format!("duplicate definition of {}/{}", kind, name))
+                DMError::new(location, format!("duplicate definition of {}/{}", kind, name), Component::ObjectTree)
                     .with_note(decl.location, "previous definition")
                     .register(context);
             } else {
@@ -1152,7 +1180,7 @@ impl ObjectTreeBuilder {
                 // Show the hint now, make up for it by putting the original
                 // at the beginning of the list (so `..()` finds it).
                 // Configuration can be used to upgrade this above a hint.
-                DMError::new(proc.value[0].location, format!("override of {}/{} precedes definition", node.path, name))
+                DMError::new(proc.value[0].location, format!("override of {}/{} precedes definition", node.path, name), Component::ObjectTree)
                     .set_severity(Severity::Hint)
                     .with_errortype("override_precedes_definition")
                     .with_note(location, format!("{}/{}/{} is defined here", node.path, decl, name))
@@ -1244,15 +1272,16 @@ impl ObjectTreeBuilder {
             declaration = Some(kind);
             proc_name = match path.next() {
                 Some(name) => name,
-                None => return Err(DMError::new(location, "proc must have a name")),
+                None => return Err(DMError::new(location, "proc must have a name", Component::ObjectTree)),
             };
         } else if is_var_decl(proc_name) {
-            return Err(DMError::new(location, "var looks like a proc"));
+            return Err(DMError::new(location, "var looks like a proc", Component::ObjectTree));
         }
         if let Some(other) = path.next() {
             return Err(DMError::new(
                 location,
                 format!("proc name must be a single identifier (spurious {:?})", other),
+                Component::ObjectTree,
             ));
         }
 

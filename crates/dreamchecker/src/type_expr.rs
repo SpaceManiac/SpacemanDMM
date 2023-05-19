@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use dm::ast::*;
+use dm::{ast::*, Component};
 use dm::constants::Constant;
 use dm::objtree::{ObjectTree, ProcRef};
 use dm::{DMError, Location};
@@ -180,7 +180,7 @@ impl<'o> TypeExprCompiler<'o> {
                 if_: Box::new(self.visit_expression(location, if_)?),
                 else_: Box::new(self.visit_expression(location, else_)?),
             }),
-            _ => Err(DMError::new(location, "type expr: bad expression node")),
+            _ => Err(DMError::new(location, "type expr: bad expression node", Component::DreamChecker)),
         }
     }
 
@@ -201,6 +201,7 @@ impl<'o> TypeExprCompiler<'o> {
                 Err(DMError::new(
                     location,
                     format!("type expr: no such parameter {:?}", unscoped_name),
+                    Component::DreamChecker,
                 ))
             }
 
@@ -212,7 +213,7 @@ impl<'o> TypeExprCompiler<'o> {
                 Ok(TypeExpr::from(ty))
             }
 
-            _ => Err(DMError::new(location, "type expr: bad term node")),
+            _ => Err(DMError::new(location, "type expr: bad term node", Component::DreamChecker)),
         }
     }
 
@@ -238,11 +239,13 @@ impl<'o> TypeExprCompiler<'o> {
                     _ => Err(DMError::new(
                         location,
                         "type expr: cannot index non-parameters",
+                        Component::DreamChecker,
                     )),
                 },
                 _ => Err(DMError::new(
                     location,
                     "type expr: cannot index by anything but `_`",
+                    Component::DreamChecker,
                 )),
             },
 
@@ -260,10 +263,11 @@ impl<'o> TypeExprCompiler<'o> {
                 _ => Err(DMError::new(
                     location,
                     "type expr: cannot take .type of non-parameters",
+                    Component::DreamChecker,
                 )),
             },
 
-            _ => Err(DMError::new(location, format!("type expr: bad follow node {:?}", rhs))),
+            _ => Err(DMError::new(location, format!("type expr: bad follow node {:?}", rhs), Component::DreamChecker)),
         }
     }
 }

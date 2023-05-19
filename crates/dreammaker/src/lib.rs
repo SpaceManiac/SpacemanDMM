@@ -216,7 +216,7 @@ pub fn incremental_reparse<'ctx, S: Into<Cow<'ctx, str>>>(
     assert_eq!(range.start.file, range.end.file);
     let defines_option = syntax_tree.defines();
     if defines_option.is_none() {
-        return Err(DMError::new(Location::builtins(), "SyntaxTree does not have define history!"));
+        return Err(DMError::new(Location::builtins(), "SyntaxTree does not have define history!", Component::Unspecified));
     }
 
     // get our reference point define maps
@@ -233,7 +233,7 @@ pub fn incremental_reparse<'ctx, S: Into<Cow<'ctx, str>>>(
     // Should not fail unless file_buffer is scuffed
     preprocessor.push_buffer(path, file_buffer)?;
 
-    let indents = IndentProcessor::new(context, &mut preprocessor);
+    let indents: IndentProcessor<&mut preprocessor::Preprocessor> = IndentProcessor::new(context, &mut preprocessor);
 
     // preprocess before continuing
     let tokens: Vec<LocatedToken> = indents.into_iter().collect();

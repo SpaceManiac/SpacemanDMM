@@ -37,7 +37,7 @@ pub struct FileList {
     /// Mapping of files -> files they include + sorted line numbers.
     included_files: RefCell<Vec<Vec<(FileId, u32)>>>,
     /// Mapping of file -> file that includes them and where.
-    reverse_included_files: RefCell<HashMap<FileId, (FileId, u32)>>,
+    reverse_included_files: RefCell<Vec<Option<(FileId, u32)>>>,
 }
 
 /// A diagnostics context, tracking loaded files and any observed errors.
@@ -87,23 +87,25 @@ impl FileList {
                 includes_vec.push(new_specifier);
             }
 
-            self.reverse_included_files.borrow_mut().insert(id, new_specifier);
+            self.reverse_included_files.borrow_mut().push(Some(new_specifier));
+        } else {
+            self.reverse_included_files.borrow_mut().push(None);
         }
 
         id
     }
 
-    // This fn is used a lot by reparsing so it needs to be fast af
+    // This fn is used a fuck ton by reparsing so it needs to be fast af while still being correct
     pub fn include_aware_gt(&self, lhs: &Location, rhs: &Location) -> bool {
-        // common case
+        // Most common case, same file
         if lhs.file == rhs.file {
             return lhs > rhs;
         }
 
         // Optimization: The second most common case. dm files are included by and only by the .dme
         let reverse_included_files = self.reverse_included_files.borrow();
-        let lhs_parent_opt = reverse_included_files.get(&lhs.file);
-        let rhs_parent_opt = reverse_included_files.get(&rhs.file);
+        let lhs_parent_opt = &reverse_included_files[lhs.file.0 as usize];
+        let rhs_parent_opt = &reverse_included_files[rhs.file.0 as usize];
 
         if let Some(lhs_parent) = lhs_parent_opt {
             if let Some(rhs_parent) = rhs_parent_opt {
@@ -120,13 +122,13 @@ impl FileList {
                 // find a common ancestor
                 let mut lhs_walk = vec![lhs_parent];
                 let mut walker = lhs_parent;
-                while let Some(new_lhs_parent) = reverse_included_files.get(&walker.0) {
+                while let Some(new_lhs_parent) = &reverse_included_files[walker.0.0 as usize] {
                     walker = new_lhs_parent;
                     lhs_walk.push(walker);
                 }
 
                 walker = rhs_parent;
-                while let Some(new_rhs_parent) = reverse_included_files.get(&walker.0) {
+                while let Some(new_rhs_parent) = &reverse_included_files[walker.0.0 as usize]  {
                     if let Some(lhs_ancestor) = lhs_walk.iter().find(|lhs_known_include|lhs_known_include.0 == walker.0) {
                         return lhs_ancestor.1 > new_rhs_parent.1;
                     }
@@ -138,7 +140,7 @@ impl FileList {
             } else {
                 // RHS is in the .dme/root file, walk up to it and compare
                 let mut relevant_lhs = lhs_parent;
-                while let Some(new_lhs_parent) = reverse_included_files.get(&relevant_lhs.0) {
+                while let Some(new_lhs_parent) = &reverse_included_files[relevant_lhs.0.0 as usize]  {
                     relevant_lhs = new_lhs_parent;
                 }
 
@@ -148,8 +150,8 @@ impl FileList {
             }
         } else {
             // Same as above case but with LHS
-            let mut relevant_rhs = rhs_parent_opt.unwrap(); // if this unwrap fails, it means both the lhs and rhs files are rooted but different somehow
-            while let Some(new_rhs_parent) = reverse_included_files.get(&relevant_rhs.0) {
+            let mut relevant_rhs = rhs_parent_opt.as_ref().unwrap(); // if this unwrap fails, it means both the lhs and rhs files are rooted but different somehow
+            while let Some(new_rhs_parent) = &reverse_included_files[relevant_rhs.0.0 as usize]  {
                 relevant_rhs = new_rhs_parent;
             }
 
@@ -226,7 +228,7 @@ impl Context {
             Err(io_error) => {
                 let file = self.register_file(toml, None);
                 let (line, column) = io_error.line_col().unwrap_or((1, 1));
-                DMError::new(Location { file, line, column }, "Error reading configuration file")
+                DMError::new(Location { file, line, column }, "Error reading configuration file", Component::Unspecified)
                     .with_boxed_cause(io_error.into_boxed_error())
                     .register(self);
             }
@@ -295,9 +297,20 @@ impl Context {
         errors.push(error);
     }
 
-    pub fn clear_errors(&self, range: &RangeInclusive<Location>) {
+    pub fn clear_errors(&self, range_option: Option<&RangeInclusive<Location>>, component_option: Option<Component>) {
         let mut errors = self.errors.borrow_mut();
-        errors.retain(|error|error.location < range.start || error.location > range.end);
+        errors.retain(|error|{
+            let mut keep = true;
+            if let Some(range) = range_option {
+                keep &= error.location < range.start || error.location > range.end
+            }
+
+            if let Some(component) = component_option {
+                keep &= error.component != component
+            }
+
+            keep
+        });
     }
 
     /// Access the list of diagnostics generated so far.
@@ -443,8 +456,8 @@ pub(crate) trait HasLocation {
 
     #[inline]
     #[doc(hidden)]
-    fn error<S: Into<String>>(&self, message: S) -> DMError {
-        DMError::new(self.location(), message)
+    fn error<S: Into<String>>(&self, message: S, component: Component) -> DMError {
+        DMError::new(self.location(), message, component)
     }
 }
 
@@ -494,14 +507,20 @@ impl fmt::Display for Severity {
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Component {
     Unspecified,
+    Parser,
+    ObjectTree,
     DreamChecker,
+    DmmTools,
 }
 
 impl Component {
     pub fn name(self) -> Option<&'static str> {
         match self {
             Component::Unspecified => None,
+            Component::Parser => Some("parser"),
+            Component::ObjectTree => Some("object tree"),
             Component::DreamChecker => Some("dreamchecker"),
+            Component::DmmTools => Some("dmm-tools")
         }
     }
 }
@@ -543,11 +562,11 @@ pub struct DiagnosticNote {
 
 #[allow(unused_variables)]
 impl DMError {
-    pub fn new<S: Into<String>>(location: Location, desc: S) -> DMError {
+    pub fn new<S: Into<String>>(location: Location, desc: S, component: Component) -> DMError {
         DMError {
             location,
             severity: Default::default(),
-            component: Default::default(),
+            component: component,
             description: desc.into(),
             notes: Vec::new(),
             cause: None,
@@ -579,11 +598,6 @@ impl DMError {
 
     pub fn with_note<S: Into<String>>(mut self, location: Location, desc: S) -> DMError {
         self.add_note(location, desc);
-        self
-    }
-
-    pub fn with_component(mut self, component: Component) -> DMError {
-        self.component = component;
         self
     }
 

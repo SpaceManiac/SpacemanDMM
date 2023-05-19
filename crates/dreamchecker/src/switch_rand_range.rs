@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 
-use dm::ast::*;
+use dm::{ast::*, Component};
 use dm::{Context, DMError, Location, Severity};
 
 /**
@@ -31,8 +31,7 @@ pub fn check_switch_rand_range(
                 if start <= rand_end && end >= rand_start {
                     case_ranges.push((start, end));
                 } else {
-                    DMError::new(location, format!("Case range '{} to {}' will never trigger as it is outside the rand() range {} to {}", start, end, rand_start, rand_end))
-                        .with_component(dm::Component::DreamChecker)
+                    DMError::new(location, format!("Case range '{} to {}' will never trigger as it is outside the rand() range {} to {}", start, end, rand_start, rand_end), Component::DreamChecker)
                         .set_severity(Severity::Warning)
                         .register(context);
                 }
@@ -62,8 +61,8 @@ pub fn check_switch_rand_range(
                 "Switch branches on rand() with range {} to {} but no case branch triggers for {}",
                 rand_start, rand_end, first_uncovered
             ),
+            Component::DreamChecker,
         )
-        .with_component(dm::Component::DreamChecker)
         .set_severity(Severity::Warning)
         .register(context);
     }

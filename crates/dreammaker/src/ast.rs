@@ -4,8 +4,10 @@
 use std::collections::VecDeque;
 use std::fmt;
 use std::iter::FromIterator;
+use dreammaker_proc_macros::SyntaxEq;
 use phf::phf_map;
 
+use crate::Component;
 use crate::preprocessor::DefineHistory;
 use crate::{
     Context,
@@ -17,6 +19,92 @@ use crate::{
     objtree::*
 };
 
+pub trait SyntaxEq {
+    fn syntax_eq(&self, other: &Self) -> bool;
+}
+
+impl<T: SyntaxEq> SyntaxEq for Option<T> {
+    fn syntax_eq(&self, other: &Self) -> bool {
+        if self.is_some() != other.is_some() {
+            false
+        } else if let Some(ours) = self {
+            ours.syntax_eq(other.as_ref().unwrap())
+        } else {
+            true
+        }
+    }
+}
+
+impl SyntaxEq for String {
+    fn syntax_eq(&self, other: &Self) -> bool {
+        self == other
+    }
+}
+
+impl SyntaxEq for Box<str> {
+    fn syntax_eq(&self, other: &Self) -> bool {
+        self == other
+    }
+}
+
+impl<T: SyntaxEq> SyntaxEq for Box<T> {
+    fn syntax_eq(&self, other: &Self) -> bool {
+        self.as_ref().syntax_eq(other.as_ref())
+    }
+}
+
+impl<T: SyntaxEq> SyntaxEq for [T] {
+    fn syntax_eq(&self, other: &Self) -> bool {
+        self.len() == other.len()
+        && self.iter().zip(other.iter()).all(|(ours, theirs)|ours.syntax_eq(theirs))
+    }
+}
+
+impl<T: SyntaxEq> SyntaxEq for Box<[T]> {
+    fn syntax_eq(&self, other: &Self) -> bool {
+        self.as_ref().syntax_eq(other.as_ref())
+    }
+}
+
+impl<T: SyntaxEq> SyntaxEq for Vec<T> {
+    fn syntax_eq(&self, other: &Self) -> bool {
+        self.as_slice().syntax_eq(other.as_slice())
+    }
+}
+
+impl SyntaxEq for Location {
+    fn syntax_eq(&self, _: &Self) -> bool {
+        true // location doesn't affect syntax
+    }
+}
+
+impl SyntaxEq for i32 {
+    fn syntax_eq(&self, other: &Self) -> bool {
+        self == other
+    }
+}
+
+impl SyntaxEq for u8 {
+    fn syntax_eq(&self, other: &Self) -> bool {
+        self == other
+    }
+}
+
+impl SyntaxEq for f32 {
+    fn syntax_eq(&self, other: &Self) -> bool {
+        self == other
+    }
+}
+
+impl<T1: SyntaxEq, T2: SyntaxEq> SyntaxEq for (T1, T2) {
+    fn syntax_eq(&self, other: &Self) -> bool {
+        let (our_1, our_2) = self;
+        let (their_1, their_2) = other;
+        our_1.syntax_eq(their_1)
+        && our_2.syntax_eq(their_2)
+    }
+}
+
 /// Arguments for [`Term::Pick`]
 pub type PickArgs = [(Option<Expression>, Expression)];
 
@@ -27,7 +115,7 @@ pub type SwitchCases = [(Spanned<Vec<Case>>, Block)];
 // Simple enums
 
 /// The unary operators, both prefix and postfix.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, SyntaxEq)]
 pub enum UnaryOp {
     Neg,
     Not,
@@ -88,7 +176,7 @@ impl UnaryOp {
 /// The DM path operators.
 ///
 /// Which path operator is used typically only matters at the start of a path.
-#[derive(Copy, Clone, Hash, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, Hash, PartialEq, Eq, Debug, SyntaxEq)]
 pub enum PathOp {
     /// `/` for absolute pathing.
     Slash,
@@ -115,7 +203,7 @@ impl fmt::Display for PathOp {
 }
 
 /// The binary operators.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, SyntaxEq)]
 pub enum BinaryOp {
     Add,
     Sub,
@@ -174,7 +262,7 @@ impl fmt::Display for BinaryOp {
 }
 
 /// The assignment operators, including augmented assignment.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, SyntaxEq)]
 pub enum AssignOp {
     Assign,
     AddAssign,
@@ -259,7 +347,7 @@ pub enum TernaryOp {
 }
 
 /// The possible kinds of access operators for lists
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, SyntaxEq)]
 pub enum ListAccessKind {
     /// `[]`
     Normal,
@@ -268,7 +356,7 @@ pub enum ListAccessKind {
 }
 
 /// The possible kinds of index operators, for both fields and methods.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, SyntaxEq)]
 pub enum PropertyAccessKind {
     /// `a.b`
     Dot,
@@ -338,7 +426,7 @@ impl fmt::Display for ProcDeclKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, SyntaxEq)]
 pub enum SettingMode {
     /// As in `set name = "Use"`.
     Assign,
@@ -403,6 +491,12 @@ macro_rules! type_table {
                 Ok(())
             }
         }
+
+        impl SyntaxEq for $name {
+            fn syntax_eq(&self, other: &Self) -> bool {
+                self == other
+            }
+        }
     }
 }
 
@@ -431,7 +525,7 @@ type_table! {
 }
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Default, SyntaxEq)]
     pub struct VarTypeFlags: u8 {
         // DM flags
         const STATIC = 1 << 0;
@@ -546,7 +640,7 @@ pub type Ident = String;
 // Ident2 is an opaque type which promises a limited interface.
 // It's a `Box<str>` for now (smaller than `Ident` by 8 bytes),
 // but could be replaced by interning later.
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, SyntaxEq)]
 pub struct Ident2 {
     inner: Box<str>,
 }
@@ -601,7 +695,7 @@ impl fmt::Debug for Ident2 {
 }
 
 /// An AST element with an additional location attached.
-#[derive(Copy, Clone, Eq, Debug)]
+#[derive(Copy, Clone, Eq, Debug, SyntaxEq)]
 pub struct Spanned<T> {
     // TODO: add a Span type and use it here
     pub location: Location,
@@ -653,7 +747,7 @@ impl<'a> fmt::Display for FormatTypePath<'a> {
 // Terms and Expressions
 
 /// A typepath optionally followed by a set of variables.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, SyntaxEq)]
 pub struct Prefab {
     pub path: TypePath,
     pub vars: Box<[(Ident2, Expression)]>,
@@ -691,7 +785,7 @@ where
 }
 
 /// The structure of an expression, a tree of terms and operators.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, SyntaxEq)]
 pub enum Expression {
     /// An expression containing a term directly. The term is evaluated first,
     /// then its follows, then its unary operators in reverse order.
@@ -845,7 +939,7 @@ impl From<Term> for Expression {
 }
 
 /// The structure of a term, the basic building block of the AST.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, SyntaxEq)]
 pub enum Term {
     // Terms with no recursive contents ---------------------------------------
     /// The literal `null`.
@@ -1005,14 +1099,14 @@ impl From<Expression> for Term {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, SyntaxEq)]
 pub struct MiniExpr {
     pub ident: Ident2,
     pub fields: Box<[Field]>,
 }
 
 /// An expression part which is applied to a term or another follow.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, SyntaxEq)]
 pub enum Follow {
     /// Index the value by an expression.
     Index(ListAccessKind, Box<Expression>),
@@ -1025,7 +1119,7 @@ pub enum Follow {
 }
 
 /// Like a `Follow` but only supports field accesses.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, SyntaxEq)]
 pub struct Field {
     pub kind: PropertyAccessKind,
     pub ident: Ident2,
@@ -1038,7 +1132,7 @@ impl From<Field> for Follow {
 }
 
 /// A parameter declaration in the header of a proc.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, SyntaxEq)]
 pub struct Parameter {
     pub var_type: VarType,
     pub name: Ident,
@@ -1059,7 +1153,7 @@ impl fmt::Display for Parameter {
 }
 
 /// A type which may be ascribed to a `var`.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, SyntaxEq)]
 pub struct VarType {
     pub flags: VarTypeFlags,
     pub type_path: TreePath,
@@ -1171,7 +1265,7 @@ impl VarSuffix {
 pub type Block = Box<[Spanned<Statement>]>;
 
 /// A statement in a proc body.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, SyntaxEq)]
 pub enum Statement {
     Expr(Expression),
     Return(Option<Expression>),
@@ -1231,20 +1325,20 @@ pub enum Statement {
     Crash(Option<Expression>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, SyntaxEq)]
 pub struct VarStatement {
     pub var_type: VarType,
     pub name: Ident,
     pub value: Option<Expression>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, SyntaxEq)]
 pub enum Case {
     Exact(Expression),
     Range(Expression, Expression),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, SyntaxEq)]
 pub struct ForListStatement {
     pub var_type: Option<VarType>,
     pub name: Ident2,
@@ -1255,7 +1349,7 @@ pub struct ForListStatement {
     pub block: Block,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, SyntaxEq)]
 pub struct ForRangeStatement {
     pub var_type: Option<VarType>,
     pub name: Ident2,
@@ -1310,10 +1404,7 @@ pub static VALID_FILTER_FLAGS: phf::Map<&'static str, (&str, bool, bool, &[&str]
     "wave" => ("flags", false, true, &[ "WAVE_SIDEWAYS", "WAVE_BOUNDED" ]),
 };
 
-pub struct TreeVar {
-
-}
-
+#[derive(SyntaxEq)]
 pub enum TreeEntryData {
     Decl,
     Block(TreeBlock),
@@ -1341,6 +1432,15 @@ impl TreeEntry {
             data: TreeEntryData::Decl,
             docs: DocCollection::default(),
         }
+    }
+}
+
+impl SyntaxEq for TreeEntry {
+    fn syntax_eq(&self, other: &Self) -> bool {
+        self.leading_path == other.leading_path
+        && self.absolute == other.absolute
+        && self.docs == other.docs
+        && self.data.syntax_eq(&other.data)
     }
 }
 
@@ -1448,6 +1548,7 @@ impl<'entry> TreeEntryBuilder<'entry> {
     }
 }
 
+#[derive(SyntaxEq)]
 pub struct TreeBlock {
     pub start: Location,
     pub entries: Vec<TreeEntry>,
@@ -1570,7 +1671,7 @@ impl<'ctx> SyntaxTree<'ctx> {
             let mut block_start_loc = Location::builtins();
             for (index, entry) in current_block.entries.iter_mut().enumerate() {
                 let starts_before = file_list.include_aware_gte(&range.start, &entry.start);
-                let ends_after = file_list.include_aware_gte(&entry.end, &range.end);
+                let ends_after = file_list.include_aware_gt(&entry.end, &range.end);
                 if starts_before && ends_after {
                     if let TreeEntryData::Block(block) = &mut entry.data {
                         if file_list.include_aware_gt(&range.start, &block.start) {
@@ -1632,7 +1733,7 @@ impl<'ctx> SyntaxTree<'ctx> {
             current_block.entries.reserve(merge_block.tree_block.entries.len());
 
             let index = merge_block.insert_index;
-            for entry in merge_block.tree_block.entries {
+            for entry in merge_block.tree_block.entries.into_iter().rev() {
                 current_block.entries.insert(index, entry);
             }
         }
@@ -1721,7 +1822,7 @@ impl<'ctx> SyntaxTree<'ctx> {
                                     dest.insert(*body_start..entry.end, Annotation::ProcBody(new_stack.to_vec(), idx));
                                 }
                                 if !entry.absolute && self.context.config().code_standards.disallow_relative_proc_definitions {
-                                    DMError::new(entry.start, "relatively pathed proc defined here")
+                                    DMError::new(entry.start, "relatively pathed proc defined here", Component::Parser)
                                         .set_severity(Severity::Warning)
                                         .register(self.context);
                                 }
@@ -1753,6 +1854,12 @@ impl<'ctx> SyntaxTree<'ctx> {
     }
 }
 
+impl<'ctx> SyntaxEq for SyntaxTree<'ctx> {
+    fn syntax_eq(&self, other: &Self) -> bool {
+        self.root.syntax_eq(&other.root)
+    }
+}
+
 fn reconstruct_path(node: &str, proc_kind: Option<ProcDeclKind>, last: &str) -> Vec<Ident> {
     let mut result = Vec::new();
     for entry in node.split('/').skip(1) {
@@ -1767,6 +1874,7 @@ fn reconstruct_path(node: &str, proc_kind: Option<ProcDeclKind>, last: &str) -> 
     }
     result
 }
+
 
 // random notes
 // updating any file requires a full reparse of the remainder of the file in order to update locations/symbolids

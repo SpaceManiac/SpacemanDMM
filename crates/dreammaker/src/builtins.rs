@@ -1,6 +1,6 @@
 //! BYOND built-in types, procs, and vars.
 
-use builtins_proc_macro::builtins_table;
+use dreammaker_proc_macros::builtins_table;
 
 use super::objtree::*;
 use super::Location;

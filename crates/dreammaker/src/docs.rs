@@ -2,6 +2,8 @@
 
 use std::fmt;
 
+use crate::ast::SyntaxEq;
+
 /// A collection of documentation comments targeting the same item.
 #[derive(Default, Clone, Debug, PartialEq)]
 pub struct DocCollection {
@@ -56,6 +58,12 @@ impl DocCollection {
             simplify(&mut output, &line_comments, '/');
         }
         output
+    }
+}
+
+impl SyntaxEq for DocCollection {
+    fn syntax_eq(&self, other: &Self) -> bool {
+        self == other
     }
 }
 

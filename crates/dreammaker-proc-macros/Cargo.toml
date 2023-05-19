@@ -1,0 +1,13 @@
+[package]
+name = "dreammaker-proc-macros"
+version = "0.2.0"
+authors = ["Tad Hardesty <tad@platymuus.com>", "Jordan Dominion <Cyberboss@users.noreply.github.com>" ]
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "1.0"
+quote = "1.0"
+proc-macro2 = "1.0.43"

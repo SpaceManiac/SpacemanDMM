@@ -10,6 +10,8 @@ use ahash::RandomState;
 
 use interval_tree::{IntervalTree, range};
 
+use crate::Component;
+
 use super::{DMError, Location, HasLocation, FileId, Context, Severity};
 use super::lexer::*;
 use super::docs::{DocComment, DocTarget, DocCollection};
@@ -665,7 +667,7 @@ impl<'ctx> Preprocessor<'ctx> {
     fn prepare_include_file(&mut self, path: PathBuf, include_location: Location) -> Result<Include<'ctx>, DMError> {
         // Attempt to open the file.
         let read = io::BufReader::new(File::open(&path).map_err(|e|
-            DMError::new(self.last_input_loc, format!("failed to open file: #include {:?}", path))
+            DMError::new(self.last_input_loc, format!("failed to open file: #include {:?}", path), Component::Parser)
                 .with_cause(e))?);
 
         // Get the path relative to the environment root, for easy lookup later.
@@ -675,7 +677,7 @@ impl<'ctx> Preprocessor<'ctx> {
         // All DM source is effectively `#pragma once`.
         let file_id = self.context.register_file(register, Some(include_location));
         if let Some(&loc) = self.include_locations.get(&file_id) {
-            Err(DMError::new(self.last_input_loc, format!("duplicate #include {:?}", path))
+            Err(DMError::new(self.last_input_loc, format!("duplicate #include {:?}", path), Component::Parser)
                 .set_severity(Severity::Warning)
                 .with_note(loc, "previously included here")
                 .with_errortype("duplicate_include"))
@@ -694,7 +696,7 @@ impl<'ctx> Preprocessor<'ctx> {
             self.context.register_error(DMError::new(*loc, format!(
                 "macro {:?} used immediately before being {}:\n\
                 https://www.byond.com/forum/?post=2072419", name, kind
-            )).set_severity(Severity::Warning));
+            ), Component::Parser).set_severity(Severity::Warning));
         }
     }
 
@@ -712,7 +714,7 @@ impl<'ctx> Preprocessor<'ctx> {
                         _last_expected_loc = x.location;
                         x.token
                     }
-                    None => return Err(self.error("unexpected EOF")),
+                    None => return Err(self.error("unexpected EOF", Component::Parser)),
                 }
             };
         }
@@ -720,7 +722,7 @@ impl<'ctx> Preprocessor<'ctx> {
             (($($i:ident),*) = $p:pat) => {
                 let ($($i,)*) = match next!() {
                     $p => ($($i,)*),
-                    other => return Err(self.error(format!("unexpected token {:?}, expecting {}", other, stringify!($p))))
+                    other => return Err(self.error(format!("unexpected token {:?}, expecting {}", other, stringify!($p)), Component::Parser))
                 };
             }
         }
@@ -738,11 +740,11 @@ impl<'ctx> Preprocessor<'ctx> {
                     // ifdefs
                     "endif" => {
                         self.pop_ifdef().ok_or_else(||
-                            DMError::new(self.last_input_loc, "unmatched #endif"))?;
+                            DMError::new(self.last_input_loc, "unmatched #endif", Component::Parser))?;
                     }
                     "else" => {
                         let last = self.pop_ifdef().ok_or_else(||
-                            DMError::new(self.last_input_loc, "unmatched #else"))?;
+                            DMError::new(self.last_input_loc, "unmatched #else", Component::Parser))?;
                         self.ifdef_stack.push(last.else_(self.last_input_loc));
                     }
                     "ifdef" => {
@@ -763,7 +765,7 @@ impl<'ctx> Preprocessor<'ctx> {
                     }
                     "elif" => {
                         let last = self.pop_ifdef().ok_or_else(||
-                            DMError::new(self.last_input_loc, "unmatched #elif"))?;
+                            DMError::new(self.last_input_loc, "unmatched #elif", Component::Parser))?;
                         let enabled = self.evaluate();
                         self.ifdef_stack.push(last.else_if(self.last_input_loc, enabled));
                     }
@@ -807,11 +809,12 @@ impl<'ctx> Preprocessor<'ctx> {
                                     self.context.register_error(DMError::new(
                                         self.last_input_loc,
                                         format!("unknown extension {:?}", ext),
+                                        Component::Parser,
                                     ));
                                     return Ok(());
                                 }
                                 None => {
-                                    self.context.register_error(DMError::new(self.last_input_loc, "filename has no extension"));
+                                    self.context.register_error(DMError::new(self.last_input_loc, "filename has no extension", Component::Parser));
                                     return Ok(());
                                 }
                             };
@@ -841,7 +844,7 @@ impl<'ctx> Preprocessor<'ctx> {
                             return Ok(());
                         }
 
-                        self.context.register_error(DMError::new(self.last_input_loc, format!("failed to find #include {:?}", path)));
+                        self.context.register_error(DMError::new(self.last_input_loc, format!("failed to find #include {:?}", path), Component::Parser));
                         return Ok(());
                     }
                     // both constant and function defines
@@ -888,7 +891,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                 Token::Punct(Punctuation::LParen) if !ws => {
                                     loop {
                                         if variadic {
-                                            return Err(self.error("only the last parameter of a macro may be variadic"));
+                                            return Err(self.error("only the last parameter of a macro may be variadic", Component::Parser));
                                         }
                                         match next!() {
                                             Token::Ident(name, _) => params.push(name),
@@ -896,7 +899,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                                 params.push("__VA_ARGS__".to_owned());  // default
                                                 variadic = true;
                                             }
-                                            _ => return Err(self.error("malformed macro parameters, expected name")),
+                                            _ => return Err(self.error("malformed macro parameters, expected name", Component::Parser)),
                                         }
                                         match next!() {
                                             Token::Punct(Punctuation::Comma) => {}
@@ -905,10 +908,10 @@ impl<'ctx> Preprocessor<'ctx> {
                                                 variadic = true;
                                                 match next!() {
                                                     Token::Punct(Punctuation::RParen) => break,
-                                                    _ => return Err(self.error("only the last parameter of a macro may be variadic"))
+                                                    _ => return Err(self.error("only the last parameter of a macro may be variadic", Component::Parser))
                                                 }
                                             }
-                                            _ => return Err(self.error("malformed macro parameters, expected comma")),
+                                            _ => return Err(self.error("malformed macro parameters, expected comma", Component::Parser)),
                                         }
                                     }
                                 }
@@ -937,7 +940,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                 // DM doesn't issue a warning for this, but it's usually a mistake, so let's.
                                 // FILE_DIR is handled specially and sometimes makes sense to define multiple times.
                                 if define_name != "FILE_DIR" {
-                                    DMError::new(define_name_loc, format!("macro redefined: {}", define_name))
+                                    DMError::new(define_name_loc, format!("macro redefined: {}", define_name), Component::Parser)
                                         .set_severity(Severity::Warning)
                                         .with_note(previous_loc, format!("previous definition of {}", define_name))
                                         .with_errortype("macro_redefined")
@@ -955,7 +958,7 @@ impl<'ctx> Preprocessor<'ctx> {
                         if let Some(previous) = self.defines.remove(&define_name) {
                             self.move_to_history(define_name, previous);
                         } else {
-                            DMError::new(define_name_loc, format!("macro undefined while not defined: {}", define_name))
+                            DMError::new(define_name_loc, format!("macro undefined while not defined: {}", define_name), Component::Parser)
                                 .with_errortype("macro_undefined_no_definition")
                                 .set_severity(Severity::Warning)
                                 .register(self.context);
@@ -964,14 +967,14 @@ impl<'ctx> Preprocessor<'ctx> {
                     "warn" if disabled => {}
                     "warn" => {
                         expect_token!((text) = Token::String(text));
-                        DMError::new(self.last_input_loc, format!("#{} {}", ident, text))
+                        DMError::new(self.last_input_loc, format!("#{} {}", ident, text), Component::Parser)
                             .set_severity(Severity::Warning)
                             .register(self.context);
                     }
                     "error" if disabled => {}
                     "error" => {
                         expect_token!((text) = Token::String(text));
-                        self.context.register_error(DMError::new(self.last_input_loc, format!("#{} {}", ident, text)));
+                        self.context.register_error(DMError::new(self.last_input_loc, format!("#{} {}", ident, text), Component::Parser));
                     }
                     // none of this other stuff should even exist
                     other => {
@@ -982,7 +985,7 @@ impl<'ctx> Preprocessor<'ctx> {
                             }
                         }
                         return Err(DMError::new(self.last_input_loc, format!("unknown directive: #{}{}{}", ident,
-                            if !meant.is_empty() { ", did you mean #" } else { "" }, meant)));
+                            if !meant.is_empty() { ", did you mean #" } else { "" }, meant), Component::Parser));
                     }
                 }
                 // yield a newline
@@ -1033,7 +1036,7 @@ impl<'ctx> Preprocessor<'ctx> {
                 let mut expansion = self.defines.get(ident).cloned();  // TODO: don't clone?
                 if expansion.is_some() && self.include_stack.stack.len() > MAX_RECURSION_DEPTH {
                     self.error(format!("expanding {:?} would exceed max recursion depth of {} levels",
-                        ident, MAX_RECURSION_DEPTH)).register(self.context);
+                        ident, MAX_RECURSION_DEPTH), Component::Parser).register(self.context);
                     expansion = None;
                 }
 
@@ -1102,7 +1105,7 @@ impl<'ctx> Preprocessor<'ctx> {
                             }
                         }
                         if args.len() != params.len() {
-                            return Err(self.error("wrong number of arguments to macro call"));
+                            return Err(self.error("wrong number of arguments to macro call", Component::Parser));
                         }
 
                         // paste them into the expansion
@@ -1178,10 +1181,10 @@ impl<'ctx> Preprocessor<'ctx> {
                                                 }
                                                 expansion.push_back(Token::String(string));
                                             }
-                                            None => return Err(DMError::new(self.last_input_loc, format!("can't stringify non-argument ident {:?}", argname))),
+                                            None => return Err(DMError::new(self.last_input_loc, format!("can't stringify non-argument ident {:?}", argname), Component::Parser)),
                                         }
-                                        Some(tok) => return Err(DMError::new(self.last_input_loc, format!("can't stringify non-ident '{}'", tok))),
-                                        None => return Err(DMError::new(self.last_input_loc, "can't stringify EOF")),
+                                        Some(tok) => return Err(DMError::new(self.last_input_loc, format!("can't stringify non-ident '{}'", tok), Component::Parser)),
+                                        None => return Err(DMError::new(self.last_input_loc, "can't stringify EOF", Component::Parser)),
                                     }
                                 }
                                 _ => expansion.push_back(token),
@@ -1253,7 +1256,7 @@ impl<'ctx> Iterator for Preprocessor<'ctx> {
                 }
             } else {
                 while let Some(ifdef) = self.pop_ifdef() {
-                    self.context.register_error(DMError::new(ifdef.location, "unterminated #if/#ifdef"));
+                    self.context.register_error(DMError::new(ifdef.location, "unterminated #if/#ifdef", Component::Parser));
                 }
                 return None;
             }

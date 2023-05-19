@@ -3,10 +3,13 @@ use std::fmt;
 use std::ops;
 use std::path::Path;
 
+use dreammaker_proc_macros::SyntaxEq;
 use indexmap::IndexMap;
 use ahash::RandomState;
 use ordered_float::OrderedFloat;
 use color_space::{Hsl, Hsv, Lch, Rgb};
+
+use crate::Component;
 
 use super::ast::*;
 use super::objtree::*;
@@ -22,6 +25,23 @@ pub type Arguments = [(Constant, Option<Constant>)];
 pub struct Pop {
     pub path: TreePath,
     pub vars: IndexMap<Ident, Constant, RandomState>,
+}
+
+impl SyntaxEq for Pop {
+    fn syntax_eq(&self, other: &Self) -> bool {
+        if !self.path.syntax_eq(&other.path)
+        || self.vars.len() != other.vars.len(){
+            return false;
+        }
+
+        self.vars.iter().all(|(key, value)|{
+            if let Some(entry) = other.vars.get(key){
+                value.syntax_eq(entry)
+            } else {
+                false
+            }
+        })
+    }
 }
 
 impl PartialEq for Pop {
@@ -62,7 +82,7 @@ impl fmt::Display for Pop {
 ///
 /// This is intended to represent the degree to which constants are evaluated
 /// before being displayed in DreamMaker.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, SyntaxEq)]
 pub enum Constant {
     /// The literal `null`.
     Null(Option<TreePath>),
@@ -132,7 +152,7 @@ impl std::cmp::PartialEq for Constant {
 impl std::cmp::Eq for Constant {}
 
 /// The constant functions which are represented as-is.
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, SyntaxEq)]
 pub enum ConstFn {
     /// The `icon()` type constructor.
     Icon,
@@ -420,7 +440,7 @@ pub fn evaluate_str(location: Location, input: &[u8]) -> Result<Constant, DMErro
     let expr = crate::parser::parse_expression(&ctx, location, &mut lexer)?;
     let leftover = lexer.remaining();
     if !leftover.is_empty() {
-        return Err(DMError::new(location, format!("leftover: {:?} {}", from_utf8_or_latin1_borrowed(input), leftover.len())));
+        return Err(DMError::new(location, format!("leftover: {:?} {}", from_utf8_or_latin1_borrowed(input), leftover.len()), Component::ObjectTree));
     }
     expr.simple_evaluate(location)
 }
@@ -471,6 +491,7 @@ pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree) {
                             key,
                             tree[ty].path,
                         ),
+                        Component::ObjectTree,
                     ));
                 }
             }
@@ -512,16 +533,19 @@ fn constant_ident_lookup(
                             return Err(DMError::new(
                                 var.value.location,
                                 format!("recursive constant reference: {}", ident),
+                                Component::ObjectTree,
                             ));
                         } else if !decl.var_type.is_const_evaluable() {
                             return Err(DMError::new(
                                 var.value.location,
                                 format!("non-const-evaluable variable: {}", ident),
+                                Component::ObjectTree,
                             ));
                         } else if !decl.var_type.flags.is_const() && must_be_const {
                             return Err(DMError::new(
                                 var.value.location,
                                 format!("non-const variable: {}", ident),
+                                Component::ObjectTree,
                             ));
                         }
                         var.value.being_evaluated = true;
@@ -589,7 +613,7 @@ impl<'a> ConstantFolder<'a> {
                     false => self.expr(*else_, type_hint)?,
                 }
             },
-            Expression::AssignOp { .. } => return Err(self.error("non-constant assignment")),
+            Expression::AssignOp { .. } => return Err(self.error("non-constant assignment", Component::ObjectTree)),
         })
     }
 
@@ -642,11 +666,11 @@ impl<'a> ConstantFolder<'a> {
                 }
                 match self.tree.as_mut().and_then(|t| t.find(&full_path)).map(|t| t.index()) {
                     Some(idx) => self.recursive_lookup(idx, &field_name, true),
-                    None => Err(self.error(format!("unknown typepath {}", full_path))),
+                    None => Err(self.error(format!("unknown typepath {}", full_path), Component::ObjectTree)),
                 }
             }
             (term, Follow::Unary(op)) => self.unary(term, op),
-            (term, follow) => Err(self.error(format!("non-constant expression follower: {} {:?}", term, follow))),
+            (term, follow) => Err(self.error(format!("non-constant expression follower: {} {:?}", term, follow), Component::ObjectTree)),
         }
     }
 
@@ -660,7 +684,7 @@ impl<'a> ConstantFolder<'a> {
             (UnaryOp::Not, c) => Constant::from(!c.to_bool()),
             // float ops
             // unsupported
-            (op, term) => return Err(self.error(format!("non-constant unary operation: {}", op.around(&term)))),
+            (op, term) => return Err(self.error(format!("non-constant unary operation: {}", op.around(&term)), Component::ObjectTree)),
         })
     }
 
@@ -712,7 +736,7 @@ impl<'a> ConstantFolder<'a> {
             (BinaryOp::NotEq, lhs, rhs) => Ok(Constant::from(lhs != rhs)),
             (BinaryOp::And, lhs, rhs) => Ok(if lhs.to_bool() { rhs } else { lhs }),
             (BinaryOp::Or, lhs, rhs) => Ok(if lhs.to_bool() { lhs } else { rhs }),
-            (op, lhs, rhs) => Err(self.error(format!("non-constant {:?}: {} {} {}", op, lhs, op, rhs))),
+            (op, lhs, rhs) => Err(self.error(format!("non-constant {:?}: {} {} {}", op, lhs, op, rhs), Component::ObjectTree)),
         }
     }
 
@@ -733,7 +757,7 @@ impl<'a> ConstantFolder<'a> {
                     None => None,
                 },
             },
-            Term::NewMiniExpr { .. } => return Err(self.error("non-constant new expression")),
+            Term::NewMiniExpr { .. } => return Err(self.error("non-constant new expression", Component::ObjectTree)),
             Term::List(vec) => Constant::List(self.arguments(vec)?),
             Term::Call(ident, args) => match &*ident {
                 // constructors which remain as they are
@@ -752,15 +776,15 @@ impl<'a> ConstantFolder<'a> {
                 "defined" if self.defines.is_some() => {
                     let defines = self.defines.unwrap();  // annoying, but keeps the match clean
                     if args.len() != 1 {
-                        return Err(self.error(format!("malformed defined() call, must have 1 argument and instead has {}", args.len())));
+                        return Err(self.error(format!("malformed defined() call, must have 1 argument and instead has {}", args.len()), Component::ObjectTree));
                     }
                     match args[0].as_term() {
                         Some(Term::Ident(ref ident)) => Constant::from(defines.contains_key(ident)),
-                        _ => return Err(self.error("malformed defined() call, argument given isn't an Ident.")),
+                        _ => return Err(self.error("malformed defined() call, argument given isn't an Ident.", Component::ObjectTree)),
                     }
                 }
                 // other functions are no-goes
-                _ => return Err(self.error(format!("non-constant function call: {}", ident))),
+                _ => return Err(self.error(format!("non-constant function call: {}", ident), Component::ObjectTree)),
             },
             Term::Prefab(prefab) => Constant::Prefab(Box::new(self.prefab(*prefab)?)),
             Term::Ident(ident) => self.ident(ident, false)?,
@@ -769,17 +793,17 @@ impl<'a> ConstantFolder<'a> {
             Term::Int(v) => Constant::Float(v as f32),
             Term::Float(v) => Constant::from(v),
             Term::Expr(expr) => self.expr(*expr, type_hint)?,
-            _ => return Err(self.error("non-constant expression".to_owned())),
+            _ => return Err(self.error("non-constant expression".to_owned(), Component::ObjectTree)),
         })
     }
 
     fn trig_op(&mut self, args: Box<[Expression]>, op: fn(f32) -> f32) -> Result<Constant, DMError> {
         if args.len() != 1 {
-            Err(self.error(format!("trig function requires exactly 1 argument, instead found {}", args.len())))
+            Err(self.error(format!("trig function requires exactly 1 argument, instead found {}", args.len()), Component::ObjectTree))
         } else if let Some(f) = self.expr(Vec::from(args).swap_remove(0), None)?.to_float() {
             Ok(Constant::Float(op(f)))
         } else {
-            Err(self.error("trig function requires numeric argument"))
+            Err(self.error("trig function requires numeric argument", Component::ObjectTree))
         }
     }
 
@@ -798,14 +822,14 @@ impl<'a> ConstantFolder<'a> {
             Some(tree) => tree,
             None => return Err(self.error(format!(
                 "cannot resolve relative type path without an object tree: {}",
-                FormatTypePath(&prefab.path)))),
+                FormatTypePath(&prefab.path)), Component::ObjectTree)),
         };
 
         let relative_to = TypeRef::new(tree, self.ty);
         let found = match relative_to.navigate_path(&prefab.path) {
             Some(found) => found,
             None => return Err(self.error(format!("could not resolve {} relative to {}",
-                FormatTypePath(&prefab.path), relative_to))),
+                FormatTypePath(&prefab.path), relative_to), Component::ObjectTree)),
         };
 
         let path = found.to_path().into_boxed_slice();
@@ -832,7 +856,7 @@ impl<'a> ConstantFolder<'a> {
         while let Some(ty) = idx {
             let location = self.location;
             if self.tree.is_none() {
-                return Err(self.error(format!("cannot reference variable {:?} in this context", ident)));
+                return Err(self.error(format!("cannot reference variable {:?} in this context", ident), Component::ObjectTree));
             }
             let tree = self.tree.as_mut().unwrap();
             match constant_ident_lookup(tree, ty, ident, must_be_const)
@@ -842,7 +866,7 @@ impl<'a> ConstantFolder<'a> {
                 ConstLookup::Continue(i) => idx = i,
             }
         }
-        Err(self.error(format!("unknown variable: {}", ident)))
+        Err(self.error(format!("unknown variable: {}", ident), Component::ObjectTree))
     }
 
     fn rgb(&mut self, args: Box<[Expression]>) -> Result<String, DMError> {
@@ -868,7 +892,7 @@ impl<'a> ConstantFolder<'a> {
         }
 
         if args.len() != 3 && args.len() != 4 && args.len() != 5 {
-            return Err(self.error(format!("malformed rgb() call, must have 3, 4, or 5 arguments and instead has {}", args.len())));
+            return Err(self.error(format!("malformed rgb() call, must have 3, 4, or 5 arguments and instead has {}", args.len()), Component::ObjectTree));
         }
 
         let arguments = self.arguments(args)?;
@@ -897,15 +921,15 @@ impl<'a> ConstantFolder<'a> {
                             Some(2) => space = Some(ColorSpace::Hsl),
                             Some(3) => space = Some(ColorSpace::Hcy),
                             _ => {
-                                return Err(self.error(format!("malformed rgb() call, bad color space: {}", kwarg_value)))
+                                return Err(self.error(format!("malformed rgb() call, bad color space: {}", kwarg_value), Component::ObjectTree))
                             }
                         }
                         _ => {
-                            return Err(self.error(format!("malformed rgb() call, bad kwarg passed: {}", kwarg)))
+                            return Err(self.error(format!("malformed rgb() call, bad kwarg passed: {}", kwarg), Component::ObjectTree))
                         }
                     }
                 } else {
-                    return Err(self.error(format!("malformed rgb() call, kwarg is not string: {}", value)));
+                    return Err(self.error(format!("malformed rgb() call, kwarg is not string: {}", value), Component::ObjectTree));
                 }
             }
         }
@@ -925,10 +949,10 @@ impl<'a> ConstantFolder<'a> {
                 } else if color_args.l {
                     ColorSpace::Hsl
                 } else {
-                    return Err(self.error("malformed rgb() call, could not determine space: only h & s specified"));
+                    return Err(self.error("malformed rgb() call, could not determine space: only h & s specified", Component::ObjectTree));
                 }
             } else {
-                return Err(self.error("malformed rgb() call, could not determine space: only h specified"));
+                return Err(self.error("malformed rgb() call, could not determine space: only h specified", Component::ObjectTree));
             }
         } else {
             ColorSpace::Rgb  // Default
@@ -977,17 +1001,17 @@ impl<'a> ConstantFolder<'a> {
                         "a" | "alpha" => 0..=255,
                         "space" => continue, // Don't range-check the value of the space
                         _ => {
-                            return Err(self.error(format!("malformed rgb() call, bad kwarg passed: {}", kwarg)))
+                            return Err(self.error(format!("malformed rgb() call, bad kwarg passed: {}", kwarg), Component::ObjectTree))
                         }
                     };
                 } else {
-                    return Err(self.error(format!("malformed rgb() call, kwarg is not string: {}", value)));
+                    return Err(self.error(format!("malformed rgb() call, kwarg is not string: {}", value), Component::ObjectTree));
                 }
             }
 
             if let Some(i) = to_check.to_int() {
                 if !range.contains(&i) {
-                    return Err(self.error(format!("malformed rgb() call, {} is not within the valid range ({}..{})", i, range.start(), range.end()))
+                    return Err(self.error(format!("malformed rgb() call, {} is not within the valid range ({}..{})", i, range.start(), range.end()), Component::ObjectTree)
                         .set_severity(Severity::Warning)
                         .with_location(self.location)
                     );
@@ -995,7 +1019,7 @@ impl<'a> ConstantFolder<'a> {
                 let clamped = std::cmp::max(::std::cmp::min(i, *range.end()), *range.start());
                 value_vec.push(clamped.into());
             } else {
-                return Err(self.error("malformed rgb() call, value wasn't an int"));
+                return Err(self.error("malformed rgb() call, value wasn't an int", Component::ObjectTree));
             }
         }
 

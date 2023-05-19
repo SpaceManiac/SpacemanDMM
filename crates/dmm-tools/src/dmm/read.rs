@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use std::cmp::max;
 use std::mem::take;
 
+use dreammaker::Component;
 use ndarray::Array3;
 
 use dm::{DMError, Location};
@@ -211,7 +212,7 @@ pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
                     max_y = max(max_y, curr_y);
                     reading_coord = Coord::Z;
                 } else {
-                    return Err(DMError::new(chars.location(), "Incorrect number of coordinates"));
+                    return Err(DMError::new(chars.location(), "Incorrect number of coordinates", Component::DmmTools));
                 }
             } else if ch == b')' {
                 assert_eq!(reading_coord, Coord::Z);
@@ -222,7 +223,7 @@ pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
             } else {
                 match (ch as char).to_digit(10) {
                     Some(x) => curr_num = 10 * curr_num + x as usize,
-                    None => return Err(DMError::new(chars.location(), format!("bad digit {:?} in map coordinate", ch))),
+                    None => return Err(DMError::new(chars.location(), format!("bad digit {:?} in map coordinate", ch), Component::DmmTools)),
                 }
             }
         } else if in_map_string {
@@ -248,7 +249,7 @@ pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
                     if grid.insert((curr_x, curr_y, curr_z), Key(key)).is_some() {
                         return Err(DMError::new(chars.location(), format!(
                             "multiple entries for ({}, {}, {})",
-                            curr_x, curr_y, curr_z)))
+                            curr_x, curr_y, curr_z), Component::DmmTools))
                     }
                     max_x = max(max_x, curr_x);
                     curr_x += 1;
@@ -269,7 +270,7 @@ pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
         } else {
             result = Err(DMError::new(chars.location(), format!(
                 "no value for tile ({}, {}, {})",
-                x + 1, y + 1, z + 1)));
+                x + 1, y + 1, z + 1), Component::DmmTools));
             Key(0)
         }
     });
@@ -279,9 +280,9 @@ pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
 
 fn advance_key(loc: Location, curr_key: KeyType, ch: u8) -> Result<KeyType, DMError> {
     match super::base_52_reverse(ch) {
-        Err(err) => Err(DMError::new(loc, err)),
+        Err(err) => Err(DMError::new(loc, err, Component::DmmTools)),
         Ok(single) => match super::advance_key(curr_key, single) {
-            Err(err) => Err(DMError::new(loc, err)),
+            Err(err) => Err(DMError::new(loc, err, Component::DmmTools)),
             Ok(key) => Ok(key),
         }
     }
