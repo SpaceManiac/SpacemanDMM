@@ -391,3 +391,45 @@ fn test_fatal_open_brace_reparse_into_fix() {
     assert_eq!(2, syn.root().entries.len());
 })
 }
+
+#[test]
+fn test_macro_multi_range_reparse(){
+    with_reparse("
+/datum/sub
+
+#define DATUM(X) /datum/##X
+
+DATUM(affected)
+
+/datum/maybe_affected
+
+/datum/definitely_not_affected
+
+DATUM(second_affected)
+", |ctx, _, _, file|{
+    ctx.assert_success();
+
+    range(Location{
+        file,
+        line: 3,
+        column: 25
+    },
+    Location{
+        file,
+        line: 3,
+        column: 25
+    })
+}, "
+/datum/sub
+
+#define DATUM(X) /datum/sub/##X
+
+DATUM(affected)
+
+/datum/maybe_affected
+
+/datum/definitely_not_affected
+
+DATUM(second_affected)
+", |ctx, _, _, _| ctx.assert_success());
+}
