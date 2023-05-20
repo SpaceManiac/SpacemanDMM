@@ -209,18 +209,18 @@ pub fn detect_environment_default() -> std::io::Result<Option<std::path::PathBuf
 fn get_and_merge_rebuild_ranges<'ctx, S: Into<Cow<'ctx, str>>>(
     context: &'ctx Context,
     syntax_tree: &SyntaxTree,
-    range: RangeInclusive<Location>,
+    mut modified_range: RangeInclusive<Location>,
     modified_file_buffer: S,
     file_provider: &mut dyn FileProvider) -> (Vec<LocatedToken>, Vec<RangeTreeBlockBuilder>) {
     let existing_defines = syntax_tree.defines().unwrap();
-    let mut preprocessor = existing_defines.branch_at(range.start, context, Some(file_provider));
+    let mut preprocessor = existing_defines.branch_at(modified_range.start, context, Some(file_provider));
     let existing_defines_end = existing_defines.branch_at(Location {
-            file: range.end.file,
-            line: range.end.line + 1, // should be gucchi
+            file: modified_range.end.file,
+            line: modified_range.end.line + 1, // should be gucchi
             column: 1,
         }, context, None).finalize();
 
-    let path = context.file_list().get_path(range.start.file);
+    let path = context.file_list().get_path(modified_range.start.file);
 
     // Should not fail unless modified_file_buffer is scuffed
     preprocessor.push_buffer(path, modified_file_buffer);
@@ -232,17 +232,15 @@ fn get_and_merge_rebuild_ranges<'ctx, S: Into<Cow<'ctx, str>>>(
 
     let new_defines_end = preprocessor.finalize();
 
-    let mut expanded_range = range;
     if !new_defines_end.currently_equals(&existing_defines_end) {
         // Uncommon, but slow AF, we have to re-preprocess each relevant subsequent macro invocation that's changed
         todo!();
     }
 
-    let block = syntax_tree.rebuild_range(expanded_range);
+    let block = syntax_tree.rebuild_range(modified_range);
     (tokens, vec![block])
 }
 
-// Syntax tree must have define history
 pub fn incremental_reparse<'ctx, S: Into<Cow<'ctx, str>>>(
     context: &'ctx Context,
     mut syntax_tree: SyntaxTree<'ctx>,
@@ -253,6 +251,7 @@ pub fn incremental_reparse<'ctx, S: Into<Cow<'ctx, str>>>(
 
     // a single reparse invocation cannot cross files
     assert_eq!(modified_range.start.file, modified_range.end.file);
+    // Syntax tree must have define history
     assert!(syntax_tree.defines().is_some());
 
     // - Something akin to define history for the include stack, stored the same way
