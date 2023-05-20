@@ -1,6 +1,8 @@
 //! DreamChecker, a robust static analysis and typechecking engine for
 //! DreamMaker.
 
+use dm::preprocessor::DiskFileProvider;
+
 extern crate dreammaker as dm;
 extern crate dreamchecker;
 #[macro_use]
@@ -59,7 +61,8 @@ fn main() {
 
     println!("============================================================");
     println!("Parsing {}...\n", dme.display());
-    let pp = dm::preprocessor::Preprocessor::new(&context, dme)
+    let mut file_provider = DiskFileProvider{};
+    let pp = dm::preprocessor::Preprocessor::new(&context, dme, &mut file_provider)
         .expect("i/o error opening .dme");
     let indents = dm::indents::IndentProcessor::new(&context, pp);
     let mut parser = dm::parser::Parser::new(&context, indents);

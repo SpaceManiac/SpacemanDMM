@@ -5,6 +5,7 @@ use std::fmt;
 use std::borrow::Cow;
 
 use crate::Component;
+use crate::preprocessor::FileProvider;
 
 use super::{DMError, Location, HasLocation, FileId, Context, Severity};
 use super::docs::*;
@@ -499,7 +500,7 @@ fn buffer_read<R: Read>(file: FileId, mut read: R) -> Result<Vec<u8>, DMError> {
 
 /// Attempt to read an entire file into memory, returning a line and column if
 /// an I/O error occurs.
-pub fn buffer_file(file: FileId, path: &std::path::Path) -> Result<Vec<u8>, DMError> {
+pub fn buffer_file(file: FileId, path: &std::path::Path, file_provider: &mut dyn FileProvider) -> Result<Vec<u8>, DMError> {
     let mut buffer = match std::fs::metadata(path) {
         // Add an extra byte for the final read() that ultimately returns EOF.
         // Otherwise the capacity is doubled at the last moment.
@@ -507,7 +508,7 @@ pub fn buffer_file(file: FileId, path: &std::path::Path) -> Result<Vec<u8>, DMEr
         Err(_) => Vec::new(),
     };
 
-    let mut read = match std::fs::File::open(path) {
+    let mut read = match file_provider.open_file(path) {
         Ok(read) => read,
         Err(error) => return Err(DMError::new(Location { file, line: 1, column: 1 }, "i/o error opening file", Component::Parser).with_cause(error)),
     };
@@ -684,9 +685,9 @@ impl<'ctx> Lexer<'ctx> {
     }
 
     /// Create a new lexer from a reader.
-    pub fn from_file(context: &'ctx Context, file: FileId, path: &std::path::Path) -> Result<Self, DMError> {
+    pub fn from_file(context: &'ctx Context, file: FileId, path: &std::path::Path, file_provider: &mut dyn FileProvider) -> Result<Self, DMError> {
         let start_time = std::time::Instant::now();
-        let input = buffer_file(file, path)?;
+        let input = buffer_file(file, path, file_provider)?;
         context.add_io_time(start_time.elapsed());
         Ok(Lexer::new(context, file, input))
     }

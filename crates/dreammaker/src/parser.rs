@@ -357,14 +357,12 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         (self.fatal_errored, tree)
     }
 
-    /// Attempt to reparse a pre-existing SyntaxTree.
-    pub fn reparse_2(mut self, mut tree: SyntaxTree<'ctx>, range: RangeInclusive<Location>) -> (bool, SyntaxTree<'ctx>) {
-        let mut block = tree.rebuild_range(range);
+    pub fn reparse(&mut self, block: &mut RangeTreeBlockBuilder) -> bool {
         self.tree_entry_limit_range = Some(block.parse_range());
-        let root = self.root(&mut block);
-        self.finish(root, &mut tree, Some(block));
+        let root = self.root(block);
+        self.finish(root, None);
 
-        (self.fatal_errored, tree)
+        self.fatal_errored
     }
 
     pub fn parse_with_module_docs(mut self) -> (SyntaxTree<'ctx>, BTreeMap<FileId, Vec<(u32, DocComment)>>) {
@@ -375,15 +373,16 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     fn run(&mut self) -> SyntaxTree<'ctx> {
         let mut tree = SyntaxTree::new(self.context);
+
         let mut block = tree.build_root();
         let root = self.root(&mut block);
         drop(block);
 
-        self.finish(root, &mut tree, None);
+        self.finish(root, Some(&mut tree));
         tree
     }
 
-    fn finish(&mut self, root: Status<()>, tree: &mut SyntaxTree, merge_block: Option<RangeTreeBlockBuilder>) {
+    fn finish(&mut self, root: Status<()>, tree_option: Option<&mut SyntaxTree>) {
         if let Err(mut e) = self.require(root) {
             let loc = e.location();
             e = e.set_severity(Severity::Error);
@@ -403,7 +402,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             );
         }
 
-        tree.finish(merge_block, self.fatal_errored);
+        if let Some(tree) = tree_option {
+            tree.finish(self.fatal_errored);
+        }
     }
 
     // ------------------------------------------------------------------------

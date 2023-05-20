@@ -17,9 +17,10 @@ use std::borrow::Cow;
 
 use annotation::AnnotationTree;
 pub use error::*;
-use ast::SyntaxTree;
-use interval_tree::RangeInclusive;
+use ast::{SyntaxTree, RangeTreeBlockBuilder};
+use interval_tree::{RangeInclusive, range};
 use lexer::LocatedToken;
+use preprocessor::{DiskFileProvider, FileProvider};
 
 use crate::indents::IndentProcessor;
 use crate::parser::Parser;
@@ -56,9 +57,10 @@ impl Context {
     /// return a best-effort parse. Call `print_all_errors` to pretty-print
     /// errors to standard error.
     pub fn parse_environment(&self, dme: &Path) -> Result<SyntaxTree, DMError> {
+        let mut file_provider = DiskFileProvider{};
         Ok(parser::parse(self,
             indents::IndentProcessor::new(self,
-                preprocessor::Preprocessor::new(self, dme.to_owned())?
+                preprocessor::Preprocessor::new(self, dme.to_owned(), &mut file_provider)?
             )
         ))
     }
@@ -204,51 +206,119 @@ pub fn detect_environment_default() -> std::io::Result<Option<std::path::PathBuf
     }))
 }
 
-pub fn incremental_reparse<'ctx, S: Into<Cow<'ctx, str>>>(
+fn get_and_merge_rebuild_ranges<'ctx, S: Into<Cow<'ctx, str>>>(
     context: &'ctx Context,
-    syntax_tree: SyntaxTree<'ctx>,
+    syntax_tree: &SyntaxTree,
     range: RangeInclusive<Location>,
-    file_buffer: S,
-    annotations_opt: Option<&mut AnnotationTree>) -> Result<(bool, SyntaxTree<'ctx>), DMError> {
-
-    // incremental parsing across files is not supported, do one at a time
-    // adding an #include line is still a one file change
-    assert_eq!(range.start.file, range.end.file);
-    let defines_option = syntax_tree.defines();
-    if defines_option.is_none() {
-        return Err(DMError::new(Location::builtins(), "SyntaxTree does not have define history!", Component::Unspecified));
-    }
-
-    // get our reference point define maps
-    let existing_defines = defines_option.unwrap();
-    let mut preprocessor = existing_defines.branch_at(range.start, context);
+    modified_file_buffer: S,
+    file_provider: &mut dyn FileProvider) -> (Vec<LocatedToken>, Vec<RangeTreeBlockBuilder>) {
+    let existing_defines = syntax_tree.defines().unwrap();
+    let mut preprocessor = existing_defines.branch_at(range.start, context, Some(file_provider));
     let existing_defines_end = existing_defines.branch_at(Location {
             file: range.end.file,
             line: range.end.line + 1, // should be gucchi
             column: 1,
-        }, context).finalize();
+        }, context, None).finalize();
 
     let path = context.file_list().get_path(range.start.file);
 
-    // Should not fail unless file_buffer is scuffed
-    preprocessor.push_buffer(path, file_buffer)?;
+    // Should not fail unless modified_file_buffer is scuffed
+    preprocessor.push_buffer(path, modified_file_buffer);
 
-    let indents: IndentProcessor<&mut preprocessor::Preprocessor> = IndentProcessor::new(context, &mut preprocessor);
+    let indents = IndentProcessor::new(context, &mut preprocessor);
 
     // preprocess before continuing
     let tokens: Vec<LocatedToken> = indents.into_iter().collect();
 
     let new_defines_end = preprocessor.finalize();
 
+    let mut expanded_range = range;
     if !new_defines_end.currently_equals(&existing_defines_end) {
-        // Uncommon, but slow AF, we have to re-preprocess everything after this point
+        // Uncommon, but slow AF, we have to re-preprocess each relevant subsequent macro invocation that's changed
         todo!();
     }
 
-    let mut parser = Parser::new(context, tokens);
-    if let Some(annotations) = annotations_opt {
-        parser.annotate_to(annotations);
+    let block = syntax_tree.rebuild_range(expanded_range);
+    (tokens, vec![block])
+}
+
+// Syntax tree must have define history
+pub fn incremental_reparse<'ctx, S: Into<Cow<'ctx, str>>>(
+    context: &'ctx Context,
+    mut syntax_tree: SyntaxTree<'ctx>,
+    modified_range: RangeInclusive<Location>,
+    modified_file_buffer: S,
+    file_provider: &mut dyn FileProvider,
+    annotations_opt: Option<&mut AnnotationTree>) -> (bool, SyntaxTree<'ctx>) {
+
+    // a single reparse invocation cannot cross files
+    assert_eq!(modified_range.start.file, modified_range.end.file);
+    assert!(syntax_tree.defines().is_some());
+
+    // - Something akin to define history for the include stack, stored the same way
+    // - Map define usage to get concise ranges for reparsing
+
+    // get our reference point define maps
+    let (modified_range_tokens, mut blocks_to_rebuild) = get_and_merge_rebuild_ranges(
+        context,
+        &syntax_tree,
+        modified_range,
+        modified_file_buffer,
+        file_provider);
+
+    let first_block_start = blocks_to_rebuild.iter().next().unwrap().parse_range().start;
+    let last_block_end = blocks_to_rebuild.last().unwrap().parse_range().end;
+    let expanded_range = range(first_block_start, last_block_end);
+
+    let mut parser_error = false;
+    if expanded_range.start.file != modified_range.start.file || expanded_range.end.file != modified_range.end.file {
+        // need a fresh preprocess of the new data
+        // the range can only ever meaningfully expand forwards, backwards expansion is just the parser needing more context for a reparse
+
+        // always start preprocessing at the start of the file for clean state
+        let branch_location = Location {
+            file: expanded_range.start.file,
+            line: 1,
+            column: 1
+        };
+
+        let existing_defines = syntax_tree.defines().unwrap();
+        let mut second_preprocessor = existing_defines.branch_at(branch_location, context, Some(file_provider));
+        let second_indents = IndentProcessor::new(context, &mut second_preprocessor);
+        let mut parser = Parser::new(context, second_indents);
+        if let Some(annotations) = annotations_opt {
+            parser.annotate_to(annotations);
+        }
+
+        for block in blocks_to_rebuild.iter_mut() {
+            parser_error = parser.reparse(block);
+            if parser_error {
+                break
+            }
+        }
+
+        if !parser_error {
+            syntax_tree.update(blocks_to_rebuild.into_iter());
+            drop(parser);
+            syntax_tree.with_define_history(second_preprocessor.finalize());
+        }
+    } else {
+        let mut parser = Parser::new(context, modified_range_tokens);
+        if let Some(annotations) = annotations_opt {
+            parser.annotate_to(annotations);
+        }
+
+        for block in blocks_to_rebuild.iter_mut() {
+            parser_error = parser.reparse(block);
+            if parser_error {
+                break
+            }
+        }
+
+        if !parser_error {
+            syntax_tree.update(blocks_to_rebuild.into_iter());
+        }
     }
 
-    Ok(parser.reparse_2(syntax_tree, range))
+    (parser_error, syntax_tree)
 }

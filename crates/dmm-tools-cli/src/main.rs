@@ -20,6 +20,7 @@ use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::RwLock;
 use std::collections::HashSet;
 
+use dm::preprocessor::DiskFileProvider;
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use structopt::StructOpt;
 
@@ -77,7 +78,8 @@ impl Context {
         }
 
         self.dm_context.autodetect_config(&environment);
-        let pp = match dm::preprocessor::Preprocessor::new(&self.dm_context, environment) {
+        let mut file_provider = DiskFileProvider{};
+        let pp = match dm::preprocessor::Preprocessor::new(&self.dm_context, environment, &mut file_provider) {
             Ok(pp) => pp,
             Err(e) => {
                 eprintln!("i/o error opening environment:\n{}", e);

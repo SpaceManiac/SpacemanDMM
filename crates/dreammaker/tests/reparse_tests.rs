@@ -1,17 +1,29 @@
 extern crate dreammaker as dm;
 
-use dm::{objtree::ObjectTree, Context, preprocessor::Preprocessor, indents, ast::{SyntaxTree, TreeEntryData, Expression, Term, SyntaxEq}, parser, incremental_reparse, Location, FileId, Component};
+use dm::{objtree::ObjectTree, Context, preprocessor::{Preprocessor, FileProvider}, indents, ast::{SyntaxTree, TreeEntryData, Expression, Term, SyntaxEq}, parser, incremental_reparse, Location, FileId, Component};
 use interval_tree::{range, RangeInclusive};
+
+struct BufferedFileProvider {
+    code: &'static str,
+}
+
+const TEST_FILE_PATH: &str = "test.dme";
+
+impl FileProvider for BufferedFileProvider {
+    fn open_file(&mut self, _: &std::path::Path) -> Result<Box<dyn std::io::Read>, std::io::Error> {
+        Ok(Box::new(self.code.as_bytes()))
+    }
+}
 
 fn with_reparse<
     F1: FnOnce(&Context, &SyntaxTree, Option<ObjectTree>, FileId) -> RangeInclusive<Location>,
     F2: FnOnce(&Context, SyntaxTree, Option<ObjectTree>, FileId)>(
         code: &'static str,
         f1: F1,
-        code2: &'static str,
+        mut code2: &'static str,
         f2: F2) {
     let context = Context::default();
-    let path = std::path::PathBuf::from(r"test.dm");
+    let path = std::path::PathBuf::from(TEST_FILE_PATH);
     let mut pp = Preprocessor::from_buffer(&context, path, code.trim());
     let indents = indents::IndentProcessor::new(&context, &mut pp);
     let mut parser = parser::Parser::new(&context, indents);
@@ -20,16 +32,27 @@ fn with_reparse<
     syntax_tree.with_define_history(pp.finalize());
     let objtree = syntax_tree.object_tree_without_builtins();
 
-    let file = context.get_file(std::path::PathBuf::from("test.dm").as_path()).unwrap();
+    let file = context.get_file(std::path::PathBuf::from(TEST_FILE_PATH).as_path()).unwrap();
     let range = f1(&context, &syntax_tree, Some(objtree), file);
 
     context.clear_errors(Some(&range), Some(Component::Parser));
     context.clear_errors(None, Some(Component::ObjectTree));
     let original_syntax_tree = syntax_tree.root().clone();
-    let result = incremental_reparse(&context, syntax_tree, range, code2.trim(), None);
 
-    assert!(result.is_ok());
-    let (parser_error, syntax_tree_2) = result.unwrap();
+    code2 = code2.trim();
+    let mut file_provider = BufferedFileProvider{
+        code: code2,
+    };
+
+    let result = incremental_reparse(
+        &context,
+        syntax_tree,
+        range,
+        code2,
+        &mut file_provider,
+        None);
+
+    let (parser_error, syntax_tree_2) = result;
 
 
     let obj = if parser_error {
@@ -39,7 +62,7 @@ fn with_reparse<
     } else {
         // for everything we reparse successfully, we want to fully parse it and syntax compare it as well to assert there are no differences with the updated syntax tree
         let context2 = Context::default();
-        let path2 = std::path::PathBuf::from(r"test.dm");
+        let path2 = std::path::PathBuf::from(TEST_FILE_PATH);
         let mut pp2 = Preprocessor::from_buffer(&context2, path2, code2.trim());
         let indents2 = indents::IndentProcessor::new(&context2, &mut pp2);
         let mut parser2 = parser::Parser::new(&context2, indents2);
@@ -61,17 +84,26 @@ fn with_double_reparse<
         f1: F1,
         code2: &'static str,
         f2: F2,
-        code3: &'static str,
+        mut code3: &'static str,
         f3: F3) {
     with_reparse(code, f1, code2, |context,syn,obj,file|{
         let second_reparse_range: RangeInclusive<Location> = f2(context, &syn, obj, file);
         context.clear_errors(Some(&second_reparse_range), Some(Component::Parser));
         context.clear_errors(None, Some(Component::ObjectTree));
 
-        let result = incremental_reparse(&context, syn, second_reparse_range, code3.trim(), None);
+        code3 = code3.trim();
+        let mut file_provider = BufferedFileProvider{
+            code: code3,
+        };
+        let result = incremental_reparse(
+            &context,
+            syn,
+            second_reparse_range,
+            code3,
+            &mut file_provider,
+            None);
 
-        assert!(result.is_ok());
-        let (parser_error, syn2) = result.unwrap();
+        let (parser_error, syn2) = result;
 
         // for everything we reparse, we want to fully parse it and syntax compare it as well to assert there are no differences
         let context2 = Context::default();
@@ -93,7 +125,6 @@ fn with_double_reparse<
         f3(context, syn2, obj, file)
     });
 }
-
 
 #[test]
 fn test_basic_reparse() {

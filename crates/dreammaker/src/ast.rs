@@ -1652,11 +1652,11 @@ impl<'ctx> SyntaxTree<'ctx> {
         }
     }
 
-    pub(crate) fn rebuild_range(&mut self, range: interval_tree::RangeInclusive<Location>) -> RangeTreeBlockBuilder {
+    pub(crate) fn rebuild_range(&self, range: interval_tree::RangeInclusive<Location>) -> RangeTreeBlockBuilder {
         debug_assert_eq!(range.start.file, range.end.file);
 
         let mut stack = VecDeque::with_capacity(1);
-        stack.push_back(&mut self.root);
+        stack.push_back(&self.root);
 
         let mut builder = RangeTreeBlockBuilder {
             expanded_range: range,
@@ -1671,11 +1671,11 @@ impl<'ctx> SyntaxTree<'ctx> {
         while let Some(current_block) = stack.pop_back() {
             let mut block_start_index = None;
             let mut block_start_loc = Location::builtins();
-            for (index, entry) in current_block.entries.iter_mut().enumerate() {
+            for (index, entry) in current_block.entries.iter().enumerate() {
                 let starts_before = file_list.include_aware_gte(&range.start, &entry.start);
                 let ends_after = file_list.include_aware_gt(&entry.end, &range.end);
                 if starts_before && ends_after {
-                    if let TreeEntryData::Block(block) = &mut entry.data {
+                    if let TreeEntryData::Block(block) = &entry.data {
                         if file_list.include_aware_gt(&range.start, &block.start) {
                             builder.navigation_path.push(index);
                             builder.parent_path.extend(entry.leading_path.iter().cloned());
@@ -1715,14 +1715,13 @@ impl<'ctx> SyntaxTree<'ctx> {
         builder
     }
 
-    pub(crate) fn finish(&mut self, block_to_merge: Option<RangeTreeBlockBuilder>, parser_fatal_errored: bool) {
+    pub(crate) fn finish(&mut self, parser_fatal_errored: bool) {
         self.parser_fatal_errored = parser_fatal_errored;
-        if parser_fatal_errored {
-            // do not accept any block_to_merge, a random LBRACE can destroy a syntax tree that can be used for future reparsing
-            return;
-        }
+    }
 
-        if let Some(merge_block) = block_to_merge {
+    pub fn update<I: DoubleEndedIterator<Item = RangeTreeBlockBuilder>>(&mut self, blocks: I) {
+        // reverse it to avoid adversely affecting insert offsets/spans
+        for merge_block in blocks.rev() {
             let mut current_block = &mut self.root;
             for index in &merge_block.navigation_path {
                 let entry = &mut current_block.entries[*index];

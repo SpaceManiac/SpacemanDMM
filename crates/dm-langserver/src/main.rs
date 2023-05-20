@@ -39,6 +39,7 @@ use std::collections::hash_map::Entry;
 use std::sync::{Arc, Mutex};
 use std::rc::Rc;
 
+use dm::preprocessor::DiskFileProvider;
 use url::Url;
 use jsonrpc::{Request, Call, Response, Output};
 use lsp_types::MessageType;
@@ -450,7 +451,8 @@ impl<'a> Engine<'a> {
         let ctx = self.context;
         ctx.reset_io_time();
         ctx.autodetect_config(&environment);
-        let mut pp = match dm::preprocessor::Preprocessor::new(ctx, environment.clone()) {
+        let mut file_provider = DiskFileProvider{};
+        let mut pp = match dm::preprocessor::Preprocessor::new(ctx, environment.clone(), &mut file_provider) {
             Ok(pp) => pp,
             Err(err) => {
                 self.issue_notification::<lsp_types::notification::PublishDiagnostics>(

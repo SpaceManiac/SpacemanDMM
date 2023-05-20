@@ -3,7 +3,7 @@ extern crate dreammaker as dm;
 use std::path::PathBuf;
 
 use dm::*;
-use dm::preprocessor::Preprocessor;
+use dm::preprocessor::{Preprocessor, DiskFileProvider};
 
 fn with_test_dme<F: FnOnce(Preprocessor)>(context: &Context, f: F) {
     let dme = match std::env::var_os("TEST_DME") {
@@ -13,7 +13,8 @@ fn with_test_dme<F: FnOnce(Preprocessor)>(context: &Context, f: F) {
             return;
         }
     };
-    f(Preprocessor::new(context, PathBuf::from(dme)).expect("failed to open test file"))
+    let mut file_provider = DiskFileProvider{};
+    f(Preprocessor::new(context, PathBuf::from(dme), &mut file_provider).expect("failed to open test file"))
 }
 
 #[test]

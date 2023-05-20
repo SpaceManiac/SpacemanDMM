@@ -4,6 +4,7 @@ use std::cmp::max;
 use std::mem::take;
 
 use dreammaker::Component;
+use dreammaker::preprocessor::DiskFileProvider;
 use ndarray::Array3;
 
 use dm::{DMError, Location};
@@ -13,7 +14,8 @@ use super::{Map, Key, KeyType, Prefab};
 
 pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
     let file_id = Default::default();
-    let mut chars = LocationTracker::new(file_id, dm::lexer::buffer_file(file_id, path)?.into());
+    let mut file_provider = DiskFileProvider{};
+    let mut chars = LocationTracker::new(file_id, dm::lexer::buffer_file(file_id, path, &mut file_provider)?.into());
 
     let mut in_comment_line = false;
     let mut comment_trigger = false;

@@ -51,6 +51,7 @@ use auxtools::Auxtools;
 use ahash::RandomState;
 
 use dap_types::*;
+use dreammaker::preprocessor::DiskFileProvider;
 use self::auxtools::AuxtoolsScopes;
 use self::extools::ExtoolsHolder;
 use self::launched::{Launched, EngineParams};
@@ -108,7 +109,8 @@ pub fn debugger_main<I: Iterator<Item = String>>(mut args: I) {
         .expect("did not detect a .dme");
     let ctx = dm::Context::default();
     ctx.autodetect_config(&environment);
-    let mut pp = dm::preprocessor::Preprocessor::new(&ctx, environment).unwrap();
+    let mut file_provider = DiskFileProvider{};
+    let mut pp = dm::preprocessor::Preprocessor::new(&ctx, environment, &mut file_provider).unwrap();
     let objtree = {
         let mut parser =
             dm::parser::Parser::new(&ctx, dm::indents::IndentProcessor::new(&ctx, &mut pp));

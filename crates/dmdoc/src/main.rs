@@ -16,6 +16,7 @@ use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use dm::objtree::ObjectTree;
+use dm::preprocessor::DiskFileProvider;
 use pulldown_cmark::{BrokenLink, CowStr};
 
 use tera::Value;
@@ -87,7 +88,8 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     let mut context = dm::Context::default();
     context.autodetect_config(&environment);
     context.set_print_severity(Some(dm::Severity::Error));
-    let mut pp = dm::preprocessor::Preprocessor::new(&context, environment.clone())?;
+    let mut file_provider = DiskFileProvider{};
+    let mut pp = dm::preprocessor::Preprocessor::new(&context, environment.clone(), &mut file_provider)?;
     let (syntax_tree, module_docs) = {
         let indents = dm::indents::IndentProcessor::new(&context, &mut pp);
         let parser = dm::parser::Parser::new(&context, indents);

@@ -1,5 +1,8 @@
 //! The preprocessor.
+use core::fmt::Debug;
+
 use std::collections::{HashMap, VecDeque};
+use std::io::{Read, Error};
 use std::rc::Rc;
 use std::{io, fmt};
 use std::fs::File;
@@ -97,16 +100,17 @@ pub struct DefineHistory {
 impl DefineHistory {
     /// Branch a child preprocessor from this preprocessor's historic state at
     /// the start of the given file.
-    pub fn branch_at_file<'ctx2>(&self, file: FileId, context: &'ctx2 Context) -> Preprocessor<'ctx2> {
+    pub fn branch_at_file<'ctx2>(&self, file: FileId, context: &'ctx2 Context) -> Preprocessor<'ctx2, '_> {
         let location = Location { file, line: 0, column: 0 };
-        self.branch_at(location, context)
+        self.branch_at(location, context, None)
     }
 
-    pub fn branch_at<'ctx2>(&self, location: Location, context: &'ctx2 Context) -> Preprocessor<'ctx2> {
+    pub fn branch_at<'ctx2, 'fp>(&self, location: Location, context: &'ctx2 Context, file_provider: Option<&'fp mut dyn FileProvider>) -> Preprocessor<'ctx2, 'fp> {
         let defines = DefineMap::from_history(self, location);
 
         Preprocessor {
             context,
+            file_provider,
             env_file: self.env_file.clone(),
             include_stack: Default::default(),
             include_locations: Default::default(),
@@ -129,9 +133,10 @@ impl DefineHistory {
     }
 
     /// Branch a child preprocessor from this preprocessor's current state.
-    pub fn branch_at_end<'ctx2>(&self, context: &'ctx2 Context) -> Preprocessor<'ctx2> {
+    pub fn branch_at_end<'ctx2, 'fp>(&self, context: &'ctx2 Context) -> Preprocessor<'ctx2, 'fp> {
         Preprocessor {
             context,
+            file_provider: None,
             env_file: self.env_file.clone(),
             include_stack: Default::default(),
             include_locations: Default::default(),
@@ -282,11 +287,11 @@ enum Include<'ctx> {
 }
 
 impl<'ctx> Include<'ctx> {
-    fn from_path(context: &'ctx Context, path: PathBuf) -> Result<Include<'ctx>, DMError> {
+    fn from_path(context: &'ctx Context, path: PathBuf, file_provider: &mut dyn FileProvider) -> Result<Include<'ctx>, DMError> {
         let idx = context.register_file(&path, None);
         Ok(Include::File {
             //file: idx,
-            lexer: Lexer::from_file(context, idx, &path)?,
+            lexer: Lexer::from_file(context, idx, &path, file_provider)?,
             path,
         })
     }
@@ -381,11 +386,28 @@ impl Ifdef {
     }
 }
 
-#[derive(Debug)]
+pub trait FileProvider {
+    fn open_file(&mut self, path: &Path) -> Result<Box<dyn Read>, Error>;
+}
+
+pub struct DiskFileProvider{}
+
+impl FileProvider for DiskFileProvider{
+    fn open_file(&mut self, path: &Path) -> Result<Box<dyn Read>, Error> {
+        let open = File::open(path);
+        if let Ok(file) = open {
+            Ok(Box::new(file))
+        } else {
+            Err(open.err().unwrap())
+        }
+    }
+}
+
 /// C-like preprocessor for DM. Expands directives and macro invocations.
-pub struct Preprocessor<'ctx> {
+pub struct Preprocessor<'ctx, 'fp> {
     context: &'ctx Context,
     env_file: PathBuf,
+    file_provider: Option<&'fp mut dyn FileProvider>,
 
     include_stack: IncludeStack<'ctx>,
     include_locations: HashMap<FileId, Location, RandomState>,
@@ -409,7 +431,7 @@ pub struct Preprocessor<'ctx> {
     docs_out: VecDeque<(Location, DocComment)>,
 }
 
-impl<'ctx> HasLocation for Preprocessor<'ctx> {
+impl<'ctx, 'fp> HasLocation for Preprocessor<'ctx, 'fp> {
     fn location(&self) -> Location {
         match self.include_stack.stack.last() {
             Some(&Include::File { ref lexer, .. }) => lexer.location(),
@@ -419,17 +441,16 @@ impl<'ctx> HasLocation for Preprocessor<'ctx> {
     }
 }
 
-impl<'ctx> Preprocessor<'ctx> {
+impl<'ctx, 'fp> Preprocessor<'ctx, 'fp> {
     /// Create a new preprocessor from the given Context and environment file.
-    pub fn new(context: &'ctx Context, env_file: PathBuf) -> Result<Self, DMError> {
+    pub fn new(context: &'ctx Context, env_file: PathBuf, file_provider: &'fp mut dyn FileProvider) -> Result<Self, DMError> {
         // Buffer the entire environment file. Large environments take a while
         // to load and locking it for the whole time is somewhat inconvenient.
-        let include = Include::from_path(context, env_file.clone())?;
-
-        Ok(Preprocessor {
+        let mut pp = Preprocessor {
             context,
             env_file,
-            include_stack: IncludeStack { stack: vec![include] },
+            file_provider: Some(file_provider),
+            include_stack: Default::default(),
             include_locations: Default::default(),
             history: Default::default(),
             defines: DefineMap::with_builtins(),
@@ -446,7 +467,11 @@ impl<'ctx> Preprocessor<'ctx> {
             docs_out: Default::default(),
             in_interp_string: 0,
             annotations: None,
-        })
+        };
+
+        pp.reset_include_stack()?;
+
+        Ok(pp)
     }
 
     pub fn from_buffer<S: Into<Cow<'ctx, str>>>(context: &'ctx Context, env_file: PathBuf, buffer: S) -> Self {
@@ -458,6 +483,7 @@ impl<'ctx> Preprocessor<'ctx> {
         Preprocessor {
             context,
             env_file,
+            file_provider: None,
             include_stack: IncludeStack { stack: vec![include] },
             include_locations: Default::default(),
             history: Default::default(),
@@ -527,7 +553,7 @@ impl<'ctx> Preprocessor<'ctx> {
         Ok(idx)
     }
 
-    pub fn push_buffer<S: Into<Cow<'ctx, str>>>(&mut self, path: PathBuf, buffer: S) -> Result<(), DMError> {
+    pub fn push_buffer<S: Into<Cow<'ctx, str>>>(&mut self, path: PathBuf, buffer: S) {
         let cow_u8 = match buffer.into() {
             Cow::Borrowed(s) => Cow::Borrowed(s.as_bytes()),
             Cow::Owned(s) => Cow::Owned(s.into_bytes()),
@@ -535,8 +561,6 @@ impl<'ctx> Preprocessor<'ctx> {
 
         let include = Include::from_buffer(self.context, path, cow_u8);
         self.include_stack.stack.push(include);
-
-        Ok(())
     }
 
     /// Enable source file annotations.
@@ -587,6 +611,17 @@ impl<'ctx> Preprocessor<'ctx> {
 
     fn move_to_history(&mut self, name: String, previous: (Location, Define)) {
         self.history.insert(range(previous.0, self.last_input_loc), (name, previous.1));
+    }
+
+    fn reset_include_stack(&mut self) -> Result<(), DMError> {
+        if self.file_provider.is_none() {
+            return Err(DMError::new(Location::default(), "Preprocessor has no file provider!", Component::Parser));
+        }
+
+        let file_provider = self.file_provider.as_deref_mut().unwrap();
+        let include = Include::from_path(self.context, self.env_file.clone(), file_provider)?;
+        self.include_stack.stack = vec![include];
+        Ok(())
     }
 
     // ------------------------------------------------------------------------
@@ -659,7 +694,12 @@ impl<'ctx> Preprocessor<'ctx> {
 
     fn prepare_include_file(&mut self, path: PathBuf, include_location: Location) -> Result<Include<'ctx>, DMError> {
         // Attempt to open the file.
-        let read = io::BufReader::new(File::open(&path).map_err(|e|
+        if self.file_provider.is_none() {
+            return Err(DMError::new(self.last_input_loc, format!("No file provider set!"), Component::Parser))
+        }
+
+        let reader_result = self.file_provider.as_mut().unwrap().open_file(&path);
+        let read = io::BufReader::new(reader_result.map_err(|e|
             DMError::new(self.last_input_loc, format!("failed to open file: #include {:?}", path), Component::Parser)
                 .with_cause(e))?);
 
@@ -1212,7 +1252,7 @@ impl<'ctx> Preprocessor<'ctx> {
     }
 }
 
-impl<'ctx> Iterator for Preprocessor<'ctx> {
+impl<'ctx, 'fp> Iterator for Preprocessor<'ctx, 'fp> {
     type Item = LocatedToken;
 
     fn next(&mut self) -> Option<LocatedToken> {
