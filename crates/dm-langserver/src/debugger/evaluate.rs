@@ -19,17 +19,17 @@ impl Debugger {
                     return Ok(EvaluateResponse::from(EXTOOLS_HELP.trim()));
                 }
 
-                guard!(let Some(frame_id) = params.frameId else {
+                let Some(frame_id) = params.frameId else {
                     return Err(Box::new(GenericError("Must select a stack frame to evaluate in")));
-                });
+                };
 
                 let (thread, frame_no) = extools.get_thread_by_frame_id(frame_id)?;
 
                 if input.starts_with('#') {
                     if input == "#dis" || input == "#disassemble" {
-                        guard!(let Some(frame) = thread.call_stack.get(frame_no) else {
+                        let Some(frame) = thread.call_stack.get(frame_no) else {
                             return Err(Box::new(GenericError("Stack frame out of range")));
-                        });
+                        };
 
                         let bytecode = extools.bytecode(&frame.proc, frame.override_id);
                         return Ok(EvaluateResponse::from(Self::format_disassembly(bytecode)));
