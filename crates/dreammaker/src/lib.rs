@@ -5,7 +5,6 @@ extern crate indexmap;
 extern crate interval_tree;
 extern crate lodepng;
 #[macro_use] extern crate bitflags;
-#[macro_use] extern crate guard;
 extern crate termcolor;
 extern crate ordered_float;
 extern crate serde;

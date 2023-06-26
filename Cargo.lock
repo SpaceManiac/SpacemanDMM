@@ -451,7 +451,6 @@ dependencies = [
  "dreamchecker",
  "dreammaker",
  "git2",
- "guard",
  "interval-tree",
  "jsonrpc-core",
  "lazy_static",
@@ -532,7 +531,6 @@ dependencies = [
  "chrono",
  "dreammaker",
  "git2",
- "guard",
  "serde_json",
 ]
 
@@ -547,7 +545,6 @@ dependencies = [
  "derivative",
  "get-size",
  "get-size-derive",
- "guard",
  "indexmap",
  "interval-tree",
  "lodepng",
@@ -802,12 +799,6 @@ dependencies = [
  "ignore",
  "walkdir",
 ]
-
-[[package]]
-name = "guard"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff893cc51ea04f8a3b73fbaf4376c06ebc5a0ccbe86d460896f805d9417c93ea"
 
 [[package]]
 name = "hashbrown"

@@ -756,12 +756,12 @@ impl Expression {
     pub fn is_const_eval(&self) -> bool {
         match self {
             Expression::BinaryOp { op, lhs, rhs } => {
-                guard!(let Some(lhterm) = lhs.as_term() else {
+                let Some(lhterm) = lhs.as_term() else {
                     return false
-                });
-                guard!(let Some(rhterm) = rhs.as_term() else {
+                };
+                let Some(rhterm) = rhs.as_term() else {
                     return false
-                });
+                };
                 if !lhterm.is_static() {
                     return false
                 }
@@ -784,9 +784,9 @@ impl Expression {
     pub fn is_truthy(&self) -> Option<bool> {
         match self {
             Expression::Base { term, follow } => {
-                guard!(let Some(mut truthy) = term.elem.is_truthy() else {
+                let Some(mut truthy) = term.elem.is_truthy() else {
                     return None;
-                });
+                };
                 for follow in follow.iter() {
                     match follow.elem {
                         Follow::Unary(UnaryOp::Not) => truthy = !truthy,
@@ -796,12 +796,12 @@ impl Expression {
                 Some(truthy)
             },
             Expression::BinaryOp { op, lhs, rhs } => {
-                guard!(let Some(lhtruth) = lhs.is_truthy() else {
+                let Some(lhtruth) = lhs.is_truthy() else {
                     return None
-                });
-                guard!(let Some(rhtruth) = rhs.is_truthy() else {
+                };
+                let Some(rhtruth) = rhs.is_truthy() else {
                     return None
-                });
+                };
                 match op {
                     BinaryOp::And => Some(lhtruth && rhtruth),
                     BinaryOp::Or => Some(lhtruth || rhtruth),
@@ -819,9 +819,9 @@ impl Expression {
                 }
             },
             Expression::TernaryOp { cond, if_, else_ } => {
-                guard!(let Some(condtruth) = cond.is_truthy() else {
+                let Some(condtruth) = cond.is_truthy() else {
                     return None
-                });
+                };
                 if condtruth {
                     if_.is_truthy()
                 } else {

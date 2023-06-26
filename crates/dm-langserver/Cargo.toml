@@ -17,7 +17,6 @@ dreammaker = { path = "../dreammaker" }
 dreamchecker = { path = "../dreamchecker" }
 interval-tree = { path = "../interval-tree" }
 libc = "0.2.132"
-guard = "0.5.1"
 regex = "1.6.0"
 lazy_static = "1.4"
 ahash = "0.8.0"
