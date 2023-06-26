@@ -13,7 +13,7 @@ impl RenderPass for SmartCables {
         output: &mut Vec<Sprite<'a>>,
         bump: &'a bumpalo::Bump,
     ) -> bool {
-        if !atom.istype("/obj/structure/cable/") {
+        if !atom.istype("/obj/structure/cable/") && !atom.istype("/obj/cable/auto") {
             return true;
         }
 
