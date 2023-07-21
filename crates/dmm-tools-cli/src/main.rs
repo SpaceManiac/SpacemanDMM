@@ -3,7 +3,7 @@
 #![doc(hidden)]  // Don't interfere with lib docs.
 
 extern crate rayon;
-extern crate structopt;
+extern crate clap;
 
 extern crate serde;
 extern crate serde_json;
@@ -20,8 +20,8 @@ use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::RwLock;
 use std::collections::HashSet;
 
+use clap::{Parser, Subcommand};
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
-use structopt::StructOpt;
 
 use dm::objtree::ObjectTree;
 use dmm_tools::*;
@@ -32,13 +32,7 @@ use ahash::RandomState;
 // Main driver
 
 fn main() {
-    let opt = Opt::from_clap(&Opt::clap()
-        .long_version(concat!(
-            env!("CARGO_PKG_VERSION"), "\n",
-            include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")),
-        ).trim_end())
-        .get_matches());
-
+    let opt = Opt::parse();
     let mut context = Context::default();
     context.dm_context.set_print_severity(Some(dm::Severity::Error));
     rayon::ThreadPoolBuilder::new()
@@ -90,87 +84,93 @@ impl Context {
     }
 }
 
-#[derive(StructOpt, Debug)]
-#[structopt(name="dmm-tools",
-author="Copyright (C) 2017-2023  Tad Hardesty",
-about="This program comes with ABSOLUTELY NO WARRANTY. This is free software,
+#[derive(Parser, Debug)]
+#[command(
+    name="dmm-tools",
+    version=concat!(
+        env!("CARGO_PKG_VERSION"), "\n",
+        include_str!(concat!(env!("OUT_DIR"), "/build-info.txt"))
+    ),
+    author="Copyright (C) 2017-2023  Tad Hardesty",
+    about="This program comes with ABSOLUTELY NO WARRANTY. This is free software,
 and you are welcome to redistribute it under the conditions of the GNU
-General Public License version 3.")]
+General Public License version 3.",
+)]
 struct Opt {
     /// The environment file to operate under.
-    #[structopt(short="e", long="env")]
+    #[arg(short='e', long="env")]
     environment: Option<String>,
 
-    #[structopt(short="v", long="verbose")]
+    #[arg(short='v', long="verbose")]
     #[allow(dead_code)]
     verbose: bool,
 
     /// Set the number of threads to be used for parallel execution when
     /// possible. A value of 0 will select automatically, and 1 will be serial.
-    #[structopt(long="jobs", default_value="1")]
+    #[arg(long="jobs", default_value="1")]
     jobs: usize,
 
-    #[structopt(subcommand)]
+    #[command(subcommand)]
     command: Command,
 }
 
 // ----------------------------------------------------------------------------
 // Subcommands
 
-#[derive(StructOpt, Debug)]
+#[derive(Subcommand, Debug)]
 enum Command {
     /// Show information about the render-pass list.
-    #[structopt(name = "list-passes")]
+    #[command(name = "list-passes")]
     ListPasses {
         /// Output as JSON.
-        #[structopt(short="j", long="json")]
+        #[arg(short='j', long="json")]
         json: bool,
     },
     /// Build minimaps of the specified maps.
-    #[structopt(name = "minimap")]
+    #[command(name = "minimap")]
     Minimap {
         /// The output directory.
-        #[structopt(short="o", default_value="data/minimaps")]
+        #[arg(short='o', default_value="data/minimaps")]
         output: String,
 
         /// Set the minimum x,y or x,y,z coordinate to act upon (1-indexed, inclusive).
-        #[structopt(long="min")]
+        #[arg(long="min")]
         min: Option<CoordArg>,
 
         /// Set the maximum x,y or x,y,z coordinate to act upon (1-indexed, inclusive).
-        #[structopt(long="max")]
+        #[arg(long="max")]
         max: Option<CoordArg>,
 
         /// Enable render-passes, or "all" to only exclude those passed to --disable.
-        #[structopt(long="enable", default_value="")]
+        #[arg(long="enable", default_value="")]
         enable: String,
 
         /// Disable render-passes, or "all" to only use those passed to --enable.
-        #[structopt(long="disable", default_value="")]
+        #[arg(long="disable", default_value="")]
         disable: String,
 
         /// Run output through pngcrush automatically. Requires pngcrush.
-        #[structopt(long="pngcrush")]
+        #[arg(long="pngcrush")]
         pngcrush: bool,
 
         /// Run output through optipng automatically. Requires optipng.
-        #[structopt(long="optipng")]
+        #[arg(long="optipng")]
         optipng: bool,
 
         /// The list of maps to process.
         files: Vec<String>,
     },
     /// List the differing coordinates between two maps.
-    #[structopt(name="diff-maps")]
+    #[command(name="diff-maps")]
     DiffMaps {
         left: String,
         right: String,
     },
     /// Show metadata information about the map.
-    #[structopt(name="map-info")]
+    #[command(name="map-info")]
     MapInfo {
         /// Output as JSON.
-        #[structopt(short="j", long="json")]
+        #[arg(short='j', long="json")]
         json: bool,
 
         /// The list of maps to show info on.

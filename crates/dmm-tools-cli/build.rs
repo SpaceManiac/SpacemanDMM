@@ -13,7 +13,7 @@ fn main() {
     if let Ok(commit) = read_commit() {
         writeln!(f, "commit: {}", commit).unwrap();
     }
-    writeln!(f, "build date: {}", chrono::Utc::now().date_naive()).unwrap();
+    write!(f, "build date: {}", chrono::Utc::now().date_naive()).unwrap();
 }
 
 fn read_commit() -> Result<String, git2::Error> {
