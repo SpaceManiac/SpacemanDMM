@@ -194,8 +194,6 @@ impl Dir {
     }
 }
 
-
-
 /// Embedded metadata describing a DMI spritesheet's layout.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Metadata {
@@ -558,7 +556,7 @@ state = "duplicate"
     /// information when a state has the number of frames edited.
     ///
     /// This means we need to truncate our delay list to the number of frames specified by the frames key.
-    /// 
+    ///
     /// This always worked fine- however, we also simplify `delays = 1,1,...` to `Frames::Count(delays.len())`.
     ///
     /// The bug in our code was that we checked if our `delays = 1,1,...` *before* truncating the array

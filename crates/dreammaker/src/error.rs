@@ -363,8 +363,6 @@ impl Severity {
     }
 }
 
-
-
 impl fmt::Display for Severity {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -393,8 +391,6 @@ impl Component {
         }
     }
 }
-
-
 
 impl fmt::Display for Component {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

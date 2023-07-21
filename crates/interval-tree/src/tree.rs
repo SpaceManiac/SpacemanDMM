@@ -240,7 +240,6 @@ mod tests {
 
     fn random_range() -> RangeInclusive<u64> {
         let offset = rand::random::<u64>()%50;
-
         let len: u64 = rand::random::<u64>()%50;
         crate::range(offset, offset+len)
     }

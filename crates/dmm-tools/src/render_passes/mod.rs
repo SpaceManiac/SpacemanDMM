@@ -95,7 +95,7 @@ macro_rules! pass {
         name: $name,
         desc: $desc,
         default: $def,
-        new: || Box::<WiresAndPipes>::default()
+        new: || Box::<$typ>::default()
     })
 }
 

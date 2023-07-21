@@ -163,8 +163,6 @@ impl WarningLevel {
     }
 }
 
-
-
 impl From<Severity> for WarningLevel {
     fn from(severity: Severity) -> Self {
         match severity {

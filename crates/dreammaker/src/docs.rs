@@ -214,5 +214,3 @@ pub enum BuiltinDocs {
     /// A DM reference hash such as "/DM/vars".
     ReferenceHash(&'static str),
 }
-
-
