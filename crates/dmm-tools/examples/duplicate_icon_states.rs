@@ -15,7 +15,7 @@ fn is_visible(entry: &DirEntry) -> bool {
         .file_name()
         .unwrap_or("".as_ref())
         .to_str()
-        .map(|s| !s.starts_with("."))
+        .map(|s| !s.starts_with('.'))
         .unwrap_or(true)
 }
 

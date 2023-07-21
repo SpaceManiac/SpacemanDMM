@@ -133,7 +133,7 @@ fn random_range() -> RangeInclusive<u64> {
         len = rand::random::<u64>()%(0xff_ff_ff_ff_ff_ff_ff_ff - offset)
     }
 
-    return RangeInclusive::new(offset, offset+len)
+    RangeInclusive::new(offset, offset+len)
 }
 
 #[test]
@@ -155,7 +155,7 @@ fn test_range_iter_nontrivial(){
             //assert!(t.test_theban_interval_tree());
         };
     let query = random_range();
-    let should = set.iter().filter(|r| crate::range::intersect(&query, r)).map(|r| r.clone()).collect::<Vec<RangeInclusive<u64>>>();
+    let should = set.iter().filter(|r| crate::range::intersect(&query, r)).copied().collect::<Vec<RangeInclusive<u64>>>();
     let is = t.range(query).map(|(r,_)| r).collect::<Vec<RangeInclusive<u64>>>();
     assert_eq!(should, is);
     };

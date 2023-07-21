@@ -9,7 +9,7 @@ use std::path::PathBuf;
 fn main() {
     // build info
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
-    let mut f = File::create(&out_dir.join("build-info.txt")).unwrap();
+    let mut f = File::create(out_dir.join("build-info.txt")).unwrap();
 
     match read_commit() {
         Ok(commit) => writeln!(f, "commit: {}", commit).unwrap(),

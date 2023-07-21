@@ -234,11 +234,11 @@ fn subtree_max<V>(node: &Option<Box<Node<V>>>) -> u64 {
 ///returns the smallest key and value after the given key.
 pub fn min_after<'a,V>(key: &RangeInclusive<u64>, root: &'a Box<Node<V>>) -> Option<(&'a RangeInclusive<u64>,&'a [V])> {
     match root.key.cmp(key){
-        Ordering::Equal =>  root.right.as_ref().map_or(None, |succ| Some(succ.min_pair())),
-        Ordering::Less =>   root.right.as_ref().map_or(None, |succ| min_after(key, succ)),
+        Ordering::Equal =>  root.right.as_ref().map(|succ| succ.min_pair()),
+        Ordering::Less =>   root.right.as_ref().and_then(|succ| min_after(key, succ)),
         Ordering::Greater => {
             match root.left {
-                Some(ref succ) => min_after(key, &succ).or( Some((&root.key,&root.data)) ),
+                Some(ref succ) => min_after(key, succ).or( Some((&root.key,&root.data)) ),
                 None => Some((&root.key, &root.data))
             }
         }
@@ -273,7 +273,7 @@ fn is_interval_node<V>(node: &Box<Node<V>>) -> bool {
     let sorted = is_sorted_left(node) && is_sorted_right(node);
     let balanced = node.height == cmp::max(height(&node.left),height(&node.right))+1;
     let proper_max = node.max == cmp::max(subtree_max(&node.left), cmp::max(subtree_max(&node.right), node.key.end));
-    return sorted && balanced && proper_max;
+    sorted && balanced && proper_max
 }
 
 pub fn is_interval_tree<V>(root: &Option<Box<Node<V>>>) -> bool {

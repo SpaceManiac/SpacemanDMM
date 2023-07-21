@@ -38,8 +38,10 @@ impl From<&str> for StateIndex {
 
 /// The two-dimensional facing subset of BYOND's direction type.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Default)]
 pub enum Dir {
     North = 1,
+    #[default]
     South = 2,
     East = 4,
     West = 8,
@@ -192,11 +194,7 @@ impl Dir {
     }
 }
 
-impl Default for Dir {
-    fn default() -> Self {
-        Dir::South
-    }
-}
+
 
 /// Embedded metadata describing a DMI spritesheet's layout.
 #[derive(Debug, Clone, PartialEq)]

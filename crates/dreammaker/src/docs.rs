@@ -207,14 +207,12 @@ pub enum DocTarget {
 
 /// Information about where builtin docs can be found.
 #[derive(Clone, Debug, PartialEq)]
+#[derive(Default)]
 pub enum BuiltinDocs {
+    #[default]
     None,
     /// A DM reference hash such as "/DM/vars".
     ReferenceHash(&'static str),
 }
 
-impl Default for BuiltinDocs {
-    fn default() -> Self {
-        BuiltinDocs::None
-    }
-}
+

@@ -27,7 +27,7 @@ fn check_semicolon_in_proc_parameters() {
         let errors = context.errors();
         assert_eq!(errors.len(), 2);
 
-        for error in errors.into_iter() {
+        for error in errors.iter() {
             assert_eq!(error.errortype().expect("No errortype set!"), "semicolon_in_proc_parameter");
         }
     });

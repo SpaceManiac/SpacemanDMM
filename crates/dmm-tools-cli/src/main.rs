@@ -332,7 +332,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                 if parallel {
                     ((min.z - 1)..(max.z)).into_par_iter().for_each(do_z_level);
                 } else {
-                    ((min.z - 1)..(max.z)).into_iter().for_each(do_z_level);
+                    ((min.z - 1)..(max.z)).for_each(do_z_level);
                 }
             };
 

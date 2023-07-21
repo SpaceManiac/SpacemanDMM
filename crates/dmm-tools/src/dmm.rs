@@ -333,9 +333,9 @@ impl fmt::Display for FormatKey {
 const BASE_52: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 fn base_52_reverse(ch: u8) -> Result<KeyType, String> {
-    if (b'a'..=b'z').contains(&ch) {
+    if ch.is_ascii_lowercase() {
         Ok(ch as KeyType - b'a' as KeyType)
-    } else if (b'A'..=b'Z').contains(&ch) {
+    } else if ch.is_ascii_uppercase() {
         Ok(26 + ch as KeyType - b'A' as KeyType)
     } else {
         Err(format!("Not a base-52 character: {:?}", ch as char))

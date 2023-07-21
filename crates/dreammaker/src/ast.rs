@@ -543,7 +543,7 @@ pub struct Ident2 {
 
 impl Ident2 {
     pub fn as_str(&self) -> &str {
-        &*self.inner
+        &self.inner
     }
 }
 
@@ -574,7 +574,7 @@ impl From<Ident2> for String {
 impl std::ops::Deref for Ident2 {
     type Target = str;
     fn deref(&self) -> &str {
-        &*self.inner
+        &self.inner
     }
 }
 
@@ -724,7 +724,7 @@ impl Expression {
     /// If this expression consists of a single term, return it.
     pub fn as_term(&self) -> Option<&Term> {
         match self {
-            &Expression::Base { ref term, ref follow } if follow.is_empty() => Some(&term.elem),
+            Expression::Base { term, follow } if follow.is_empty() => Some(&term.elem),
             _ => None,
         }
     }
@@ -924,7 +924,7 @@ impl Term {
     }
 
     pub fn is_truthy(&self) -> Option<bool> {
-        return match self {
+        match self {
             // `null`, `0`, and empty strings are falsey.
             Term::Null => Some(false),
             Term::Int(i) => Some(*i != 0),
@@ -953,7 +953,7 @@ impl Term {
             Term::Expr(e) => e.is_truthy(),
 
             _ => None,
-        };
+        }
     }
 
     pub fn valid_for_range(&self, other: &Term, step: Option<&Expression>) -> Option<bool> {

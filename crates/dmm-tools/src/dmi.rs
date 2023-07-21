@@ -233,7 +233,7 @@ impl Image {
                         dst[i] = 0;
                     }
                 }
-                dst.a = out_a as u8;
+                dst.a = out_a;
 
                 sx += 1;
             }

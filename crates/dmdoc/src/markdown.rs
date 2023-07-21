@@ -5,7 +5,7 @@ use std::collections::VecDeque;
 
 use pulldown_cmark::{self, Parser, Tag, Event, BrokenLinkCallback, HeadingLevel};
 
-pub fn render<'string, 'func>(markdown: &'string str, broken_link_callback: BrokenLinkCallback<'string, 'func>) -> String {
+pub fn render<'string>(markdown: &'string str, broken_link_callback: BrokenLinkCallback<'string, '_>) -> String {
     let mut buf = String::new();
     push_html(&mut buf, parser(markdown, broken_link_callback));
     buf
@@ -20,11 +20,11 @@ pub struct DocBlock {
 }
 
 impl DocBlock {
-    pub fn parse<'string, 'func>(markdown: &'string str, broken_link_callback: BrokenLinkCallback<'string, 'func>) -> Self {
+    pub fn parse<'string>(markdown: &'string str, broken_link_callback: BrokenLinkCallback<'string, '_>) -> Self {
         parse_main(parser(markdown, broken_link_callback).peekable())
     }
 
-    pub fn parse_with_title<'string, 'func>(markdown: &'string str, broken_link_callback: BrokenLinkCallback<'string, 'func>) -> (Option<String>, Self) {
+    pub fn parse_with_title<'string>(markdown: &'string str, broken_link_callback: BrokenLinkCallback<'string, '_>) -> (Option<String>, Self) {
         let mut parser = parser(markdown, broken_link_callback).peekable();
         (
             if let Some(&Event::Start(Tag::Heading(HeadingLevel::H1, _, _))) = parser.peek() {

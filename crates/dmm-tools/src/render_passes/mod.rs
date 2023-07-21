@@ -95,7 +95,7 @@ macro_rules! pass {
         name: $name,
         desc: $desc,
         default: $def,
-        new: || Box::new(<$typ>::default())
+        new: || Box::<WiresAndPipes>::default()
     })
 }
 
@@ -290,11 +290,11 @@ impl RenderPass for Overlays {
                 } else {
                     "icon_state"
                 };
-                if let &Constant::String(ref door) = atom.get_var(var, objtree) {
+                if let Constant::String(door) = atom.get_var(var, objtree) {
                     add_to(overlays, atom, bumpalo::format!(in bump, "{}_open", door).into_bump_str());
                 }
             } else {
-                if let &Constant::String(ref door) = atom
+                if let Constant::String(door) = atom
                     .get_var_notnull("icon_door", objtree)
                     .unwrap_or_else(|| atom.get_var("icon_state", objtree))
                 {
@@ -484,7 +484,7 @@ impl RenderPass for FancyLayers {
 
 fn unary_aboveground(atom: &Atom, objtree: &ObjectTree) -> Option<&'static str> {
     Some(match atom.get_var("icon_state", objtree) {
-        &Constant::String(ref text) => match &**text {
+        Constant::String(text) => match &**text {
             "vent_map-1" | "vent_map-2" | "vent_map-3" | "vent_map-4" => "vent_off",
             "vent_map_on-1" | "vent_map_on-2" | "vent_map_on-3" | "vent_map_on-4" => "vent_out",
             "vent_map_siphon_on-1" | "vent_map_siphon_on-2" | "vent_map_siphon_on-3" | "vent_map_siphon_on-4" => "vent_in",

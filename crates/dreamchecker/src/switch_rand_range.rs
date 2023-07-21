@@ -89,9 +89,9 @@ fn get_case_range(case: &Case, location: Location) -> Option<(f32, f32)> {
 
 fn get_rand_range(maybe_rand: &Expression) -> Option<(i32, i32)> {
     let (term, location) = match maybe_rand {
-        &Expression::Base {
-            ref term,
-            ref follow,
+        Expression::Base {
+            term,
+            follow,
         } if follow.is_empty() => (&term.elem, term.location),
         _ => return None,
     };

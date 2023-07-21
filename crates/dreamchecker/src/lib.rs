@@ -174,12 +174,7 @@ impl<'o> AssumptionSet<'o> {
     }
 
     fn conflicts_with(&self, new: &Assumption) -> Option<&Assumption> {
-        for each in self.set.iter() {
-            if each.oneway_conflict(new) || new.oneway_conflict(each) {
-                return Some(each);
-            }
-        }
-        None
+        self.set.iter().find(|&each| each.oneway_conflict(new) || new.oneway_conflict(each))
     }
 }
 
