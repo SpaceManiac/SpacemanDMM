@@ -204,7 +204,7 @@ fn make_speedy_table() {
         }
     }
 
-    if &SPEEDY_TABLE[..] != &table[..] {
+    if SPEEDY_TABLE[..] != table[..] {
         panic!(
             "\n\nSpeedy table outdated, replace with:\n\nstatic SPEEDY_TABLE: [(usize, usize); {}] = {:?};\n\n",
             table.len(),

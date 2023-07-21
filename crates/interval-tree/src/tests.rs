@@ -126,12 +126,11 @@ fn test_range_iter_non_pointwise(){
 
 fn random_range() -> RangeInclusive<u64> {
     let offset = rand::random::<u64>();
-    let len: u64;
-    if rand::random::<bool>() {
-        len = cmp::min(rand::random::<u64>()%500, 0xff_ff_ff_ff_ff_ff_ff_ff - offset)
+    let len: u64 = if rand::random::<bool>() {
+        cmp::min(rand::random::<u64>()%500, 0xff_ff_ff_ff_ff_ff_ff_ff - offset)
     } else {
-        len = rand::random::<u64>()%(0xff_ff_ff_ff_ff_ff_ff_ff - offset)
-    }
+        rand::random::<u64>()%(0xff_ff_ff_ff_ff_ff_ff_ff - offset)
+    };
 
     RangeInclusive::new(offset, offset+len)
 }

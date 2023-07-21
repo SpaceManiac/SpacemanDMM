@@ -1755,6 +1755,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         success(expr)
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn expression_part(&mut self, lhs: Expression, prev_op: OpInfo, strength: Option<Strength>, in_ternary: bool) -> Status<Expression> {
         use std::cmp::Ordering;
 

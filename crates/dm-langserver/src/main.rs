@@ -1404,12 +1404,8 @@ handle_method_call! {
                     let next = self.find_scoped_type(&iter, priors);
                     results.append(&mut self.construct_var_hover(var_name, next, true)?);
                 }
-                Annotation::MacroUse { docs, .. } => {
-                    if let Some(dc) = docs {
-                        if !dc.is_empty() {
-                            results.push(dc.text());
-                        }
-                    }
+                Annotation::MacroUse { docs: Some(dc), .. } if !dc.is_empty() => {
+                    results.push(dc.text());
                 }
                 _ => {}
             }

@@ -358,6 +358,7 @@ impl<'o> WalkProc<'o> {
         }
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn visit_expression(&mut self, location: Location, expression: &'o Expression, type_hint: Option<TypeRef<'o>>) -> StaticType<'o> {
         match expression {
             Expression::Base { term, follow } => {
@@ -678,6 +679,7 @@ impl<'o> WalkProc<'o> {
         }
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn static_type(&mut self, location: Location, mut of: &[String]) -> StaticType<'o> {
         while !of.is_empty() && ["static", "global", "const", "tmp", "final", "SpacemanDMM_final", "SpacemanDMM_private", "SpacemanDMM_protected"].contains(&&*of[0]) {
             of = &of[1..];
