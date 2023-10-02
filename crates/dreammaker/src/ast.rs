@@ -628,6 +628,10 @@ impl<'a, T: fmt::Display> fmt::Display for FormatTreePath<'a, T> {
 /// A series of identifiers separated by path operators.
 pub type TypePath = Vec<(PathOp, Ident)>;
 
+pub fn make_typepath(segments: Vec<String>) -> TypePath {
+    segments.into_iter().fold(vec![], |mut acc, segment| { acc.push((PathOp::Slash, segment)); acc })
+}
+
 pub struct FormatTypePath<'a>(pub &'a [(PathOp, Ident)]);
 
 impl<'a> fmt::Display for FormatTypePath<'a> {
@@ -852,6 +856,10 @@ pub enum Term {
     Resource(String),
     /// An `as()` call, with an input type. Undocumented.
     As(InputType),
+    /// A reference to our current proc's name
+    __PROC__,
+    /// A reference to the current proc/scope's type
+    __TYPE__,
 
     // Non-function calls with recursive contents -----------------------------
     /// An expression contained in a term.

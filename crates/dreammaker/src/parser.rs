@@ -2065,7 +2065,18 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 require!(self.exact(Token::Punct(Punctuation::RParen)));
                 Term::As(input_type)
             },
+            // term :: __PROC__
+            Token::Ident(ref i, _) if i == "__PROC__" => {
+                // We cannot replace with the proc path yet, you don't need one it's fine
+                Term::__PROC__
+                },
 
+            // term :: __TYPE__
+            Token::Ident(ref i, _) if i == "__TYPE__" => {
+                // We cannot replace with the typepath yet, so we'll hand back a term we can parse later
+                Term::__TYPE__
+            },
+            
             // term :: ident arglist | ident
             Token::Ident(i, _) => {
                 let first_token = self.updated_location();
