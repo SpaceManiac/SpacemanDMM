@@ -268,6 +268,8 @@ pub enum PropertyAccessKind {
     SafeDot,
     /// `a?:b`
     SafeColon,
+    /// 'a::b'
+    Scope,
 }
 
 impl PropertyAccessKind {
@@ -277,6 +279,7 @@ impl PropertyAccessKind {
             PropertyAccessKind::Colon => ":",
             PropertyAccessKind::SafeDot => "?.",
             PropertyAccessKind::SafeColon => "?:",
+            PropertyAccessKind::Scope => "::",
         }
     }
 }
@@ -627,6 +630,10 @@ impl<'a, T: fmt::Display> fmt::Display for FormatTreePath<'a, T> {
 
 /// A series of identifiers separated by path operators.
 pub type TypePath = Vec<(PathOp, Ident)>;
+
+pub fn make_typepath(segments: Vec<String>) -> TypePath {
+    segments.into_iter().fold(vec![], |mut acc, segment| { acc.push((PathOp::Slash, segment)); acc })
+}
 
 pub struct FormatTypePath<'a>(pub &'a [(PathOp, Ident)]);
 
