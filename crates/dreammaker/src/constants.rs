@@ -659,7 +659,7 @@ impl<'a> ConstantFolder<'a> {
                 let Some(real_type) = tree.find(FormatTreePath(&read_from.path).to_string().as_str()) else {
                     return Err(self.error(format!("{} was not a valid type", FormatTreePath(&read_from.path))))
                 };
-                self.recursive_lookup(real_type.index(), &field, true)
+                self.recursive_lookup(real_type.index(), &field, false)
             },
             (term, Follow::ProcReference(field)) => {
                 let Constant::Prefab(read_from) = term else {

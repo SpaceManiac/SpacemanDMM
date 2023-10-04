@@ -42,6 +42,7 @@ fn check_semicolon_in_proc_parameters() {
 fn process_scope() {
     with_code("
 /datum/test
+    var/hell = type::base
     var/base = 10
     var/heck = type::base
     var/static/stat = 1
@@ -69,8 +70,12 @@ var/global/bill = 1
         let errors = context.errors();
 
         // Check for errors
+        let mut sum_errors: Vec<String> = vec![];
         for error in errors.iter() {
-            panic!("{}", error);
+            sum_errors.push(format!("{}", error));
+        }
+        if sum_errors.len() > 0 {
+            panic!("\n{}", sum_errors.join("\n").as_str());
         }
         // test type::var in typedef
         let parent_type = tree.find("/datum/test").unwrap();
