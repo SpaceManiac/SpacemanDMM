@@ -2066,6 +2066,12 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 Term::As(input_type)
             },
 
+            // term :: __IMPLIED_TYPE__
+            Token::Ident(ref i, _) if i == "__IMPLIED_TYPE__" => {
+                // We cannot replace with the typepath yet, so we'll hand back a term we can parse later
+                Term::__IMPLIED_TYPE__
+            },
+
             // term :: ident arglist | ident
             Token::Ident(i, _) => {
                 let first_token = self.updated_location();
