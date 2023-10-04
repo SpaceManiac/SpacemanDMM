@@ -38,8 +38,10 @@ impl From<&str> for StateIndex {
 
 /// The two-dimensional facing subset of BYOND's direction type.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Default)]
 pub enum Dir {
     North = 1,
+    #[default]
     South = 2,
     East = 4,
     West = 8,
@@ -189,12 +191,6 @@ impl Dir {
             Dir::Southeast => (1, -1),
             Dir::Southwest => (-1, -1),
         }
-    }
-}
-
-impl Default for Dir {
-    fn default() -> Self {
-        Dir::South
     }
 }
 
@@ -560,7 +556,7 @@ state = "duplicate"
     /// information when a state has the number of frames edited.
     ///
     /// This means we need to truncate our delay list to the number of frames specified by the frames key.
-    /// 
+    ///
     /// This always worked fine- however, we also simplify `delays = 1,1,...` to `Frames::Count(delays.len())`.
     ///
     /// The bug in our code was that we checked if our `delays = 1,1,...` *before* truncating the array

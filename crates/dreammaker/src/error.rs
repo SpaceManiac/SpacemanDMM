@@ -345,7 +345,9 @@ pub(crate) trait HasLocation {
 
 /// The possible diagnostic severities available.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Default)]
 pub enum Severity {
+    #[default]
     Error = 1,
     Warning = 2,
     Info = 3,
@@ -365,12 +367,6 @@ impl Severity {
     }
 }
 
-impl Default for Severity {
-    fn default() -> Severity {
-        Severity::Error
-    }
-}
-
 impl fmt::Display for Severity {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -384,7 +380,9 @@ impl fmt::Display for Severity {
 
 /// A component which generated a diagnostic, when separation is desired.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Default)]
 pub enum Component {
+    #[default]
     Unspecified,
     DreamChecker,
 }
@@ -395,12 +393,6 @@ impl Component {
             Component::Unspecified => None,
             Component::DreamChecker => Some("dreamchecker"),
         }
-    }
-}
-
-impl Default for Component {
-    fn default() -> Component {
-        Component::Unspecified
     }
 }
 

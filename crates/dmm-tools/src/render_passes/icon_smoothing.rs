@@ -110,7 +110,7 @@ fn find_type_in_direction(objtree: &ObjectTree, adjacency: &Neighborhood, source
     }
 
     match source.get_var("canSmoothWith", objtree) {
-        &Constant::List(ref elements) => if smooth_flags & SMOOTH_MORE != 0 {
+        Constant::List(elements) => if smooth_flags & SMOOTH_MORE != 0 {
             // smooth with canSmoothWith + subtypes
             for atom in atom_list {
                 let mut path = atom.get_path();

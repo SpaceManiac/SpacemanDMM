@@ -232,7 +232,7 @@ impl DefineMap {
     /// Cut a DefineMap from the state of a DefineHistory at the given location.
     fn from_history(history: &InnerDefineHistory, location: Location) -> DefineMap {
         let mut map = DefineMap::default();
-        for (range, &(ref name, ref define)) in history.range(range(location, location)) {
+        for (range, (name, define)) in history.range(range(location, location)) {
             map.insert(name.clone(), (range.start, define.clone()));
         }
         map
@@ -320,18 +320,21 @@ impl<'ctx> Iterator for IncludeStack<'ctx> {
     fn next(&mut self) -> Option<LocatedToken> {
         loop {
             match self.stack.last_mut() {
-                Some(&mut Include::File { ref mut lexer, .. }) => match lexer.next() {
-                    //Some(Err(e)) => return Some(Err(e)),
-                    Some(t) => return Some(t),
-                    None => {} // fall through
+                Some(&mut Include::File { ref mut lexer, .. }) => {
+                    if let Some(t) = lexer.next() {
+                        return Some(t);
+                    }
+                    // else fallthrough to pop()
                 },
                 Some(&mut Include::Expansion {
                     ref mut tokens,
                     location,
                     ..
-                }) => match tokens.pop_front() {
-                    Some(token) => return Some(LocatedToken { location, token }),
-                    None => {} // fall through
+                }) => {
+                    if let Some(token) = tokens.pop_front() {
+                        return Some(LocatedToken { location, token });
+                    }
+                    // else fallthrough to pop()
                 },
                 None => return None,
             }
@@ -405,7 +408,7 @@ pub struct Preprocessor<'ctx> {
 impl<'ctx> HasLocation for Preprocessor<'ctx> {
     fn location(&self) -> Location {
         match self.include_stack.stack.last() {
-            Some(&Include::File { ref lexer, .. }) => lexer.location(),
+            Some(Include::File { lexer, .. }) => lexer.location(),
             Some(&Include::Expansion { location, .. }) => location,
             None => Location::default()
         }
@@ -1015,7 +1018,7 @@ impl<'ctx> Preprocessor<'ctx> {
 
                 match expansion {
                     Some((location, Define::Constant { subst, docs })) => {
-                        self.annotate_macro(ident, location, Some(docs.clone()));
+                        self.annotate_macro(ident, location, Some(docs));
                         self.include_stack.stack.push(Include::Expansion {
                             //name: ident.to_owned(),
                             tokens: subst.into_iter().collect(),
@@ -1039,7 +1042,7 @@ impl<'ctx> Preprocessor<'ctx> {
                             }
                         }
 
-                        self.annotate_macro(ident, location, Some(docs.clone()));
+                        self.annotate_macro(ident, location, Some(docs));
 
                         // read arguments
                         let mut args = Vec::new();

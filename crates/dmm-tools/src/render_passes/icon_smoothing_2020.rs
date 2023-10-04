@@ -130,11 +130,11 @@ fn find_type_in_direction(objtree: &ObjectTree, adjacency: &Neighborhood, source
     }
 
     match source.get_var("canSmoothWith", objtree) {
-        &Constant::List(ref elements) => {
+        Constant::List(elements) => {
             // smooth with anything for which their smoothing_groups overlaps our canSmoothWith
             let set: std::collections::HashSet<_> = elements.iter().map(|x| &x.0).collect();
             for atom in atom_list {
-                if let &Constant::List(ref elements2) = atom.get_var("smoothing_groups", objtree) {
+                if let Constant::List(elements2) = atom.get_var("smoothing_groups", objtree) {
                     let set2: std::collections::HashSet<_> = elements2.iter().map(|x| &x.0).collect();
                     if set.intersection(&set2).next().is_some() {
                         return true;

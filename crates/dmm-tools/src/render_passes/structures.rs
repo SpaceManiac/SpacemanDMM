@@ -12,8 +12,8 @@ impl RenderPass for Spawners {
             return true;
         }
         match atom.get_var("spawn_list", objtree) {
-            &Constant::List(ref elements) => {
-                for &(ref key, _) in elements.iter() {
+            Constant::List(elements) => {
+                for (key, _) in elements.iter() {
                     // TODO: use a more civilized lookup method
                     let type_key;
                     let reference = match *key {

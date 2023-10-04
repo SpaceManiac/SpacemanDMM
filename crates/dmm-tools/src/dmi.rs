@@ -216,7 +216,7 @@ impl Image {
                         )
                     };
                 }
-                let mut dst = &mut self_dat[(y * self.width + x) as usize];
+                let dst = &mut self_dat[(y * self.width + x) as usize];
                 let src_tint = Rgba8::new(tint!(0), tint!(1), tint!(2), tint!(3));
 
                 // out_A = src_A + dst_A (1 - src_A)
@@ -233,7 +233,7 @@ impl Image {
                         dst[i] = 0;
                     }
                 }
-                dst.a = out_a as u8;
+                dst.a = out_a;
 
                 sx += 1;
             }

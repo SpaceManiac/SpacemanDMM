@@ -174,12 +174,7 @@ impl<'o> AssumptionSet<'o> {
     }
 
     fn conflicts_with(&self, new: &Assumption) -> Option<&Assumption> {
-        for each in self.set.iter() {
-            if each.oneway_conflict(new) || new.oneway_conflict(each) {
-                return Some(each);
-            }
-        }
-        None
+        self.set.iter().find(|&each| each.oneway_conflict(new) || new.oneway_conflict(each))
     }
 }
 
@@ -559,6 +554,7 @@ pub struct AnalyzeObjectTree<'o> {
 
     sleeping_procs: ViolatingProcs<'o>,
     impure_procs: ViolatingProcs<'o>,
+    /// Procs with waitfor=0 or waitfor=FALSE
     waitfor_procs: HashSet<ProcRef<'o>>,
 
     sleeping_overrides: ViolatingOverrides<'o>,
@@ -1453,13 +1449,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 if name != "waitfor" {
                     return ControlFlow::allfalse()
                 }
-                match match value.as_term() {
-                    Some(Term::Int(0)) => Some(true),
-                    Some(Term::Ident(i)) if i == "FALSE" => Some(true),
-                    _ => None,
+                if match value.as_term() {
+                    Some(Term::Int(0)) => true,
+                    Some(Term::Ident(i)) if i == "FALSE" => true,
+                    _ => false,
                 } {
-                    Some(_) => { self.env.waitfor_procs.insert(self.proc_ref); },
-                    None => (),
+                    self.env.waitfor_procs.insert(self.proc_ref);
                 }
             },
             Statement::Setting { .. } => {},
@@ -1690,6 +1685,18 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     Analysis::empty()
                 }
             },
+            Term::GlobalIdent(global_name) => {
+                if let Some(decl) = self.objtree.root().get_var_declaration(global_name) {
+                    let mut ana = self.static_type(location, &decl.var_type.type_path)
+                        .with_fix_hint(decl.location, "add additional type info here");
+                    ana.is_impure = Some(true);
+                    ana
+                } else {
+                    error(location, format!("undefined global var: {:?}", global_name))
+                        .register(self.context);
+                    Analysis::empty()
+                }
+            },
 
             Term::Expr(expr) => self.visit_expression(location, expr, type_hint, local_vars),
             Term::Prefab(prefab) => {
@@ -1763,6 +1770,15 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 } else {
                     error(location, format!("proc has no parent: {}", self.proc_ref))
                         .with_errortype("proc_has_no_parent")
+                        .register(self.context);
+                    Analysis::empty()
+                }
+            },
+            Term::GlobalCall(global_name, args) => {
+                if let Some(proc) = self.objtree.root().get_proc(global_name) {
+                    self.visit_call(location, self.objtree.root(), proc, args, true, local_vars)
+                } else {
+                    error(location, format!("undefined global proc: {:?}", global_name))
                         .register(self.context);
                     Analysis::empty()
                 }
@@ -1975,6 +1991,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     Analysis::empty()
                 }
             },
+            Follow::StaticField(name) => {
+                // TODO
+                Analysis::empty()
+            },
+
             Follow::Call(kind, name, arguments) => {
                 if let Some(ty) = lhs.static_ty.basic_type() {
                     self.check_type_sleepers(ty, location, name);
@@ -2010,6 +2031,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         .register(self.context);
                     Analysis::empty()
                 }
+            },
+            Follow::ProcReference(name) => {
+                // TODO
+                Analysis::empty()
             },
         }
     }

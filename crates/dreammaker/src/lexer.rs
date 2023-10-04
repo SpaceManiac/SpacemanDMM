@@ -204,7 +204,7 @@ fn make_speedy_table() {
         }
     }
 
-    if &SPEEDY_TABLE[..] != &table[..] {
+    if SPEEDY_TABLE[..] != table[..] {
         panic!(
             "\n\nSpeedy table outdated, replace with:\n\nstatic SPEEDY_TABLE: [(usize, usize); {}] = {:?};\n\n",
             table.len(),
@@ -435,11 +435,11 @@ impl LocatedToken {
 }
 
 fn is_digit(ch: u8) -> bool {
-    (b'0'..=b'9').contains(&ch)
+    ch.is_ascii_digit()
 }
 
 fn is_ident(ch: u8) -> bool {
-    (b'a'..=b'z').contains(&ch) || (b'A'..=b'Z').contains(&ch) || ch == b'_'
+    ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch == b'_'
 }
 
 fn from_latin1(bytes: &[u8]) -> String {

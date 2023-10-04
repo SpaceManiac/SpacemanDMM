@@ -74,7 +74,7 @@ fn reconstruct(tokens: &[LocatedToken], iffy: bool) -> String {
         write!(this_line, "{}", token.token).unwrap();
     }
     for each in reconstructed.iter_mut() {
-        if !each.ends_with("\n") {
+        if !each.ends_with('\n') {
             each.push('\n');
         }
     }

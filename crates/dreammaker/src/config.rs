@@ -69,6 +69,7 @@ pub struct Debugger {
 /// Severity overrides from configuration
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
 #[serde(rename_all(deserialize = "lowercase"))]
+#[derive(Default)]
 pub enum WarningLevel {
     #[serde(alias = "errors")]
     Error = 1,
@@ -80,6 +81,7 @@ pub enum WarningLevel {
     Hint = 4,
     #[serde(alias = "false", alias = "off")]
     Disabled = 5,
+    #[default]
     Unset = 6,
 }
 
@@ -158,12 +160,6 @@ impl WarningLevel {
             WarningLevel::Hint => severity <= Severity::Hint,
             WarningLevel::Unset => true,
         }
-    }
-}
-
-impl Default for WarningLevel {
-    fn default() -> WarningLevel {
-        WarningLevel::Unset
     }
 }
 

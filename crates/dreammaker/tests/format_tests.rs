@@ -16,7 +16,7 @@ fn floats() {
     assert_eq!(FormatFloat(99999.01).to_string(), "99999");
     assert_eq!(FormatFloat(999999.0).to_string(), "999999");
     assert_eq!(FormatFloat(5.0e6).to_string(), "5e+006");
-    assert_eq!(FormatFloat(5000000i32 as f32).to_string(), "5e+006");
+    assert_eq!(FormatFloat(5000000_f32).to_string(), "5e+006");
     assert_eq!(FormatFloat(9999999.0).to_string(), "1e+007");
     assert_eq!(FormatFloat(9999991.0).to_string(), "9.99999e+006");
 
