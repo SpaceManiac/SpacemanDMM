@@ -62,16 +62,43 @@ fn no_override() {
     check_errors_match(code, NO_OVERRIDE_ERRORS);
 }
 
+
+#[test]
+fn final_proc() {
+    let code = r##"
+/mob/proc/final/test()
+    return
+
+/mob/subtype/test()
+    return
+"##.trim();
+    check_errors_match(code, NO_OVERRIDE_ERRORS);
+}
+
 pub const NO_OVERRIDE_DISABLE_ERRORS: &[(u32, u16, &str)] = &[
     (5, 5, "/mob/subtype/proc/test sets SpacemanDMM_should_not_override false, but it cannot be disabled."),
     (4, 18, "proc overrides parent, prohibited by /mob/proc/test"),
 ];
+
 
 #[test]
 fn no_override_disable() {
     let code = r##"
 /mob/proc/test()
     set SpacemanDMM_should_not_override = 1
+
+/mob/subtype/test()
+    set SpacemanDMM_should_not_override = 0
+    return
+"##.trim();
+    check_errors_match(code, NO_OVERRIDE_DISABLE_ERRORS);
+}
+
+#[test]
+fn final_proc_intermix() {
+    let code = r##"
+/mob/proc/final/test()
+    return
 
 /mob/subtype/test()
     set SpacemanDMM_should_not_override = 0
