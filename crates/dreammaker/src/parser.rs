@@ -1171,8 +1171,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         let mut path_vec = vec![];
         let mut slash_last = true;
         while let Ok(path_component) = self.next("return type") {
-            // NEED to hand back unconsumed tokens. so double slash if we encounter it, or anything that causes a break
-            // If we don't we'll mess up proc body handling and cause some bullshit
             match path_component {
                 Token::Ident(text, whitespace) if slash_last => {
                     path_vec.push(text);
@@ -1182,12 +1180,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     }
                 },
                 Token::Punct(Punctuation::Slash) if !slash_last => slash_last = true,
-                Token::Punct(Punctuation::Slash) if slash_last => {
-                    // This is a comment, let's back out and give it back its slashes
-                    self.put_back(path_component.clone());
-                    self.put_back(path_component);
-                    break;
-                },
                 _ => {
                     // If we're done, put back what we just fond so someone else can process it, in case they care
                     self.put_back(path_component);
