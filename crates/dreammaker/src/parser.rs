@@ -447,7 +447,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     fn next<S: Into<Cow<'static, str>>>(&mut self, expected: S) -> Result<Token, DMError> {
         let tok = loop {
             if let Some(next) = self.next.take() {
-                break Ok(next);
+                    break Ok(next);
             }
             match self.input.next() {
                 Some(LocatedToken {
@@ -956,15 +956,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
         let location = self.location;
         let parameters = require!(self.separated(Comma, RParen, None, Parser::proc_parameter));
-
-        // TODO: store this information.
-        let _return_type = if let Some(()) = self.exact_ident("as")? {
-            // For now loosely interpret this as an expression, but really it
-            // should be either an absolute typepath or some |'d input types.
-            Some(require!(self.expression()))
-        } else {
-            None
-        };
+        let return_type = self.return_type(proc_kind);
 
         // split off a subparser so we can keep parsing the objtree
         // even when the proc body doesn't parse
@@ -1016,7 +1008,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             None
         };
 
-        match self.tree.register_proc(self.context, location, current, name, proc_kind, parameters, code) {
+        match self.tree.register_proc(self.context, location, current, name, proc_kind, parameters, return_type, code) {
             Ok((idx, proc)) => {
                 proc.docs.extend(comment);
                 // manually performed for borrowck reasons
@@ -1142,6 +1134,74 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             in_list = None;
         }
         success((input_type, in_list))
+    }
+
+    /// Parse an optional as return type signifier (for procs)
+    fn return_type(&mut self, proc_kind: Option<ProcDeclKind>) -> AsType {
+        if let Ok(None) = self.exact_ident("as") {
+            return AsType::Anything;
+        };
+        if None == proc_kind {
+            self.error("Cannot specify a return type for a proc override")
+                    .register(self.context);
+        }
+        // While loop over self.next, extracting either the first string with from_name OR
+        // if the first string is a slash, continue to extract, and check for a slash again, and finish with from_vec
+        let next_token: Result<Token, DMError> = self.next("return type");
+        let Ok(ok_token) = next_token else {
+            self.error("'as' used with no return type")
+                .register(self.context);
+            return AsType::Anything;
+        };
+        if let Token::Ident(text, _) = ok_token {
+            let Some(return_type) = AsType::from_name(text.as_str()) else {
+                self.error("Invalid return type")
+                    .register(self.context);
+                return AsType::Anything;
+            };
+            return return_type;
+        };
+        if Token::Punct(Punctuation::Slash) != ok_token {
+            self.error("Invalid return type")
+                .register(self.context);
+                self.put_back(ok_token);
+                return AsType::Anything;
+        };
+        // We're pulling out just the text, and we go until the end of the text or until we hit something unexpected
+        let mut path_vec = vec![];
+        let mut slash_last = true;
+        while let Ok(path_component) = self.next("return type") {
+            // NEED to hand back unconsumed tokens. so double slash if we encounter it, or anything that causes a break
+            // If we don't we'll mess up proc body handling and cause some bullshit
+            match path_component {
+                Token::Ident(text, whitespace) if slash_last => {
+                    path_vec.push(text);
+                    slash_last = false;
+                    if whitespace {
+                        break;
+                    }
+                },
+                Token::Punct(Punctuation::Slash) if !slash_last => slash_last = true,
+                Token::Punct(Punctuation::Slash) if slash_last => {
+                    // This is a comment, let's back out and give it back its slashes
+                    self.put_back(path_component.clone());
+                    self.put_back(path_component);
+                    break;
+                },
+                _ => {
+                    // If we're done, put back what we just fond so someone else can process it, in case they care
+                    self.put_back(path_component);
+                    break;
+                },
+            }
+        }
+        if path_vec.len() > 0 {
+            AsType::from_vec(path_vec)
+        } else {
+            self.error("Invalid return type")
+                .register(self.context);
+            AsType::Anything
+        }
     }
 
     /// Parse a verb input type. Used by proc params and the input() form.

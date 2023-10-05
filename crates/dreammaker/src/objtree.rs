@@ -6,7 +6,7 @@ use std::fmt;
 use indexmap::IndexMap;
 use ahash::RandomState;
 
-use super::ast::{Expression, VarType, VarTypeBuilder, VarSuffix, PathOp, Parameter, Block, ProcDeclKind, Ident};
+use super::ast::{AsType, Expression, VarType, VarTypeBuilder, VarSuffix, PathOp, Parameter, Block, ProcDeclKind, Ident};
 use super::constants::Constant;
 use super::docs::DocCollection;
 use super::{DMError, Location, Context, Severity};
@@ -75,6 +75,8 @@ pub struct TypeVar {
 pub struct ProcDeclaration {
     pub location: Location,
     pub kind: ProcDeclKind,
+    // todo: tie this into our return type, add support for the funky types
+    pub return_type: AsType,
     pub id: SymbolId,
     pub is_private: bool,
     pub is_protected: bool,
@@ -1110,6 +1112,7 @@ impl ObjectTreeBuilder {
         name: &str,
         declaration: Option<ProcDeclKind>,
         parameters: Vec<Parameter>,
+        return_type: AsType,
         code: Option<Block>,
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let node = &mut self.inner.graph[parent.index()];
@@ -1126,6 +1129,7 @@ impl ObjectTreeBuilder {
                 proc.declaration = Some(ProcDeclaration {
                     location,
                     kind,
+                    return_type,
                     id: self.symbols.allocate(),
                     is_private: false,
                     is_protected: false,
@@ -1256,7 +1260,7 @@ impl ObjectTreeBuilder {
             ));
         }
 
-        self.register_proc(context, location, parent, proc_name, declaration, parameters, code)
+        self.register_proc(context, location, parent, proc_name, declaration, parameters,AsType::Anything, code)
     }
 }
 
