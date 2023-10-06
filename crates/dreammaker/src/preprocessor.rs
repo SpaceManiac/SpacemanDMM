@@ -104,6 +104,7 @@ impl DefineHistory {
             env_file: self.env_file.clone(),
             include_stack: Default::default(),
             include_locations: Default::default(),
+            multiple_locations: Default::default(),
             history: Default::default(),  // TODO: support branching a second time
             defines,
             maps: Default::default(),
@@ -129,6 +130,7 @@ impl DefineHistory {
             env_file: self.env_file.clone(),
             include_stack: Default::default(),
             include_locations: Default::default(),
+            multiple_locations: Default::default(),
             history: Default::default(),  // TODO: support branching a second time
             defines: DefineMap::from_history(self, self.last_input_loc),
             maps: Default::default(),
@@ -385,6 +387,9 @@ pub struct Preprocessor<'ctx> {
 
     include_stack: IncludeStack<'ctx>,
     include_locations: HashMap<FileId, Location, RandomState>,
+    // list of files with #pragma multiple to allow for more then one include
+    // should this be done as an enum in include_locations instead?
+    multiple_locations: HashMap<FileId, Location, RandomState>,
     last_input_loc: Location,
     output: VecDeque<Token>,
     ifdef_stack: Vec<Ifdef>,
@@ -427,6 +432,7 @@ impl<'ctx> Preprocessor<'ctx> {
             env_file,
             include_stack: IncludeStack { stack: vec![include] },
             include_locations: Default::default(),
+            multiple_locations: Default::default(),
             history: Default::default(),
             defines: DefineMap::with_builtins(),
             maps: Default::default(),
@@ -456,6 +462,7 @@ impl<'ctx> Preprocessor<'ctx> {
             env_file,
             include_stack: IncludeStack { stack: vec![include] },
             include_locations: Default::default(),
+            multiple_locations: Default::default(),
             history: Default::default(),
             defines: DefineMap::with_builtins(),
             maps: Default::default(),
@@ -654,10 +661,18 @@ impl<'ctx> Preprocessor<'ctx> {
         // All DM source is effectively `#pragma once`.
         let file_id = self.context.register_file(register);
         if let Some(&loc) = self.include_locations.get(&file_id) {
-            Err(DMError::new(self.last_input_loc, format!("duplicate #include {:?}", path))
-                .set_severity(Severity::Warning)
-                .with_note(loc, "previously included here")
-                .with_errortype("duplicate_include"))
+            if self.multiple_locations.get(&file_id) == None {
+                Err(DMError::new(self.last_input_loc, format!("duplicate #include {:?}", path))
+                    .set_severity(Severity::Warning)
+                    .with_note(loc, "previously included here")
+                    .with_errortype("duplicate_include"))
+            } else {
+                Ok(Include::File {
+                    path,
+                    //file: file_id,
+                    lexer: Lexer::from_read(self.context, file_id, read)?,
+                })
+            }
         } else {
             self.include_locations.insert(file_id, self.last_input_loc);
             Ok(Include::File {
@@ -706,7 +721,7 @@ impl<'ctx> Preprocessor<'ctx> {
 
         const ALL_DIRECTIVES: &[&str] = &[
             "if", "ifdef", "ifndef", "elif", "else", "endif",
-            "include", "define", "undef", "warn", "error",
+            "include", "define", "undef", "warn", "error", "pragma",
         ];
         let disabled = !inside_condition && self.is_disabled();
         match read {
@@ -951,6 +966,18 @@ impl<'ctx> Preprocessor<'ctx> {
                     "error" => {
                         expect_token!((text) = Token::String(text));
                         self.context.register_error(DMError::new(self.last_input_loc, format!("#{} {}", ident, text)));
+                    }
+                    "pragma" if disabled => {}
+                    "pragma" => {
+                        expect_token!((text) = Token::String(text));
+                        match text.as_str() {
+                            "multiple" => {
+                                if let Some(file_id) = self.context.get_file(self.env_file.as_path()) {
+                                    self.multiple_locations.insert(file_id, self.last_input_loc);
+                                }
+                            },
+                            _ => {},
+                        }
                     }
                     // none of this other stuff should even exist
                     other => {
