@@ -950,7 +950,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             } else {
                 last_part.push_str("[]");
             }
-        } else if self.exact(Punct(EmptyQuote))?.is_some() {
+        } else if self.exact(Token::String("".to_string()))?.is_some() {
             last_part.push_str("\"\"")
         }
         SUCCESS
