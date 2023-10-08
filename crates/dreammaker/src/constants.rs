@@ -3,10 +3,15 @@ use std::fmt;
 use std::ops;
 use std::path::Path;
 
+use get_size::GetSize;
+use get_size_derive::GetSize;
+
 use indexmap::IndexMap;
 use ahash::RandomState;
 use ordered_float::OrderedFloat;
 use color_space::{Hsl, Hsv, Lch, Rgb};
+
+use crate::heap_size_of_index_map;
 
 use super::ast::*;
 use super::objtree::*;
@@ -18,9 +23,10 @@ pub type Arguments = [(Constant, Option<Constant>)];
 /// An absolute typepath and optional variables.
 ///
 /// The path may involve `/proc` or `/verb` references.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, GetSize)]
 pub struct Pop {
     pub path: TreePath,
+    #[get_size(size_fn = heap_size_of_index_map)]
     pub vars: IndexMap<Ident, Constant, RandomState>,
 }
 
@@ -62,7 +68,7 @@ impl fmt::Display for Pop {
 ///
 /// This is intended to represent the degree to which constants are evaluated
 /// before being displayed in DreamMaker.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, GetSize)]
 pub enum Constant {
     /// The literal `null`.
     Null(Option<TreePath>),
@@ -80,9 +86,9 @@ pub enum Constant {
     /// A prefab literal.
     Prefab(Box<Pop>),
     /// A string literal.
-    String(Box<str>),
+    String(Ident2),
     /// A resource literal.
-    Resource(Box<str>),
+    Resource(Ident2),
     /// A floating-point (or integer) literal, following BYOND's rules.
     Float(f32),
 }
@@ -132,7 +138,7 @@ impl std::cmp::PartialEq for Constant {
 impl std::cmp::Eq for Constant {}
 
 /// The constant functions which are represented as-is.
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, GetSize)]
 pub enum ConstFn {
     /// The `icon()` type constructor.
     Icon,
@@ -163,7 +169,7 @@ impl Constant {
     }
 
     #[inline]
-    pub fn string<S: Into<Box<str>>>(s: S) -> Constant {
+    pub fn string<S: Into<Ident2>>(s: S) -> Constant {
         Constant::String(s.into())
     }
 
