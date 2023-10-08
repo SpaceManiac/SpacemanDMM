@@ -150,11 +150,12 @@ oper_table! { BINARY_OPS;
     Pow {
         (BinaryOp, Pow),
     }
-    // * / %
+    // * / % %%
     Mul {
         (BinaryOp, Mul), //
         (BinaryOp, Div = Slash), //
         (BinaryOp, Mod),
+        (BinaryOp, FloatMod),
     }
     // + -
     Add {
@@ -205,7 +206,7 @@ oper_table! { BINARY_OPS;
     Conditional {
         (TernaryOp, Conditional = QuestionMark),
     }
-    // = += -= -= *= /= %= &= |= ^= <<= >>=
+    // = += -= -= *= /= %= %%= &= |= ^= <<= >>=
     Assign {
         (AssignOp, Assign),
         (AssignOp, AddAssign),
@@ -213,6 +214,7 @@ oper_table! { BINARY_OPS;
         (AssignOp, MulAssign),
         (AssignOp, DivAssign),
         (AssignOp, ModAssign),
+        (AssignOp, FloatModAssign),
         (AssignOp, BitAndAssign),
         (AssignOp, BitOrAssign),
         (AssignOp, BitXorAssign),
@@ -887,6 +889,10 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             last_part.push('%');
         } else if self.exact(Punct(ModAssign))?.is_some() {
             last_part.push_str("%=");
+        } else if self.exact(Punct(FloatMod))?.is_some() {
+            last_part.push_str("%%");
+        } else if self.exact(Punct(FloatModAssign))?.is_some() {
+            last_part.push_str("%%=");
         } else if self.exact(Punct(BitAnd))?.is_some() {
             last_part.push('&');
         } else if self.exact(Punct(BitAndAssign))?.is_some() {
@@ -944,6 +950,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             } else {
                 last_part.push_str("[]");
             }
+        } else if self.exact(Token::String("".to_string()))?.is_some() {
+            last_part.push_str("\"\"")
         }
         SUCCESS
     }

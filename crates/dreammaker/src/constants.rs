@@ -691,6 +691,14 @@ impl<'a> ConstantFolder<'a> {
         numeric!(Greater >);
         numeric!(GreaterEq >=);
         match (op, lhs, rhs) {
+            (BinaryOp::FloatMod, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs - ((lhs / rhs).floor() * rhs))),
+            (_, lhs_, rhs_) => {
+                lhs = lhs_;
+                rhs = rhs_;
+            }
+        }
+
+        match (op, lhs, rhs) {
             (BinaryOp::Pow, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs.powf(rhs))),
             (_, lhs_, rhs_) => {
                 lhs = lhs_;

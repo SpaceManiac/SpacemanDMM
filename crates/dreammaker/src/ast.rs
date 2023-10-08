@@ -116,6 +116,7 @@ pub enum BinaryOp {
     Div,
     Pow,
     Mod,
+    FloatMod,
     Eq,
     NotEq,
     Less,
@@ -145,6 +146,7 @@ impl fmt::Display for BinaryOp {
             Div => "/",
             Pow => "**",
             Mod => "%",
+            FloatMod => "%%",
             Eq => "==",
             NotEq => "!=",
             Less => "<",
@@ -175,6 +177,7 @@ pub enum AssignOp {
     MulAssign,
     DivAssign,
     ModAssign,
+    FloatModAssign,
     AssignInto,
     BitAndAssign,
     AndAssign,
@@ -195,6 +198,7 @@ impl fmt::Display for AssignOp {
             MulAssign => "*=",
             DivAssign => "/=",
             ModAssign => "%=",
+            FloatModAssign => "%%=",
             AssignInto => ":=",
             BitAndAssign => "&=",
             AndAssign => "&&=",
@@ -236,6 +240,7 @@ augmented! {
     Mul = MulAssign;
     Div = DivAssign;
     Mod = ModAssign;
+    FloatMod = FloatModAssign;
     BitAnd = BitAndAssign;
     BitOr = BitOrAssign;
     BitXor = BitXorAssign;
