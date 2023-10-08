@@ -23,9 +23,10 @@ pub type Arguments = [(Constant, Option<Constant>)];
 /// An absolute typepath and optional variables.
 ///
 /// The path may involve `/proc` or `/verb` references.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, GetSize)]
 pub struct Pop {
     pub path: TreePath,
+    #[get_size(size_fn = heap_size_of_index_map)]
     pub vars: IndexMap<Ident, Constant, RandomState>,
 }
 
@@ -60,12 +61,6 @@ impl From<TreePath> for Pop {
 impl fmt::Display for Pop {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}{}", FormatTreePath(&self.path), FormatVars(&self.vars))
-    }
-}
-
-impl GetSize for Pop {
-    fn get_heap_size(&self) -> usize {
-        self.path.get_heap_size() + heap_size_of_index_map(&self.vars)
     }
 }
 

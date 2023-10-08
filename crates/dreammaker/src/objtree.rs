@@ -23,7 +23,7 @@ use super::{DMError, Location, Context, Severity};
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct SymbolId(u32);
 
-impl GetSize for SymbolId{}
+impl GetSize for SymbolId {}
 
 #[derive(Debug)]
 pub struct SymbolIdSource(SymbolId);
@@ -111,15 +111,17 @@ impl TypeProc {
 // ----------------------------------------------------------------------------
 // Types
 
-#[derive(Debug)]
+#[derive(Debug, GetSize)]
 pub struct Type {
     pub path: String,
     path_last_slash: usize,
     pub location: Location,
     location_specificity: usize,
     /// Variables which this type has declarations or overrides for.
+    #[get_size(size_fn = heap_size_of_index_map)]
     pub vars: IndexMap<String, TypeVar, RandomState>,
     /// Procs and verbs which this type has declarations or overrides for.
+    #[get_size(size_fn = heap_size_of_index_map)]
     pub procs: IndexMap<String, TypeProc, RandomState>,
     parent_path: NodeIndex,
     parent_type: NodeIndex,
@@ -194,21 +196,6 @@ impl Type {
             current = objtree.parent_of(ty);
         }
         None
-    }
-}
-
-impl GetSize for Type {
-    fn get_heap_size(&self) -> usize {
-        self.path.get_heap_size()
-        + self.path_last_slash.get_heap_size()
-        + self.location.get_heap_size()
-        + self.parent_path.get_heap_size()
-        + self.parent_type.get_heap_size()
-        + self.docs.get_heap_size()
-        + self.id.get_heap_size()
-        + self.children.get_heap_size()
-        + heap_size_of_index_map(&self.vars)
-        + heap_size_of_index_map(&self.procs)
     }
 }
 
@@ -1318,4 +1305,4 @@ impl NodeIndex {
     }
 }
 
-impl GetSize for NodeIndex{}
+impl GetSize for NodeIndex {}

@@ -17,7 +17,7 @@ use crate::config::Config;
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct FileId(u16);
 
-impl GetSize for FileId{}
+impl GetSize for FileId {}
 
 const FILEID_BUILTINS: FileId = FileId(0x0000);
 const FILEID_MIN: FileId = FileId(0x0001);

@@ -199,9 +199,11 @@ pub fn detect_environment_default() -> std::io::Result<Option<std::path::PathBuf
     }))
 }
 
-pub(crate) fn heap_size_of_index_map<K, V>(index_map: &IndexMap<K, V, RandomState>) -> usize where
+fn heap_size_of_index_map<K, V>(index_map: &IndexMap<K, V, RandomState>) -> usize
+where
     K: GetSize,
-    V: GetSize, {
+    V: GetSize,
+{
     let mut total = 0;
 
     for (k, v) in index_map.iter() {
