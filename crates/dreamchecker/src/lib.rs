@@ -1738,6 +1738,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 let src = self.ty;
                 if let Some(proc) = self.ty.get_proc(unscoped_name) {
                     self.visit_call(location, src, proc, args, false, local_vars)
+                } else if unscoped_name == "__PROC__" {
+                    self.visit_call(location, src, self.proc_ref, args, false, local_vars)
                 } else if unscoped_name == "SpacemanDMM_unlint" {
                     // Escape hatch for cases like `src` in macros used in
                     // global procs.
@@ -1881,6 +1883,20 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 self.visit_expression(location, function_name, None, local_vars);
                 self.visit_arguments(location, args, local_vars);
                 Analysis::empty()  // TODO
+            },
+            Term::__TYPE__ => {
+                let pop = dm::constants::Pop::from(self.ty.path.split('/').skip(1).map(ToOwned::to_owned).collect::<Vec<_>>().into_boxed_slice());
+                Analysis {
+                    static_ty: StaticType::None,
+                    aset: assumption_set![Assumption::IsPath(true, self.ty)],
+                    value: Some(Constant::Prefab(Box::new(pop))),
+                    fix_hint: None,
+                    is_impure: None,
+                }
+            },
+            Term::__PROC__ => {
+                // Can't fuckin do it bros
+                Analysis::empty()
             },
         }
     }

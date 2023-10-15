@@ -783,6 +783,15 @@ impl<'a> ConstantFolder<'a> {
             Term::Int(v) => Constant::Float(v as f32),
             Term::Float(v) => Constant::from(v),
             Term::Expr(expr) => self.expr(*expr, type_hint)?,
+            Term::__TYPE__ => {
+                if let Some(obj_tree) = &self.tree {
+                    let typeval = TypeRef::new(obj_tree, self.ty).get();
+                    let path = make_typepath(typeval.path.split("/").filter(|elem| *elem != "").map(|segment| segment.to_string()).collect());
+                    Constant::Prefab(Box::new(self.prefab(Prefab::from(path))?))
+                } else {
+                    return Err(self.error("No type context".to_owned()))
+                }
+            },
             _ => return Err(self.error("non-constant expression".to_owned())),
         })
     }
