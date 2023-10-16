@@ -544,6 +544,19 @@ impl<'o> WalkProc<'o> {
                     StaticType::None
                 }
             },
+            Term::__TYPE__ => {
+                self.tab.use_symbol(self.ty.id, location);
+                StaticType::None
+            },
+            Term::__PROC__ => {
+                let Some(proc) = self.proc else {
+                    return StaticType::None
+                };
+                if let Some(decl) = self.ty.get_proc_declaration(proc.name()) {
+                    self.tab.use_symbol(decl.id, location);
+                }
+                StaticType::None
+            }
             Term::__IMPLIED_TYPE__ => {
                 let Some(implied_type) = type_hint else {
                     return StaticType::None
