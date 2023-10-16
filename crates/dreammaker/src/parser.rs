@@ -150,11 +150,12 @@ oper_table! { BINARY_OPS;
     Pow {
         (BinaryOp, Pow),
     }
-    // * / %
+    // * / % %%
     Mul {
         (BinaryOp, Mul), //
         (BinaryOp, Div = Slash), //
         (BinaryOp, Mod),
+        (BinaryOp, FloatMod),
     }
     // + -
     Add {
@@ -205,7 +206,7 @@ oper_table! { BINARY_OPS;
     Conditional {
         (TernaryOp, Conditional = QuestionMark),
     }
-    // = += -= -= *= /= %= &= |= ^= <<= >>=
+    // = += -= -= *= /= %= %%= &= |= ^= <<= >>=
     Assign {
         (AssignOp, Assign),
         (AssignOp, AddAssign),
@@ -213,6 +214,7 @@ oper_table! { BINARY_OPS;
         (AssignOp, MulAssign),
         (AssignOp, DivAssign),
         (AssignOp, ModAssign),
+        (AssignOp, FloatModAssign),
         (AssignOp, BitAndAssign),
         (AssignOp, BitOrAssign),
         (AssignOp, BitXorAssign),
@@ -887,6 +889,10 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             last_part.push('%');
         } else if self.exact(Punct(ModAssign))?.is_some() {
             last_part.push_str("%=");
+        } else if self.exact(Punct(FloatMod))?.is_some() {
+            last_part.push_str("%%");
+        } else if self.exact(Punct(FloatModAssign))?.is_some() {
+            last_part.push_str("%%=");
         } else if self.exact(Punct(BitAnd))?.is_some() {
             last_part.push('&');
         } else if self.exact(Punct(BitAndAssign))?.is_some() {
@@ -944,6 +950,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             } else {
                 last_part.push_str("[]");
             }
+        } else if self.exact(Token::String("".to_string()))?.is_some() {
+            last_part.push_str("\"\"")
         }
         SUCCESS
     }
@@ -2116,6 +2124,17 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 let input_type = self.input_type()?.unwrap_or_else(InputType::empty);
                 require!(self.exact(Token::Punct(Punctuation::RParen)));
                 Term::As(input_type)
+            },
+            // term :: __PROC__
+            Token::Ident(ref i, _) if i == "__PROC__" => {
+                // We cannot replace with the proc path yet, you don't need one it's fine
+                Term::__PROC__
+            },
+
+            // term :: __TYPE__
+            Token::Ident(ref i, _) if i == "__TYPE__" => {
+                // We cannot replace with the typepath yet, so we'll hand back a term we can parse later
+                Term::__TYPE__
             },
 
             // term :: ident arglist | ident
