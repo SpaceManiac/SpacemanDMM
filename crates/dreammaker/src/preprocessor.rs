@@ -969,12 +969,11 @@ impl<'ctx> Preprocessor<'ctx> {
                     }
                     "pragma" if disabled => {}
                     "pragma" => {
-                        expect_token!((text) = Token::String(text));
+                        expect_token!((text) = Token::Ident(text, _));
+                        let pragma_use_loc = _last_expected_loc;
                         match text.as_str() {
                             "multiple" => {
-                                if let Some(file_id) = self.context.get_file(self.env_file.as_path()) {
-                                    self.multiple_locations.insert(file_id, self.last_input_loc);
-                                }
+                                self.multiple_locations.insert(pragma_use_loc.file, pragma_use_loc);
                             },
                             _ => {},
                         }
