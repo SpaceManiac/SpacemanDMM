@@ -296,7 +296,7 @@ impl fmt::Display for PropertyAccessKind {
 }
 
 /// Description of the type of an as block, particularly in the context of proc return types
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, GetSize)]
 pub enum AsType {
     // These lummy stole from the InputType spec
     // There are more but we will parse them into a typepath/string
