@@ -3,8 +3,13 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
+use get_size::GetSize;
+use get_size_derive::GetSize;
+
 use indexmap::IndexMap;
 use ahash::RandomState;
+
+use crate::heap_size_of_index_map;
 
 use super::ast::{Expression, VarType, VarTypeBuilder, VarSuffix, PathOp, Parameter, Block, ProcDeclBuilder, ProcDeclKind, ProcFlags, Ident};
 use super::constants::Constant;
@@ -17,6 +22,8 @@ use super::{DMError, Location, Context, Severity};
 /// An identifier referring to a symbol in the object tree.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct SymbolId(u32);
+
+impl GetSize for SymbolId {}
 
 #[derive(Debug)]
 pub struct SymbolIdSource(SymbolId);
@@ -47,14 +54,14 @@ impl SymbolIdSource {
 
 pub type Vars = IndexMap<String, Constant, RandomState>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, GetSize)]
 pub struct VarDeclaration {
     pub var_type: VarType,
     pub location: Location,
     pub id: SymbolId,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, GetSize)]
 pub struct VarValue {
     pub location: Location,
     /// Syntactic value, as specified in the source.
@@ -65,13 +72,13 @@ pub struct VarValue {
     pub docs: DocCollection,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, GetSize)]
 pub struct TypeVar {
     pub value: VarValue,
     pub declaration: Option<VarDeclaration>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, GetSize)]
 pub struct ProcDeclaration {
     pub location: Location,
     pub kind: ProcDeclKind,
@@ -79,7 +86,7 @@ pub struct ProcDeclaration {
     pub id: SymbolId,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, GetSize)]
 pub struct ProcValue {
     pub location: Location,
     pub parameters: Box<[Parameter]>,
@@ -87,7 +94,7 @@ pub struct ProcValue {
     pub code: Option<Block>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, GetSize)]
 pub struct TypeProc {
     pub value: Vec<ProcValue>,
     pub declaration: Option<ProcDeclaration>,
@@ -103,15 +110,17 @@ impl TypeProc {
 // ----------------------------------------------------------------------------
 // Types
 
-#[derive(Debug)]
+#[derive(Debug, GetSize)]
 pub struct Type {
     pub path: String,
     path_last_slash: usize,
     pub location: Location,
     location_specificity: usize,
     /// Variables which this type has declarations or overrides for.
+    #[get_size(size_fn = heap_size_of_index_map)]
     pub vars: IndexMap<String, TypeVar, RandomState>,
     /// Procs and verbs which this type has declarations or overrides for.
+    #[get_size(size_fn = heap_size_of_index_map)]
     pub procs: IndexMap<String, TypeProc, RandomState>,
     parent_path: NodeIndex,
     parent_type: NodeIndex,
@@ -623,7 +632,7 @@ impl<'a> std::hash::Hash for ProcRef<'a> {
 // ----------------------------------------------------------------------------
 // The object tree itself
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, GetSize)]
 pub struct ObjectTree {
     graph: Vec<Type>,
     types: BTreeMap<String, NodeIndex>,
@@ -1299,3 +1308,5 @@ impl NodeIndex {
         NodeIndex(std::u32::MAX)
     }
 }
+
+impl GetSize for NodeIndex {}

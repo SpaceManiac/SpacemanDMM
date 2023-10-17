@@ -3,6 +3,9 @@
 //! Most AST types can be pretty-printed using the `Display` trait.
 use std::fmt;
 use std::iter::FromIterator;
+
+use get_size::GetSize;
+use get_size_derive::GetSize;
 use phf::phf_map;
 
 use crate::error::Location;
@@ -17,7 +20,7 @@ pub type SwitchCases = [(Spanned<Vec<Case>>, Block)];
 // Simple enums
 
 /// The unary operators, both prefix and postfix.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, GetSize)]
 pub enum UnaryOp {
     Neg,
     Not,
@@ -78,7 +81,7 @@ impl UnaryOp {
 /// The DM path operators.
 ///
 /// Which path operator is used typically only matters at the start of a path.
-#[derive(Copy, Clone, Hash, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, Hash, PartialEq, Eq, Debug, GetSize)]
 pub enum PathOp {
     /// `/` for absolute pathing.
     Slash,
@@ -105,7 +108,7 @@ impl fmt::Display for PathOp {
 }
 
 /// The binary operators.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, GetSize)]
 pub enum BinaryOp {
     Add,
     Sub,
@@ -113,6 +116,7 @@ pub enum BinaryOp {
     Div,
     Pow,
     Mod,
+    FloatMod,
     Eq,
     NotEq,
     Less,
@@ -142,6 +146,7 @@ impl fmt::Display for BinaryOp {
             Div => "/",
             Pow => "**",
             Mod => "%",
+            FloatMod => "%%",
             Eq => "==",
             NotEq => "!=",
             Less => "<",
@@ -164,7 +169,7 @@ impl fmt::Display for BinaryOp {
 }
 
 /// The assignment operators, including augmented assignment.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, GetSize)]
 pub enum AssignOp {
     Assign,
     AddAssign,
@@ -172,6 +177,7 @@ pub enum AssignOp {
     MulAssign,
     DivAssign,
     ModAssign,
+    FloatModAssign,
     AssignInto,
     BitAndAssign,
     AndAssign,
@@ -192,6 +198,7 @@ impl fmt::Display for AssignOp {
             MulAssign => "*=",
             DivAssign => "/=",
             ModAssign => "%=",
+            FloatModAssign => "%%=",
             AssignInto => ":=",
             BitAndAssign => "&=",
             AndAssign => "&&=",
@@ -233,6 +240,7 @@ augmented! {
     Mul = MulAssign;
     Div = DivAssign;
     Mod = ModAssign;
+    FloatMod = FloatModAssign;
     BitAnd = BitAndAssign;
     BitOr = BitOrAssign;
     BitXor = BitXorAssign;
@@ -249,7 +257,7 @@ pub enum TernaryOp {
 }
 
 /// The possible kinds of access operators for lists
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, GetSize)]
 pub enum ListAccessKind {
     /// `[]`
     Normal,
@@ -258,7 +266,7 @@ pub enum ListAccessKind {
 }
 
 /// The possible kinds of index operators, for both fields and methods.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, GetSize)]
 pub enum PropertyAccessKind {
     /// `a.b`
     Dot,
@@ -322,7 +330,7 @@ impl fmt::Display for ProcDeclBuilder {
 /// DM requires referencing proc paths to include whether the target is
 /// declared as a proc or verb, even though the two modes are functionally
 /// identical in many other respects.
-#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash, GetSize)]
 pub enum ProcDeclKind {
     Proc,
     Verb,
@@ -359,7 +367,7 @@ impl fmt::Display for ProcDeclKind {
 }
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Default, GetSize)]
     pub struct ProcFlags: u8 {
         // DM flags
         const FINAL = 1 << 0;
@@ -395,7 +403,7 @@ impl fmt::Display for ProcFlags {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, GetSize)]
 pub enum SettingMode {
     /// As in `set name = "Use"`.
     Assign,
@@ -465,6 +473,7 @@ macro_rules! type_table {
 
 type_table! {
     /// A type specifier for verb arguments and input() calls.
+    #[derive(GetSize)]
     pub struct InputType;
 
     // These values can be known with an invocation such as:
@@ -488,7 +497,7 @@ type_table! {
 }
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Default, GetSize)]
     pub struct VarTypeFlags: u8 {
         // DM flags
         const STATIC = 1 << 0;
@@ -657,8 +666,14 @@ impl fmt::Debug for Ident2 {
     }
 }
 
+impl GetSize for Ident2 {
+    fn get_heap_size(&self) -> usize {
+        self.inner.as_bytes().len()
+    }
+}
+
 /// An AST element with an additional location attached.
-#[derive(Copy, Clone, Eq, Debug)]
+#[derive(Copy, Clone, Eq, Debug, GetSize)]
 pub struct Spanned<T> {
     // TODO: add a Span type and use it here
     pub location: Location,
@@ -695,6 +710,10 @@ impl<'a, T: fmt::Display> fmt::Display for FormatTreePath<'a, T> {
 /// A series of identifiers separated by path operators.
 pub type TypePath = Vec<(PathOp, Ident)>;
 
+pub fn make_typepath(segments: Vec<String>) -> TypePath {
+    segments.into_iter().fold(vec![], |mut acc, segment| { acc.push((PathOp::Slash, segment)); acc })
+}
+
 pub struct FormatTypePath<'a>(pub &'a [(PathOp, Ident)]);
 
 impl<'a> fmt::Display for FormatTypePath<'a> {
@@ -710,7 +729,7 @@ impl<'a> fmt::Display for FormatTypePath<'a> {
 // Terms and Expressions
 
 /// A typepath optionally followed by a set of variables.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, GetSize)]
 pub struct Prefab {
     pub path: TypePath,
     pub vars: Box<[(Ident2, Expression)]>,
@@ -748,7 +767,7 @@ where
 }
 
 /// The structure of an expression, a tree of terms and operators.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, GetSize)]
 pub enum Expression {
     /// An expression containing a term directly. The term is evaluated first,
     /// then its follows, then its unary operators in reverse order.
@@ -902,7 +921,7 @@ impl From<Term> for Expression {
 }
 
 /// The structure of a term, the basic building block of the AST.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, GetSize)]
 pub enum Term {
     // Terms with no recursive contents ---------------------------------------
     /// The literal `null`.
@@ -919,6 +938,10 @@ pub enum Term {
     Resource(String),
     /// An `as()` call, with an input type. Undocumented.
     As(InputType),
+    /// A reference to our current proc's name
+    __PROC__,
+    /// A reference to the current proc/scope's type
+    __TYPE__,
 
     // Non-function calls with recursive contents -----------------------------
     /// An expression contained in a term.
@@ -1066,14 +1089,14 @@ impl From<Expression> for Term {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, GetSize)]
 pub struct MiniExpr {
     pub ident: Ident2,
     pub fields: Box<[Field]>,
 }
 
 /// An expression part which is applied to a term or another follow.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, GetSize)]
 pub enum Follow {
     /// Index the value by an expression.
     Index(ListAccessKind, Box<Expression>),
@@ -1096,7 +1119,7 @@ pub enum Follow {
 }
 
 /// Like a `Follow` but only supports field accesses.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, GetSize)]
 pub struct Field {
     pub kind: PropertyAccessKind,
     pub ident: Ident2,
@@ -1109,7 +1132,7 @@ impl From<Field> for Follow {
 }
 
 /// A parameter declaration in the header of a proc.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, GetSize)]
 pub struct Parameter {
     pub var_type: VarType,
     pub name: Ident,
@@ -1130,7 +1153,7 @@ impl fmt::Display for Parameter {
 }
 
 /// A type which may be ascribed to a `var`.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, GetSize)]
 pub struct VarType {
     pub flags: VarTypeFlags,
     pub type_path: TreePath,
@@ -1242,7 +1265,7 @@ impl VarSuffix {
 pub type Block = Box<[Spanned<Statement>]>;
 
 /// A statement in a proc body.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, GetSize)]
 pub enum Statement {
     Expr(Expression),
     Return(Option<Expression>),
@@ -1302,20 +1325,20 @@ pub enum Statement {
     Crash(Option<Expression>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, GetSize)]
 pub struct VarStatement {
     pub var_type: VarType,
     pub name: Ident,
     pub value: Option<Expression>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, GetSize)]
 pub enum Case {
     Exact(Expression),
     Range(Expression, Expression),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, GetSize)]
 pub struct ForListStatement {
     pub var_type: Option<VarType>,
     pub name: Ident2,
@@ -1326,7 +1349,7 @@ pub struct ForListStatement {
     pub block: Block,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, GetSize)]
 pub struct ForRangeStatement {
     pub var_type: Option<VarType>,
     pub name: Ident2,
