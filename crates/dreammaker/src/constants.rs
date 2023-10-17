@@ -792,6 +792,13 @@ impl<'a> ConstantFolder<'a> {
                     return Err(self.error("No type context".to_owned()))
                 }
             },
+            Term::__IMPLIED_TYPE__ => {
+                if let Some(lhs_type) = type_hint {
+                    Constant::Prefab(Box::new(Pop::from(lhs_type.clone())))
+                } else {
+                    return Err(self.error("No type hint".to_owned()))
+                }
+            },
             _ => return Err(self.error("non-constant expression".to_owned())),
         })
     }

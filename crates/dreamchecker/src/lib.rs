@@ -1898,6 +1898,19 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 // Can't fuckin do it bros
                 Analysis::empty()
             },
+            Term::__IMPLIED_TYPE__ => {
+                let Some(implied_type) = type_hint else {
+                    return Analysis::empty()
+                };
+                let pop = dm::constants::Pop::from(implied_type.path.split('/').skip(1).map(ToOwned::to_owned).collect::<Vec<_>>().into_boxed_slice());
+                Analysis {
+                    static_ty: StaticType::None,
+                    aset: assumption_set![Assumption::IsPath(true, self.ty)],
+                    value: Some(Constant::Prefab(Box::new(pop))),
+                    fix_hint: None,
+                    is_impure: None,
+                }
+            },
         }
     }
 
