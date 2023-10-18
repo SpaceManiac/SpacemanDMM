@@ -750,8 +750,21 @@ impl<'o> AnalyzeObjectTree<'o> {
         }
     }
 
-    /// Gather and store set directives for the given proc using the provided code body
+    /// Gather and store set directives for the given proc using the provided code body and already existing flags
     pub fn gather_settings(&mut self, proc: ProcRef<'o>, code: &'o [Spanned<Statement>]) {
+        let proc_location = proc.get().location;
+        // Need to extract OUR declaration, and not our parent's. so we do the stupid
+        if let Some(proc_type) = proc.ty().get().procs.get(proc.name()) {
+            if let Some(declaration) = &proc_type.declaration {
+                let proc_flags = declaration.flags;
+                if proc_flags.is_final() {
+                    // lemon todo: this should run, but it doesn't appear to trigger an error like I'd want. needs looking into imo
+                    if let Err(error) = self.must_not_override.insert(proc, true, proc_location) {
+                        self.context.register_error(error);
+                    }
+                }
+            }
+        }
         for statement in code.iter() {
             if let Statement::Setting { ref name, ref value, .. } = statement.elem {
                 if name == "SpacemanDMM_return_type" {

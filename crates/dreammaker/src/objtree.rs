@@ -11,7 +11,7 @@ use ahash::RandomState;
 
 use crate::heap_size_of_index_map;
 
-use super::ast::{Expression, VarType, VarTypeBuilder, VarSuffix, PathOp, Parameter, Block, ProcDeclKind, Ident};
+use super::ast::{Expression, VarType, VarTypeBuilder, VarSuffix, PathOp, Parameter, Block, ProcDeclBuilder, ProcDeclKind, ProcFlags, Ident};
 use super::constants::Constant;
 use super::docs::DocCollection;
 use super::{DMError, Location, Context, Severity};
@@ -82,9 +82,8 @@ pub struct TypeVar {
 pub struct ProcDeclaration {
     pub location: Location,
     pub kind: ProcDeclKind,
+    pub flags: ProcFlags,
     pub id: SymbolId,
-    pub is_private: bool,
-    pub is_protected: bool,
 }
 
 #[derive(Debug, Clone, GetSize)]
@@ -1117,7 +1116,7 @@ impl ObjectTreeBuilder {
         location: Location,
         parent: NodeIndex,
         name: &str,
-        declaration: Option<ProcDeclKind>,
+        declaration: Option<ProcDeclBuilder>,
         parameters: Vec<Parameter>,
         code: Option<Block>,
     ) -> Result<(usize, &mut ProcValue), DMError> {
@@ -1126,18 +1125,17 @@ impl ObjectTreeBuilder {
             value: Vec::with_capacity(1),
             declaration: None,
         });
-        if let Some(kind) = declaration {
+        if let Some(decl_builder) = declaration {
             if let Some(ref decl) = proc.declaration {
-                DMError::new(location, format!("duplicate definition of {}/{}", kind, name))
+                DMError::new(location, format!("duplicate definition of {}/{}", decl_builder.kind, name))
                     .with_note(decl.location, "previous definition")
                     .register(context);
             } else {
                 proc.declaration = Some(ProcDeclaration {
                     location,
-                    kind,
+                    kind: decl_builder.kind,
+                    flags: decl_builder.flags,
                     id: self.symbols.allocate(),
-                    is_private: false,
-                    is_protected: false,
                 });
             }
         }
@@ -1250,8 +1248,14 @@ impl ObjectTreeBuilder {
         let (parent, mut proc_name) = self.get_from_path(location, &mut path, len)?;
         let mut declaration = None;
         if let Some(kind) = ProcDeclKind::from_name(proc_name) {
-            declaration = Some(kind);
-            proc_name = match path.next() {
+            let mut next_entry = path.next();
+            let flags = ProcFlags::from_name(next_entry.unwrap_or(""));
+            if let Some(_) = flags {
+                // did something? take another step
+                next_entry = path.next();
+            }
+            declaration = Some(ProcDeclBuilder::new(kind, flags));
+            proc_name = match next_entry {
                 Some(name) => name,
                 None => return Err(DMError::new(location, "proc must have a name")),
             };
