@@ -964,7 +964,10 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
         let location = self.location;
         let parameters = require!(self.separated(Comma, RParen, None, Parser::proc_parameter));
-        let return_type = self.return_type(proc_kind);
+        let return_type = match self.return_type(proc_kind)? {
+            Some(type_to_use) => type_to_use,
+            None => AsType::Anything,
+        };
 
         // split off a subparser so we can keep parsing the objtree
         // even when the proc body doesn't parse
@@ -1145,9 +1148,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     }
 
     /// Parse an optional as return type signifier (for procs)
-    fn return_type(&mut self, proc_kind: Option<ProcDeclKind>) -> AsType {
-        if let Ok(None) = self.exact_ident("as") {
-            return AsType::Anything;
+    fn return_type(&mut self, proc_kind: Option<ProcDeclKind>) -> Status<AsType> {
+        if self.exact_ident("as")?.is_none() {
+            return Ok(None);
         };
         if None == proc_kind {
             self.error("Cannot specify a return type for a proc override")
@@ -1155,30 +1158,22 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }
         // While loop over self.next, extracting either the first string with from_name OR
         // if the first string is a slash, continue to extract, and check for a slash again, and finish with from_vec
-        let next_token: Result<Token, DMError> = self.next("return type");
-        let Ok(ok_token) = next_token else {
-            self.error("'as' used with no return type")
-                .register(self.context);
-            return AsType::Anything;
-        };
-        if let Token::Ident(text, _) = ok_token {
+        let return_result: Result<Token, DMError> = self.next("return type");
+        let next_token = return_result?;
+        if let Token::Ident(text, _) = next_token {
             let Some(return_type) = AsType::from_name(text.as_str()) else {
-                self.error("Invalid return type")
-                    .register(self.context);
-                return AsType::Anything;
+                return Err(self.error("Invalid return type"));
             };
-            return return_type;
+            return Ok(Some(return_type));
         };
-        if Token::Punct(Punctuation::Slash) != ok_token {
-            self.error("Invalid return type")
-                .register(self.context);
-                self.put_back(ok_token);
-                return AsType::Anything;
+        if Token::Punct(Punctuation::Slash) != next_token {
+                self.put_back(next_token);
+                return Err(self.error("Invalid return type"));
         };
         // We're pulling out just the text, and we go until the end of the text or until we hit something unexpected
         let mut path_vec = vec![];
         let mut slash_last = true;
-        while let Ok(path_component) = self.next("return type") {
+        while let path_component = self.next("return type")? {
             match path_component {
                 Token::Ident(text, whitespace) if slash_last => {
                     path_vec.push(text);
@@ -1196,11 +1191,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             }
         }
         if path_vec.len() > 0 {
-            AsType::from_vec(path_vec)
+            Ok(Some(AsType::from_vec(path_vec)))
         } else {
-            self.error("Invalid return type")
-                .register(self.context);
-            AsType::Anything
+            Err(self.error("Invalid return type"))
         }
     }
 
