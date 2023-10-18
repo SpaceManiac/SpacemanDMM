@@ -590,13 +590,13 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         self.tree_entries(self.tree.root_index(), None, None, Token::Eof)
     }
 
-    fn tree_block(&mut self, current: NodeIndex, proc_kind: Option<ProcDeclKind>, var_type: Option<VarTypeBuilder>) -> Status<()> {
+    fn tree_block(&mut self, current: NodeIndex, proc_builder: Option<ProcDeclBuilder>, var_type: Option<VarTypeBuilder>) -> Status<()> {
         leading!(self.exact(Token::Punct(Punctuation::LBrace)));
-        require!(self.tree_entries(current, proc_kind, var_type, Token::Punct(Punctuation::RBrace)));
+        require!(self.tree_entries(current, proc_builder, var_type, Token::Punct(Punctuation::RBrace)));
         SUCCESS
     }
 
-    fn tree_entries(&mut self, current: NodeIndex, proc_kind: Option<ProcDeclKind>, var_type: Option<VarTypeBuilder>, terminator: Token) -> Status<()> {
+    fn tree_entries(&mut self, current: NodeIndex, proc_builder: Option<ProcDeclBuilder>, var_type: Option<VarTypeBuilder>, terminator: Token) -> Status<()> {
         loop {
             let message: Cow<'static, str> = match terminator {
                 Token::Eof => "newline".into(),
@@ -609,7 +609,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 continue;
             }
             self.put_back(next);
-            require!(self.tree_entry(current, proc_kind, var_type.clone()));
+            require!(self.tree_entry(current, proc_builder, var_type.clone()));
         }
         SUCCESS
     }
@@ -694,7 +694,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }
     }
 
-    fn tree_entry(&mut self, mut current: NodeIndex, mut proc_kind: Option<ProcDeclKind>, mut var_type: Option<VarTypeBuilder>) -> Status<()> {
+    fn tree_entry(&mut self, mut current: NodeIndex, mut proc_builder: Option<ProcDeclBuilder>, mut var_type: Option<VarTypeBuilder>) -> Status<()> {
         // tree_entry :: path ';'
         // tree_entry :: path tree_block
         // tree_entry :: path '=' expression ';'
@@ -739,10 +739,16 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         var_type.type_path.push(each.to_owned());
                     }
                 } else if let Some(kind) = ProcDeclKind::from_name(each) {
-                    proc_kind = Some(kind);
-                } else if proc_kind.is_some() {
-                    self.error("cannot have sub-blocks of `proc/` block")
-                        .register(self.context);
+                    proc_builder = Some(ProcDeclBuilder::new(kind, None));
+                } else if let Some(builder) = proc_builder.as_mut() {
+                    let flags = ProcFlags::from_name(each);
+                    if let Some(found) = flags {
+                        builder.flags |= found
+                    }
+                    else {
+                        self.error("cannot have sub-blocks of `proc/` block")
+                            .register(self.context);
+                    }
                 } else {
                     let len = self.tree.get_path(current).chars().filter(|&c| c == '/').count() + path_len;
                     current = self.tree.subtype_or_add(self.location, current, each, len);
@@ -787,16 +793,16 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 handle_relative_type_error!();
                 let start = self.updated_location();
 
-                if proc_kind.is_some() || var_type.is_some() {
+                if proc_builder.is_some() || var_type.is_some() {
                     // Can't apply docs to `var/` or `proc/` blocks.
-                    require!(self.tree_block(current, proc_kind, var_type.clone()));
+                    require!(self.tree_block(current, proc_builder, var_type.clone()));
                 } else {
-                    let (comment, ()) = require!(self.doc_comment(|this| this.tree_block(current, proc_kind, var_type.clone())));
+                    let (comment, ()) = require!(self.doc_comment(|this| this.tree_block(current, proc_builder, var_type.clone())));
                     self.tree.extend_docs(current, comment);
                 }
 
                 let node = self.tree.get_path(current).to_owned();
-                self.annotate(start, || Annotation::TreeBlock(reconstruct_path(&node, proc_kind, var_type.as_ref(), "")));
+                self.annotate(start, || Annotation::TreeBlock(reconstruct_path(&node, proc_builder, var_type.as_ref(), "")));
                 SUCCESS
             }
             Punct(Assign) => {
@@ -813,7 +819,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     // We have to annotate prior to consuming the statement terminator, as we
                     // will otherwise consume following whitespace resulting in a bad annotation range
                     let node = this.tree.get_path(current).to_owned();
-                    this.annotate(entry_start, || Annotation::Variable(reconstruct_path(&node, proc_kind, var_type.as_ref(), last_part)));
+                    this.annotate(entry_start, || Annotation::Variable(reconstruct_path(&node, proc_builder, var_type.as_ref(), last_part)));
 
                     require!(this.statement_terminator());
                     success(expr)
@@ -831,7 +837,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             t @ Punct(LParen) => {
                 // `something(` - proc
                 self.put_back(t);
-                require!(self.proc_params_and_body(current, proc_kind, last_part, entry_start, absolute));
+                require!(self.proc_params_and_body(current, proc_builder, last_part, entry_start, absolute));
                 SUCCESS
             }
             other => {
@@ -852,14 +858,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         let docs = std::mem::take(&mut self.docs_following);
                         var_type.suffix(&var_suffix);
                         let node = self.tree.get_path(current).to_owned();
-                        self.annotate(entry_start, || Annotation::Variable(reconstruct_path(&node, proc_kind, Some(&var_type), last_part)));
+                        self.annotate(entry_start, || Annotation::Variable(reconstruct_path(&node, proc_builder, Some(&var_type), last_part)));
                         self.tree.declare_var(current, last_part, self.location, docs, var_type.build(), var_suffix.into_initializer());
                     }
                 } else if ProcDeclKind::from_name(last_part).is_some() {
                     self.error("`proc;` item has no effect")
                         .set_severity(Severity::Warning)
                         .register(self.context);
-                } else if proc_kind.is_some() {
+                } else if proc_builder.is_some() {
                     self.error("child of `proc/` without body")
                         .register(self.context);
                 } else {
@@ -956,7 +962,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         SUCCESS
     }
 
-    fn proc_params_and_body(&mut self, current: NodeIndex, proc_kind: Option<ProcDeclKind>, name: &str, entry_start: Location, absolute: bool) -> Status<()> {
+    fn proc_params_and_body(&mut self, current: NodeIndex, proc_builder: Option<ProcDeclBuilder>, name: &str, entry_start: Location, absolute: bool) -> Status<()> {
         use super::lexer::Token::*;
         use super::lexer::Punctuation::*;
 
@@ -1019,12 +1025,12 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             None
         };
 
-        match self.tree.register_proc(self.context, location, current, name, proc_kind, parameters, return_type, code) {
+        match self.tree.register_proc(self.context, location, current, name, proc_builder, parameters, return_type, code) {
             Ok((idx, proc)) => {
                 proc.docs.extend(comment);
                 // manually performed for borrowck reasons
                 if let Some(dest) = self.annotations.as_mut() {
-                    let new_stack = reconstruct_path(self.tree.get_path(current), proc_kind, None, name);
+                    let new_stack = reconstruct_path(self.tree.get_path(current), proc_builder, None, name);
                     dest.insert(entry_start..body_start, Annotation::ProcHeader(new_stack.to_vec(), idx));
                     dest.insert(body_start..self.location, Annotation::ProcBody(new_stack.to_vec(), idx));
                 }
@@ -2130,6 +2136,12 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 Term::__TYPE__
             },
 
+            // term :: __IMPLIED_TYPE__
+            Token::Ident(ref i, _) if i == "__IMPLIED_TYPE__" => {
+                // We cannot replace with the typepath yet, so we'll hand back a term we can parse later
+                Term::__IMPLIED_TYPE__
+            },
+
             // term :: ident arglist | ident
             Token::Ident(i, _) => {
                 let first_token = self.updated_location();
@@ -2434,13 +2446,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     }
 }
 
-fn reconstruct_path(node: &str, proc_kind: Option<ProcDeclKind>, var_type: Option<&VarTypeBuilder>, last: &str) -> Vec<Ident> {
+fn reconstruct_path(node: &str, proc_deets: Option<ProcDeclBuilder>, var_type: Option<&VarTypeBuilder>, last: &str) -> Vec<Ident> {
     let mut result = Vec::new();
     for entry in node.split('/').skip(1) {
         result.push(entry.to_owned());
     }
-    if let Some(kind) = proc_kind {
-        result.push(kind.to_string());
+    if let Some(deets) = proc_deets {
+        result.push(deets.kind.to_string());
+        deets.flags.to_vec().into_iter().for_each(|elem| result.push(elem.to_string()));
     }
     if let Some(var) = var_type {
         result.extend(var.flags.to_vec().into_iter().map(ToOwned::to_owned));

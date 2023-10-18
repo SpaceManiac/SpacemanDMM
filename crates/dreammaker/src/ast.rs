@@ -344,6 +344,34 @@ impl AsType {
 
     pub fn from_vec(vec: Vec<String>) -> AsType{
         AsType::Type(vec)
+        
+/// Information about a proc declaration
+///
+/// Holds what sort of decl it was (did it use /proc or /verb), alongside a set of flags
+/// That describe extra info pulled from the path
+#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
+pub struct ProcDeclBuilder {
+    pub kind: ProcDeclKind,
+    pub flags: ProcFlags,
+}
+
+impl ProcDeclBuilder {
+    pub fn new(kind: ProcDeclKind, flags: Option<ProcFlags>) -> ProcDeclBuilder {
+        ProcDeclBuilder { kind: kind, flags: flags.unwrap_or(ProcFlags::default()) }
+    }
+
+    pub fn kind(self) -> &'static str {
+        self.kind.name()
+    }
+
+    pub fn is_final(self) -> bool {
+        self.flags.is_final()
+    }
+}
+
+impl fmt::Display for ProcDeclBuilder {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "{}{}", self.kind, self.flags)
     }
 }
 
@@ -385,6 +413,43 @@ impl ProcDeclKind {
 impl fmt::Display for ProcDeclKind {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.write_str(self.name())
+    }
+}
+
+bitflags! {
+    #[derive(Default, GetSize)]
+    pub struct ProcFlags: u8 {
+        // DM flags
+        const FINAL = 1 << 0;
+    }
+}
+
+impl ProcFlags {
+    pub fn from_name(name: &str) -> Option<ProcFlags> {
+        match name {
+            // DM flags
+            "final" => Some(ProcFlags::FINAL),
+            // Fallback
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub fn is_final(&self) -> bool {
+        self.contains(ProcFlags::FINAL)
+    }
+
+    pub fn to_vec(&self) -> Vec<&'static str> {
+        let mut v = Vec::new();
+        if self.is_final() { v.push("final"); }
+        v
+    }
+}
+
+impl fmt::Display for ProcFlags {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        if self.is_final() { fmt.write_str("/final")?; }
+        Ok(())
     }
 }
 
@@ -906,6 +971,7 @@ impl From<Term> for Expression {
 }
 
 /// The structure of a term, the basic building block of the AST.
+#[allow(non_camel_case_types)]
 #[derive(Clone, PartialEq, Debug, GetSize)]
 pub enum Term {
     // Terms with no recursive contents ---------------------------------------
@@ -927,6 +993,11 @@ pub enum Term {
     __PROC__,
     /// A reference to the current proc/scope's type
     __TYPE__,
+     /// If rhs of an assignment op, this is a reference to the lhs var's type
+    /// If we're used as the second arg of an istype then it's the implied type of the first arg
+    /// Second case takes precedence over the first, but we don't properly implement because it would be impossible to
+    /// Tell. You can't DO anything to the __IMPLIED_TYPE__ so we don't really need to care about it
+    __IMPLIED_TYPE__,
 
     // Non-function calls with recursive contents -----------------------------
     /// An expression contained in a term.
