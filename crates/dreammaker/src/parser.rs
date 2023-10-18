@@ -641,10 +641,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             }
         }
         // followed by ('/' ident)*
-        loop {
-            if self.slash()?.is_none() {
-                break;
-            }
+        while parts.last().unwrap() != "operator" && self.slash()?.is_some() {
             let mut slash_loc = self.location;
             if let Some(i) = self.ident_in_seq(parts.len())? {
                 parts.push(i);
@@ -909,6 +906,10 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             last_part.push_str("**");
         } else if self.exact(Punct(MulAssign))?.is_some() {
             last_part.push_str("*=");
+        } else if self.exact(Punct(Slash))?.is_some() {
+            last_part.push('/');
+        } else if self.exact(Punct(DivAssign))?.is_some() {
+            last_part.push_str("/=");
         } else if self.exact(Punct(Add))?.is_some() {
             last_part.push('+');
         } else if self.exact(Punct(PlusPlus))?.is_some() {
