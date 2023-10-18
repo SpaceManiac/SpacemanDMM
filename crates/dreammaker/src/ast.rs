@@ -321,7 +321,7 @@ impl ProcDeclBuilder {
 
 impl fmt::Display for ProcDeclBuilder {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.write_str(format!("{}{}", self.kind, self.flags).as_str())
+        write!(fmt, "{}{}", self.kind, self.flags)
     }
 }
 
@@ -398,8 +398,8 @@ impl ProcFlags {
 
 impl fmt::Display for ProcFlags {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let written_entries = self.to_vec().into_iter().fold("".to_string(), |acc, elem| format!("{}/{}", acc, elem));
-        fmt.write_str(written_entries.as_str())
+        if self.is_final() { fmt.write_str("/final")?; }
+        Ok(())
     }
 }
 
