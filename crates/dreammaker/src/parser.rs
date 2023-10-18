@@ -970,7 +970,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
         let location = self.location;
         let parameters = require!(self.separated(Comma, RParen, None, Parser::proc_parameter));
-        let return_type = match self.return_type(proc_kind)? {
+        let return_type = match self.return_type(proc_builder)? {
             Some(type_to_use) => type_to_use,
             None => AsType::Anything,
         };
@@ -1154,11 +1154,11 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     }
 
     /// Parse an optional as return type signifier (for procs)
-    fn return_type(&mut self, proc_kind: Option<ProcDeclKind>) -> Status<AsType> {
+    fn return_type(&mut self, proc_builder: Option<ProcDeclBuilder>) -> Status<AsType> {
         if self.exact_ident("as")?.is_none() {
             return Ok(None);
         };
-        if None == proc_kind {
+        if proc_builder.is_none() {
             self.error("Cannot specify a return type for a proc override")
                     .register(self.context);
         }
@@ -1179,7 +1179,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         // We're pulling out just the text, and we go until the end of the text or until we hit something unexpected
         let mut path_vec = vec![];
         let mut slash_last = true;
-        while let path_component = self.next("return type")? {
+        loop {
+            let path_component = self.next("return type")?;
             match path_component {
                 Token::Ident(text, whitespace) if slash_last => {
                     path_vec.push(text);

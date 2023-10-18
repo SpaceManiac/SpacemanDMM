@@ -344,7 +344,9 @@ impl AsType {
 
     pub fn from_vec(vec: Vec<String>) -> AsType{
         AsType::Type(vec)
-        
+    }
+}
+
 /// Information about a proc declaration
 ///
 /// Holds what sort of decl it was (did it use /proc or /verb), alongside a set of flags
