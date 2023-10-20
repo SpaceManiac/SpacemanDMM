@@ -2186,6 +2186,18 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     Term::Ident(".".to_owned())
                 }
             },
+            Token::Punct(Punctuation::Scope) => {
+                if let Some(ident) = self.ident()? {
+                    if let Some(args) = self.arguments(&[], "::")? {
+                        Term::GlobalCall(Ident2::from(ident), args)
+                    } else {
+                        Term::GlobalIdent(Ident2::from(ident))
+                    }
+                } else {
+                    // Go away
+                    return self.parse_error()
+                }
+            }
             // term :: path_lit
             t @ Token::Punct(Punctuation::Slash) |
             t @ Token::Punct(Punctuation::CloseColon) => {
@@ -2269,6 +2281,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Token::Punct(Punctuation::CloseColon) if !belongs_to.is_empty() || !in_ternary => PropertyAccessKind::Colon,
             Token::Punct(Punctuation::SafeDot) => PropertyAccessKind::SafeDot,
             Token::Punct(Punctuation::SafeColon) => PropertyAccessKind::SafeColon,
+            Token::Punct(Punctuation::Scope) => PropertyAccessKind::Scope,
 
             other => return self.try_another(other),
         };
@@ -2295,14 +2308,28 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     let past = std::mem::take(belongs_to);
                     self.annotate_precise(start..end, || Annotation::ScopedCall(past, ident.clone()));
                 }
-                Follow::Call(kind, ident.into(), args)
+                match kind {
+                    PropertyAccessKind::Scope => {
+                        Follow::ProcReference(ident.into())
+                    }
+                    _ => {
+                        Follow::Call(kind, ident.into(), args)
+                    }
+                }
             },
             None => {
                 if !belongs_to.is_empty() {
                     self.annotate_precise(start..end, || Annotation::ScopedVar(belongs_to.clone(), ident.clone()));
                     belongs_to.push(ident.clone());
                 }
-                Follow::Field(kind, ident.into())
+                match kind {
+                    PropertyAccessKind::Scope => {
+                        Follow::StaticField(ident.into())
+                    }
+                    _ => {
+                        Follow::Field(kind, ident.into())
+                    }
+                }
             },
         };
         success(Spanned::new(first_location, follow))

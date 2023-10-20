@@ -276,6 +276,8 @@ pub enum PropertyAccessKind {
     SafeDot,
     /// `a?:b`
     SafeColon,
+    /// 'a::b'
+    Scope,
 }
 
 impl PropertyAccessKind {
@@ -285,6 +287,7 @@ impl PropertyAccessKind {
             PropertyAccessKind::Colon => ":",
             PropertyAccessKind::SafeDot => "?.",
             PropertyAccessKind::SafeColon => "?:",
+            PropertyAccessKind::Scope => "::",
         }
     }
 }

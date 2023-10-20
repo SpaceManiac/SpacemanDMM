@@ -652,6 +652,36 @@ impl<'a> ConstantFolder<'a> {
                 }
             }
             (term, Follow::Unary(op)) => self.unary(term, op),
+            (term, Follow::StaticField(field)) => {
+                let Constant::Prefab(read_from) = term else {
+                    return Err(self.error(format!("non typepath {} used with ::", term)))
+                };
+                if read_from.vars.len() > 0 {
+                    return Err(self.error(format!("non typepath {} used with ::", read_from)))
+                }
+                let Some(ref tree) = self.tree else {
+                    return Err(self.error("no type tree available"))
+                };
+                let Some(real_type) = tree.find(FormatTreePath(&read_from.path).to_string().as_str()) else {
+                    return Err(self.error(format!("{} was not a valid type", FormatTreePath(&read_from.path))))
+                };
+                self.recursive_lookup(real_type.index(), &field, false)
+            },
+            (term, Follow::ProcReference(field)) => {
+                let Constant::Prefab(read_from) = term else {
+                    return Err(self.error(format!("non typepath {} used with ::", term)))
+                };
+                if read_from.vars.len() > 0 {
+                    return Err(self.error(format!("non typepath {} used with ::", read_from)))
+                }
+                let Some(ref tree) = self.tree else {
+                    return Err(self.error("no type tree available"))
+                };
+                let Some(real_type) = tree.find(FormatTreePath(&read_from.path).to_string().as_str()) else {
+                    return Err(self.error(format!("{} was not a valid type", FormatTreePath(&read_from.path))))
+                };
+                self.proc_ref_lookup(real_type.index(), &field)
+            },
             (term, follow) => Err(self.error(format!("non-constant expression follower: {} {:?}", term, follow))),
         }
     }
@@ -777,7 +807,33 @@ impl<'a> ConstantFolder<'a> {
                 _ => return Err(self.error(format!("non-constant function call: {}", ident))),
             },
             Term::Prefab(prefab) => Constant::Prefab(Box::new(self.prefab(*prefab)?)),
-            Term::Ident(ident) => self.ident(ident, false)?,
+            Term::Ident(ident) => match ident.as_str() {
+                // We need to handle type and parent_type here
+                // They technically resolve to their respective values only in type defs when using ::
+                // But that's annoying so let's not
+                "type" => {
+                    if let Some(obj_tree) = &self.tree {
+                        let typeval = TypeRef::new(obj_tree, self.ty).get();
+                        let path = make_typepath(typeval.path.split("/").filter(|elem| *elem != "").map(|segment| segment.to_string()).collect());
+                        Constant::Prefab(Box::new(self.prefab(Prefab::from(path))?))
+                    } else {
+                        return Err(self.error("no type context".to_owned()))
+                    }
+                },
+                "parent_type" => {
+                    if let Some(obj_tree) = &self.tree {
+                        let typeref = TypeRef::new(obj_tree, self.ty);
+                        let Some(parent_type) = typeref.parent_type() else {
+                            return Err(self.error(format!("no parent type for {}", typeref)))
+                        };
+                        let path = make_typepath(parent_type.path.split("/").filter(|elem| *elem != "").map(|segment| segment.to_string()).collect());
+                        Constant::Prefab(Box::new(self.prefab(Prefab::from(path))?))
+                    } else {
+                        return Err(self.error("no type context".to_owned()))
+                    }
+                }
+                _ => self.ident(ident, false)?,
+            },
             Term::String(v) => Constant::String(v.into()),
             Term::Resource(v) => Constant::Resource(v.into()),
             Term::Int(v) => Constant::Float(v as f32),
@@ -873,6 +929,22 @@ impl<'a> ConstantFolder<'a> {
             }
         }
         Err(self.error(format!("unknown variable: {}", ident)))
+    }
+
+    fn proc_ref_lookup(&mut self, ty: NodeIndex, name: &str) -> Result<Constant, DMError> {
+        let tree = self.tree.as_mut().unwrap();
+        let proc_type = TypeRef::new(tree, ty);
+        let Some(proc_ref) = proc_type.get_proc(name) else {
+            return Err(self.error(format!("unknown proc: {}", name)))
+        };
+        // Gonna build the proc's path
+        let mut path_elements: Vec<String> = proc_type.get().path.split("/").filter(|elem| *elem != "").map(|segment| segment.to_string()).collect();
+        // Only tricky bit is adding on the type if required
+        if let Some(declaration) = proc_ref.get_declaration() {
+            path_elements.push(declaration.kind.name().to_string());
+        }
+        path_elements.push(proc_ref.name().to_string());
+        Ok(Constant::Prefab(Box::new(self.prefab(Prefab::from(make_typepath(path_elements)))?)))
     }
 
     fn rgb(&mut self, args: Box<[Expression]>) -> Result<String, DMError> {

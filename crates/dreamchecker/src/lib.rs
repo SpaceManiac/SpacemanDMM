@@ -2034,8 +2034,41 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
             },
             Follow::StaticField(name) => {
-                // TODO
-                Analysis::empty()
+                let real_type = match lhs.static_ty.basic_type() {
+                    Some(existing_type) => existing_type,
+                    None => {
+                        let Some(to_our_side) = lhs.value else {
+                            error(location, format!("no typepath found for: {:?}", name))
+                                .register(self.context);
+                            return Analysis::empty()
+                        };
+                        let Constant::Prefab(typepop) = to_our_side else {
+                            error(location, format!("static access requires a static typepath, {} found instead", to_our_side))
+                                .register(self.context);
+                            return Analysis::empty()
+                        };
+                        if !&typepop.vars.is_empty() {
+                            error(location, format!("static access requires a static typepath, {} found instead", typepop))
+                                .register(self.context);
+                            return Analysis::empty()
+                        }
+                        let typepath = dm::ast::FormatTreePath(&typepop.path).to_string();
+                        let Some(found_type) = self.objtree.find(typepath.as_str()) else {
+                            error(location, format!("static access requires an existing typepath, {} found instead", typepath))
+                                .register(self.context);
+                            return Analysis::empty()
+                        };
+                        found_type
+                    }
+                };
+                let Some(decl) = real_type.get_var_declaration(name) else {
+                    error(location, format!("undefined field: {:?} on {}", name, real_type))
+                        .register(self.context);
+                    return Analysis::empty()
+                };
+
+                self.static_type(location, &decl.var_type.type_path)
+                    .with_fix_hint(decl.location, "add additional type info here")
             },
 
             Follow::Call(kind, name, arguments) => {
@@ -2075,8 +2108,54 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
             },
             Follow::ProcReference(name) => {
-                // TODO
-                Analysis::empty()
+                let real_type = match lhs.static_ty.basic_type() {
+                    Some(existing_type) => existing_type,
+                    None => {
+                        let Some(to_our_side) = lhs.value else {
+                            error(location, format!("no typepath found for: {:?}", name))
+                                .register(self.context);
+                            return Analysis::empty()
+                        };
+                        let Constant::Prefab(typepop) = to_our_side else {
+                            error(location, format!("static proc reference requires a static typepath, {} found instead", to_our_side))
+                                .register(self.context);
+                            return Analysis::empty()
+                        };
+                        if !&typepop.vars.is_empty() {
+                            error(location, format!("static proc reference requires a static typepath, {} found instead", typepop))
+                                .register(self.context);
+                            return Analysis::empty()
+                        }
+                        let typepath = dm::ast::FormatTreePath(&typepop.path).to_string();
+                        let Some(found_type) = self.objtree.find(typepath.as_str()) else {
+                            error(location, format!("static proc reference requires an existing typepath, {} found instead", typepath))
+                                .register(self.context);
+                            return Analysis::empty()
+                        };
+                        found_type
+                    }
+                };
+                let Some(decl) = real_type.get_proc(name) else {
+                    error(location, format!("undefined proc: {:?} on {}", name, real_type))
+                        .register(self.context);
+                    return Analysis::empty()
+                };
+
+                // Gonna build the proc's path
+                let mut path_elements: Vec<String> = real_type.get().path.split("/").filter(|elem| *elem != "").map(|segment| segment.to_string()).collect();
+                // Only tricky bit is adding on the type if required
+                if let Some(declaration) = decl.get_declaration() {
+                    path_elements.push(declaration.kind.name().to_string());
+                }
+                path_elements.push(decl.name().to_string());
+                let path_const = dm::constants::Pop::from(path_elements.into_boxed_slice());
+                Analysis {
+                    static_ty: StaticType::None,
+                    aset: assumption_set![Assumption::IsPath(true, real_type)],
+                    value: Some(Constant::Prefab(Box::new(path_const))),
+                    fix_hint: None,
+                    is_impure: None,
+                }
             },
         }
     }
