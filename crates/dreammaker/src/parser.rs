@@ -449,7 +449,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     fn next<S: Into<Cow<'static, str>>>(&mut self, expected: S) -> Result<Token, DMError> {
         let tok = loop {
             if let Some(next) = self.next.take() {
-                    break Ok(next);
+                break Ok(next);
             }
             match self.input.next() {
                 Some(LocatedToken {

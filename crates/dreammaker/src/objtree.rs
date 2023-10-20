@@ -1273,7 +1273,7 @@ impl ObjectTreeBuilder {
             ));
         }
 
-        self.register_proc(context, location, parent, proc_name, declaration, parameters,AsType::Anything, code)
+        self.register_proc(context, location, parent, proc_name, declaration, parameters, AsType::Anything, code)
     }
 }
 
