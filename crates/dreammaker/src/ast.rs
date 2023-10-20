@@ -961,6 +961,19 @@ impl Expression {
             }
         }
     }
+
+    pub fn nameof(&self) -> Option<&str> {
+        match self {
+            Expression::Base { term, follow } => {
+                if let Some(last) = follow.last() {
+                    last.elem.nameof()
+                } else {
+                    term.elem.nameof()
+                }
+            }
+            _ => None
+        }
+    }
 }
 
 impl From<Term> for Expression {
@@ -1132,6 +1145,16 @@ impl Term {
         }
         None
     }
+
+    pub fn nameof(&self) -> Option<&str> {
+        match self {
+            Term::Expr(e) => e.nameof(),
+            Term::Ident(i) => Some(i),
+            Term::Prefab(fab) if fab.vars.is_empty() => Some(&fab.path.last()?.1),
+            Term::GlobalIdent(i) => Some(i),
+            _ => None,
+        }
+    }
 }
 
 impl From<Expression> for Term {
@@ -1177,6 +1200,17 @@ pub enum Follow {
     /// If the LHS is a constant typepath, that is used.
     /// Otherwise the **static** type of LHS is used.
     ProcReference(Ident2),
+}
+
+impl Follow {
+    pub fn nameof(&self) -> Option<&str> {
+        match self {
+            Follow::Field(_, i) => Some(i),
+            Follow::StaticField(i) => Some(i),
+            Follow::ProcReference(i) => Some(i),
+            _ => None,
+        }
+    }
 }
 
 /// Like a `Follow` but only supports field accesses.

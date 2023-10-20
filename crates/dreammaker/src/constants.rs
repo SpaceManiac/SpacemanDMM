@@ -803,6 +803,15 @@ impl<'a> ConstantFolder<'a> {
                         _ => return Err(self.error("malformed defined() call, argument given isn't an Ident.")),
                     }
                 }
+                "nameof" => {
+                    if args.len() != 1 {
+                        return Err(self.error(format!("malformed nameof() call, must have 1 argument and instead has {}", args.len())));
+                    }
+                    match args[0].nameof() {
+                        Some(name) => Constant::string(name),
+                        None => return Err(self.error("malformed nameof() call, expression appears to have no name")),
+                    }
+                }
                 // other functions are no-goes
                 _ => return Err(self.error(format!("non-constant function call: {}", ident))),
             },
