@@ -8,8 +8,8 @@ use super::preprocessor::{DefineMap, Define};
 use super::constants::Constant;
 use super::docs::{BuiltinDocs, DocCollection};
 
-const DM_VERSION: i32 = 514;
-const DM_BUILD: i32 = 1556;
+const DM_VERSION: i32 = 515;
+const DM_BUILD: i32 = 1619;
 
 /// Register BYOND builtin macros to the given define map.
 pub fn default_defines(defines: &mut DefineMap) {
