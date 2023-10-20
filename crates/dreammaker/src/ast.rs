@@ -927,12 +927,8 @@ impl Expression {
                 Some(truthy)
             },
             Expression::BinaryOp { op, lhs, rhs } => {
-                let Some(lhtruth) = lhs.is_truthy() else {
-                    return None
-                };
-                let Some(rhtruth) = rhs.is_truthy() else {
-                    return None
-                };
+                let lhtruth = lhs.is_truthy()?;
+                let rhtruth = rhs.is_truthy()?;
                 match op {
                     BinaryOp::And => Some(lhtruth && rhtruth),
                     BinaryOp::Or => Some(lhtruth || rhtruth),
@@ -950,9 +946,7 @@ impl Expression {
                 }
             },
             Expression::TernaryOp { cond, if_, else_ } => {
-                let Some(condtruth) = cond.is_truthy() else {
-                    return None
-                };
+                let condtruth = cond.is_truthy()?;
                 if condtruth {
                     if_.is_truthy()
                 } else {

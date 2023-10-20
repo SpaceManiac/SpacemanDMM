@@ -232,7 +232,7 @@ fn subtree_max<V>(node: &Option<Box<Node<V>>>) -> u64 {
 }
 
 ///returns the smallest key and value after the given key.
-pub fn min_after<'a,V>(key: &RangeInclusive<u64>, root: &'a Box<Node<V>>) -> Option<(&'a RangeInclusive<u64>,&'a [V])> {
+pub fn min_after<'a,V>(key: &RangeInclusive<u64>, root: &'a Node<V>) -> Option<(&'a RangeInclusive<u64>,&'a [V])> {
     match root.key.cmp(key){
         Ordering::Equal =>  root.right.as_ref().map(|succ| succ.min_pair()),
         Ordering::Less =>   root.right.as_ref().and_then(|succ| min_after(key, succ)),
@@ -246,13 +246,13 @@ pub fn min_after<'a,V>(key: &RangeInclusive<u64>, root: &'a Box<Node<V>>) -> Opt
 }
 
 ///returns the minimal value within this tree
-pub fn min<V>(root: &Box<Node<V>>) -> &[V] {
-    root.left.as_ref().map_or(&root.data, min)
+pub fn min<V>(root: &Node<V>) -> &[V] {
+    root.left.as_ref().map_or(&root.data, |v| min(v))
 }
 
 ///returns the minimal value within this tree
-pub fn max<V>(root: &Box<Node<V>>) -> &[V] {
-    root.right.as_ref().map_or(&root.data, max)
+pub fn max<V>(root: &Node<V>) -> &[V] {
+    root.right.as_ref().map_or(&root.data, |v| max(v))
 }
 
 

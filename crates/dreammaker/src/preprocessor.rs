@@ -971,11 +971,8 @@ impl<'ctx> Preprocessor<'ctx> {
                     "pragma" => {
                         expect_token!((text) = Token::Ident(text, _));
                         let pragma_use_loc = _last_expected_loc;
-                        match text.as_str() {
-                            "multiple" => {
-                                self.multiple_locations.insert(pragma_use_loc.file, pragma_use_loc);
-                            },
-                            _ => {},
+                        if text.as_str() == "multiple" {
+                            self.multiple_locations.insert(pragma_use_loc.file, pragma_use_loc);
                         }
                     }
                     // none of this other stuff should even exist
