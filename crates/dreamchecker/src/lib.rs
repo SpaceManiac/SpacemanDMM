@@ -1683,11 +1683,21 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
             Term::Ident(unscoped_name) => {
                 if let Some(var) = local_vars.get(unscoped_name) {
-                    return var.analysis.clone()
+                    var.analysis.clone()
                         .with_fix_hint(var.location, "add additional type info here")
-                }
-                if let Some(decl) = self.ty.get_var_declaration(unscoped_name) {
-                    //println!("found type var");
+                } else if unscoped_name == "type" {
+                    // Strictly speaking "type" might be any subset of our current type, but let's return something useful
+                    // so that `nameof(type::foo)` is sensible.
+                    let ty = self.ty;
+                    let pop = dm::constants::Pop::from(ty.path.split('/').skip(1).map(ToOwned::to_owned).collect::<Vec<_>>().into_boxed_slice());
+                    Analysis {
+                        static_ty: StaticType::None,
+                        aset: assumption_set![Assumption::IsPath(true, ty)],
+                        value: Some(Constant::Prefab(Box::new(pop))),
+                        fix_hint: None,
+                        is_impure: None,
+                    }
+                } else if let Some(decl) = self.ty.get_var_declaration(unscoped_name) {
                     let mut ana = self.static_type(location, &decl.var_type.type_path)
                         .with_fix_hint(decl.location, "add additional type info here");
                     ana.is_impure = Some(true);
@@ -2047,7 +2057,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                                 .register(self.context);
                             return Analysis::empty()
                         };
-                        if !&typepop.vars.is_empty() {
+                        if !typepop.vars.is_empty() {
                             error(location, format!("static access requires a static typepath, {} found instead", typepop))
                                 .register(self.context);
                             return Analysis::empty()
