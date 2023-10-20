@@ -11,7 +11,7 @@ use ahash::RandomState;
 
 use crate::heap_size_of_index_map;
 
-use super::ast::{Expression, VarType, VarTypeBuilder, VarSuffix, PathOp, Parameter, Block, ProcDeclBuilder, ProcDeclKind, ProcFlags, Ident};
+use super::ast::{AsType, Expression, VarType, VarTypeBuilder, VarSuffix, PathOp, Parameter, Block, ProcDeclBuilder, ProcDeclKind, ProcFlags, Ident};
 use super::constants::Constant;
 use super::docs::DocCollection;
 use super::{DMError, Location, Context, Severity};
@@ -82,6 +82,8 @@ pub struct TypeVar {
 pub struct ProcDeclaration {
     pub location: Location,
     pub kind: ProcDeclKind,
+    // todo: tie this into our return type, add support for the funky types
+    pub return_type: AsType,
     pub flags: ProcFlags,
     pub id: SymbolId,
 }
@@ -1118,6 +1120,7 @@ impl ObjectTreeBuilder {
         name: &str,
         declaration: Option<ProcDeclBuilder>,
         parameters: Vec<Parameter>,
+        return_type: AsType,
         code: Option<Block>,
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let node = &mut self.inner.graph[parent.index()];
@@ -1135,6 +1138,7 @@ impl ObjectTreeBuilder {
                     location,
                     kind: decl_builder.kind,
                     flags: decl_builder.flags,
+                    return_type,
                     id: self.symbols.allocate(),
                 });
             }
@@ -1269,7 +1273,7 @@ impl ObjectTreeBuilder {
             ));
         }
 
-        self.register_proc(context, location, parent, proc_name, declaration, parameters, code)
+        self.register_proc(context, location, parent, proc_name, declaration, parameters, AsType::Anything, code)
     }
 }
 
