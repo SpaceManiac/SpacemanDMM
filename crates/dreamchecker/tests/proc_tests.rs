@@ -29,7 +29,7 @@ fn return_type() {
 "##.trim();
     let context = parse_a_file_for_test(code);
     let error_text: Vec<String> = context.errors().iter().map(|error| format!("{}", error)).collect();
-    if error_text.len() > 0 {
+    if !error_text.is_empty() {
         panic!("\n{}", error_text.join("\n"))
     }
 }

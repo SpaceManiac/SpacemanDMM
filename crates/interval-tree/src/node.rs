@@ -106,7 +106,7 @@ impl<K: Ord + Clone, V> Node<K, V> {
     fn rotate_if_necessary(self: Box<Self>) -> Box<Self> {
         match self.diff_of_successors_height() {
             2 => self.rotate_left_successor(),
-            1 | 0 | -1 => self,
+            -1..=1 => self,
             -2 => self.rotate_right_successor(),
             _ => unreachable!(),
         }

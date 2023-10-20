@@ -74,7 +74,7 @@ var/global/bill = 1
         for error in errors.iter() {
             sum_errors.push(format!("{}", error));
         }
-        if sum_errors.len() > 0 {
+        if !sum_errors.is_empty() {
             panic!("\n{}", sum_errors.join("\n").as_str());
         }
         // test type::var in typedef
@@ -124,7 +124,7 @@ var/global/bill = 1
         }
         let global_procs = tree.root();
         let work_proc = global_procs.get_proc("work").unwrap();
-        let work_code = work_proc.code.as_ref().unwrap().into_iter().map(|statement| {
+        let work_code = work_proc.code.as_ref().unwrap().iter().map(|statement| {
             &statement.elem
         }).collect::<Vec<&Statement>>();
         // /datum/explicit::var

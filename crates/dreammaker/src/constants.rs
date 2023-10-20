@@ -656,7 +656,7 @@ impl<'a> ConstantFolder<'a> {
                 let Constant::Prefab(read_from) = term else {
                     return Err(self.error(format!("non typepath {} used with ::", term)))
                 };
-                if read_from.vars.len() > 0 {
+                if !read_from.vars.is_empty() {
                     return Err(self.error(format!("non typepath {} used with ::", read_from)))
                 }
                 let Some(ref tree) = self.tree else {
@@ -671,7 +671,7 @@ impl<'a> ConstantFolder<'a> {
                 let Constant::Prefab(read_from) = term else {
                     return Err(self.error(format!("non typepath {} used with ::", term)))
                 };
-                if read_from.vars.len() > 0 {
+                if !read_from.vars.is_empty() {
                     return Err(self.error(format!("non typepath {} used with ::", read_from)))
                 }
                 let Some(ref tree) = self.tree else {
@@ -823,7 +823,7 @@ impl<'a> ConstantFolder<'a> {
                 "type" => {
                     if let Some(obj_tree) = &self.tree {
                         let typeval = TypeRef::new(obj_tree, self.ty).get();
-                        let path = make_typepath(typeval.path.split("/").filter(|elem| *elem != "").map(|segment| segment.to_string()).collect());
+                        let path = make_typepath(typeval.path.split('/').filter(|elem| !elem.is_empty()).map(|segment| segment.to_string()).collect());
                         Constant::Prefab(Box::new(self.prefab(Prefab::from(path))?))
                     } else {
                         return Err(self.error("no type context".to_owned()))
@@ -835,7 +835,7 @@ impl<'a> ConstantFolder<'a> {
                         let Some(parent_type) = typeref.parent_type() else {
                             return Err(self.error(format!("no parent type for {}", typeref)))
                         };
-                        let path = make_typepath(parent_type.path.split("/").filter(|elem| *elem != "").map(|segment| segment.to_string()).collect());
+                        let path = make_typepath(parent_type.path.split('/').filter(|elem| !elem.is_empty()).map(|segment| segment.to_string()).collect());
                         Constant::Prefab(Box::new(self.prefab(Prefab::from(path))?))
                     } else {
                         return Err(self.error("no type context".to_owned()))
@@ -851,7 +851,7 @@ impl<'a> ConstantFolder<'a> {
             Term::__TYPE__ => {
                 if let Some(obj_tree) = &self.tree {
                     let typeval = TypeRef::new(obj_tree, self.ty).get();
-                    let path = make_typepath(typeval.path.split("/").filter(|elem| *elem != "").map(|segment| segment.to_string()).collect());
+                    let path = make_typepath(typeval.path.split('/').filter(|elem| !elem.is_empty()).map(|segment| segment.to_string()).collect());
                     Constant::Prefab(Box::new(self.prefab(Prefab::from(path))?))
                 } else {
                     return Err(self.error("No type context".to_owned()))
@@ -947,7 +947,7 @@ impl<'a> ConstantFolder<'a> {
             return Err(self.error(format!("unknown proc: {}", name)))
         };
         // Gonna build the proc's path
-        let mut path_elements: Vec<String> = proc_type.get().path.split("/").filter(|elem| *elem != "").map(|segment| segment.to_string()).collect();
+        let mut path_elements: Vec<String> = proc_type.get().path.split('/').filter(|elem| !elem.is_empty()).map(|segment| segment.to_string()).collect();
         // Only tricky bit is adding on the type if required
         if let Some(declaration) = proc_ref.get_declaration() {
             path_elements.push(declaration.kind.name().to_string());

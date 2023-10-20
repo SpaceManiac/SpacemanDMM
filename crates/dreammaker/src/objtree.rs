@@ -1254,7 +1254,7 @@ impl ObjectTreeBuilder {
         if let Some(kind) = ProcDeclKind::from_name(proc_name) {
             let mut next_entry = path.next();
             let flags = ProcFlags::from_name(next_entry.unwrap_or(""));
-            if let Some(_) = flags {
+            if flags.is_some() {
                 // did something? take another step
                 next_entry = path.next();
             }

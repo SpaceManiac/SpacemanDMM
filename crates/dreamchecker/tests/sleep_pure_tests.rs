@@ -181,7 +181,7 @@ pub const PURE_ERRORS: &[(u32, u16, &str)] = &[
 
 #[test]
 fn pure() {
-    let code = r##"
+    let code = r#"
 /proc/pure()
     return 1
 /proc/impure()
@@ -196,7 +196,7 @@ fn pure() {
 /mob/proc/test2()
     set SpacemanDMM_should_be_pure = TRUE
     bar()
-"##.trim();
+"#.trim();
     check_errors_match(code, PURE_ERRORS);
 }
 

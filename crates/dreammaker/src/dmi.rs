@@ -510,7 +510,7 @@ mod test {
 
     #[test]
     fn duplicate_states() {
-        let description = r##"
+        let description = r#"
 # BEGIN DMI
 version = 4.0
     width = 32
@@ -525,7 +525,7 @@ state = "duplicate"
     dirs = 1
     frames = 1
 # END DMI
-"##.trim();
+"#.trim();
 
         let metadata = parse_metadata(description).expect("Metadata is valid");
         assert_eq!(metadata.state_names.len(), 3);
@@ -562,7 +562,7 @@ state = "duplicate"
     /// The bug in our code was that we checked if our `delays = 1,1,...` *before* truncating the array
     /// in the truncation case, so we would output `Frames::Delays([1,1])` for this metadata.
     fn delay_overflow_edge_case() {
-        let description = r##"
+        let description = r#"
 # BEGIN DMI
 version = 4.0
     width = 32
@@ -572,7 +572,7 @@ state = "one"
     frames = 2
     delay = 1,1,0.5,0.5
 # END DMI
-"##.trim();
+"#.trim();
 
         let metadata = parse_metadata(description).expect("Metadata is valid");
         let state = metadata.get_icon_state(&StateIndex("one".to_owned(), 0)).expect("Only one state, named one, should be found");

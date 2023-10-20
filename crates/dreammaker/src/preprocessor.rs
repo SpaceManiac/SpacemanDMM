@@ -661,7 +661,7 @@ impl<'ctx> Preprocessor<'ctx> {
         // All DM source is effectively `#pragma once`.
         let file_id = self.context.register_file(register);
         if let Some(&loc) = self.include_locations.get(&file_id) {
-            if self.multiple_locations.get(&file_id) == None {
+            if self.multiple_locations.get(&file_id).is_none() {
                 Err(DMError::new(self.last_input_loc, format!("duplicate #include {:?}", path))
                     .set_severity(Severity::Warning)
                     .with_note(loc, "previously included here")
@@ -772,11 +772,11 @@ impl<'ctx> Preprocessor<'ctx> {
                         expect_token!(() = Token::Punct(Punctuation::Newline));
                         let path = PathBuf::from(path_str.replace('\\', "/"));
 
-                        for candidate in vec![
+                        for candidate in [
                             // 1. relative to file in which `#include` appears.
                             self.include_stack.top_file_path().parent().unwrap().join(&path),
                             // 2. relative to root `.dme` file.
-                            self.env_file.parent().unwrap().join(&path),
+                            self.env_file.parent().unwrap().join(&path)
                         ] {
                             if !candidate.exists() {
                                 continue;

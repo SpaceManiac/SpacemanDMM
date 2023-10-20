@@ -57,7 +57,7 @@ pub fn parse<I>(context: &Context, iter: I) -> ObjectTree
 where
     I: IntoIterator<Item=LocatedToken>,
 {
-    Parser::new(context, iter.into_iter()).parse_object_tree()
+    Parser::new(context, iter).parse_object_tree()
 }
 
 /// Parse a token stream into an expression.
@@ -68,7 +68,7 @@ pub fn parse_expression<I>(context: &Context, location: Location, iter: I) -> Re
 where
     I: IntoIterator<Item=LocatedToken>,
 {
-    let mut parser = Parser::new(context, iter.into_iter());
+    let mut parser = Parser::new(context, iter);
     parser.location = location;
     Ok(require!(parser.expression()))
 }
@@ -1198,7 +1198,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 },
             }
         }
-        if path_vec.len() > 0 {
+        if !path_vec.is_empty() {
             Ok(Some(AsType::from_vec(path_vec)))
         } else {
             Err(self.error("Invalid return type"))

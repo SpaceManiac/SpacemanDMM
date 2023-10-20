@@ -4,7 +4,7 @@ use dm::lexer::*;
 
 #[test]
 fn simple_location_test() {
-    let code = r##"
+    let code = r#"
 #define islist(thing) istype(thing, /list)
 
 /datum/globals
@@ -15,7 +15,7 @@ fn simple_location_test() {
         world.log <<  new/   obj()
 
 /var/foo = bar
-"##.trim();
+"#.trim();
 
     let context = Default::default();
     let located_tokens: Vec<_> = Lexer::new(&context, Default::default(), code.as_bytes()).collect();

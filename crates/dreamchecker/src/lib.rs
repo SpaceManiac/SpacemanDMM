@@ -2142,7 +2142,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 };
 
                 // Gonna build the proc's path
-                let mut path_elements: Vec<String> = real_type.get().path.split("/").filter(|elem| *elem != "").map(|segment| segment.to_string()).collect();
+                let mut path_elements: Vec<String> = real_type.get().path.split('/').filter(|elem| !elem.is_empty()).map(|segment| segment.to_string()).collect();
                 // Only tricky bit is adding on the type if required
                 if let Some(declaration) = decl.get_declaration() {
                     path_elements.push(declaration.kind.name().to_string());

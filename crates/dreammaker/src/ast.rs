@@ -337,7 +337,7 @@ impl AsType {
             "sound" => AsType::from_name("/sound"),
             // If it looks like a typepath, we'll process it as a typepath (figure out reality later ya feel?)
             _ if name.chars().next().unwrap_or(' ') == '/' =>
-                Some(AsType::from_vec(name.split("/").into_iter().filter_map(|part| match part {
+                Some(AsType::from_vec(name.split('/').filter_map(|part| match part {
                     "" => None,
                     _ => Some(part.to_string()),
                 }).collect::<Vec<String>>())),
@@ -362,7 +362,7 @@ pub struct ProcDeclBuilder {
 
 impl ProcDeclBuilder {
     pub fn new(kind: ProcDeclKind, flags: Option<ProcFlags>) -> ProcDeclBuilder {
-        ProcDeclBuilder { kind: kind, flags: flags.unwrap_or(ProcFlags::default()) }
+        ProcDeclBuilder { kind, flags: flags.unwrap_or_default() }
     }
 
     pub fn kind(self) -> &'static str {

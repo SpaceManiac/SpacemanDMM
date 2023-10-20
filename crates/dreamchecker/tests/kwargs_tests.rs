@@ -29,7 +29,7 @@ pub const FILTER_KWARGS_ERRORS: &[(u32, u16, &str)] = &[
 
 #[test]
 fn filter_kwarg() {
-    let code = r##"
+    let code = r#"
 /proc/test()
     filter(type="alpha", x=1, y=2, icon=null, render_source=null, flags=0)
     filter(type="angular_blur", x=1, y=2, size=null)
@@ -50,6 +50,6 @@ fn filter_kwarg() {
     filter(x=4)
     filter("alpha", x=1, flags=MASK_INVERSE|MASK_INVERSE|MASK_INVERSE|MASK_INVERSE|MASK_INVERSE|MASK_INVERSE)
     filter(type="wave", color=null)
-"##.trim();
+"#.trim();
     check_errors_match(code, FILTER_KWARGS_ERRORS);
 }

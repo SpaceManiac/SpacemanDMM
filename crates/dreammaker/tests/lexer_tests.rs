@@ -68,7 +68,7 @@ fn empty_block_comment() {
 #[test]
 fn raw_strings() {
     let desired = Token::String("content".to_owned());
-    let stuff = lex(r###"
+    let stuff = lex(r#"
 @"content"
 @xcontentx
 @/content/
@@ -77,7 +77,7 @@ fn raw_strings() {
 @(very long terminator)contentvery long terminator
 @{"content"}
 @{content{
-"###);
+"#);
     for each in stuff.iter() {
         if each == &Punct(Newline) { continue }
         assert_eq!(each, &desired);
