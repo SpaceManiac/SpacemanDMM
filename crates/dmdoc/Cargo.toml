@@ -1,6 +1,6 @@
 [package]
 name = "dmdoc"
-version = "1.7.3"
+version = "1.8.0"
 authors = ["Tad Hardesty <tad@platymuus.com>"]
 homepage = "https://github.com/SpaceManiac/SpacemanDMM/blob/master/crates/dmdoc/README.md"
 edition = "2018"
