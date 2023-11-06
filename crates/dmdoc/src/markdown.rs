@@ -129,8 +129,8 @@ impl<'a, I: Iterator<Item=Event<'a>>> Iterator for HeadingLinker<'a, I> {
                 self.output.push_back(event);
             }
 
-            self.output.push_back(Event::Html(format!("</h{}>", heading).into()));
-            return Some(Event::Html(format!("<h{} id=\"{}\">", heading, slugify(&text_buf)).into()));
+            self.output.push_back(Event::Html(format!("</{}>", heading).into()));
+            return Some(Event::Html(format!("<{} id=\"{}\">", heading, slugify(&text_buf)).into()));
         }
         original
     }
