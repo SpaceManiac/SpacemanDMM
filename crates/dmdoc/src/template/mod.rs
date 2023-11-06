@@ -410,6 +410,7 @@ pub(crate) fn dm_type(ty: &Type) -> Markup {
                                 @if ty.is_static { "/static" }
                                 @if ty.is_const { "/const" }
                                 @if ty.is_tmp { "/tmp" }
+                                @if ty.is_final { "/final" }
                                 (env.linkify_type_array(ty.path))
                             }
                         }
