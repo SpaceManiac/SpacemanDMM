@@ -471,7 +471,7 @@ pub fn save_resources(output_path: &Path) -> std::io::Result<()> {
         ($($name:expr,)*) => {{
             use std::io::Write;
             $(
-                crate::create(&output_path.join($name))?.write_all(include_bytes!($name))?;
+                crate::create(&output_path.join($name))?.write_all(include_bytes!(concat!("template/", $name)))?;
             )*
         }}
     }
