@@ -950,6 +950,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             last_part.push('~');
         } else if self.exact(Punct(Equiv))?.is_some() {
             last_part.push_str("~=");
+        } else if self.exact(Punct(AssignInto))?.is_some() {
+            last_part.push_str(":=");
         } else if self.exact(Punct(LBracket))?.is_some() {
             require!(self.exact(Punct(RBracket)));
             if self.exact(Punct(Assign))?.is_some() {
