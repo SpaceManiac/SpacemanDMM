@@ -28,7 +28,7 @@ pub struct Key(KeyType);
 /// An XY coordinate pair in the BYOND coordinate system.
 ///
 /// The lower-left corner is `{ x: 1, y: 1 }`.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Coord2 {
     pub x: i32,
     pub y: i32,
@@ -71,7 +71,7 @@ impl std::ops::Add<Dir> for Coord2 {
 ///
 /// Note that BYOND by default considers "UP" to be Z+1, but this does not
 /// necessarily apply to a given game's logic.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Coord3 {
     pub x: i32,
     pub y: i32,
