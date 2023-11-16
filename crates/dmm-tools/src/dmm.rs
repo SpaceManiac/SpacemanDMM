@@ -200,6 +200,10 @@ impl Map {
         }
     }
 
+    pub fn set_key_length(&mut self, key_length: u8) {
+        self.key_length = key_length;
+    }
+
     #[inline]
     pub fn dim_xyz(&self) -> (usize, usize, usize) {
         let dim = self.grid.dim();
