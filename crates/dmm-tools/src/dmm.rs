@@ -181,9 +181,12 @@ impl Map {
         Ok(map)
     }
 
+    pub fn to_writer(&self, writer: &mut impl std::io::Write) -> io::Result<()> {
+        save_tgm::save_tgm(self, writer)
+    }
+
     pub fn to_file(&self, path: &Path) -> io::Result<()> {
-        // DMM saver later
-        save_tgm::save_tgm(self, File::create(path)?)
+        self.to_writer(&mut File::create(path)?)
     }
 
     pub fn key_length(&self) -> u8 {
