@@ -28,7 +28,7 @@ pub struct Key(KeyType);
 /// An XY coordinate pair in the BYOND coordinate system.
 ///
 /// The lower-left corner is `{ x: 1, y: 1 }`.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Coord2 {
     pub x: i32,
     pub y: i32,
@@ -71,7 +71,7 @@ impl std::ops::Add<Dir> for Coord2 {
 ///
 /// Note that BYOND by default considers "UP" to be Z+1, but this does not
 /// necessarily apply to a given game's logic.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Coord3 {
     pub x: i32,
     pub y: i32,
@@ -181,9 +181,12 @@ impl Map {
         Ok(map)
     }
 
+    pub fn to_writer(&self, writer: &mut impl std::io::Write) -> io::Result<()> {
+        save_tgm::save_tgm(self, writer)
+    }
+
     pub fn to_file(&self, path: &Path) -> io::Result<()> {
-        // DMM saver later
-        save_tgm::save_tgm(self, File::create(path)?)
+        self.to_writer(&mut File::create(path)?)
     }
 
     pub fn key_length(&self) -> u8 {

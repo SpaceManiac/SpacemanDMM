@@ -1,5 +1,4 @@
 //! TGM map writer.
-use std::fs::File;
 use std::io::{self, Write, BufWriter};
 
 use ndarray::Axis;
@@ -10,8 +9,8 @@ const TGM_HEADER: &str = "//MAP CONVERTED BY dmm2tgm.py THIS HEADER COMMENT PREV
 
 // Note: writeln! currently (2022-04-30) writes the \n character alone on all platforms
 // If that changes, this will break.
-pub fn save_tgm(map: &Map, f: File) -> io::Result<()> {
-    let mut f = BufWriter::new(f);
+pub fn save_tgm(map: &Map, w: &mut impl Write) -> io::Result<()> {
+    let mut f = BufWriter::new(w);
     writeln!(f, "{}", TGM_HEADER)?;
 
     // dictionary
