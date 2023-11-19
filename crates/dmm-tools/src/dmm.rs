@@ -196,9 +196,9 @@ impl Map {
     pub fn adjust_key_length(&mut self) {
         if let Some(max_key) = self.dictionary.keys().max() {
             let max_key = max_key.0;
-            if max_key > 2704 {
+            if max_key >= 2704 {
                 self.key_length = 3;
-            } else if max_key > 52 {
+            } else if max_key >= 52 {
                 self.key_length = 2;
             } else {
                 self.key_length = 1;
