@@ -811,7 +811,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 // translators note: this allows comments of the form ``//! blah`` at the end of the line
                 let (docs, expression) = require!(self.doc_comment(|this| {
                     let expr = require!(this.expression());
-                    let _ = require!(this.input_specifier());
+                    let _ = require!(this.input_specifier());  // TODO: save to VarType instead of ignoring
 
                     // We have to annotate prior to consuming the statement terminator, as we
                     // will otherwise consume following whitespace resulting in a bad annotation range
@@ -841,6 +841,10 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 // usually `thing;` - a contentless declaration
                 // TODO: allow enclosing-targeting docs here somehow?
                 self.put_back(other);
+
+                if var_type.is_some() {
+                    let _ = require!(self.input_specifier());  // TODO: save to VarType instead of ignoring
+                }
 
                 if last_part == "var" {
                     self.error("`var;` item has no effect")
