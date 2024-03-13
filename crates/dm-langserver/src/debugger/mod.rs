@@ -434,11 +434,9 @@ handle_request! {
                     #[allow(unused_mut)]
                     let mut extools_dll = None;
 
-                    #[cfg(debug_assertions)] {
-                        if let Some(dll) = self.extools_dll.as_ref() {
-                            debug_output!(in self.seq, "[main] configured override: {:?}", dll);
-                            extools_dll = Some(dll.into());
-                        }
+                    if let Some(dll) = self.extools_dll.as_ref() {
+                        debug_output!(in self.seq, "[main] configured override: {:?}", dll);
+                        extools_dll = Some(dll.into());
                     }
 
                     #[cfg(extools_bundle)] {
@@ -460,11 +458,9 @@ handle_request! {
                     #[allow(unused_mut)]
                     let mut debug_server_dll = None;
 
-                    #[cfg(debug_assertions)] {
-                        if let Some(dll) = self.debug_server_dll.as_ref() {
-                            debug_output!(in self.seq, "[main] configured override: {:?}", dll);
-                            debug_server_dll = Some(dll.into());
-                        }
+                    if let Some(dll) = self.debug_server_dll.as_ref() {
+                        debug_output!(in self.seq, "[main] configured override: {:?}", dll);
+                        debug_server_dll = Some(dll.into());
                     }
 
                     #[cfg(auxtools_bundle)] {
