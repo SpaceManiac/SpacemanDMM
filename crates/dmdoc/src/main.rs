@@ -22,7 +22,7 @@ use dm::docs::*;
 use markdown::DocBlock;
 
 const BUILD_INFO: &str = concat!(
-    "dmdoc ", env!("CARGO_PKG_VERSION"), "  Copyright (C) 2017-2023  Tad Hardesty\n",
+    "dmdoc ", env!("CARGO_PKG_VERSION"), "  Copyright (C) 2017-2024  Tad Hardesty\n",
     include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")), "\n",
     "This program comes with ABSOLUTELY NO WARRANTY. This is free software,\n",
     "and you are welcome to redistribute it under the conditions of the GNU\n",

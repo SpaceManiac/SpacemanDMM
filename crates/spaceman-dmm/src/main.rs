@@ -590,7 +590,7 @@ impl EditorScene {
             ui.menu(im_str!("Help"), true, || {
                 ui.menu(im_str!("About SpacemanDMM"), true, || {
                     ui.text(&im_str!(
-                        "{} {}  Copyright (C) 2017-2023  Tad Hardesty",
+                        "{} {}  Copyright (C) 2017-2024  Tad Hardesty",
                         env!("CARGO_PKG_NAME"),
                         env!("CARGO_PKG_VERSION"),
                     ));
