@@ -19,5 +19,4 @@ sed \
     download-auxtools.sh
 
 # Prepare the commit
-git add download-auxtools.sh
-git commit -m "Update to auxtools debug server $DEBUG_SERVER_TAG"
+git commit -m "Update to auxtools debug server $DEBUG_SERVER_TAG" -- download-auxtools.sh
