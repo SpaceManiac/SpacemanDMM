@@ -403,7 +403,7 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         proc/abs(A);
         proc/addtext(Arg1, Arg2/*, ...*/);
         proc/alert(Usr/*=usr*/,Message,Title,Button1/*="Ok"*/,Button2,Button3);
-        proc/animate(Object, time, loop, easing, flags, // +2 forms
+        proc/animate(Object, time, loop, easing, flags, delay, // +2 forms
             // these kwargs
             alpha, color, infra_luminosity, layer, maptext_width, maptext_height,
             maptext_x, maptext_y, luminosity, pixel_x, pixel_y, pixel_w, pixel_z,
