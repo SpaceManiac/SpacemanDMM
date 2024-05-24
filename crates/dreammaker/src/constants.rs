@@ -154,6 +154,8 @@ pub enum ConstFn {
     File,
     /// The `generator()` type constructor.
     Generator,
+    /// `fexists()`, which can be used in preprocessor expressions.
+    FileExists,
 }
 
 /// A constant-evaluation error (usually type mismatch).
@@ -411,6 +413,7 @@ impl fmt::Display for ConstFn {
             ConstFn::Filter => "filter",
             ConstFn::File => "file",
             ConstFn::Generator => "generator",
+            ConstFn::FileExists => "fexists"
         })
     }
 }
@@ -811,6 +814,12 @@ impl<'a> ConstantFolder<'a> {
                         Some(name) => Constant::string(name),
                         None => return Err(self.error("malformed nameof() call, expression appears to have no name")),
                     }
+                }
+                "fexists" => {
+                    if args.len() != 1 {
+                        return Err(self.error(format!("malformed fexists() call, must have 1 argument and instead has {}", args.len())));
+                    }
+                    Constant::Call(ConstFn::FileExists, self.arguments(args)?)
                 }
                 // other functions are no-goes
                 _ => return Err(self.error(format!("non-constant function call: {}", ident))),

@@ -110,3 +110,11 @@ fn rgb_hcy() {
         Constant::string("#000000"),
     );
 }
+
+#[test]
+fn fexists_noarg() {
+    assert_eq!(
+        eval("fexists()").unwrap_err().description(),
+        "malformed fexists() call, must have 1 argument and instead has 0",
+    );
+}
