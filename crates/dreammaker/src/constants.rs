@@ -815,11 +815,14 @@ impl<'a> ConstantFolder<'a> {
                         None => return Err(self.error("malformed nameof() call, expression appears to have no name")),
                     }
                 }
-                "fexists" => {
+                "fexists" if self.defines.is_some() => {
                     if args.len() != 1 {
                         return Err(self.error(format!("malformed fexists() call, must have 1 argument and instead has {}", args.len())));
                     }
-                    Constant::Call(ConstFn::FileExists, self.arguments(args)?)
+                    match args[0].as_term() {
+                        Some(Term::String(ref path)) => Constant::from(std::path::Path::new(path).exists()),
+                        _ => return Err(self.error("malformed fexists() call, argument given isn't a string.")),
+                    }
                 }
                 // other functions are no-goes
                 _ => return Err(self.error(format!("non-constant function call: {}", ident))),
