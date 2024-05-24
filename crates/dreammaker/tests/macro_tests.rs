@@ -69,3 +69,20 @@ ok2
         Ident("ok2".into(), false),
     ]);
 }
+
+#[test]
+fn fexists_function() {
+    assert_eq!(process(r#"
+#if fexists("README.md")
+exists
+#endif
+"#), &[
+        Ident("exists".into(), false),
+    ]);
+
+    assert_eq!(process(r#"
+#if fexists("this file does not exist")
+exists
+#endif
+"#), &[]);
+}

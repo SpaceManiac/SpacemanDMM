@@ -112,9 +112,9 @@ fn rgb_hcy() {
 }
 
 #[test]
-fn fexists_noarg() {
+fn no_fexists_outside_preproc() {
     assert_eq!(
         eval("fexists()").unwrap_err().description(),
-        "malformed fexists() call, must have 1 argument and instead has 0",
+        "non-constant function call: fexists",
     );
 }
