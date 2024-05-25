@@ -1004,7 +1004,24 @@ impl<'ctx> Preprocessor<'ctx> {
 
                 // substitute special macros
                 if ident == "__FILE__" {
-                    self.annotate_macro(ident, Location::builtins(), None);
+                    let path = self.include_stack.top_file_path().to_str().unwrap();
+                    let dm_path;
+
+                    #[cfg(windows)] {
+                        dm_path = path.replace("\\", "/");
+                    }
+
+                    #[cfg(not(windows))] {
+                        dm_path = path.to_string();
+                    }
+
+                    let mut doc_collection = DocCollection::default();
+                    doc_collection.push(DocComment {
+                        kind: crate::docs::CommentKind::Line,
+                        target: DocTarget::FollowingItem,
+                        text: dm_path,
+                    });
+                    self.annotate_macro(ident, Location::builtins(), Some(Rc::new(doc_collection)));
                     for include in self.include_stack.stack.iter().rev() {
                         if let Include::File { ref path, .. } = *include {
                             self.output.push_back(Token::String(path.display().to_string()));
@@ -1014,7 +1031,13 @@ impl<'ctx> Preprocessor<'ctx> {
                     self.output.push_back(Token::String(String::new()));
                     return Ok(());
                 } else if ident == "__LINE__" {
-                    self.annotate_macro(ident, Location::builtins(), None);
+                    let mut doc_collection = DocCollection::default();
+                    doc_collection.push(DocComment {
+                        kind: crate::docs::CommentKind::Line,
+                        target: DocTarget::FollowingItem,
+                        text: self.last_input_loc.line.to_string(),
+                    });
+                    self.annotate_macro(ident, Location::builtins(), Some(Rc::new(doc_collection)));
                     self.output.push_back(Token::Int(self.last_input_loc.line as i32));
                     return Ok(());
                 }
