@@ -354,7 +354,7 @@ impl fmt::Display for Token {
         use self::Token::*;
         match *self {
             Eof => f.write_str("__EOF__"),
-            Punct(p) => write!(f, "{}", p),
+            Punct(p) => p.fmt(f),
             Ident(ref i, _) => f.write_str(i),
             String(ref i) => Quote(i).fmt(f),
             InterpStringBegin(ref i) => write!(f, "\"{}[", i),
@@ -363,7 +363,7 @@ impl fmt::Display for Token {
             Resource(ref i) => write!(f, "'{}'", i),
             Int(i) => FormatFloat(i as f32).fmt(f),
             Float(i) => FormatFloat(i).fmt(f),
-            DocComment(ref c) => write!(f, "{}", c),
+            DocComment(ref c) => c.fmt(f),
         }
     }
 }

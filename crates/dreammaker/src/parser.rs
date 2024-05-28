@@ -1,7 +1,7 @@
 //! Minimalist parser which turns a token stream into an object tree.
 
 use std::borrow::Cow;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::ops::Range;
 use std::str::FromStr;
 
@@ -297,10 +297,9 @@ pub struct Parser<'ctx, 'an, 'inp> {
     location: Location,
     expected: Vec<Cow<'static, str>>,
 
-    docs_following: DocCollection,
-    docs_enclosing: DocCollection,
+    doc_comments_pending: VecDeque<(Location, DocComment)>,
+    doc_comments_on_notice: bool,
     module_docs: BTreeMap<FileId, Vec<(u32, DocComment)>>,
-    in_docs: usize,
 
     procs: bool,
     procs_bad: u64,
@@ -329,10 +328,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             location: Default::default(),
             expected: Vec::new(),
 
-            docs_following: Default::default(),
-            docs_enclosing: Default::default(),
+            doc_comments_pending: Default::default(),
+            doc_comments_on_notice: false,
             module_docs: Default::default(),
-            in_docs: 0,
 
             procs: false,
             procs_bad: 0,
@@ -414,9 +412,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         if self.eof {
             return self.error(format!("got EOF, expected one of: {}", expected));
         }
-        match self.next("") {
+        match self.next_quiet() {
             Ok(got) => {
-                let message = format!("got '{}', expected one of: {}", got, expected);
+                let message = format!("got '{:#}', expected one of: {}", got, expected);
                 self.put_back(got);
                 let mut e = self.error(message);
                 if self.possible_indentation_error {
@@ -446,45 +444,94 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }
     }
 
+    /// Push an alternative to the "got X, expected one of: ..." list.
+    fn expected(&mut self, expected: Cow<'static, str>) {
+        if !expected.is_empty() && !self.expected.contains(&expected) {
+            self.expected.push(expected);
+        }
+    }
+
+    /// Get the next token and push something to the "expected" list.
     fn next<S: Into<Cow<'static, str>>>(&mut self, expected: S) -> Result<Token, DMError> {
-        let tok = loop {
+        self.expected(expected.into());
+        self.next_quiet()
+    }
+
+    /// Get the next token without pushing anything to the "expected" list.
+    fn next_quiet(&mut self) -> Result<Token, DMError> {
+        loop {
             if let Some(next) = self.next.take() {
-                break Ok(next);
+                self.doc_comments_on_notice = false;
+                return Ok(next);
             }
             match self.input.next() {
-                Some(LocatedToken {
-                    location,
-                    token: Token::DocComment(dc),
-                }) => match dc.target {
-                    DocTarget::EnclosingItem if self.in_docs == 0 => {
-                        self.module_docs
-                            .entry(location.file)
-                            .or_default()
-                            .push((location.line, dc));
-                    }
-                    DocTarget::EnclosingItem => self.docs_enclosing.push(dc),
-                    DocTarget::FollowingItem => self.docs_following.push(dc),
-                },
+                // To allow comments that look like doc comments in arbitrary
+                // positions, buffer them until they are specifically read,
+                // or drop them if we've read TWO non-doc tokens, meaning the
+                // first non-doc token can no longer be put_back.
+                Some(LocatedToken { location, token: Token::DocComment(comment) }) => {
+                    self.doc_comments_pending.push_back((location, comment));
+                    self.doc_comments_on_notice = false;
+                }
                 Some(token) => {
                     self.expected.clear();
                     self.location = token.location;
-                    break Ok(token.token);
+                    if self.doc_comments_on_notice {
+                        // This is where we would diagnose "doc comment has no
+                        // effect", but it would probably be more annoying than
+                        // useful.
+                        self.doc_comments_pending.clear();
+                    } else if !self.doc_comments_pending.is_empty() {
+                        self.doc_comments_on_notice = true;
+                    }
+                    return Ok(token.token);
                 }
                 None => {
                     if !self.eof {
                         self.eof = true;
-                        break Ok(Token::Eof);
+                        return Ok(Token::Eof);
                     } else {
-                        break self.parse_error();
+                        return self.parse_error();
                     }
                 }
             }
-        };
-        let what = expected.into();
-        if !what.is_empty() && !self.expected.contains(&what) {
-            self.expected.push(what);
         }
-        tok
+    }
+
+    fn next_comment_of_target(&mut self, target: DocTarget) -> Status<DocComment> {
+        loop {
+            if let Some((location, comment)) = self.doc_comments_pending.pop_front() {
+                if comment.target == target {
+                    self.location = location;
+                    return success(comment);
+                } else if comment.target == DocTarget::FollowingItem {
+                    //^ out-of-position `//!` comments have to be dropped or they infect later declarations
+                    self.doc_comments_pending.push_front((location, comment));
+                    return Ok(None);
+                }
+            }
+            if self.next.is_some() {
+                return Ok(None);
+            }
+            match self.input.next() {
+                Some(LocatedToken { location, token: Token::DocComment(comment) }) => {
+                    if comment.target == target {
+                        self.location = location;
+                        return success(comment);
+                    } else if comment.target == DocTarget::FollowingItem {
+                        //^ out-of-position `//!` comments have to be dropped or they infect later declarations
+                        self.doc_comments_pending.push_front((location, comment));
+                        return Ok(None);
+                    }
+                }
+                Some(other) => {
+                    self.location = other.location;
+                    self.next = Some(other.token);
+                    return Ok(None);
+                }
+                None => return Ok(None),
+            }
+        }
     }
 
     fn put_back(&mut self, tok: Token) {
@@ -495,7 +542,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     }
 
     fn updated_location(&mut self) -> Location {
-        if let Ok(token) = self.next("") {
+        if let Ok(token) = self.next_quiet() {
             self.put_back(token);
         }
         self.location
@@ -567,20 +614,16 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     // ------------------------------------------------------------------------
     // Doc comment tracking
 
-    fn doc_comment<R, F: FnOnce(&mut Self) -> Status<R>>(&mut self, f: F) -> Status<(DocCollection, R)> {
-        use std::mem::replace;
+    fn following_doc_comment(&mut self) -> Status<DocComment> {
+        self.expected("'///'".into());
+        self.expected("'/**'".into());
+        self.next_comment_of_target(DocTarget::FollowingItem)
+    }
 
-        let enclosing = std::mem::take(&mut self.docs_enclosing);
-        let mut docs = std::mem::take(&mut self.docs_following);
-        self.in_docs += 1;
-        let result = f(self);
-        self.in_docs -= 1;
-        docs.extend(replace(&mut self.docs_enclosing, enclosing));
-        match result {
-            Ok(Some(found)) => Ok(Some((docs, found))),
-            Ok(None) => Ok(None),
-            Err(err) => Err(err),
-        }
+    fn enclosing_doc_comment(&mut self) -> Status<DocComment> {
+        self.expected("'//!'".into());
+        self.expected("'/*!'".into());
+        self.next_comment_of_target(DocTarget::EnclosingItem)
     }
 
     // ------------------------------------------------------------------------
@@ -590,22 +633,31 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         self.tree_entries(self.tree.root_index(), None, None, Token::Eof)
     }
 
-    fn tree_block(&mut self, current: NodeIndex, proc_builder: Option<ProcDeclBuilder>, var_type: Option<VarTypeBuilder>) -> Status<()> {
-        leading!(self.exact(Token::Punct(Punctuation::LBrace)));
-        require!(self.tree_entries(current, proc_builder, var_type, Token::Punct(Punctuation::RBrace)));
-        SUCCESS
-    }
-
     fn tree_entries(&mut self, current: NodeIndex, proc_builder: Option<ProcDeclBuilder>, var_type: Option<VarTypeBuilder>, terminator: Token) -> Status<()> {
         loop {
-            let message: Cow<'static, str> = match terminator {
-                Token::Eof => "newline".into(),
-                ref other => format!("newline, '{}'", other).into(),
-            };
-            let next = self.next(message)?;
+            self.expected("newline".into());
+            if terminator != Token::Eof {
+                self.expected(format!("'{terminator}'").into());
+            }
+
+            if current == self.tree.root_index() {
+                self.expected("'//!'".into());
+                self.expected("'/*!'".into());
+                if let Some(module_comment) = self.enclosing_doc_comment()? {
+                    // If we're not inside a type, this is where module `//!` comments appear.
+                    self.module_docs
+                        .entry(self.location.file)
+                        .or_default()
+                        .push((self.location.line, module_comment));
+                    continue;
+                }
+            }
+
+            let next = self.next_quiet()?;
             if next == terminator || next == Token::Eof {
                 break;
             } else if next == Token::Punct(Punctuation::Semicolon) {
+                self.doc_comments_on_notice = false;
                 continue;
             }
             self.put_back(next);
@@ -693,7 +745,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     fn tree_entry(&mut self, mut current: NodeIndex, mut proc_builder: Option<ProcDeclBuilder>, mut var_type: Option<VarTypeBuilder>) -> Status<()> {
         // tree_entry :: path ';'
-        // tree_entry :: path tree_block
+        // tree_entry :: path '{' tree_entry* '}'
         // tree_entry :: path '=' expression ';'
         // tree_entry :: path '(' argument_list ')' ';'
         // tree_entry :: path '(' argument_list ')' code_block
@@ -703,8 +755,17 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
         let entry_start = self.updated_location();
 
+        let mut docs = DocCollection::default();
+        while let Some(doc_comment) = self.following_doc_comment()? {
+            docs.push(doc_comment);
+        }
+
         // read and calculate the current path
-        let (absolute, mut path) = leading!(self.tree_path(false));
+        let (absolute, mut path) = if docs.is_empty() {
+            leading!(self.tree_path(false))
+        } else {
+            require!(self.tree_path(false))
+        };
 
         if absolute && current != self.tree.root_index() {
             DMError::new(entry_start, format!("nested absolute path inside {}", self.tree.get_path(current)))
@@ -781,22 +842,36 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Default::default()
         };
 
+        // Same-line `//!` comment for types.
+        // Also incidentally allows putting `/*!` in weird places, but that's probably fine.
+        while let Some(doc_comment) = self.enclosing_doc_comment()? {
+            docs.push(doc_comment);
+        }
+
         // read the contents for real
-        match self.next("contents")? {
-            t @ Punct(LBrace) => {
+        self.expected("'='".into());
+        self.expected("'('".into());
+        self.expected("'{'".into());
+        match self.next_quiet()? {
+            Punct(LBrace) => {
                 // `thing{` - block
-                self.put_back(t);
                 traverse_tree!(last_part);
                 handle_relative_type_error!();
                 let start = self.updated_location();
 
-                if proc_builder.is_some() || var_type.is_some() {
-                    // Can't apply docs to `var/` or `proc/` blocks.
-                    require!(self.tree_block(current, proc_builder, var_type.clone()));
-                } else {
-                    let (comment, ()) = require!(self.doc_comment(|this| this.tree_block(current, proc_builder, var_type.clone())));
-                    self.tree.extend_docs(current, comment);
+                // Inside-block `//!` comments for types.
+                while let Some(comment) = self.enclosing_doc_comment()? {
+                    docs.push(comment);
                 }
+                if !docs.is_empty() && (proc_builder.is_some() || var_type.is_some()) {
+                    // Can't apply docs to `var/` or `proc/` blocks.
+                    DMError::new(start, "docs on `var/` or `proc/` block will be applied to their type")
+                        .set_severity(Severity::Warning)
+                        .register(self.context);
+                }
+                self.tree.extend_docs(current, docs);
+
+                require!(self.tree_entries(current, proc_builder, var_type.clone(), Token::Punct(Punctuation::RBrace)));
 
                 let node = self.tree.get_path(current).to_owned();
                 self.annotate(start, || Annotation::TreeBlock(reconstruct_path(&node, proc_builder, var_type.as_ref(), "")));
@@ -807,20 +882,20 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 handle_relative_type_error!();
                 let location = self.location;
 
-                // kind of goofy, but allows "enclosing" doc comments at the end of the line
-                // translators note: this allows comments of the form ``//! blah`` at the end of the line
-                let (docs, expression) = require!(self.doc_comment(|this| {
-                    let expr = require!(this.expression());
-                    let _ = require!(this.input_specifier());  // TODO: save to VarType instead of ignoring
+                let expression = require!(self.expression());
+                let _ = require!(self.input_specifier());  // TODO: save to VarType instead of ignoring
 
-                    // We have to annotate prior to consuming the statement terminator, as we
-                    // will otherwise consume following whitespace resulting in a bad annotation range
-                    let node = this.tree.get_path(current).to_owned();
-                    this.annotate(entry_start, || Annotation::Variable(reconstruct_path(&node, proc_builder, var_type.as_ref(), last_part)));
+                // We have to annotate prior to consuming the statement terminator, as we
+                // will otherwise consume following whitespace resulting in a bad annotation range
+                let node = self.tree.get_path(current).to_owned();
+                self.annotate(entry_start, || Annotation::Variable(reconstruct_path(&node, proc_builder, var_type.as_ref(), last_part)));
 
-                    require!(this.statement_terminator());
-                    success(expr)
-                }));
+                // Allow `//!` doc comments at the end of the line.
+                while let Some(comment) = self.enclosing_doc_comment()? {
+                    docs.push(comment);
+                }
+
+                require!(self.statement_terminator());
 
                 if let Some(mut var_type) = var_type {
                     var_type.suffix(&var_suffix);
@@ -834,16 +909,20 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             t @ Punct(LParen) => {
                 // `something(` - proc
                 self.put_back(t);
-                require!(self.proc_params_and_body(current, proc_builder, last_part, entry_start, absolute));
+                require!(self.proc_params_and_body(current, proc_builder, last_part, entry_start, absolute, docs));
                 SUCCESS
             }
             other => {
                 // usually `thing;` - a contentless declaration
-                // TODO: allow enclosing-targeting docs here somehow?
                 self.put_back(other);
 
                 if var_type.is_some() {
                     let _ = require!(self.input_specifier());  // TODO: save to VarType instead of ignoring
+                }
+
+                // Same-line `//!` comment AFTER
+                while let Some(comment) = self.enclosing_doc_comment()? {
+                    docs.push(comment);
                 }
 
                 if last_part == "var" {
@@ -856,7 +935,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                             .set_severity(Severity::Warning)
                             .register(self.context);
                     } else {
-                        let docs = std::mem::take(&mut self.docs_following);
                         var_type.suffix(&var_suffix);
                         let node = self.tree.get_path(current).to_owned();
                         self.annotate(entry_start, || Annotation::Variable(reconstruct_path(&node, proc_builder, Some(&var_type), last_part)));
@@ -867,11 +945,11 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         .set_severity(Severity::Warning)
                         .register(self.context);
                 } else if proc_builder.is_some() {
+                    eprintln!("-- {:?}", last_part);
                     self.error("child of `proc/` without body")
                         .register(self.context);
                 } else {
                     handle_relative_type_error!();
-                    let docs = std::mem::take(&mut self.docs_following);
                     let len = self.tree.get_path(current).chars().filter(|&c| c == '/').count() + path_len;
                     current = self.tree.subtype_or_add(self.location, current, last_part, len);
                     self.tree.extend_docs(current, docs);
@@ -969,7 +1047,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         SUCCESS
     }
 
-    fn proc_params_and_body(&mut self, current: NodeIndex, proc_builder: Option<ProcDeclBuilder>, name: &str, entry_start: Location, absolute: bool) -> Status<()> {
+    fn proc_params_and_body(&mut self, current: NodeIndex, proc_builder: Option<ProcDeclBuilder>, name: &str, entry_start: Location, absolute: bool, mut docs: DocCollection) -> Status<()> {
         use super::lexer::Token::*;
         use super::lexer::Punctuation::*;
 
@@ -984,26 +1062,38 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
         // split off a subparser so we can keep parsing the objtree
         // even when the proc body doesn't parse
-        let mut body_start = self.location;
         let mut body_tt = Vec::new();
-        // check that it doesn't end immediately (empty body)
-        let (comment, ()) = require!(self.doc_comment(|this| {
-            body_start = this.updated_location();
-            if let Some(()) = this.statement_terminator()? {
-                body_tt.push(LocatedToken::new(this.location, Punct(Semicolon)));
-            } else {
-                // read an initial token tree
-                require!(this.read_any_tt(&mut body_tt));
-                // if the first token is not an LBrace, it's on one line
-                if body_tt[0].token != Punct(LBrace) {
-                    while this.statement_terminator()?.is_none() {
-                        require!(this.read_any_tt(&mut body_tt));
-                    }
-                    body_tt.push(LocatedToken::new(this.location, Punct(Semicolon)));
-                }
+        let body_start = self.updated_location();
+
+        // Accept `//!` comments right after the `)` of the proc.
+        while let Some(comment) = self.enclosing_doc_comment()? {
+            docs.push(comment);
+        }
+
+        if let Some(()) = self.statement_terminator()? {
+            // proc has no body and just ends with `;`
+            body_tt.push(LocatedToken::new(self.location, Punct(Semicolon)));
+        } else if let Some(()) = self.exact(Punct(LBrace))? {
+            // proc has a body starting with `{`
+            body_tt.push(LocatedToken::new(self.location, Punct(LBrace)));
+
+            // enclosing doc comments `//!` can appear after the `{`
+            while let Some(comment) = self.enclosing_doc_comment()? {
+                docs.push(comment);
             }
-            SUCCESS
-        }));
+
+            // read the rest of the line
+            while self.exact(Punct(RBrace))?.is_none() {
+                require!(self.read_any_tt(&mut body_tt));
+            }
+            body_tt.push(LocatedToken::new(self.location, Punct(RBrace)));
+        } else {
+            // proc has a same-line body, read until statement terminator
+            while self.statement_terminator()?.is_none() {
+                require!(self.read_any_tt(&mut body_tt));
+            }
+            body_tt.push(LocatedToken::new(self.location, Punct(Semicolon)));
+        }
 
         let code = if self.procs {
             let result = {
@@ -1034,7 +1124,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
         match self.tree.register_proc(self.context, location, current, name, proc_builder, parameters, return_type, code) {
             Ok((idx, proc)) => {
-                proc.docs.extend(comment);
+                proc.docs.extend(docs);
                 // manually performed for borrowck reasons
                 if let Some(dest) = self.annotations.as_mut() {
                     let new_stack = reconstruct_path(self.tree.get_path(current), proc_builder, None, name);
@@ -1178,11 +1268,11 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 return Err(self.error("Invalid return type"));
             };
             return Ok(Some(return_type));
-        };
+        }
         if Token::Punct(Punctuation::Slash) != next_token {
-                self.put_back(next_token);
-                return Err(self.error("Invalid return type"));
-        };
+            self.put_back(next_token);
+            return Err(self.error("Invalid return type"));
+        }
         // We're pulling out just the text, and we go until the end of the text or until we hit something unexpected
         let mut path_vec = vec![];
         let mut slash_last = true;
@@ -1452,19 +1542,23 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             require!(self.exact(Token::Punct(Punctuation::RParen)));
             require!(self.exact(Token::Punct(Punctuation::LBrace)));
             let mut cases = Vec::new();
-            while let Some(()) = self.exact_ident("if")? {
-                require!(self.exact(Token::Punct(Punctuation::LParen)));
-                let what = require!(self.separated(Punctuation::Comma, Punctuation::RParen, None, Parser::case));
-                if what.is_empty() {
-                    self.context.register_error(self.error("switch case cannot be empty"));
+            let default = loop {
+                if let Some(()) = self.exact_ident("if")? {
+                    require!(self.exact(Token::Punct(Punctuation::LParen)));
+                    let what = require!(self.separated(Punctuation::Comma, Punctuation::RParen, None, Parser::case));
+                    if what.is_empty() {
+                        self.context.register_error(self.error("switch case cannot be empty"));
+                    }
+                    let block = require!(self.block(loop_ctx));
+                    cases.push((Spanned::new(self.location(), what), block));
+                } else if let Some(()) = self.exact_ident("else")? {
+                    break Some(require!(self.block(loop_ctx)));
+                } else if let Some(()) = self.exact(Token::Punct(Punctuation::Semicolon))? {
+                    // Tolerate stray semicolons here because inert doc
+                    // comments might synthesize them.
+                } else {
+                    break None;
                 }
-                let block = require!(self.block(loop_ctx));
-                cases.push((Spanned::new(self.location(), what), block));
-            }
-            let default = if let Some(()) = self.exact_ident("else")? {
-                Some(require!(self.block(loop_ctx)))
-            } else {
-                None
             };
             require!(self.exact(Token::Punct(Punctuation::RBrace)));
             spanned(Statement::Switch {
@@ -1538,7 +1632,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     // Handle if(1){a=1;b=2} without a trailing semicolon
     fn statement_terminator(&mut self) -> Status<()> {
-        match self.next("';'")? {
+        match self.next("newline")? {
             Token::Punct(Punctuation::Semicolon) => SUCCESS,
             p @ Token::Punct(Punctuation::RBrace) => {
                 self.put_back(p);
@@ -2461,7 +2555,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     fn read_any_tt(&mut self, target: &mut Vec<LocatedToken>) -> Status<()> {
         // read a single arbitrary "token tree", either a group or a single token
-        let start = self.next("anything")?;
+        let start = self.next_quiet()?;
         let kind = TTKind::from_token(&start);
         target.push(LocatedToken::new(self.location(), start));
         let kind = match kind {
@@ -2469,7 +2563,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             None => return SUCCESS,
         };
         loop {
-            let token = self.next("anything")?;
+            let token = self.next_quiet()?;
             if kind.is_end(&token) {
                 target.push(LocatedToken::new(self.location(), token));
                 return SUCCESS;

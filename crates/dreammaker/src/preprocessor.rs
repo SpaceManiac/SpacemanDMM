@@ -12,7 +12,7 @@ use interval_tree::{IntervalTree, range};
 
 use super::{DMError, Location, HasLocation, FileId, Context, Severity};
 use super::lexer::*;
-use super::docs::{DocComment, DocTarget, DocCollection};
+use super::docs::{DocComment, DocTarget, DocCollection, CommentKind};
 use super::annotation::*;
 use super::ast::Ident;
 
@@ -117,7 +117,6 @@ impl DefineHistory {
             output: Default::default(),
             danger_idents: Default::default(),
             docs_in: Default::default(),
-            docs_out: Default::default(),
             in_interp_string: 0,
             annotations: None,
         }
@@ -143,7 +142,6 @@ impl DefineHistory {
             output: Default::default(),
             danger_idents: Default::default(),
             docs_in: Default::default(),
-            docs_out: Default::default(),
             in_interp_string: 0,
             annotations: None,
         }
@@ -391,7 +389,7 @@ pub struct Preprocessor<'ctx> {
     // should this be done as an enum in include_locations instead?
     multiple_locations: HashMap<FileId, Location, RandomState>,
     last_input_loc: Location,
-    output: VecDeque<Token>,
+    output: VecDeque<LocatedToken>,
     ifdef_stack: Vec<Ifdef>,
     ifdef_history: IntervalTree<Location, bool>,
     annotations: Option<AnnotationTree>,
@@ -407,7 +405,6 @@ pub struct Preprocessor<'ctx> {
     in_interp_string: u32,
 
     docs_in: VecDeque<(Location, DocComment)>,
-    docs_out: VecDeque<(Location, DocComment)>,
 }
 
 impl<'ctx> HasLocation for Preprocessor<'ctx> {
@@ -445,7 +442,6 @@ impl<'ctx> Preprocessor<'ctx> {
             output: Default::default(),
             danger_idents: Default::default(),
             docs_in: Default::default(),
-            docs_out: Default::default(),
             in_interp_string: 0,
             annotations: None,
         })
@@ -475,7 +471,6 @@ impl<'ctx> Preprocessor<'ctx> {
             output: Default::default(),
             danger_idents: Default::default(),
             docs_in: Default::default(),
-            docs_out: Default::default(),
             in_interp_string: 0,
             annotations: None,
         }
@@ -619,7 +614,7 @@ impl<'ctx> Preprocessor<'ctx> {
         let expr = crate::parser::parse_expression(
             self.context,
             start,
-            self.output.drain(..).map(|token| LocatedToken::new(start, token))
+            self.output.drain(..),
         )?;
         Ok(crate::constants::preprocessor_evaluate(start, expr, &self.defines)?.to_bool())
     }
@@ -641,7 +636,11 @@ impl<'ctx> Preprocessor<'ctx> {
     /// Something other than a `#define` was encountered, docs are not for us.
     fn flush_docs(&mut self) {
         if !self.docs_in.is_empty() {
-            self.docs_out.extend(self.docs_in.drain(..));
+            self.output.extend(
+                self.docs_in
+                    .drain(..)
+                    .map(|(l, d)| LocatedToken::new(l, Token::DocComment(d))),
+            );
         }
     }
 
@@ -690,6 +689,10 @@ impl<'ctx> Preprocessor<'ctx> {
                 https://www.byond.com/forum/?post=2072419", name, kind
             )).set_severity(Severity::Warning));
         }
+    }
+
+    fn push_output(&mut self, token: Token) {
+        self.output.push_back(LocatedToken::new(self.last_input_loc, token));
     }
 
     fn inner_next(&mut self) -> Option<LocatedToken> {
@@ -825,7 +828,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                         // A phantom newline keeps the include
                                         // directive being indented from making
                                         // the first line of the file indented.
-                                        self.output.push_back(Token::Punct(Punctuation::Newline));
+                                        self.push_output(Token::Punct(Punctuation::Newline));
                                         self.include_stack.stack.push(include);
                                     },
                                     Err(e) => self.context.register_error(e),
@@ -850,21 +853,8 @@ impl<'ctx> Preprocessor<'ctx> {
                     }
                     "define" => {
                         // accumulate just-seen Following doc comments
-                        let mut our_docs = Vec::new();
-                        while let Some((loc, doc)) = self.docs_in.pop_back() {
-                            if doc.target == DocTarget::FollowingItem {
-                                our_docs.push(doc);
-                            } else {
-                                self.docs_in.push_back((loc, doc));
-                                break;
-                            }
-                        }
                         let mut docs = DocCollection::default();
-                        for each in our_docs.into_iter().rev() {
-                            docs.push(each);
-                        }
-                        // flush all docs which do not apply to this define
-                        self.flush_docs();
+                        docs.extend(self.docs_in.drain(..).map(|x| x.1));
 
                         expect_token!((define_name, ws) = Token::Ident(define_name, ws));
                         let define_name_loc = _last_expected_loc;
@@ -907,7 +897,18 @@ impl<'ctx> Preprocessor<'ctx> {
                                     }
                                 }
                                 Token::Punct(Punctuation::Newline) => break 'outer,
-                                Token::DocComment(doc) => docs.push(doc),
+                                Token::DocComment(doc) => {
+                                    if doc.target != DocTarget::EnclosingItem {
+                                        let message = match doc.kind {
+                                            CommentKind::Block => "after a #define, should be `/*!` instead of `/**`",
+                                            CommentKind::Line => "after a #define, should be `//!` instead of `///`",
+                                        };
+                                        self.error(message)
+                                            .set_severity(Severity::Hint)
+                                            .register(&self.context);
+                                    }
+                                    docs.push(doc);
+                                }
                                 other => {
                                     subst.push(other);
                                 }
@@ -915,7 +916,18 @@ impl<'ctx> Preprocessor<'ctx> {
                             loop {
                                 match next!() {
                                     Token::Punct(Punctuation::Newline) => break 'outer,
-                                    Token::DocComment(doc) => docs.push(doc),
+                                    Token::DocComment(doc) => {
+                                        if doc.target != DocTarget::EnclosingItem {
+                                            let message = match doc.kind {
+                                                CommentKind::Block => "after a #define, should be `/*!` instead of `/**`",
+                                                CommentKind::Line => "after a #define, should be `//!` instead of `///`",
+                                            };
+                                            self.error(message)
+                                                .set_severity(Severity::Hint)
+                                                .register(&self.context);
+                                        }
+                                        docs.push(doc);
+                                    }
                                     other => subst.push(other),
                                 }
                             }
@@ -988,7 +1000,7 @@ impl<'ctx> Preprocessor<'ctx> {
                     }
                 }
                 // yield a newline
-                self.output.push_back(Token::Punct(Punctuation::Newline));
+                self.push_output(Token::Punct(Punctuation::Newline));
                 return Ok(());
             }
             // anything other than directives may be ifdef'd out
@@ -1007,24 +1019,24 @@ impl<'ctx> Preprocessor<'ctx> {
                     self.annotate_macro(ident, Location::builtins(), None);
                     for include in self.include_stack.stack.iter().rev() {
                         if let Include::File { ref path, .. } = *include {
-                            self.output.push_back(Token::String(path.display().to_string()));
+                            self.push_output(Token::String(path.display().to_string()));
                             return Ok(());
                         }
                     }
-                    self.output.push_back(Token::String(String::new()));
+                    self.push_output(Token::String(String::new()));
                     return Ok(());
                 } else if ident == "__LINE__" {
                     self.annotate_macro(ident, Location::builtins(), None);
-                    self.output.push_back(Token::Int(self.last_input_loc.line as i32));
+                    self.push_output(Token::Int(self.last_input_loc.line as i32));
                     return Ok(());
                 }
 
                 // special case for inside a defined() call
-                if let Some(Token::Punct(Punctuation::LParen)) = self.output.back() {
+                if let Some(LocatedToken { token: Token::Punct(Punctuation::LParen), .. }) = self.output.back() {
                     if let Some(idx) = self.output.len().checked_sub(2) {
-                        if let Some(Token::Ident(identname, _)) = self.output.get(idx) {
+                        if let Some(LocatedToken { token: Token::Ident(identname, _), .. }) = self.output.get(idx) {
                             if identname.as_str() == "defined" {
-                                self.output.push_back(Token::Ident(ident.to_owned(), whitespace));
+                                self.push_output(Token::Ident(ident.to_owned(), whitespace));
                                 return Ok(());
                             }
                         }
@@ -1054,13 +1066,13 @@ impl<'ctx> Preprocessor<'ctx> {
                         match next!() {
                             Token::Punct(Punctuation::LParen) => {}
                             other => {
-                                self.output.push_back(Token::Ident(ident.to_owned(), false));
+                                self.push_output(Token::Ident(ident.to_owned(), false));
                                 match other {
                                     Token::InterpStringBegin(_) => self.in_interp_string += 1,
                                     Token::InterpStringEnd(_) => self.in_interp_string -= 1,
                                     _ => {}
                                 }
-                                self.output.push_back(other);
+                                self.push_output(other);
                                 return Ok(());
                             }
                         }
@@ -1202,7 +1214,7 @@ impl<'ctx> Preprocessor<'ctx> {
             Token::InterpStringBegin(_) => self.in_interp_string += 1,
             Token::InterpStringEnd(_) => self.in_interp_string -= 1,
             // documentation is accumulated, and flushed if no #define follows
-            Token::DocComment(doc) => {
+            Token::DocComment(doc) if doc.target == DocTarget::FollowingItem => {
                 self.docs_in.push_back((self.last_input_loc, doc));
                 return Ok(());
             },
@@ -1212,7 +1224,7 @@ impl<'ctx> Preprocessor<'ctx> {
         if !read.is_whitespace() {
             self.flush_docs();
         }
-        self.output.push_back(read);
+        self.push_output(read);
         Ok(())
     }
 }
@@ -1222,18 +1234,8 @@ impl<'ctx> Iterator for Preprocessor<'ctx> {
 
     fn next(&mut self) -> Option<LocatedToken> {
         loop {
-            if let Some((location, doc)) = self.docs_out.pop_front() {
-                return Some(LocatedToken {
-                    location,
-                    token: Token::DocComment(doc),
-                });
-            }
-
             if let Some(token) = self.output.pop_front() {
-                return Some(LocatedToken {
-                    location: self.last_input_loc,
-                    token,
-                });
+                return Some(token);
             }
 
             if let Some(tok) = self.inner_next() {
