@@ -471,7 +471,7 @@ pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree) {
             }
             match constant_ident_lookup(tree, ty, &key, false) {
                 Err(err) => context.register_error(err),
-                Ok(ConstLookup::Found(_, _)) => {}
+                Ok(ConstLookup::Found(_)) => {}
                 Ok(ConstLookup::Continue(_)) => {
                     context.register_error(DMError::new(
                         tree[ty].vars[&key].value.location,
@@ -488,7 +488,7 @@ pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree) {
 }
 
 enum ConstLookup {
-    Found(TreePath, Constant),
+    Found(Constant),
     Continue(Option<NodeIndex>),
 }
 
@@ -514,7 +514,7 @@ fn constant_ident_lookup(
         match type_.vars.get_mut(ident) {
             None => return Ok(ConstLookup::Continue(parent)),
             Some(var) => match var.value.constant.clone() {
-                Some(constant) => return Ok(ConstLookup::Found(decl.var_type.type_path, constant)),
+                Some(constant) => return Ok(ConstLookup::Found(/*decl.var_type.type_path,*/ constant)),
                 None => match var.value.expression.clone() {
                     Some(expr) => {
                         if var.value.being_evaluated {
@@ -539,7 +539,7 @@ fn constant_ident_lookup(
                     None => {
                         let c = Constant::Null(Some(decl.var_type.type_path.clone()));
                         var.value.constant = Some(c.clone());
-                        return Ok(ConstLookup::Found(decl.var_type.type_path, c));
+                        return Ok(ConstLookup::Found(/*decl.var_type.type_path,*/ c));
                     }
                 },
             },
@@ -556,7 +556,7 @@ fn constant_ident_lookup(
     let var = tree[ty].vars.get_mut(ident).unwrap();
     var.value.constant = Some(value.clone());
     var.value.being_evaluated = false;
-    Ok(ConstLookup::Found(type_hint, value))
+    Ok(ConstLookup::Found(/*type_hint,*/ value))
 }
 
 struct ConstantFolder<'a> {
@@ -945,7 +945,7 @@ impl<'a> ConstantFolder<'a> {
             match constant_ident_lookup(tree, ty, ident, must_be_const)
                 .map_err(|e| e.with_location(location))?
             {
-                ConstLookup::Found(_, v) => return Ok(v),
+                ConstLookup::Found(v) => return Ok(v),
                 ConstLookup::Continue(i) => idx = i,
             }
         }
