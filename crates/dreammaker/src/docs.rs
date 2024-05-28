@@ -19,8 +19,8 @@ impl DocCollection {
     }
 
     /// Combine another collection into this one.
-    pub fn extend(&mut self, collection: DocCollection) {
-        self.elems.extend(collection.elems);
+    pub fn extend(&mut self, collection: impl IntoIterator<Item=DocComment>) {
+        self.elems.extend(collection);
     }
 
     /// Check whether this collection is empty.
@@ -62,6 +62,16 @@ impl DocCollection {
     }
 }
 
+impl IntoIterator for DocCollection {
+    type Item = DocComment;
+
+    type IntoIter = <Vec<DocComment> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.elems.into_iter()
+    }
+}
+
 /// A documentation comment.
 #[derive(Clone, Debug, PartialEq, GetSize)]
 pub struct DocComment {
@@ -83,6 +93,16 @@ impl DocComment {
     /// Check if this comment is entirely textless.
     fn is_empty(&self) -> bool {
         is_empty(&self.text, self.kind.ignore_char())
+    }
+
+    /// Return the 3-character sequence that started this comment.
+    pub fn describe_type(&self) -> &'static str {
+        match (self.kind, self.target) {
+            (CommentKind::Block, DocTarget::FollowingItem) => "/**",
+            (CommentKind::Block, DocTarget::EnclosingItem) => "/*!",
+            (CommentKind::Line,  DocTarget::FollowingItem) => "///",
+            (CommentKind::Line,  DocTarget::EnclosingItem) => "//!",
+        }
     }
 }
 
