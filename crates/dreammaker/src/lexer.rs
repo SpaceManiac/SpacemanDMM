@@ -729,6 +729,7 @@ impl<'ctx> Lexer<'ctx> {
     fn skip_block_comments(&mut self) -> Option<Token> {
         let mut depth = 1;
         let mut buffer = [0, 0];
+        let mut comment_text = Vec::new();
 
         // read the first character and check for being a comment
         let mut comment = None;
@@ -766,14 +767,15 @@ impl<'ctx> Lexer<'ctx> {
                 }
             }
 
-            if buffer[0] != 0 {
-                if let Some(ref mut comment) = comment {
-                    comment.text.push(buffer[0] as char);
-                }
+            if buffer[0] != 0 && comment.is_some() {
+                comment_text.push(buffer[0]);
             }
         }
 
-        comment.filter(|c| !c.text.is_empty()).map(Token::DocComment)
+        comment.filter(|_| !comment_text.is_empty()).map(|mut c| {
+            c.text = from_utf8_or_latin1(comment_text);
+            Token::DocComment(c)
+        })
     }
 
     fn skip_line_comment(&mut self) -> Option<Token> {
@@ -781,6 +783,7 @@ impl<'ctx> Lexer<'ctx> {
 
         // read the first character and check for being a comment
         let mut comment = None;
+        let mut comment_text = Vec::new();
         match self.next() {
             Some(b'/') => comment = Some(DocComment::new(CommentKind::Line, DocTarget::FollowingItem)),
             Some(b'!') => comment = Some(DocComment::new(CommentKind::Line, DocTarget::EnclosingItem)),
@@ -793,10 +796,8 @@ impl<'ctx> Lexer<'ctx> {
         }
 
         while let Some(ch) = self.next() {
-            if ch != b'\r' && ch != b'\n' {
-                if let Some(ref mut comment) = comment {
-                    comment.text.push(ch as char);
-                }
+            if ch != b'\r' && ch != b'\n' && comment.is_some() {
+                comment_text.push(ch);
             }
 
             if ch == b'\r' {
@@ -816,7 +817,10 @@ impl<'ctx> Lexer<'ctx> {
             }
         }
 
-        comment.map(Token::DocComment)
+        comment.map(|mut c| {
+            c.text = from_utf8_or_latin1(comment_text);
+            Token::DocComment(c)
+        })
     }
 
     fn read_number_inner(&mut self, first: u8) -> (bool, u32, Cow<'static, str>) {
