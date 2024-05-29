@@ -1,16 +1,16 @@
 //! Client for the Extools debugger protocol.
 
-use std::time::Duration;
-use std::sync::{mpsc, Arc, Mutex};
-use std::net::{SocketAddr, Ipv4Addr, TcpStream, TcpListener};
 use std::collections::HashMap;
-use std::io::{Read, Write};
 use std::error::Error;
+use std::io::{Read, Write};
+use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
+use std::sync::{mpsc, Arc, Mutex};
+use std::time::Duration;
 
 use ahash::RandomState;
 
-use super::SequenceNumber;
 use super::extools_types::*;
+use super::SequenceNumber;
 
 pub const DEFAULT_PORT: u16 = 2448;
 

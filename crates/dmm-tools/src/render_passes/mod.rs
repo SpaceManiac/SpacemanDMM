@@ -1,20 +1,20 @@
-use dm::objtree::*;
+use crate::minimap::{Atom, GetVar, Layer, Neighborhood, Sprite};
 use dm::constants::Constant;
-use crate::minimap::{Atom, GetVar, Sprite, Layer, Neighborhood};
+use dm::objtree::*;
 
-mod transit_tube;
-mod random;
-mod structures;
 mod icon_smoothing;
 mod icon_smoothing_2020;
+mod random;
 mod smart_cables;
+mod structures;
+mod transit_tube;
 
-pub use self::transit_tube::TransitTube;
-pub use self::random::Random;
-pub use self::structures::{GravityGen, Spawners};
 pub use self::icon_smoothing::IconSmoothing as IconSmoothing2016;
 pub use self::icon_smoothing_2020::IconSmoothing;
+pub use self::random::Random;
 pub use self::smart_cables::SmartCables;
+pub use self::structures::{GravityGen, Spawners};
+pub use self::transit_tube::TransitTube;
 
 /// A map rendering pass.
 ///

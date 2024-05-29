@@ -1,7 +1,7 @@
+use crate::node::Node;
+use crate::{IntervalTree, RangeInclusive};
 use std::collections::Bound;
 use std::vec;
-use crate::{IntervalTree, RangeInclusive};
-use crate::node::Node;
 
 #[derive(Debug, Clone)]
 enum Visiting {

@@ -3,14 +3,14 @@
 //! [interval tree]: https://en.wikipedia.org/wiki/Interval_tree#Augmented_tree
 #![forbid(unsafe_code)]
 
-mod range;
-mod node;
-mod tree;
 mod iterators;
+mod node;
+mod range;
+mod tree;
 
-pub use range::{RangeInclusive, range};
-pub use tree::IntervalTree;
 pub use iterators::RangePairIter;
+pub use range::{range, RangeInclusive};
+pub use tree::IntervalTree;
 
 #[cfg(test)]
 mod tests;

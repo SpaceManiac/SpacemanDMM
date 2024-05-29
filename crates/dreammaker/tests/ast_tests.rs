@@ -2,11 +2,11 @@ extern crate dreammaker as dm;
 
 use core::panic;
 
-use dm::*;
-use dm::constants::*;
 use dm::ast::*;
-use dm::preprocessor::Preprocessor;
+use dm::constants::*;
 use dm::objtree::ObjectTree;
+use dm::preprocessor::Preprocessor;
+use dm::*;
 
 fn with_code<F: FnOnce(Context, ObjectTree)>(code: &'static str, f: F) {
     let context = Context::default();

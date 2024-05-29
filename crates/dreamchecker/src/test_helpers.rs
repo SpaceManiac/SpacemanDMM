@@ -1,7 +1,7 @@
 use dm::Context;
 use std::borrow::Cow;
 
-use crate::{run_inner};
+use crate::run_inner;
 
 pub const NO_ERRORS: &[(u32, u16, &str)] = &[];
 

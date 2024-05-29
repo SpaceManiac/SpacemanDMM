@@ -1,9 +1,9 @@
 extern crate chrono;
 extern crate git2;
 
-use std::io::Write;
-use std::fs::File;
 use std::env;
+use std::fs::File;
+use std::io::Write;
 use std::path::PathBuf;
 
 fn main() {

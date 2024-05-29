@@ -1,8 +1,8 @@
 extern crate dreammaker as dm;
 
-use dm::lexer::*;
-use dm::lexer::Token::*;
 use dm::lexer::Punctuation::*;
+use dm::lexer::Token::*;
+use dm::lexer::*;
 
 fn lex(f: &str) -> Vec<Token> {
     let context = Default::default();

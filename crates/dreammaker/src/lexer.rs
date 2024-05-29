@@ -1,12 +1,12 @@
 //! The lexer/tokenizer.
+use std::borrow::Cow;
+use std::fmt;
 use std::io::Read;
 use std::str::FromStr;
-use std::fmt;
-use std::borrow::Cow;
 
-use super::{DMError, Location, HasLocation, FileId, Context, Severity};
-use super::docs::*;
 use super::ast::Ident;
+use super::docs::*;
+use super::{Context, DMError, FileId, HasLocation, Location, Severity};
 
 macro_rules! table {
     (

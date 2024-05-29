@@ -1,9 +1,9 @@
 //! DMI metadata parsing and representation.
 
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::Display;
 use std::io;
 use std::path::Path;
-use std::collections::{BTreeMap, HashMap};
 
 use derivative::Derivative;
 use lodepng::Decoder;

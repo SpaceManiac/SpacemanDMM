@@ -1,10 +1,10 @@
 //! Parser for "doc-block" markdown documents.
 
-use std::ops::Range;
 use std::collections::VecDeque;
+use std::ops::Range;
 
 use maud::PreEscaped;
-use pulldown_cmark::{self, Parser, Tag, Event, BrokenLinkCallback, HeadingLevel};
+use pulldown_cmark::{self, BrokenLinkCallback, Event, HeadingLevel, Parser, Tag};
 
 pub fn render<'string>(markdown: &'string str, broken_link_callback: BrokenLinkCallback<'string, '_>) -> PreEscaped<String> {
     let mut buf = String::new();

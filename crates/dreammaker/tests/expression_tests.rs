@@ -1,8 +1,8 @@
 extern crate dreammaker as dm;
 
+use dm::ast::*;
 use dm::lexer::Lexer;
 use dm::parser::*;
-use dm::ast::*;
 
 fn parse_expr(f: &str) -> Expression {
     let context = Default::default();

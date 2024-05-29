@@ -1,7 +1,7 @@
-use std::collections::Bound;
+use crate::iterators::{IntoIter, RangePairIter};
+use crate::node::{height, Node};
 use crate::range::RangeInclusive;
-use crate::node::{Node, height};
-use crate::iterators::{RangePairIter, IntoIter};
+use std::collections::Bound;
 
 /// An interval tree.
 #[derive(Debug, Clone)]

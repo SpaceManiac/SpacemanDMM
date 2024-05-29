@@ -1,14 +1,14 @@
+use std::collections::{BTreeMap, HashSet};
 use std::sync::RwLock;
-use std::collections::{HashSet, BTreeMap};
 
 use ndarray::Axis;
 
-use dm::objtree::*;
-use dm::constants::Constant;
-use crate::dmm::{Map, ZLevel, Prefab};
 use crate::dmi::{self, Dir, Image};
-use crate::render_passes::RenderPass;
+use crate::dmm::{Map, Prefab, ZLevel};
 use crate::icon_cache::IconCache;
+use crate::render_passes::RenderPass;
+use dm::constants::Constant;
+use dm::objtree::*;
 
 use ahash::RandomState;
 

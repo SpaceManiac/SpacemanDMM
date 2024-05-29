@@ -1,14 +1,12 @@
 //! Serde types for the Extools debugger protocol.
 //!
 //! * https://github.com/MCHSL/extools/blob/master/byond-extools/src/debug_server/protocol.h
-///
-/// > All communication happens over a TCP socket using a JSON-based protocol.
-/// > A null byte signifies the end of a message.
-
-use std::collections::HashMap;
-use serde_json::Value as Json;
-
+//!
+//! > All communication happens over a TCP socket using a JSON-based protocol.
+//! > A null byte signifies the end of a message.
 use ahash::RandomState;
+use serde_json::Value as Json;
+use std::collections::HashMap;
 
 // ----------------------------------------------------------------------------
 // Extools data structures

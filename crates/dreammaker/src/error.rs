@@ -1,15 +1,15 @@
 //! Error, warning, and other diagnostics handling.
 
-use std::{fmt, error, io};
-use std::path::{PathBuf, Path};
-use std::cell::{RefCell, Ref, RefMut};
+use std::cell::{Ref, RefCell, RefMut};
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::{error, fmt, io};
 
 use ahash::RandomState;
 
 use get_size::GetSize;
 use get_size_derive::GetSize;
-use termcolor::{ColorSpec, Color};
+use termcolor::{Color, ColorSpec};
 
 use crate::config::Config;
 

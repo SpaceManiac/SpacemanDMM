@@ -2,9 +2,9 @@
 
 use std::path::Path;
 
-use maud::{html, DOCTYPE, Markup, Render, display, PreEscaped};
+use maud::{display, html, Markup, PreEscaped, Render, DOCTYPE};
 
-use crate::{Environment, Index, IndexTree, ModuleArgs, Type, ModuleItem, markdown::DocBlock};
+use crate::{markdown::DocBlock, Environment, Index, IndexTree, ModuleArgs, ModuleItem, Type};
 
 pub(crate) fn base(
     env: &Environment,

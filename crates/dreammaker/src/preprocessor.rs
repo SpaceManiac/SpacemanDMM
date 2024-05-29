@@ -1,20 +1,20 @@
 //! The preprocessor.
+use std::borrow::Cow;
 use std::collections::{HashMap, VecDeque};
-use std::rc::Rc;
-use std::{io, fmt};
 use std::fs::File;
 use std::path::{Path, PathBuf};
-use std::borrow::Cow;
+use std::rc::Rc;
+use std::{fmt, io};
 
 use ahash::RandomState;
 
-use interval_tree::{IntervalTree, range};
+use interval_tree::{range, IntervalTree};
 
-use super::{DMError, Location, HasLocation, FileId, Context, Severity};
-use super::lexer::*;
-use super::docs::{DocComment, DocTarget, DocCollection, CommentKind};
 use super::annotation::*;
 use super::ast::Ident;
+use super::docs::{CommentKind, DocCollection, DocComment, DocTarget};
+use super::lexer::*;
+use super::{Context, DMError, FileId, HasLocation, Location, Severity};
 
 /// The maximum recursion depth of macro expansion.
 const MAX_RECURSION_DEPTH: usize = 32;

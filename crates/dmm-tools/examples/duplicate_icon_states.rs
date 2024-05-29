@@ -1,13 +1,13 @@
-extern crate dreammaker as dm;
 extern crate dmm_tools;
-extern crate walkdir;
+extern crate dreammaker as dm;
 extern crate ndarray;
+extern crate walkdir;
 
-use std::path::Path;
-use std::collections::HashMap;
-use walkdir::{DirEntry, WalkDir};
 use dmm_tools::dmi::*;
 use ndarray::s;
+use std::collections::HashMap;
+use std::path::Path;
+use walkdir::{DirEntry, WalkDir};
 
 fn is_visible(entry: &DirEntry) -> bool {
     entry

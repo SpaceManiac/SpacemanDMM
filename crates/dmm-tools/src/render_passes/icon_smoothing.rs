@@ -1,9 +1,9 @@
 //! Port of icon smoothing subsystem.
 
-use dm::objtree::ObjectTree;
-use dm::constants::Constant;
 use crate::dmi::Dir;
-use crate::minimap::{Sprite, Atom, GetVar, Neighborhood};
+use crate::minimap::{Atom, GetVar, Neighborhood, Sprite};
+use dm::constants::Constant;
+use dm::objtree::ObjectTree;
 
 use super::RenderPass;
 

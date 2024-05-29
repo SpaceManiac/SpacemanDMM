@@ -7,12 +7,12 @@ use std::str::FromStr;
 
 use crate::ast;
 
-use super::{DMError, Location, HasLocation, Context, Severity, FileId};
-use super::lexer::{LocatedToken, Token, Punctuation};
-use super::objtree::{ObjectTreeBuilder, ObjectTree, NodeIndex};
 use super::annotation::*;
 use super::ast::*;
 use super::docs::*;
+use super::lexer::{LocatedToken, Punctuation, Token};
+use super::objtree::{NodeIndex, ObjectTree, ObjectTreeBuilder};
+use super::{Context, DMError, FileId, HasLocation, Location, Severity};
 
 // ----------------------------------------------------------------------------
 // Error handling

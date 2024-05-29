@@ -3,10 +3,10 @@
 #![allow(dead_code, unused_variables)]
 
 extern crate dreammaker as dm;
-use dm::{Context, DMError, Location, Severity};
-use dm::objtree::{ObjectTree, TypeRef, ProcRef};
-use dm::constants::{Constant, ConstFn};
 use dm::ast::*;
+use dm::constants::{ConstFn, Constant};
+use dm::objtree::{ObjectTree, ProcRef, TypeRef};
+use dm::{Context, DMError, Location, Severity};
 
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 

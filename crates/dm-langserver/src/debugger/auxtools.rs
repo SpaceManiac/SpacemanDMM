@@ -1,5 +1,4 @@
 use super::auxtools_types::*;
-use std::{net::TcpListener, sync::mpsc};
 use std::thread;
 use std::{
     io::{Read, Write},
@@ -9,6 +8,7 @@ use std::{
     sync::{Arc, RwLock},
     thread::JoinHandle,
 };
+use std::{net::TcpListener, sync::mpsc};
 
 use super::SequenceNumber;
 

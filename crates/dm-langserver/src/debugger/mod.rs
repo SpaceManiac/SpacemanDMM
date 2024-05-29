@@ -50,11 +50,11 @@ use auxtools::Auxtools;
 
 use ahash::RandomState;
 
-use dap_types::*;
 use self::auxtools::AuxtoolsScopes;
 use self::extools::ExtoolsHolder;
-use self::launched::{Launched, EngineParams};
+use self::launched::{EngineParams, Launched};
 use crate::jrpc_io;
+use dap_types::*;
 
 /// line, path, name, override_id
 pub type LineNumber = (i64, String, String, usize);

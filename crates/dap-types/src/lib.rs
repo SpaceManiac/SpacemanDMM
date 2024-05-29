@@ -4,10 +4,10 @@
 #![deny(unsafe_code)]
 #![allow(non_snake_case)]
 
-use std::collections::HashMap;
-use serde_json::Value;
-use serde_derive::{Serialize, Deserialize};
 use ahash::RandomState;
+use serde_derive::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::HashMap;
 
 pub trait Request {
     type Params;

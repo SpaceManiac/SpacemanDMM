@@ -1,6 +1,6 @@
-use std::sync::{Arc, RwLock};
+use std::collections::{hash_map, HashMap};
 use std::path::{Path, PathBuf};
-use std::collections::{HashMap, hash_map};
+use std::sync::{Arc, RwLock};
 
 use super::dmi::IconFile;
 

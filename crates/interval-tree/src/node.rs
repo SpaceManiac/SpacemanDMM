@@ -1,5 +1,5 @@
-use std::cmp::{self, Ordering};
 use crate::range::RangeInclusive;
+use std::cmp::{self, Ordering};
 
 #[derive(Debug, Clone)]
 pub struct Node<K, V> {

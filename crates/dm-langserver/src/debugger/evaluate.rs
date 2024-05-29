@@ -1,5 +1,5 @@
-use dap_types::*;
 use super::*;
+use dap_types::*;
 
 const EXTOOLS_HELP: &str = "
 #dis, #disassemble: show disassembly for current stack frame";

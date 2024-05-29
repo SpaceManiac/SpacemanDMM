@@ -1,8 +1,8 @@
 //! Extensions to the language server protocol.
 
-use lsp_types::SymbolKind;
 use lsp_types::notification::*;
 use lsp_types::request::*;
+use lsp_types::SymbolKind;
 
 pub enum WindowStatus {}
 impl Notification for WindowStatus {

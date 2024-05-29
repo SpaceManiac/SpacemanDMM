@@ -6,10 +6,10 @@ use std::path::Path;
 use get_size::GetSize;
 use get_size_derive::GetSize;
 
-use indexmap::IndexMap;
 use ahash::RandomState;
-use ordered_float::OrderedFloat;
 use color_space::{Hsl, Hsv, Lch, Rgb};
+use indexmap::IndexMap;
+use ordered_float::OrderedFloat;
 
 use crate::heap_size_of_index_map;
 

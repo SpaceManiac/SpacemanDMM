@@ -1,4 +1,3 @@
-
 extern crate dreamchecker as dc;
 
 use dc::test_helpers::*;

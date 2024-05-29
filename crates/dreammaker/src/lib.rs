@@ -4,15 +4,16 @@
 extern crate indexmap;
 extern crate interval_tree;
 extern crate lodepng;
-#[macro_use] extern crate bitflags;
-extern crate termcolor;
+#[macro_use]
+extern crate bitflags;
 extern crate ordered_float;
 extern crate serde;
 extern crate serde_derive;
+extern crate termcolor;
 extern crate toml;
 
-use std::path::Path;
 use std::borrow::Cow;
+use std::path::Path;
 
 #[allow(unused_macros)]
 macro_rules! try_iter {
@@ -31,18 +32,18 @@ use get_size::GetSize;
 use indexmap::IndexMap;
 
 // roughly in order of stage
-pub mod docs;
-pub mod lexer;
-pub mod preprocessor;
-pub mod indents;
-pub mod parser;
 pub mod annotation;
 pub mod ast;
-pub mod objtree;
 mod builtins;
+pub mod config;
 pub mod constants;
 pub mod dmi;
-pub mod config;
+pub mod docs;
+pub mod indents;
+pub mod lexer;
+pub mod objtree;
+pub mod parser;
+pub mod preprocessor;
 
 impl Context {
     /// Run the parsing suite on a given `.dme` file, producing an object tree.

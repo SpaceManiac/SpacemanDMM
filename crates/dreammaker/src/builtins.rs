@@ -2,11 +2,11 @@
 
 use builtins_proc_macro::builtins_table;
 
-use super::objtree::*;
-use super::Location;
-use super::preprocessor::{DefineMap, Define};
 use super::constants::Constant;
 use super::docs::{BuiltinDocs, DocCollection};
+use super::objtree::*;
+use super::preprocessor::{Define, DefineMap};
+use super::Location;
 
 const DM_VERSION: i32 = 515;
 const DM_BUILD: i32 = 1619;

@@ -4,12 +4,12 @@ use std::collections::HashSet;
 
 use lsp_types::*;
 
-use dm::ast::PathOp;
 use dm::annotation::Annotation;
-use dm::objtree::{TypeRef, TypeVar, TypeProc, ProcValue};
+use dm::ast::PathOp;
+use dm::objtree::{ProcValue, TypeProc, TypeRef, TypeVar};
 
-use crate::{Engine, Span, is_constructor_name};
 use crate::symbol_search::contains;
+use crate::{is_constructor_name, Engine, Span};
 
 use ahash::RandomState;
 

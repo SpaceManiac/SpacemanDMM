@@ -2,14 +2,16 @@
 //! language server protocol.
 #![allow(dead_code)]
 
-use std::io::{self, Read, BufRead};
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::io::{self, BufRead, Read};
 use std::rc::Rc;
 use url::Url;
 
-use lsp_types::{TextDocumentItem, TextDocumentIdentifier,
-    VersionedTextDocumentIdentifier, TextDocumentContentChangeEvent};
+use lsp_types::{
+    TextDocumentContentChangeEvent, TextDocumentIdentifier, TextDocumentItem,
+    VersionedTextDocumentIdentifier,
+};
 
 use super::{invalid_request, url_to_path};
 

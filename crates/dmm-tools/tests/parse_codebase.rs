@@ -1,9 +1,9 @@
-extern crate walkdir;
 extern crate dmm_tools;
+extern crate walkdir;
 
+use dmm_tools::*;
 use std::path::Path;
 use walkdir::{DirEntry, WalkDir};
-use dmm_tools::*;
 
 fn is_visible(entry: &DirEntry) -> bool {
     entry
@@ -46,4 +46,3 @@ fn parse_all_dmi() {
         dmi::Metadata::from_file(path).unwrap();
     });
 }
-

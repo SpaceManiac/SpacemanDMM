@@ -1,8 +1,8 @@
 extern crate dreammaker as dm;
 
-use dm::preprocessor::*;
-use dm::lexer::Token::*;
 use dm::lexer::Punctuation::*;
+use dm::lexer::Token::*;
+use dm::preprocessor::*;
 
 fn process(source: &'static str) -> Vec<dm::lexer::Token> {
     let ctx = dm::Context::default();

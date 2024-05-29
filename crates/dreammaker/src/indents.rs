@@ -1,8 +1,8 @@
 //! The indentation processor.
 use std::collections::VecDeque;
 
-use crate::{Location, Context, DMError};
-use crate::lexer::{LocatedToken, Token, Punctuation};
+use crate::lexer::{LocatedToken, Punctuation, Token};
+use crate::{Context, DMError, Location};
 
 /// Eliminates blank lines, parses and validates indentation, braces, and semicolons.
 ///

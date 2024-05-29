@@ -7,44 +7,47 @@
 //! * https://github.com/rust-lang-nursery/rls
 #![deny(unsafe_code)]
 
-extern crate url;
 extern crate serde;
 extern crate serde_json;
-#[macro_use] extern crate serde_derive;
-extern crate interval_tree;
-extern crate lsp_types;
-extern crate jsonrpc_core as jsonrpc;
-extern crate dreammaker as dm;
+extern crate url;
+#[macro_use]
+extern crate serde_derive;
 extern crate dreamchecker;
+extern crate dreammaker as dm;
+extern crate interval_tree;
+extern crate jsonrpc_core as jsonrpc;
 extern crate libc;
+extern crate lsp_types;
 extern crate regex;
-#[macro_use] extern crate lazy_static;
+#[macro_use]
+extern crate lazy_static;
 
-#[macro_use] mod macros;
-mod jrpc_io;
-mod document;
-mod symbol_search;
-mod find_references;
-mod extras;
-mod completion;
-mod color;
+#[macro_use]
+mod macros;
 mod background;
+mod color;
+mod completion;
+mod document;
+mod extras;
+mod find_references;
+mod jrpc_io;
+mod symbol_search;
 
 mod debugger;
 
-use std::path::PathBuf;
-use std::collections::{HashMap, HashSet, VecDeque};
 use std::collections::hash_map::Entry;
-use std::sync::{Arc, Mutex};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
-use url::Url;
-use jsonrpc::{Request, Call, Response, Output};
+use jsonrpc::{Call, Output, Request, Response};
 use lsp_types::MessageType;
+use url::Url;
 
-use dm::FileId;
 use dm::annotation::{Annotation, AnnotationTree};
 use dm::objtree::TypeRef;
+use dm::FileId;
 
 use ahash::RandomState;
 

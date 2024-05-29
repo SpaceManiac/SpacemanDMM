@@ -1,21 +1,21 @@
 //! A CLI tool to generate HTML documentation of DreamMaker codebases.
 #![forbid(unsafe_code)]
 extern crate dreammaker as dm;
-extern crate pulldown_cmark;
 extern crate git2;
+extern crate pulldown_cmark;
 extern crate walkdir;
 
 mod markdown;
 mod template;
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::io::{self, Write};
-use std::fs::{self, File};
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use dm::objtree::ObjectTree;
 use maud::{Markup, PreEscaped};
 use pulldown_cmark::{BrokenLink, CowStr};
+use std::collections::{BTreeMap, BTreeSet};
+use std::fs::{self, File};
+use std::io::{self, Write};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use dm::docs::*;
 

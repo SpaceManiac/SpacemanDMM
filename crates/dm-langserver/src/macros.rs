@@ -1,13 +1,13 @@
 //! Utility macros.
 
 pub mod all_methods {
-    pub use lsp_types::request::*;
     pub use crate::extras::*;
+    pub use lsp_types::request::*;
 }
 
 pub mod all_notifications {
-    pub use lsp_types::notification::*;
     pub use crate::extras::*;
+    pub use lsp_types::notification::*;
 }
 
 macro_rules! handle_method_call {

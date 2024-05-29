@@ -6,15 +6,18 @@ use std::fmt;
 use get_size::GetSize;
 use get_size_derive::GetSize;
 
-use indexmap::IndexMap;
 use ahash::RandomState;
+use indexmap::IndexMap;
 
 use crate::heap_size_of_index_map;
 
-use super::ast::{AsType, Expression, VarType, VarTypeBuilder, VarSuffix, PathOp, Parameter, Block, ProcDeclBuilder, ProcDeclKind, ProcFlags, Ident};
+use super::ast::{
+    AsType, Block, Expression, Ident, Parameter, PathOp, ProcDeclBuilder, ProcDeclKind, ProcFlags,
+    VarSuffix, VarType, VarTypeBuilder,
+};
 use super::constants::Constant;
 use super::docs::DocCollection;
-use super::{DMError, Location, Context, Severity};
+use super::{Context, DMError, Location, Severity};
 
 // ----------------------------------------------------------------------------
 // Symbol IDs

@@ -2,11 +2,11 @@
 //!
 //! Includes re-exports from `dreammaker::dmi`.
 
+use bytemuck::Pod;
 use std::io;
 use std::path::Path;
-use bytemuck::Pod;
 
-use lodepng::{self, RGBA, Decoder, ColorType};
+use lodepng::{self, ColorType, Decoder, RGBA};
 use ndarray::Array2;
 
 pub use dm::dmi::*;

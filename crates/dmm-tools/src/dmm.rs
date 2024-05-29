@@ -1,16 +1,16 @@
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::fmt;
 use std::fs::File;
 use std::io;
-use std::fmt;
+use std::path::Path;
 
-use ndarray::{self, Array3, Axis};
-use indexmap::IndexMap;
 use ahash::RandomState;
+use indexmap::IndexMap;
+use ndarray::{self, Array3, Axis};
 
-use dm::DMError;
-use dm::constants::Constant;
 use crate::dmi::Dir;
+use dm::constants::Constant;
+use dm::DMError;
 
 mod read;
 mod save_tgm;

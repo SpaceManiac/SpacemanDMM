@@ -2,23 +2,24 @@
 #![forbid(unsafe_code)]
 #![doc(hidden)]  // Don't interfere with lib docs.
 
-extern crate rayon;
 extern crate clap;
+extern crate rayon;
 
 extern crate serde;
 extern crate serde_json;
-#[macro_use] extern crate serde_derive;
+#[macro_use]
+extern crate serde_derive;
 
-extern crate dreammaker as dm;
 extern crate dmm_tools;
+extern crate dreammaker as dm;
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::RwLock;
-use std::collections::HashSet;
 
 use clap::{Parser, Subcommand};
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};

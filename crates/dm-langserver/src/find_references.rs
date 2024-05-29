@@ -2,9 +2,9 @@
 
 use std::collections::HashMap;
 
-use dm::Location;
-use dm::objtree::*;
 use dm::ast::*;
+use dm::objtree::*;
+use dm::Location;
 
 use ahash::RandomState;
 

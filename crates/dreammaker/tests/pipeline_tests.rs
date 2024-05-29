@@ -2,8 +2,8 @@ extern crate dreammaker as dm;
 
 use std::path::PathBuf;
 
-use dm::*;
 use dm::preprocessor::Preprocessor;
+use dm::*;
 
 fn with_test_dme<F: FnOnce(Preprocessor)>(context: &Context, f: F) {
     let dme = match std::env::var_os("TEST_DME") {

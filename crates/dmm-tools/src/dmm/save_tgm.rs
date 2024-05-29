@@ -1,5 +1,5 @@
 //! TGM map writer.
-use std::io::{self, Write, BufWriter};
+use std::io::{self, BufWriter, Write};
 
 use ndarray::Axis;
 
