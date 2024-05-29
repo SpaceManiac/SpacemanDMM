@@ -478,7 +478,7 @@ impl From<f32> for Layer {
     }
 }
 
-#[cfg(feature="gfx_core")]
+#[cfg(feature = "gfx_core")]
 impl gfx_core::shade::BaseTyped for Layer {
     fn get_base_type() -> gfx_core::shade::BaseType {
         i32::get_base_type()

@@ -578,7 +578,7 @@ pub struct EvaluateResponse {
     /**
      * The optional type of the evaluate result.
      */
-    #[serde(rename="type")]
+    #[serde(rename = "type")]
     pub type_: Option<String>,
 
     /**
@@ -1078,9 +1078,9 @@ pub struct VariablesArguments {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum VariablesFilter {
-    #[serde(rename="indexed")]
+    #[serde(rename = "indexed")]
     Indexed,
-    #[serde(rename="named")]
+    #[serde(rename = "named")]
     Named,
 }
 
@@ -1359,16 +1359,16 @@ pub struct DisassembledInstruction {
 #[derive(Serialize, Deserialize, Debug)]
 pub enum ExceptionBreakMode {
     /// never breaks
-    #[serde(rename="never")]
+    #[serde(rename = "never")]
     Never,
     /// always breaks
-    #[serde(rename="always")]
+    #[serde(rename = "always")]
     Always,
     /// breaks when exception unhandled
-    #[serde(rename="unhandled")]
+    #[serde(rename = "unhandled")]
     Unhandled,
     /// breaks if the exception is not handled by user code
-    #[serde(rename="userUnhandled")]
+    #[serde(rename = "userUnhandled")]
     UserUnhandled,
 }
 
@@ -1670,11 +1670,11 @@ pub struct Source {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum SourcePresentationHint {
-    #[serde(rename="normal")]
+    #[serde(rename = "normal")]
     Normal,
-    #[serde(rename="emphasize")]
+    #[serde(rename = "emphasize")]
     Emphasize,
-    #[serde(rename="deemphasize")]
+    #[serde(rename = "deemphasize")]
     Deemphasize,
 }
 
@@ -1763,11 +1763,11 @@ pub struct StackFrame {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum StackFramePresentationHint {
-    #[serde(rename="normal")]
+    #[serde(rename = "normal")]
     Normal,
-    #[serde(rename="label")]
+    #[serde(rename = "label")]
     Label,
-    #[serde(rename="subtle")]
+    #[serde(rename = "subtle")]
     Subtle,
 }
 
@@ -1871,7 +1871,7 @@ pub struct Variable {
     /**
      * The type of the variable's value. Typically shown in the UI when hovering over the value.
      */
-    #[serde(rename="type")]
+    #[serde(rename = "type")]
     pub type_: Option<String>,
 
     /**

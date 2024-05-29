@@ -99,16 +99,16 @@ General Public License version 3.",
 )]
 struct Opt {
     /// The environment file to operate under.
-    #[arg(short='e', long="env")]
+    #[arg(short = 'e', long = "env")]
     environment: Option<String>,
 
-    #[arg(short='v', long="verbose")]
+    #[arg(short = 'v', long = "verbose")]
     #[allow(dead_code)]
     verbose: bool,
 
     /// Set the number of threads to be used for parallel execution when
     /// possible. A value of 0 will select automatically, and 1 will be serial.
-    #[arg(long="jobs", default_value="1")]
+    #[arg(long = "jobs", default_value = "1")]
     jobs: usize,
 
     #[command(subcommand)]
@@ -124,54 +124,54 @@ enum Command {
     #[command(name = "list-passes")]
     ListPasses {
         /// Output as JSON.
-        #[arg(short='j', long="json")]
+        #[arg(short = 'j', long = "json")]
         json: bool,
     },
     /// Build minimaps of the specified maps.
     #[command(name = "minimap")]
     Minimap {
         /// The output directory.
-        #[arg(short='o', default_value="data/minimaps")]
+        #[arg(short = 'o', default_value = "data/minimaps")]
         output: String,
 
         /// Set the minimum x,y or x,y,z coordinate to act upon (1-indexed, inclusive).
-        #[arg(long="min")]
+        #[arg(long = "min")]
         min: Option<CoordArg>,
 
         /// Set the maximum x,y or x,y,z coordinate to act upon (1-indexed, inclusive).
-        #[arg(long="max")]
+        #[arg(long = "max")]
         max: Option<CoordArg>,
 
         /// Enable render-passes, or "all" to only exclude those passed to --disable.
-        #[arg(long="enable", default_value="")]
+        #[arg(long = "enable", default_value = "")]
         enable: String,
 
         /// Disable render-passes, or "all" to only use those passed to --enable.
-        #[arg(long="disable", default_value="")]
+        #[arg(long = "disable", default_value = "")]
         disable: String,
 
         /// Run output through pngcrush automatically. Requires pngcrush.
-        #[arg(long="pngcrush")]
+        #[arg(long = "pngcrush")]
         pngcrush: bool,
 
         /// Run output through optipng automatically. Requires optipng.
-        #[arg(long="optipng")]
+        #[arg(long = "optipng")]
         optipng: bool,
 
         /// The list of maps to process.
         files: Vec<String>,
     },
     /// List the differing coordinates between two maps.
-    #[command(name="diff-maps")]
+    #[command(name = "diff-maps")]
     DiffMaps {
         left: String,
         right: String,
     },
     /// Show metadata information about the map.
-    #[command(name="map-info")]
+    #[command(name = "map-info")]
     MapInfo {
         /// Output as JSON.
-        #[arg(short='j', long="json")]
+        #[arg(short = 'j', long = "json")]
         json: bool,
 
         /// The list of maps to show info on.
