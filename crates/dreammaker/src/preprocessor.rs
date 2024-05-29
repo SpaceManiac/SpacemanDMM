@@ -722,6 +722,7 @@ impl<'ctx> Preprocessor<'ctx> {
             }
         }
 
+        #[rustfmt::skip]
         const ALL_DIRECTIVES: &[&str] = &[
             "if", "ifdef", "ifndef", "elif", "else", "endif",
             "include", "define", "undef", "warn", "error", "pragma",

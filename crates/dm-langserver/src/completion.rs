@@ -13,6 +13,7 @@ use crate::{is_constructor_name, Engine, Span};
 
 use ahash::RandomState;
 
+#[rustfmt::skip]
 static PROC_KEYWORDS: &[&str] = &[
     // Implicit variables
     "args",
