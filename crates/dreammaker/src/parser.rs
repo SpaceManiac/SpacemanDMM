@@ -2068,7 +2068,10 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         use super::lexer::Punctuation::*;
 
         let start = self.updated_location();
-        self.expected("term");  // TODO: a better explanation
+        // We look for a lot of different words here, so just explain the categories.
+        self.expected("literal");
+        self.expected("variable");
+        self.expected("proc call");
         let term = take_match!(self {
             // term :: 'new' (prefab | (ident field*))? arglist?
             Token::Ident(ref i, _) if i == "new" => {
