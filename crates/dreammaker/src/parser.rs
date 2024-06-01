@@ -27,6 +27,11 @@ fn success<T>(t: T) -> Status<T> {
     Ok(Some(t))
 }
 
+#[inline]
+fn try_another<T>() -> Status<T> {
+    Ok(None)
+}
+
 const SUCCESS: Status<()> = Ok(Some(()));
 
 macro_rules! require {
@@ -40,9 +45,46 @@ macro_rules! leading {
     ($e:expr) => {
         match $e? {
             Some(x) => x,
-            None => return Ok(None),
+            None => return try_another(),
         }
     };
+}
+
+macro_rules! take_match {
+    (
+        $self:ident {
+            $(
+                $($p:pat)|* $( if $condition:expr )? => $branch:expr,
+            )*
+        }
+        // else mandatory because you should never be matching on every option
+        else $else:expr
+    ) => {
+        // Both $p introduce bindings. The first set are by-ref, the second set
+        // are by-move. It'd be nice to warn if *both* were unused, but warning
+        // when just one is unused is too much, so don't warn.
+        {
+            #[allow(unused_variables)]
+            match $self.peek() {
+                $(
+                    $($p)|* $( if $condition )? => {
+                        // inner match that moves instead of refs
+                        match $self.take() {
+                            // no duplicate `if` because types are different
+                            $($p)|* => {
+                                #[warn(unused_variables)]
+                                $branch
+                            }
+                            // might be unreachable because of missing `if`
+                            #[allow(unreachable_patterns)]
+                            _ => panic!("take_match inner match failed somehow"),
+                        }
+                    }
+                )*
+                _ => $else
+            }
+        }
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -298,7 +340,6 @@ pub struct Parser<'ctx, 'an, 'inp> {
     expected: Vec<Cow<'static, str>>,
 
     doc_comments_pending: VecDeque<(Location, DocComment)>,
-    doc_comments_on_notice: bool,
     module_docs: BTreeMap<FileId, Vec<(u32, DocComment)>>,
 
     procs: bool,
@@ -329,7 +370,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             expected: Vec::new(),
 
             doc_comments_pending: Default::default(),
-            doc_comments_on_notice: false,
             module_docs: Default::default(),
 
             procs: false,
@@ -412,24 +452,17 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         if self.eof {
             return self.error(format!("got EOF, expected one of: {}", expected));
         }
-        match self.next_quiet() {
-            Ok(got) => {
-                let message = format!("got '{:#}', expected one of: {}", got, expected);
-                self.put_back(got);
-                let mut e = self.error(message);
-                if self.possible_indentation_error {
-                    let mut loc = e.location();
-                    loc.line += 1;
-                    loc.column = 1;
-                    e.add_note(loc, "check for extra indentation at the start of the next line");
-                    self.possible_indentation_error = false;
-                }
-                e
-            }
-            Err(err) => self
-                .error(format!("i/o error, expected one of: {}", expected))
-                .with_cause(err),
+        let got = self.peek();
+        let message = format!("got '{:#}', expected one of: {}", got, expected);
+        let mut error = self.error(message);
+        if self.possible_indentation_error {
+            let mut loc = error.location();
+            loc.line += 1;
+            loc.column = 1;
+            error.add_note(loc, "check for extra indentation at the start of the next line");
+            self.possible_indentation_error = false;
         }
+        error
     }
 
     fn parse_error<T>(&mut self) -> Result<T, DMError> {
@@ -445,57 +478,46 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     }
 
     /// Push an alternative to the "got X, expected one of: ..." list.
-    fn expected(&mut self, expected: Cow<'static, str>) {
+    fn expected(&mut self, expected: impl Into<Cow<'static, str>>) {
+        let expected = expected.into();
         if !expected.is_empty() && !self.expected.contains(&expected) {
             self.expected.push(expected);
         }
     }
 
-    /// Get the next token and push something to the "expected" list.
-    fn next<S: Into<Cow<'static, str>>>(&mut self, expected: S) -> Result<Token, DMError> {
-        self.expected(expected.into());
-        self.next_quiet()
-    }
-
-    /// Get the next token without pushing anything to the "expected" list.
-    fn next_quiet(&mut self) -> Result<Token, DMError> {
+    /// Peek next token without consuming it, and update location.
+    fn peek(&mut self) -> &Token {
         loop {
-            if let Some(next) = self.next.take() {
-                self.doc_comments_on_notice = false;
-                return Ok(next);
+            if let Some(ref next) = self.next {
+                break next;
             }
             match self.input.next() {
-                // To allow comments that look like doc comments in arbitrary
-                // positions, buffer them until they are specifically read,
-                // or drop them if we've read TWO non-doc tokens, meaning the
-                // first non-doc token can no longer be put_back.
                 Some(LocatedToken { location, token: Token::DocComment(comment) }) => {
                     self.doc_comments_pending.push_back((location, comment));
-                    self.doc_comments_on_notice = false;
                 }
-                Some(token) => {
-                    self.expected.clear();
-                    self.location = token.location;
-                    if self.doc_comments_on_notice {
-                        // This is where we would diagnose "doc comment has no
-                        // effect", but it would probably be more annoying than
-                        // useful.
-                        self.doc_comments_pending.clear();
-                    } else if !self.doc_comments_pending.is_empty() {
-                        self.doc_comments_on_notice = true;
-                    }
-                    return Ok(token.token);
+                Some(LocatedToken { location, token }) => {
+                    self.location = location;
+                    self.next = Some(token);
                 }
                 None => {
                     if !self.eof {
                         self.eof = true;
-                        return Ok(Token::Eof);
+                        self.next = Some(Token::Eof);
                     } else {
-                        return self.parse_error();
+                        panic!("internal parser error: kept parsing after EOF");
                     }
                 }
             }
         }
+    }
+
+    /// Consume next token unconditionally. Cannot be undone. Try `take_match!` instead.
+    fn take(&mut self) -> Token {
+        self.peek(); // Always populates self.next, so .take().unwrap() is OK
+        //assert_ne!(self.peek(), &Token::Eof, "internal parser error: EOF token was consumed");
+        self.doc_comments_pending.clear();
+        self.expected.clear();
+        self.next.take().unwrap()
     }
 
     fn next_comment_of_target(&mut self, target: DocTarget) -> Status<DocComment> {
@@ -534,17 +556,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }
     }
 
-    fn put_back(&mut self, tok: Token) {
-        if self.next.is_some() {
-            panic!("cannot put_back twice")
-        }
-        self.next = Some(tok);
-    }
-
     fn updated_location(&mut self) -> Location {
-        if let Ok(token) = self.next_quiet() {
-            self.put_back(token);
-        }
+        self.peek();
         self.location
     }
 
@@ -560,69 +573,56 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }
     }
 
-    fn try_another<T>(&mut self, tok: Token) -> Status<T> {
-        self.put_back(tok);
-        Ok(None)
-    }
-
     fn exact(&mut self, tok: Token) -> Status<()> {
-        let message: Cow<'static, str> = match tok {
-            Token::Eof => "EOF".into(),
-            Token::Punct(p) => p.single_quoted().into(),
-            ref other => format!("'{}'", other).into(),
-        };
-        let next = self.next(message)?;
-        if next == tok {
+        match tok {
+            Token::Eof => self.expected("EOF"),
+            Token::Punct(p) => self.expected(p.single_quoted()),
+            ref other => self.expected(format!("'{}'", other)),
+        }
+        if self.peek() == &tok {
+            self.take();
             SUCCESS
         } else {
-            self.try_another(next)
+            try_another()
         }
     }
 
     fn ident(&mut self) -> Status<Ident> {
-        match self.next("identifier")? {
-            Token::Ident(i, _) => Ok(Some(i)),
-            other => self.try_another(other),
-        }
-    }
-
-    fn dot(&mut self) -> Status<()> {
-        match self.next("'.'")? {
-            Token::Punct(Punctuation::Dot) => Ok(Some(())),
-            other => self.try_another(other),
-        }
+        self.expected("identifier");
+        take_match!(self {
+            Token::Ident(i, _) => success(i),
+        } else try_another())
     }
 
     fn ident_in_seq(&mut self, idx: usize) -> Status<Ident> {
         let start = self.updated_location();
-        match self.next("identifier")? {
+        take_match!(self {
             Token::Ident(i, _) => {
                 self.annotate(start, || Annotation::InSequence(idx));
-                Ok(Some(i))
+                success(i)
             },
-            other => self.try_another(other),
-        }
+        } else try_another())
     }
 
     fn exact_ident(&mut self, ident: &'static str) -> Status<()> {
-        match self.next(ident)? {
-            Token::Ident(ref i, _) if i == ident => SUCCESS,
-            other => self.try_another(other),
-        }
+        self.expected(format!("'{}'", ident));
+        take_match!(self {
+            Token::Ident(i, _) if i == ident => SUCCESS,
+        } else try_another())
     }
 
     // ------------------------------------------------------------------------
     // Doc comment tracking
 
     fn following_doc_comment(&mut self) -> Status<DocComment> {
-        self.expected("'///'".into());
-        self.expected("'/**'".into());
+        //self.expected("'///'");
+        //self.expected("'/**'");
         self.next_comment_of_target(DocTarget::FollowingItem)
     }
 
     fn enclosing_doc_comment(&mut self) -> Status<DocComment> {
-        self.expected("'//!'".into());
-        self.expected("'/*!'".into());
+        //self.expected("'//!'");
+        //self.expected("'/*!'");
         self.next_comment_of_target(DocTarget::EnclosingItem)
     }
 
@@ -635,14 +635,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     fn tree_entries(&mut self, current: NodeIndex, proc_builder: Option<ProcDeclBuilder>, var_type: Option<VarTypeBuilder>, terminator: Token) -> Status<()> {
         loop {
-            self.expected("newline".into());
+            self.expected("';'");
             if terminator != Token::Eof {
-                self.expected(format!("'{terminator}'").into());
+                self.expected(format!("'{terminator}'"));
             }
 
             if current == self.tree.root_index() {
-                self.expected("'//!'".into());
-                self.expected("'/*!'".into());
+                self.expected("'//!'");
+                self.expected("'/*!'");
                 if let Some(module_comment) = self.enclosing_doc_comment()? {
                     // If we're not inside a type, this is where module `//!` comments appear.
                     self.module_docs
@@ -653,15 +653,13 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 }
             }
 
-            let next = self.next_quiet()?;
-            if next == terminator || next == Token::Eof {
-                break;
-            } else if next == Token::Punct(Punctuation::Semicolon) {
-                self.doc_comments_on_notice = false;
-                continue;
-            }
-            self.put_back(next);
-            require!(self.tree_entry(current, proc_builder, var_type.clone()));
+            take_match!(self {
+                Token::Eof => break,
+                tok if tok == &terminator => break,
+                Token::Punct(Punctuation::Semicolon) => continue,
+            } else {
+                require!(self.tree_entry(current, proc_builder, var_type.clone()));
+            });
         }
         SUCCESS
     }
@@ -709,8 +707,12 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         success((absolute, parts))
     }
 
+    /// Look for nothing, silently accept `/`, and complain but continue if we see a `.` or `:`.
+    ///
+    /// Return: `(absolute, spurious_lead)`
     fn possible_leading_slash(&mut self) -> Result<(bool, bool), DMError> {
-        match self.next("'/'")? {
+        self.expected("'/'");
+        take_match!(self {
             Token::Punct(Punctuation::Slash) => Ok((true, false)),
             Token::Punct(p @ Punctuation::Dot) |
             Token::Punct(p @ Punctuation::CloseColon) |
@@ -719,17 +721,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     .set_severity(Severity::Warning)
                     .register(self.context);
                 Ok((false, true))
-            }
-            t => {
-                self.put_back(t);
-                Ok((false, false))
-            }
-        }
+            },
+        } else Ok((false, false)))
     }
 
-    // Look for a `/`, and complain but continue if we see a `.` or `:`.
+    /// Look for a `/`, and complain but continue if we see a `.` or `:`.
     fn slash(&mut self) -> Status<()> {
-        match self.next("'/'")? {
+        self.expected("'/'");
+        take_match!(self {
             Token::Punct(Punctuation::Slash) => SUCCESS,
             Token::Punct(p @ Punctuation::Dot) |
             Token::Punct(p @ Punctuation::CloseColon) |
@@ -738,9 +737,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     .set_severity(Severity::Warning)
                     .register(self.context);
                 SUCCESS
-            }
-            t => { self.put_back(t); Ok(None) }
-        }
+            },
+        } else try_another())
     }
 
     fn tree_entry(&mut self, mut current: NodeIndex, mut proc_builder: Option<ProcDeclBuilder>, mut var_type: Option<VarTypeBuilder>) -> Status<()> {
@@ -849,11 +847,12 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }
 
         // read the contents for real
-        self.expected("'='".into());
-        self.expected("'('".into());
-        self.expected("'{'".into());
-        match self.next_quiet()? {
+        self.expected("'='");
+        self.expected("'('");
+        self.expected("'{'");
+        match self.peek() {
             Punct(LBrace) => {
+                self.take();
                 // `thing{` - block
                 traverse_tree!(last_part);
                 handle_relative_type_error!();
@@ -878,6 +877,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 SUCCESS
             }
             Punct(Assign) => {
+                self.take();
                 // `something=` - var
                 handle_relative_type_error!();
                 let location = self.location;
@@ -906,15 +906,13 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
                 SUCCESS
             }
-            t @ Punct(LParen) => {
+            Punct(LParen) => {
                 // `something(` - proc
-                self.put_back(t);
                 require!(self.proc_params_and_body(current, proc_builder, last_part, entry_start, absolute, docs));
                 SUCCESS
             }
-            other => {
+            _ => {
                 // usually `thing;` - a contentless declaration
-                self.put_back(other);
 
                 if var_type.is_some() {
                     let _ = require!(self.input_specifier());  // TODO: save to VarType instead of ignoring
@@ -1261,24 +1259,27 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }
         // While loop over self.next, extracting either the first string with from_name OR
         // if the first string is a slash, continue to extract, and check for a slash again, and finish with from_vec
-        let return_result: Result<Token, DMError> = self.next("return type");
-        let next_token = return_result?;
-        if let Token::Ident(text, _) = next_token {
-            let Some(return_type) = AsType::from_name(text.as_str()) else {
-                return Err(self.error("Invalid return type"));
-            };
-            return Ok(Some(return_type));
-        }
-        if Token::Punct(Punctuation::Slash) != next_token {
-            self.put_back(next_token);
+        self.expected("identifier");
+        self.expected("'/'");
+        take_match!(self {
+            Token::Ident(text, _) => {
+                let Some(return_type) = AsType::from_name(text.as_str()) else {
+                    return Err(self.error("Invalid return type"));
+                };
+                return Ok(Some(return_type));
+            },
+            Token::Punct(Punctuation::Slash) => {},
+        } else {
             return Err(self.error("Invalid return type"));
-        }
+        });
+
         // We're pulling out just the text, and we go until the end of the text or until we hit something unexpected
         let mut path_vec = vec![];
         let mut slash_last = true;
         loop {
-            let path_component = self.next("return type")?;
-            match path_component {
+            self.expected("identifier");
+            self.expected("'/'");
+            take_match!(self {
                 Token::Ident(text, whitespace) if slash_last => {
                     path_vec.push(text);
                     slash_last = false;
@@ -1287,12 +1288,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     }
                 },
                 Token::Punct(Punctuation::Slash) if !slash_last => slash_last = true,
-                _ => {
-                    // If we're done, put back what we just fond so someone else can process it, in case they care
-                    self.put_back(path_component);
-                    break;
-                },
-            }
+                // If we're done, put back what we just fond so someone else can process it, in case they care
+            } else break);
         }
         if !path_vec.is_empty() {
             Ok(Some(AsType::from_vec(path_vec)))
@@ -1630,21 +1627,22 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }
     }
 
-    // Handle if(1){a=1;b=2} without a trailing semicolon
     fn statement_terminator(&mut self) -> Status<()> {
-        match self.next("newline")? {
-            Token::Punct(Punctuation::Semicolon) => SUCCESS,
-            p @ Token::Punct(Punctuation::RBrace) => {
-                self.put_back(p);
+        self.expected("';'");
+        match self.peek() {
+            Token::Punct(Punctuation::Semicolon) => {
+                self.take();
                 SUCCESS
-            }
-            p @ Token::Punct(Punctuation::LBrace) => {
+            },
+            // Handle if(1){a=1;b=2} without a trailing semicolon
+            Token::Punct(Punctuation::RBrace) => {
+                SUCCESS
+            },
+            Token::Punct(Punctuation::LBrace) => {
                 self.possible_indentation_error = true;
-                self.try_another(p)
-            }
-            other => {
-                self.try_another(other)
-            }
+                try_another()
+            },
+            _ => try_another()
         }
     }
 
@@ -1814,12 +1812,11 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     // Expressions
 
     fn path_separator(&mut self) -> Status<PathOp> {
-        success(match self.next("path separator")? {
-            Token::Punct(Punctuation::Slash) => PathOp::Slash,
-            Token::Punct(Punctuation::Dot) => PathOp::Dot,
-            Token::Punct(Punctuation::CloseColon) => PathOp::Colon,
-            other => return self.try_another(other),
-        })
+        take_match!(self {
+            Token::Punct(Punctuation::Slash) => success(PathOp::Slash),
+            Token::Punct(Punctuation::Dot) => success(PathOp::Dot),
+            Token::Punct(Punctuation::CloseColon) => success(PathOp::Colon),
+        } else try_another())
     }
 
     // distinct from a tree_path, path must begin with a path separator and can
@@ -1892,22 +1889,20 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         let mut expr = leading!(self.group(in_ternary));
         loop {
             // try to read the next operator
-            let next = self.next("operator")?;
-            let &info = match BINARY_OPS.iter().find(|op| op.matches(&next)) {
-                Some(info) => info,
-                None => {
-                    self.put_back(next);
-                    break;
-                }
+            self.expected("operator");
+            let peek = self.peek();
+            let Some(&info) = BINARY_OPS.iter().find(|op| op.matches(peek)) else {
+                break;
             };
 
             // If we're a sub-expression within a ternary expression, don't try to read further than our parent's precedence would allow
             if let Some(strength) = strength {
                 if info.strength > strength {
-                    self.put_back(Token::Punct(info.token));
                     break;
                 }
             }
+
+            self.take();
 
             // trampoline high-strength expression parts as the lhs of the newly found op
             expr = require!(self.expression_part(expr, info, strength,
@@ -1925,29 +1920,27 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         let mut rhs = require!(self.group(in_ternary));
         loop {
             // try to read the next operator...
-            let next = self.next("operator")?;
-            let &info = match BINARY_OPS.iter().find(|op| op.matches(&next)) {
-                Some(info) => info,
-                None => {
-                    self.put_back(next);
-                    break;
-                }
+            self.expected("operator");
+            let peek = self.peek();
+            let Some(&info) = BINARY_OPS.iter().find(|op| op.matches(peek)) else {
+                break;
             };
 
             // Strength is in reverse order: A < B means A binds tighter
             match info.strength.cmp(&prev_op.strength) {
                 Ordering::Less => {
                     // the operator is stronger than us... recurse down
+                    self.take();
                     rhs = require!(self.expression_part(rhs, info, strength,
                         in_ternary || info.strength == Strength::Conditional));
                 }
                 Ordering::Greater => {
                     // the operator is weaker than us... return up
-                    self.put_back(Token::Punct(info.token));
                     break;
                 }
                 Ordering::Equal => {
                     // the same strength... push it to the list
+                    self.take();
                     ops.push(info.oper);
                     bits.push(rhs);
                     rhs = require!(self.group(in_ternary));
@@ -1972,14 +1965,11 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             let mut result = rhs;
             while let Some(lhs) = bits.pop() {
                 // Ensure that the next thing we see is a ':' by now.
-                match self.next("':'")? {
+                self.expected("':'");
+                take_match!(self {
                     Token::Punct(Punctuation::Colon) |
-                    Token::Punct(Punctuation::CloseColon) => {}
-                    other => {
-                        self.put_back(other);
-                        return self.parse_error()
-                    }
-                }
+                    Token::Punct(Punctuation::CloseColon) => {},
+                } else return self.parse_error());
                 // Read the else branch.
                 let else_ = match self.expression_ex(Some(Strength::Conditional), true)? {
                     Some(else_) => else_,
@@ -2023,7 +2013,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         // Read prefix unary ops
         let mut unary_ops = Vec::new();
         loop {
-            match self.next("operator")? {
+            self.expected("operator");
+            take_match!(self {
                 Token::Punct(Punctuation::Sub) => unary_ops.push(Spanned::new(self.location, Follow::Unary(UnaryOp::Neg))),
                 Token::Punct(Punctuation::Not) => unary_ops.push(Spanned::new(self.location, Follow::Unary(UnaryOp::Not))),
                 Token::Punct(Punctuation::BitNot) => unary_ops.push(Spanned::new(self.location, Follow::Unary(UnaryOp::BitNot))),
@@ -2031,11 +2022,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 Token::Punct(Punctuation::MinusMinus) => unary_ops.push(Spanned::new(self.location, Follow::Unary(UnaryOp::PreDecr))),
                 Token::Punct(Punctuation::BitAnd) => unary_ops.push(Spanned::new(self.location, Follow::Unary(UnaryOp::Reference))),
                 Token::Punct(Punctuation::Mul) => unary_ops.push(Spanned::new(self.location, Follow::Unary(UnaryOp::Dereference))),
-                other => {
-                    self.put_back(other);
-                    break;
-                }
-            }
+            } else break);
         }
 
         let mut belongs_to = Vec::new();
@@ -2048,17 +2035,16 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         // Read postfix unary ops and field-access follows
         let mut follow = Vec::new();
         loop {
-            match self.next("operator")? {
+            self.expected("operator");
+            take_match!(self {
                 Token::Punct(Punctuation::PlusPlus) => follow.push(Spanned::new(self.location, Follow::Unary(UnaryOp::PostIncr))),
                 Token::Punct(Punctuation::MinusMinus) => follow.push(Spanned::new(self.location, Follow::Unary(UnaryOp::PostDecr))),
-                other => {
-                    self.put_back(other);
-                    match self.follow(&mut belongs_to, in_ternary)? {
-                        Some(f) => follow.push(f),
-                        None => break,
-                    }
+            } else {
+                match self.follow(&mut belongs_to, in_ternary)? {
+                    Some(f) => follow.push(f),
+                    None => break,
                 }
-            }
+            });
         }
 
         // Add prefix unary operators to the follows in reverse order
@@ -2082,7 +2068,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         use super::lexer::Punctuation::*;
 
         let start = self.updated_location();
-        let term = match self.next("term")? {
+        self.expected("term");  // TODO: a better explanation
+        let term = take_match!(self {
             // term :: 'new' (prefab | (ident field*))? arglist?
             Token::Ident(ref i, _) if i == "new" => {
                 // It's not entirely clear what is supposed to be valid here.
@@ -2099,7 +2086,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 // The following is what seems a reasonable approximation.
 
                 // Try to read an ident or path, then read the arguments.
-                if self.dot()?.is_some() {
+                if let Some(()) = self.exact(Token::Punct(Punctuation::Dot))? {
                     if let Some(ident) = self.ident()? {
                         // prefab
                         // TODO: arrange for this ident to end up in the prefab's annotation
@@ -2297,12 +2284,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     // Go away
                     return self.parse_error()
                 }
-            }
-            // term :: path_lit
-            t @ Token::Punct(Punctuation::Slash) |
-            t @ Token::Punct(Punctuation::CloseColon) => {
-                self.put_back(t);
-                Term::Prefab(require!(self.prefab()))
             },
 
             // term :: str_lit | num_lit
@@ -2332,7 +2313,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 let mut parts = Vec::new();
                 loop {
                     let expr = self.expression()?;
-                    match self.next("']'")? {
+                    self.expected("']'");
+                    take_match!(self {
                         Token::InterpStringPart(part) => {
                             parts.push((expr, part.into()));
                         },
@@ -2340,14 +2322,18 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                             parts.push((expr, end.into()));
                             break;
                         },
-                        _ => return self.parse_error(),
-                    }
+                    } else return self.parse_error());
                 }
                 Term::InterpString(begin.into(), parts.into())
             },
-
-            other => return self.try_another(other),
-        };
+        } else match self.peek() {
+            // term :: prefab
+            Token::Punct(Punctuation::Slash) |
+            Token::Punct(Punctuation::CloseColon) => {
+                Term::Prefab(require!(self.prefab()))
+            },
+            _ => return try_another(),
+        });
         success(Spanned::new(start, term))
     }
 
@@ -2355,11 +2341,11 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         let first_location = self.updated_location();
 
         // follow :: ('[' | '?[') expression ']'
-        let kind = match self.next("field access")? {
+        self.expected("field access");
+        let kind = take_match!(self {
             Token::Punct(Punctuation::LBracket) => ListAccessKind::Normal,
             Token::Punct(Punctuation::SafeLBracket) => ListAccessKind::Safe,
-            other => return self.try_another(other),
-        };
+        } else return try_another());
 
         belongs_to.clear();
         let expr = require!(self.expression());
@@ -2375,16 +2361,15 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }
 
         // follow :: '.' ident arglist?
-        let kind = match self.next("field access")? {
+        self.expected("field access");
+        let kind = take_match!(self {
             // TODO: only apply these rules if there is no whitespace around the punctuation
             Token::Punct(Punctuation::Dot) => PropertyAccessKind::Dot,
             Token::Punct(Punctuation::CloseColon) if !belongs_to.is_empty() || !in_ternary => PropertyAccessKind::Colon,
             Token::Punct(Punctuation::SafeDot) => PropertyAccessKind::SafeDot,
             Token::Punct(Punctuation::SafeColon) => PropertyAccessKind::SafeColon,
             Token::Punct(Punctuation::Scope) => PropertyAccessKind::Scope,
-
-            other => return self.try_another(other),
-        };
+        } else return try_another());
 
         let mut index_op_loc = self.location;
         let start = self.updated_location();
@@ -2438,16 +2423,15 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     // TODO: somehow fix the fact that this is basically copy-pasted from
     // follow() above.
     fn field(&mut self, belongs_to: &mut Vec<Ident>, in_ternary: bool) -> Status<Field> {
-        let kind = match self.next("field access")? {
+        self.expected("field access");
+        let kind = take_match!(self {
             // follow :: '.' ident
             // TODO: only apply these rules if there is no whitespace around the punctuation
             Token::Punct(Punctuation::Dot) => PropertyAccessKind::Dot,
             Token::Punct(Punctuation::CloseColon) if !belongs_to.is_empty() || !in_ternary => PropertyAccessKind::Colon,
             Token::Punct(Punctuation::SafeDot) => PropertyAccessKind::SafeDot,
             Token::Punct(Punctuation::SafeColon) => PropertyAccessKind::SafeColon,
-
-            other => return self.try_another(other),
-        };
+        } else return try_another());
 
         let mut index_op_loc = self.location;
         let start = self.updated_location();
@@ -2555,7 +2539,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     fn read_any_tt(&mut self, target: &mut Vec<LocatedToken>) -> Status<()> {
         // read a single arbitrary "token tree", either a group or a single token
-        let start = self.next_quiet()?;
+        let start = self.take();
         let kind = TTKind::from_token(&start);
         target.push(LocatedToken::new(self.location(), start));
         let kind = match kind {
@@ -2563,12 +2547,10 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             None => return SUCCESS,
         };
         loop {
-            let token = self.next_quiet()?;
-            if kind.is_end(&token) {
-                target.push(LocatedToken::new(self.location(), token));
+            if kind.is_end(self.peek()) {
+                target.push(LocatedToken::new(self.location(), self.take()));
                 return SUCCESS;
             } else {
-                self.put_back(token);
                 require!(self.read_any_tt(target));
             }
         }
