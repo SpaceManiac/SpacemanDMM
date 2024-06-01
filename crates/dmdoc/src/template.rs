@@ -328,7 +328,7 @@ pub(crate) fn dm_type(ty: &Type) -> Markup {
     let Type { env, base_href, path, details } = *ty;
     base(
         env,
-        &base_href,
+        base_href,
         &display(path),
         &display(""),
         &html! {

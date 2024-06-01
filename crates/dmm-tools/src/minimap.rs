@@ -424,7 +424,6 @@ impl Category {
     const OBJ: Category = Category { raw: 3 };
     const MOB: Category = Category { raw: 4 };
 
-    ///
     pub fn from_path(path: &str) -> Category {
         if path.starts_with("/area") {
             Category::AREA

@@ -20,8 +20,7 @@ pub fn check_switch_rand_range(
         return;
     };
 
-    let mut case_ranges = vec![];
-    case_ranges.reserve(cases.len());
+    let mut case_ranges = Vec::with_capacity(cases.len());
     for case_block in cases.iter() {
         let location = case_block.0.location;
         for case in case_block.0.elem.iter() {

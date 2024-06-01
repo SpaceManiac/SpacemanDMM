@@ -1460,12 +1460,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                             Some(Term::Ident(name)) => name,
                             _ => return Err(self.error("for-list must start with variable")),
                         };
-                        // Explicit move is necessary because rustc becomes
-                        // confused when matching on the *rhs lvalue, thinking
-                        // moving the LHS also moves the RHS. This fails:
-                        //   let a: Box<(NonCopy, NonCopy)>;
-                        //   let (b, c) = *a;
-                        match {*rhs} {
+                        match *rhs {
                             Expression::BinaryOp { op: BinaryOp::To, lhs, rhs } => {
                                 return spanned(require!(self.for_range(None, name, lhs, rhs)));
                             },
@@ -2179,7 +2174,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Token::Ident(ref i, _) if i == "locate" => match self.arguments(&[], "locate")? {
                 Some(args) => {
                     // warn against this mistake
-                    if let Some(&Expression::BinaryOp { op: BinaryOp::In, .. } ) = args.get(0) {
+                    if let Some(&Expression::BinaryOp { op: BinaryOp::In, .. } ) = args.first() {
                         self.error("bad `locate(X in Y)`, should be `locate(X) in Y`")
                             .set_severity(Severity::Warning)
                             .register(self.context);

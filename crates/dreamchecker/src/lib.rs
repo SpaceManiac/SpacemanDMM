@@ -440,7 +440,7 @@ impl<'o> ProcDirective<'o> {
     }
 
     fn try_copy_from_parent(&mut self, proc: ProcRef<'o>) {
-        if self.directive.get(&proc).is_none() {
+        if !self.directive.contains_key(&proc) {
             if let Some(parent) = proc.parent_proc() {
                 if let Some((_, true, location)) = self.get_self_or_parent(parent) {
                     let _ = self.insert(proc, true, location);
@@ -660,7 +660,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                 if !visited.insert(nextproc) {
                     continue
                 }
-                if self.waitfor_procs.get(&nextproc).is_some() {
+                if self.waitfor_procs.contains(&nextproc) {
                     continue
                 }
                 if self.sleep_exempt.get(nextproc).is_some() {

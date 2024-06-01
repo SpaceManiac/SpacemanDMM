@@ -199,7 +199,7 @@ pub struct HideInvisible {
 
 impl RenderPass for HideInvisible {
     fn configure(&mut self, renderer_config: &dm::config::MapRenderer) {
-        self.overrides = renderer_config.hide_invisible.clone();
+        self.overrides.clone_from(&renderer_config.hide_invisible);
         // Put longer typepaths earlier in the list so that `/foo/bar` can override `/foo`.
         self.overrides.sort_unstable_by_key(|k| usize::MAX - k.len());
         // Append `/` to each typepath for faster starts_with later.

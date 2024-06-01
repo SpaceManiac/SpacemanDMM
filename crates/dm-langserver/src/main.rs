@@ -960,7 +960,7 @@ impl<'a> Engine<'a> {
                         let _ = write!(message, "{}", each);
                     }
                     message.push(')');
-                    defstring = message.clone();
+                    defstring.clone_from(&message);
                 }
 
                 if let Some(ref decl) = proc.declaration {

@@ -408,7 +408,7 @@ impl AuxtoolsThread {
                     BreakpointReason::Pause => dap_types::StoppedEvent::REASON_PAUSE,
                     BreakpointReason::Breakpoint => dap_types::StoppedEvent::REASON_BREAKPOINT,
                     BreakpointReason::Runtime(error) => {
-                        *(self.last_error.write().unwrap()) = error.clone();
+                        self.last_error.write().unwrap().clone_from(&error);
                         description = Some(error);
                         dap_types::StoppedEvent::REASON_EXCEPTION
                     }

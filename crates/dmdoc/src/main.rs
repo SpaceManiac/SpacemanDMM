@@ -95,7 +95,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     println!("collating documented types");
 
     if index_path.is_none() {
-        index_path = context.config().dmdoc.index_file.clone();
+        index_path.clone_from(&context.config().dmdoc.index_file);
     }
 
     let mut code_directories: std::collections::HashSet<std::ffi::OsString>;
@@ -1006,7 +1006,7 @@ fn git_info(git: &mut Git) -> Result<(), git2::Error> {
     // check that the current revision is an ancestor of its remote
     let branch = repo.find_branch(req!(head.shorthand()), git2::BranchType::Local)?;
     if let Ok(Some(name)) = branch.name() {
-        git.branch = name.to_owned();
+        name.clone_into(&mut git.branch);
     }
     let upstream = branch.upstream()?;
     let upstream_oid = upstream.get().peel_to_commit()?.id();
@@ -1020,7 +1020,7 @@ fn git_info(git: &mut Git) -> Result<(), git2::Error> {
     let mut iter = upstream_name.splitn(2, '/');
     let remote_name = req!(iter.next());
     if let Some(name) = iter.next() {
-        git.remote_branch = name.to_owned();
+        name.clone_into(&mut git.remote_branch);
     }
 
     let remote = repo.find_remote(remote_name)?;
@@ -1035,7 +1035,7 @@ fn git_info(git: &mut Git) -> Result<(), git2::Error> {
         }
     }
     if url.starts_with("https://") || url.starts_with("http://") {
-        git.web_url = url.to_owned();
+        url.clone_into(&mut git.web_url);
     } else if url.starts_with("ssh://") {
         git.web_url = url.replace("ssh://", "https://");
     } else {

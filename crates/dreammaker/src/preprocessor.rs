@@ -660,7 +660,7 @@ impl<'ctx> Preprocessor<'ctx> {
         // All DM source is effectively `#pragma once`.
         let file_id = self.context.register_file(register);
         if let Some(&loc) = self.include_locations.get(&file_id) {
-            if self.multiple_locations.get(&file_id).is_none() {
+            if !self.multiple_locations.contains_key(&file_id) {
                 Err(DMError::new(self.last_input_loc, format!("duplicate #include {:?}", path))
                     .set_severity(Severity::Warning)
                     .with_note(loc, "previously included here")
@@ -868,7 +868,7 @@ impl<'ctx> Preprocessor<'ctx> {
                         let mut params = Vec::new();
                         let mut subst = Vec::new();
                         let mut variadic = false;
-                        'outer: loop {
+                        'outer: {
                             match next!() {
                                 Token::Punct(Punctuation::LParen) if !ws => {
                                     loop {
@@ -906,7 +906,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                         };
                                         self.error(message)
                                             .set_severity(Severity::Hint)
-                                            .register(&self.context);
+                                            .register(self.context);
                                     }
                                     docs.push(doc);
                                 }
@@ -925,7 +925,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                             };
                                             self.error(message)
                                                 .set_severity(Severity::Hint)
-                                                .register(&self.context);
+                                                .register(self.context);
                                         }
                                         docs.push(doc);
                                     }

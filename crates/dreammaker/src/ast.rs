@@ -915,9 +915,7 @@ impl Expression {
     pub fn is_truthy(&self) -> Option<bool> {
         match self {
             Expression::Base { term, follow } => {
-                let Some(mut truthy) = term.elem.is_truthy() else {
-                    return None;
-                };
+                let mut truthy = term.elem.is_truthy()?;
                 for follow in follow.iter() {
                     match follow.elem {
                         Follow::Unary(UnaryOp::Not) => truthy = !truthy,

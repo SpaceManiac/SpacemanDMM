@@ -287,7 +287,7 @@ pub mod tests {
     fn is_sorted_right<V>(node: &Node<V>) -> bool {
         node.right.as_ref().map_or(true, |succ| succ.key > node.key)
     }
-    fn is_interval_node<V>(node: &Box<Node<V>>) -> bool {
+    fn is_interval_node<V>(node: &Node<V>) -> bool {
         let sorted = is_sorted_left(node) && is_sorted_right(node);
         let balanced = node.height == cmp::max(height(&node.left), height(&node.right)) + 1;
         let proper_max = node.max
@@ -299,7 +299,7 @@ pub mod tests {
     }
 
     pub fn is_interval_tree<V>(root: &Option<Box<Node<V>>>) -> bool {
-        (*root).as_ref().map_or(true, is_interval_node)
+        (*root).as_ref().map_or(true, |n| is_interval_node(n))
     }
 
     #[test]
