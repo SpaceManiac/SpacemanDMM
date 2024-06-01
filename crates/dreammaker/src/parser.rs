@@ -5,8 +5,6 @@ use std::collections::{BTreeMap, VecDeque};
 use std::ops::Range;
 use std::str::FromStr;
 
-use crate::ast;
-
 use super::annotation::*;
 use super::ast::*;
 use super::docs::*;
@@ -299,6 +297,14 @@ impl TTKind {
         }
     }
 
+    fn end(self) -> &'static str {
+        match self {
+            TTKind::Paren => "')'",
+            TTKind::Brace => "'}'",
+            TTKind::Bracket => "']'",
+        }
+    }
+
     fn is_end(self, token: &Token) -> bool {
         matches!((self, token),
             (TTKind::Paren, &Token::Punct(Punctuation::RParen))
@@ -338,6 +344,7 @@ pub struct Parser<'ctx, 'an, 'inp> {
     next: Option<Token>,
     location: Location,
     expected: Vec<Cow<'static, str>>,
+    skipping_location: Option<Location>,
 
     doc_comments_pending: VecDeque<(Location, DocComment)>,
     module_docs: BTreeMap<FileId, Vec<(u32, DocComment)>>,
@@ -368,6 +375,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             next: None,
             location: Default::default(),
             expected: Vec::new(),
+            skipping_location: None,
 
             doc_comments_pending: Default::default(),
             module_docs: Default::default(),
@@ -450,19 +458,24 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     fn describe_parse_error(&mut self) -> DMError {
         let expected = self.expected.join(", ");
         if self.eof {
-            return self.error(format!("got EOF, expected one of: {}", expected));
+            let mut error = self.error(format!("got EOF, expected one of: {}", expected));
+            if let Some(loc) = self.skipping_location {
+                error.add_note(loc, "unmatched pair here");
+            }
+            error
+        } else {
+            let got = self.peek();
+            let message = format!("got '{:#}', expected one of: {}", got, expected);
+            let mut error = self.error(message);
+            if self.possible_indentation_error {
+                let mut loc = error.location();
+                loc.line += 1;
+                loc.column = 1;
+                error.add_note(loc, "check for extra indentation at the start of the next line");
+                self.possible_indentation_error = false;
+            }
+            error
         }
-        let got = self.peek();
-        let message = format!("got '{:#}', expected one of: {}", got, expected);
-        let mut error = self.error(message);
-        if self.possible_indentation_error {
-            let mut loc = error.location();
-            loc.line += 1;
-            loc.column = 1;
-            error.add_note(loc, "check for extra indentation at the start of the next line");
-            self.possible_indentation_error = false;
-        }
-        error
     }
 
     fn parse_error<T>(&mut self) -> Result<T, DMError> {
@@ -2485,7 +2498,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }
     }
 
-    fn pick_arguments(&mut self) -> Status<Box<ast::PickArgs>> {
+    fn pick_arguments(&mut self) -> Status<Box<PickArgs>> {
         leading!(self.exact(Token::Punct(Punctuation::LParen)));
         success(require!(self.separated(
             Punctuation::Comma,
@@ -2537,6 +2550,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     fn read_any_tt(&mut self, target: &mut Vec<LocatedToken>) -> Status<()> {
         // read a single arbitrary "token tree", either a group or a single token
+        if self.peek() == &Token::Eof {
+            return try_another();
+        }
         let start = self.take();
         let kind = TTKind::from_token(&start);
         target.push(LocatedToken::new(self.location(), start));
@@ -2544,12 +2560,16 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Some(k) => k,
             None => return SUCCESS,
         };
+        let location = self.location;
         loop {
+            self.expected(kind.end());
             if kind.is_end(self.peek()) {
                 target.push(LocatedToken::new(self.location(), self.take()));
                 return SUCCESS;
             } else {
+                self.skipping_location = Some(location);
                 require!(self.read_any_tt(target));
+                self.skipping_location = None;
             }
         }
     }
