@@ -32,7 +32,7 @@ pub fn check_errors_match<S: Into<Cow<'static, str>>>(buffer: S, errorlist: &[(u
             || nexterror.description() != *desc
         {
             panic!(
-                "possible feature regression in dreamchecker, expected {}:{}:{}, found {}:{}:{}",
+                "possible feature regression in dreamchecker:\nexpected error: {}:{}:{}\nfound error:    {}:{}:{}",
                 *line,
                 *column,
                 *desc,
