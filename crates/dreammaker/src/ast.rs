@@ -1490,3 +1490,9 @@ pub static VALID_FILTER_FLAGS: phf::Map<&'static str, (&str, bool, bool, &[&str]
     "ripple" => ("flags", false, true, &[ "WAVE_BOUNDED" ]),
     "wave" => ("flags", false, true, &[ "WAVE_SIDEWAYS", "WAVE_BOUNDED" ]),
 };
+
+// ----------------------------------------------------------------------------
+// Guard against sizeof regression.
+const _: [(); 0 - !(std::mem::size_of::<Statement>() <= 56) as usize] = [];
+const _: [(); 0 - !(std::mem::size_of::<Expression>() <= 32) as usize] = [];
+const _: [(); 0 - !(std::mem::size_of::<Term>() <= 40) as usize] = [];
