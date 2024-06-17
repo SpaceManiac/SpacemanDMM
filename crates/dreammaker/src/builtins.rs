@@ -467,7 +467,7 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         proc/get_step_rand(Ref);
         proc/get_step_to(Ref,Trg,Min=0);
         proc/get_step_towards(Ref,Trg);
-        proc/gradient(Gradient, index); // unsure how to handle (Item1, Item2, ..., index) form
+        proc/gradient(Gradient, index, space = COLORSPACE_RGB); // unsure how to handle (Item1, Item2, ..., index) form
         proc/hascall(Object,ProcName);
         proc/hearers(Depth=world.view,Center=usr);
         proc/html_decode(HtmlText);
