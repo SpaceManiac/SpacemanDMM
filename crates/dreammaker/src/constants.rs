@@ -788,6 +788,7 @@ impl<'a> ConstantFolder<'a> {
                 "newlist" => Constant::Call(ConstFn::Newlist, self.arguments(args)?),
                 "icon" => Constant::Call(ConstFn::Icon, self.arguments(args)?),
                 "sound" => Constant::Call(ConstFn::Sound, self.arguments(args)?),
+                "filter" => Constant::Call(ConstFn::Filter, self.arguments(args)?),
                 "file" => Constant::Call(ConstFn::File, self.arguments(args)?),
                 "generator" => Constant::Call(ConstFn::Generator, self.arguments(args)?),
                 // constant-evaluatable functions
