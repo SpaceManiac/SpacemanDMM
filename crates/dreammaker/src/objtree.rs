@@ -12,7 +12,7 @@ use indexmap::IndexMap;
 use crate::heap_size_of_index_map;
 
 use super::ast::{
-    AsType, Block, Expression, Ident, Parameter, PathOp, ProcDeclBuilder, ProcDeclKind, ProcFlags,
+    ProcReturnType, Block, Expression, Ident, Parameter, PathOp, ProcDeclBuilder, ProcDeclKind, ProcFlags,
     VarSuffix, VarType, VarTypeBuilder,
 };
 use super::constants::Constant;
@@ -86,7 +86,7 @@ pub struct ProcDeclaration {
     pub location: Location,
     pub kind: ProcDeclKind,
     // todo: tie this into our return type, add support for the funky types
-    pub return_type: AsType,
+    pub return_type: ProcReturnType,
     pub flags: ProcFlags,
     pub id: SymbolId,
 }
@@ -1123,7 +1123,7 @@ impl ObjectTreeBuilder {
         name: &str,
         declaration: Option<ProcDeclBuilder>,
         parameters: Vec<Parameter>,
-        return_type: AsType,
+        return_type: ProcReturnType,
         code: Option<Block>,
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let node = &mut self.inner.graph[parent.index()];
@@ -1276,7 +1276,7 @@ impl ObjectTreeBuilder {
             ));
         }
 
-        self.register_proc(context, location, parent, proc_name, declaration, parameters, AsType::Anything, code)
+        self.register_proc(context, location, parent, proc_name, declaration, parameters, ProcReturnType::default(), code)
     }
 }
 

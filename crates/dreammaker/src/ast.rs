@@ -298,55 +298,16 @@ impl fmt::Display for PropertyAccessKind {
     }
 }
 
-/// Description of the type of an as block, particularly in the context of proc return types
+/// Description of a proc's return type (`as` phrase).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, GetSize)]
-pub enum AsType {
-    // These lummy stole from the InputType spec
-    // There are more but we will parse them into a typepath/string
-    Text,
-    Num,
-    Null,
-    List,
-    File,
-    Anything,
-    // Any typepath
-    Type(Vec<Ident>),
+pub enum ProcReturnType {
+    InputType(InputType),
+    TypePath(Vec<Ident>),
 }
 
-impl AsType {
-    pub fn from_name(name: &str) -> Option<AsType>{
-        match name {
-            // First class pairings
-            "text" => Some(AsType::Text),
-            "num" => Some(AsType::Num),
-            "null" => Some(AsType::Null),
-            "list" => Some(AsType::List),
-            "file" => Some(AsType::File),
-            "anything" => Some(AsType::Anything),
-
-            // Vestiges of input(), we just treat these as text I think
-            "message" | "command_text" | "password" | "color" | "key" =>
-                Some(AsType::Text),
-
-            // Type handling
-            "mob" => AsType::from_name("/mob"),
-            "obj" => AsType::from_name("/obj"),
-            "turf" => AsType::from_name("/turf"),
-            "area" => AsType::from_name("/area"),
-            "icon" => AsType::from_name("/icon"),
-            "sound" => AsType::from_name("/sound"),
-            // If it looks like a typepath, we'll process it as a typepath (figure out reality later ya feel?)
-            _ if name.chars().next().unwrap_or(' ') == '/' =>
-                Some(AsType::from_vec(name.split('/').filter_map(|part| match part {
-                    "" => None,
-                    _ => Some(part.to_string()),
-                }).collect::<Vec<String>>())),
-            _ => None,
-        }
-    }
-
-    pub fn from_vec(vec: Vec<String>) -> AsType{
-        AsType::Type(vec)
+impl Default for ProcReturnType {
+    fn default() -> Self {
+        ProcReturnType::InputType(InputType::empty())
     }
 }
 

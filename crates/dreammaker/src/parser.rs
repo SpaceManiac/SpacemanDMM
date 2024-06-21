@@ -1066,10 +1066,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
         let location = self.location;
         let parameters = require!(self.separated(Comma, RParen, None, Parser::proc_parameter));
-        let return_type = match self.return_type(proc_builder)? {
-            Some(type_to_use) => type_to_use,
-            None => AsType::Anything,
-        };
+        let return_type = self.return_type(proc_builder)?.unwrap_or_default();
 
         // split off a subparser so we can keep parsing the objtree
         // even when the proc body doesn't parse
@@ -1262,53 +1259,31 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     }
 
     /// Parse an optional as return type signifier (for procs)
-    fn return_type(&mut self, proc_builder: Option<ProcDeclBuilder>) -> Status<AsType> {
+    fn return_type(&mut self, proc_builder: Option<ProcDeclBuilder>) -> Status<ProcReturnType> {
         if self.exact_ident("as")?.is_none() {
-            return Ok(None);
-        };
-        if proc_builder.is_none() {
-            self.error("Cannot specify a return type for a proc override")
-                    .register(self.context);
+            return try_another();
         }
-        // While loop over self.next, extracting either the first string with from_name OR
-        // if the first string is a slash, continue to extract, and check for a slash again, and finish with from_vec
-        self.expected("identifier");
-        self.expected("'/'");
-        take_match!(self {
-            Token::Ident(text, _) => {
-                let Some(return_type) = AsType::from_name(text.as_str()) else {
-                    return Err(self.error("Invalid return type"));
-                };
-                return Ok(Some(return_type));
-            },
-            Token::Punct(Punctuation::Slash) => {},
-        } else {
-            return Err(self.error("Invalid return type"));
-        });
 
-        // We're pulling out just the text, and we go until the end of the text or until we hit something unexpected
-        let mut path_vec = vec![];
-        let mut slash_last = true;
-        loop {
-            self.expected("identifier");
-            self.expected("'/'");
-            take_match!(self {
-                Token::Ident(text, whitespace) if slash_last => {
-                    path_vec.push(text);
-                    slash_last = false;
-                    if whitespace {
-                        break;
-                    }
-                },
-                Token::Punct(Punctuation::Slash) if !slash_last => slash_last = true,
-                // If we're done, put back what we just fond so someone else can process it, in case they care
-            } else break);
+        if proc_builder.is_none() {
+            self.error("cannot specify a return type for a proc override")
+                .register(self.context);
         }
-        if !path_vec.is_empty() {
-            Ok(Some(AsType::from_vec(path_vec)))
-        } else {
-            Err(self.error("Invalid return type"))
+
+        // Alternative one: a traditional input type as usually follows `as`.
+        if let Some(input_type) = self.input_type()? {
+            return success(ProcReturnType::InputType(input_type));
         }
+
+        // Option two: a typepath.
+        require!(self.exact(Token::Punct(Punctuation::Slash)));
+        let mut path_vec = vec![
+            require!(self.ident()),
+        ];
+        while let Some(()) = self.exact(Token::Punct(Punctuation::Slash))? {
+            path_vec.push(require!(self.ident()));
+        }
+
+        success(ProcReturnType::TypePath(path_vec))
     }
 
     /// Parse a verb input type. Used by proc params and the input() form.
