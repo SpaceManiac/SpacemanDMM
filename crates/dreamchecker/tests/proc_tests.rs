@@ -34,8 +34,8 @@ fn return_type() {
 }
 
 pub const RETURN_TYPE_FAILURE_ERRORS: &[(u32, u16, &str)] = &[
-    (4, 13, "Cannot specify a return type for a proc override"),
-    (7, 22, "Invalid return type"),
+    (4, 13, "cannot specify a return type for a proc override"),
+    (7, 22, "bad input type: 'incorrect'"),
 ];
 
 #[test]
@@ -47,7 +47,7 @@ fn return_type_failure() {
 /mob/test() as /mob
     return
 
-/mob/proc/test2() as bullshit
+/mob/proc/test2() as incorrect
     return
 "##.trim();
     check_errors_match(code, RETURN_TYPE_FAILURE_ERRORS);
