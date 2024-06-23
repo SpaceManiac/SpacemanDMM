@@ -359,7 +359,7 @@ dependencies = [
 
 [[package]]
 name = "dm-langserver"
-version = "1.8.0"
+version = "1.9.0"
 dependencies = [
  "ahash",
  "bincode",
@@ -382,7 +382,7 @@ dependencies = [
 
 [[package]]
 name = "dmdoc"
-version = "1.8.0"
+version = "1.9.0"
 dependencies = [
  "chrono",
  "dreammaker",
@@ -414,7 +414,7 @@ dependencies = [
 
 [[package]]
 name = "dmm-tools-cli"
-version = "1.8.0"
+version = "1.9.0"
 dependencies = [
  "ahash",
  "chrono",
@@ -439,7 +439,7 @@ dependencies = [
 
 [[package]]
 name = "dreamchecker"
-version = "1.8.0"
+version = "1.9.0"
 dependencies = [
  "ahash",
  "chrono",
