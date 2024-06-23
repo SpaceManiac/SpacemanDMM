@@ -2009,7 +2009,7 @@ handle_method_call! {
             extools_dll: self.extools_dll.clone(),
             debug_server_dll: self.debug_server_dll.clone(),
         };
-        let (port, handle) = debugger::start_server(self.context.config().debugger.engine, params.dreamseeker_exe, db).map_err(invalid_request)?;
+        let (port, handle) = debugger::start_server(self.context.config().debugger.engine, params.dreamseeker_exe, params.env, db).map_err(invalid_request)?;
         self.threads.push(handle);
         extras::StartDebuggerResult { port }
     }

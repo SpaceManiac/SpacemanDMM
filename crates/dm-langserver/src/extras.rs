@@ -1,5 +1,7 @@
 //! Extensions to the language server protocol.
 
+use std::collections::HashMap;
+
 use lsp_types::notification::*;
 use lsp_types::request::*;
 use lsp_types::SymbolKind;
@@ -63,6 +65,7 @@ impl Request for StartDebugger {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StartDebuggerParams {
     pub dreamseeker_exe: String,
+    pub env: Option<HashMap<String, String>>,
 }
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StartDebuggerResult {

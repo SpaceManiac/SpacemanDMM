@@ -2,6 +2,7 @@
 #![allow(unsafe_code)]
 
 use super::SequenceNumber;
+use std::collections::HashMap;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 
@@ -42,6 +43,7 @@ impl Launched {
     pub fn new(
         seq: Arc<SequenceNumber>,
         dreamseeker_exe: &str,
+        env: Option<&HashMap<String, String>>,
         dmb: &str,
         params: Option<EngineParams>,
     ) -> std::io::Result<Launched> {
@@ -59,6 +61,10 @@ impl Launched {
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+
+        if let Some(env) = env {
+            command.envs(env);
+        }
 
         match params {
             Some(EngineParams::Extools { port, dll }) => {

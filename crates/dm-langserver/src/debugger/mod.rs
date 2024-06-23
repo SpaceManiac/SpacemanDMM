@@ -62,6 +62,7 @@ pub type LineNumber = (i64, String, String, usize);
 pub fn start_server(
     engine: DebugEngine,
     dreamseeker_exe: String,
+    env: Option<HashMap<String, String>>,
     db: DebugDatabaseBuilder,
 ) -> std::io::Result<(u16, std::thread::JoinHandle<()>)> {
     use std::net::*;
@@ -75,7 +76,7 @@ pub fn start_server(
             let (stream, _) = listener.accept().unwrap();
             drop(listener);
             let mut input = std::io::BufReader::new(stream.try_clone().unwrap());
-            let mut debugger = Debugger::new(engine, dreamseeker_exe, db, Box::new(stream));
+            let mut debugger = Debugger::new(engine, dreamseeker_exe, env, db, Box::new(stream));
             jrpc_io::run_with_read(&mut input, |message| debugger.handle_input(message));
         })?;
 
@@ -123,7 +124,7 @@ pub fn debugger_main<I: Iterator<Item = String>>(mut args: I) {
         extools_dll: None,
         debug_server_dll: None,
     };
-    let mut debugger = Debugger::new(ctx.config().debugger.engine, dreamseeker_exe, db, Box::new(std::io::stdout()));
+    let mut debugger = Debugger::new(ctx.config().debugger.engine, dreamseeker_exe, None, db, Box::new(std::io::stdout()));
     jrpc_io::run_until_stdin_eof(|message| debugger.handle_input(message));
 }
 
@@ -247,6 +248,7 @@ enum DebugClient {
 struct Debugger {
     engine: DebugEngine,
     dreamseeker_exe: String,
+    env: Option<HashMap<String, String>>,
     extools_dll: Option<String>,
     debug_server_dll: Option<String>,
     db: DebugDatabase,
@@ -261,10 +263,11 @@ struct Debugger {
 }
 
 impl Debugger {
-    fn new(engine: DebugEngine, dreamseeker_exe: String, mut db: DebugDatabaseBuilder, stream: OutStream) -> Self {
+    fn new(engine: DebugEngine, dreamseeker_exe: String, env: Option<HashMap<String, String>>, mut db: DebugDatabaseBuilder, stream: OutStream) -> Self {
         Debugger {
             engine,
             dreamseeker_exe,
+            env,
             extools_dll: db.extools_dll.take(),
             debug_server_dll: db.debug_server_dll.take(),
             db: db.build(),
@@ -480,7 +483,7 @@ handle_request! {
         };
 
         // Launch the subprocess.
-        self.launched = Some(Launched::new(self.seq.clone(), &self.dreamseeker_exe, &params.dmb, engine_params)?);
+        self.launched = Some(Launched::new(self.seq.clone(), &self.dreamseeker_exe, self.env.as_ref(), &params.dmb, engine_params)?);
     }
 
     on AttachVsc(&mut self, params) {
