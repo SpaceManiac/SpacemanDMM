@@ -154,8 +154,6 @@ pub enum ConstFn {
     File,
     /// The `generator()` type constructor.
     Generator,
-    /// `fexists()`, which can be used in preprocessor expressions.
-    FileExists,
 }
 
 /// A constant-evaluation error (usually type mismatch).
@@ -413,7 +411,6 @@ impl fmt::Display for ConstFn {
             ConstFn::Filter => "filter",
             ConstFn::File => "file",
             ConstFn::Generator => "generator",
-            ConstFn::FileExists => "fexists"
         })
     }
 }

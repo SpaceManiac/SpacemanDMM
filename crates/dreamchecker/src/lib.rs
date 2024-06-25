@@ -143,7 +143,6 @@ impl<'o> AssumptionSet<'o> {
                 ConstFn::Newlist => AssumptionSet::from_valid_instance(objtree.expect("/list")),
                 ConstFn::Sound => AssumptionSet::from_valid_instance(objtree.expect("/sound")),
                 ConstFn::Generator => AssumptionSet::from_valid_instance(objtree.expect("/generator")),
-                ConstFn::FileExists => AssumptionSet::default(),
                 ConstFn::Filter => AssumptionSet::default(),
                 ConstFn::File => AssumptionSet::default(),
             },
