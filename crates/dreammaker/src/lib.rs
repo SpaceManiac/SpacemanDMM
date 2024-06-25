@@ -15,16 +15,6 @@ extern crate toml;
 use std::borrow::Cow;
 use std::path::Path;
 
-#[allow(unused_macros)]
-macro_rules! try_iter {
-    ($e:expr) => {
-        match $e {
-            Ok(x) => x,
-            Err(e) => return Some(Err(From::from(e))),
-        }
-    };
-}
-
 mod error;
 use ahash::RandomState;
 pub use error::*;
