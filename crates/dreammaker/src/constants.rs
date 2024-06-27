@@ -833,8 +833,8 @@ impl<'a> ConstantFolder<'a> {
                 "type" => {
                     if let Some(obj_tree) = &self.tree {
                         let typeval = TypeRef::new(obj_tree, self.ty).get();
-                        let path = make_typepath(typeval.path.split('/').filter(|elem| !elem.is_empty()).map(|segment| segment.to_string()).collect());
-                        Constant::Prefab(Box::new(self.prefab(Prefab::from(path))?))
+                        let pop = Pop::from(typeval.path.split('/').filter(|elem| !elem.is_empty()).map(|segment| segment.to_string()).collect::<TreePath>());
+                        Constant::Prefab(Box::new(pop))
                     } else {
                         return Err(self.error("no type context".to_owned()))
                     }
@@ -845,8 +845,8 @@ impl<'a> ConstantFolder<'a> {
                         let Some(parent_type) = typeref.parent_type() else {
                             return Err(self.error(format!("no parent type for {}", typeref)))
                         };
-                        let path = make_typepath(parent_type.path.split('/').filter(|elem| !elem.is_empty()).map(|segment| segment.to_string()).collect());
-                        Constant::Prefab(Box::new(self.prefab(Prefab::from(path))?))
+                        let pop = Pop::from(parent_type.path.split('/').filter(|elem| !elem.is_empty()).map(|segment| segment.to_string()).collect::<TreePath>());
+                        Constant::Prefab(Box::new(pop))
                     } else {
                         return Err(self.error("no type context".to_owned()))
                     }
@@ -861,8 +861,8 @@ impl<'a> ConstantFolder<'a> {
             Term::__TYPE__ => {
                 if let Some(obj_tree) = &self.tree {
                     let typeval = TypeRef::new(obj_tree, self.ty).get();
-                    let path = make_typepath(typeval.path.split('/').filter(|elem| !elem.is_empty()).map(|segment| segment.to_string()).collect());
-                    Constant::Prefab(Box::new(self.prefab(Prefab::from(path))?))
+                    let pop = Pop::from(typeval.path.split('/').filter(|elem| !elem.is_empty()).map(|segment| segment.to_string()).collect::<TreePath>());
+                    Constant::Prefab(Box::new(pop))
                 } else {
                     return Err(self.error("No type context".to_owned()))
                 }
@@ -963,7 +963,7 @@ impl<'a> ConstantFolder<'a> {
             path_elements.push(declaration.kind.name().to_string());
         }
         path_elements.push(proc_ref.name().to_string());
-        Ok(Constant::Prefab(Box::new(self.prefab(Prefab::from(make_typepath(path_elements)))?)))
+        Ok(Constant::Prefab(Box::new(Pop::from(Box::from(path_elements)))))
     }
 
     fn rgb(&mut self, args: Box<[Expression]>) -> Result<String, DMError> {
