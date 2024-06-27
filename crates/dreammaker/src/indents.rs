@@ -141,11 +141,11 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
                 }
             } else if indents == new_indents + 1 {
                 // single unindent
-                self.push(Token::Punct(Punctuation::RBrace));
+                self.push_eol(Token::Punct(Punctuation::RBrace));
             } else if indents > new_indents {
                 // multiple unindent
                 for _ in new_indents..indents {
-                    self.push(Token::Punct(Punctuation::RBrace));
+                    self.push_eol(Token::Punct(Punctuation::RBrace));
                 }
             } else {
                 // same indent as before

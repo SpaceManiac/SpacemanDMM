@@ -1810,10 +1810,12 @@ handle_method_call! {
         }
 
         // recursive traversal
-        fn find_document_symbols(
-            iter: &mut std::iter::Peekable<dm::annotation::Iter>,
+        fn find_document_symbols<'a, I>(
+            iter: &mut std::iter::Peekable<I>,
             section_end: dm::Location,
-        ) -> Vec<DocumentSymbol> {
+        ) -> Vec<DocumentSymbol>
+            where I: Iterator<Item=(interval_tree::RangeInclusive<dm::Location>, &'a Annotation)>
+        {
             let mut result = Vec::new();
 
             loop {
@@ -1823,9 +1825,7 @@ handle_method_call! {
                     }
                 }
 
-                let (child_range, annotation) = if let Some(x) = iter.next() {
-                    x
-                } else {
+                let Some((child_range, annotation)) = iter.next() else {
                     break;
                 };
 
@@ -1918,7 +1918,12 @@ handle_method_call! {
         } else {
             let start = dm::Location { file: file_id, line: 0, column: 0 };
             let end = dm::Location { file: file_id, line: !0, column: !0 };
-            let mut iter = annotations.get_range(start..end).peekable();
+            let mut vec: Vec<_> = annotations.get_range(start..end).collect();
+            // Our traversal is outside-in. TreeBlock and Variable can have the
+            // same extent if the variable is the only thing in the block, so
+            // sort TreeBlocks first as well.
+            vec.sort_by_key(|x| (x.0.start, std::cmp::Reverse(x.0.end), if matches!(x.1, Annotation::TreeBlock(_)) { 0 } else { 1 }));
+            let mut iter = vec.into_iter().peekable();
             Some(DocumentSymbolResponse::Nested(find_document_symbols(&mut iter, end)))
         }
     }
