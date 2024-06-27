@@ -13,7 +13,7 @@ use crate::error::Location;
 /// Arguments for [`Term::Pick`]
 pub type PickArgs = [(Option<Expression>, Expression)];
 
-/// Cases for [`Term::Switch`]
+/// Cases for [`Statement::Switch`]
 pub type SwitchCases = [(Spanned<Vec<Case>>, Block)];
 
 // ----------------------------------------------------------------------------
