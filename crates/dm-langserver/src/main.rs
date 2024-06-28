@@ -1806,13 +1806,22 @@ handle_method_call! {
     on DocumentSymbolRequest(&mut self, params) {
         fn name_and_detail(path: &[String]) -> (String, Option<String>) {
             let (name, rest) = path.split_last().unwrap();
-            (name.to_owned(), rest.last().map(ToOwned::to_owned))
+            (
+                name.to_owned(),
+                rest.iter().rev().find(|x|
+                    dm::ast::ProcDeclKind::from_name(x).is_none() &&
+                    dm::ast::ProcFlags::from_name(x).is_none() &&
+                    dm::ast::VarTypeFlags::from_name(x).is_none() &&
+                    *x != "var"
+                ).map(ToOwned::to_owned)
+            )
         }
 
         // recursive traversal
         fn find_document_symbols<'a, I>(
             iter: &mut std::iter::Peekable<I>,
             section_end: dm::Location,
+            skip_front: usize,
         ) -> Vec<DocumentSymbol>
             where I: Iterator<Item=(interval_tree::RangeInclusive<dm::Location>, &'a Annotation)>
         {
@@ -1835,7 +1844,7 @@ handle_method_call! {
                 match annotation {
                     Annotation::TreeBlock(ref path) => {
                         if path.is_empty() { continue }
-                        let (name, detail) = name_and_detail(path);
+                        let (name, detail) = name_and_detail(&path[skip_front..]);
                         result.push(DocumentSymbol {
                             name,
                             detail,
@@ -1844,13 +1853,14 @@ handle_method_call! {
                             deprecated: None,
                             range,
                             selection_range,
-                            children: Some(find_document_symbols(iter, end)),
+                            children: Some(find_document_symbols(iter, end, path.len())),
                         });
                     },
                     Annotation::Variable(ref path) => {
+                        let (name, detail) = name_and_detail(&path[skip_front..]);
                         result.push(DocumentSymbol {
-                            name: path.last().unwrap().to_owned(),
-                            detail: None,
+                            name: name,
+                            detail: detail,
                             kind: SymbolKind::FIELD,
                             tags: None,
                             deprecated: None,
@@ -1861,7 +1871,7 @@ handle_method_call! {
                     },
                     Annotation::ProcBody(ref path, _) => {
                         if path.is_empty() { continue }
-                        let (name, detail) = name_and_detail(path);
+                        let (name, detail) = name_and_detail(&path[skip_front..]);
                         let kind = if path.len() == 1 || (path.len() == 2 && path[0] == "proc") {
                             SymbolKind::FUNCTION
                         } else if is_constructor_name(&name) {
@@ -1877,7 +1887,7 @@ handle_method_call! {
                             tags: None,
                             range,
                             selection_range,
-                            children: Some(find_document_symbols(iter, end)),
+                            children: Some(find_document_symbols(iter, end, 0)),
                         });
                     },
                     Annotation::LocalVarScope(_, ref name) => {
@@ -1924,7 +1934,7 @@ handle_method_call! {
             // sort TreeBlocks first as well.
             vec.sort_by_key(|x| (x.0.start, std::cmp::Reverse(x.0.end), if matches!(x.1, Annotation::TreeBlock(_)) { 0 } else { 1 }));
             let mut iter = vec.into_iter().peekable();
-            Some(DocumentSymbolResponse::Nested(find_document_symbols(&mut iter, end)))
+            Some(DocumentSymbolResponse::Nested(find_document_symbols(&mut iter, end, 0)))
         }
     }
 
