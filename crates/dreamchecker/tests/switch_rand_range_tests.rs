@@ -3,7 +3,7 @@ extern crate dreamchecker as dc;
 use dc::test_helpers::*;
 
 pub const SWITCH_RAND_INCOMPLETE_ERRORS: &[(u32, u16, &str)] = &[
-    (5, 9, "Case range '0 to 0' will never trigger as it is outside the rand() range 1 to 3"),
+    (4, 19, "Case range '0 to 0' will never trigger as it is outside the rand() range 1 to 3"),
     (2, 5, "Switch branches on rand() with range 1 to 3 but no case branch triggers for 3"),
 ];
 
@@ -54,7 +54,7 @@ fn switch_rand_case_ranges() {
 
 
 pub const SWITCH_RAND_DEFAULT_ERRORS: &[(u32, u16, &str)] = &[
-    (5, 9, "Case range '5 to 5' will never trigger as it is outside the rand() range 1 to 4"),
+    (4, 19, "Case range '5 to 5' will never trigger as it is outside the rand() range 1 to 4"),
 ];
 
 #[test]
