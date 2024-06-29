@@ -1804,16 +1804,18 @@ handle_method_call! {
 
     #[allow(deprecated)]  // DocumentSymbol::deprecated is... deprecated. But we need to provide a `None` anyways.
     on DocumentSymbolRequest(&mut self, params) {
-        fn name_and_detail(path: &[String]) -> (String, Option<String>) {
+        fn name_and_detail(path: &[String], skip_front: usize) -> (String, Option<String>) {
             let (name, rest) = path.split_last().unwrap();
             (
                 name.to_owned(),
-                rest.iter().rev().find(|x|
-                    dm::ast::ProcDeclKind::from_name(x).is_none() &&
-                    dm::ast::ProcFlags::from_name(x).is_none() &&
-                    dm::ast::VarTypeFlags::from_name(x).is_none() &&
-                    *x != "var"
-                ).map(ToOwned::to_owned)
+                rest.get(skip_front..).and_then(|i|
+                    i.iter().rev().find(|x|
+                        dm::ast::ProcDeclKind::from_name(x).is_none() &&
+                        dm::ast::ProcFlags::from_name(x).is_none() &&
+                        dm::ast::VarTypeFlags::from_name(x).is_none() &&
+                        *x != "var"
+                    ).map(ToOwned::to_owned)
+                )
             )
         }
 
@@ -1844,7 +1846,7 @@ handle_method_call! {
                 match annotation {
                     Annotation::TreeBlock(ref path) => {
                         if path.is_empty() { continue }
-                        let (name, detail) = name_and_detail(&path[skip_front..]);
+                        let (name, detail) = name_and_detail(path, skip_front);
                         result.push(DocumentSymbol {
                             name,
                             detail,
@@ -1857,7 +1859,7 @@ handle_method_call! {
                         });
                     },
                     Annotation::Variable(ref path) => {
-                        let (name, detail) = name_and_detail(&path[skip_front..]);
+                        let (name, detail) = name_and_detail(path, skip_front);
                         result.push(DocumentSymbol {
                             name: name,
                             detail: detail,
@@ -1871,7 +1873,7 @@ handle_method_call! {
                     },
                     Annotation::ProcBody(ref path, _) => {
                         if path.is_empty() { continue }
-                        let (name, detail) = name_and_detail(&path[skip_front..]);
+                        let (name, detail) = name_and_detail(path, skip_front);
                         let kind = if path.len() == 1 || (path.len() == 2 && path[0] == "proc") {
                             SymbolKind::FUNCTION
                         } else if is_constructor_name(&name) {
