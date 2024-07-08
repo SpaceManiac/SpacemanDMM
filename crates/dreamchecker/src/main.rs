@@ -50,12 +50,12 @@ fn main() {
             .expect("no .dme found"));
 
     let mut context = dm::Context::default();
+    context.set_print_severity(Some(dm::Severity::Info));
     if let Some(filepath) = config_file {
         context.force_config(filepath.as_ref());
     } else {
         context.autodetect_config(&dme);
     }
-    context.set_print_severity(Some(dm::Severity::Info));
 
     println!("============================================================");
     println!("Parsing {}...\n", dme.display());
