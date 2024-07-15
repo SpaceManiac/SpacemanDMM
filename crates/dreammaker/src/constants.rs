@@ -469,7 +469,7 @@ pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree) {
             {
                 continue;  // skip non-constant-evaluable vars
             }
-            match constant_ident_lookup(tree, ty, &key, false, None) {
+            match constant_ident_lookup(tree, ty, &key, false, context.config().environment.as_ref()) {
                 Err(err) => context.register_error(err),
                 Ok(ConstLookup::Found(_)) => {}
                 Ok(ConstLookup::Continue(_)) => {
@@ -953,7 +953,7 @@ impl<'a> ConstantFolder<'a> {
                 return Err(self.error(format!("cannot reference variable {:?} in this context", ident)));
             }
             let tree = self.tree.as_mut().unwrap();
-            match constant_ident_lookup( tree, ty, ident, must_be_const, self.env_file)
+            match constant_ident_lookup(tree, ty, ident, must_be_const, self.env_file)
                 .map_err(|e| e.with_location(location))?
             {
                 ConstLookup::Found(v) => return Ok(v),
