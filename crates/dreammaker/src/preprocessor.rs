@@ -616,7 +616,7 @@ impl<'ctx> Preprocessor<'ctx> {
             start,
             self.output.drain(..),
         )?;
-        Ok(crate::constants::preprocessor_evaluate(start, expr, &self.defines)?.to_bool())
+        Ok(crate::constants::preprocessor_evaluate(start, expr, &self.defines, Some(self.context))?.to_bool())
     }
 
     fn evaluate(&mut self) -> bool {
