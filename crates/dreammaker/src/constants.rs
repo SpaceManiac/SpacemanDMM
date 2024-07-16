@@ -2,7 +2,6 @@
 use std::fmt;
 use std::ops;
 use std::path::Path;
-use std::path::PathBuf;
 
 use get_size::GetSize;
 use get_size_derive::GetSize;
@@ -819,18 +818,21 @@ impl<'a> ConstantFolder<'a> {
                         None => return Err(self.error("malformed nameof() call, expression appears to have no name")),
                     }
                 }
-                "fexists" if self.defines.is_some() => {
+                "fexists" if self.defines.is_some() && self.context.is_some() => {
                     if args.len() != 1 {
                         return Err(self.error(format!("malformed fexists() call, must have 1 argument and instead has {}", args.len())));
                     }
                     match args[0].as_term() {
                         Some(Term::String(passed_path)) => {
-                            let current_file = self.location().file;
-                            let path = self.context
-                                .map(|ctx| ctx.file_path(current_file).parent().unwrap().join(passed_path))
-                                .unwrap_or_else(|| PathBuf::from(passed_path));
-                            Constant::from(path.exists())
-                        },
+                            let current_file_path = self.context.unwrap(/* is_some checked above */).file_path(self.location.file);
+                            let Some(current_dir) = current_file_path.parent() else {
+                                return Err(self.error(format!(
+                                    "fexists() file has no parent: {:?}",
+                                    current_file_path
+                                )));
+                            };
+                            current_dir.join(passed_path).exists().into()
+                        }
                         _ => return Err(self.error("malformed fexists() call, argument given isn't a string.")),
                     }
                 }
