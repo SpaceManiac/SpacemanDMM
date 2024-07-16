@@ -511,7 +511,8 @@ type_table! {
     "command_text", COMMAND_TEXT, 1 << 16;
     "color",        COLOR,        1 << 17;
     // Non-primitive combinations that are still valid as(X) calls:
-    "movable",      MOVABLE,      (1 << 0) | (1 << 1);
+    "movable",      MOVABLE,      Self::OBJ.bits | Self::MOB.bits;
+    "atom",         ATOM,         Self::AREA.bits | Self::TURF.bits | Self::OBJ.bits | Self::MOB.bits;
 }
 
 bitflags! {
