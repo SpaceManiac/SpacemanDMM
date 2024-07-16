@@ -510,6 +510,8 @@ type_table! {
     "password",     PASSWORD,     1 << 15;
     "command_text", COMMAND_TEXT, 1 << 16;
     "color",        COLOR,        1 << 17;
+    // Non-primitive combinations that are still valid as(X) calls:
+    "movable",      MOVABLE,      (1 << 0) | (1 << 1);
 }
 
 bitflags! {
