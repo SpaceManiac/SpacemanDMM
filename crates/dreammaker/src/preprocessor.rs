@@ -971,14 +971,14 @@ impl<'ctx> Preprocessor<'ctx> {
                     "warn" if disabled => {}
                     "warn" => {
                         expect_token!((text) = Token::String(text));
-                        DMError::new(self.last_input_loc, format!("#{} {}", ident, text))
+                        DMError::new(self.last_input_loc, format!("#{} {}", ident, text.trim_end_matches(['\r', '\n'])))
                             .set_severity(Severity::Warning)
                             .register(self.context);
                     }
                     "error" if disabled => {}
                     "error" => {
                         expect_token!((text) = Token::String(text));
-                        self.context.register_error(DMError::new(self.last_input_loc, format!("#{} {}", ident, text)));
+                        self.context.register_error(DMError::new(self.last_input_loc, format!("#{} {}", ident, text.trim_end_matches(['\r', '\n']))));
                     }
                     "pragma" if disabled => {}
                     "pragma" => {
