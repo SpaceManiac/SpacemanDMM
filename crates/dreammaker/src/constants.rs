@@ -827,7 +827,7 @@ impl<'a> ConstantFolder<'a> {
                         Some(Term::String(passed_path)) => {
                             let current_file = self.location().file;
                             let path = self.context
-                                .map(|ctx| ctx.file_path(current_file).join(passed_path))
+                                .map(|ctx| ctx.file_path(current_file).parent().unwrap().join(passed_path))
                                 .unwrap_or_else(|| PathBuf::from(passed_path));
                             Constant::from(path.exists())
                         },
