@@ -1312,7 +1312,7 @@ impl NodeIndex {
 
     #[inline]
     pub fn end() -> Self {
-        NodeIndex(std::u32::MAX)
+        NodeIndex(u32::MAX)
     }
 }
 

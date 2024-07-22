@@ -1861,8 +1861,8 @@ handle_method_call! {
                     Annotation::Variable(ref path) => {
                         let (name, detail) = name_and_detail(path, skip_front);
                         result.push(DocumentSymbol {
-                            name: name,
-                            detail: detail,
+                            name,
+                            detail,
                             kind: SymbolKind::FIELD,
                             tags: None,
                             deprecated: None,

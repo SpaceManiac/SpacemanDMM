@@ -306,7 +306,7 @@ impl fmt::Display for Coord3 {
 
 impl Key {
     pub fn invalid() -> Key {
-        Key(KeyType::max_value())
+        Key(KeyType::MAX)
     }
 
     pub fn next(self) -> Key {
