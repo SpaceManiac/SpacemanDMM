@@ -12,11 +12,11 @@ DEBUG_SERVER_DLL_URL=https://github.com/willox/auxtools/releases/download/$DEBUG
 DEBUG_SERVER_DLL_SHA256=$(curl -L -s "$DEBUG_SERVER_DLL_URL" | sha256sum | cut -d' ' -f1)
 
 sed \
-    -e "/^DEBUG_SERVER_TAG=/c DEBUG_SERVER_TAG=$DEBUG_SERVER_TAG" \
-    -e "/^DEBUG_SERVER_DLL_URL=/c DEBUG_SERVER_DLL_URL=$DEBUG_SERVER_DLL_URL" \
-    -e "/^DEBUG_SERVER_DLL_SHA256=/c DEBUG_SERVER_DLL_SHA256=$DEBUG_SERVER_DLL_SHA256" \
+    -e "/DEBUG_SERVER_TAG$/c\\        \"$DEBUG_SERVER_TAG\", // DEBUG_SERVER_TAG" \
+    -e "/DEBUG_SERVER_DLL_URL$/c\\        \"$DEBUG_SERVER_DLL_URL\", // DEBUG_SERVER_DLL_URL" \
+    -e "/DEBUG_SERVER_DLL_SHA256$/c\\        \"$DEBUG_SERVER_DLL_SHA256\", // DEBUG_SERVER_DLL_SHA256" \
     --in-place \
-    download-auxtools.sh
+    ../crates/dm-langserver/build.rs
 
 # Prepare the commit
-git commit -m "Update to auxtools debug server $DEBUG_SERVER_TAG" -- download-auxtools.sh
+git commit -m "Update to auxtools debug server $DEBUG_SERVER_TAG" -- ../crates/dm-langserver/build.rs

@@ -10,11 +10,6 @@ relname=$(git describe --tags --exact)
 echo "Using tag name: $relname"
 
 # -----------------------------------------------------------------------------
-# Prepare dependency DLLs
-eval "$(scripts/download-extools.sh)"
-eval "$(scripts/download-auxtools.sh)"
-
-# -----------------------------------------------------------------------------
 # Cargo build
 touch crates/*/build.rs
 

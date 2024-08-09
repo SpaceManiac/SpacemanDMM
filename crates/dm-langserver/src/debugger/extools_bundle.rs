@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::{Result, Write};
 use std::path::{Path, PathBuf};
 
-const BYTES: &[u8] = include_bytes!(env!("EXTOOLS_BUNDLE_DLL"));
+const BYTES: &[u8] = include_bytes!(env!("BUNDLE_PATH_extools.dll"));
 
 fn write(path: &Path) -> Result<()> {
     File::create(path)?.write_all(BYTES)

@@ -5,11 +5,6 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 cd ..
 
 # -----------------------------------------------------------------------------
-# Prepare dependency DLLs
-eval "$(scripts/download-extools.sh)"
-eval "$(scripts/download-auxtools.sh)"
-
-# -----------------------------------------------------------------------------
 # Cargo build
 touch crates/dm-langserver/build.rs
 

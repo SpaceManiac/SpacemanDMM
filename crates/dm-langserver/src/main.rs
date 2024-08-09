@@ -68,10 +68,10 @@ fn main() {
     }
     eprint!("{}", include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")));
     #[cfg(extools_bundle)] {
-        eprintln!("extools commit: {}", env!("EXTOOLS_COMMIT_HASH"));
+        eprintln!("extools commit: {}", env!("BUNDLE_VERSION_extools.dll"));
     }
     #[cfg(auxtools_bundle)] {
-        eprintln!("auxtools commit: {}", env!("AUXTOOLS_COMMIT_HASH"));
+        eprintln!("auxtools commit: {}", env!("BUNDLE_VERSION_debug_server.dll"));
     }
     match std::env::current_dir() {
         Ok(path) => eprintln!("directory: {}", path.display()),
