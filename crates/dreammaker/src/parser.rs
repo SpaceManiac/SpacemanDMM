@@ -704,11 +704,18 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             }
         }
         // followed by ('/' ident)*
-        while parts.last().unwrap() != "operator" && self.slash()?.is_some() {
+        while self.slash()?.is_some() {
             let mut slash_loc = self.location;
             if let Some(i) = self.ident_in_seq(parts.len())? {
                 parts.push(i);
             } else {
+                // .../operator/<non-ident> = ... / "operator/"
+                // but .../operator/ident = ... / "operator" / "ident"
+                let last = parts.last_mut().unwrap();
+                if last == "operator" {
+                    last.push('/');
+                }
+
                 slash_loc.column += 1;
                 self.annotate_precise(slash_loc..slash_loc, || {
                     Annotation::IncompleteTreePath(absolute || always_absolute, parts.clone())
@@ -789,7 +796,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         let (last_part, traverse) = match path.split_last_mut() {
             Some(x) => x,
             None => {
-                self.error("what?")
+                self.error("tree entry appears to have no name")
                     .register(self.context);
                 return SUCCESS;
             }
@@ -844,7 +851,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
         // parse operator overloading definitions
         if last_part == "operator" {
-            self.try_read_operator_name(last_part)?;
+            let () = self.try_read_operator_name(last_part)?;
         }
 
         let var_suffix = if var_type.is_some() {
@@ -956,7 +963,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         .set_severity(Severity::Warning)
                         .register(self.context);
                 } else if proc_builder.is_some() {
-                    eprintln!("-- {:?}", last_part);
                     self.error("child of `proc/` without body")
                         .register(self.context);
                 } else {
@@ -977,7 +983,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     // ------------------------------------------------------------------------
     // Object tree - Procs
 
-    fn try_read_operator_name(&mut self, last_part: &mut String) -> Status<()> {
+    fn try_read_operator_name(&mut self, last_part: &mut String) -> Result<(), DMError> {
         use super::lexer::Token::Punct;
         use super::lexer::Punctuation::*;
 
@@ -1000,6 +1006,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         } else if self.exact(Punct(MulAssign))?.is_some() {
             last_part.push_str("*=");
         } else if self.exact(Punct(Slash))?.is_some() {
+            // Here for completeness, but REALLY handled in tree_path().
             last_part.push('/');
         } else if self.exact(Punct(DivAssign))?.is_some() {
             last_part.push_str("/=");
@@ -1055,7 +1062,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         } else if self.exact(Token::String("".to_string()))?.is_some() {
             last_part.push_str("\"\"")
         }
-        SUCCESS
+        Ok(())
     }
 
     fn proc_params_and_body(&mut self, current: NodeIndex, proc_builder: Option<ProcDeclBuilder>, name: &str, entry_start: Location, absolute: bool, mut docs: DocCollection) -> Status<()> {

@@ -267,3 +267,24 @@ fn return_type_list() {
         );
     });
 }
+
+#[test]
+fn proc_operator_slash() {
+    // https://github.com/SpaceManiac/SpacemanDMM/issues/399
+    with_code("
+/datum/operator/proc/foo()
+/datum/operator/()
+/datum/operator/=()
+/datum/operator
+    proc/bar()
+    ", |context, tree| {
+        context.assert_success();
+
+        eprintln!("{:#?}", tree.expect("/datum").procs);
+
+        tree.expect("/datum/operator").get_proc("foo").unwrap();
+        tree.expect("/datum").get_proc("operator/").unwrap();
+        tree.expect("/datum").get_proc("operator/=").unwrap();
+        tree.expect("/datum/operator").get_proc("bar").unwrap();
+    });
+}
