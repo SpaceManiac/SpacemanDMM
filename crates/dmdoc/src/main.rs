@@ -8,7 +8,7 @@ extern crate walkdir;
 mod markdown;
 mod template;
 
-use dm::ast::InputType;
+use dm::ast::{InputType, ProcReturnType};
 use dm::objtree::ObjectTree;
 use maud::{Markup, PreEscaped};
 use pulldown_cmark::{BrokenLink, CowStr};
@@ -413,6 +413,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                     },
                     file: context.file_path(proc_value.location.file),
                     line: proc_value.location.line,
+                    return_type: proc.declaration.as_ref().map(|d| &d.return_type),
                     parent,
                 });
                 anything = true;
@@ -1263,7 +1264,7 @@ struct ParsedType<'a> {
     docs: Option<DocBlock>,
     substance: bool,
     vars: BTreeMap<&'a str, Var<'a>>,
-    procs: BTreeMap<&'a str, Proc>,
+    procs: BTreeMap<&'a str, Proc<'a>>,
     htmlname: &'a str,
     file: PathBuf,
     line: u32,
@@ -1288,13 +1289,14 @@ struct VarType<'a> {
     path: &'a [String],
 }
 
-struct Proc {
+struct Proc<'a> {
     docs: DocBlock,
     decl: &'static str,
     params: Vec<Param>,
     file: PathBuf,
     line: u32,
     parent: Option<String>,
+    return_type: Option<&'a ProcReturnType>,
 }
 
 struct Param {

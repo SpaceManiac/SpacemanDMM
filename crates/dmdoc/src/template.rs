@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use dm::ast::InputType;
+use dm::ast::{InputType, ProcReturnType};
 use maud::{display, html, Markup, PreEscaped, Render, DOCTYPE};
 
 use crate::{markdown::DocBlock, Environment, Index, IndexTree, ModuleArgs, ModuleItem, Type};
@@ -446,12 +446,24 @@ pub(crate) fn dm_type(ty: &Type) -> Markup {
                                 (param.name)
                                 @if let Some(input_type) = param.input_type {
                                     @if !input_type.is_empty() {
-                                        i { " as " }
+                                        small { " as " }
                                         (render_input_type(env, input_type))
                                     }
                                 }
                             }
                             ") "
+                            @match proc.return_type {
+                                Some(ProcReturnType::InputType(i)) if !i.is_empty() => {
+                                    small { " as " }
+                                    ({ eprintln!("{:?}", proc.file); "" })
+                                    (render_input_type(env, *i))
+                                },
+                                Some(ProcReturnType::TypePath(p)) => {
+                                    small { " as " }
+                                    (env.linkify_type_array(p))
+                                },
+                                _ => {},
+                            }
                             (git_link(env, &proc.file.to_string_lossy(), proc.line))
                         }
                     }
