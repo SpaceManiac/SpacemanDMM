@@ -239,9 +239,8 @@ var/global/bill = 1
 }
 
 #[test]
-fn union_return_types() {
+fn return_type_union() {
     // https://github.com/SpaceManiac/SpacemanDMM/issues/385
-
     with_code("
 /proc/returns_num_or_text() as num | text
     ", |context, tree| {
@@ -250,6 +249,21 @@ fn union_return_types() {
         assert_eq!(
             tree.root().get_proc("returns_num_or_text").unwrap().get_declaration().unwrap().return_type,
             ProcReturnType::InputType(InputType::NUM | InputType::TEXT),
+        );
+    });
+}
+
+#[test]
+fn return_type_list() {
+    // https://github.com/SpaceManiac/SpacemanDMM/issues/399
+    with_code("
+/proc/returns_list() as list
+    ", |context, tree| {
+        context.assert_success();
+
+        assert_eq!(
+            tree.root().get_proc("returns_list").unwrap().get_declaration().unwrap().return_type,
+            ProcReturnType::InputType(InputType::LIST),
         );
     });
 }

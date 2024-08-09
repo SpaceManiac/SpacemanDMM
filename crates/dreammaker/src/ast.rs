@@ -513,6 +513,8 @@ type_table! {
     // Non-primitive combinations that are still valid as(X) calls:
     "movable",      MOVABLE,      Self::OBJ.bits | Self::MOB.bits;
     "atom",         ATOM,         Self::AREA.bits | Self::TURF.bits | Self::OBJ.bits | Self::MOB.bits;
+    // Placeholder value for `as list` that's technically only legal as a proc return type, but whatever.
+    "list",         LIST,         1 << 31;
 }
 
 bitflags! {
