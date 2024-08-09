@@ -455,7 +455,6 @@ pub(crate) fn dm_type(ty: &Type) -> Markup {
                             @match &proc.return_type {
                                 Some(ProcReturnType::InputType(i)) if !i.is_empty() => {
                                     small { " as " }
-                                    ({ eprintln!("{:?}", proc.file); "" })
                                     (render_input_type(env, *i))
                                 },
                                 Some(ProcReturnType::TypePath(p)) => {
