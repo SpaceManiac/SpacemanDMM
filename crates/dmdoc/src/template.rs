@@ -446,7 +446,7 @@ pub(crate) fn dm_type(ty: &Type) -> Markup {
                                 (param.name)
                                 @if let Some(input_type) = param.input_type {
                                     @if !input_type.is_empty() {
-                                        small { " as " }
+                                        span class="as" { " as " }
                                         (render_input_type(env, input_type))
                                     }
                                 }
@@ -454,11 +454,11 @@ pub(crate) fn dm_type(ty: &Type) -> Markup {
                             ") "
                             @match &proc.return_type {
                                 Some(ProcReturnType::InputType(i)) if !i.is_empty() => {
-                                    small { " as " }
+                                    span class="as" { " as " }
                                     (render_input_type(env, *i))
                                 },
                                 Some(ProcReturnType::TypePath(p)) => {
-                                    small { " as " }
+                                    span class="as" { " as " }
                                     (env.linkify_type_array(p))
                                 },
                                 _ => {},
