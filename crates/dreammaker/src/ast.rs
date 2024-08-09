@@ -305,6 +305,12 @@ pub enum ProcReturnType {
     TypePath(Vec<Ident>),
 }
 
+impl ProcReturnType {
+    pub fn is_empty(&self) -> bool {
+        matches!(self, ProcReturnType::InputType(InputType { bits: 0 }))
+    }
+}
+
 impl Default for ProcReturnType {
     fn default() -> Self {
         ProcReturnType::InputType(InputType::empty())

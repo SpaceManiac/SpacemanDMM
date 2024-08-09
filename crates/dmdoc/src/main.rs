@@ -88,7 +88,8 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     let mut pp = dm::preprocessor::Preprocessor::new(&context, environment.clone())?;
     let (objtree, module_docs) = {
         let indents = dm::indents::IndentProcessor::new(&context, &mut pp);
-        let parser = dm::parser::Parser::new(&context, indents);
+        let mut parser = dm::parser::Parser::new(&context, indents);
+        parser.enable_procs();  // for `set SpacemanDMM_return_type`
         parser.parse_with_module_docs()
     };
     let define_history = pp.finalize();
@@ -399,6 +400,14 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                     ));
                 }
 
+                let return_type = proc.declaration.as_ref()
+                    .map(|decl| &decl.return_type)
+                    .filter(|ret| !ret.is_empty())
+                    .cloned() // could use Cow maybe
+                    .or_else(|| {
+                        proc_value.code.as_ref().and_then(find_return_type).map(ProcReturnType::TypePath)
+                    });
+
                 // add the proc to the type containing it
                 parsed_type.procs.insert(name, Proc {
                     docs: block,
@@ -413,7 +422,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                     },
                     file: context.file_path(proc_value.location.file),
                     line: proc_value.location.line,
-                    return_type: proc.declaration.as_ref().map(|d| &d.return_type),
+                    return_type,
                     parent,
                 });
                 anything = true;
@@ -705,6 +714,22 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+fn find_return_type(code: &dm::ast::Block) -> Option<Vec<String>> {
+    for stmt in code {
+        if let dm::ast::Statement::Setting { name, mode: dm::ast::SettingMode::Assign, value } = &stmt.elem {
+            if name.as_str() == "SpacemanDMM_return_type" {
+                if let Some(dm::ast::Term::Prefab(fab)) = value.as_term() {
+                    let bits: Vec<_> = fab.path.iter().map(|(_, name)| name.to_owned()).collect();
+                    return Some(bits);
+                }
+            }
+        } else {
+            break;
+        }
+    }
+    None
 }
 
 // reference & other captures -> (href, tooltip)
@@ -1264,7 +1289,7 @@ struct ParsedType<'a> {
     docs: Option<DocBlock>,
     substance: bool,
     vars: BTreeMap<&'a str, Var<'a>>,
-    procs: BTreeMap<&'a str, Proc<'a>>,
+    procs: BTreeMap<&'a str, Proc>,
     htmlname: &'a str,
     file: PathBuf,
     line: u32,
@@ -1289,14 +1314,14 @@ struct VarType<'a> {
     path: &'a [String],
 }
 
-struct Proc<'a> {
+struct Proc {
     docs: DocBlock,
     decl: &'static str,
     params: Vec<Param>,
     file: PathBuf,
     line: u32,
     parent: Option<String>,
-    return_type: Option<&'a ProcReturnType>,
+    return_type: Option<ProcReturnType>,
 }
 
 struct Param {
