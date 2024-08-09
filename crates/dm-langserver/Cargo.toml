@@ -24,3 +24,9 @@ ahash = "0.8.0"
 [build-dependencies]
 chrono = "0.4.22"
 git2 = { version = "0.18.2", default-features = false }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(auxtools_bundle)',
+    'cfg(extools_bundle)',
+] }
