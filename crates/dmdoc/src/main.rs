@@ -993,6 +993,11 @@ fn linkify_type<'a, I: Iterator<Item=&'a str>>(all_type_names: &BTreeSet<String>
                 &progress[1..]
             );
             progress.clear();
+        } else if all_progress == "/list" {
+            // Let `/list/datum` resolve to `/list/<a href="/datum.html">datum</a>`.
+            output.push_str("/list");
+            all_progress.clear();
+            progress.clear();
         }
     }
     output.push_str(&progress);
