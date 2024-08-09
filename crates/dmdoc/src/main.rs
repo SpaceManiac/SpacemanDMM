@@ -8,6 +8,7 @@ extern crate walkdir;
 mod markdown;
 mod template;
 
+use dm::ast::InputType;
 use dm::objtree::ObjectTree;
 use maud::{Markup, PreEscaped};
 use pulldown_cmark::{BrokenLink, CowStr};
@@ -404,6 +405,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                     params: proc_value.parameters.iter().map(|p| Param {
                         name: p.name.clone(),
                         type_path: format_type_path(&p.var_type.type_path),
+                        input_type: p.input_type,
                     }).collect(),
                     decl: match proc.declaration {
                         Some(ref decl) => decl.kind.name(),
@@ -1298,6 +1300,7 @@ struct Proc {
 struct Param {
     name: String,
     type_path: String,
+    input_type: Option<InputType>,
 }
 
 /// Module struct exposed to templates.

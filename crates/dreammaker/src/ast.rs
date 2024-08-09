@@ -456,6 +456,12 @@ macro_rules! type_table {
             }
         }
 
+        impl $name {
+            pub const ENTRIES: &'static [(&'static str, $name)] = &[
+                $(($txt, $name::$i),)*
+            ];
+        }
+
         impl std::str::FromStr for $name {
             type Err = ();
 

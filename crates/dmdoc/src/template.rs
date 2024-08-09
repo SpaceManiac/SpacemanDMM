@@ -2,6 +2,7 @@
 
 use std::path::Path;
 
+use dm::ast::InputType;
 use maud::{display, html, Markup, PreEscaped, Render, DOCTYPE};
 
 use crate::{markdown::DocBlock, Environment, Index, IndexTree, ModuleArgs, ModuleItem, Type};
@@ -443,6 +444,12 @@ pub(crate) fn dm_type(ty: &Type) -> Markup {
                                     "/"
                                 }
                                 (param.name)
+                                @if let Some(input_type) = param.input_type {
+                                    @if !input_type.is_empty() {
+                                        i { " as " }
+                                        (render_input_type(env, input_type))
+                                    }
+                                }
                             }
                             ") "
                             (git_link(env, &proc.file.to_string_lossy(), proc.line))
@@ -453,6 +460,48 @@ pub(crate) fn dm_type(ty: &Type) -> Markup {
             }
         }
     )
+}
+
+pub fn render_input_type(env: &Environment, input_type: InputType) -> Markup {
+    html! {
+        @for (i, &name) in matching_names(input_type).iter().enumerate() {
+            @if i > 0 { " | " }
+            @match name {
+                "mob" => (linkify_input_type(env, "mob", "/mob")),
+                "obj" => (linkify_input_type(env, "obj", "/obj")),
+                "turf" => (linkify_input_type(env, "turf", "/turf")),
+                "area" => (linkify_input_type(env, "area", "/area")),
+                //"icon" => (linkify_input_type(env, "icon", "/icon")),
+                //"sound" => (linkify_input_type(env, "sound", "/sound")),
+                "movable" => (linkify_input_type(env, "movable", "/atom/movable")),
+                "atom" => (linkify_input_type(env, "atom", "/atom")),
+                "list" => (linkify_input_type(env, "list", "/list")),
+                _ => (name),
+            }
+        }
+    }
+}
+
+fn linkify_input_type(env: &Environment, show: &str, typepath: &str) -> Markup {
+    if env.all_type_names.contains(typepath) {
+        html! {
+            a href=(format!("{}.html", &typepath[1..])) { (show) }
+        }
+    } else {
+        html! { (show) }
+    }
+}
+
+fn matching_names(mut input_type: InputType) -> Vec<&'static str> {
+    let mut result = Vec::with_capacity(input_type.bits().count_ones() as usize);
+    for &(name, value) in InputType::ENTRIES.iter().rev() {
+        if input_type.contains(value) {
+            input_type.remove(value);
+            result.push(name);
+        }
+    }
+    result.reverse();
+    result
 }
 
 pub fn save_resources(output_path: &Path) -> std::io::Result<()> {
