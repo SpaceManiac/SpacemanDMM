@@ -350,6 +350,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                     //is_private: decl.var_type.flags.is_private(),
                     //is_protected: decl.var_type.flags.is_protected(),
                     path: &decl.var_type.type_path,
+                    input_type: decl.var_type.input_type,
                 });
                 parsed_type.vars.insert(name, Var {
                     docs: block,
@@ -1317,6 +1318,7 @@ struct VarType<'a> {
     //is_private: bool,
     //is_protected: bool,
     path: &'a [String],
+    input_type: InputType,
 }
 
 struct Proc {

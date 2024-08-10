@@ -903,7 +903,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 let location = self.location;
 
                 let expression = require!(self.expression());
-                let _ = require!(self.input_specifier());  // TODO: save to VarType instead of ignoring
+                // TODO: save `in` expression?
+                let (input_type, _) = require!(self.input_specifier());
 
                 // We have to annotate prior to consuming the statement terminator, as we
                 // will otherwise consume following whitespace resulting in a bad annotation range
@@ -919,6 +920,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
                 if let Some(mut var_type) = var_type {
                     var_type.suffix(&var_suffix);
+                    var_type.input_type = input_type;
                     self.tree.declare_var(current, last_part, location, docs, var_type.build(), Some(expression));
                 } else {
                     self.tree.override_var(current, last_part, location, docs, expression);
@@ -934,9 +936,12 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             _ => {
                 // usually `thing;` - a contentless declaration
 
-                if var_type.is_some() {
-                    let _ = require!(self.input_specifier());  // TODO: save to VarType instead of ignoring
-                }
+                let input_type = if var_type.is_some() {
+                    // TODO: save `in` expression?
+                    require!(self.input_specifier()).0
+                } else {
+                    None
+                };
 
                 // Same-line `//!` comment AFTER
                 while let Some(comment) = self.enclosing_doc_comment()? {
@@ -954,6 +959,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                             .register(self.context);
                     } else {
                         var_type.suffix(&var_suffix);
+                        var_type.input_type = input_type;
                         let node = self.tree.get_path(current).to_owned();
                         self.annotate(entry_start, || Annotation::Variable(reconstruct_path(&node, proc_builder, Some(&var_type), last_part)));
                         self.tree.declare_var(current, last_part, self.location, docs, var_type.build(), var_suffix.into_initializer());

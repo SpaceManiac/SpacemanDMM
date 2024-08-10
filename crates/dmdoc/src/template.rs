@@ -405,14 +405,20 @@ pub(crate) fn dm_type(ty: &Type) -> Markup {
                         }
                         (name)
                         @if let Some(ref ty) = var.type_ {
-                            " "
-                            aside {
-                                "\u{2013} "  // &ndash;
-                                @if ty.is_static { "/static" }
-                                @if ty.is_const { "/const" }
-                                @if ty.is_tmp { "/tmp" }
-                                @if ty.is_final { "/final" }
-                                (env.linkify_type_array(ty.path))
+                            @if ty.is_static || ty.is_const || ty.is_tmp || ty.is_final || !ty.path.is_empty() || !ty.input_type.is_empty() {
+                                " "
+                                aside {
+                                    "\u{2013} "  // &ndash;
+                                    @if ty.is_static { "/static" }
+                                    @if ty.is_const { "/const" }
+                                    @if ty.is_tmp { "/tmp" }
+                                    @if ty.is_final { "/final" }
+                                    (env.linkify_type_array(ty.path))
+                                    @if !ty.input_type.is_empty() {
+                                        span class="as" { " as " }
+                                        (render_input_type(env, ty.input_type))
+                                    }
+                                }
                             }
                         }
                         (git_link(env, &var.file.to_string_lossy(), var.line))

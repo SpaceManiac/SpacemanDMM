@@ -1087,6 +1087,7 @@ impl ObjectTreeBuilder {
         let mut var_type = VarTypeBuilder {
             flags,
             type_path,
+            input_type: None,
         };
         var_type.suffix(&suffix);
 

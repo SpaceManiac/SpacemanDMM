@@ -529,6 +529,12 @@ type_table! {
     "list",         LIST,         1 << 31;
 }
 
+impl Default for InputType {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
 bitflags! {
     #[derive(Default, GetSize)]
     pub struct VarTypeFlags: u8 {
@@ -1218,6 +1224,7 @@ impl fmt::Display for Parameter {
 pub struct VarType {
     pub flags: VarTypeFlags,
     pub type_path: TreePath,
+    pub input_type: InputType,
 }
 
 impl VarType {
@@ -1254,6 +1261,7 @@ impl fmt::Display for VarType {
 pub struct VarTypeBuilder {
     pub flags: VarTypeFlags,
     pub type_path: Vec<Ident>,
+    pub input_type: Option<InputType>,
 }
 
 impl VarTypeBuilder {
@@ -1267,6 +1275,7 @@ impl VarTypeBuilder {
         VarType {
             flags: self.flags,
             type_path: self.type_path.into_boxed_slice(),
+            input_type: self.input_type.unwrap_or_default(),
         }
     }
 }
@@ -1288,6 +1297,7 @@ impl FromIterator<String> for VarTypeBuilder {
         VarTypeBuilder {
             flags,
             type_path,
+            input_type: None,
         }
     }
 }
