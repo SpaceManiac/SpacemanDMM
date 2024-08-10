@@ -84,21 +84,36 @@ fn teaser(block: &DocBlock, prefix: &str) -> Markup {
 }
 
 fn git_link(env: &Environment, file: &str, line: u32) -> Markup {
+    let title = if line == 0 {
+        file
+    } else {
+        &format!("{} {}", file, line)
+    };
     let icon = html! {
-        img src="git.png" width="16" height="16" title=(format!("{}{}{}", file, if line != 0 { " " } else { "" }, line));
+        img src="git.png" width="16" height="16" title=(title);
     };
     html! {
-        @if !file.is_empty() {
+        @if !file.is_empty() && file != "(builtins)" {
             " "
             @if !env.git.web_url.is_empty() && !env.git.revision.is_empty() {
-                a href=(format!(
-                    "{}/blob/{}/{}{}{}",
-                    env.git.web_url,
-                    env.git.revision,
-                    file,
-                    if line != 0 { "#L" } else { "" },
-                    line
-                )) {
+                a href=(
+                    if line == 0 {
+                        format!(
+                            "{}/blob/{}/{}",
+                            env.git.web_url,
+                            env.git.revision,
+                            file
+                        )
+                    } else {
+                        format!(
+                            "{}/blob/{}/{}#L{}",
+                            env.git.web_url,
+                            env.git.revision,
+                            file,
+                            line
+                        )
+                    }
+                ) {
                     (icon)
                 }
             } @else {
