@@ -753,6 +753,7 @@ impl<'o> AnalyzeObjectTree<'o> {
     /// Gather and store set directives for the given proc using the provided code body and already existing flags
     pub fn gather_settings(&mut self, proc: ProcRef<'o>, code: &'o [Spanned<Statement>]) {
         let proc_location = proc.get().location;
+
         // Need to extract OUR declaration, and not our parent's. so we do the stupid
         if let Some(proc_type) = proc.ty().get().procs.get(proc.name()) {
             if let Some(declaration) = &proc_type.declaration {
@@ -765,6 +766,24 @@ impl<'o> AnalyzeObjectTree<'o> {
                 }
             }
         }
+
+        if let Some(decl) = proc.get_declaration() {
+            match &decl.return_type {
+                ProcReturnType::InputType(input_type) => {
+                    if let Some(path) = input_type.to_typepath() {
+                        if let Some(ty) = self.objtree.find(path) {
+                            self.return_type.insert(proc, TypeExpr::from(StaticType::Type(ty)));
+                        }
+                    }
+                }
+                ProcReturnType::TypePath(bits) => {
+                    if let Ok(ty) = crate::static_type(self.objtree, proc_location, bits) {
+                        self.return_type.insert(proc, TypeExpr::from(ty));
+                    }
+                }
+            }
+        }
+
         for statement in code.iter() {
             if let Statement::Setting { ref name, ref value, .. } = statement.elem {
                 if name == "SpacemanDMM_return_type" {

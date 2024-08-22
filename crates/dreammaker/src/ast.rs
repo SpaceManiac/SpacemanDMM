@@ -535,6 +535,33 @@ impl Default for InputType {
     }
 }
 
+impl InputType {
+    /// Get a typepath that approximates this input type, if possible.
+    pub fn to_typepath(&self) -> Option<&'static str> {
+        if self.is_empty() {
+            None
+        } else if *self == InputType::MOB {
+            Some("/mob")
+        } else if *self == InputType::OBJ {
+            Some("/obj")
+        } else if *self == InputType::TURF {
+            Some("/turf")
+        } else if *self == InputType::AREA {
+            Some("/area")
+        } else if *self == InputType::LIST {
+            Some("/list")
+        } else if self.difference(InputType::MOVABLE).is_empty() {
+            // Only applies to exactly movable = mob | obj
+            Some("/atom/movable")
+        } else if self.difference(InputType::ATOM).is_empty() {
+            // Might apply to area|turf or turf|mob or similar combos
+            Some("/atom")
+        } else {
+            None
+        }
+    }
+}
+
 bitflags! {
     #[derive(Default, GetSize)]
     pub struct VarTypeFlags: u8 {
