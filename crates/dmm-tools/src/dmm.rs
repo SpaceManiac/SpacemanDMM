@@ -1,4 +1,5 @@
-use std::collections::BTreeMap;
+use std::borrow::BorrowMut;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 use std::fs::File;
 use std::io;
@@ -185,7 +186,8 @@ impl Map {
         save_tgm::save_tgm(self, writer)
     }
 
-    pub fn to_file(&self, path: &Path) -> io::Result<()> {
+    pub fn to_file(&mut self, path: &Path) -> io::Result<()> {
+        self.coalesce_duplicate_tiles();
         self.to_writer(&mut File::create(path)?)
     }
 
@@ -229,6 +231,39 @@ impl Map {
     #[inline]
     pub fn format_key(&self, key: Key) -> impl std::fmt::Display {
         FormatKey(self.key_length, key)
+    }
+
+    pub fn coalesce_duplicate_tiles(&mut self) {
+        let mut coords_using_keys: HashMap<Key, Vec<Coord3>> = HashMap::default();
+
+        // First collect all known keys
+        self.iter_levels().for_each(|(z, zlvl)| {
+            zlvl.iter_top_down().for_each(|(coord, key)| {
+                coords_using_keys.entry(key).or_default().push(coord.z(z));
+            });
+        });
+
+        // Then find our prefab collisions, moving the collided keys over to the first one we found
+        // Then update the coords we know of and move them to the first key
+        let mut unused_keys: HashSet<Key> = HashSet::default();
+        let mut prefab_collisions: HashMap<&Vec<Prefab>, &Key> = HashMap::default();
+        for (key, prefabs) in &self.dictionary {
+            if prefab_collisions.contains_key(prefabs) {
+                unused_keys.insert(*key);
+                if let Some(coords) = coords_using_keys.get(key) {
+                    for coord in coords {
+                        let raw = coord.to_raw(self.grid.dim());
+                        self.grid[raw] = *prefab_collisions[prefabs];
+                    }
+                }
+            } else {
+                prefab_collisions.insert(prefabs, key);
+            }
+        }
+
+        for key in unused_keys {
+            self.dictionary.borrow_mut().remove_entry(&key);
+        }
     }
 }
 
