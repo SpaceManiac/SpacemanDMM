@@ -2311,6 +2311,21 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
     }
 
+    fn initial_null_error(&mut self, static_ty: StaticType, name: String, location: Location) {
+        match static_ty {
+            StaticType::List { list: _, keys: _ } => {
+                error(location, format!("initial() called on var/list/{}, but it always returns null for lists", name))
+                    .register(self.context);
+            }
+            StaticType::Type(ty) if ty == self.objtree.expect("/icon") => {}
+            StaticType::Type(ty) => {
+                error(location, format!("initial() called on var{}/{}, but it always returns null for types", ty.pretty_path() , name))
+                    .register(self.context);
+            }
+            _ => {}
+        }
+    }
+
     fn visit_call(&mut self, location: Location, src: TypeRef<'o>, proc: ProcRef<'o>, args: &'o [Expression], is_exact: bool, local_vars: &mut HashMap<String, LocalVar<'o>, RandomState>) -> Analysis<'o> {
         self.env.call_tree.entry(self.proc_ref).or_default().push((proc, location, self.inside_newcontext != 0));
         if let Some((privateproc, true, decllocation)) = self.env.private.get_self_or_parent(proc) {
@@ -2397,6 +2412,20 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             }
 
             let analysis = self.visit_expression(location, argument_value, None, local_vars);
+
+            if proc.is_builtin() && proc.name() == "initial" && analysis.static_ty != StaticType::None {
+                if let Expression::Base{term, follow} = arg {
+                    if let Some(Spanned{location, elem: Follow::Field(_, ident)}) = follow.last() {
+                        self.initial_null_error(analysis.static_ty.clone(), ident.to_string(), *location);
+                    } else {
+                        let argument_analysis = self.visit_term(term.location, &term.elem, None, local_vars);
+                        if let Term::Ident(ident_name) = &term.elem {
+                            self.initial_null_error(argument_analysis.static_ty, ident_name.to_string(), term.location);
+                        }
+                    }
+                }
+            }
+
             if let Some(kw) = this_kwarg {
                 param_name_map.insert(kw.as_str(), analysis);
                 param_expr_map.insert(kw.as_str(), argument_value);
