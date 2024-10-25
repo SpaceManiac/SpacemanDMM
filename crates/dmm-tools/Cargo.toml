@@ -9,21 +9,21 @@ inflate = "0.4.5"
 ndarray = "0.15.6"
 rand = "0.8.5"
 dreammaker = { path = "../dreammaker" }
-lodepng = "3.7.0"
-indexmap = "1.9.1"
-ahash = "0.8.0"
-either = "1.8.0"
+lodepng = "3.10.7"
+indexmap = "1.9.3"
+ahash = "0.8.11"
+either = "1.13.0"
 
 [dependencies.bytemuck]
-version = "1.12.1"
+version = "1.19.0"
 features = ["derive"]
 
 [dependencies.bumpalo]
-version = "3.11.1"
+version = "3.16.0"
 features = ["collections"]
 
 [dependencies.png]
-version = "0.17.6"
+version = "0.17.14"
 optional = true
 
 [dependencies.gfx_core]
@@ -35,4 +35,4 @@ version = "0.11.4"
 optional = true
 
 [dev-dependencies]
-walkdir = "2.3.2"
+walkdir = "2.5.0"
