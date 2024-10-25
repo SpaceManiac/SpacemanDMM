@@ -6,7 +6,7 @@ description = "A simple Interval Tree implementation"
 repository = "https://github.com/SpaceManiac/SpacemanDMM/tree/master/crates/interval-tree"
 keywords = ["datastructure", "interval", "tree", "map"]
 license-file = "LICENSE"
-edition = "2018"
+edition = "2021"
 
 [dev-dependencies]
 rand = "0.8.5"
