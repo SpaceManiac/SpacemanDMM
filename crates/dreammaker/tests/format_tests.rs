@@ -26,8 +26,8 @@ fn floats() {
     assert_eq!(FormatFloat(0.000500001).to_string(), "0.000500001");
     assert_eq!(FormatFloat(0.0000500001).to_string(), "5.00001e-005");
 
-    assert_eq!(FormatFloat(std::f32::INFINITY).to_string(), "1.#INF");
-    assert_eq!(FormatFloat(-std::f32::INFINITY).to_string(), "-1.#INF");
+    assert_eq!(FormatFloat(f32::INFINITY).to_string(), "1.#INF");
+    assert_eq!(FormatFloat(-f32::INFINITY).to_string(), "-1.#INF");
 
     assert_eq!(FormatFloat(2.9).to_string(), "2.9");
     assert_eq!(FormatFloat(2.4).to_string(), "2.4");
