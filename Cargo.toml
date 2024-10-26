@@ -11,6 +11,7 @@ members = [
     "crates/interval-tree",
     #"crates/spaceman-dmm",
 ]
+resolver = "2"
 
 [profile.dev]
 opt-level = 2

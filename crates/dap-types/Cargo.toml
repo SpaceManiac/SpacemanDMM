@@ -2,7 +2,7 @@
 name = "dap-types"
 version = "0.0.0"
 authors = ["Tad Hardesty <tad@platymuus.com>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 serde = "1.0.144"

@@ -52,7 +52,7 @@ macro_rules! take_match {
     (
         $self:ident {
             $(
-                $($p:pat)|* $( if $condition:expr )? => $branch:expr,
+                $($p:pat_param)|* $( if $condition:expr )? => $branch:expr,
             )*
         }
         // else mandatory because you should never be matching on every option

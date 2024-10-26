@@ -2,7 +2,7 @@
 name = "dm-langserver"
 version = "1.9.0"
 authors = ["Tad Hardesty <tad@platymuus.com>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 url = "2.3.1"
