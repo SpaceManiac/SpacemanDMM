@@ -84,10 +84,12 @@ fn teaser(block: &DocBlock, prefix: &str) -> Markup {
 }
 
 fn git_link(env: &Environment, file: &str, line: u32) -> Markup {
+    let z;
     let title = if line == 0 {
         file
     } else {
-        &format!("{} {}", file, line)
+        z = format!("{} {}", file, line);
+        &z
     };
     let icon = html! {
         img src="git.png" width="16" height="16" title=(title);
