@@ -52,7 +52,7 @@ macro_rules! take_match {
     (
         $self:ident {
             $(
-                $($p:pat_param)|* $( if $condition:expr )? => $branch:expr,
+                $p:pat $( if $condition:expr )? => $branch:expr,
             )*
         }
         // else mandatory because you should never be matching on every option
@@ -65,11 +65,11 @@ macro_rules! take_match {
             #[allow(unused_variables)]
             match $self.peek() {
                 $(
-                    $($p)|* $( if $condition )? => {
+                    $p $( if $condition )? => {
                         // inner match that moves instead of refs
                         match $self.take() {
                             // no duplicate `if` because types are different
-                            $($p)|* => {
+                            $p => {
                                 #[warn(unused_variables)]
                                 $branch
                             }

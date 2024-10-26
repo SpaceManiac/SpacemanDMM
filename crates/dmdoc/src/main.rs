@@ -718,7 +718,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn find_return_type(code: &dm::ast::Block) -> Option<Vec<String>> {
-    for stmt in code {
+    for stmt in code.iter() {
         if let dm::ast::Statement::Setting { name, mode: dm::ast::SettingMode::Assign, value } = &stmt.elem {
             if name.as_str() == "SpacemanDMM_return_type" {
                 if let Some(dm::ast::Term::Prefab(fab)) = value.as_term() {
