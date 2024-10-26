@@ -142,10 +142,10 @@ macro_rules! if_annotation {
 }
 
 macro_rules! match_annotation {
-    ($a:expr; $($($p:pat_param)|* => $b:block,)*) => {
+    ($a:expr; $($p:pat => $b:block,)*) => {
         for (_, thing) in $a.clone() {
             match thing {
-                $($($p)|* => $b,)*
+                $($p => $b,)*
                 _ => {}
             }
         }
