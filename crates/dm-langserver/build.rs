@@ -47,17 +47,19 @@ fn read_commit() -> Result<String, git2::Error> {
 
     let mut best = None;
     for tag_id in all_tags {
-        let tag_commit = repo.find_tag(tag_id)?.as_object().peel_to_commit()?.id();
-        let (ahead, behind) = repo.graph_ahead_behind(head, tag_commit)?;
-        if behind == 0 {
-            match best {
-                None => best = Some(ahead),
-                Some(prev) if ahead < prev => best = Some(ahead),
-                _ => {}
+        if let Ok(possible_tag) = repo.find_tag(tag_id) {
+            let tag_commit = possible_tag.as_object().peel_to_commit()?.id();
+            let (ahead, behind) = repo.graph_ahead_behind(head, tag_commit)?;
+            if behind == 0 {
+                match best {
+                    None => best = Some(ahead),
+                    Some(prev) if ahead < prev => best = Some(ahead),
+                    _ => {}
+                }
             }
-        }
-        if ahead == 0 {
-            break;
+            if ahead == 0 {
+                break;
+            }
         }
     }
 

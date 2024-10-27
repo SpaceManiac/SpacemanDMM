@@ -7,8 +7,8 @@ edition = "2021"
 [dependencies]
 dreammaker = { path = "../dreammaker" }
 serde_json = "1.0"
-ahash = "0.8.0"
+ahash = "0.8.11"
 
 [build-dependencies]
-chrono = "0.4.22"
-git2 = { version = "0.18.2", default-features = false }
+chrono = "0.4.38"
+git2 = { version = "0.19.0", default-features = false }
