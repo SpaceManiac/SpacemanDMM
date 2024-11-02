@@ -3,7 +3,7 @@
 #![allow(dead_code)]
 
 use std::borrow::Cow;
-use std::collections::HashMap;
+use foldhash::HashMap;
 use std::io::{self, BufRead, Read};
 use std::rc::Rc;
 use url::Url;
@@ -15,13 +15,11 @@ use lsp_types::{
 
 use super::{invalid_request, url_to_path};
 
-use ahash::RandomState;
-
 /// A store for the contents of currently-open documents, with appropriate
 /// fallback for documents which are not currently open.
 #[derive(Default)]
 pub struct DocumentStore {
-    map: HashMap<Url, Document, RandomState>,
+    map: HashMap<Url, Document>,
 }
 
 impl DocumentStore {

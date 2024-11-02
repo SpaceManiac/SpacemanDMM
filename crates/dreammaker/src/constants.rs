@@ -6,7 +6,7 @@ use std::path::Path;
 use get_size::GetSize;
 use get_size_derive::GetSize;
 
-use ahash::RandomState;
+use foldhash::fast::RandomState;
 use color_space::{Hsl, Hsv, Lch, Rgb};
 use indexmap::IndexMap;
 use ordered_float::OrderedFloat;

@@ -16,9 +16,10 @@ use std::borrow::Cow;
 use std::path::Path;
 
 mod error;
-use ahash::RandomState;
 pub use error::*;
 use get_size::GetSize;
+
+use foldhash::fast::RandomState;
 use indexmap::IndexMap;
 
 // roughly in order of stage

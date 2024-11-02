@@ -1,11 +1,9 @@
 //! Error, warning, and other diagnostics handling.
 
 use std::cell::{Ref, RefCell, RefMut};
-use std::collections::HashMap;
+use foldhash::HashMap;
 use std::path::{Path, PathBuf};
 use std::{error, fmt, io};
-
-use ahash::RandomState;
 
 use get_size::GetSize;
 use get_size_derive::GetSize;
@@ -36,7 +34,7 @@ pub struct FileList {
     /// The list of loaded files.
     files: RefCell<Vec<PathBuf>>,
     /// Reverse mapping from paths to file numbers.
-    reverse_files: RefCell<HashMap<PathBuf, FileId, RandomState>>,
+    reverse_files: RefCell<HashMap<PathBuf, FileId>>,
 }
 
 /// A diagnostics context, tracking loaded files and any observed errors.

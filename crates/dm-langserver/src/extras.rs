@@ -1,6 +1,6 @@
 //! Extensions to the language server protocol.
 
-use std::collections::HashMap;
+use foldhash::HashMap;
 
 use lsp_types::notification::*;
 use lsp_types::request::*;

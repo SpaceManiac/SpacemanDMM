@@ -10,8 +10,8 @@ ndarray = "0.15.6"
 rand = "0.8.5"
 dreammaker = { path = "../dreammaker" }
 lodepng = "3.10.7"
-indexmap = "1.9.3"
-ahash = "0.8.11"
+indexmap = "2.6.0"
+foldhash = "0.1.3"
 either = "1.13.0"
 
 [dependencies.bytemuck]

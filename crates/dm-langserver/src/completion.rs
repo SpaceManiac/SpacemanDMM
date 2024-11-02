@@ -1,6 +1,6 @@
 //! Supporting functions for completion and go-to-definition.
 
-use std::collections::HashSet;
+use foldhash::{HashSet, HashSetExt};
 
 use lsp_types::*;
 
@@ -10,8 +10,6 @@ use dm::objtree::{ProcValue, TypeProc, TypeRef, TypeVar};
 
 use crate::symbol_search::contains;
 use crate::{is_constructor_name, Engine, Span};
-
-use ahash::RandomState;
 
 #[rustfmt::skip]
 static PROC_KEYWORDS: &[&str] = &[
@@ -103,7 +101,7 @@ fn item_documentation(docs: &dm::docs::DocCollection) -> Option<Documentation> {
 
 fn items_ty<'a>(
     results: &mut Vec<CompletionItem>,
-    skip: &mut HashSet<(&str, &'a String), RandomState>,
+    skip: &mut HashSet<(&str, &'a String)>,
     ty: TypeRef<'a>,
     query: &str,
 ) {
@@ -256,7 +254,7 @@ impl<'a> Engine<'a> {
         }
 
         let mut next = Some(ty).filter(|ty| !ty.is_root());
-        let mut skip = HashSet::with_hasher(RandomState::default());
+        let mut skip = HashSet::new();
         while let Some(ty) = next {
             // override a parent's var
             for (name, var) in ty.get().vars.iter() {
@@ -350,7 +348,7 @@ impl<'a> Engine<'a> {
                 proc: None,
             }) => {
                 let mut next = Some(ty);
-                let mut skip = HashSet::with_hasher(RandomState::default());
+                let mut skip = HashSet::new();
                 while let Some(ty) = next {
                     // reference a declared proc
                     for (name, proc) in ty.get().procs.iter() {
@@ -446,7 +444,7 @@ impl<'a> Engine<'a> {
 
         // fields
         let mut next = Some(ty);
-        let mut skip = HashSet::with_hasher(RandomState::default());
+        let mut skip = HashSet::new();
         while let Some(ty) = next {
             items_ty(results, &mut skip, ty, query);
             next = ty.parent_type();
@@ -463,7 +461,7 @@ impl<'a> Engine<'a> {
         I: Iterator<Item = (Span, &'b Annotation)> + Clone,
     {
         let mut next = self.find_scoped_type(iter, priors);
-        let mut skip = HashSet::with_hasher(RandomState::default());
+        let mut skip = HashSet::new();
         while let Some(ty) = next {
             items_ty(results, &mut skip, ty, query);
             next = ty.parent_type_without_root();

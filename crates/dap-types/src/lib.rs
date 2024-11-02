@@ -4,10 +4,9 @@
 #![deny(unsafe_code)]
 #![allow(non_snake_case)]
 
-use ahash::RandomState;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
+use foldhash::HashMap;
 
 pub trait Request {
     type Params;
@@ -1530,7 +1529,7 @@ pub struct Message {
     /**
      * An object used as a dictionary for looking up the variables in the format string.
      */
-    pub variables: Option<HashMap<String, String, RandomState>>,
+    pub variables: Option<HashMap<String, String>>,
 
     /**
      * If true send to telemetry.

@@ -13,6 +13,7 @@ use dm::objtree::ObjectTree;
 use maud::{Markup, PreEscaped};
 use pulldown_cmark::{BrokenLink, CowStr};
 use std::collections::{BTreeMap, BTreeSet};
+use foldhash::HashSet;
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -100,7 +101,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         index_path.clone_from(&context.config().dmdoc.index_file);
     }
 
-    let mut code_directories: std::collections::HashSet<std::ffi::OsString>;
+    let mut code_directories: HashSet<std::ffi::OsString>;
     if context.config().dmdoc.module_directories.is_empty() {
         // Any top-level directory which is `#include`d in the `.dme` (most
         // importantly "code", but also "_maps", "interface", and any downstream

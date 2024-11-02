@@ -5,7 +5,7 @@ extern crate walkdir;
 
 use dmm_tools::dmi::*;
 use ndarray::s;
-use std::collections::HashMap;
+use foldhash::{HashMap, HashMapExt};
 use std::path::Path;
 use walkdir::{DirEntry, WalkDir};
 
