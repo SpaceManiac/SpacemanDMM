@@ -583,9 +583,8 @@ impl<'ctx> Preprocessor<'ctx> {
     }
 
     fn pop_ifdef(&mut self) -> Option<Ifdef> {
-        self.ifdef_stack.pop().map(|ifdef| {
+        self.ifdef_stack.pop().inspect(|ifdef| {
             self.ifdef_history.insert(range(ifdef.location, self.last_input_loc), ifdef.active);
-            ifdef
         })
     }
 
