@@ -1,12 +1,12 @@
 //! The preprocessor.
 use std::borrow::Cow;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::{fmt, io};
 
-use ahash::RandomState;
+use foldhash::HashMap;
 
 use interval_tree::{range, IntervalTree};
 
@@ -169,7 +169,7 @@ impl std::ops::DerefMut for DefineHistory {
 /// stack is exhausted.
 #[derive(Debug, Clone, Default)]
 pub struct DefineMap {
-    inner: HashMap<String, Vec<(Location, Define)>, RandomState>,
+    inner: HashMap<String, Vec<(Location, Define)>>,
 }
 
 impl DefineMap {
@@ -384,10 +384,10 @@ pub struct Preprocessor<'ctx> {
     env_file: PathBuf,
 
     include_stack: IncludeStack<'ctx>,
-    include_locations: HashMap<FileId, Location, RandomState>,
+    include_locations: HashMap<FileId, Location>,
     // list of files with #pragma multiple to allow for more then one include
     // should this be done as an enum in include_locations instead?
-    multiple_locations: HashMap<FileId, Location, RandomState>,
+    multiple_locations: HashMap<FileId, Location>,
     last_input_loc: Location,
     output: VecDeque<LocatedToken>,
     ifdef_stack: Vec<Ifdef>,
@@ -401,7 +401,7 @@ pub struct Preprocessor<'ctx> {
     scripts: Vec<PathBuf>,
 
     last_printable_input_loc: Location,
-    danger_idents: HashMap<Ident, Location, RandomState>,
+    danger_idents: HashMap<Ident, Location>,
     in_interp_string: u32,
 
     docs_in: VecDeque<(Location, DocComment)>,
@@ -583,9 +583,8 @@ impl<'ctx> Preprocessor<'ctx> {
     }
 
     fn pop_ifdef(&mut self) -> Option<Ifdef> {
-        self.ifdef_stack.pop().map(|ifdef| {
+        self.ifdef_stack.pop().inspect(|ifdef| {
             self.ifdef_history.insert(range(ifdef.location, self.last_input_loc), ifdef.active);
-            ifdef
         })
     }
 

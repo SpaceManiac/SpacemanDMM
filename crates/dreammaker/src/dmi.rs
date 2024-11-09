@@ -1,6 +1,7 @@
 //! DMI metadata parsing and representation.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
+use foldhash::{HashMap, HashMapExt};
 use std::fmt::Display;
 use std::io;
 use std::path::Path;

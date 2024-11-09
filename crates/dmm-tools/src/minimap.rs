@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::sync::RwLock;
 
 use ndarray::Axis;
@@ -10,7 +10,7 @@ use crate::render_passes::RenderPass;
 use dm::constants::Constant;
 use dm::objtree::*;
 
-use ahash::RandomState;
+use foldhash::HashSet;
 
 const TILE_SIZE: u32 = 32;
 
@@ -25,7 +25,7 @@ pub struct Context<'a> {
     pub min: (usize, usize),
     pub max: (usize, usize),
     pub render_passes: &'a [Box<dyn RenderPass>],
-    pub errors: &'a RwLock<HashSet<String, RandomState>>,
+    pub errors: &'a RwLock<HashSet<String>>,
     pub bump: &'a bumpalo::Bump,
 }
 
@@ -201,7 +201,7 @@ fn get_atom_list<'a>(
     objtree: &'a ObjectTree,
     prefabs: &'a [Prefab],
     render_passes: &[Box<dyn RenderPass>],
-    errors: &RwLock<HashSet<String, RandomState>>,
+    errors: &RwLock<HashSet<String>>,
 ) -> Vec<Atom<'a>> {
     let mut result = Vec::new();
 

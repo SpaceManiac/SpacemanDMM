@@ -36,7 +36,8 @@ mod symbol_search;
 mod debugger;
 
 use std::collections::hash_map::Entry;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::VecDeque;
+use foldhash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -48,8 +49,6 @@ use url::Url;
 use dm::annotation::{Annotation, AnnotationTree};
 use dm::objtree::TypeRef;
 use dm::FileId;
-
-use ahash::RandomState;
 
 fn main() {
     std::env::set_var("RUST_BACKTRACE", "1");
@@ -149,7 +148,7 @@ impl ClientCaps {
 
 #[derive(Default)]
 struct DiagnosticsTracker {
-    sent: HashSet<Url, RandomState>,
+    sent: HashSet<Url>,
 }
 
 impl DiagnosticsTracker {
@@ -162,8 +161,8 @@ impl DiagnosticsTracker {
         }
     }
 
-    fn build(root: Option<&Url>, file_list: &dm::FileList, errors: &[dm::DMError], related_info: bool) -> HashMap<Url, Vec<lsp_types::Diagnostic>, RandomState> {
-        let mut map: HashMap<_, Vec<_>, RandomState> = HashMap::with_hasher(RandomState::default());
+    fn build(root: Option<&Url>, file_list: &dm::FileList, errors: &[dm::DMError], related_info: bool) -> HashMap<Url, Vec<lsp_types::Diagnostic>> {
+        let mut map: HashMap<_, Vec<_>> = HashMap::new();
         for error in errors.iter() {
             let loc = error.location();
             let related_information = if !related_info || error.notes().is_empty() {
@@ -216,8 +215,8 @@ impl DiagnosticsTracker {
         map
     }
 
-    fn send(&mut self, map: HashMap<Url, Vec<lsp_types::Diagnostic>, RandomState>) {
-        let mut new_sent = HashSet::with_capacity_and_hasher(map.len(), RandomState::default());
+    fn send(&mut self, map: HashMap<Url, Vec<lsp_types::Diagnostic>>) {
+        let mut new_sent = HashSet::with_capacity(map.len());
         for (url, diagnostics) in map {
             self.sent.remove(&url);  // don't erase below
             new_sent.insert(url.clone());
@@ -256,7 +255,7 @@ struct Engine<'a> {
     objtree: Arc<dm::objtree::ObjectTree>,
     references_table: background::Background<find_references::ReferencesTable>,
 
-    annotations: HashMap<Url, (FileId, FileId, Rc<AnnotationTree>), RandomState>,
+    annotations: HashMap<Url, (FileId, FileId, Rc<AnnotationTree>)>,
     diagnostics_tracker: Arc<Mutex<DiagnosticsTracker>>,
 
     client_caps: ClientCaps,

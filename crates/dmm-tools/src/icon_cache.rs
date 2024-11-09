@@ -1,4 +1,5 @@
 use std::collections::{hash_map, HashMap};
+use foldhash::fast::RandomState;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
@@ -6,7 +7,7 @@ use super::dmi::IconFile;
 
 #[derive(Default)]
 pub struct IconCache {
-    lock: RwLock<HashMap<PathBuf, Option<Arc<IconFile>>>>,
+    lock: RwLock<HashMap<PathBuf, Option<Arc<IconFile>>, RandomState>>,
     icons_root: Option<PathBuf>,
 }
 

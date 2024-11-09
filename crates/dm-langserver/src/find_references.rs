@@ -1,15 +1,13 @@
 //! The symbol table used for "Find References" support.
 
-use std::collections::HashMap;
+use foldhash::{HashMap, HashMapExt};
 
 use dm::ast::*;
 use dm::objtree::*;
 use dm::Location;
 
-use ahash::RandomState;
-
 pub struct ReferencesTable {
-    uses: HashMap<SymbolId, References, RandomState>,
+    uses: HashMap<SymbolId, References>,
     symbols: SymbolIdSource,
 }
 
@@ -22,7 +20,7 @@ struct References {
 impl ReferencesTable {
     pub fn new(objtree: &ObjectTree) -> Self {
         let mut tab = ReferencesTable {
-            uses: HashMap::with_hasher(RandomState::default()),
+            uses: HashMap::new(),
             symbols: SymbolIdSource::new(SymbolIdCategory::LocalVars),
         };
 
@@ -134,12 +132,12 @@ struct WalkProc<'o> {
     objtree: &'o ObjectTree,
     ty: TypeRef<'o>,
     proc: Option<ProcRef<'o>>,
-    local_vars: HashMap<String, Local<'o>, RandomState>,
+    local_vars: HashMap<String, Local<'o>>,
 }
 
 impl<'o> WalkProc<'o> {
     fn from_proc(tab: &'o mut ReferencesTable, objtree: &'o ObjectTree, proc: ProcRef<'o>) -> Self {
-        let mut local_vars = HashMap::with_hasher(RandomState::default());
+        let mut local_vars = HashMap::new();
         local_vars.insert("global".to_owned(), Local {
             ty: StaticType::Type(objtree.root()),
             symbol: objtree.root().id,
@@ -175,7 +173,7 @@ impl<'o> WalkProc<'o> {
     }
 
     fn from_ty(tab: &'o mut ReferencesTable, objtree: &'o ObjectTree, ty: TypeRef<'o>) -> Self {
-        let mut local_vars = HashMap::with_hasher(RandomState::default());
+        let mut local_vars = HashMap::new();
         local_vars.insert("global".to_owned(), Local {
             ty: StaticType::Type(objtree.root()),
             symbol: objtree.root().id,

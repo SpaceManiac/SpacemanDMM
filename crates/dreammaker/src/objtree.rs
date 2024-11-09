@@ -6,8 +6,8 @@ use std::fmt;
 use get_size::GetSize;
 use get_size_derive::GetSize;
 
-use ahash::RandomState;
 use indexmap::IndexMap;
+use foldhash::fast::RandomState;
 
 use crate::heap_size_of_index_map;
 

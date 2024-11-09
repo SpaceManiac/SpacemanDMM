@@ -2,7 +2,7 @@
 #![allow(unsafe_code)]
 
 use super::SequenceNumber;
-use std::collections::HashMap;
+use foldhash::HashMap;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 
