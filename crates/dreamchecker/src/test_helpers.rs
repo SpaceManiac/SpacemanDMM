@@ -5,8 +5,10 @@ use crate::run_inner;
 
 pub const NO_ERRORS: &[(u32, u16, &str)] = &[];
 
-pub fn parse_a_file_for_test<S: Into<Cow<'static, str>>>(buffer: S) -> Context {
+pub fn parse_a_file_for_test<S: Into<Cow<'static, str>>>(buffer: S, config: String) -> Context {
     let context = Context::default();
+
+    context.set_config(config);
 
     let pp = dm::preprocessor::Preprocessor::from_buffer(&context, "unit_tests.rs".into(), buffer.into());
 
@@ -22,7 +24,11 @@ pub fn parse_a_file_for_test<S: Into<Cow<'static, str>>>(buffer: S) -> Context {
 }
 
 pub fn check_errors_match<S: Into<Cow<'static, str>>>(buffer: S, errorlist: &[(u32, u16, &str)]) {
-    let context = parse_a_file_for_test(buffer);
+    check_errors_match_with_config(buffer, errorlist, String::new());
+}
+
+pub fn check_errors_match_with_config<S: Into<Cow<'static, str>>>(buffer: S, errorlist: &[(u32, u16, &str)], config: String) {
+    let context = parse_a_file_for_test(buffer, config);
     let errors = context.errors();
     let mut iter = errors.iter();
     for (line, column, desc) in errorlist {
