@@ -587,11 +587,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     }
 
     fn exact(&mut self, tok: Token) -> Status<()> {
-        match tok {
-            Token::Eof => self.expected("EOF"),
-            Token::Punct(p) => self.expected(p.single_quoted()),
-            ref other => self.expected(format!("'{}'", other)),
-        }
+        self.expected(tok.single_quoted());
         if self.peek() == &tok {
             self.take();
             SUCCESS
@@ -650,7 +646,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         loop {
             self.expected("';'");
             if terminator != Token::Eof {
-                self.expected(format!("'{terminator}'"));
+                self.expected(terminator.single_quoted());
             }
 
             if current == self.tree.root_index() {

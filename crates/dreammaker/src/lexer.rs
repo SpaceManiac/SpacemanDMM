@@ -348,6 +348,14 @@ impl Token {
             _ => false,
         }
     }
+
+    pub fn single_quoted(&self) -> Cow<'static, str> {
+        match self {
+            Token::Eof => Cow::Borrowed("EOF"),
+            Token::Punct(p) => Cow::Borrowed(p.single_quoted()),
+            _ => Cow::Owned(format!("'{}'", self)),
+        }
+    }
 }
 
 impl fmt::Display for Token {
