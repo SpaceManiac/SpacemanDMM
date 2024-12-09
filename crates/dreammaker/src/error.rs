@@ -44,7 +44,7 @@ pub struct Context {
     /// A list of errors, warnings, and other diagnostics generated.
     errors: RefCell<Vec<DMError>>,
     /// Warning config
-    config: RefCell<Config>,
+    config: Config,
     print_severity: Option<Severity>,
 
     io_time: std::cell::Cell<std::time::Duration>,
@@ -124,9 +124,9 @@ impl Context {
     // ------------------------------------------------------------------------
     // Configuration
 
-    pub fn force_config(&self, toml: &Path) {
+    pub fn force_config(&mut self, toml: &Path) {
         match Config::read_toml(toml) {
-            Ok(config) => *self.config.borrow_mut() = config,
+            Ok(config) => self.config = config,
             Err(io_error) => {
                 let file = self.register_file(toml);
                 let (line, column) = io_error.line_col().unwrap_or((1, 1));
@@ -137,15 +137,15 @@ impl Context {
         }
     }
 
-    pub fn autodetect_config(&self, dme: &Path) {
+    pub fn autodetect_config(&mut self, dme: &Path) {
         let toml = dme.parent().unwrap().join("SpacemanDMM.toml");
         if toml.exists() {
             self.force_config(&toml);
         }
     }
 
-    pub fn config(&self) -> Ref<Config> {
-        self.config.borrow()
+    pub fn config(&self) -> &Config {
+        &self.config
     }
 
     /// Set a severity at and above which errors will be printed immediately.
@@ -173,11 +173,11 @@ impl Context {
 
     /// Push an error or other diagnostic to the context.
     pub fn register_error(&self, error: DMError) {
-        let Some(error) = self.config.borrow().set_configured_severity(error) else {
+        let Some(error) = self.config.set_configured_severity(error) else {
             return // errortype is disabled
         };
         // ignore errors with severity above configured level
-        if !self.config.borrow().registerable_error(&error) {
+        if !self.config.registerable_error(&error) {
             return
         }
         if let Some(print_severity) = self.print_severity {

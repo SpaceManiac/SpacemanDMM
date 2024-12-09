@@ -12,7 +12,7 @@ pub mod all_notifications {
 
 macro_rules! handle_method_call {
     ($($(#[$attr:meta])* on $what:ident(&mut $self:ident, $p:pat) $b:block)*) => {
-        impl<'a> Engine<'a> {
+        impl Engine {
             fn handle_method_call_table(method: &str) -> Option<fn(&mut Self, serde_json::Value) -> Result<serde_json::Value, jsonrpc::Error>> {
                 use macros::all_methods::*;
                 $(if method == <$what>::METHOD {
@@ -46,7 +46,7 @@ macro_rules! handle_method_call {
 
 macro_rules! handle_notification {
     ($(on $what:ident(&mut $self:ident, $p:pat) $b:block)*) => {
-        impl<'a> Engine<'a> {
+        impl Engine {
             fn handle_notification_table(method: &str) -> Option<fn(&mut Self, serde_json::Value) -> Result<(), jsonrpc::Error>> {
                 use macros::all_notifications::*;
                 $(if method == <$what>::METHOD {

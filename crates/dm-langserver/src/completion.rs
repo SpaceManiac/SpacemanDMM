@@ -164,10 +164,10 @@ pub fn combine_tree_path<'a, I>(iter: &I, mut absolute: bool, mut parts: &'a [St
     prefix_parts.iter().chain(parts).map(|x| &**x)
 }
 
-impl<'a> Engine<'a> {
+impl Engine {
     pub fn follow_type_path<'b, I>(&'b self, iter: &I, mut parts: &'b [(PathOp, String)]) -> Option<TypePathResult<'b>>
     where
-        I: Iterator<Item = (Span, &'a Annotation)> + Clone,
+        I: Iterator<Item = (Span, &'b Annotation)> + Clone,
     {
         // cut off the part of the path we haven't selected
         if_annotation! { Annotation::InSequence(idx) in iter; {

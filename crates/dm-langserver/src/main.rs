@@ -89,8 +89,7 @@ fn main() {
         }
     }
 
-    let context = dm::Context::default();
-    let mut engine = Engine::new(&context);
+    let mut engine = Engine::new();
     jrpc_io::run_until_stdin_eof(|message| engine.handle_input(message));
     engine.exit(0);
 }
@@ -242,7 +241,7 @@ impl DiagnosticsTracker {
     }
 }
 
-struct Engine<'a> {
+struct Engine {
     docs: document::DocumentStore,
 
     status: InitStatus,
@@ -250,7 +249,7 @@ struct Engine<'a> {
     threads: Vec<std::thread::JoinHandle<()>>,
     root: Option<Url>,
 
-    context: &'a dm::Context,
+    context: dm::Context,
     defines: Option<dm::preprocessor::DefineHistory>,
     objtree: Arc<dm::objtree::ObjectTree>,
     references_table: background::Background<find_references::ReferencesTable>,
@@ -263,8 +262,8 @@ struct Engine<'a> {
     debug_server_dll: Option<String>,
 }
 
-impl<'a> Engine<'a> {
-    fn new(context: &'a dm::Context) -> Self {
+impl Engine {
+    fn new() -> Self {
         Engine {
             docs: Default::default(),
 
@@ -273,7 +272,7 @@ impl<'a> Engine<'a> {
             threads: Default::default(),
             root: None,
 
-            context,
+            context: dm::Context::default(),
             defines: None,
             objtree: Default::default(),
             references_table: Default::default(),
@@ -448,10 +447,9 @@ impl<'a> Engine<'a> {
         };
 
         // Set up the preprocessor.
-        let ctx = self.context;
-        ctx.reset_io_time();
-        ctx.autodetect_config(&environment);
-        let mut pp = match dm::preprocessor::Preprocessor::new(ctx, environment.clone()) {
+        self.context.reset_io_time();
+        self.context.autodetect_config(&environment);
+        let mut pp = match dm::preprocessor::Preprocessor::new(&self.context, environment.clone()) {
             Ok(pp) => pp,
             Err(err) => {
                 self.issue_notification::<lsp_types::notification::PublishDiagnostics>(
@@ -477,7 +475,7 @@ impl<'a> Engine<'a> {
         // Parse the environment.
         let fatal_errored;
         {
-            let mut parser = dm::parser::Parser::new(ctx, dm::indents::IndentProcessor::new(ctx, &mut pp));
+            let mut parser = dm::parser::Parser::new(&self.context, dm::indents::IndentProcessor::new(&self.context, &mut pp));
             parser.enable_procs();
             let (fatal_errored_2, objtree) = parser.parse_object_tree_2();
             fatal_errored = fatal_errored_2;
@@ -485,7 +483,7 @@ impl<'a> Engine<'a> {
         }
         let elapsed = start.elapsed(); start += elapsed;
         {
-            let disk = ctx.get_io_time();
+            let disk = self.context.get_io_time();
             let parse = elapsed.saturating_sub(disk);
             eprint!("disk {}.{:03}s - parse {}.{:03}s", disk.as_secs(), disk.subsec_millis(), parse.as_secs(), parse.subsec_millis());
         }
@@ -504,7 +502,7 @@ impl<'a> Engine<'a> {
         let mut diagnostics_lock = self.diagnostics_tracker.lock().unwrap();
 
         // Background thread: If enabled, and parse was OK, run dreamchecker.
-        if ctx.config().langserver.dreamchecker && !fatal_errored {
+        if self.context.config().langserver.dreamchecker && !fatal_errored {
             self.show_status("checking");
             let context = self.context.clone();
             let objtree = self.objtree.clone();
@@ -582,16 +580,16 @@ impl<'a> Engine<'a> {
                         Err(_) => "<outside workspace>".as_ref(),
                     };
                     let (real_file_id, mut preprocessor) = match self.context.get_file(stripped) {
-                        Some(id) => (id, defines.branch_at_file(id, self.context)),
-                        None => (FileId::default(), defines.branch_at_end(self.context)),
+                        Some(id) => (id, defines.branch_at_file(id, &self.context)),
+                        None => (FileId::default(), defines.branch_at_end(&self.context)),
                     };
                     let contents = self.docs.read(url).map_err(invalid_request)?;
                     let file_id = preprocessor.push_file(stripped.to_owned(), contents).map_err(invalid_request)?;
                     preprocessor.enable_annotations();
                     let mut annotations = AnnotationTree::default();
                     {
-                        let indent = dm::indents::IndentProcessor::new(self.context, &mut preprocessor);
-                        let parser = dm::parser::Parser::new(self.context, indent);
+                        let indent = dm::indents::IndentProcessor::new(&self.context, &mut preprocessor);
+                        let parser = dm::parser::Parser::new(&self.context, indent);
                         parser.parse_annotations_only(&mut annotations);
                     }
                     annotations.merge(preprocessor.take_annotations().unwrap());
@@ -602,7 +600,7 @@ impl<'a> Engine<'a> {
                     let filename = url.to_string();
 
                     let contents = self.docs.get_contents(url).map_err(invalid_request)?.into_owned();
-                    let mut pp = dm::preprocessor::Preprocessor::from_buffer(self.context, filename.clone().into(), contents);
+                    let mut pp = dm::preprocessor::Preprocessor::from_buffer(&self.context, filename.clone().into(), contents);
                     let file_id = self.context.get_file(filename.as_ref()).expect("file didn't exist?");
                     // Clear old errors for this file. Hacky, but it will work for now.
                     self.context.errors_mut().retain(|error| error.location().file != file_id);
@@ -610,8 +608,8 @@ impl<'a> Engine<'a> {
                     pp.enable_annotations();
                     let mut annotations = AnnotationTree::default();
                     {
-                        let indent = dm::indents::IndentProcessor::new(self.context, &mut pp);
-                        let mut parser = dm::parser::Parser::new(self.context, indent);
+                        let indent = dm::indents::IndentProcessor::new(&self.context, &mut pp);
+                        let mut parser = dm::parser::Parser::new(&self.context, indent);
                         parser.annotate_to(&mut annotations);
                         // Every time anyone types anything the object tree is replaced.
                         // This is probably really inefficient, but it will do until
@@ -619,7 +617,7 @@ impl<'a> Engine<'a> {
                         self.objtree = Arc::new(parser.parse_object_tree());
                     }
                     pp.finalize();
-                    dreamchecker::run(self.context, &self.objtree);
+                    dreamchecker::run(&self.context, &self.objtree);
 
                     // Perform a diagnostics pump on this file only.
                     // Assume all errors are in this file.
