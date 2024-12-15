@@ -124,6 +124,10 @@ impl Context {
     // ------------------------------------------------------------------------
     // Configuration
 
+    pub fn set_config(&self, config: String) {
+        *self.config.borrow_mut() = Config::read_toml_string(config).unwrap();
+    }
+
     pub fn force_config(&self, toml: &Path) {
         match Config::read_toml(toml) {
             Ok(config) => *self.config.borrow_mut() = config,

@@ -47,6 +47,7 @@ pub struct Langserver {
 pub struct CodeStandards {
     pub disallow_relative_proc_definitions: bool,
     pub disallow_relative_type_definitions: bool,
+    pub disallow_turf_contents_iteration: bool,
 }
 
 /// DMDoc config options
@@ -118,6 +119,10 @@ impl Config {
         let mut config_toml = String::new();
         file.read_to_string(&mut config_toml)?;
         Ok(toml::from_str(&config_toml)?)
+    }
+
+    pub fn read_toml_string(toml: String) -> Result<Config, Error> {
+        Ok(toml::from_str(&toml)?)
     }
 
     fn config_warninglevel(&self, error: &DMError) -> Option<&WarningLevel> {

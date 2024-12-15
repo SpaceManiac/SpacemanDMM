@@ -1409,6 +1409,28 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 let ForListStatement { var_type, name, input_type, in_list, block } = &**for_list;
                 let mut scoped_locals = local_vars.clone();
                 if let Some(in_list) = in_list {
+                    if self.context.config().code_standards.disallow_turf_contents_iteration {
+                        if let Expression::Base { term, follow } = in_list {
+                            let ty = self.visit_term(term.location, &term.elem, None, &mut scoped_locals);
+                            if ty.static_ty == StaticType::Type(self.objtree.expect("/turf")) {
+                                if follow.is_empty() {
+                                    error(term.location, "iterating over turf contents")
+                                        .set_severity(Severity::Error)
+                                        .register(self.context);
+                                }
+
+                                if follow.len() == 1 {
+                                    if let Follow::Field(_, ident) = &follow.first().unwrap().elem {
+                                        if ident == "contents" {
+                                            error(term.location, "iterating over turf contents")
+                                                .set_severity(Severity::Error)
+                                                .register(self.context);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     let list = self.visit_expression(location, in_list, None, &mut scoped_locals);
                     match list.static_ty {
                         StaticType::None => {
