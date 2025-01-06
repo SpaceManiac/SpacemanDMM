@@ -1256,7 +1256,10 @@ impl<'ctx> Iterator for Lexer<'ctx> {
                         self.put_back(next);
                         let ws = next == Some(b' ') || next == Some(b'\t');
                         if self.directive == Directive::Hash {
-                            if ident == "warn" || ident == "error" {
+                            // len() checks bypass slooow string comparison unless we absolutely have to
+                            if (ident.len() == 4 && ident == "warn")
+                                || (ident.len() == 5 && ident == "error")
+                            {
                                 self.directive = Directive::Stringy;
                             } else {
                                 self.directive = Directive::Ordinary;
