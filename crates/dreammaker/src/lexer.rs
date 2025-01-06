@@ -935,20 +935,22 @@ impl<'ctx> Lexer<'ctx> {
         }
     }
 
-    fn read_ident(&mut self, first: u8) -> String {
+    fn read_ident(&mut self, first: u8) -> (String, Option<u8>) {
         // 12 is ~89% of idents, 24 is ~99.5%, 48 is ~100%
         let mut ident = Vec::with_capacity(12);
+        let next;
         ident.push(first);
         loop {
             match self.next() {
                 Some(ch) if is_ident(ch) || is_digit(ch) => ident.push(ch),
                 ch => {
+                    next = ch;
                     self.put_back(ch);
                     break;
                 }
             }
         }
-        from_utf8_or_latin1(ident)
+        (from_utf8_or_latin1(ident), next)
     }
 
     fn read_resource(&mut self) -> String {
@@ -1251,12 +1253,13 @@ impl<'ctx> Iterator for Lexer<'ctx> {
                 None => match first {
                     b'0'..=b'9' => Some(locate(self.read_number(first))),
                     b'_' | b'a'..=b'z' | b'A'..=b'Z' => {
-                        let ident = self.read_ident(first);
-                        let next = self.next();
-                        self.put_back(next);
+                        let (ident, next) = self.read_ident(first);
                         let ws = next == Some(b' ') || next == Some(b'\t');
                         if self.directive == Directive::Hash {
-                            if ident == "warn" || ident == "error" {
+                            // len() checks bypass slooow string comparison unless we absolutely have to
+                            if (ident.len() == 4 && ident == "warn")
+                                || (ident.len() == 5 && ident == "error")
+                            {
                                 self.directive = Directive::Stringy;
                             } else {
                                 self.directive = Directive::Ordinary;
