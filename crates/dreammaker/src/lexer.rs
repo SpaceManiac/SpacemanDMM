@@ -1259,10 +1259,8 @@ impl<'ctx> Iterator for Lexer<'ctx> {
                             }
                         }
                         // check keywords
-                        for &(name, value) in PUNCT_TABLE.iter() {
-                            if name == ident {
-                                return Some(locate(Punct(value)));
-                            }
+                        if ident == "in" {
+                            return Some(locate(Punct(In)));
                         }
                         self.close_allowed = true;
                         Some(locate(Ident(ident, ws)))
