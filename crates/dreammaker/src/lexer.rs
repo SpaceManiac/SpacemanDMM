@@ -500,9 +500,8 @@ fn buffer_read<R: Read>(file: FileId, mut read: R) -> Result<Vec<u8>, DMError> {
     let mut buffer = Vec::new();
 
     if let Err(error) = read.read_to_end(&mut buffer) {
-        let mut tracker = LocationTracker::new(file, buffer.as_slice().into());
-        tracker.by_ref().count();
-        return Err(DMError::new(tracker.location(), "i/o error reading file").with_cause(error));
+        let location = LocationTracker::count_location(file, &buffer);
+        return Err(DMError::new(location, "i/o error reading file").with_cause(error));
     }
 
     Ok(buffer)
@@ -524,9 +523,8 @@ pub fn buffer_file(file: FileId, path: &std::path::Path) -> Result<Vec<u8>, DMEr
     };
 
     if let Err(error) = read.read_to_end(&mut buffer) {
-        let mut tracker = LocationTracker::new(file, buffer.as_slice().into());
-        tracker.by_ref().count();
-        return Err(DMError::new(tracker.location(), "i/o error reading file").with_cause(error));
+        let location = LocationTracker::count_location(file, &buffer);
+        return Err(DMError::new(location, "i/o error reading file").with_cause(error));
     }
 
     Ok(buffer)
@@ -557,6 +555,12 @@ impl<'a> LocationTracker<'a> {
         } else {
             input
         }
+    }
+
+    pub fn count_location(file: FileId, content: &[u8]) -> Location {
+        let mut tracker = LocationTracker::new(file, content.into());
+        tracker.by_ref().count();
+        tracker.location()
     }
 
     pub fn new(file: FileId, inner: Cow<'a, [u8]>) -> LocationTracker<'a> {
