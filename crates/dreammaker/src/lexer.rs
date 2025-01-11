@@ -931,20 +931,25 @@ impl<'ctx> Lexer<'ctx> {
         }
     }
 
-    fn read_ident(&mut self, first: u8) -> String {
-        // 12 is ~89% of idents, 24 is ~99.5%, 48 is ~100%
-        let mut ident = Vec::with_capacity(12);
-        ident.push(first);
+    fn read_ident(&mut self, first: u8) -> (String, bool) {
+        let start = self.input.offset - 1;
+        let mut end = start + 1;
+        assert_eq!(first, self.input.inner[start]);
+        let ws;
         loop {
             match self.next() {
-                Some(ch) if is_ident(ch) || is_digit(ch) => ident.push(ch),
+                Some(ch) if is_ident(ch) || is_digit(ch) => {
+                    end += 1;
+                },
                 ch => {
+                    ws = ch == Some(b' ') || ch == Some(b'\t');
                     self.put_back(ch);
                     break;
                 }
             }
         }
-        from_utf8_or_latin1(ident)
+        let ident = &self.input.inner[start..end];
+        (from_utf8_or_latin1_borrowed(ident).into_owned(), ws)
     }
 
     fn read_resource(&mut self) -> String {
@@ -1247,10 +1252,7 @@ impl<'ctx> Iterator for Lexer<'ctx> {
                 None => match first {
                     b'0'..=b'9' => Some(locate(self.read_number(first))),
                     b'_' | b'a'..=b'z' | b'A'..=b'Z' => {
-                        let ident = self.read_ident(first);
-                        let next = self.next();
-                        self.put_back(next);
-                        let ws = next == Some(b' ') || next == Some(b'\t');
+                        let (ident, ws) = self.read_ident(first);
                         if self.directive == Directive::Hash {
                             if ident == "warn" || ident == "error" {
                                 self.directive = Directive::Stringy;
