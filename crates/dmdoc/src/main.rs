@@ -358,7 +358,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                     type_,
                     // but `decl` is only used if it's on this type
                     decl: if var.declaration.is_some() { "var" } else { "" },
-                    file: context.file_path(var.value.location.file),
+                    file: context.file_path(var.value.location.file).to_owned(),
                     line: var.value.location.line,
                     parent,
                 });
@@ -422,7 +422,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                         Some(ref decl) => decl.kind.name(),
                         None => "",
                     },
-                    file: context.file_path(proc_value.location.file),
+                    file: context.file_path(proc_value.location.file).to_owned(),
                     line: proc_value.location.line,
                     return_type,
                     parent,
@@ -446,7 +446,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         if anything {
-            parsed_type.file = context.file_path(ty.location.file);
+            parsed_type.file = context.file_path(ty.location.file).to_owned();
             parsed_type.line = ty.location.line;
             parsed_type.substance = substance;
             if substance {

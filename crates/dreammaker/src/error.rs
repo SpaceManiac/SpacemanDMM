@@ -73,16 +73,16 @@ impl FileList {
     }
 
     /// Look up a file path by its index returned from `register_file`.
-    pub fn get_path(&self, file: FileId) -> PathBuf {
+    pub fn get_path(&self, file: FileId) -> Ref<Path> {
+        let files = self.files.borrow();
         if file == FILEID_BUILTINS {
-            return "(builtins)".into();
+            return Ref::map(files, |_| Path::new("(builtins)"));
         }
         let idx = (file.0 - FILEID_MIN.0) as usize;
-        let files = self.files.borrow();
         if idx > files.len() {
-            "(unknown)".into()
+            Ref::map(files, |_| Path::new("(unknown)"))
         } else {
-            files[idx].to_owned()
+            Ref::map(files, |files| files[idx].as_path())
         }
     }
 
@@ -108,7 +108,7 @@ impl Context {
     }
 
     /// Look up a file path by its index returned from `register_file`.
-    pub fn file_path(&self, file: FileId) -> PathBuf {
+    pub fn file_path(&self, file: FileId) -> Ref<Path> {
         self.files.get_path(file)
     }
 

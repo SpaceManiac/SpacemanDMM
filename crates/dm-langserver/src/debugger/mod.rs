@@ -924,7 +924,7 @@ handle_request! {
                                     .unwrap_or_default()
                                     .to_string_lossy()
                                     .into_owned()),
-                                path: Some(self.db.root_dir.join(path).to_string_lossy().into_owned()),
+                                path: Some(self.db.root_dir.join(&*path).to_string_lossy().into_owned()),
                                 .. Default::default()
                             });
                             dap_frame.line = i64::from(proc.location.line);
@@ -990,7 +990,7 @@ handle_request! {
                                     .unwrap_or_default()
                                     .to_string_lossy()
                                     .into_owned()),
-                                path: Some(self.db.root_dir.join(path).to_string_lossy().into_owned()),
+                                path: Some(self.db.root_dir.join(&*path).to_string_lossy().into_owned()),
                                 .. Default::default()
                             });
                             dap_frame.line = i64::from(proc.location.line);
