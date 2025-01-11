@@ -545,18 +545,6 @@ pub struct LocationTracker<'a> {
 }
 
 impl<'a> LocationTracker<'a> {
-    pub fn skip_utf8_bom(input: Cow<'a, [u8]>) -> Cow<'a, [u8]> {
-        const BOM: &[u8] = b"\xEF\xBB\xBF";
-        if input.starts_with(BOM) {
-            match input {
-                Cow::Borrowed(b) => Cow::Borrowed(&b[BOM.len()..]),
-                Cow::Owned(mut o) => { o.drain(..BOM.len()); Cow::Owned(o) }
-            }
-        } else {
-            input
-        }
-    }
-
     pub fn count_location(file: FileId, content: &[u8]) -> Location {
         let mut tracker = LocationTracker::new(file, content.into());
         tracker.by_ref().count();
@@ -564,7 +552,7 @@ impl<'a> LocationTracker<'a> {
     }
 
     pub fn new(file: FileId, inner: Cow<'a, [u8]>) -> LocationTracker<'a> {
-        LocationTracker {
+        let mut this = LocationTracker {
             inner,
             offset: 0,
             location: Location {
@@ -573,7 +561,12 @@ impl<'a> LocationTracker<'a> {
                 column: 0,
             },
             at_line_end: true,
+        };
+        // Skip UTF-8 BOM
+        if this.inner.starts_with(b"\xEF\xBB\xBF") {
+            this.offset += 3;
         }
+        this
     }
 
     /// `location` will be taken as the location of the first character of `inner`.
@@ -686,8 +679,7 @@ impl<'ctx> Lexer<'ctx> {
 
     /// Create a new lexer from a byte stream.
     pub fn new<I: Into<Cow<'ctx, [u8]>>>(context: &'ctx Context, file_number: FileId, input: I) -> Self {
-        let inner = LocationTracker::skip_utf8_bom(input.into());
-        Lexer::from_input(context, LocationTracker::new(file_number, inner))
+        Lexer::from_input(context, LocationTracker::new(file_number, input.into()))
     }
 
     /// Create a new lexer from a reader.
