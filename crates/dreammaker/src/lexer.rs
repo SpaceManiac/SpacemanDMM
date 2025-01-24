@@ -500,9 +500,8 @@ fn buffer_read<R: Read>(file: FileId, mut read: R) -> Result<Vec<u8>, DMError> {
     let mut buffer = Vec::new();
 
     if let Err(error) = read.read_to_end(&mut buffer) {
-        let mut tracker = LocationTracker::new(file, buffer.as_slice().into());
-        tracker.by_ref().count();
-        return Err(DMError::new(tracker.location(), "i/o error reading file").with_cause(error));
+        let location = LocationTracker::count_location(file, &buffer);
+        return Err(DMError::new(location, "i/o error reading file").with_cause(error));
     }
 
     Ok(buffer)
@@ -524,9 +523,8 @@ pub fn buffer_file(file: FileId, path: &std::path::Path) -> Result<Vec<u8>, DMEr
     };
 
     if let Err(error) = read.read_to_end(&mut buffer) {
-        let mut tracker = LocationTracker::new(file, buffer.as_slice().into());
-        tracker.by_ref().count();
-        return Err(DMError::new(tracker.location(), "i/o error reading file").with_cause(error));
+        let location = LocationTracker::count_location(file, &buffer);
+        return Err(DMError::new(location, "i/o error reading file").with_cause(error));
     }
 
     Ok(buffer)
@@ -547,20 +545,14 @@ pub struct LocationTracker<'a> {
 }
 
 impl<'a> LocationTracker<'a> {
-    pub fn skip_utf8_bom(input: Cow<'a, [u8]>) -> Cow<'a, [u8]> {
-        const BOM: &[u8] = b"\xEF\xBB\xBF";
-        if input.starts_with(BOM) {
-            match input {
-                Cow::Borrowed(b) => Cow::Borrowed(&b[BOM.len()..]),
-                Cow::Owned(mut o) => { o.drain(..BOM.len()); Cow::Owned(o) }
-            }
-        } else {
-            input
-        }
+    pub fn count_location(file: FileId, content: &[u8]) -> Location {
+        let mut tracker = LocationTracker::new(file, content.into());
+        tracker.by_ref().count();
+        tracker.location()
     }
 
     pub fn new(file: FileId, inner: Cow<'a, [u8]>) -> LocationTracker<'a> {
-        LocationTracker {
+        let mut this = LocationTracker {
             inner,
             offset: 0,
             location: Location {
@@ -569,7 +561,12 @@ impl<'a> LocationTracker<'a> {
                 column: 0,
             },
             at_line_end: true,
+        };
+        // Skip UTF-8 BOM
+        if this.inner.starts_with(b"\xEF\xBB\xBF") {
+            this.offset += 3;
         }
+        this
     }
 
     /// `location` will be taken as the location of the first character of `inner`.
@@ -682,8 +679,7 @@ impl<'ctx> Lexer<'ctx> {
 
     /// Create a new lexer from a byte stream.
     pub fn new<I: Into<Cow<'ctx, [u8]>>>(context: &'ctx Context, file_number: FileId, input: I) -> Self {
-        let inner = LocationTracker::skip_utf8_bom(input.into());
-        Lexer::from_input(context, LocationTracker::new(file_number, inner))
+        Lexer::from_input(context, LocationTracker::new(file_number, input.into()))
     }
 
     /// Create a new lexer from a reader.
@@ -935,22 +931,25 @@ impl<'ctx> Lexer<'ctx> {
         }
     }
 
-    fn read_ident(&mut self, first: u8) -> (String, Option<u8>) {
-        // 12 is ~89% of idents, 24 is ~99.5%, 48 is ~100%
-        let mut ident = Vec::with_capacity(12);
-        let next;
-        ident.push(first);
+    fn read_ident(&mut self, first: u8) -> (String, bool) {
+        let start = self.input.offset - 1;
+        let mut end = start + 1;
+        assert_eq!(first, self.input.inner[start]);
+        let ws;
         loop {
             match self.next() {
-                Some(ch) if is_ident(ch) || is_digit(ch) => ident.push(ch),
+                Some(ch) if is_ident(ch) || is_digit(ch) => {
+                    end += 1;
+                },
                 ch => {
-                    next = ch;
+                    ws = ch == Some(b' ') || ch == Some(b'\t');
                     self.put_back(ch);
                     break;
                 }
             }
         }
-        (from_utf8_or_latin1(ident), next)
+        let ident = &self.input.inner[start..end];
+        (from_utf8_or_latin1_borrowed(ident).into_owned(), ws)
     }
 
     fn read_resource(&mut self) -> String {
@@ -1253,8 +1252,7 @@ impl<'ctx> Iterator for Lexer<'ctx> {
                 None => match first {
                     b'0'..=b'9' => Some(locate(self.read_number(first))),
                     b'_' | b'a'..=b'z' | b'A'..=b'Z' => {
-                        let (ident, next) = self.read_ident(first);
-                        let ws = next == Some(b' ') || next == Some(b'\t');
+                        let (ident, ws) = self.read_ident(first);
                         if self.directive == Directive::Hash {
                             // len() checks bypass slooow string comparison unless we absolutely have to
                             if (ident.len() == 4 && ident == "warn")
@@ -1266,10 +1264,8 @@ impl<'ctx> Iterator for Lexer<'ctx> {
                             }
                         }
                         // check keywords
-                        for &(name, value) in PUNCT_TABLE.iter() {
-                            if name == ident {
-                                return Some(locate(Punct(value)));
-                            }
+                        if ident == "in" {
+                            return Some(locate(Punct(In)));
                         }
                         self.close_allowed = true;
                         Some(locate(Ident(ident, ws)))
