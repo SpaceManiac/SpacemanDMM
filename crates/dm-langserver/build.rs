@@ -32,9 +32,9 @@ fn main() {
     download_dll(
         &out_dir,
         "debug_server.dll",
-        "v2.3.3", // DEBUG_SERVER_TAG
-        "https://github.com/willox/auxtools/releases/download/v2.3.3/debug_server.dll", // DEBUG_SERVER_DLL_URL
-        "8c3633d8237738be39a8c8f34bbd3d819cdaa270d1f30774c5007481fc32418c", // DEBUG_SERVER_DLL_SHA256
+        "v2.3.4", // DEBUG_SERVER_TAG
+        "https://github.com/willox/auxtools/releases/download/v2.3.4/debug_server.dll", // DEBUG_SERVER_DLL_URL
+        "06547804cf39c74d6a74aa1663a47f438871ea8fa85deb7dcb0c8d772747db7c", // DEBUG_SERVER_DLL_SHA256
     );
 }
 
