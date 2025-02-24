@@ -50,6 +50,7 @@ Raised by DreamChecker:
 * `control_condition_static` - Raised on a control condition such as `if`/`while` having a static condition such as `1` or `"string"`
 * `if_condition_determinate` - Raised on if condition being always true or always false
 * `loop_condition_determinate` - Raised on loop condition such as in `for` being always true or always false
+* `improper_index` - Raised on accessing a non list with []
 
 Raised by Lexer:
 

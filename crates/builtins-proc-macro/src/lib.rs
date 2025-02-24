@@ -11,6 +11,7 @@ use syn::*;
 struct Header {
     attrs: Vec<Attribute>,
     path: Vec<Ident>,
+    operator_overload_target: Option<String>,
 }
 
 impl Header {
@@ -24,7 +25,110 @@ impl Header {
             input.parse::<Token![/]>()?;
             self.path.push(Ident::parse_any(input)?);
         }
+        if let Some(final_ident) = self.path.last() {
+            // If we find an operator{some token}() pattern we allow the some token part
+            if final_ident == "operator" {
+                self.parse_operator(input)?;
+            }
+        }
+        Ok(())
+    }
 
+    fn parse_operator(&mut self, input: ParseStream) -> Result<()> {
+        let text_token: Option<&str> = if input.parse::<Token![%]>().is_ok() {
+            if input.parse::<Token![%]>().is_ok() {
+                Some("%%")
+            } else if input.parse::<Token![%=]>().is_ok() {
+                Some("%%=")
+            } else {
+                Some("%")
+            }
+        } else if input.parse::<Token![&]>().is_ok() {
+            Some("&")
+        } else if input.parse::<Token![&=]>().is_ok() {
+            Some("&=")
+        } else if input.parse::<Token![*]>().is_ok() {
+            if input.parse::<Token![*]>().is_ok() {
+                Some("**")
+            } else {
+                Some("*")
+            }
+        } else if input.parse::<Token![*=]>().is_ok() {
+            Some("*=")
+        } else if input.parse::<Token![/]>().is_ok() {
+            Some("/")
+        } else if input.parse::<Token![/=]>().is_ok() {
+            Some("/=")
+        } else if input.parse::<Token![+]>().is_ok() {
+            if input.parse::<Token![+]>().is_ok() {
+                Some("++")
+            } else {
+                Some("+")
+            }
+        } else if input.parse::<Token![+=]>().is_ok() {
+            Some("+=")
+        } else if input.parse::<Token![-]>().is_ok() {
+            if input.parse::<Token![-]>().is_ok() {
+                Some("--")
+            } else {
+                Some("-")
+            }
+        } else if input.parse::<Token![-=]>().is_ok() {
+            Some("-=")
+        } else if input.parse::<Token![<]>().is_ok() {
+            Some("<")
+        } else if input.parse::<Token![<<]>().is_ok() {
+            Some("<<")
+        } else if input.parse::<Token![<<=]>().is_ok() {
+            Some("<<=")
+        } else if input.parse::<Token![<=]>().is_ok() {
+            Some("<=")
+        } else if input.parse::<Token![>=]>().is_ok() {
+            Some(">=")
+        } else if input.parse::<Token![>>]>().is_ok() {
+            Some(">>")
+        } else if input.parse::<Token![>>=]>().is_ok() {
+            Some(">>=")
+        } else if input.parse::<Token![^]>().is_ok() {
+            Some("^")
+        } else if input.parse::<Token![^=]>().is_ok() {
+            Some("^=")
+        } else if input.parse::<Token![|]>().is_ok() {
+            Some("|")
+        } else if input.parse::<Token![|=]>().is_ok() {
+            Some("|=")
+        } else if input.parse::<Token![~]>().is_ok() {
+            if input.parse::<Token![=]>().is_ok() {
+                Some("~=")
+            } else {
+                Some("~")
+            }
+        } else if input.parse::<Token![~]>().is_ok() {
+            Some("~")
+        } else if input.peek(Token![:]) && input.peek2(Token![=]) {
+            input.parse::<Token![:]>()?;
+            input.parse::<Token![=]>()?;
+            Some(":=")
+        } else if self.brackets_next(input).is_ok() {
+            if input.parse::<Token![=]>().is_ok() {
+                Some("[]=")
+            } else {
+                Some("[]")
+            }
+        } else {
+            // Todo: Implement operator""() support. Unsure how to expect an empty string
+            None
+        };
+        if let Some(text) = text_token {
+            self.operator_overload_target = Some(text.to_string());
+        }
+        Ok(())
+    }
+
+    fn brackets_next(&mut self, input: ParseStream) -> Result<()> {
+        // Sorry
+        let _bracket_dummy;
+        bracketed!(_bracket_dummy in input);
         Ok(())
     }
 }
@@ -143,7 +247,11 @@ pub fn builtins_table(input: TokenStream) -> TokenStream {
     let mut output = Vec::new();
     for entry in builtins {
         let span = entry.header.path.first().unwrap().span();
-        let lit_strs: Vec<_> = entry.header.path.into_iter().map(|x| LitStr::new(&x.to_string(), x.span())).collect();
+        let mut lit_strs: Vec<_> = entry.header.path.into_iter().map(|x| LitStr::new(&x.to_string(), x.span())).collect();
+        if let Some(operator) = entry.header.operator_overload_target {
+            let last_entry = lit_strs.pop().unwrap();
+            lit_strs.push(LitStr::new((last_entry.value() + operator.as_str()).as_str(), last_entry.span()));
+        }
         let path = quote! {
             &[ #(#lit_strs),* ]
         };
