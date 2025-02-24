@@ -89,7 +89,7 @@ impl Context {
         env!("CARGO_PKG_VERSION"), "\n",
         include_str!(concat!(env!("OUT_DIR"), "/build-info.txt"))
     ),
-    author="Copyright (C) 2017-2024  Tad Hardesty",
+    author="Copyright (C) 2017-2025  Tad Hardesty",
     about="This program comes with ABSOLUTELY NO WARRANTY. This is free software,
 and you are welcome to redistribute it under the conditions of the GNU
 General Public License version 3.",

@@ -54,7 +54,7 @@ fn main() {
     std::env::set_var("RUST_BACKTRACE", "1");
 
     eprintln!(
-        "dm-langserver {}  Copyright (C) 2017-2024  Tad Hardesty",
+        "dm-langserver {}  Copyright (C) 2017-2025  Tad Hardesty",
         env!("CARGO_PKG_VERSION")
     );
     eprintln!("This program comes with ABSOLUTELY NO WARRANTY. This is free software,");
