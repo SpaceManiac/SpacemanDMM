@@ -13,8 +13,8 @@ const DM_BUILD: i32 = 1619;
 
 /// Register BYOND builtin macros to the given define map.
 pub fn default_defines(defines: &mut DefineMap) {
-    use super::lexer::*;
     use super::lexer::Token::*;
+    use super::lexer::*;
     let location = Location::builtins();
 
     // #define EXCEPTION(value) new /exception(value)
@@ -149,6 +149,7 @@ pub fn default_defines(defines: &mut DefineMap) {
         ANIMATION_LINEAR_TRANSFORM = Int(2);
         ANIMATION_PARALLEL = Int(4);
         ANIMATION_SLICE = Int(8); // 515
+        ANIMATION_END_LOOP = Int(16); // 516
         ANIMATION_RELATIVE = Int(256);
         ANIMATION_CONTINUE = Int(512); // 515
 
@@ -576,6 +577,12 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         proc/winshow(player, window, show=1);
         proc/CRASH(message);  // kind of special, but let's pretend
 
+        proc/values_cut_over(Alist, Max, inclusive=0);
+        proc/values_cut_under(Alist, Max, inclusive=0);
+        proc/values_dot(A, B);
+        proc/values_product(Alist);
+        proc/values_sum(Alist);
+
         // database builtin procs
         proc/_dm_db_new_query();
         proc/_dm_db_execute(db_query, sql_query, db_connection, cursor_handler, unknown);
@@ -629,6 +636,22 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         list/proc/Swap(Index1, Index2);
         list/var/len;
 
+        // 516
+        alist;
+        alist/var/const/type;
+        alist/var/const/parent_type;
+        alist/var/tag;
+        alist/proc/Add(Item1, Item2/*,...*/);
+        alist/proc/Copy(Start=1, End=0);
+        alist/proc/Cut(Start=1, End=0);
+        alist/proc/Find(Elem, Start=1, End=0);
+        alist/proc/Insert(Index, Item1, Item2/*,...*/);
+        alist/proc/Join(Glue, Start=1, End=0);
+        alist/proc/Remove(Item1, Item2/*,...*/);
+        alist/proc/Splice(Start=1, End=0, Item1, Item2/*,...*/);
+        alist/proc/Swap(Index1, Index2);
+        alist/var/len;
+
         atom/parent_type = path!(/datum);
         atom/var/alpha = int!(255);
         atom/var/tmp/appearance;  // not editable
@@ -666,6 +689,11 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         atom/var/pixel_y = int!(0);
         atom/var/pixel_w = int!(0);
         atom/var/pixel_z = int!(0);
+
+        // 516
+        atom/var/icon_w = int!(0);
+        atom/var/icon_z = int!(0);
+
         atom/var/plane = int!(0);
         atom/var/suffix;
         atom/var/text;
@@ -913,6 +941,11 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         // only used by client.SoundQuery() for now:
         sound/var/offset = int!(0);
         sound/var/len = int!(0);
+
+        // 516
+        sound/var/atom;
+        sound/var/transform;
+
         sound/New(file, repeat, wait, channel, volume);
 
         icon;
@@ -1015,6 +1048,11 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         image/var/pixel_y;
         image/var/pixel_w;
         image/var/pixel_z;
+
+        // 516
+        image/var/icon_w;
+        image/var/icon_z;
+
         image/var/plane;
         image/var/render_source;
         image/var/render_target;
@@ -1200,6 +1238,23 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         list/proc/RemoveAll(Item1/*, ...*/);
 
         world/proc/Tick();
+
+        // 516
+        proc/lerp(A, B, factor);
+        proc/sign(A);
+
+        callee;
+        callee/var/args;
+        callee/var/caller;
+        callee/var/category;
+        callee/var/desc;
+        callee/var/file;
+        callee/var/name;
+        callee/var/line;
+        callee/var/proc;
+        callee/var/src;
+        callee/var/type;
+        callee/var/usr;
     };
 }
 

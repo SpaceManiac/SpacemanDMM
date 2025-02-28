@@ -1160,6 +1160,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         local_vars.insert(".".to_owned(), Analysis::empty().into());
         local_vars.insert("args".to_owned(), Analysis::from_static_type_impure(self.objtree.expect("/list")).into());
         local_vars.insert("usr".to_owned(), Analysis::from_static_type(self.objtree.expect("/mob")).into());
+        local_vars.insert("callee".to_owned(), Analysis::from_static_type(self.objtree.expect("/callee")).into());
+        local_vars.insert("caller".to_owned(), Analysis::from_static_type(self.objtree.expect("/callee")).into());
         if !self.ty.is_root() {
             local_vars.insert("src".to_owned(), Analysis::from_static_type(self.ty).into());
         }
