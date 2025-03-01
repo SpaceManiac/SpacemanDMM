@@ -525,6 +525,11 @@ impl<'o> WalkProc<'o> {
                 self.visit_arguments(location, args);
                 StaticType::None
             },
+            Term::ExternalLoad { library_name, function_name } => {
+                self.visit_expression(location, library_name, None);
+                self.visit_expression(location, function_name, None);
+                StaticType::None
+            }
 
             Term::GlobalCall(name, args) => {
                 if let Some(proc) = self.objtree.root().get_proc(name) {

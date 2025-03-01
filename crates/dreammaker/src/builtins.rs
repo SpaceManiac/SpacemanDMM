@@ -404,7 +404,7 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         proc/abs(A);
         proc/addtext(Arg1, Arg2/*, ...*/);
         proc/alert(Usr/*=usr*/,Message,Title,Button1/*="Ok"*/,Button2,Button3);
-        proc/animate(Object, time, loop, easing, flags, delay, // +2 forms
+        proc/animate(Object, time, loop, easing, flags, delay, tag, command, // +2 forms
             // these kwargs
             alpha, color, infra_luminosity, layer, maptext_width, maptext_height,
             maptext_x, maptext_y, luminosity, pixel_x, pixel_y, pixel_w, pixel_z,
@@ -452,7 +452,8 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
             repeat,
             radius,
             falloff,
-            alpha
+            alpha,
+            name // 516
         );
         proc/findlasttext(Haystack,Needle,Start=0,End=1);
         proc/findlasttextEx(Haystack,Needle,Start=0,End=1);
@@ -693,6 +694,7 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         // 516
         atom/var/icon_w = int!(0);
         atom/var/icon_z = int!(0);
+        atom/var/pixloc/pixloc;
 
         atom/var/plane = int!(0);
         atom/var/suffix;
@@ -943,7 +945,7 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         sound/var/len = int!(0);
 
         // 516
-        sound/var/atom;
+        sound/var/tmp/atom/atom;
         sound/var/transform;
 
         sound/New(file, repeat, wait, channel, volume);
@@ -1242,10 +1244,12 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         // 516
         proc/lerp(A, B, factor);
         proc/sign(A);
+        proc/astype(Val, Type);
+        proc/alist(A/* =a */,B/* =b */,C/* =c */);
 
         callee;
         callee/var/args;
-        callee/var/caller;
+        callee/var/callee/caller;
         callee/var/category;
         callee/var/desc;
         callee/var/file;
@@ -1255,6 +1259,31 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         callee/var/src;
         callee/var/type;
         callee/var/usr;
+
+        proc/pixloc(x, y, z);
+
+        pixloc;
+        pixloc/var/atom/loc;
+        pixloc/var/step_x;
+        pixloc/var/step_y;
+        pixloc/x;
+        pixloc/y;
+        pixloc/z;
+
+        proc/vector(x, y, z);
+
+        vector;
+        vector/var/len;
+        vector/var/size;
+        vector/var/x;
+        vector/var/y;
+        vector/var/z;
+
+        vector/proc/Cross(B);
+        vector/proc/Dot(B);
+        vector/proc/Interpolate(B, t);
+        vector/proc/Normalize();
+        vector/proc/Turn(B);
     };
 }
 

@@ -1927,6 +1927,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 self.visit_arguments(location, args, local_vars);
                 Analysis::empty()  // TODO
             },
+            Term::ExternalLoad { library_name, function_name } => {
+                self.visit_expression(location, library_name, None, local_vars);
+                self.visit_expression(location, function_name, None, local_vars);
+                Analysis::empty() // TODO
+            }
             Term::__TYPE__ => {
                 let pop = dm::constants::Pop::from(self.ty.path.split('/').skip(1).map(ToOwned::to_owned).collect::<Vec<_>>().into_boxed_slice());
                 Analysis {
