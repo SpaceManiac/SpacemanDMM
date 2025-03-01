@@ -2154,6 +2154,19 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 }
             },
 
+            Token::Ident(ref i, _) if i == "load_ext" => {
+                require!(self.exact(Token::Punct(Punctuation::LParen)));
+                let library_name = require!(self.expression());
+                require!(self.exact(Token::Punct(Punctuation::Comma)));
+                let function_name = require!(self.expression());
+                require!(self.exact(Token::Punct(Punctuation::RParen)));
+
+                Term::ExternalLoad {
+                    library_name: Box::new(library_name),
+                    function_name: Box::new(function_name),
+                }
+            },
+
             // term :: 'input' arglist input_specifier
             Token::Ident(ref i, _) if i == "input" => match self.arguments(&[], "input")? {
                 Some(args) => {

@@ -1077,6 +1077,10 @@ pub enum Term {
         library_name: Box<Expression>,
         function_name: Box<Expression>
     },
+    AsType {
+        value: Box<Expression>,
+        wanted_type: Box<Expression>
+    },
     /// Unscoped `::A` is a shorthand for `global.A`
     GlobalIdent(Ident2),
     /// Unscoped `::A(...)` is a shorthand for `global.A(...)`
