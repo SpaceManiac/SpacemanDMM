@@ -2167,6 +2167,21 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 }
             },
 
+            Token::Ident(ref i, _) if i == "astype" => {
+                require!(self.exact(Token::Punct(Punctuation::LParen)));
+                let val = require!(self.expression());
+                if let Ok(Some(_)) = self.exact(Token::Punct(Punctuation::Comma)) {
+                    let val_type = require!(self.expression());
+
+                    require!(self.exact(Token::Punct(Punctuation::RParen)));
+                    Term::AsType { expr: Box::new(val), to_type: Some(Box::new(val_type)) }
+                } else {
+                    require!(self.exact(Token::Punct(Punctuation::RParen)));
+                    Term::AsType { expr: Box::new(val), to_type: None }
+                }
+
+            },
+
             // term :: 'input' arglist input_specifier
             Token::Ident(ref i, _) if i == "input" => match self.arguments(&[], "input")? {
                 Some(args) => {

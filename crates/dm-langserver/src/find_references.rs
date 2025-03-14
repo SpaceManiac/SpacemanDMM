@@ -567,6 +567,16 @@ impl<'o> WalkProc<'o> {
                 self.tab.use_symbol(implied_type.id, location);
                 StaticType::Type(implied_type)
             },
+
+            Term::AsType { expr, to_type } => {
+                self.visit_expression(location, expr, type_hint);
+
+                if let Some(to_type) = to_type {
+                    self.visit_expression(location, to_type, type_hint);
+                };
+
+                StaticType::None
+            }
         }
     }
 
