@@ -474,7 +474,7 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         proc/html_encode(PlainText);
         proc/icon(icon,icon_state,dir,frame,moving);  // SNA
         proc/icon_states(Icon, mode=0);
-        proc/image(icon,loc,icon_state,layer,dir,pixel_x,pixel_y);  // SNA
+        proc/image(icon,loc,icon_state,layer,dir,pixel_x,pixel_y,pixel_w,pixel_z);  // SNA
         proc/initial(Var);  // special form
         proc/input(Usr=usr,Message,Title,Default)/*as Type in List*/;  // special form
         proc/isarea(Loc1, Loc2/*,...*/);
