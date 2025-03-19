@@ -1070,6 +1070,7 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         savefile/var/list/dir;
         savefile/var/eof;
         savefile/var/name;
+        savefile/proc/operator[]();
         savefile/proc/ExportText(/* path=cd, file */);
         savefile/proc/Flush();
         savefile/proc/ImportText(/* path=cd, file */);
