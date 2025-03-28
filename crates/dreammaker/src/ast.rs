@@ -1024,6 +1024,11 @@ pub enum Term {
     /// An interpolated string, alternating string/expr/string/expr.
     InterpString(Ident2, Box<[(Option<Expression>, Box<str>)]>),
 
+    AsType {
+        expr: Box<Expression>,
+        to_type: Option<Box<Expression>>,
+    },
+
     // Function calls with recursive contents ---------------------------------
     /// An unscoped function call.
     Call(Ident2, Box<[Expression]>),
@@ -1072,6 +1077,10 @@ pub enum Term {
         library_name: Box<Expression>,
         function_name: Box<Expression>,
         args: Box<[Expression]>,
+    },
+    ExternalLoad {
+        library_name: Box<Expression>,
+        function_name: Box<Expression>
     },
     /// Unscoped `::A` is a shorthand for `global.A`
     GlobalIdent(Ident2),
