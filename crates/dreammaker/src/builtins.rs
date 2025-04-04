@@ -1247,6 +1247,8 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         proc/astype(Val, Type);
         proc/alist(A/* =a */,B/* =b */,C/* =c */);
 
+        proc/load_ext(LibName, FuncName);
+
         callee;
         callee/var/args;
         callee/var/callee/caller;

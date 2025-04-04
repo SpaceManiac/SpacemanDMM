@@ -1927,39 +1927,6 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 self.visit_arguments(location, args, local_vars);
                 Analysis::empty()  // TODO
             },
-            Term::ExternalLoad { library_name, function_name } => {
-                self.visit_expression(location, library_name, None, local_vars);
-                self.visit_expression(location, function_name, None, local_vars);
-                Analysis::empty() // TODO
-            }
-            Term::AsType { expr, to_type } => {
-                if let Some(to_type) = to_type {
-                    if let Some(Term::Prefab(fab)) = to_type.clone().as_term() {
-                        let path = fab.path.iter().map(|(path_op, name)| path_op.to_string() + name).collect::<Vec<_>>().join("");
-
-                        if let Some(val_type) = self.objtree.find(&path) {
-                            return Analysis {
-                                static_ty: StaticType::Type(val_type),
-                                aset: assumption_set![Assumption::IsNum(true)],
-                                value: Some(Constant::Float(1.0)),
-                                fix_hint: None,
-                                is_impure: None,
-                            };
-                        } else {
-                            return Analysis::empty();
-                        }
-                    }
-                }
-
-                Analysis {
-                    static_ty: self.visit_expression(location, expr, type_hint, local_vars).static_ty,
-                    aset: assumption_set![Assumption::IsNum(true)],
-                    value: Some(Constant::Float(1.0)),
-                    fix_hint: None,
-                    is_impure: None,
-                }
-            }
-
 
             Term::__TYPE__ => {
                 let pop = dm::constants::Pop::from(self.ty.path.split('/').skip(1).map(ToOwned::to_owned).collect::<Vec<_>>().into_boxed_slice());
@@ -2438,6 +2405,22 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             } else {
                 param_idx_map.insert(param_idx, analysis);
                 param_idx += 1;
+            }
+        }
+
+        if proc.ty().is_root() && proc.name() == "astype" {
+            if let Some(type_val) = param_idx_map.get(&1) {
+                if let Some(Constant::Prefab(path)) = type_val.clone().value {
+                    let type_val = path.path.iter().map(|x| "/".to_owned() + x).collect::<Vec<_>>().join("");
+
+                    if let Some(path) = self.objtree.find(&type_val) {
+                        return Analysis::from_static_type(path);
+                    }
+                }
+            }
+
+            if let Some(type_val) = param_idx_map.get(&0) {
+                return Analysis::from(type_val.clone().static_ty);
             }
         }
 
