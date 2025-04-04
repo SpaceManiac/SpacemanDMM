@@ -1160,6 +1160,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         local_vars.insert(".".to_owned(), Analysis::empty().into());
         local_vars.insert("args".to_owned(), Analysis::from_static_type_impure(self.objtree.expect("/list")).into());
         local_vars.insert("usr".to_owned(), Analysis::from_static_type(self.objtree.expect("/mob")).into());
+        local_vars.insert("callee".to_owned(), Analysis::from_static_type(self.objtree.expect("/callee")).into());
+        local_vars.insert("caller".to_owned(), Analysis::from_static_type(self.objtree.expect("/callee")).into());
         if !self.ty.is_root() {
             local_vars.insert("src".to_owned(), Analysis::from_static_type(self.ty).into());
         }
@@ -1925,6 +1927,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 self.visit_arguments(location, args, local_vars);
                 Analysis::empty()  // TODO
             },
+
             Term::__TYPE__ => {
                 let pop = dm::constants::Pop::from(self.ty.path.split('/').skip(1).map(ToOwned::to_owned).collect::<Vec<_>>().into_boxed_slice());
                 Analysis {
@@ -2402,6 +2405,22 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             } else {
                 param_idx_map.insert(param_idx, analysis);
                 param_idx += 1;
+            }
+        }
+
+        if proc.ty().is_root() && proc.name() == "astype" {
+            if let Some(type_val) = param_idx_map.get(&1) {
+                if let Some(Constant::Prefab(path)) = type_val.clone().value {
+                    let type_val = path.path.iter().map(|x| "/".to_owned() + x).collect::<Vec<_>>().join("");
+
+                    if let Some(path) = self.objtree.find(&type_val) {
+                        return Analysis::from_static_type(path);
+                    }
+                }
+            }
+
+            if let Some(type_val) = param_idx_map.get(&0) {
+                return Analysis::from(type_val.clone().static_ty);
             }
         }
 

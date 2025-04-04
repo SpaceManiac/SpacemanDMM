@@ -825,7 +825,7 @@ impl ObjectTreeBuilder {
     fn assign_parent_types(&mut self, context: &Context) {
         for (path, &type_idx) in self.inner.types.iter() {
             let mut location = self.inner[type_idx].location;
-            let idx = if path == "/datum" || path == "/list" || path == "/savefile" || path == "/world" {
+            let idx = if path == "/datum" || path == "/list" || path == "/alist" || path == "/savefile" || path == "/world" || path == "/vector" || path == "/pixloc" {
                 // These types have no parent and cannot have one added. In the official compiler:
                 // - setting list or savefile/parent_type is denied with the same error as setting something's parent type to them;
                 // - setting datum/parent_type infinite loops the compiler;

@@ -1754,7 +1754,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     // for(var/a = 1 to 20
     // for(var/a in 1 to 20
     // This... isn't a boxed local, it's method arguments. Clippy??
-    #[allow(clippy::boxed_local)]
     fn for_range(
         &mut self,
         var_type: Option<VarType>,
@@ -2129,6 +2128,11 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             // we're going to pretend they're not to make code simpler, and
             // anyone relying on the difference needs to fix their garbage
             Token::Ident(ref i, _) if i == "list" => match self.arguments(&[], "list")? {
+                Some(args) => Term::List(args),
+                None => Term::Ident(i.to_owned()),
+            },
+
+            Token::Ident(ref i, _) if i == "alist" => match self.arguments(&[], "alist")? {
                 Some(args) => Term::List(args),
                 None => Term::Ident(i.to_owned()),
             },
