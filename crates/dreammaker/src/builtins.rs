@@ -1227,6 +1227,7 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         proc/refcount(Object);
         proc/trimtext(Text);
         proc/trunc(A);
+        proc/bound_pixloc(Atom, Dir);
 
         client/proc/RenderIcon(object);
 
