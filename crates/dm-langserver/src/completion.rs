@@ -18,6 +18,8 @@ static PROC_KEYWORDS: &[&str] = &[
     "global",
     "src",
     "usr",
+    "caller",
+    "callee",
 
     // Term
     "null",
