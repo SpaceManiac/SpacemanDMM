@@ -1969,7 +1969,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 // `/datum/New()` and never an override.
                 true,
                 local_vars);
-        } else if typepath.path != "/list" || typepath.path != "/alist" || typepath.path != "/vector" || typepath.path != "/pixloc" {
+        } else if typepath.path != "/list" && typepath.path != "/alist" && typepath.path != "/vector" && typepath.path != "/pixloc" {
             error(location, format!("couldn't find {}/proc/New", typepath.path))
                 .register(self.context);
         }
