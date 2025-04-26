@@ -2080,10 +2080,16 @@ handle_notification! {
     }
 
     on DidChangeConfiguration(&mut self, params) {
-        if let Some(extools_dll) = params.settings["dreammaker"]["extoolsDLL"].as_str() {
+        if let Some(extools_dll) = params.settings["dreammaker"]["extoolsDLL"]
+            .as_str()
+            .filter(|path| !path.trim().is_empty())
+        {
             self.extools_dll = Some(extools_dll.to_owned());
         }
-        if let Some(debug_server_dll) = params.settings["dreammaker"]["debugServerDll"].as_str() {
+        if let Some(debug_server_dll) = params.settings["dreammaker"]["debugServerDll"]
+            .as_str()
+            .filter(|path| !path.trim().is_empty())
+        {
             self.debug_server_dll = Some(debug_server_dll.to_owned());
         }
     }
