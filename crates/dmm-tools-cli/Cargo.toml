@@ -1,6 +1,6 @@
 [package]
 name = "dmm-tools-cli"
-version = "1.9.0"
+version = "1.10.0"
 authors = ["Tad Hardesty <tad@platymuus.com>"]
 description = "BYOND map rendering and analysis tools powered by SpacemanDMM"
 edition = "2021"

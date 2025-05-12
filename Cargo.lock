@@ -424,7 +424,7 @@ dependencies = [
 
 [[package]]
 name = "dm-langserver"
-version = "1.9.0"
+version = "1.10.0"
 dependencies = [
  "bincode",
  "chrono",
@@ -449,7 +449,7 @@ dependencies = [
 
 [[package]]
 name = "dmdoc"
-version = "1.9.0"
+version = "1.10.0"
 dependencies = [
  "chrono",
  "dreammaker",
@@ -482,7 +482,7 @@ dependencies = [
 
 [[package]]
 name = "dmm-tools-cli"
-version = "1.9.0"
+version = "1.10.0"
 dependencies = [
  "chrono",
  "clap",
@@ -507,7 +507,7 @@ dependencies = [
 
 [[package]]
 name = "dreamchecker"
-version = "1.9.0"
+version = "1.10.0"
 dependencies = [
  "chrono",
  "dreammaker",
