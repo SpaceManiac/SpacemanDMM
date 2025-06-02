@@ -1392,6 +1392,7 @@ pub enum Statement {
         block: Block,
     },
     ForList(Box<ForListStatement>),
+    ForKeyValue(Box<ForKeyValueStatement>),
     ForRange(Box<ForRangeStatement>),
     Var(Box<VarStatement>),
     Vars(Vec<VarStatement>),
@@ -1444,6 +1445,15 @@ pub struct ForListStatement {
     pub name: Ident2,
     /// If zero, uses the declared type of the variable.
     pub input_type: Option<InputType>,
+    /// Defaults to 'world'.
+    pub in_list: Option<Expression>,
+    pub block: Block,
+}
+
+#[derive(Debug, Clone, PartialEq, GetSize)]
+pub struct ForKeyValueStatement {
+    pub key: Ident2,
+    pub value: Ident2,
     /// Defaults to 'world'.
     pub in_list: Option<Expression>,
     pub block: Block,

@@ -325,7 +325,8 @@ impl<'o> WalkProc<'o> {
             Statement::Goto(_) => {},
             Statement::Crash(_) => {},
             Statement::Label { name: _, block } => self.visit_block(block),
-            Statement::Del(expr) => { self.visit_expression(location, expr, None); },
+            Statement::Del(expr) => { self.visit_expression(location, expr, None); }, // UUuuh
+            Statement::ForKeyValue(_) => { println!("correctly found a kv pair but no idea what do lol!")},
         }
     }
 

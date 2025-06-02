@@ -1561,6 +1561,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Statement::Goto(_) => {},
             Statement::Label { name: _, block } => { self.visit_block(block, &mut local_vars.clone()); },
             Statement::Del(expr) => { self.visit_expression(location, expr, None, local_vars); },
+            Statement::ForKeyValue(_) => { println!("correctly found a kv pair but no idea what do lol!")},
         }
         ControlFlow::allfalse()
     }
