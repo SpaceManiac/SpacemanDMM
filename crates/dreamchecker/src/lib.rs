@@ -1561,7 +1561,48 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Statement::Goto(_) => {},
             Statement::Label { name: _, block } => { self.visit_block(block, &mut local_vars.clone()); },
             Statement::Del(expr) => { self.visit_expression(location, expr, None, local_vars); },
-            Statement::ForKeyValue(_) => { println!("correctly found a kv pair but no idea what do lol!")},
+            Statement::ForKeyValue(for_key_value) => {
+                let ForKeyValueStatement { var_type, key, value, in_list, block } = &**for_key_value;
+                let mut scoped_locals = local_vars.clone();
+                if let Some(in_list) = in_list {
+                    let list = self.visit_expression(location, in_list, None, &mut scoped_locals);
+                    match list.static_ty {
+                        StaticType::None => {
+                            // Occurs extremely often due to DM not complaining about this, with
+                            // over 800 detections on /tg/. Maybe a future lint.
+                        }
+                        StaticType::List { .. } => {/* OK */}
+                        StaticType::Type(ty) => {
+                            if ty != self.objtree.expect("/world") && ty != self.objtree.expect("/list") && ty != self.objtree.expect("/alist") {
+                                let atom = self.objtree.expect("/atom");
+                                if ty.is_subtype_of(&atom) {
+                                    // Fine.
+                                } else if atom.is_subtype_of(&ty) {
+                                    // Iffy conceptually, but the only detections on /tg/ are false positives in the
+                                    // component system, where we loop over `var/datum/parent` that is known to be an
+                                    // atom in a way that's hard for Dreamchecker to capture.
+                                    error(location, "iterating over a /datum which might not be an /atom")
+                                        .set_severity(Severity::Hint)
+                                        .register(self.context);
+                                } else {
+                                    // The type is a /datum/foo subtype that definitely can't be looped over.
+                                    error(location, format!("iterating over a {} which cannot be iterated", ty.path))
+                                        .register(self.context);
+                                }
+                            }
+                        }
+                    }
+                }
+                // This quite ugly but DM doesn't let you do for (var/k, var/v)
+                // only the type of the key is taken into account
+                if let Some(var_type) = var_type {
+                    self.visit_var(location, var_type, key, None, &mut scoped_locals);
+                    self.visit_var(location, var_type, value, None, &mut scoped_locals);
+                }
+                let mut state = self.visit_block(block, &mut scoped_locals);
+                state.end_loop();
+                return state
+            }
         }
         ControlFlow::allfalse()
     }

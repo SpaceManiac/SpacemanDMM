@@ -325,8 +325,18 @@ impl<'o> WalkProc<'o> {
             Statement::Goto(_) => {},
             Statement::Crash(_) => {},
             Statement::Label { name: _, block } => self.visit_block(block),
-            Statement::Del(expr) => { self.visit_expression(location, expr, None); }, // UUuuh
-            Statement::ForKeyValue(_) => { println!("correctly found a kv pair but no idea what do lol!")},
+            Statement::Del(expr) => { self.visit_expression(location, expr, None); },
+            Statement::ForKeyValue(for_key_value) => {
+                let ForKeyValueStatement { var_type, key, value, in_list, block } = &**for_key_value;
+                if let Some(in_list) = in_list {
+                    self.visit_expression(location, in_list, None);
+                }
+                if let Some(var_type) = var_type {
+                    self.visit_var(location, var_type, key, None);
+                    self.visit_var(location, var_type, value, None);
+                }
+                self.visit_block(block);
+            },
         }
     }
 

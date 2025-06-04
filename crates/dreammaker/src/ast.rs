@@ -1452,6 +1452,7 @@ pub struct ForListStatement {
 
 #[derive(Debug, Clone, PartialEq, GetSize)]
 pub struct ForKeyValueStatement {
+    pub var_type: Option<VarType>,
     pub key: Ident2,
     pub value: Ident2,
     /// Defaults to 'world'.
