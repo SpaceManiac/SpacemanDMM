@@ -1597,8 +1597,15 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 // only the type of the key is taken into account
                 if let Some(var_type) = var_type {
                     self.visit_var(location, var_type, key, None, &mut scoped_locals);
-                    self.visit_var(location, var_type, value, None, &mut scoped_locals);
                 }
+                // the "v" in a DM for (var/k, v) statement is essentially typeless.
+                // There is currently no way to change that.
+                let var_type_value = VarType {
+                    flags: VarTypeFlags::from_bits_truncate(0),
+                    type_path: Box::new([]),
+                    input_type: InputType::from_bits_truncate(0),
+                };
+                self.visit_var(location, &var_type_value, value, None, &mut scoped_locals);
                 let mut state = self.visit_block(block, &mut scoped_locals);
                 state.end_loop();
                 return state
