@@ -1460,7 +1460,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                             // this is a really terrible way to do this
                                 Some(Statement::Var(var_statement)) => match var_statement.value {
                                     None => (Some(var_statement.var_type), var_statement.name),
-                                    _ => return Err(self.error("cannot assigned a value in var/key for(var/key, value) statement")),
+                                    _ => return Err(self.error("cannot assigned a value to var/key in a for(var/key, value) statement")),
                                 },
                                 _ => return Err(self.error("for (var/key, value) requires a 'var' keyword")),
                             };
@@ -1468,7 +1468,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                             // It should also pass only if it's an ident
                             let value = match lhs.into_term() {
                                 Some(Term::Ident(value)) => value,
-                                _ => return Err(self.error("value must be a variable in for (var/key, value) statement")),
+                                _ => return Err(self.error("value must be a variable in a for (var/key, value) statement")),
                             };
                             // TODO : check if `x` is an ident/a "list()" or "alist()" statement ?
                             require!(self.exact(Token::Punct(Punctuation::RParen)));

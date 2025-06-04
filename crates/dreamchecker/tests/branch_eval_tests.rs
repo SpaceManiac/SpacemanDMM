@@ -94,3 +94,17 @@ fn for_loop_condition() {
 "##.trim();
     check_errors_match(code, FOR_LOOP_CONDITION_ERRORS);
 }
+
+#[test]
+fn for_kv_check() {
+    let code = r##"
+/proc/test()
+    var/alist/A = alist()
+    for (var/k, v in A)
+        world.log << k
+        world.log << v
+
+"##.trim();
+    check_errors_match(code, NO_ERRORS);
+}
+
