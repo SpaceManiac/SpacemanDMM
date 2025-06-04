@@ -1427,9 +1427,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 })
             // ... copypasted but with commas
             } else if let Some(()) = self.comma()? {
-                // for(init, test, [inc])
+                // for(init, test [, inc])
                 let test = self.expression()?;
-                let inc = match self.semicolon()? {
+                let inc = match self.comma()? {
                     Some(()) => self.simple_statement(false, vars)?,
                     None => None,
                 };
