@@ -521,7 +521,9 @@ impl<'o> WalkProc<'o> {
             },
             Term::ExternalCall { library_name, function_name, args } => {
                 self.visit_expression(location, library_name, None);
-                self.visit_expression(location, function_name, None);
+                if let Some(function_name) = function_name {
+                    self.visit_expression(location, function_name, None);
+                }
                 self.visit_arguments(location, args);
                 StaticType::None
             },

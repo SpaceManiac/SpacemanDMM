@@ -1923,7 +1923,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Term::ExternalCall { library_name, function_name, args } => {
                 self.visit_expression(location, library_name, None, local_vars);
-                self.visit_expression(location, function_name, None, local_vars);
+                if let Some(function_name) = function_name {
+                    self.visit_expression(location, function_name, None, local_vars);
+                }
                 self.visit_arguments(location, args, local_vars);
                 Analysis::empty()  // TODO
             },
