@@ -1246,7 +1246,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     setting_allowed = false;
                 }
             }
-            let state = self.visit_statement(stmt.location, &stmt.elem, local_vars, setting_allowed);
+            let state = self.visit_statement(stmt.location, &stmt.elem, local_vars);
             term.merge(state);
         }
         term
@@ -1283,7 +1283,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
     }
 
-    fn visit_statement(&mut self, location: Location, statement: &'o Statement, local_vars: &mut HashMap<String, LocalVar<'o>>, setting_allowed : bool) -> ControlFlow {
+    fn visit_statement(&mut self, location: Location, statement: &'o Statement, local_vars: &mut HashMap<String, LocalVar<'o>>) -> ControlFlow {
         match statement {
             Statement::Expr(expr) => {
                 match expr {
@@ -1364,7 +1364,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                             .register(self.context);
                     }
                     self.visit_expression(condition.location, &condition.elem, None, &mut scoped_locals);
-                    let state = self.visit_block(block, &mut scoped_locals, setting_allowed);
+                    let state = self.visit_block(block, &mut scoped_locals, false);
                     match condition.elem.is_truthy() {
                         Some(true) => {
                             error(condition.location,"if condition is always true")
@@ -1389,7 +1389,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                                 .register(self.context);
                         }
                     }
-                    let state = self.visit_block(else_arm, &mut local_vars.clone(), setting_allowed);
+                    let state = self.visit_block(else_arm, &mut local_vars.clone(), false);
                     allterm.merge_false(state);
                 } else {
                     allterm.no_else();
@@ -1407,7 +1407,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Statement::ForLoop { init, test, inc, block } => {
                 let mut scoped_locals = local_vars.clone();
                 if let Some(init) = init {
-                    self.visit_statement(location, init, &mut scoped_locals, false);
+                    self.visit_statement(location, init, &mut scoped_locals);
                 }
                 if let Some(test) = test {
                     self.loop_condition_check(location, test);
@@ -1415,7 +1415,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     self.visit_expression(location, test, None, &mut scoped_locals);
                 }
                 if let Some(inc) = inc {
-                    self.visit_statement(location, inc, &mut scoped_locals, false);
+                    self.visit_statement(location, inc, &mut scoped_locals);
                 }
                 let mut state = self.visit_block(block, &mut scoped_locals, false);
                 state.end_loop();
@@ -1535,11 +1535,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                             }
                         }
                     }
-                    let state = self.visit_block(block, &mut scoped_locals, setting_allowed);
+                    let state = self.visit_block(block, &mut scoped_locals, false);
                     allterm.merge_false(state);
                 }
                 if let Some(default) = default {
-                    let state = self.visit_block(default, &mut local_vars.clone(), setting_allowed);
+                    let state = self.visit_block(default, &mut local_vars.clone(), false);
                     allterm.merge_false(state);
                 } else {
                     allterm.no_else();
@@ -1573,7 +1573,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Statement::Continue(_) => { return ControlFlow { returns: false, continues: true, breaks: false, fuzzy: true } },
             Statement::Break(_) => { return ControlFlow { returns: false, continues: false, breaks: true, fuzzy: true } },
             Statement::Goto(_) => {},
-            Statement::Label { name: _, block } => { self.visit_block(block, &mut local_vars.clone(), setting_allowed); },
+            Statement::Label { name: _, block } => { self.visit_block(block, &mut local_vars.clone(), false); },
             Statement::Del(expr) => { self.visit_expression(location, expr, None, local_vars); },
         }
         ControlFlow::allfalse()
