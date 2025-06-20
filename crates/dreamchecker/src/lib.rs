@@ -1232,9 +1232,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     .register(self.context);
                 return term // stop evaluating
             }
-            match stmt.elem {
-                Statement::Setting { .. } => {
-                    if !setting_allowed {
+            match &stmt.elem {
+                Statement::Setting { name, mode, value } => {
+                    // Defines like SHOULD_CALL_PARENT currently only work at the top
+                    // Built in settings like background can situationally work in control blocks but are already warned by dreammaker
+                    if !setting_allowed && name.starts_with("SpacemanDMM_") {
                         error(stmt.location, "set statement not at the top of the proc")
                             .with_errortype("set_has_no_effect")
                             .register(self.context);
