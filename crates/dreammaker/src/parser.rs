@@ -2146,21 +2146,31 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 require!(self.arguments(&[], "call*")),
             ),
 
-            // term :: 'call_ext' (library_name, [function_name]) arglist
+            // term :: 'call_ext' (library, [function]) arglist
             Token::Ident(ref i, _) if i == "call_ext" => {
                 require!(self.exact(Token::Punct(Punctuation::LParen)));
-                let library_name = require!(self.expression());
-                let function_name = if self.exact(Token::Punct(Punctuation::Comma))?.is_some() {
+                let first = require!(self.expression());
+                let second = if self.exact(Token::Punct(Punctuation::Comma))?.is_some() {
                     Some(require!(self.expression()))
                 } else {
                     None
                 };
                 require!(self.exact(Token::Punct(Punctuation::RParen)));
 
-                Term::ExternalCall {
-                    library_name: Box::new(library_name),
-                    function_name: function_name.map(Box::new),
-                    args: require!(self.arguments(&[], "call_ext*")),
+                let args = require!(self.arguments(&[], "call_ext*"));
+                match second {
+                    // call_ext(library, function)(...)
+                    Some(function) => Term::ExternalCall {
+                        library: Some(Box::new(first)),
+                        function: Box::new(function),
+                        args,
+                    },
+                    // call_ext(loaded_func)(...)
+                    None => Term::ExternalCall {
+                        library: None,
+                        function: Box::new(first),
+                        args,
+                    }
                 }
             },
 
