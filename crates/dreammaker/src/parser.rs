@@ -2146,7 +2146,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 require!(self.arguments(&[], "call*")),
             ),
 
-            // term :: 'call_ext' (library, [function]) arglist
+            // term :: 'call_ext' ([library,] function) arglist
             Token::Ident(ref i, _) if i == "call_ext" => {
                 require!(self.exact(Token::Punct(Punctuation::LParen)));
                 let first = require!(self.expression());
