@@ -63,7 +63,7 @@ fn main() {
     eprintln!();
     match std::env::current_exe() {
         Ok(path) => eprintln!("executable: {}", path.display()),
-        Err(e) => eprintln!("exe check failure: {}", e),
+        Err(e) => eprintln!("exe check failure: {e}"),
     }
     eprint!("{}", include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")));
     #[cfg(extools_bundle)] {
@@ -74,7 +74,7 @@ fn main() {
     }
     match std::env::current_dir() {
         Ok(path) => eprintln!("directory: {}", path.display()),
-        Err(e) => eprintln!("dir check failure: {}", e),
+        Err(e) => eprintln!("dir check failure: {e}"),
     }
 
     let mut args = std::env::args();
@@ -85,7 +85,7 @@ fn main() {
         } else if arg == "--version" {
             return;
         } else {
-            panic!("unknown argument {:?}", arg);
+            panic!("unknown argument {arg:?}");
         }
     }
 
@@ -301,7 +301,7 @@ impl Engine {
         S: Into<String>
     {
         let message = message.into();
-        eprintln!("{:?}: {}", typ, message);
+        eprintln!("{typ:?}: {message}");
         self.issue_notification::<lsp_types::notification::ShowMessage>(
             lsp_types::ShowMessageParams { typ, message }
         )
@@ -319,10 +319,10 @@ impl Engine {
     fn file_url(&self, file: dm::FileId) -> Result<Url, jsonrpc::Error> {
         if let Some(ref root) = self.root {
             root.join(&self.context.file_path(file).display().to_string())
-                .map_err(|e| invalid_request(format!("error in file_url: {}", e)))
+                .map_err(|e| invalid_request(format!("error in file_url: {e}")))
         } else {
             Url::parse(&self.context.file_path(file).display().to_string())
-                .map_err(|e| invalid_request(format!("error in rootless file_url {}", e)))
+                .map_err(|e| invalid_request(format!("error in rootless file_url {e}")))
         }
     }
 
@@ -462,7 +462,7 @@ impl Engine {
                         version: None,
                     },
                 );
-                eprintln!("{:?}", err);
+                eprintln!("{err:?}");
                 return Ok(());
             }
         };
@@ -945,7 +945,7 @@ impl Engine {
                 // form the markdown text to be used once the proc's declaration is reached
                 if defstring.is_empty() {
                     proclink = format!("[{}]({})", ty.pretty_path(), self.location_link(proc_value.location)?);
-                    let mut message = format!("{}(", proc_name);
+                    let mut message = format!("{proc_name}(");
                     let mut first = true;
                     for each in proc_value.parameters.iter() {
                         use std::fmt::Write;
@@ -954,7 +954,7 @@ impl Engine {
                         } else {
                             message.push_str(", ");
                         }
-                        let _ = write!(message, "{}", each);
+                        let _ = write!(message, "{each}");
                     }
                     message.push(')');
                     defstring.clone_from(&message);
@@ -1127,7 +1127,7 @@ handle_method_call! {
                 let path = format!("{}/", url.path());
                 url.set_path(&path);
             }
-            eprintln!("workspace root: {}", url);
+            eprintln!("workspace root: {url}");
 
             if let Ok(root_path) = url_to_path(&url) {
                 let config_path = root_path.join("SpacemanDMM.toml");
@@ -1147,7 +1147,7 @@ handle_method_call! {
         if let (Some(start), Some(end)) = (debug.find('{'), debug.rfind('}')) {
             eprintln!("client capabilities: {}", &debug[start + 2..end - 1]);
         } else {
-            eprintln!("client capabilities: {}", debug);
+            eprintln!("client capabilities: {debug}");
         }
         eprintln!();
 
@@ -1289,7 +1289,7 @@ handle_method_call! {
         let iter = annotations.get_location(location);
         for (_range, annotation) in iter.clone() {
             #[cfg(debug_assertions)] {
-                results.push(format!("{:?}", annotation));
+                results.push(format!("{annotation:?}"));
             }
             match annotation {
                 Annotation::Variable(path) if !path.is_empty() => {
@@ -1311,7 +1311,7 @@ handle_method_call! {
                     while let Some(current) = next {
                         if let Some(var) = current.vars.get(last) {
                             let constant = if let Some(ref constant) = var.value.constant {
-                                format!("\n```dm\n= {}\n```", constant)
+                                format!("\n```dm\n= {constant}\n```")
                             } else {
                                 String::new()
                             };
@@ -1362,7 +1362,7 @@ handle_method_call! {
                                 } else {
                                     message.push_str(", ");
                                 }
-                                let _ = write!(message, "{}", each);
+                                let _ = write!(message, "{each}");
                             }
                             message.push_str(")\n```");
                             infos.push_front(message);
@@ -1752,7 +1752,7 @@ handle_method_call! {
                     let mut sep = "";
                     for param in proc.main_value().parameters.iter() {
                         for each in param.var_type.type_path.iter() {
-                            let _ = write!(label, "{}{}", sep, each);
+                            let _ = write!(label, "{sep}{each}");
                             sep = "/";
                         }
                         label.push_str(sep);
@@ -2133,7 +2133,7 @@ fn url_to_path(url: &Url) -> Result<PathBuf, jsonrpc::Error> {
 fn path_to_url(path: PathBuf) -> Result<Url, jsonrpc::Error> {
     let formatted = path.display().to_string();
     Url::from_file_path(path).map_err(|_| invalid_request(format!(
-        "bad file path: {}", formatted,
+        "bad file path: {formatted}",
     )))
 }
 

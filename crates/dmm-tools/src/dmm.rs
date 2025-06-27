@@ -146,7 +146,7 @@ impl std::hash::Hash for Prefab {
 
 impl Map {
     pub fn new(x: usize, y: usize, z: usize, turf: String, area: String) -> Map {
-        assert!(x > 0 && y > 0 && z > 0, "({}, {}, {})", x, y, z);
+        assert!(x > 0 && y > 0 && z > 0, "({x}, {y}, {z})");
 
         let mut dictionary = BTreeMap::new();
         dictionary.insert(Key(0), vec![
@@ -281,7 +281,7 @@ impl fmt::Display for Prefab {
                 if f.alternate() {
                     f.write_str("\n    ")?;
                 }
-                write!(f, "{} = {}", k, v)?;
+                write!(f, "{k} = {v}")?;
             }
             if f.alternate() {
                 f.write_str("\n")?;

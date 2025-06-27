@@ -59,7 +59,7 @@ fn item_var(ty: TypeRef, name: &str, var: &TypeVar) -> CompletionItem {
                 if ty.is_root() {
                     detail = constant.to_string();
                 } else {
-                    detail = format!("{} - {}", constant, detail);
+                    detail = format!("{constant} - {detail}");
                 }
             }
         }
@@ -265,7 +265,7 @@ impl Engine {
                 }
                 if contains(name, query) {
                     results.push(CompletionItem {
-                        insert_text: Some(format!("{} = ", name)),
+                        insert_text: Some(format!("{name} = ")),
                         .. item_var(ty, name, var)
                     });
                 }
@@ -279,11 +279,11 @@ impl Engine {
                 if contains(name, query) {
                     use std::fmt::Write;
 
-                    let mut completion = format!("{}(", name);
+                    let mut completion = format!("{name}(");
                     let mut sep = "";
                     for param in proc.main_value().parameters.iter() {
                         for each in param.var_type.type_path.iter() {
-                            let _ = write!(completion, "{}{}", sep, each);
+                            let _ = write!(completion, "{sep}{each}");
                             sep = "/";
                         }
                         let _ = write!(completion, "{}{}", sep, param.name);

@@ -117,8 +117,7 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
                             // hope that truncating division will approximate
                             // a sane situation.
                             DMError::new(self.last_input_loc, format!(
-                                "inconsistent indentation: {} % {} != 0",
-                                spaces, spaces_per_indent,
+                                "inconsistent indentation: {spaces} % {spaces_per_indent} != 0",
                             )).register(self.context)
                         }
                         new_indents = spaces / spaces_per_indent;

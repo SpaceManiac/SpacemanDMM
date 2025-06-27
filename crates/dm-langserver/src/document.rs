@@ -78,7 +78,7 @@ impl DocumentStore {
         }
 
         Err(io::Error::new(io::ErrorKind::NotFound,
-            format!("URL not opened and schema is not 'file': {}", url)))
+            format!("URL not opened and schema is not 'file': {url}")))
     }
 
     pub fn read(&self, url: &Url) -> io::Result<Box<dyn io::Read>> {
@@ -92,7 +92,7 @@ impl DocumentStore {
         }
 
         Err(io::Error::new(io::ErrorKind::NotFound,
-            format!("URL not opened and schema is not 'file': {}", url)))
+            format!("URL not opened and schema is not 'file': {url}")))
     }
 }
 
@@ -193,7 +193,7 @@ pub fn find_word(text: &str, offset: usize) -> &str {
         while !text.is_char_boundary(start_next) {
             start_next -= 1;
         }
-        if !text[start_next..start].chars().next().map_or(false, is_ident) {
+        if !text[start_next..start].chars().next().is_some_and(is_ident) {
             break;
         }
         start = start_next;
@@ -206,7 +206,7 @@ pub fn find_word(text: &str, offset: usize) -> &str {
         while !text.is_char_boundary(end_next) {
             end_next += 1;
         }
-        if !text[end..end_next].chars().next().map_or(false, is_ident) {
+        if !text[end..end_next].chars().next().is_some_and(is_ident) {
             break;
         }
         end = end_next;

@@ -72,7 +72,7 @@ var/global/bill = 1
         // Check for errors
         let mut sum_errors: Vec<String> = vec![];
         for error in errors.iter() {
-            sum_errors.push(format!("{}", error));
+            sum_errors.push(format!("{error}"));
         }
         if !sum_errors.is_empty() {
             panic!("\n{}", sum_errors.join("\n").as_str());

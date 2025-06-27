@@ -151,7 +151,7 @@ impl std::fmt::Display for Ref {
         match *self {
             Ref::NULL => fmt.write_str("null"),
             Ref::WORLD => fmt.write_str("world"),
-            Ref(v) => write!(fmt, "[0x{:08x}]", v),
+            Ref(v) => write!(fmt, "[0x{v:08x}]"),
         }
     }
 }
@@ -159,15 +159,15 @@ impl std::fmt::Display for Ref {
 impl std::fmt::Display for Literal {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Literal::Ref(v) => write!(fmt, "{}", v),
-            Literal::Number(n) => write!(fmt, "{}", n),
-            Literal::String(s) => write!(fmt, "{:?}", s),
-            Literal::Typepath(t) => write!(fmt, "{}", t),
-            Literal::Resource(f) => write!(fmt, "'{}'", f),
+            Literal::Ref(v) => write!(fmt, "{v}"),
+            Literal::Number(n) => write!(fmt, "{n}"),
+            Literal::String(s) => write!(fmt, "{s:?}"),
+            Literal::Typepath(t) => write!(fmt, "{t}"),
+            Literal::Resource(f) => write!(fmt, "'{f}'"),
             Literal::Proc(p) => {
                 match p.rfind('/') {
                     Some(idx) => write!(fmt, "{}/proc/{}", &p[..idx], &p[idx + 1..]),
-                    None => write!(fmt, "{}", p),
+                    None => write!(fmt, "{p}"),
                 }
             }
         }

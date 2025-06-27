@@ -675,7 +675,7 @@ impl ObjectTree {
     pub fn expect(&self, path: &str) -> TypeRef {
         match self.types.get(path) {
             Some(&ix) => TypeRef::new(self, ix),
-            None => panic!("type not found: {:?}", path),
+            None => panic!("type not found: {path:?}"),
         }
     }
 
@@ -837,7 +837,7 @@ impl ObjectTreeBuilder {
                     if var.value.expression.is_some() {
                         context.register_error(DMError::new(
                             var.value.location,
-                            format!("not allowed to change {}/parent_type", path),
+                            format!("not allowed to change {path}/parent_type"),
                         ));
                     }
                 }
@@ -879,7 +879,7 @@ impl ObjectTreeBuilder {
                             Ok(&empty_string)
                         } else {
                             // A weird situation which should not happen.
-                            Err(DMError::new(location, format!("missing {}/parent_type", path)))
+                            Err(DMError::new(location, format!("missing {path}/parent_type")))
                         };
 
                         match constant {
@@ -895,7 +895,7 @@ impl ObjectTreeBuilder {
                                 parent_type = &parent_type_buf;
                             }
                             Ok(other) => {
-                                context.register_error(DMError::new(location, format!("value of {}/parent_type must be a string or typepath, got {}", path, other)));
+                                context.register_error(DMError::new(location, format!("value of {path}/parent_type must be a string or typepath, got {other}")));
                             }
                             Err(e) => {
                                 context.register_error(e);
@@ -913,7 +913,7 @@ impl ObjectTreeBuilder {
                 } else {
                     context.register_error(DMError::new(
                         location,
-                        format!("bad parent type for {}: {}", path, parent_type),
+                        format!("bad parent type for {path}: {parent_type}"),
                     ));
                     NodeIndex::new(0)  // on bad parent_type, fall back to the root
                 }
@@ -1273,7 +1273,7 @@ impl ObjectTreeBuilder {
         if let Some(other) = path.next() {
             return Err(DMError::new(
                 location,
-                format!("proc name must be a single identifier (spurious {:?})", other),
+                format!("proc name must be a single identifier (spurious {other:?})"),
             ));
         }
 

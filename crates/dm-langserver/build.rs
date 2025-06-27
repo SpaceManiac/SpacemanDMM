@@ -12,8 +12,8 @@ fn main() {
     let mut f = File::create(out_dir.join("build-info.txt")).unwrap();
 
     match read_commit() {
-        Ok(commit) => writeln!(f, "commit: {}", commit).unwrap(),
-        Err(err) => println!("cargo:warning=Failed to fetch commit info: {}", err)
+        Ok(commit) => writeln!(f, "commit: {commit}").unwrap(),
+        Err(err) => println!("cargo:warning=Failed to fetch commit info: {err}")
     }
     writeln!(f, "build date: {}", chrono::Utc::now().date_naive()).unwrap();
 
@@ -74,7 +74,7 @@ fn read_commit() -> Result<String, git2::Error> {
 fn download_dll(out_dir: &Path, fname: &str, tag: &str, url: &str, sha256: &str) {
     let full_path = out_dir.join(fname);
     println!("cargo:rustc-env=BUNDLE_PATH_{}={}", fname, full_path.display());
-    println!("cargo:rustc-env=BUNDLE_VERSION_{}={}", fname, tag);
+    println!("cargo:rustc-env=BUNDLE_VERSION_{fname}={tag}");
 
     if let Ok(digest) = sha256::try_digest(&full_path) {
         if digest == sha256 {

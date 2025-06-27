@@ -65,7 +65,7 @@ impl IconFile {
         self.metadata.get_icon_state(icon_state).ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::NotFound,
-                format!("icon_state {} not found", icon_state),
+                format!("icon_state {icon_state} not found"),
             )
         })
     }

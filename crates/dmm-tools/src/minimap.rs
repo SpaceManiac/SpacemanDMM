@@ -155,7 +155,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
         } else {
             let key = format!("bad icon: {:?}, state: {:?}", sprite.icon, sprite.icon_state);
             if !ctx.errors.read().unwrap().contains(&key) {
-                eprintln!("{}", key);
+                eprintln!("{key}");
                 ctx.errors.write().unwrap().insert(key);
             }
         }
@@ -218,7 +218,7 @@ fn get_atom_list<'a>(
             None => {
                 let key = format!("bad path: {}", fab.path);
                 if !errors.read().unwrap().contains(&key) {
-                    println!("{}", key);
+                    println!("{key}");
                     errors.write().unwrap().insert(key);
                 }
                 continue;

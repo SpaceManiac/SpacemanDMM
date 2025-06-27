@@ -198,7 +198,7 @@ impl<'o> TypeExprCompiler<'o> {
                 }
                 Err(DMError::new(
                     location,
-                    format!("type expr: no such parameter {:?}", unscoped_name),
+                    format!("type expr: no such parameter {unscoped_name:?}"),
                 ))
             }
 
@@ -261,7 +261,7 @@ impl<'o> TypeExprCompiler<'o> {
                 )),
             },
 
-            _ => Err(DMError::new(location, format!("type expr: bad follow node {:?}", rhs))),
+            _ => Err(DMError::new(location, format!("type expr: bad follow node {rhs:?}"))),
         }
     }
 }

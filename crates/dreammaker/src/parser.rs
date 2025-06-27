@@ -459,14 +459,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     fn describe_parse_error(&mut self) -> DMError {
         let expected = self.expected.join(", ");
         if self.eof {
-            let mut error = self.error(format!("got EOF, expected one of: {}", expected));
+            let mut error = self.error(format!("got EOF, expected one of: {expected}"));
             if let Some(loc) = self.skipping_location {
                 error.add_note(loc, "unmatched pair here");
             }
             error
         } else {
             let got = self.peek();
-            let message = format!("got '{:#}', expected one of: {}", got, expected);
+            let message = format!("got '{got:#}', expected one of: {expected}");
             let mut error = self.error(message);
             if self.possible_indentation_error {
                 let mut loc = error.location();
@@ -615,7 +615,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     }
 
     fn exact_ident(&mut self, ident: &'static str) -> Status<()> {
-        self.expected(format!("'{}'", ident));
+        self.expected(format!("'{ident}'"));
         take_match!(self {
             Token::Ident(i, _) if i == ident => SUCCESS,
         } else try_another())
@@ -734,7 +734,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Token::Punct(p @ Punctuation::Dot) |
             Token::Punct(p @ Punctuation::CloseColon) |
             Token::Punct(p @ Punctuation::Colon) => {
-                self.error(format!("path started by '{}', should be unprefixed", p))
+                self.error(format!("path started by '{p}', should be unprefixed"))
                     .set_severity(Severity::Warning)
                     .register(self.context);
                 Ok((false, true))
@@ -750,7 +750,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Token::Punct(p @ Punctuation::Dot) |
             Token::Punct(p @ Punctuation::CloseColon) |
             Token::Punct(p @ Punctuation::Colon) => {
-                self.error(format!("path separated by '{}', should be '/'", p))
+                self.error(format!("path separated by '{p}', should be '/'"))
                     .set_severity(Severity::Warning)
                     .register(self.context);
                 SUCCESS
@@ -951,7 +951,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         .register(self.context);
                 } else if let Some(mut var_type) = var_type.take() {
                     if VarTypeFlags::from_name(last_part).is_some() {
-                        self.error(format!("`var/{};` item has no effect", last_part))
+                        self.error(format!("`var/{last_part};` item has no effect"))
                             .set_severity(Severity::Warning)
                             .register(self.context);
                     } else {
@@ -1185,7 +1185,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 "".to_owned()
             }
         };
-        if path.first().map_or(false, |i| i == "var") {
+        if path.first().is_some_and(|i| i == "var") {
             path.remove(0);
             DMError::new(leading_loc, "'var/' is unnecessary here")
                 .set_severity(Severity::Hint)
@@ -1310,7 +1310,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         let mut as_what = match InputType::from_str(&ident) {
             Ok(what) => what,
             Err(()) => {
-                self.context.register_error(self.error(format!("bad input type: '{}'", ident)));
+                self.context.register_error(self.error(format!("bad input type: '{ident}'")));
                 InputType::empty()
             }
         };
@@ -1319,7 +1319,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             match InputType::from_str(&ident) {
                 Ok(what) => as_what |= what,
                 Err(()) => {
-                    self.context.register_error(self.error(format!("bad input type: '{}'", ident)));
+                    self.context.register_error(self.error(format!("bad input type: '{ident}'")));
                 }
             }
         }

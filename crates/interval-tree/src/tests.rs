@@ -88,7 +88,7 @@ fn test_iter() {
     t.insert(RangeInclusive::new(38, 38), 1340);
     for (i, pair) in t.iter().enumerate() {
         let (k, v) = pair;
-        println!("{:?}, {}", k, v);
+        println!("{k:?}, {v}");
         let key = (i as u64) * 2 + 32;
         assert_eq!(k, RangeInclusive::new(key, key));
         assert_eq!(v, &((i as i32) + 1337));
@@ -104,7 +104,7 @@ fn test_range_iter() {
     t.insert(RangeInclusive::new(38, 38), 1340);
     for (i, pair) in t.range(RangeInclusive::new(34, 36)).enumerate() {
         let (k, v) = pair;
-        println!("{:?}, {}", k, v);
+        println!("{k:?}, {v}");
         let key = (i as u64) * 2 + 34;
         assert_eq!(k, RangeInclusive::new(key, key));
         assert_eq!(v, &((i as i32) + 1338));

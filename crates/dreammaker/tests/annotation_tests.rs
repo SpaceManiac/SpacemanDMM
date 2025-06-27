@@ -33,7 +33,7 @@ fn annotation_basic() {
         line: 9,
         column: 14,
     }) {
-        println!("{:?}", each);
+        println!("{each:?}");
         for each in annotations.get_range_raw(each.0) {
             println!("    {:?}", each.1);
         }

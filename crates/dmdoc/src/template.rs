@@ -88,7 +88,7 @@ fn git_link(env: &Environment, file: &str, line: u32) -> Markup {
     let title = if line == 0 {
         file
     } else {
-        z = format!("{} {}", file, line);
+        z = format!("{file} {line}");
         &z
     };
     let icon = html! {

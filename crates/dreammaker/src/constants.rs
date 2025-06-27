@@ -323,7 +323,7 @@ impl ops::Not for Constant {
     }
 }
 
-impl<'a> ops::Not for &'a Constant {
+impl ops::Not for &Constant {
     type Output = Constant;
 
     fn not(self) -> Constant {
@@ -338,7 +338,7 @@ impl fmt::Display for Constant {
             Constant::New { ref type_, ref args } => {
                 f.write_str("new")?;
                 if let Some(prefab) = type_ {
-                    write!(f, " {}", prefab)?;
+                    write!(f, " {prefab}")?;
                 }
                 if let Some(args) = args.as_ref() {
                     write!(f, "(")?;
@@ -350,7 +350,7 @@ impl fmt::Display for Constant {
                         first = false;
                         write!(f, "{}", each.0)?;
                         if let Some(val) = each.1.as_ref() {
-                            write!(f, " = {}", val)?;
+                            write!(f, " = {val}")?;
                         }
                     }
                     write!(f, ")")?;
@@ -370,32 +370,32 @@ impl fmt::Display for Constant {
                     }
                     first = false;
                     previous_assoc = false;
-                    write!(f, "{}", key)?;
+                    write!(f, "{key}")?;
                     if let Some(val) = val.as_ref() {
-                        write!(f, " = {}", val)?;
+                        write!(f, " = {val}")?;
                         previous_assoc = true;
                     }
                 }
                 write!(f, ")")
             },
             Constant::Call(const_fn, ref list) => {
-                write!(f, "{}(", const_fn)?;
+                write!(f, "{const_fn}(")?;
                 let mut first = true;
                 for (key, val) in list.iter() {
                     if !first {
                         write!(f, ", ")?;
                     }
                     first = false;
-                    write!(f, "{}", key)?;
+                    write!(f, "{key}")?;
                     if let Some(val) = val {
-                        write!(f, " = {}", val)?;
+                        write!(f, " = {val}")?;
                     }
                 }
                 write!(f, ")")
             },
-            Constant::Prefab(ref val) => write!(f, "{}", val),
+            Constant::Prefab(ref val) => write!(f, "{val}"),
             Constant::String(ref val) => crate::lexer::Quote(val).fmt(f),
-            Constant::Resource(ref val) => write!(f, "'{}'", val),
+            Constant::Resource(ref val) => write!(f, "'{val}'"),
             Constant::Float(val) => crate::lexer::FormatFloat(val).fmt(f),
         }
     }
@@ -462,7 +462,7 @@ pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree) {
         for key in keys {
             if !tree[ty]
                 .get_var_declaration(&key, tree)
-                .map_or(true, |x| {
+                .is_none_or(|x| {
                     x.var_type.is_const_evaluable() && (x.var_type.flags.is_const() || ty != NodeIndex::new(0))
                 })
             {
@@ -520,17 +520,17 @@ fn constant_ident_lookup(
                         if var.value.being_evaluated {
                             return Err(DMError::new(
                                 var.value.location,
-                                format!("recursive constant reference: {}", ident),
+                                format!("recursive constant reference: {ident}"),
                             ));
                         } else if !decl.var_type.is_const_evaluable() {
                             return Err(DMError::new(
                                 var.value.location,
-                                format!("non-const-evaluable variable: {}", ident),
+                                format!("non-const-evaluable variable: {ident}"),
                             ));
                         } else if !decl.var_type.flags.is_const() && must_be_const {
                             return Err(DMError::new(
                                 var.value.location,
-                                format!("non-const variable: {}", ident),
+                                format!("non-const variable: {ident}"),
                             ));
                         }
                         var.value.being_evaluated = true;
@@ -653,16 +653,16 @@ impl<'a> ConstantFolder<'a> {
                 }
                 match self.tree.as_mut().and_then(|t| t.find(&full_path)).map(|t| t.index()) {
                     Some(idx) => self.recursive_lookup(idx, &field_name, true),
-                    None => Err(self.error(format!("unknown typepath {}", full_path))),
+                    None => Err(self.error(format!("unknown typepath {full_path}"))),
                 }
             }
             (term, Follow::Unary(op)) => self.unary(term, op),
             (term, Follow::StaticField(field)) => {
                 let Constant::Prefab(read_from) = term else {
-                    return Err(self.error(format!("non typepath {} used with ::", term)))
+                    return Err(self.error(format!("non typepath {term} used with ::")))
                 };
                 if !read_from.vars.is_empty() {
-                    return Err(self.error(format!("non typepath {} used with ::", read_from)))
+                    return Err(self.error(format!("non typepath {read_from} used with ::")))
                 }
                 let Some(ref tree) = self.tree else {
                     return Err(self.error("no type tree available"))
@@ -674,10 +674,10 @@ impl<'a> ConstantFolder<'a> {
             },
             (term, Follow::ProcReference(field)) => {
                 let Constant::Prefab(read_from) = term else {
-                    return Err(self.error(format!("non typepath {} used with ::", term)))
+                    return Err(self.error(format!("non typepath {term} used with ::")))
                 };
                 if !read_from.vars.is_empty() {
-                    return Err(self.error(format!("non typepath {} used with ::", read_from)))
+                    return Err(self.error(format!("non typepath {read_from} used with ::")))
                 }
                 let Some(ref tree) = self.tree else {
                     return Err(self.error("no type tree available"))
@@ -687,7 +687,7 @@ impl<'a> ConstantFolder<'a> {
                 };
                 self.proc_ref_lookup(real_type.index(), &field)
             },
-            (term, follow) => Err(self.error(format!("non-constant expression follower: {} {:?}", term, follow))),
+            (term, follow) => Err(self.error(format!("non-constant expression follower: {term} {follow:?}"))),
         }
     }
 
@@ -761,7 +761,7 @@ impl<'a> ConstantFolder<'a> {
             (BinaryOp::NotEq, lhs, rhs) => Ok(Constant::from(lhs != rhs)),
             (BinaryOp::And, lhs, rhs) => Ok(if lhs.to_bool() { rhs } else { lhs }),
             (BinaryOp::Or, lhs, rhs) => Ok(if lhs.to_bool() { lhs } else { rhs }),
-            (op, lhs, rhs) => Err(self.error(format!("non-constant {:?}: {} {} {}", op, lhs, op, rhs))),
+            (op, lhs, rhs) => Err(self.error(format!("non-constant {op:?}: {lhs} {op} {rhs}"))),
         }
     }
 
@@ -827,8 +827,7 @@ impl<'a> ConstantFolder<'a> {
                             let current_file_path = self.context.unwrap(/* is_some checked above */).file_path(self.location.file);
                             let Some(current_dir) = current_file_path.parent() else {
                                 return Err(self.error(format!(
-                                    "fexists() file has no parent: {:?}",
-                                    current_file_path
+                                    "fexists() file has no parent: {current_file_path:?}"
                                 )));
                             };
                             current_dir.join(passed_path).exists().into()
@@ -837,7 +836,7 @@ impl<'a> ConstantFolder<'a> {
                     }
                 }
                 // other functions are no-goes
-                _ => return Err(self.error(format!("non-constant function call: {}", ident))),
+                _ => return Err(self.error(format!("non-constant function call: {ident}"))),
             },
             Term::Prefab(prefab) => Constant::Prefab(Box::new(self.prefab(*prefab)?)),
             Term::Ident(ident) => match ident.as_str() {
@@ -857,7 +856,7 @@ impl<'a> ConstantFolder<'a> {
                     if let Some(obj_tree) = &self.tree {
                         let typeref = TypeRef::new(obj_tree, self.ty);
                         let Some(parent_type) = typeref.parent_type() else {
-                            return Err(self.error(format!("no parent type for {}", typeref)))
+                            return Err(self.error(format!("no parent type for {typeref}")))
                         };
                         let pop = Pop::from(parent_type.path.split('/').filter(|elem| !elem.is_empty()).map(|segment| segment.to_string()).collect::<TreePath>());
                         Constant::Prefab(Box::new(pop))
@@ -951,7 +950,7 @@ impl<'a> ConstantFolder<'a> {
         while let Some(ty) = idx {
             let location = self.location;
             if self.tree.is_none() {
-                return Err(self.error(format!("cannot reference variable {:?} in this context", ident)));
+                return Err(self.error(format!("cannot reference variable {ident:?} in this context")));
             }
             let tree = self.tree.as_mut().unwrap();
             match constant_ident_lookup(tree, ty, ident, must_be_const, self.context)
@@ -961,14 +960,14 @@ impl<'a> ConstantFolder<'a> {
                 ConstLookup::Continue(i) => idx = i,
             }
         }
-        Err(self.error(format!("unknown variable: {}", ident)))
+        Err(self.error(format!("unknown variable: {ident}")))
     }
 
     fn proc_ref_lookup(&mut self, ty: NodeIndex, name: &str) -> Result<Constant, DMError> {
         let tree = self.tree.as_mut().unwrap();
         let proc_type = TypeRef::new(tree, ty);
         let Some(proc_ref) = proc_type.get_proc(name) else {
-            return Err(self.error(format!("unknown proc: {}", name)))
+            return Err(self.error(format!("unknown proc: {name}")))
         };
         // Gonna build the proc's path
         let mut path_elements: Vec<String> = proc_type.get().path.split('/').filter(|elem| !elem.is_empty()).map(|segment| segment.to_string()).collect();
@@ -1032,15 +1031,15 @@ impl<'a> ConstantFolder<'a> {
                             Some(2) => space = Some(ColorSpace::Hsl),
                             Some(3) => space = Some(ColorSpace::Hcy),
                             _ => {
-                                return Err(self.error(format!("malformed rgb() call, bad color space: {}", kwarg_value)))
+                                return Err(self.error(format!("malformed rgb() call, bad color space: {kwarg_value}")))
                             }
                         }
                         _ => {
-                            return Err(self.error(format!("malformed rgb() call, bad kwarg passed: {}", kwarg)))
+                            return Err(self.error(format!("malformed rgb() call, bad kwarg passed: {kwarg}")))
                         }
                     }
                 } else {
-                    return Err(self.error(format!("malformed rgb() call, kwarg is not string: {}", value)));
+                    return Err(self.error(format!("malformed rgb() call, kwarg is not string: {value}")));
                 }
             }
         }
@@ -1112,11 +1111,11 @@ impl<'a> ConstantFolder<'a> {
                         "a" | "alpha" => 0..=255,
                         "space" => continue, // Don't range-check the value of the space
                         _ => {
-                            return Err(self.error(format!("malformed rgb() call, bad kwarg passed: {}", kwarg)))
+                            return Err(self.error(format!("malformed rgb() call, bad kwarg passed: {kwarg}")))
                         }
                     };
                 } else {
-                    return Err(self.error(format!("malformed rgb() call, kwarg is not string: {}", value)));
+                    return Err(self.error(format!("malformed rgb() call, kwarg is not string: {value}")));
                 }
             }
 

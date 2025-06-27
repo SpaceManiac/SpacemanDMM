@@ -178,8 +178,7 @@ fn make_speedy_table() {
     for each in everything.iter() {
         assert!(
             each.len() == 1 || everything.contains(&&each[..each.len() - 1]),
-            "no prefix: {}",
-            each
+            "no prefix: {each}"
         );
     }
 
@@ -191,7 +190,7 @@ fn make_speedy_table() {
         }
 
         if let Some(prev) = prev {
-            assert!(each > prev, "out-of-order: {:?} is not greater than {:?}", each, prev);
+            assert!(each > prev, "out-of-order: {each:?} is not greater than {prev:?}");
         }
         prev = Some(each);
 
@@ -204,7 +203,7 @@ fn make_speedy_table() {
             table[b].1 = i + 1;
         } else {
             assert!(i >= table[b].0);
-            assert_eq!(i, table[b].1, "{}", each);
+            assert_eq!(i, table[b].1, "{each}");
             table[b].1 = i + 1;
         }
     }
@@ -354,7 +353,7 @@ impl Token {
         match self {
             Token::Eof => Cow::Borrowed("EOF"),
             Token::Punct(p) => Cow::Borrowed(p.single_quoted()),
-            _ => Cow::Owned(format!("'{}'", self)),
+            _ => Cow::Owned(format!("'{self}'")),
         }
     }
 }
@@ -367,10 +366,10 @@ impl fmt::Display for Token {
             Punct(p) => p.fmt(f),
             Ident(ref i, _) => f.write_str(i),
             String(ref i) => Quote(i).fmt(f),
-            InterpStringBegin(ref i) => write!(f, "\"{}[", i),
-            InterpStringPart(ref i) => write!(f, "]{}[", i),
-            InterpStringEnd(ref i) => write!(f, "]{}\"", i),
-            Resource(ref i) => write!(f, "'{}'", i),
+            InterpStringBegin(ref i) => write!(f, "\"{i}["),
+            InterpStringPart(ref i) => write!(f, "]{i}["),
+            InterpStringEnd(ref i) => write!(f, "]{i}\""),
+            Resource(ref i) => write!(f, "'{i}'"),
             Int(i) => FormatFloat(i as f32).fmt(f),
             Float(i) => FormatFloat(i).fmt(f),
             DocComment(ref c) => c.fmt(f),
@@ -387,11 +386,11 @@ impl<'a> fmt::Display for Quote<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = self.0;
         if s.contains("\"}") {
-            write!(f, "@@{}@", s)
+            write!(f, "@@{s}@")
         } else if s.contains('"') || s.contains('\n') {
-            write!(f, "{{\"{}\"}}", s)
+            write!(f, "{{\"{s}\"}}")
         } else {
-            write!(f, "\"{}\"", s)
+            write!(f, "\"{s}\"")
         }
     }
 }
@@ -428,7 +427,7 @@ impl fmt::Display for FormatFloat {
                 write!(f, "{:.*}e{:+04}", precision as usize, n2, exp)
             } else {
                 let n2 = (n * factor).round() / factor;
-                write!(f, "{}", n2)
+                write!(f, "{n2}")
             }
         }
     }
@@ -908,7 +907,7 @@ impl<'ctx> Lexer<'ctx> {
                 if let Ok(val) = f32::from_str(&buf) {
                     let val_str = val.to_string();
                     if val_str != buf {
-                        self.error(format!("precision loss of integer constant: \"{}\" to {}", buf, val))
+                        self.error(format!("precision loss of integer constant: \"{buf}\" to {val}"))
                             .set_severity(Severity::Warning)
                             .with_errortype("integer_precision_loss")
                             .register(self.context);
@@ -917,7 +916,7 @@ impl<'ctx> Lexer<'ctx> {
                 }
             }
             self.context.register_error(self.error(
-                format!("bad base-{} integer \"{}\": {}", radix, buf, original_error)));
+                format!("bad base-{radix} integer \"{buf}\": {original_error}")));
             Token::Int(0)  // fallback
         } else {
             // ignore radix
@@ -925,7 +924,7 @@ impl<'ctx> Lexer<'ctx> {
                 Ok(val) => Token::Float(val),
                 Err(e) => {
                     self.context.register_error(self.error(
-                        format!("bad float \"{}\": {}", buf, e)));
+                        format!("bad float \"{buf}\": {e}")));
                     Token::Float(0.0)  // fallback
                 }
             }
@@ -1276,7 +1275,7 @@ impl<'ctx> Iterator for Lexer<'ctx> {
                     b'@' => Some(locate(self.read_raw_string())),
                     _ => {
                         if !found_illegal {
-                            let mut msg = format!("illegal byte 0x{:x}", first);
+                            let mut msg = format!("illegal byte 0x{first:x}");
                             if (b' '..=b'~').contains(&first) {
                                 use std::fmt::Write;
                                 let _ = write!(msg, " ({:?})", first as char);
