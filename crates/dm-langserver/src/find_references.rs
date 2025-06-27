@@ -326,6 +326,24 @@ impl<'o> WalkProc<'o> {
             Statement::Crash(_) => {},
             Statement::Label { name: _, block } => self.visit_block(block),
             Statement::Del(expr) => { self.visit_expression(location, expr, None); },
+            Statement::ForKeyValue(for_key_value) => {
+                let ForKeyValueStatement { var_type, key, value, in_list, block } = &**for_key_value;
+                if let Some(in_list) = in_list {
+                    self.visit_expression(location, in_list, None);
+                }
+                if let Some(var_type) = var_type {
+                    self.visit_var(location, var_type, key, None);
+                }
+                // the "v" in a DM for (var/k, v) statement is essentially typeless.
+                // There is currently no way to change that.
+                let var_type_value = VarType {
+                    flags: VarTypeFlags::from_bits_truncate(0),
+                    type_path: Box::new([]),
+                    input_type: InputType::from_bits_truncate(0),
+                };
+                self.visit_var(location, &var_type_value, value, None);
+                self.visit_block(block);
+            },
         }
     }
 

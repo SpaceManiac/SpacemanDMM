@@ -94,3 +94,63 @@ fn for_loop_condition() {
 "##.trim();
     check_errors_match(code, FOR_LOOP_CONDITION_ERRORS);
 }
+
+#[test]
+fn for_kv_check() {
+    let code = r##"
+/proc/test()
+    var/alist/A = alist()
+    for (var/k, v in A)
+        world.log << k
+        world.log << v
+
+"##.trim();
+    check_errors_match(code, NO_ERRORS);
+}
+
+pub const FOR_KV_VAR_ERROR: &[(u32, u16, &str)] = &[
+    (3, 19, "for (var/key, value) requires a 'var' keyword"),
+];
+
+#[test]
+fn for_kv_var_check() {
+    let code = r##"
+/proc/test()
+    var/alist/A = alist()
+    for (k, v in A)
+        world.log << k
+        world.log << v
+
+"##.trim();
+    check_errors_match(code, FOR_KV_VAR_ERROR);
+}
+
+pub const FOR_KV_VALUE_ERROR: &[(u32, u16, &str)] = &[
+    (3, 23, "value must be a variable in a for (var/key, value) statement"),
+];
+
+#[test]
+fn for_kv_value_check() {
+    let code = r##"
+/proc/test()
+    var/alist/A = alist()
+    for (var/k, 0 in A)
+        world.log << k
+"##.trim();
+    check_errors_match(code, FOR_KV_VALUE_ERROR);
+}
+
+pub const FOR_KV_KEY_ERROR: &[(u32, u16, &str)] = &[
+    (3, 27, "cannot assigned a value to var/key in a for(var/key, value) statement"),
+];
+
+#[test]
+fn for_kv_key_check() {
+    let code = r##"
+/proc/test()
+    var/alist/A = alist()
+    for (var/k = 5, v in A)
+        world.log << k
+"##.trim();
+    check_errors_match(code, FOR_KV_KEY_ERROR);
+}
