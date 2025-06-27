@@ -93,21 +93,6 @@ the individual packages.
 [rust]: https://www.rust-lang.org/en-US/install.html
 [source readme]: ./crates/README.md
 
-### Docker
-
-A `dockerfile` is provided for the map generator binary. To build the docker
-image, enter the SpacemanDMM directory and run:
-
-```shell
-docker build -t spacemandmm .
-```
-
-To use the image, switch to the codebase you want to generate maps for and invoke the container:
-
-```shell
-docker run -v "$PWD":/usr/src/codebase --rm -it spacemandmm -e /usr/src/codebase/tgstation.dme minimap /usr/src/codebase/_maps/map_files/BoxStation/BoxStation.dmm
-```
-
 ## License
 
 SpacemanDMM is free software: you can redistribute it and/or modify
