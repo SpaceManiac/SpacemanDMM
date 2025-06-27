@@ -1071,8 +1071,8 @@ pub enum Term {
     DynamicCall(Box<[Expression]>, Box<[Expression]>),
     /// A use of the `call_ext()()` primitive.
     ExternalCall {
-        library_name: Box<Expression>,
-        function_name: Box<Expression>,
+        library: Option<Box<Expression>>,
+        function: Box<Expression>,
         args: Box<[Expression]>,
     },
     /// Unscoped `::A` is a shorthand for `global.A`

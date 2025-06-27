@@ -1935,9 +1935,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 self.visit_arguments(location, rhs_args, local_vars);
                 Analysis::empty()  // TODO
             },
-            Term::ExternalCall { library_name, function_name, args } => {
-                self.visit_expression(location, library_name, None, local_vars);
-                self.visit_expression(location, function_name, None, local_vars);
+            Term::ExternalCall { library, function, args } => {
+                if let Some(library) = library {
+                    self.visit_expression(location, library, None, local_vars);
+                }
+                self.visit_expression(location, function, None, local_vars);
                 self.visit_arguments(location, args, local_vars);
                 Analysis::empty()  // TODO
             },
