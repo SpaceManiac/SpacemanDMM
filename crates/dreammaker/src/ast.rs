@@ -1477,20 +1477,20 @@ pub const KNOWN_SETTING_NAMES: &[&str] = &[
 
 // TODO: maybe put this somewhere more suitable?
 pub static VALID_FILTER_TYPES: phf::Map<&'static str, &[&str]> = phf_map! {
-    "alpha" => &[ "x", "y", "icon", "render_source", "flags" ],
-    "angular_blur" => &[ "x", "y", "size" ],
-    "bloom" => &[ "threshold", "size", "offset", "alpha" ],
-    "color" => &[ "color", "space" ],
-    "displace" => &[ "x", "y", "size", "icon", "render_source" ],
-    "drop_shadow" => &[ "x", "y", "size", "offset", "color"],
-    "blur" => &[ "size" ],
-    "layer" => &[ "x", "y", "icon", "render_source", "flags", "color", "transform", "blend_mode" ],
-    "motion_blur" => &[ "x", "y" ],
-    "outline" => &[ "size", "color", "flags" ],
-    "radial_blur" => &[ "x", "y", "size" ],
-    "rays" => &[ "x", "y", "size", "color", "offset", "density", "threshold", "factor", "flags" ],
-    "ripple" => &[ "x", "y", "size", "repeat", "radius", "falloff", "flags" ],
-    "wave" => &[ "x", "y", "size", "offset", "flags" ],
+    "alpha" => &[ "x", "y", "icon", "render_source", "flags", "name" ],
+    "angular_blur" => &[ "x", "y", "size", "name" ],
+    "bloom" => &[ "threshold", "size", "offset", "alpha", "name" ],
+    "color" => &[ "color", "space", "name" ],
+    "displace" => &[ "x", "y", "size", "icon", "render_source", "name" ],
+    "drop_shadow" => &[ "x", "y", "size", "offset", "color", "name"],
+    "blur" => &[ "size", "name" ],
+    "layer" => &[ "x", "y", "icon", "render_source", "flags", "color", "transform", "blend_mode", "name" ],
+    "motion_blur" => &[ "x", "y", "name" ],
+    "outline" => &[ "size", "color", "flags", "name" ],
+    "radial_blur" => &[ "x", "y", "size", "name" ],
+    "rays" => &[ "x", "y", "size", "color", "offset", "density", "threshold", "factor", "flags", "name" ],
+    "ripple" => &[ "x", "y", "size", "repeat", "radius", "falloff", "flags", "name" ],
+    "wave" => &[ "x", "y", "size", "offset", "flags", "name" ],
 };
 
 // filter type => (flag field name, exclusive, can_be_0, valid flag values)
