@@ -2462,7 +2462,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 return Analysis::empty()
             };
             for arg in param_name_map.keys() {
-                if *arg != "type" && !arglist.contains(arg) {
+                if *arg != "type" && *arg != "name" && !arglist.contains(arg) {
                     error(location, format!("filter(type=\"{typevalue}\") called with invalid keyword parameter '{arg}'"))
                         .with_filter_args(location, typevalue)
                         .register(self.context);
