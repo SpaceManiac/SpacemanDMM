@@ -134,8 +134,7 @@ impl<'o> AssumptionSet<'o> {
             Constant::Null(_) => assumption_set![Assumption::IsNull(true), Assumption::Truthy(false)],
             Constant::String(val) => assumption_set![Assumption::IsText(true), Assumption::Truthy(!val.is_empty())],
             Constant::Resource(_) => assumption_set![Assumption::Truthy(true)],
-            Constant::Float(val) => assumption_set![Assumption::IsNum(true), Assumption::Truthy(*val != 0.0)]
-            }
+            Constant::Float(val) => assumption_set![Assumption::IsNum(true), Assumption::Truthy(*val != 0.0)],
             Constant::Boolean(boolean) => assumption_set![Assumption::Truthy((*boolean))],
             Constant::List(_) => AssumptionSet::from_valid_instance(objtree.expect("/list")),
             Constant::Call(func, _) => match func {
@@ -1712,6 +1711,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         match term {
             Term::Null => Analysis::null(),
             Term::Int(number) => Analysis::from_value(self.objtree, Constant::from(*number), type_hint),
+            Term::Boolean(inner_boolean) => Analysis::from_value(self.objtree, Constant::from(*inner_boolean), type_hint),
             Term::Float(number) => Analysis::from_value(self.objtree, Constant::from(*number), type_hint),
             Term::String(text) => Analysis::from_value(self.objtree, Constant::String(text.as_str().into()), type_hint),
             Term::Resource(text) => Analysis::from_value(self.objtree, Constant::Resource(text.as_str().into()), type_hint),

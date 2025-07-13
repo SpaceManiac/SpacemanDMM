@@ -416,6 +416,7 @@ impl<'o> WalkProc<'o> {
             Term::Null => StaticType::None,
             Term::Int(_) => StaticType::None,
             Term::Float(_) => StaticType::None,
+            Term::Boolean(_) => StaticType::None,
             Term::String(_) => StaticType::None,
             Term::Resource(_) => StaticType::None,
             Term::As(_) => StaticType::None,
