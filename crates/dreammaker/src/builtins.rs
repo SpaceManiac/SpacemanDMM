@@ -228,6 +228,11 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
             Constant::Float($e as f32)
         };
     }
+    macro_rules! boolean {
+        ($e:expr) => {
+            Constant::Boolean($e as bool)
+        };
+    }
     macro_rules! string {
         ($e:expr) => {
             Constant::String($e.into())
@@ -309,8 +314,8 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         var/const/TILED_ICON_MAP = int!(32768);
 
         #[dm_ref("/proc/if")] {
-            var/const/TRUE = int!(1);
-            var/const/FALSE = int!(0);
+            var/const/TRUE = boolean!(true);
+            var/const/FALSE = boolean!(false);
         }
 
         // enum /mob/var/gender
