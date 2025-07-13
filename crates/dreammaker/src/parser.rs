@@ -2220,7 +2220,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             },
 
             Token::Ident(ref i, _) if i == "null" => Term::Null,
-
+            Token::Ident(ref i, _) if i == "TRUE" => Term::Boolean(true),
+            Token::Ident(ref i, _) if i == "FALSE" => Term::Boolean(false),
             // term :: 'as' '(' input_type ')'
             Token::Ident(ref i, _) if i == "as" => {
                 require!(self.exact(Token::Punct(Punctuation::LParen)));

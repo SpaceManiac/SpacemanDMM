@@ -1079,6 +1079,7 @@ pub enum Term {
     GlobalIdent(Ident2),
     /// Unscoped `::A(...)` is a shorthand for `global.A(...)`
     GlobalCall(Ident2, Box<[Expression]>),
+    Boolean(bool),
 }
 
 impl Term {

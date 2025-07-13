@@ -91,6 +91,7 @@ pub enum Constant {
     Resource(Ident2),
     /// A floating-point (or integer) literal, following BYOND's rules.
     Float(f32),
+    Boolean(bool),
 }
 
 impl Constant {
@@ -115,6 +116,7 @@ impl std::hash::Hash for Constant {
             Constant::String(s) => s.hash(state),
             Constant::Resource(s) => s.hash(state),
             Constant::Float(f) => OrderedFloat(*f).hash(state),
+            _ => {},
         }
     }
 }
@@ -299,8 +301,8 @@ impl From<f32> for Constant {
 impl From<bool> for Constant {
     fn from(value: bool) -> Constant {
         match value {
-            true => Constant::Float(1.),
-            false => Constant::Float(0.),
+            true => Constant::Boolean(true),
+            false => Constant::Boolean(false)
         }
     }
 }
@@ -335,6 +337,13 @@ impl fmt::Display for Constant {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Constant::Null(_) => f.write_str("null"),
+            Constant::Boolean(boolean) => {
+                if boolean {
+                    f.write_str("TRUE")
+                } else {
+                    f.write_str("FALSE")
+                }
+            },
             Constant::New { ref type_, ref args } => {
                 f.write_str("new")?;
                 if let Some(prefab) = type_ {
@@ -768,6 +777,7 @@ impl<'a> ConstantFolder<'a> {
     fn term(&mut self, term: Term, type_hint: Option<&TreePath>) -> Result<Constant, DMError> {
         Ok(match term {
             Term::Null => Constant::Null(type_hint.cloned()),
+            Term::Boolean(inner_bool) => Constant::Boolean(inner_bool),
             Term::NewPrefab { prefab, args } => Constant::New {
                 type_: Some(Box::new(self.prefab(*prefab)?)),
                 args: match args {
