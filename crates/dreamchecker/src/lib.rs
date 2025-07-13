@@ -135,7 +135,7 @@ impl<'o> AssumptionSet<'o> {
             Constant::String(val) => assumption_set![Assumption::IsText(true), Assumption::Truthy(!val.is_empty())],
             Constant::Resource(_) => assumption_set![Assumption::Truthy(true)],
             Constant::Float(val) => assumption_set![Assumption::IsNum(true), Assumption::Truthy(*val != 0.0)],
-            Constant::Boolean(boolean) => assumption_set![Assumption::Truthy((*boolean))],
+            Constant::Boolean(boolean) => assumption_set![Assumption::Truthy(*boolean)],
             Constant::List(_) => AssumptionSet::from_valid_instance(objtree.expect("/list")),
             Constant::Call(func, _) => match func {
                 ConstFn::Icon => AssumptionSet::from_valid_instance(objtree.expect("/icon")),
