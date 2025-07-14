@@ -2,6 +2,8 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::ops::Range;
+use std::mem::size_of;
 
 use get_size::GetSize;
 use get_size_derive::GetSize;
@@ -91,12 +93,19 @@ pub struct ProcDeclaration {
     pub id: SymbolId,
 }
 
+fn heap_size_of_location_range(_range: &Option<Range<Location>>) -> usize
+{
+    size_of::<Range<Location>>()
+}
+
 #[derive(Debug, Clone, GetSize)]
 pub struct ProcValue {
     pub location: Location,
     pub parameters: Box<[Parameter]>,
     pub docs: DocCollection,
     pub code: Option<Block>,
+    #[get_size(size_fn = heap_size_of_location_range)]
+    pub body_range: Option<Range<Location>>,
 }
 
 #[derive(Debug, Clone, Default, GetSize)]
@@ -1126,6 +1135,7 @@ impl ObjectTreeBuilder {
         parameters: Vec<Parameter>,
         return_type: ProcReturnType,
         code: Option<Block>,
+        body_range: Option<Range<Location>>
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let node = &mut self.inner.graph[parent.index()];
         let proc = node.procs.entry(name.to_owned()).or_insert_with(|| TypeProc {
@@ -1152,7 +1162,8 @@ impl ObjectTreeBuilder {
             location,
             parameters: parameters.into(),
             docs: Default::default(),
-            code
+            code,
+            body_range
         };
 
         // DM really does reorder the declaration to appear before the override,
@@ -1240,6 +1251,7 @@ impl ObjectTreeBuilder {
             elems.len() + 1,
             params.iter().copied().map(|param| Parameter { name: param.into(), .. Default::default() }).collect(),
             None,
+            None
         ).unwrap().1
     }
 
@@ -1252,6 +1264,7 @@ impl ObjectTreeBuilder {
         len: usize,
         parameters: Vec<Parameter>,
         code: Option<Block>,
+        body_range: Option<Range<Location>>,
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let (parent, mut proc_name) = self.get_from_path(location, &mut path, len)?;
         let mut declaration = None;
@@ -1277,7 +1290,7 @@ impl ObjectTreeBuilder {
             ));
         }
 
-        self.register_proc(context, location, parent, proc_name, declaration, parameters, ProcReturnType::default(), code)
+        self.register_proc(context, location, parent, proc_name, declaration, parameters, ProcReturnType::default(), code, body_range)
     }
 }
 

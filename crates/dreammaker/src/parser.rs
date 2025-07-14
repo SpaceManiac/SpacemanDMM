@@ -1142,7 +1142,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             None
         };
 
-        match self.tree.register_proc(self.context, location, current, name, proc_builder, parameters, return_type, code) {
+        match self.tree.register_proc(self.context, location, current, name, proc_builder, parameters, return_type, code, Some(Range{start: body_start, end: self.location})) {
             Ok((idx, proc)) => {
                 proc.docs.extend(docs);
                 // manually performed for borrowck reasons
