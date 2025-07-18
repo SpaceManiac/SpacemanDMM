@@ -1442,14 +1442,13 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         inc: inc.map(Box::new),
                         block: require!(self.block(&LoopContext::ForLoop)),
                     })
-                }
-                else {
+                } else {
                     // for (..., ... in ...)
                     match test {
                         // This should necessarily be caught because the expression is going be
                         //for(var/k, [v in x]) and [v in x] will be passed as BinaryOp::In
                         // This is a bit ugly but it workss
-                       Some(Expression::BinaryOp {
+                        Some(Expression::BinaryOp {
                             op: BinaryOp::In,
                             lhs,
                             rhs,
@@ -1468,12 +1467,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                             // It should also pass only if it's an ident
                             let value = match lhs.into_term() {
                                 Some(Term::Ident(value)) => value,
-                                _ => return Err(self.error("value must be a variable in a for (var/key, value) statement")),
+                                _ => return Err(self.error(
+                                    "value must be a variable in a for (var/key, value) statement",
+                                )),
                             };
                             // TODO : check if `x` is an ident/a "list()" or "alist()" statement ?
                             require!(self.exact(Token::Punct(Punctuation::RParen)));
                             // Returns a for(k,v)
-                            spanned(Statement::ForKeyValue(Box::new(ForKeyValueStatement{
+                            spanned(Statement::ForKeyValue(Box::new(ForKeyValueStatement {
                                 var_type: Some(var_type.expect("/")),
                                 key: key.into(),
                                 value: value.into(),
@@ -1860,6 +1861,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Ok(None)
         }
     }
+
     fn semicolon(&mut self) -> Status<()> {
         if let Some(()) = self.exact(Token::Punct(Punctuation::Semicolon))? {
             SUCCESS
