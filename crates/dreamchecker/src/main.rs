@@ -38,7 +38,7 @@ fn main() {
         } else if arg == "--parse-only" {
             parse_only = true;
         } else {
-            eprintln!("unknown argument: {}", arg);
+            eprintln!("unknown argument: {arg}");
             return;
         }
     }
@@ -72,7 +72,7 @@ fn main() {
 
     println!("============================================================");
     let errors = context.errors().iter().filter(|each| each.severity() <= dm::Severity::Info).count();
-    println!("Found {} diagnostics", errors);
+    println!("Found {errors} diagnostics");
 
     if json {
         serde_json::to_writer(std::io::stdout().lock(), &json! {{

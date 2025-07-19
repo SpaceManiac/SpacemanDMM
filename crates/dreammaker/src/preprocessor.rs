@@ -193,7 +193,7 @@ impl DefineMap {
 
     /// Returns true if the map contains a value for the specified key.
     pub fn contains_key(&self, key: &str) -> bool {
-        self.inner.get(key).map_or(false, |v| !v.is_empty())
+        self.inner.get(key).is_some_and(|v| !v.is_empty())
     }
 
     /// Returns a reference to the value corresponding to the key.
@@ -649,7 +649,7 @@ impl<'ctx> Preprocessor<'ctx> {
     fn prepare_include_file(&mut self, path: PathBuf) -> Result<Include<'ctx>, DMError> {
         // Attempt to open the file.
         let read = io::BufReader::new(File::open(&path).map_err(|e|
-            DMError::new(self.last_input_loc, format!("failed to open file: #include {:?}", path))
+            DMError::new(self.last_input_loc, format!("failed to open file: #include {path:?}"))
                 .with_cause(e))?);
 
         // Get the path relative to the environment root, for easy lookup later.
@@ -660,7 +660,7 @@ impl<'ctx> Preprocessor<'ctx> {
         let file_id = self.context.register_file(register);
         if let Some(&loc) = self.include_locations.get(&file_id) {
             if !self.multiple_locations.contains_key(&file_id) {
-                Err(DMError::new(self.last_input_loc, format!("duplicate #include {:?}", path))
+                Err(DMError::new(self.last_input_loc, format!("duplicate #include {path:?}"))
                     .set_severity(Severity::Warning)
                     .with_note(loc, "previously included here")
                     .with_errortype("duplicate_include"))
@@ -684,8 +684,8 @@ impl<'ctx> Preprocessor<'ctx> {
     fn check_danger_ident(&mut self, name: &str, kind: &str) {
         if let Some(loc) = self.danger_idents.get(name) {
             self.context.register_error(DMError::new(*loc, format!(
-                "macro {:?} used immediately before being {}:\n\
-                https://www.byond.com/forum/?post=2072419", name, kind
+                "macro {name:?} used immediately before being {kind}:\n\
+                https://www.byond.com/forum/?post=2072419"
             )).set_severity(Severity::Warning));
         }
     }
@@ -803,7 +803,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                 Some(ext) => {
                                     self.context.register_error(DMError::new(
                                         self.last_input_loc,
-                                        format!("unknown extension {:?}", ext),
+                                        format!("unknown extension {ext:?}"),
                                     ));
                                     return Ok(());
                                 }
@@ -838,7 +838,7 @@ impl<'ctx> Preprocessor<'ctx> {
                             return Ok(());
                         }
 
-                        self.context.register_error(DMError::new(self.last_input_loc, format!("failed to find #include {:?}", path)));
+                        self.context.register_error(DMError::new(self.last_input_loc, format!("failed to find #include {path:?}")));
                         return Ok(());
                     }
                     // both constant and function defines
@@ -943,9 +943,9 @@ impl<'ctx> Preprocessor<'ctx> {
                                 // DM doesn't issue a warning for this, but it's usually a mistake, so let's.
                                 // FILE_DIR is handled specially and sometimes makes sense to define multiple times.
                                 if define_name != "FILE_DIR" {
-                                    DMError::new(define_name_loc, format!("macro redefined: {}", define_name))
+                                    DMError::new(define_name_loc, format!("macro redefined: {define_name}"))
                                         .set_severity(Severity::Warning)
-                                        .with_note(previous_loc, format!("previous definition of {}", define_name))
+                                        .with_note(previous_loc, format!("previous definition of {define_name}"))
                                         .with_errortype("macro_redefined")
                                         .register(self.context);
                                 }
@@ -961,7 +961,7 @@ impl<'ctx> Preprocessor<'ctx> {
                         if let Some(previous) = self.defines.remove(&define_name) {
                             self.move_to_history(define_name, previous);
                         } else {
-                            DMError::new(define_name_loc, format!("macro undefined while not defined: {}", define_name))
+                            DMError::new(define_name_loc, format!("macro undefined while not defined: {define_name}"))
                                 .with_errortype("macro_undefined_no_definition")
                                 .set_severity(Severity::Warning)
                                 .register(self.context);
@@ -1046,8 +1046,7 @@ impl<'ctx> Preprocessor<'ctx> {
                 // if it's a define, perform the substitution
                 let mut expansion = self.defines.get(ident).cloned();  // TODO: don't clone?
                 if expansion.is_some() && self.include_stack.stack.len() > MAX_RECURSION_DEPTH {
-                    self.error(format!("expanding {:?} would exceed max recursion depth of {} levels",
-                        ident, MAX_RECURSION_DEPTH)).register(self.context);
+                    self.error(format!("expanding {ident:?} would exceed max recursion depth of {MAX_RECURSION_DEPTH} levels")).register(self.context);
                     expansion = None;
                 }
 
@@ -1139,13 +1138,13 @@ impl<'ctx> Preprocessor<'ctx> {
                                                     match arg.next() {
                                                         Some(Token::Ident(param_ident, ws)) => {
                                                             expansion.push_back(Token::Ident(
-                                                                format!("{}{}", first, param_ident),
+                                                                format!("{first}{param_ident}"),
                                                                 ws,
                                                             ));
                                                         }
                                                         Some(Token::Int(param_int)) => {
                                                             expansion.push_back(Token::Ident(
-                                                                format!("{}{}", first, param_int),
+                                                                format!("{first}{param_int}"),
                                                                 ws,
                                                             ))
                                                         }
@@ -1157,7 +1156,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                                     }
                                                     expansion.extend(arg);
                                                 }
-                                                None => expansion.push_back(Token::Ident(format!("{}{}", first, param_name), ws)),
+                                                None => expansion.push_back(Token::Ident(format!("{first}{param_name}"), ws)),
                                             }
                                         }
                                         (non_ident_first, Some(Token::Ident(second, ws))) => {
@@ -1185,16 +1184,16 @@ impl<'ctx> Preprocessor<'ctx> {
                                                     if !string.is_empty() {
                                                         string.push(' ');
                                                     }
-                                                    let _e = write!(string, "{}", each);
+                                                    let _e = write!(string, "{each}");
                                                     #[cfg(debug_assertions)] {
                                                         _e.unwrap();
                                                     }
                                                 }
                                                 expansion.push_back(Token::String(string));
                                             }
-                                            None => return Err(DMError::new(self.last_input_loc, format!("can't stringify non-argument ident {:?}", argname))),
+                                            None => return Err(DMError::new(self.last_input_loc, format!("can't stringify non-argument ident {argname:?}"))),
                                         }
-                                        Some(tok) => return Err(DMError::new(self.last_input_loc, format!("can't stringify non-ident '{}'", tok))),
+                                        Some(tok) => return Err(DMError::new(self.last_input_loc, format!("can't stringify non-ident '{tok}'"))),
                                         None => return Err(DMError::new(self.last_input_loc, "can't stringify EOF")),
                                     }
                                 }

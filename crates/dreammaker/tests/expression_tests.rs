@@ -7,7 +7,8 @@ use dm::parser::*;
 fn parse_expr(f: &str) -> Expression {
     let context = Default::default();
     let lexer = Lexer::new(&context, Default::default(), f.as_bytes());
-    let result = parse_expression(&context, Default::default(), lexer).expect("failed to parse expression");
+    let result =
+        parse_expression(&context, Default::default(), lexer).expect("failed to parse expression");
     context.assert_success();
     result
 }
@@ -124,7 +125,72 @@ fn pointer_ops() {
             follow: vec![
                 Spanned::new(Default::default(), Follow::Unary(UnaryOp::Reference)),
                 Spanned::new(Default::default(), Follow::Unary(UnaryOp::Dereference)),
-            ].into_boxed_slice(),
+            ]
+            .into_boxed_slice(),
+        }
+    )
+}
+
+#[test]
+fn call_ext() {
+    assert_eq!(
+        parse_expr("call_ext(\"cat.dll\", \"meow\")(1, 2, 3)"),
+        Expression::Base {
+            term: Box::new(Spanned::new(
+                Default::default(),
+                Term::ExternalCall {
+                    library: Some(Box::new(Expression::from(Term::String(
+                        "cat.dll".to_owned()
+                    )))),
+                    function: Box::new(Expression::from(Term::String("meow".to_owned()))),
+                    args: Box::new([
+                        Expression::Base {
+                            term: Box::new(Spanned::new(Default::default(), Term::Int(1))),
+                            follow: Box::new([])
+                        },
+                        Expression::Base {
+                            term: Box::new(Spanned::new(Default::default(), Term::Int(2))),
+                            follow: Box::new([])
+                        },
+                        Expression::Base {
+                            term: Box::new(Spanned::new(Default::default(), Term::Int(3))),
+                            follow: Box::new([])
+                        }
+                    ])
+                }
+            )),
+            follow: Box::new([]),
+        }
+    )
+}
+
+#[test]
+fn loaded_call_ext() {
+    assert_eq!(
+        parse_expr("call_ext(loaded_cat_meow)(1, 2, 3)"),
+        Expression::Base {
+            term: Box::new(Spanned::new(
+                Default::default(),
+                Term::ExternalCall {
+                    library: None,
+                    function: Box::new(Expression::from(Term::Ident("loaded_cat_meow".to_owned()))),
+                    args: Box::new([
+                        Expression::Base {
+                            term: Box::new(Spanned::new(Default::default(), Term::Int(1))),
+                            follow: Box::new([])
+                        },
+                        Expression::Base {
+                            term: Box::new(Spanned::new(Default::default(), Term::Int(2))),
+                            follow: Box::new([])
+                        },
+                        Expression::Base {
+                            term: Box::new(Spanned::new(Default::default(), Term::Int(3))),
+                            follow: Box::new([])
+                        }
+                    ])
+                }
+            )),
+            follow: Box::new([]),
         }
     )
 }

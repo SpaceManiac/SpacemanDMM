@@ -123,7 +123,7 @@ impl RenderPass for Random {
                 let mut signs = Vec::new();
                 for child in root.children() {
                     if let Some(v) = child.vars.get("hidden") {
-                        if !v.value.constant.as_ref().map_or(false, |c| c.to_bool()) {
+                        if !v.value.constant.as_ref().is_some_and(|c| c.to_bool()) {
                             continue;
                         }
                     }

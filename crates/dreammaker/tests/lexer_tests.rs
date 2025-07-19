@@ -15,7 +15,7 @@ fn lex(f: &str) -> Vec<Token> {
 
 fn one_token(f: &str) -> Token {
     let mut v = lex(f);
-    assert_eq!(v.len(), 2, "not one token: {:?} -> {:?}", f, v);
+    assert_eq!(v.len(), 2, "not one token: {f:?} -> {v:?}");
     assert_eq!(v[1], Punct(Newline));
     v.remove(0)
 }
@@ -23,7 +23,7 @@ fn one_token(f: &str) -> Token {
 fn float(f: &str) -> f32 {
     match one_token(f) {
         Token::Float(f) => f,
-        other => panic!("{:?}: expected float, got {:?}", f, other),
+        other => panic!("{f:?}: expected float, got {other:?}"),
     }
 }
 

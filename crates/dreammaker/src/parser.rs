@@ -459,14 +459,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     fn describe_parse_error(&mut self) -> DMError {
         let expected = self.expected.join(", ");
         if self.eof {
-            let mut error = self.error(format!("got EOF, expected one of: {}", expected));
+            let mut error = self.error(format!("got EOF, expected one of: {expected}"));
             if let Some(loc) = self.skipping_location {
                 error.add_note(loc, "unmatched pair here");
             }
             error
         } else {
             let got = self.peek();
-            let message = format!("got '{:#}', expected one of: {}", got, expected);
+            let message = format!("got '{got:#}', expected one of: {expected}");
             let mut error = self.error(message);
             if self.possible_indentation_error {
                 let mut loc = error.location();
@@ -615,7 +615,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     }
 
     fn exact_ident(&mut self, ident: &'static str) -> Status<()> {
-        self.expected(format!("'{}'", ident));
+        self.expected(format!("'{ident}'"));
         take_match!(self {
             Token::Ident(i, _) if i == ident => SUCCESS,
         } else try_another())
@@ -734,7 +734,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Token::Punct(p @ Punctuation::Dot) |
             Token::Punct(p @ Punctuation::CloseColon) |
             Token::Punct(p @ Punctuation::Colon) => {
-                self.error(format!("path started by '{}', should be unprefixed", p))
+                self.error(format!("path started by '{p}', should be unprefixed"))
                     .set_severity(Severity::Warning)
                     .register(self.context);
                 Ok((false, true))
@@ -750,7 +750,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Token::Punct(p @ Punctuation::Dot) |
             Token::Punct(p @ Punctuation::CloseColon) |
             Token::Punct(p @ Punctuation::Colon) => {
-                self.error(format!("path separated by '{}', should be '/'", p))
+                self.error(format!("path separated by '{p}', should be '/'"))
                     .set_severity(Severity::Warning)
                     .register(self.context);
                 SUCCESS
@@ -951,7 +951,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         .register(self.context);
                 } else if let Some(mut var_type) = var_type.take() {
                     if VarTypeFlags::from_name(last_part).is_some() {
-                        self.error(format!("`var/{};` item has no effect", last_part))
+                        self.error(format!("`var/{last_part};` item has no effect"))
                             .set_severity(Severity::Warning)
                             .register(self.context);
                     } else {
@@ -1185,7 +1185,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 "".to_owned()
             }
         };
-        if path.first().map_or(false, |i| i == "var") {
+        if path.first().is_some_and(|i| i == "var") {
             path.remove(0);
             DMError::new(leading_loc, "'var/' is unnecessary here")
                 .set_severity(Severity::Hint)
@@ -1310,7 +1310,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         let mut as_what = match InputType::from_str(&ident) {
             Ok(what) => what,
             Err(()) => {
-                self.context.register_error(self.error(format!("bad input type: '{}'", ident)));
+                self.context.register_error(self.error(format!("bad input type: '{ident}'")));
                 InputType::empty()
             }
         };
@@ -1319,7 +1319,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             match InputType::from_str(&ident) {
                 Ok(what) => as_what |= what,
                 Err(()) => {
-                    self.context.register_error(self.error(format!("bad input type: '{}'", ident)));
+                    self.context.register_error(self.error(format!("bad input type: '{ident}'")));
                 }
             }
         }
@@ -1505,7 +1505,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                             // for(var/a = 1 to
                             require!(self.exact_ident("to"));
                             let rhs = require!(self.expression());
-                            return spanned(require!(self.for_range(Some(vs.var_type), vs.name, Box::new(value), Box::new(rhs))));
+                            return spanned(require!(self.for_range(Some(vs.var_type), vs.name, value, rhs)));
                         }
                     },
                     Statement::Expr(Expression::AssignOp {
@@ -1520,7 +1520,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         };
                         require!(self.exact_ident("to"));
                         let to_rhs = require!(self.expression());
-                        return spanned(require!(self.for_range(None, name, rhs, Box::new(to_rhs))));
+                        return spanned(require!(self.for_range(None, name, *rhs, to_rhs)));
                     }
                     Statement::Expr(Expression::BinaryOp {
                         op: BinaryOp::In,
@@ -1533,7 +1533,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         };
                         match *rhs {
                             Expression::BinaryOp { op: BinaryOp::To, lhs, rhs } => {
-                                return spanned(require!(self.for_range(None, name, lhs, rhs)));
+                                return spanned(require!(self.for_range(None, name, *lhs, *rhs)));
                             },
                             rhs => {
                                 // I love code duplication, don't you?
@@ -1566,7 +1566,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     let value = require!(self.expression());
                     if let Some(()) = self.exact_ident("to")? {
                         let rhs = require!(self.expression());
-                        return spanned(require!(self.for_range(var_type, name, Box::new(value), Box::new(rhs))));
+                        return spanned(require!(self.for_range(var_type, name, value, rhs)));
                     }
                     Some(value)
                 } else {
@@ -1832,8 +1832,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         &mut self,
         var_type: Option<VarType>,
         name: Ident,
-        start: Box<Expression>,
-        end: Box<Expression>,
+        start: Expression,
+        end: Expression,
     ) -> Status<Statement> {
         // step 2
         let step = if let Some(()) = self.exact_ident("step")? {
@@ -1847,8 +1847,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         success(Statement::ForRange(Box::new(ForRangeStatement {
             var_type,
             name: name.into(),
-            start: *start,
-            end: *end,
+            start,
+            end,
             step,
             block: require!(self.block(&LoopContext::ForRange)),
         })))
@@ -2223,18 +2223,31 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 require!(self.arguments(&[], "call*")),
             ),
 
-            // term :: 'call_ext' (library_name, function_name) arglist
+            // term :: 'call_ext' ([library,] function) arglist
             Token::Ident(ref i, _) if i == "call_ext" => {
                 require!(self.exact(Token::Punct(Punctuation::LParen)));
-                let library_name = require!(self.expression());
-                require!(self.exact(Token::Punct(Punctuation::Comma)));
-                let function_name = require!(self.expression());
+                let first = require!(self.expression());
+                let second = if self.exact(Token::Punct(Punctuation::Comma))?.is_some() {
+                    Some(require!(self.expression()))
+                } else {
+                    None
+                };
                 require!(self.exact(Token::Punct(Punctuation::RParen)));
 
-                Term::ExternalCall {
-                    library_name: Box::new(library_name),
-                    function_name: Box::new(function_name),
-                    args: require!(self.arguments(&[], "call_ext*")),
+                let args = require!(self.arguments(&[], "call_ext*"));
+                match second {
+                    // call_ext(library, function)(...)
+                    Some(function) => Term::ExternalCall {
+                        library: Some(Box::new(first)),
+                        function: Box::new(function),
+                        args,
+                    },
+                    // call_ext(loaded_func)(...)
+                    None => Term::ExternalCall {
+                        library: None,
+                        function: Box::new(first),
+                        args,
+                    }
                 }
             },
 

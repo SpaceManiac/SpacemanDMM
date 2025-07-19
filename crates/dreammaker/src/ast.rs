@@ -736,7 +736,7 @@ impl fmt::Debug for Ident2 {
 
 impl GetSize for Ident2 {
     fn get_heap_size(&self) -> usize {
-        self.inner.as_bytes().len()
+        self.inner.len()
     }
 }
 
@@ -769,7 +769,7 @@ pub struct FormatTreePath<'a, T>(pub &'a [T]);
 impl<'a, T: fmt::Display> fmt::Display for FormatTreePath<'a, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for each in self.0.iter() {
-            write!(f, "/{}", each)?;
+            write!(f, "/{each}")?;
         }
         Ok(())
     }
@@ -944,7 +944,7 @@ impl Expression {
             },
             Expression::AssignOp { op, lhs: _, rhs } => {
                 if let AssignOp::Assign = op {
-                    return match rhs.as_term() {
+                    match rhs.as_term() {
                         Some(term) => term.is_truthy(),
                         _ => None,
                     }
@@ -1071,8 +1071,8 @@ pub enum Term {
     DynamicCall(Box<[Expression]>, Box<[Expression]>),
     /// A use of the `call_ext()()` primitive.
     ExternalCall {
-        library_name: Box<Expression>,
-        function_name: Box<Expression>,
+        library: Option<Box<Expression>>,
+        function: Box<Expression>,
         args: Box<[Expression]>,
     },
     /// Unscoped `::A` is a shorthand for `global.A`
@@ -1242,7 +1242,7 @@ impl fmt::Display for Parameter {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write!(fmt, "{}{}", self.var_type, self.name)?;
         if let Some(input_type) = self.input_type {
-            write!(fmt, " as {}", input_type)?;
+            write!(fmt, " as {input_type}")?;
         }
         Ok(())
     }

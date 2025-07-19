@@ -95,7 +95,7 @@ pub fn pretty_print<W, I>(w: &mut W, input: I, show_ws: bool) -> std::fmt::Resul
                     let spaces = 2 * indents;
                     writeln!(w)?;
                     for _ in 0..(spaces / SPACES.len()) {
-                        write!(w, "{}", SPACES)?;
+                        write!(w, "{SPACES}")?;
                     }
                     write!(w, "{}", &SPACES[..spaces % SPACES.len()])?;
                     needs_newline = false;
@@ -104,7 +104,7 @@ pub fn pretty_print<W, I>(w: &mut W, input: I, show_ws: bool) -> std::fmt::Resul
                         write!(w, " ")?;
                     }
                 }
-                write!(w, "{}", other)?;
+                write!(w, "{other}")?;
                 prev = Some(other);
             }
         }

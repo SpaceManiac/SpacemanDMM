@@ -69,7 +69,7 @@ pub fn start_server(
     let port = listener.local_addr()?.port();
 
     let handle = std::thread::Builder::new()
-        .name(format!("DAP listener on port {}", port))
+        .name(format!("DAP listener on port {port}"))
         .spawn(move || {
             let (stream, _) = listener.accept().unwrap();
             drop(listener);
@@ -92,13 +92,13 @@ pub fn debugger_main<I: Iterator<Item = String>>(mut args: I) {
                     .expect("must specify a value for --dreamseeker-exe"),
             );
         } else {
-            panic!("unknown argument {:?}", arg);
+            panic!("unknown argument {arg:?}");
         }
     }
 
     let dreamseeker_exe =
         dreamseeker_exe.expect("must provide argument `--dreamseeker-exe path/to/dreamseeker.exe`");
-    eprintln!("dreamseeker: {}", dreamseeker_exe);
+    eprintln!("dreamseeker: {dreamseeker_exe}");
 
     // This isn't the preferred way to run the DAP server so it's okay for it
     // to be kind of sloppy.
@@ -324,7 +324,7 @@ impl Debugger {
                 self.seq
                     .send_raw(&serde_json::to_string(&response).expect("response encode error"))
             }
-            other => return Err(format!("unknown `type` field {:?}", other).into()),
+            other => return Err(format!("unknown `type` field {other:?}").into()),
         }
         Ok(())
     }
@@ -623,7 +623,7 @@ handle_request! {
                 for sbp in inputs {
                     if let Some((typepath, name, override_id)) = self.db.location_to_proc_ref(file_id, sbp.line) {
                         // TODO: better discipline around format!("{}/{}") and so on
-                        let proc = format!("{}/{}", typepath, name);
+                        let proc = format!("{typepath}/{name}");
                         if let Some(offset) = extools.line_to_offset(&proc, override_id, sbp.line) {
                             let tup = (proc, override_id, offset);
                             if saved.insert(tup.clone()) {
@@ -677,7 +677,7 @@ handle_request! {
                 for sbp in inputs {
                     if let Some((typepath, name, override_id)) = self.db.location_to_proc_ref(file_id, sbp.line) {
                         // TODO: better discipline around format!("{}/{}") and so on
-                        let proc = format!("{}/{}", typepath, name);
+                        let proc = format!("{typepath}/{name}");
 
                         if let Some(offset) = auxtools.get_offset(proc.as_str(), override_id as u32, sbp.line as u32)? {
                             saved.insert((proc.clone(), override_id, offset as i64));
@@ -795,7 +795,7 @@ handle_request! {
                         });
                     } else {
                         breakpoints.push(Breakpoint {
-                            message: Some(format!("Unknown proc {}#{}", proc, override_id)),
+                            message: Some(format!("Unknown proc {proc}#{override_id}")),
                             verified: false,
                             .. Default::default()
                         });
@@ -1024,7 +1024,7 @@ handle_request! {
                 let frame_no = frame_id / threads.len();
 
                 let Some(frame) = threads[&thread_id].call_stack.get(frame_no) else {
-                    return Err(Box::new(GenericError2(format!("Stack frame out of range: {} (thread {}, depth {})", frameId, thread_id, frame_no))));
+                    return Err(Box::new(GenericError2(format!("Stack frame out of range: {frameId} (thread {thread_id}, depth {frame_no})"))));
                 };
 
                 ScopesResponse {
@@ -1178,7 +1178,7 @@ handle_request! {
                             Some(param) => {
                                 match seen.entry(param).and_modify(|e| *e += 1).or_default() {
                                     0 => param.clone(),
-                                    n => format!("{} #{}", param, n),
+                                    n => format!("{param} #{n}"),
                                 }
                             }
                             None => format!("args[{}]", i + 1),
@@ -1207,7 +1207,7 @@ handle_request! {
                             Some(local) => {
                                 match seen.entry(local).and_modify(|e| *e += 1).or_default() {
                                     0 => local.clone(),
-                                    n => format!("{} #{}", local, n),
+                                    n => format!("{local} #{n}"),
                                 }
                             }
                             None => i.to_string(),

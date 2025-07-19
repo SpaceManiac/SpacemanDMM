@@ -13,7 +13,7 @@ pub fn extract() -> Result<PathBuf> {
     let exe = std::env::current_exe()?;
     let directory = exe.parent().unwrap();
     for i in 0..9 {
-        let dll = directory.join(format!("auxtools_debug_server{}.dll", i));
+        let dll = directory.join(format!("auxtools_debug_server{i}.dll"));
         if let Ok(()) = write(&dll) {
             return Ok(dll);
         }

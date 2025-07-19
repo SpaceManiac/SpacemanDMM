@@ -282,10 +282,10 @@ pub mod tests {
         t
     }
     fn is_sorted_left<V>(node: &Node<V>) -> bool {
-        node.left.as_ref().map_or(true, |succ| succ.key < node.key)
+        node.left.as_ref().is_none_or(|succ| succ.key < node.key)
     }
     fn is_sorted_right<V>(node: &Node<V>) -> bool {
-        node.right.as_ref().map_or(true, |succ| succ.key > node.key)
+        node.right.as_ref().is_none_or(|succ| succ.key > node.key)
     }
     fn is_interval_node<V>(node: &Node<V>) -> bool {
         let sorted = is_sorted_left(node) && is_sorted_right(node);
@@ -299,7 +299,7 @@ pub mod tests {
     }
 
     pub fn is_interval_tree<V>(root: &Option<Box<Node<V>>>) -> bool {
-        (*root).as_ref().map_or(true, |n| is_interval_node(n))
+        (*root).as_ref().is_none_or(|n| is_interval_node(n))
     }
 
     #[test]
@@ -424,7 +424,7 @@ pub mod tests {
     fn test_min_after() {
         let t = simple_tree(50);
         for old_key in 0..55 {
-            println!("trying value: {}", old_key);
+            println!("trying value: {old_key}");
             match min_after(&RangeInclusive::new(old_key, old_key), &t) {
                 Some((k, _d)) => assert_eq!(k, &(RangeInclusive::new(old_key + 1, old_key + 1))),
                 None => assert!(old_key >= 50),

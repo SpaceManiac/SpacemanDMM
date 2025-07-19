@@ -58,14 +58,14 @@ impl ColorFormat {
                 let short = short && r % 0x11 == 0 && g % 0x11 == 0 && b % 0x11 == 0 && a % 0x11 == 0;
                 let alpha = alpha || a != 255;
                 match (short, alpha) {
-                    (false, false) => format!("{}#{:02x}{:02x}{:02x}{}", q, r, g, b, q),
-                    (false, true) => format!("{}#{:02x}{:02x}{:02x}{:02x}{}", q, r, g, b, a, q),
+                    (false, false) => format!("{q}#{r:02x}{g:02x}{b:02x}{q}"),
+                    (false, true) => format!("{q}#{r:02x}{g:02x}{b:02x}{a:02x}{q}"),
                     (true, false) => format!("{}#{:x}{:x}{:x}{}", q, r / 0x11, g / 0x11, b / 0x11, q),
                     (true, true) => format!("{}#{:x}{:x}{:x}{:x}{}", q, r / 0x11, g / 0x11, b / 0x11, a / 0x11, q),
                 }
             },
-            ColorFormat::Rgb { alpha } if alpha || a != 255 => format!("rgb({}, {}, {}, {})", r, g, b, a),
-            ColorFormat::Rgb { alpha: _ } => format!("rgb({}, {}, {})", r, g, b),
+            ColorFormat::Rgb { alpha } if alpha || a != 255 => format!("rgb({r}, {g}, {b}, {a})"),
+            ColorFormat::Rgb { alpha: _ } => format!("rgb({r}, {g}, {b})"),
         }
     }
 }

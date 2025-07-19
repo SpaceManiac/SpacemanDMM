@@ -57,7 +57,7 @@ impl ExtoolsHolder {
         let (conn_tx, conn_rx) = mpsc::channel();
 
         std::thread::Builder::new()
-            .name(format!("extools listening on port {}", port))
+            .name(format!("extools listening on port {port}"))
             .spawn(move || {
                 let stream = match listener.accept() {
                     Ok((stream, _)) => stream,
@@ -84,7 +84,7 @@ impl ExtoolsHolder {
         let (cancel_tx, cancel_rx) = mpsc::channel();
 
         std::thread::Builder::new()
-            .name(format!("extools attaching on port {}", port))
+            .name(format!("extools attaching on port {port}"))
             .spawn(move || {
                 while let Err(mpsc::TryRecvError::Empty) = cancel_rx.try_recv() {
                     if let Ok(stream) = TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(5)) {
@@ -372,7 +372,7 @@ impl ExtoolsThread {
                     }
                     buffer.extend_from_slice(slice);
                 }
-                Err(e) => panic!("extools read error: {:?}", e),
+                Err(e) => panic!("extools read error: {e:?}"),
             }
 
             // chop off as many full messages from the buffer as we can

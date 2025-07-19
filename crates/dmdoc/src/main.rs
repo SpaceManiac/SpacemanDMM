@@ -38,7 +38,7 @@ const DM_REFERENCE_BASE: &str = "https://www.byond.com/docs/ref/#";
 
 fn main() {
     if let Err(e) = main2() {
-        eprintln!("{}", e);
+        eprintln!("{e}");
         std::process::exit(1);
     }
 }
@@ -54,7 +54,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     let _ = args.next();  // skip executable name
     while let Some(arg) = args.next() {
         if arg == "-V" || arg == "--version" {
-            println!("{}", BUILD_INFO);
+            println!("{BUILD_INFO}");
             return Ok(());
         } else if arg == "-e" {
             environment = Some(args.next().expect("must specify a value for -e"));
@@ -65,7 +65,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         } else if arg == "--dry-run" {
             dry_run = true;
         } else {
-            return Err(format!("unknown argument: {}", arg).into());
+            return Err(format!("unknown argument: {arg}").into());
         }
     }
 
@@ -205,7 +205,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         if docs.is_empty() {
             continue;
         }
-        error_entity_put(format!("#define {}", name));
+        error_entity_put(format!("#define {name}"));
         let broken_link_callback = &mut |link: BrokenLink| -> Option<(CowStr, CowStr)> {
             broken_link_fixer(link, &macro_to_module_map, &macro_exists, &diagnostic_count, &error_entity, &modules_which_exist, &objtree, &types_with_docs)
         };
@@ -621,7 +621,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(world_name);
     let mut git = Default::default();
     if let Err(e) = git_info(&mut git) {
-        println!("incomplete git info: {}", e);
+        println!("incomplete git info: {e}");
     }
     let env = &Environment {
         all_type_names: &all_type_names,
@@ -753,20 +753,20 @@ fn broken_link_fixer<'str>(
         let error_entity_print = || {
             diagnostic_count.set(diagnostic_count.get() + 1);
             if let Some(name) = error_entity.take() {
-                eprintln!("{}:", name);
+                eprintln!("{name}:");
             }
         };
         // macros
         if let Some(module) = macro_to_module_map.get(reference) {
-            return Some((format!("{}.html#define/{}", module, reference).into(), reference.to_owned().into()));
+            return Some((format!("{module}.html#define/{reference}").into(), reference.to_owned().into()));
         } else if macro_exists.contains(reference) {
             error_entity_print();
-            eprintln!("    [{}]: macro not documented", reference);
+            eprintln!("    [{reference}]: macro not documented");
             return None;
         } else if reference.ends_with(".dm") || reference.ends_with(".txt") || reference.ends_with(".md") {
             let mod_path = module_path(reference.as_ref());
             if modules_which_exist.contains(&mod_path) {
-                return Some((format!("{}.html", mod_path).into(), reference.to_owned().into()));
+                return Some((format!("{mod_path}.html").into(), reference.to_owned().into()));
             }
             error_entity_print();
             eprintln!("    [{}]: module {}", reference, if Path::new(reference).exists() { "not documented" } else { "does not exist" });
@@ -813,14 +813,14 @@ fn broken_link_fixer<'str>(
                     proc_name = Some(rest);
                     ty_path = parent;
                     error_entity_print();
-                    eprintln!("    [{}]: correcting to [{}/proc/{}]", reference, parent, rest);
+                    eprintln!("    [{reference}]: correcting to [{parent}/proc/{rest}]");
                     entity_exists = true;
                 } else if ty.vars.contains_key(rest) {
                     // correct `[/ty/varname]` to `[/ty/var/varname]`
                     var_name = Some(rest);
                     ty_path = parent;
                     error_entity_print();
-                    eprintln!("    [{}]: correcting to [{}/var/{}]", reference, parent, rest);
+                    eprintln!("    [{reference}]: correcting to [{parent}/var/{rest}]");
                     entity_exists = true;
                 }
             }
@@ -828,7 +828,7 @@ fn broken_link_fixer<'str>(
             ty_path = "";
             var_name = Some(reference);
             error_entity_print();
-            eprintln!("    [{0}]: correcting to [/var/{0}]", reference);
+            eprintln!("    [{reference}]: correcting to [/var/{reference}]");
             entity_exists = true;
         }
         // else `[/ty]`
@@ -844,7 +844,7 @@ fn broken_link_fixer<'str>(
                         if var.location.is_builtins() {
                             external_url = Some(match var.docs.builtin_docs {
                                 BuiltinDocs::None => format!("{}{}/var/{}", DM_REFERENCE_BASE, ty.path, var_name),
-                                BuiltinDocs::ReferenceHash(hash) => format!("{}{}", DM_REFERENCE_BASE, hash),
+                                BuiltinDocs::ReferenceHash(hash) => format!("{DM_REFERENCE_BASE}{hash}"),
                             })
                         }
                     }
@@ -853,14 +853,14 @@ fn broken_link_fixer<'str>(
                         if proc.location.is_builtins() {
                             external_url = Some(match proc.docs.builtin_docs {
                                 BuiltinDocs::None => format!("{}{}/proc/{}", DM_REFERENCE_BASE, ty.path, proc_name),
-                                BuiltinDocs::ReferenceHash(hash) => format!("{}{}", DM_REFERENCE_BASE, hash),
+                                BuiltinDocs::ReferenceHash(hash) => format!("{DM_REFERENCE_BASE}{hash}"),
                             })
                         }
                     }
                 } else if ty.location.is_builtins() {
                     external_url = Some(match ty.docs.builtin_docs {
                         BuiltinDocs::None => format!("{}{}", DM_REFERENCE_BASE, ty.path),
-                        BuiltinDocs::ReferenceHash(hash) => format!("{}{}", DM_REFERENCE_BASE, hash),
+                        BuiltinDocs::ReferenceHash(hash) => format!("{DM_REFERENCE_BASE}{hash}"),
                     })
                 }
             }
@@ -915,9 +915,9 @@ fn broken_link_fixer<'str>(
                     eprint!("    [{}]: unknown crosslink, guessing [{}", reference, &progress[..best]);
                 }
                 if let Some(proc_name) = proc_name {
-                    eprint!("/proc/{}", proc_name);
+                    eprint!("/proc/{proc_name}");
                 } else if let Some(var_name) = var_name {
-                    eprint!("/var/{}", var_name);
+                    eprint!("/var/{var_name}");
                 }
                 eprintln!("]");
                 progress.truncate(best);
@@ -925,9 +925,9 @@ fn broken_link_fixer<'str>(
 
             let mut href = format!("{}.html", &progress[1..]);
             if let Some(proc_name) = proc_name {
-                let _ = write!(href, "#proc/{}", proc_name);
+                let _ = write!(href, "#proc/{proc_name}");
             } else if let Some(var_name) = var_name {
-                let _ = write!(href, "#var/{}", var_name);
+                let _ = write!(href, "#var/{var_name}");
             }
             Some((href.into(), progress.into()))
         } else if let Some(external) = external_url {
@@ -935,9 +935,9 @@ fn broken_link_fixer<'str>(
         } else {
             error_entity_print();
             if entity_exists {
-                eprintln!("    [{}]: not documented", reference);
+                eprintln!("    [{reference}]: not documented");
             } else {
-                eprintln!("    [{}]: unknown crosslink", reference);
+                eprintln!("    [{reference}]: unknown crosslink");
             }
             None
         }
@@ -948,7 +948,7 @@ fn broken_link_fixer<'str>(
 
 fn module_path(path: &Path) -> String {
     let mut path = path.with_extension("");
-    if path.file_name().map_or(false, |x| x.to_string_lossy().eq_ignore_ascii_case("README")) {
+    if path.file_name().is_some_and(|x| x.to_string_lossy().eq_ignore_ascii_case("README")) {
         path.pop();
     }
     path.display().to_string().replace('\\', "/")
@@ -1047,7 +1047,7 @@ fn git_info(git: &mut Git) -> Result<(), git2::Error> {
     let upstream_oid = upstream.get().peel_to_commit()?.id();
     let upstream_name = req!(upstream.name()?);
     if repo.merge_base(head_oid, upstream_oid)? != head_oid {
-        println!("incomplete git info: HEAD is not an ancestor of {}", upstream_name);
+        println!("incomplete git info: HEAD is not an ancestor of {upstream_name}");
         return Ok(());
     }
 
@@ -1079,7 +1079,7 @@ fn git_info(git: &mut Git) -> Result<(), git2::Error> {
         if colon >= at {
             git.web_url = format!("https://{}/{}", &url[at + 1..colon], &url[colon + 1..]);
         } else {
-            println!("incomplete git info: weird SSH path: {}", url);
+            println!("incomplete git info: weird SSH path: {url}");
         }
     }
     Ok(())
@@ -1197,7 +1197,7 @@ fn combine(stack: &mut Vec<IndexTree>, to: usize) {
 }
 
 fn last_element(path: &str) -> &str {
-    path.split('/').last().unwrap_or("")
+    path.split('/').next_back().unwrap_or("")
 }
 
 // ----------------------------------------------------------------------------

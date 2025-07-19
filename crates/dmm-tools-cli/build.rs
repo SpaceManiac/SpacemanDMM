@@ -11,7 +11,7 @@ fn main() {
     let mut f = File::create(out_dir.join("build-info.txt")).unwrap();
 
     if let Ok(commit) = read_commit() {
-        writeln!(f, "commit: {}", commit).unwrap();
+        writeln!(f, "commit: {commit}").unwrap();
     }
     write!(f, "build date: {}", chrono::Utc::now().date_naive()).unwrap();
 }

@@ -31,7 +31,7 @@ fn simple_location_test() {
 
     let reconstructed = reconstruct(&located_tokens, false);
     if reconstructed.trim() != code {
-        println!("{}", reconstructed);
+        println!("{reconstructed}");
         panic!("Some lines differed");
     }
 
@@ -42,7 +42,7 @@ fn simple_location_test() {
         println!("{}:{}: {:?}", token.location.line, token.location.column, token.token);
     }
     let reconstructed = reconstruct(&indented_tokens, true);
-    println!("{}", reconstructed);
+    println!("{reconstructed}");
 }
 
 fn reconstruct(tokens: &[LocatedToken], iffy: bool) -> String {

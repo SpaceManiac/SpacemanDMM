@@ -72,7 +72,7 @@ impl Context {
         let pp = match dm::preprocessor::Preprocessor::new(&self.dm_context, environment) {
             Ok(pp) => pp,
             Err(e) => {
-                eprintln!("i/o error opening environment:\n{}", e);
+                eprintln!("i/o error opening environment:\n{e}");
                 std::process::exit(1);
             }
         };
@@ -275,7 +275,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                 max.x = clamp(max.x, min.x, dim_x);
                 max.y = clamp(max.y, min.y, dim_y);
                 max.z = clamp(max.z, min.z, dim_z);
-                println!("{}rendering from {} to {}", prefix, min, max);
+                println!("{prefix}rendering from {min} to {max}");
 
                 let do_z_level = |z| {
                     println!("{}generating z={}", prefix, 1 + z);
@@ -292,7 +292,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                     };
                     let image = minimap::generate(minimap_context, icon_cache).unwrap();
                     if let Err(e) = std::fs::create_dir_all(output) {
-                        eprintln!("Failed to create output directory {}:\n{}", output, e);
+                        eprintln!("Failed to create output directory {output}:\n{e}");
                         exit_status.fetch_add(1, Ordering::Relaxed);
                         return;
                     }
@@ -302,11 +302,11 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                         path.file_stem().unwrap().to_string_lossy(),
                         1 + z
                     );
-                    println!("{}saving {}", prefix, outfile);
+                    println!("{prefix}saving {outfile}");
                     image.to_file(outfile.as_ref()).unwrap();
                     if pngcrush {
-                        println!("    pngcrush {}", outfile);
-                        let temp = format!("{}.temp", outfile);
+                        println!("    pngcrush {outfile}");
+                        let temp = format!("{outfile}.temp");
                         assert!(std::process::Command::new("pngcrush")
                             .arg("-ow")
                             .arg(&outfile)
@@ -317,7 +317,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                             .success(), "pngcrush failed");
                     }
                     if optipng {
-                        println!("{}optipng {}", prefix, outfile);
+                        println!("{prefix}optipng {outfile}");
                         assert!(std::process::Command::new("optipng")
                             .arg(&outfile)
                             .stderr(std::process::Stdio::null())
@@ -358,7 +358,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             let left_dims = left_map.dim_xyz();
             let right_dims = right_map.dim_xyz();
             if left_dims != right_dims {
-                println!("    different size: {:?} {:?}", left_dims, right_dims);
+                println!("    different size: {left_dims:?} {right_dims:?}");
             }
 
             for z in 0..min(left_dims.2, right_dims.2) {
@@ -586,7 +586,7 @@ fn render_many(context: &Context, command: RenderManyCommand) -> RenderManyComma
         }).collect());
 
         let result_chunks: Vec<_> = chunks.into_par_iter().enumerate().map(|(chunk_idx, chunk)| {
-            eprintln!("{}/{}: render {:?}", file_idx, chunk_idx, chunk);
+            eprintln!("{file_idx}/{chunk_idx}: render {chunk:?}");
 
             // Render the image.
             let bump = Default::default();

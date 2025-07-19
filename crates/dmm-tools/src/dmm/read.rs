@@ -222,7 +222,7 @@ pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
             } else {
                 match (ch as char).to_digit(10) {
                     Some(x) => curr_num = 10 * curr_num + x as usize,
-                    None => return Err(DMError::new(chars.location(), format!("bad digit {:?} in map coordinate", ch))),
+                    None => return Err(DMError::new(chars.location(), format!("bad digit {ch:?} in map coordinate"))),
                 }
             }
         } else if in_map_string {
@@ -247,8 +247,7 @@ pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
                     curr_key_length = 0;
                     if grid.insert((curr_x, curr_y, curr_z), Key(key)).is_some() {
                         return Err(DMError::new(chars.location(), format!(
-                            "multiple entries for ({}, {}, {})",
-                            curr_x, curr_y, curr_z)))
+                            "multiple entries for ({curr_x}, {curr_y}, {curr_z})")))
                     }
                     max_x = max(max_x, curr_x);
                     curr_x += 1;

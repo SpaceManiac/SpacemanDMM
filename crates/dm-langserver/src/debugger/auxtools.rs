@@ -156,7 +156,7 @@ impl Auxtools {
         self.send_or_disconnect(Request::Configured)?;
 
         match self.read_response_or_disconnect()? {
-            Response::Ack { .. } => Ok(()),
+            Response::Ack => Ok(()),
             response => Err(Box::new(UnexpectedResponse::new("Ack", response))),
         }
     }
@@ -251,7 +251,7 @@ impl Auxtools {
         })?;
 
         match self.read_response_or_disconnect()? {
-            Response::Ack { .. } => Ok(()),
+            Response::Ack => Ok(()),
             response => Err(Box::new(UnexpectedResponse::new("Ack", response))),
         }
     }
@@ -262,7 +262,7 @@ impl Auxtools {
         })?;
 
         match self.read_response_or_disconnect()? {
-            Response::Ack { .. } => Ok(()),
+            Response::Ack => Ok(()),
             response => Err(Box::new(UnexpectedResponse::new("Ack", response))),
         }
     }
@@ -273,7 +273,7 @@ impl Auxtools {
         })?;
 
         match self.read_response_or_disconnect()? {
-            Response::Ack { .. } => Ok(()),
+            Response::Ack => Ok(()),
             response => Err(Box::new(UnexpectedResponse::new("Ack", response))),
         }
     }
@@ -284,7 +284,7 @@ impl Auxtools {
         })?;
 
         match self.read_response_or_disconnect()? {
-            Response::Ack { .. } => Ok(()),
+            Response::Ack => Ok(()),
             response => Err(Box::new(UnexpectedResponse::new("Ack", response))),
         }
     }
@@ -293,7 +293,7 @@ impl Auxtools {
         self.send_or_disconnect(Request::Pause)?;
 
         match self.read_response_or_disconnect()? {
-            Response::Ack { .. } => Ok(()),
+            Response::Ack => Ok(()),
             response => Err(Box::new(UnexpectedResponse::new("Ack", response))),
         }
     }
@@ -375,7 +375,7 @@ impl AuxtoolsThread {
                 match connection_sender.send(stream.try_clone().unwrap()) {
                     Ok(_) => {}
                     Err(e) => {
-                        eprintln!("Debug client thread failed to pass cloned TcpStream: {}", e);
+                        eprintln!("Debug client thread failed to pass cloned TcpStream: {e}");
                         return;
                     }
                 }
@@ -384,7 +384,7 @@ impl AuxtoolsThread {
             }
 
             Err(e) => {
-                eprintln!("Debug client failed to accept connection: {}", e);
+                eprintln!("Debug client failed to accept connection: {e}");
             }
         })
     }
@@ -444,7 +444,7 @@ impl AuxtoolsThread {
                 Ok(_) => u32::from_le_bytes(len_bytes),
 
                 Err(e) => {
-                    eprintln!("Debug server thread read error: {}", e);
+                    eprintln!("Debug server thread read error: {e}");
                     break;
                 }
             };
@@ -454,7 +454,7 @@ impl AuxtoolsThread {
                 Ok(_) => (),
 
                 Err(e) => {
-                    eprintln!("Debug server thread read error: {}", e);
+                    eprintln!("Debug server thread read error: {e}");
                     break;
                 }
             };
@@ -468,7 +468,7 @@ impl AuxtoolsThread {
                 }
 
                 Err(e) => {
-                    eprintln!("Debug server thread failed to handle request: {}", e);
+                    eprintln!("Debug server thread failed to handle request: {e}");
                     break;
                 }
             }
@@ -483,7 +483,7 @@ pub struct UnexpectedResponse(String);
 
 impl UnexpectedResponse {
     fn new(expected: &'static str, received: Response) -> Self {
-        Self(format!("received unexpected response: expected {}, got {:?}", expected, received))
+        Self(format!("received unexpected response: expected {expected}, got {received:?}"))
     }
 }
 
