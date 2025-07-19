@@ -93,8 +93,7 @@ pub struct ProcDeclaration {
     pub id: SymbolId,
 }
 
-fn heap_size_of_location_range(_range: &Option<Range<Location>>) -> usize
-{
+fn heap_size_of_location_range(_range: &Option<Range<Location>>) -> usize {
     size_of::<Range<Location>>()
 }
 
@@ -1135,7 +1134,7 @@ impl ObjectTreeBuilder {
         parameters: Vec<Parameter>,
         return_type: ProcReturnType,
         code: Option<Block>,
-        body_range: Option<Range<Location>>
+        body_range: Option<Range<Location>>,
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let node = &mut self.inner.graph[parent.index()];
         let proc = node.procs.entry(name.to_owned()).or_insert_with(|| TypeProc {
@@ -1163,7 +1162,7 @@ impl ObjectTreeBuilder {
             parameters: parameters.into(),
             docs: Default::default(),
             code,
-            body_range
+            body_range,
         };
 
         // DM really does reorder the declaration to appear before the override,
@@ -1251,7 +1250,7 @@ impl ObjectTreeBuilder {
             elems.len() + 1,
             params.iter().copied().map(|param| Parameter { name: param.into(), .. Default::default() }).collect(),
             None,
-            None
+            None,
         ).unwrap().1
     }
 
