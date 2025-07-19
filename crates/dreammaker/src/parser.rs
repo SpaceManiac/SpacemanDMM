@@ -1410,10 +1410,11 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             // for (Var = Low to High)
             require!(self.exact(Token::Punct(Punctuation::LParen)));
             let init = self.simple_statement(true, vars)?;
-            if let Some(()) = self.comma_or_semicolon()? {
-                // three-pronged loop form ("for loop")
+            // three-pronged loop form ("for loop")
+            if let Some(()) = self.semicolon()? {
+                // for(init; test; [inc])
                 let test = self.expression()?;
-                let inc = match self.comma_or_semicolon()? {
+                let inc = match self.semicolon()? {
                     Some(()) => self.simple_statement(false, vars)?,
                     None => None,
                 };
@@ -1424,6 +1425,76 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     inc: inc.map(Box::new),
                     block: require!(self.block(&LoopContext::ForLoop)),
                 })
+            // ... copypasted but with commas
+            } else if let Some(()) = self.comma()? {
+                // for(init, test [, inc])
+                let test = self.expression()?;
+                let inc = match self.comma()? {
+                    Some(()) => self.simple_statement(false, vars)?,
+                    None => None,
+                };
+                // Increment exists
+                if inc.is_some() {
+                    require!(self.exact(Token::Punct(Punctuation::RParen)));
+                    spanned(Statement::ForLoop {
+                        init: init.map(Box::new),
+                        test: test.map(Box::new),
+                        inc: inc.map(Box::new),
+                        block: require!(self.block(&LoopContext::ForLoop)),
+                    })
+                } else {
+                    // for (..., ... in ...)
+                    match test {
+                        // This should necessarily be caught because the expression is going be
+                        //for(var/k, [v in x]) and [v in x] will be passed as BinaryOp::In
+                        // This is a bit ugly but it workss
+                        Some(Expression::BinaryOp {
+                            op: BinaryOp::In,
+                            lhs,
+                            rhs,
+                        }) => {
+                            // First thing first: for (var/k, v in x) REQUIRES the var/k.
+                            // This unboxes it and rejects other type for(x, [...]), for(0, [...])
+                            let (var_type, key) = match init {
+                            // this is a really terrible way to do this
+                                Some(Statement::Var(var_statement)) => match var_statement.value {
+                                    None => (Some(var_statement.var_type), var_statement.name),
+                                    _ => return Err(self.error("cannot assigned a value to var/key in a for(var/key, value) statement")),
+                                },
+                                _ => return Err(self.error("for (var/key, value) requires a 'var' keyword")),
+                            };
+                            // Value is the lhs of for(var, k [v in x])
+                            // It should also pass only if it's an ident
+                            let value = match lhs.into_term() {
+                                Some(Term::Ident(value)) => value,
+                                _ => return Err(self.error(
+                                    "value must be a variable in a for (var/key, value) statement",
+                                )),
+                            };
+                            // TODO : check if `x` is an ident/a "list()" or "alist()" statement ?
+                            require!(self.exact(Token::Punct(Punctuation::RParen)));
+                            // Returns a for(k,v)
+                            spanned(Statement::ForKeyValue(Box::new(ForKeyValueStatement {
+                                var_type: Some(var_type.expect("/")),
+                                key: key.into(),
+                                value: value.into(),
+                                in_list: Some(*rhs), // We'll assume the rhs of [v in x] is a list. Any other case, DM will catch anyway.
+                                block: require!(self.block(&LoopContext::ForLoop)),
+                            })))
+                        }
+                        // We will just assume everything else for(k, [...]) is a two-pronged for loop
+                        // for (init, test) {...}
+                        _ => {
+                            require!(self.exact(Token::Punct(Punctuation::RParen)));
+                            spanned(Statement::ForLoop {
+                                init: init.map(Box::new),
+                                test: test.map(Box::new),
+                                inc: inc.map(Box::new),
+                                block: require!(self.block(&LoopContext::ForLoop)),
+                            })
+                        }
+                    }
+                }
             } else if let Some(init) = init {
                 // in-list form ("for list")
                 let (var_type, name) = match init {
@@ -1783,10 +1854,16 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         })))
     }
 
-    fn comma_or_semicolon(&mut self) -> Status<()> {
+    fn comma(&mut self) -> Status<()> {
         if let Some(()) = self.exact(Token::Punct(Punctuation::Comma))? {
             SUCCESS
-        } else if let Some(()) = self.exact(Token::Punct(Punctuation::Semicolon))? {
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn semicolon(&mut self) -> Status<()> {
+        if let Some(()) = self.exact(Token::Punct(Punctuation::Semicolon))? {
             SUCCESS
         } else {
             Ok(None)
