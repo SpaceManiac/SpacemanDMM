@@ -536,6 +536,7 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         proc/run(File);
         proc/shell(Command);
         proc/shutdown(Addr,Natural=0);
+        proc/sign(A);
         proc/sin(X);
         proc/sleep(Delay);
         proc/sorttext(T1,T2/*,...*/);
