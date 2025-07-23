@@ -412,45 +412,6 @@ impl<'a> GetVar<'a> for TypeRef<'a> {
 // ----------------------------------------------------------------------------
 // Renderer-agnostic sprite structure
 
-/// Information about when a sprite should be shown or hidden.
-#[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub struct Category {
-    raw: u32,
-}
-
-impl Category {
-    const AREA: Category = Category { raw: 1 };
-    const TURF: Category = Category { raw: 2 };
-    const OBJ: Category = Category { raw: 3 };
-    const MOB: Category = Category { raw: 4 };
-
-    pub fn from_path(path: &str) -> Category {
-        if path.starts_with("/area") {
-            Category::AREA
-        } else if path.starts_with("/turf") {
-            Category::TURF
-        } else if path.starts_with("/obj") {
-            Category::OBJ
-        } else if path.starts_with("/mob") {
-            Category::MOB
-        } else {
-            Category { raw: 0 }
-        }
-    }
-
-    /// Encode this category for FFI representation.
-    pub fn matches_basic_layers(self, visible: &[bool]) -> bool {
-        visible.get(self.raw as usize).copied().unwrap_or(false)
-    }
-}
-
-#[cfg(feature="gfx_core")]
-impl gfx_core::shade::BaseTyped for Category {
-    fn get_base_type() -> gfx_core::shade::BaseType {
-        u32::get_base_type()
-    }
-}
-
 /// A guaranteed sortable representation of a `layer` float.
 #[derive(Default, Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Layer {
@@ -490,9 +451,6 @@ impl gfx_core::shade::BaseTyped for Layer {
 /// overlays.
 #[derive(Debug, Clone)]
 pub struct Sprite<'s> {
-    // filtering
-    pub category: Category,
-
     // visual appearance
     pub icon: &'s str,
     pub icon_state: &'s str,
@@ -518,7 +476,6 @@ impl<'s> Sprite<'s> {
         let step_y = vars.get_var("step_y", objtree).to_int().unwrap_or(0);
 
         Sprite {
-            category: Category::from_path(vars.get_path()),
             icon: vars.get_var("icon", objtree).as_path_str().unwrap_or(""),
             icon_state: vars.get_var("icon_state", objtree).as_str().unwrap_or(""),
             dir: vars.get_var("dir", objtree).to_int().and_then(Dir::from_int).unwrap_or_default(),
@@ -534,7 +491,6 @@ impl<'s> Sprite<'s> {
 impl<'s> Default for Sprite<'s> {
     fn default() -> Self {
         Sprite {
-            category: Category::default(),
             icon: "",
             icon_state: "",
             dir: Dir::default(),
