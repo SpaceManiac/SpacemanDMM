@@ -263,7 +263,7 @@ impl<'a> Atom<'a> {
     }
 
     pub fn istype(&self, parent: &str) -> bool {
-        subpath(&self.type_.path, parent)
+        ispath(&self.type_.path, parent)
     }
 }
 

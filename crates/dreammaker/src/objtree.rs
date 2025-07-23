@@ -181,7 +181,7 @@ impl Type {
     /// Checks whether this type's path is a subpath of the given path.
     #[inline]
     pub fn is_subpath_of(&self, parent: &str) -> bool {
-        subpath(&self.path, parent)
+        ispath(&self.path, parent)
     }
 
     // Used in the constant evaluator which holds an &mut ObjectTree and thus
@@ -212,9 +212,13 @@ impl Type {
 }
 
 #[inline]
-pub fn subpath(path: &str, parent: &str) -> bool {
-    debug_assert!(path.starts_with('/') && parent.starts_with('/') && parent.ends_with('/'));
-    path == &parent[..parent.len() - 1] || path.starts_with(parent)
+pub fn ispath(path: &str, parent: &str) -> bool {
+    debug_assert!(path.starts_with('/') && parent.starts_with('/'));
+    let parent = parent.trim_end_matches('/');
+    match path.strip_prefix(parent) {
+        Some(rest) => rest.is_empty() || rest.starts_with('/'),
+        None => false,
+    }
 }
 
 // ----------------------------------------------------------------------------
