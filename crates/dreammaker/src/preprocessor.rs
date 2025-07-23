@@ -681,15 +681,6 @@ impl<'ctx> Preprocessor<'ctx> {
         }
     }
 
-    fn check_danger_ident(&mut self, name: &str, kind: &str) {
-        if let Some(loc) = self.danger_idents.get(name) {
-            self.context.register_error(DMError::new(*loc, format!(
-                "macro {name:?} used immediately before being {kind}:\n\
-                https://www.byond.com/forum/?post=2072419"
-            )).set_severity(Severity::Warning));
-        }
-    }
-
     fn push_output(&mut self, token: Token) {
         self.output.push_back(LocatedToken::new(self.last_input_loc, token));
     }
@@ -863,7 +854,6 @@ impl<'ctx> Preprocessor<'ctx> {
                                 define_name_loc .. define_name_loc.add_columns(define_name.len() as u16),
                                 Annotation::MacroDefinition(define_name.to_owned()));
                         }
-                        self.check_danger_ident(&define_name, "defined");
                         let mut params = Vec::new();
                         let mut subst = Vec::new();
                         let mut variadic = false;
@@ -956,7 +946,6 @@ impl<'ctx> Preprocessor<'ctx> {
                     "undef" => {
                         expect_token!((define_name) = Token::Ident(define_name, _));
                         let define_name_loc = _last_expected_loc;
-                        self.check_danger_ident(&define_name, "undefined");
                         expect_token!(() = Token::Punct(Punctuation::Newline));
                         if let Some(previous) = self.defines.remove(&define_name) {
                             self.move_to_history(define_name, previous);
