@@ -173,31 +173,21 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
 fn clip(bounds: dmi::Coordinate, mut loc: (i32, i32), mut rect: dmi::Rect) -> Option<(dmi::Coordinate, dmi::Rect)> {
     if loc.0 < 0 {
         rect.0 += (-loc.0) as u32;
-        match rect.2.checked_sub((-loc.0) as u32) {
-            Some(s) => rect.2 = s,
-            None => return None,  // out of the viewport
-        }
+        rect.2 = rect.2.checked_sub((-loc.0) as u32)?;
         loc.0 = 0;
     }
-    while loc.0 + rect.2 as i32 > bounds.0 as i32 {
-        rect.2 -= 1;
-        if rect.2 == 0 {
-            return None;
-        }
+    let overhang = loc.0 + rect.2 as i32 - bounds.0 as i32;
+    if overhang > 0 {
+        rect.2 = rect.2.checked_sub(overhang as u32)?;
     }
     if loc.1 < 0 {
         rect.1 += (-loc.1) as u32;
-        match rect.3.checked_sub((-loc.1) as u32) {
-            Some(s) => rect.3 = s,
-            None => return None,  // out of the viewport
-        }
+        rect.3 = rect.3.checked_sub((-loc.1) as u32)?;
         loc.1 = 0;
     }
-    while loc.1 + rect.3 as i32 > bounds.1 as i32 {
-        rect.3 -= 1;
-        if rect.3 == 0 {
-            return None;
-        }
+    let overhang = loc.1 + rect.3 as i32 - bounds.1 as i32;
+    if overhang > 0 {
+        rect.3 = rect.3.checked_sub(overhang as u32)?;
     }
     Some(((loc.0 as u32, loc.1 as u32), rect))
 }
