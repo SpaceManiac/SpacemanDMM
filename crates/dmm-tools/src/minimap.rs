@@ -125,17 +125,22 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
     drop(underlays);
     drop(overlays);
 
-    // sorts the atom list and renders them onto the output image
-    sprites.sort_by_key(|(_, s)| (s.plane, s.layer));
-
-    let mut map_image = Image::new_rgba(len_x as u32 * TILE_SIZE, len_y as u32 * TILE_SIZE);
-    'sprite: for (loc, sprite) in sprites {
+    // Drop sprites rejected by any render pass.
+    sprites.retain(|(_, sprite)| {
         for pass in render_passes.iter() {
-            if !pass.sprite_filter(&sprite) {
-                continue 'sprite;
+            if !pass.sprite_filter(sprite) {
+                return false;
             }
         }
+        true
+    });
 
+    // Sort the sprite list by depth.
+    sprites.sort_by_key(|(_, s)| (s.plane, s.layer));
+
+    // Composite the sorted sprites onto the output image.
+    let mut map_image = Image::new_rgba(len_x as u32 * TILE_SIZE, len_y as u32 * TILE_SIZE);
+    for ((x, y), sprite) in sprites {
         let icon_file = match icon_cache.retrieve_shared(sprite.icon.as_ref()) {
             Some(icon_file) => icon_file,
             None => continue,
@@ -145,8 +150,8 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
             let pixel_x = sprite.ofs_x;
             let pixel_y = sprite.ofs_y + icon_file.metadata.height as i32;
             let loc = (
-                ((loc.0 - ctx.min.0 as u32) * TILE_SIZE) as i32 + pixel_x,
-                ((loc.1 + 1 - min_y as u32) * TILE_SIZE) as i32 - pixel_y,
+                ((x - ctx.min.0 as u32) * TILE_SIZE) as i32 + pixel_x,
+                ((y + 1 - min_y as u32) * TILE_SIZE) as i32 - pixel_y,
             );
 
             if let Some((loc, rect)) = clip((map_image.width, map_image.height), loc, rect) {
