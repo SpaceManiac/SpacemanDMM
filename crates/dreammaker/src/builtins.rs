@@ -8,8 +8,8 @@ use super::objtree::*;
 use super::preprocessor::{Define, DefineMap};
 use super::Location;
 
-const DM_VERSION: i32 = 515;
-const DM_BUILD: i32 = 1619;
+const DM_VERSION: i32 = 516;
+const DM_BUILD: i32 = 1666;
 
 /// Register BYOND builtin macros to the given define map.
 pub fn default_defines(defines: &mut DefineMap) {
