@@ -1269,9 +1269,9 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         pixloc/var/atom/loc;
         pixloc/var/step_x;
         pixloc/var/step_y;
-        pixloc/x;
-        pixloc/y;
-        pixloc/z;
+        pixloc/var/x;
+        pixloc/var/y;
+        pixloc/var/z;
 
         proc/vector(x, y, z);
 
