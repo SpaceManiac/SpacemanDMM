@@ -1433,7 +1433,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         }
                         StaticType::List { .. } => {/* OK */}
                         StaticType::Type(ty) => {
-                            if ty != self.objtree.expect("/world") && ty != self.objtree.expect("/list") {
+                            if ty != self.objtree.expect("/world") && ty != self.objtree.expect("/list") && ty != self.objtree.expect("/alist") {
                                 let atom = self.objtree.expect("/atom");
                                 if ty.is_subtype_of(&atom) {
                                     // Fine.
