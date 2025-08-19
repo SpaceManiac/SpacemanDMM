@@ -673,18 +673,18 @@ impl ObjectTree {
         self.node_indices().map(move |idx| TypeRef::new(self, idx))
     }
 
-    pub fn root(&self) -> TypeRef {
+    pub fn root(&self) -> TypeRef<'_> {
         TypeRef::new(self, NodeIndex::new(0))
     }
 
-    pub fn find(&self, path: &str) -> Option<TypeRef> {
+    pub fn find(&self, path: &str) -> Option<TypeRef<'_>> {
         if path.is_empty() {
             return Some(self.root());
         }
         self.types.get(path).map(|&ix| TypeRef::new(self, ix))
     }
 
-    pub fn expect(&self, path: &str) -> TypeRef {
+    pub fn expect(&self, path: &str) -> TypeRef<'_> {
         match self.types.get(path) {
             Some(&ix) => TypeRef::new(self, ix),
             None => panic!("type not found: {path:?}"),
@@ -695,7 +695,7 @@ impl ObjectTree {
         self.graph.get(type_.parent_type.index())
     }
 
-    pub fn type_by_path<I>(&self, path: I) -> Option<TypeRef>
+    pub fn type_by_path<I>(&self, path: I) -> Option<TypeRef<'_>>
     where
         I: IntoIterator,
         I::Item: AsRef<str>,
@@ -708,7 +708,7 @@ impl ObjectTree {
         }
     }
 
-    pub fn type_by_path_approx<I>(&self, path: I) -> (bool, TypeRef)
+    pub fn type_by_path_approx<I>(&self, path: I) -> (bool, TypeRef<'_>)
     where
         I: IntoIterator,
         I::Item: AsRef<str>,
@@ -732,7 +732,7 @@ impl ObjectTree {
         (true, TypeRef::new(self, current))
     }
 
-    pub fn type_by_constant(&self, constant: &Constant) -> Option<TypeRef> {
+    pub fn type_by_constant(&self, constant: &Constant) -> Option<TypeRef<'_>> {
         match constant {
             Constant::String(string_path) => self.find(string_path),
             Constant::Prefab(pop) => self.type_by_path(pop.path.iter()),

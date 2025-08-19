@@ -73,7 +73,7 @@ impl FileList {
     }
 
     /// Look up a file path by its index returned from `register_file`.
-    pub fn get_path(&self, file: FileId) -> Ref<Path> {
+    pub fn get_path(&self, file: FileId) -> Ref<'_, Path> {
         let files = self.files.borrow();
         if file == FILEID_BUILTINS {
             return Ref::map(files, |_| Path::new("(builtins)"));
@@ -108,7 +108,7 @@ impl Context {
     }
 
     /// Look up a file path by its index returned from `register_file`.
-    pub fn file_path(&self, file: FileId) -> Ref<Path> {
+    pub fn file_path(&self, file: FileId) -> Ref<'_, Path> {
         self.files.get_path(file)
     }
 
@@ -191,13 +191,13 @@ impl Context {
     }
 
     /// Access the list of diagnostics generated so far.
-    pub fn errors(&self) -> Ref<[DMError]> {
+    pub fn errors(&self) -> Ref<'_, [DMError]> {
         Ref::map(self.errors.borrow(), |x| &**x)
     }
 
     /// Mutably access the diagnostics list. Dangerous.
     #[doc(hidden)]
-    pub fn errors_mut(&self) -> RefMut<Vec<DMError>> {
+    pub fn errors_mut(&self) -> RefMut<'_, Vec<DMError>> {
         self.errors.borrow_mut()
     }
 

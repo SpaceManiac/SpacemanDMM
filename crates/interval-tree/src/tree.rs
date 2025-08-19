@@ -214,7 +214,7 @@ impl<K: Ord, V> IntervalTree<K, V> {
     /// }
     ///
     /// ```
-    pub fn range(&self, range: RangeInclusive<K>) -> RangePairIter<K, V> {
+    pub fn range(&self, range: RangeInclusive<K>) -> RangePairIter<'_, K, V> {
         RangePairIter::new(
             self,
             Bound::Included(range.start),
@@ -231,7 +231,7 @@ impl<K: Ord, V> IntervalTree<K, V> {
     /// }
     ///
     /// ```
-    pub fn iter(&self) -> RangePairIter<K, V> {
+    pub fn iter(&self) -> RangePairIter<'_, K, V> {
         RangePairIter::new(self, Bound::Unbounded, Bound::Unbounded)
     }
 }

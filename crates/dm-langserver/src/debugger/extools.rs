@@ -197,7 +197,7 @@ impl Extools {
         (extools, thread)
     }
 
-    pub fn get_all_threads(&self) -> std::sync::MutexGuard<HashMap<i64, ThreadInfo>> {
+    pub fn get_all_threads(&self) -> std::sync::MutexGuard<'_, HashMap<i64, ThreadInfo>> {
         self.threads.lock().unwrap()
     }
 

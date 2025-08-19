@@ -175,7 +175,7 @@ impl<'o> AssumptionSet<'o> {
         assumption_set![Assumption::Truthy(true), Assumption::IsNull(false), Assumption::IsType(true, ty)]
     }
 
-    fn conflicts_with(&self, new: &Assumption) -> Option<&Assumption> {
+    fn conflicts_with(&self, new: &Assumption) -> Option<&Assumption<'_>> {
         self.set.iter().find(|&each| each.oneway_conflict(new) || new.oneway_conflict(each))
     }
 }
@@ -1455,7 +1455,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                             }
                         }
                         StaticType::Proc => {
-                            error(location, format!("iterating over a procpath which cannot be iterated"))
+                            error(location, "iterating over a procpath which cannot be iterated".to_string())
                                 .register(self.context);
                         }
                     }
@@ -1613,7 +1613,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                             }
                         }
                         StaticType::Proc => {
-                            error(location, format!("iterating over a procpath which cannot be iterated"))
+                            error(location, "iterating over a procpath which cannot be iterated".to_string())
                                 .register(self.context);
                         }
                     }

@@ -683,7 +683,7 @@ impl Engine {
         })
     }
 
-    fn find_type_context<'b, I, Ign>(&self, iter: &I) -> (Option<TypeRef>, Option<(&'b str, usize)>)
+    fn find_type_context<'b, I, Ign>(&self, iter: &I) -> (Option<TypeRef<'_>>, Option<(&'b str, usize)>)
     where
         I: Iterator<Item = (Ign, &'b Annotation)> + Clone,
     {

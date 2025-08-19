@@ -218,7 +218,7 @@ impl Map {
     }
 
     #[inline]
-    pub fn z_level(&self, z: usize) -> ZLevel {
+    pub fn z_level(&self, z: usize) -> ZLevel<'_> {
         ZLevel { grid: self.grid.index_axis(Axis(0), z) }
     }
 
