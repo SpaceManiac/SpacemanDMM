@@ -31,6 +31,7 @@ pub enum StaticType<'o> {
         list: TypeRef<'o>,
         keys: Box<StaticType<'o>>,
     },
+    Proc,
 }
 
 impl<'o> StaticType<'o> {
@@ -43,6 +44,7 @@ impl<'o> StaticType<'o> {
             StaticType::None => None,
             StaticType::Type(t) => Some(t),
             StaticType::List { list, .. } => Some(list),
+            StaticType::Proc => None,
         }
     }
 
@@ -74,6 +76,7 @@ impl<'o> StaticType<'o> {
             StaticType::None => false,
             StaticType::Type(ty) => ty.path == "/list",
             StaticType::List { .. } => true,
+            StaticType::Proc => false,
         }
     }
 }
@@ -1451,6 +1454,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                                 }
                             }
                         }
+                        StaticType::Proc => {
+                            error(location, format!("iterating over a procpath which cannot be iterated"))
+                                .register(self.context);
+                        }
                     }
                 }
                 if let Some(var_type) = var_type {
@@ -1604,6 +1611,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                                         .register(self.context);
                                 }
                             }
+                        }
+                        StaticType::Proc => {
+                            error(location, format!("iterating over a procpath which cannot be iterated"))
+                                .register(self.context);
                         }
                     }
                 }
@@ -2098,8 +2109,21 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
             },
             Follow::Field(kind, name) => {
-                if let Some(ty) = lhs.static_ty.basic_type() {
-                    if let Some(decl) = ty.get_var_declaration(name) {
+                if let StaticType::Proc = lhs.static_ty {
+                    match name.as_str() {
+                        "type" | "name" | "desc" | "category" | "invisibility" => {},
+                        _ => {
+                            error(location, format!("undefined field: {name:?} on procpath"))
+                                .register(self.context);
+                        }
+                    }
+                    Analysis::empty()
+                } else if let Some(ty) = lhs.static_ty.basic_type() {
+                    if ty.path == "/callee" && name == "proc" {
+                        // Special cased for now because this might be the only place it appears?
+                        // Or maybe we should also handle new procpath() returning a procpath.
+                        Analysis::from(StaticType::Proc)
+                    } else if let Some(decl) = ty.get_var_declaration(name) {
                         if ty != self.ty && decl.var_type.flags.is_private() {
                             error(location, format!("field {name:?} on {ty} is declared as private"))
                                 .with_errortype("private_var")
@@ -2278,6 +2302,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             StaticType::List { list, .. } => {
                 typeerror = "list";
             },
+            StaticType::Proc => {
+                return Analysis::empty()
+            }
         };
         error(location, format!("Attempting {operator} on a {typeerror} which does not overload {operator}"))
             .register(self.context);
