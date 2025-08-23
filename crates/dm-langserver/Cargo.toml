@@ -19,7 +19,7 @@ interval-tree = { path = "../interval-tree" }
 libc = "0.2.161"
 regex = "1.11.1"
 lazy_static = "1.5"
-foldhash = "0.1.3"
+foldhash = "0.2.0"
 
 [build-dependencies]
 chrono = "0.4.38"
