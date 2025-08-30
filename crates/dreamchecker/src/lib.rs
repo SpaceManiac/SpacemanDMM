@@ -350,11 +350,13 @@ fn run_inner(context: &Context, objtree: &ObjectTree, cli: bool) {
     objtree.root().recurse(&mut |ty| {
         for proc in ty.iter_self_procs() {
             analyzer.check_kwargs(proc);
+            analyzer.check_arg_type(proc);//count(proc);
             analyzer.propagate_violations(proc);
         }
     });
 
     analyzer.finish_check_kwargs();
+    analyzer.finish_check_arg_count();
 
     cli_println!("============================================================");
     cli_println!("Analyzing proc call tree...\n");
@@ -561,6 +563,8 @@ pub struct AnalyzeObjectTree<'o> {
 
     sleeping_overrides: ViolatingOverrides<'o>,
     impure_overrides: ViolatingOverrides<'o>,
+    decreasing_argc_overrides: ViolatingOverrides<'o>,
+    incorrect_arg_type_overrides: ViolatingOverrides<'o>,
 }
 
 impl<'o> AnalyzeObjectTree<'o> {
@@ -587,6 +591,8 @@ impl<'o> AnalyzeObjectTree<'o> {
             waitfor_procs: Default::default(),
             sleeping_overrides: Default::default(),
             impure_overrides: Default::default(),
+            decreasing_argc_overrides: Default::default(),
+            incorrect_arg_type_overrides: Default::default(),
         }
     }
 
@@ -870,6 +876,109 @@ impl<'o> AnalyzeObjectTree<'o> {
             while let Some(current) = next {
                 self.impure_overrides.insert_override(current, proc);
                 next = current.parent_proc();
+            }
+        }
+    }
+
+    /// Check that a ProcRef doesn't have fewer arguments than its parent
+    pub fn check_arg_count(&mut self, proc: ProcRef<'o>) {
+        if proc.is_builtin()
+        {
+            return;
+        }
+        if let Some(parent) = proc.parent_proc()
+        {
+            if parent.is_varargs() /* remove this later, it's a hack for objtree proc parents including root */ || parent.ty().get().is_root() /* seriously remove it */
+            {
+                return;
+            }
+            if parent.get().parameters.len() > proc.get().parameters.len()
+            {
+                self.decreasing_argc_overrides.insert_override(parent, proc)
+            }
+        }
+    }
+
+    /// Check that a ProcRef doesn't change the type or ordering of its args
+    pub fn check_arg_type(&mut self, proc: ProcRef<'o>) {
+        if proc.is_builtin()
+        {
+            return;
+        }
+        if let Some(parent) = proc.parent_proc()
+        {
+            if parent.is_varargs() /* remove this later, it's a hack for objtree proc parents including root */ || parent.ty().get().is_root() /* seriously remove it */
+            {
+                return;
+            }
+            for (i, parent_argument) in parent.parameters.iter().enumerate()
+            {
+                let proc_arg = proc.parameters.get(i);
+                if let Some(proc_arg) = proc_arg
+                {
+                    //let parent_typepath: &str = &*format!("/{}/", parent_argument.var_type.type_path.join("/"));
+                    //let proc_typepath: &str = &*format!("/{}", proc_arg.var_type.type_path.join("/"));
+                    if let (Some(parent_type), Some(proc_type)) = (self.objtree.type_by_path(&*parent_argument.var_type.type_path), self.objtree.type_by_path(&*proc_arg.var_type.type_path))
+                    {
+                        // Argument types may get stricter or more relaxed, but at least one must be a subtype of the other.
+                        if !proc_arg.default.is_some() && !parent_argument.default.is_some() && !parent.is_builtin() && !proc_type.is_subtype_of(&parent_type) && !parent_type.is_subtype_of(&proc_type)
+                        {
+                            self.incorrect_arg_type_overrides.insert_override(parent, proc);
+                            break
+                        }
+                    }
+                }
+                else if !parent_argument.default.is_some()
+                {
+                    self.decreasing_argc_overrides.insert_override(parent, proc);
+                    break
+                }
+            }
+        }
+    }
+
+    /// Finish analyzing args for a changed count or type
+    pub fn finish_check_arg_count(&self) {
+        for &parent in self.decreasing_argc_overrides.overrides.keys()
+        {
+            if let Some(violators) = self.decreasing_argc_overrides.get_override_violators(parent)
+            {
+                let msg = match violators.len() {
+                    1 => format!("an override of {}/{} has fewer arguments", parent.ty().path, parent.name()),
+                    len => format!("{} overrides of {}/{} have fewer arguments", len, parent.ty().path, parent.name()),
+                };
+                let mut error = error(parent.get().location, msg)
+                    .set_severity(Severity::Hint)
+                    .with_errortype("override_fewer_arguments");
+                if let Some(violations) = self.decreasing_argc_overrides.get_override_violators(parent)
+                {
+                    for violating_child in violations.iter()
+                    {
+                        error.add_note(violating_child.get().location, format!("{}/{} has fewer arguments than its parent", violating_child.ty().path, violating_child.name()));
+                    }
+                }
+                error.register(self.context);
+            }
+        }
+        for &parent in self.incorrect_arg_type_overrides.overrides.keys()
+        {
+            if let Some(violators) = self.incorrect_arg_type_overrides.get_override_violators(parent)
+            {
+                let msg = match violators.len() {
+                    1 => format!("an override of {}/{} has mismatched argument types", parent.ty().path, parent.name()),
+                    len => format!("{} overrides of {}/{} have mismatched argument types", len, parent.ty().path, parent.name()),
+                };
+                let mut error = error(parent.get().location, msg)
+                    .set_severity(Severity::Hint)
+                    .with_errortype("override_changed_type");
+                if let Some(violations) = self.incorrect_arg_type_overrides.get_override_violators(parent)
+                {
+                    for violating_child in violations.iter()
+                    {
+                        error.add_note(violating_child.get().location, format!("{}/{} has mismatched argument types with its parent", violating_child.ty().path, violating_child.name()));
+                    }
+                }
+                error.register(self.context);
             }
         }
     }
