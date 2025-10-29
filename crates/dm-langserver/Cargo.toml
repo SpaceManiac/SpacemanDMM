@@ -1,8 +1,8 @@
 [package]
 name = "dm-langserver"
-version = "1.11.0"
-authors = ["Tad Hardesty <tad@platymuus.com>"]
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
 
 [dependencies]
 url = "2.5.2"
