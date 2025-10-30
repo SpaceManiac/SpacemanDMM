@@ -27,28 +27,26 @@ mod macros;
 mod background;
 mod color;
 mod completion;
+mod debugger;
 mod document;
 mod extras;
 mod find_references;
 mod jrpc_io;
 mod symbol_search;
 
-mod debugger;
-
-use std::collections::hash_map::Entry;
-use std::collections::VecDeque;
-use foldhash::{HashMap, HashMapExt, HashSet, HashSetExt};
-use std::path::PathBuf;
-use std::rc::Rc;
-use std::sync::{Arc, Mutex};
-
-use jsonrpc::{Call, Output, Request, Response};
-use lsp_types::MessageType;
-use url::Url;
-
+use crate::extras::{Reparse, StartDebugger};
 use dm::annotation::{Annotation, AnnotationTree};
 use dm::objtree::TypeRef;
 use dm::FileId;
+use foldhash::{HashMap, HashMapExt, HashSet, HashSetExt};
+use jsonrpc::{Call, Output, Response};
+use lsp_types::{notification::*, request::*, *};
+use std::collections::hash_map::Entry;
+use std::collections::VecDeque;
+use std::path::PathBuf;
+use std::rc::Rc;
+use std::sync::{Arc, Mutex};
+use url::Url;
 
 fn main() {
     std::env::set_var("RUST_BACKTRACE", "1");
@@ -1024,8 +1022,8 @@ impl Engine {
 
     fn handle_input(&mut self, message: &str) {
         let mut outputs: Vec<Output> = match serde_json::from_str(message) {
-            Ok(Request::Single(call)) => self.handle_call(call).into_iter().collect(),
-            Ok(Request::Batch(calls)) => calls.into_iter().flat_map(|call| self.handle_call(call)).collect(),
+            Ok(jsonrpc::Request::Single(call)) => self.handle_call(call).into_iter().collect(),
+            Ok(jsonrpc::Request::Batch(calls)) => calls.into_iter().flat_map(|call| self.handle_call(call)).collect(),
             Err(decode_error) => vec![Output::Failure(jsonrpc::Failure {
                 jsonrpc: VERSION,
                 error: jsonrpc::Error {
@@ -1065,7 +1063,7 @@ impl Engine {
     fn handle_method_call(&mut self, call: jsonrpc::MethodCall) -> Result<serde_json::Value, jsonrpc::Error> {
         // "If the server receives a request... before the initialize request...
         // the response should be an error with code: -32002"
-        if call.method != <lsp_types::request::Initialize as lsp_types::request::Request>::METHOD && self.status != InitStatus::Running {
+        if call.method != Initialize::METHOD && self.status != InitStatus::Running {
             return Err(jsonrpc::Error {
                 code: jsonrpc::ErrorCode::from(-32002),
                 message: "method call before initialize or after shutdown".to_owned(),
@@ -1112,10 +1110,52 @@ impl Engine {
     }
 }
 
-handle_method_call! {
+// ----------------------------------------------------------------------------
+// Request handlers
+
+type P<T> = <T as Request>::Params;
+type R<T> = Result<<T as Request>::Result, jsonrpc::Error>;
+
+macro_rules! handle_method_call_table {
+    ($($what:ident;)*) => {
+        fn handle_method_call_table(method: &str) -> Option<fn(&mut Self, serde_json::Value) -> Result<serde_json::Value, jsonrpc::Error>> {
+            match method {
+                $($what::METHOD => {
+                    Some(|this, params_value| {
+                        let params: <$what as Request>::Params = serde_json::from_value(params_value).map_err(invalid_request)?;
+                        let result: <$what as Request>::Result = this.$what(params)?;
+                        Ok(serde_json::to_value(result).expect("encode problem"))
+                    })
+                },)*
+                _ => None
+            }
+        }
+    }
+}
+
+#[allow(non_snake_case)]
+impl Engine {
+    handle_method_call_table! {
+        Initialize;
+        Shutdown;
+        WorkspaceSymbol;
+        HoverRequest;
+        GotoDefinition;
+        GotoTypeDefinition;
+        References;
+        GotoImplementation;
+        Completion;
+        SignatureHelpRequest;
+        DocumentSymbolRequest;
+        DocumentColor;
+        ColorPresentationRequest;
+        DocumentLinkRequest;
+        StartDebugger;
+    }
+
     // ------------------------------------------------------------------------
     // basic setup
-    on Initialize(&mut self, init) {
+    fn Initialize(&mut self, init: P<Initialize>) -> R<Initialize> {
         if self.status != InitStatus::Starting {
             return Err(invalid_request(""))
         }
@@ -1153,7 +1193,7 @@ handle_method_call! {
         }
         eprintln!();
 
-        InitializeResult {
+        Ok(InitializeResult {
             capabilities: ServerCapabilities {
                 definition_provider: Some(OneOf::Left(true)),
                 workspace_symbol_provider: Some(OneOf::Left(true)),
@@ -1189,17 +1229,18 @@ handle_method_call! {
                 name: "dm-langserver".to_owned(),
                 version: Some(env!("CARGO_PKG_VERSION").to_owned()),
             }),
-        }
+        })
     }
 
-    on Shutdown(&mut self, ()) {
+    fn Shutdown(&mut self, (): P<Shutdown>) -> R<Shutdown> {
         self.status = InitStatus::ShuttingDown;
+        Ok(())
     }
 
     // ------------------------------------------------------------------------
     // actual stuff provision
     #[allow(deprecated)]  // DocumentSymbol::deprecated is... deprecated. But we need to provide a `None` anyways.
-    on WorkspaceSymbol(&mut self, params) {
+    fn WorkspaceSymbol(&mut self, params: P<WorkspaceSymbol>) -> R<WorkspaceSymbol> {
         let query = symbol_search::Query::parse(&params.query);
 
         let query = match query {
@@ -1274,10 +1315,10 @@ handle_method_call! {
                 }
             }
         }
-        Some(results)
+        Ok(Some(results))
     }
 
-    on HoverRequest(&mut self, params) {
+    fn HoverRequest(&mut self, params: P<HoverRequest>) -> R<HoverRequest> {
         let tdp = params.text_document_position_params;
         let (_, file_id, annotations) = self.get_annotations(&tdp.text_document.uri)?;
         let location = dm::Location {
@@ -1413,16 +1454,16 @@ handle_method_call! {
             }
         }
         if results.is_empty() {
-            None
+            Ok(None)
         } else {
-            Some(Hover {
+            Ok(Some(Hover {
                 range: None,
                 contents: HoverContents::Array(results.into_iter().map(MarkedString::String).collect()),
-            })
+            }))
         }
     }
 
-    on GotoDefinition(&mut self, params) {
+    fn GotoDefinition(&mut self, params: P<GotoDefinition>) -> R<GotoDefinition> {
         let tdp = params.text_document_position_params;
         let (real_file_id, file_id, annotations) = self.get_annotations(&tdp.text_document.uri)?;
         let location = dm::Location {
@@ -1546,13 +1587,13 @@ handle_method_call! {
         }
 
         if results.is_empty() {
-            None
+            Ok(None)
         } else {
-            Some(GotoDefinitionResponse::Array(results))
+            Ok(Some(GotoDefinitionResponse::Array(results)))
         }
     }
 
-    on GotoTypeDefinition(&mut self, params) {
+    fn GotoTypeDefinition(&mut self, params: P<GotoTypeDefinition>) -> R<GotoTypeDefinition> {
         // Like GotoDefinition, but only supports vars, then finds their types
         let tdp = params.text_document_position_params;
         let (_, file_id, annotations) = self.get_annotations(&tdp.text_document.uri)?;
@@ -1598,16 +1639,16 @@ handle_method_call! {
         }
 
         if type_path.is_empty() {
-            None
+            Ok(None)
         } else if let Some(ty) = self.objtree.type_by_path(type_path) {
             let ty_loc = self.convert_location(ty.location, &ty.docs, &[&ty.path])?;
-            Some(GotoDefinitionResponse::Scalar(ty_loc))
+            Ok(Some(GotoDefinitionResponse::Scalar(ty_loc)))
         } else {
-            None
+            Ok(None)
         }
     }
 
-    on References(&mut self, params) {
+    fn References(&mut self, params: P<References>) -> R<References> {
         // Like GotoDefinition, but looks up references instead
         let symbol_id = self.symbol_id_at(params.text_document_position)?;
 
@@ -1619,17 +1660,17 @@ handle_method_call! {
             }
         }
         if result.is_empty() {
-            None
+            Ok(None)
         } else {
             let mut output = Vec::new();
             for each in result {
                 output.push(self.convert_location(*each, &Default::default(), &[])?);
             }
-            Some(output)
+            Ok(Some(output))
         }
     }
 
-    on GotoImplementation(&mut self, params) {
+    fn GotoImplementation(&mut self, params: P<GotoImplementation>) -> R<GotoImplementation> {
         let tdp = params.text_document_position_params;
         let symbol_id = self.symbol_id_at(tdp)?;
 
@@ -1641,17 +1682,17 @@ handle_method_call! {
             }
         }
         if result.is_empty() {
-            None
+            Ok(None)
         } else {
             let mut output = Vec::new();
             for each in result {
                 output.push(self.convert_location(*each, &Default::default(), &[])?);
             }
-            Some(GotoDefinitionResponse::Array(output))
+            Ok(Some(GotoDefinitionResponse::Array(output)))
         }
     }
 
-    on Completion(&mut self, params) {
+    fn Completion(&mut self, params: P<Completion>) -> R<Completion> {
         let (_, file_id, annotations) = self.get_annotations(&params.text_document_position.text_document.uri)?;
         let location = dm::Location {
             file: file_id,
@@ -1721,13 +1762,13 @@ handle_method_call! {
         }
 
         if results.is_empty() {
-            None
+            Ok(None)
         } else {
-            Some(CompletionResponse::Array(results))
+            Ok(Some(CompletionResponse::Array(results)))
         }
     }
 
-    on SignatureHelpRequest(&mut self, params) {
+    fn SignatureHelpRequest(&mut self, params: P<SignatureHelpRequest>) -> R<SignatureHelpRequest> {
         let tdp = params.text_document_position_params;
         let (_, file_id, annotations) = self.get_annotations(&tdp.text_document.uri)?;
         let location = dm::Location {
@@ -1798,11 +1839,11 @@ handle_method_call! {
             }
         }}
 
-        result
+        Ok(result)
     }
 
     #[allow(deprecated)]  // DocumentSymbol::deprecated is... deprecated. But we need to provide a `None` anyways.
-    on DocumentSymbolRequest(&mut self, params) {
+    fn DocumentSymbolRequest(&mut self, params: P<DocumentSymbolRequest>) -> R<DocumentSymbolRequest> {
         fn name_and_detail(path: &[String], skip_front: usize) -> (String, Option<String>) {
             let (name, rest) = path.split_last().unwrap();
             (
@@ -1925,7 +1966,7 @@ handle_method_call! {
         // root
         let (_, file_id, annotations) = self.get_annotations(&params.text_document.uri)?;
         if annotations.is_empty() {
-            None
+            Ok(None)
         } else {
             let start = dm::Location { file: file_id, line: 0, column: 0 };
             let end = dm::Location { file: file_id, line: !0, column: !0 };
@@ -1935,11 +1976,11 @@ handle_method_call! {
             // sort TreeBlocks first as well.
             vec.sort_by_key(|x| (x.0.start, std::cmp::Reverse(x.0.end), if matches!(x.1, Annotation::TreeBlock(_)) { 0 } else { 1 }));
             let mut iter = vec.into_iter().peekable();
-            Some(DocumentSymbolResponse::Nested(find_document_symbols(&mut iter, end, 0)))
+            Ok(Some(DocumentSymbolResponse::Nested(find_document_symbols(&mut iter, end, 0))))
         }
     }
 
-    on DocumentColor(&mut self, params) {
+    fn DocumentColor(&mut self, params: P<DocumentColor>) -> R<DocumentColor> {
         let content = self.docs.get_contents(&params.text_document.uri).map_err(invalid_request)?;
         let mut output = Vec::new();
         for (start, end, [r, g, b, a]) in color::extract_colors(&content) {
@@ -1956,16 +1997,16 @@ handle_method_call! {
                 },
             });
         }
-        output
+        Ok(output)
     }
 
-    on ColorPresentationRequest(&mut self, params) {
+    fn ColorPresentationRequest(&mut self, params: P<ColorPresentationRequest>) -> R<ColorPresentationRequest> {
         let content = self.docs.get_contents(&params.text_document.uri).map_err(invalid_request)?;
         let chunk = document::get_range(&content, params.range)?;
         let color_format = color::ColorFormat::parse(chunk).unwrap_or_default();
         // TODO: return compatible alternate presentations for converting
         // between "#..." and rgb().
-        vec![
+        Ok(vec![
             ColorPresentation {
                 label: color_format.format([
                     (params.color.red * 255.).round() as u8,
@@ -1975,13 +2016,13 @@ handle_method_call! {
                 ]),
                 .. Default::default()
             },
-        ]
+        ])
     }
 
-    on DocumentLinkRequest(&mut self, params) {
+    fn DocumentLinkRequest(&mut self, params: P<DocumentLinkRequest>) -> R<DocumentLinkRequest> {
         let (_, file_id, annotations) = self.get_annotations(&params.text_document.uri)?;
         if annotations.is_empty() {
-            None
+            Ok(None)
         } else {
             let mut results = Vec::new();
             for (span, annotation) in annotations.iter() {
@@ -2007,13 +2048,13 @@ handle_method_call! {
                 }
             }
 
-            Some(results)
+            Ok(Some(results))
         }
     }
 
     // ------------------------------------------------------------------------
     // debugger entry point
-    on StartDebugger(&mut self, params) {
+    fn StartDebugger(&mut self, params: P<StartDebugger>) -> R<StartDebugger> {
         let root_dir = match self.root.as_ref() {
             Some(url) => url_to_path(url)?,
             None => Default::default(),
@@ -2027,14 +2068,47 @@ handle_method_call! {
         };
         let (port, handle) = debugger::start_server(self.context.config().debugger.engine, params.dreamseeker_exe, params.env, db).map_err(invalid_request)?;
         self.threads.push(handle);
-        extras::StartDebuggerResult { port }
+        Ok(extras::StartDebuggerResult { port })
     }
 }
 
-handle_notification! {
+// ----------------------------------------------------------------------------
+// Notification handlers
+
+type N<T> = <T as Notification>::Params;
+type NR = Result<(), jsonrpc::Error>;
+
+macro_rules! handle_notification_table {
+    ($($what:ident;)*) => {
+        fn handle_notification_table(method: &str) -> Option<fn(&mut Self, serde_json::Value) -> Result<(), jsonrpc::Error>> {
+            match method {
+                $($what::METHOD => {
+                    Some(|this, params_value| {
+                        let params: <$what as Notification>::Params = serde_json::from_value(params_value).map_err(invalid_request)?;
+                        this.$what(params)
+                    })
+                },)*
+                _ => None
+            }
+        }
+    }
+}
+
+#[allow(non_snake_case)]
+impl Engine {
+    handle_notification_table! {
+        Initialized;
+        Reparse;
+        Cancel;
+        DidOpenTextDocument;
+        DidCloseTextDocument;
+        DidChangeTextDocument;
+        DidChangeConfiguration;
+    }
+
     // ------------------------------------------------------------------------
     // basic setup
-    on Initialized(&mut self, _) {
+    fn Initialized(&mut self, _: N<Initialized>) -> NR {
         let mut environment = None;
         if let Some(ref root) = self.root {
             // TODO: support non-files here
@@ -2054,34 +2128,41 @@ handle_notification! {
         } else {
             self.show_status("single file mode");
         }
+        Ok(())
     }
 
-    on Reparse(&mut self, _p) {
+    fn Reparse(&mut self, _p: N<Reparse>) -> NR {
         eprintln!();
         eprintln!("reparsing by request...");
         self.context.errors_mut().clear();
-        return self.Initialized(_p);
+        self.Initialized(_p)
     }
 
-    on Cancel(&mut self, _) { /* Not implemented, but don't log that. */ }
+    fn Cancel(&mut self, _: N<Cancel>) -> NR {
+        // Not implemented, but don't log that.
+        Ok(())
+    }
 
     // ------------------------------------------------------------------------
     // document content management
-    on DidOpenTextDocument(&mut self, params) {
+    fn DidOpenTextDocument(&mut self, params: N<DidOpenTextDocument>) -> NR {
         self.docs.open(params.text_document)?;
+        Ok(())
     }
 
-    on DidCloseTextDocument(&mut self, params) {
+    fn DidCloseTextDocument(&mut self, params: N<DidCloseTextDocument>) -> NR {
         let url = self.docs.close(params.text_document)?;
         self.annotations.remove(&url);
+        Ok(())
     }
 
-    on DidChangeTextDocument(&mut self, params) {
+    fn DidChangeTextDocument(&mut self, params: N<DidChangeTextDocument>) -> NR {
         let url = self.docs.change(params.text_document, params.content_changes)?;
         self.annotations.remove(&url);
+        Ok(())
     }
 
-    on DidChangeConfiguration(&mut self, params) {
+    fn DidChangeConfiguration(&mut self, params: N<DidChangeConfiguration>) -> NR {
         if let Some(extools_dll) = params.settings["dreammaker"]["extoolsDLL"]
             .as_str()
             .filter(|path| !path.trim().is_empty())
@@ -2094,6 +2175,7 @@ handle_notification! {
         {
             self.debug_server_dll = Some(debug_server_dll.to_owned());
         }
+        Ok(())
     }
 }
 
@@ -2195,7 +2277,7 @@ where
     T::Params: serde::Serialize,
 {
     let params = serde_json::to_value(params).expect("notification bad to_value");
-    let request = Request::Single(Call::Notification(jsonrpc::Notification {
+    let request = jsonrpc::Request::Single(Call::Notification(jsonrpc::Notification {
         jsonrpc: VERSION,
         method: T::METHOD.to_owned(),
         params: value_to_params(params),
