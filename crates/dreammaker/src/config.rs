@@ -185,7 +185,7 @@ impl PartialEq<Severity> for WarningLevel {
 
 impl Default for DebugEngine {
     fn default() -> Self {
-        Self::Extools
+        Self::Auxtools
     }
 }
 
