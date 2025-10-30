@@ -32,6 +32,7 @@ enum ExtoolsHolderInner {
     /// Used to avoid a layer of Option.
     None,
     Listening {
+        #[allow(dead_code)]
         port: u16,
         conn_rx: mpsc::Receiver<Extools>,
     },
@@ -292,6 +293,7 @@ impl Extools {
         self.sender.send(Pause);
     }
 
+    #[allow(dead_code)]
     pub fn get_reference_type(&self, reference: Ref) -> Result<String, Box<dyn Error>> {
         // TODO: error handling
         self.sender.send(GetType(reference));
@@ -431,20 +433,57 @@ impl ExtoolsThread {
     }
 }
 
-handle_extools! {
-    on Raw(&mut self, Raw(message)) {
+type R = Result<(), Box<dyn Error>>;
+
+macro_rules! handle_response_table {
+    ($($what:ident;)*) => {
+        fn handle_response_table(type_: &str) -> Option<fn(&mut Self, serde_json::Value) -> Result<(), Box<dyn Error>>> {
+            match type_ {
+                $(<$what as Response>::TYPE => {
+                    Some(|this, content| {
+                        let deserialized: $what = serde_json::from_value(content)?;
+                        this.$what(deserialized)
+                    })
+                },)*
+                _ => None
+            }
+        }
+    }
+}
+
+#[allow(non_snake_case)]
+impl ExtoolsThread {
+    handle_response_table! {
+        Raw;
+        BreakpointSet;
+        BreakpointUnset;
+        BreakpointHit;
+        Runtime;
+        CallStack;
+        DisassembledProc;
+        GetTypeResponse;
+        GetAllFieldsResponse;
+        ListContents;
+        GetSource;
+        BreakOnRuntime;
+    }
+
+    fn Raw(&mut self, Raw(message): Raw) -> R {
         output!(in self.seq, "[extools] Message: {}", message);
+        Ok(())
     }
 
-    on BreakpointSet(&mut self, BreakpointSet(_bp)) {
+    fn BreakpointSet(&mut self, BreakpointSet(_bp): BreakpointSet) -> R {
         debug_output!(in self.seq, "[extools] {}#{}@{} validated", _bp.proc, _bp.override_id, _bp.offset);
+        Ok(())
     }
 
-    on BreakpointUnset(&mut self, _) {
+    fn BreakpointUnset(&mut self, _: BreakpointUnset) -> R {
         // silent
+        Ok(())
     }
 
-    on BreakpointHit(&mut self, hit) {
+    fn BreakpointHit(&mut self, hit: BreakpointHit) -> R {
         match hit.reason {
             BreakpointHitReason::Step => {
                 self.stopped(dap_types::StoppedEvent {
@@ -467,9 +506,10 @@ handle_extools! {
                 });
             }
         }
+        Ok(())
     }
 
-    on Runtime(&mut self, runtime) {
+    fn Runtime(&mut self, runtime: Runtime) -> R {
         output!(in self.seq, "[extools] Runtime in {}: {}", runtime.proc, runtime.message);
         self.stopped(dap_types::StoppedEvent {
             reason: dap_types::StoppedEvent::REASON_EXCEPTION.to_owned(),
@@ -477,39 +517,47 @@ handle_extools! {
             .. Default::default()
         });
         self.queue(&self.runtime_tx, runtime);
+        Ok(())
     }
 
-    on CallStack(&mut self, stack) {
+    fn CallStack(&mut self, stack: CallStack) -> R {
         let mut map = self.threads.lock().unwrap();
         map.clear();
         map.entry(0).or_default().call_stack = stack.current;
         for (i, list) in stack.suspended.into_iter().enumerate() {
             map.entry((i + 1) as i64).or_default().call_stack = list;
         }
+        Ok(())
     }
 
-    on DisassembledProc(&mut self, disasm) {
+    fn DisassembledProc(&mut self, disasm: DisassembledProc) -> R {
         self.queue(&self.bytecode_tx, disasm);
+        Ok(())
     }
 
-    on GetTypeResponse(&mut self, response) {
+    fn GetTypeResponse(&mut self, response: GetTypeResponse) -> R {
         self.queue(&self.get_type_tx, response);
+        Ok(())
     }
 
-    on GetAllFieldsResponse(&mut self, response) {
+    fn GetAllFieldsResponse(&mut self, response: GetAllFieldsResponse) -> R {
         self.queue(&self.get_field_tx, response);
+        Ok(())
     }
 
-    on ListContents(&mut self, response) {
+    fn ListContents(&mut self, response: ListContents) -> R {
         self.queue(&self.get_list_contents_tx, response);
+        Ok(())
     }
 
-    on GetSource(&mut self, response) {
+    fn GetSource(&mut self, response: GetSource) -> R {
         self.queue(&self.get_source_tx, response);
+        Ok(())
     }
 
-    on BreakOnRuntime(&mut self, _) {
+    fn BreakOnRuntime(&mut self, _: BreakOnRuntime) -> R {
         // Either it worked or it didn't, nothing we can do about it now.
+        Ok(())
     }
 }
 

@@ -4,6 +4,7 @@
 //!
 //! > All communication happens over a TCP socket using a JSON-based protocol.
 //! > A null byte signifies the end of a message.
+#![allow(dead_code)]
 use serde_json::Value as Json;
 use foldhash::HashMap;
 

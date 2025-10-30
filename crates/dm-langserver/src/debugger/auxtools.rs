@@ -23,6 +23,7 @@ enum StreamState {
 }
 
 pub struct Auxtools {
+    #[allow(dead_code)]
     seq: Arc<SequenceNumber>,
     responses: mpsc::Receiver<Response>,
     _thread: JoinHandle<()>,
@@ -183,6 +184,7 @@ impl Auxtools {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_current_proc(&mut self, frame_id: u32) -> Result<Option<(String, u32)>, Box<dyn std::error::Error>> {
         self.send_or_disconnect(Request::CurrentInstruction { frame_id })?;
 
@@ -192,6 +194,7 @@ impl Auxtools {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_line_number(&mut self, path: &str, override_id: u32, offset: u32) -> Result<Option<u32>, Box<dyn std::error::Error>> {
         self.send_or_disconnect(Request::LineNumber {
             proc: ProcRef {
