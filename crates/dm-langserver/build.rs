@@ -84,6 +84,8 @@ fn download_dll(out_dir: &Path, fname: &str, tag: &str, url: &str, sha256: &str)
 
     std::io::copy(
         &mut ureq::get(url).call().expect("Error downloading DLL to bundle").into_reader(),
-        &mut std::fs::File::create(full_path).unwrap(),
+        &mut std::fs::File::create(&full_path).unwrap(),
     ).unwrap();
+
+    assert_eq!(sha256, sha256::try_digest(&full_path).unwrap());
 }
