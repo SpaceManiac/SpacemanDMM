@@ -44,8 +44,7 @@ fn main() {
 
         let crossover = if rhs != 0 && lhs != 0 {
             panic!(
-                "flags_1={}, item_flags={}, lhs={}, rhs={}",
-                flags_1, item_flags, lhs, rhs
+                "flags_1={flags_1}, item_flags={item_flags}, lhs={lhs}, rhs={rhs}"
             );
         } else if lhs != 0 {
             lhs
@@ -54,8 +53,7 @@ fn main() {
         };
 
         println!(
-            "flags_1={}, item_flags={}, crossover={}",
-            flags_1, item_flags, crossover
+            "flags_1={flags_1}, item_flags={item_flags}, crossover={crossover}"
         );
     });
 

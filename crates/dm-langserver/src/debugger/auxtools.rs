@@ -23,6 +23,7 @@ enum StreamState {
 }
 
 pub struct Auxtools {
+    #[allow(dead_code)]
     seq: Arc<SequenceNumber>,
     responses: mpsc::Receiver<Response>,
     _thread: JoinHandle<()>,
@@ -156,7 +157,7 @@ impl Auxtools {
         self.send_or_disconnect(Request::Configured)?;
 
         match self.read_response_or_disconnect()? {
-            Response::Ack { .. } => Ok(()),
+            Response::Ack => Ok(()),
             response => Err(Box::new(UnexpectedResponse::new("Ack", response))),
         }
     }
@@ -183,6 +184,7 @@ impl Auxtools {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_current_proc(&mut self, frame_id: u32) -> Result<Option<(String, u32)>, Box<dyn std::error::Error>> {
         self.send_or_disconnect(Request::CurrentInstruction { frame_id })?;
 
@@ -192,6 +194,7 @@ impl Auxtools {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_line_number(&mut self, path: &str, override_id: u32, offset: u32) -> Result<Option<u32>, Box<dyn std::error::Error>> {
         self.send_or_disconnect(Request::LineNumber {
             proc: ProcRef {
@@ -251,7 +254,7 @@ impl Auxtools {
         })?;
 
         match self.read_response_or_disconnect()? {
-            Response::Ack { .. } => Ok(()),
+            Response::Ack => Ok(()),
             response => Err(Box::new(UnexpectedResponse::new("Ack", response))),
         }
     }
@@ -262,7 +265,7 @@ impl Auxtools {
         })?;
 
         match self.read_response_or_disconnect()? {
-            Response::Ack { .. } => Ok(()),
+            Response::Ack => Ok(()),
             response => Err(Box::new(UnexpectedResponse::new("Ack", response))),
         }
     }
@@ -273,7 +276,7 @@ impl Auxtools {
         })?;
 
         match self.read_response_or_disconnect()? {
-            Response::Ack { .. } => Ok(()),
+            Response::Ack => Ok(()),
             response => Err(Box::new(UnexpectedResponse::new("Ack", response))),
         }
     }
@@ -284,7 +287,7 @@ impl Auxtools {
         })?;
 
         match self.read_response_or_disconnect()? {
-            Response::Ack { .. } => Ok(()),
+            Response::Ack => Ok(()),
             response => Err(Box::new(UnexpectedResponse::new("Ack", response))),
         }
     }
@@ -293,7 +296,7 @@ impl Auxtools {
         self.send_or_disconnect(Request::Pause)?;
 
         match self.read_response_or_disconnect()? {
-            Response::Ack { .. } => Ok(()),
+            Response::Ack => Ok(()),
             response => Err(Box::new(UnexpectedResponse::new("Ack", response))),
         }
     }
@@ -375,7 +378,7 @@ impl AuxtoolsThread {
                 match connection_sender.send(stream.try_clone().unwrap()) {
                     Ok(_) => {}
                     Err(e) => {
-                        eprintln!("Debug client thread failed to pass cloned TcpStream: {}", e);
+                        eprintln!("Debug client thread failed to pass cloned TcpStream: {e}");
                         return;
                     }
                 }
@@ -384,7 +387,7 @@ impl AuxtoolsThread {
             }
 
             Err(e) => {
-                eprintln!("Debug client failed to accept connection: {}", e);
+                eprintln!("Debug client failed to accept connection: {e}");
             }
         })
     }
@@ -444,7 +447,7 @@ impl AuxtoolsThread {
                 Ok(_) => u32::from_le_bytes(len_bytes),
 
                 Err(e) => {
-                    eprintln!("Debug server thread read error: {}", e);
+                    eprintln!("Debug server thread read error: {e}");
                     break;
                 }
             };
@@ -454,7 +457,7 @@ impl AuxtoolsThread {
                 Ok(_) => (),
 
                 Err(e) => {
-                    eprintln!("Debug server thread read error: {}", e);
+                    eprintln!("Debug server thread read error: {e}");
                     break;
                 }
             };
@@ -468,7 +471,7 @@ impl AuxtoolsThread {
                 }
 
                 Err(e) => {
-                    eprintln!("Debug server thread failed to handle request: {}", e);
+                    eprintln!("Debug server thread failed to handle request: {e}");
                     break;
                 }
             }
@@ -483,7 +486,7 @@ pub struct UnexpectedResponse(String);
 
 impl UnexpectedResponse {
     fn new(expected: &'static str, received: Response) -> Self {
-        Self(format!("received unexpected response: expected {}, got {:?}", expected, received))
+        Self(format!("received unexpected response: expected {expected}, got {received:?}"))
     }
 }
 

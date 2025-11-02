@@ -2,6 +2,7 @@
 
 use std::path::Path;
 
+use dm::ast::{InputType, ProcReturnType};
 use maud::{display, html, Markup, PreEscaped, Render, DOCTYPE};
 
 use crate::{markdown::DocBlock, Environment, Index, IndexTree, ModuleArgs, ModuleItem, Type};
@@ -83,21 +84,38 @@ fn teaser(block: &DocBlock, prefix: &str) -> Markup {
 }
 
 fn git_link(env: &Environment, file: &str, line: u32) -> Markup {
+    let z;
+    let title = if line == 0 {
+        file
+    } else {
+        z = format!("{file} {line}");
+        &z
+    };
     let icon = html! {
-        img src="git.png" width="16" height="16" title=(format!("{}{}{}", file, if line != 0 { " " } else { "" }, line));
+        img src="git.png" width="16" height="16" title=(title);
     };
     html! {
-        @if !file.is_empty() {
+        @if !file.is_empty() && file != "(builtins)" {
             " "
             @if !env.git.web_url.is_empty() && !env.git.revision.is_empty() {
-                a href=(format!(
-                    "{}/blob/{}/{}{}{}",
-                    env.git.web_url,
-                    env.git.revision,
-                    file,
-                    if line != 0 { "#L" } else { "" },
-                    line
-                )) {
+                a href=(
+                    if line == 0 {
+                        format!(
+                            "{}/blob/{}/{}",
+                            env.git.web_url,
+                            env.git.revision,
+                            file
+                        )
+                    } else {
+                        format!(
+                            "{}/blob/{}/{}#L{}",
+                            env.git.web_url,
+                            env.git.revision,
+                            file,
+                            line
+                        )
+                    }
+                ) {
                     (icon)
                 }
             } @else {
@@ -404,14 +422,20 @@ pub(crate) fn dm_type(ty: &Type) -> Markup {
                         }
                         (name)
                         @if let Some(ref ty) = var.type_ {
-                            " "
-                            aside {
-                                "\u{2013} "  // &ndash;
-                                @if ty.is_static { "/static" }
-                                @if ty.is_const { "/const" }
-                                @if ty.is_tmp { "/tmp" }
-                                @if ty.is_final { "/final" }
-                                (env.linkify_type_array(ty.path))
+                            @if ty.is_static || ty.is_const || ty.is_tmp || ty.is_final || !ty.path.is_empty() || !ty.input_type.is_empty() {
+                                " "
+                                aside {
+                                    "\u{2013} "  // &ndash;
+                                    @if ty.is_static { "/static" }
+                                    @if ty.is_const { "/const" }
+                                    @if ty.is_tmp { "/tmp" }
+                                    @if ty.is_final { "/final" }
+                                    (env.linkify_type_array(ty.path))
+                                    @if !ty.input_type.is_empty() {
+                                        span class="as" { " as " }
+                                        (render_input_type(env, ty.input_type))
+                                    }
+                                }
                             }
                         }
                         (git_link(env, &var.file.to_string_lossy(), var.line))
@@ -443,8 +467,25 @@ pub(crate) fn dm_type(ty: &Type) -> Markup {
                                     "/"
                                 }
                                 (param.name)
+                                @if let Some(input_type) = param.input_type {
+                                    @if !input_type.is_empty() {
+                                        span class="as" { " as " }
+                                        (render_input_type(env, input_type))
+                                    }
+                                }
                             }
                             ") "
+                            @match &proc.return_type {
+                                Some(ProcReturnType::InputType(i)) if !i.is_empty() => {
+                                    span class="as" { " as " }
+                                    (render_input_type(env, *i))
+                                },
+                                Some(ProcReturnType::TypePath(p)) => {
+                                    span class="as" { " as " }
+                                    (env.linkify_type_array(p))
+                                },
+                                _ => {},
+                            }
                             (git_link(env, &proc.file.to_string_lossy(), proc.line))
                         }
                     }
@@ -453,6 +494,48 @@ pub(crate) fn dm_type(ty: &Type) -> Markup {
             }
         }
     )
+}
+
+pub fn render_input_type(env: &Environment, input_type: InputType) -> Markup {
+    html! {
+        @for (i, &name) in matching_names(input_type).iter().enumerate() {
+            @if i > 0 { " | " }
+            @match name {
+                "mob" => (linkify_input_type(env, "mob", "/mob")),
+                "obj" => (linkify_input_type(env, "obj", "/obj")),
+                "turf" => (linkify_input_type(env, "turf", "/turf")),
+                "area" => (linkify_input_type(env, "area", "/area")),
+                //"icon" => (linkify_input_type(env, "icon", "/icon")),
+                //"sound" => (linkify_input_type(env, "sound", "/sound")),
+                "movable" => (linkify_input_type(env, "movable", "/atom/movable")),
+                "atom" => (linkify_input_type(env, "atom", "/atom")),
+                "list" => (linkify_input_type(env, "list", "/list")),
+                _ => (name),
+            }
+        }
+    }
+}
+
+fn linkify_input_type(env: &Environment, show: &str, typepath: &str) -> Markup {
+    if env.all_type_names.contains(typepath) {
+        html! {
+            a href=(format!("{}.html", &typepath[1..])) { (show) }
+        }
+    } else {
+        html! { (show) }
+    }
+}
+
+fn matching_names(mut input_type: InputType) -> Vec<&'static str> {
+    let mut result = Vec::with_capacity(input_type.bits().count_ones() as usize);
+    for &(name, value) in InputType::ENTRIES.iter().rev() {
+        if input_type.contains(value) {
+            input_type.remove(value);
+            result.push(name);
+        }
+    }
+    result.reverse();
+    result
 }
 
 pub fn save_resources(output_path: &Path) -> std::io::Result<()> {

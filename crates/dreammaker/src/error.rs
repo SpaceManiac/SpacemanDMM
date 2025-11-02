@@ -1,11 +1,9 @@
 //! Error, warning, and other diagnostics handling.
 
 use std::cell::{Ref, RefCell, RefMut};
-use std::collections::HashMap;
+use foldhash::HashMap;
 use std::path::{Path, PathBuf};
 use std::{error, fmt, io};
-
-use ahash::RandomState;
 
 use get_size::GetSize;
 use get_size_derive::GetSize;
@@ -36,7 +34,7 @@ pub struct FileList {
     /// The list of loaded files.
     files: RefCell<Vec<PathBuf>>,
     /// Reverse mapping from paths to file numbers.
-    reverse_files: RefCell<HashMap<PathBuf, FileId, RandomState>>,
+    reverse_files: RefCell<HashMap<PathBuf, FileId>>,
 }
 
 /// A diagnostics context, tracking loaded files and any observed errors.
@@ -46,7 +44,7 @@ pub struct Context {
     /// A list of errors, warnings, and other diagnostics generated.
     errors: RefCell<Vec<DMError>>,
     /// Warning config
-    config: RefCell<Config>,
+    config: Config,
     print_severity: Option<Severity>,
 
     io_time: std::cell::Cell<std::time::Duration>,
@@ -75,16 +73,16 @@ impl FileList {
     }
 
     /// Look up a file path by its index returned from `register_file`.
-    pub fn get_path(&self, file: FileId) -> PathBuf {
+    pub fn get_path(&self, file: FileId) -> Ref<'_, Path> {
+        let files = self.files.borrow();
         if file == FILEID_BUILTINS {
-            return "(builtins)".into();
+            return Ref::map(files, |_| Path::new("(builtins)"));
         }
         let idx = (file.0 - FILEID_MIN.0) as usize;
-        let files = self.files.borrow();
         if idx > files.len() {
-            "(unknown)".into()
+            Ref::map(files, |_| Path::new("(unknown)"))
         } else {
-            files[idx].to_owned()
+            Ref::map(files, |files| files[idx].as_path())
         }
     }
 
@@ -110,7 +108,7 @@ impl Context {
     }
 
     /// Look up a file path by its index returned from `register_file`.
-    pub fn file_path(&self, file: FileId) -> PathBuf {
+    pub fn file_path(&self, file: FileId) -> Ref<'_, Path> {
         self.files.get_path(file)
     }
 
@@ -126,9 +124,9 @@ impl Context {
     // ------------------------------------------------------------------------
     // Configuration
 
-    pub fn force_config(&self, toml: &Path) {
+    pub fn force_config(&mut self, toml: &Path) {
         match Config::read_toml(toml) {
-            Ok(config) => *self.config.borrow_mut() = config,
+            Ok(config) => self.config = config,
             Err(io_error) => {
                 let file = self.register_file(toml);
                 let (line, column) = io_error.line_col().unwrap_or((1, 1));
@@ -139,15 +137,15 @@ impl Context {
         }
     }
 
-    pub fn autodetect_config(&self, dme: &Path) {
+    pub fn autodetect_config(&mut self, dme: &Path) {
         let toml = dme.parent().unwrap().join("SpacemanDMM.toml");
         if toml.exists() {
             self.force_config(&toml);
         }
     }
 
-    pub fn config(&self) -> Ref<Config> {
-        self.config.borrow()
+    pub fn config(&self) -> &Config {
+        &self.config
     }
 
     /// Set a severity at and above which errors will be printed immediately.
@@ -175,11 +173,11 @@ impl Context {
 
     /// Push an error or other diagnostic to the context.
     pub fn register_error(&self, error: DMError) {
-        let Some(error) = self.config.borrow().set_configured_severity(error) else {
+        let Some(error) = self.config.set_configured_severity(error) else {
             return // errortype is disabled
         };
         // ignore errors with severity above configured level
-        if !self.config.borrow().registerable_error(&error) {
+        if !self.config.registerable_error(&error) {
             return
         }
         if let Some(print_severity) = self.print_severity {
@@ -193,13 +191,13 @@ impl Context {
     }
 
     /// Access the list of diagnostics generated so far.
-    pub fn errors(&self) -> Ref<[DMError]> {
+    pub fn errors(&self) -> Ref<'_, [DMError]> {
         Ref::map(self.errors.borrow(), |x| &**x)
     }
 
     /// Mutably access the diagnostics list. Dangerous.
     #[doc(hidden)]
-    pub fn errors_mut(&self) -> RefMut<Vec<DMError>> {
+    pub fn errors_mut(&self) -> RefMut<'_, Vec<DMError>> {
         self.errors.borrow_mut()
     }
 

@@ -2,7 +2,7 @@
 name = "builtins-proc-macro"
 version = "0.0.0"
 authors = ["Tad Hardesty <tad@platymuus.com>"]
-edition = "2018"
+edition = "2021"
 
 [lib]
 proc-macro = true
@@ -10,4 +10,4 @@ proc-macro = true
 [dependencies]
 syn = { version = "1.0", features = ["full"] }
 quote = "1.0"
-proc-macro2 = "1.0.43"
+proc-macro2 = "1.0.89"

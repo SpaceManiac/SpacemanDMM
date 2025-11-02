@@ -1,15 +1,13 @@
 //! The symbol table used for "Find References" support.
 
-use std::collections::HashMap;
+use foldhash::{HashMap, HashMapExt};
 
 use dm::ast::*;
 use dm::objtree::*;
 use dm::Location;
 
-use ahash::RandomState;
-
 pub struct ReferencesTable {
-    uses: HashMap<SymbolId, References, RandomState>,
+    uses: HashMap<SymbolId, References>,
     symbols: SymbolIdSource,
 }
 
@@ -22,7 +20,7 @@ struct References {
 impl ReferencesTable {
     pub fn new(objtree: &ObjectTree) -> Self {
         let mut tab = ReferencesTable {
-            uses: HashMap::with_hasher(RandomState::default()),
+            uses: HashMap::new(),
             symbols: SymbolIdSource::new(SymbolIdCategory::LocalVars),
         };
 
@@ -134,12 +132,12 @@ struct WalkProc<'o> {
     objtree: &'o ObjectTree,
     ty: TypeRef<'o>,
     proc: Option<ProcRef<'o>>,
-    local_vars: HashMap<String, Local<'o>, RandomState>,
+    local_vars: HashMap<String, Local<'o>>,
 }
 
 impl<'o> WalkProc<'o> {
     fn from_proc(tab: &'o mut ReferencesTable, objtree: &'o ObjectTree, proc: ProcRef<'o>) -> Self {
-        let mut local_vars = HashMap::with_hasher(RandomState::default());
+        let mut local_vars = HashMap::new();
         local_vars.insert("global".to_owned(), Local {
             ty: StaticType::Type(objtree.root()),
             symbol: objtree.root().id,
@@ -175,7 +173,7 @@ impl<'o> WalkProc<'o> {
     }
 
     fn from_ty(tab: &'o mut ReferencesTable, objtree: &'o ObjectTree, ty: TypeRef<'o>) -> Self {
-        let mut local_vars = HashMap::with_hasher(RandomState::default());
+        let mut local_vars = HashMap::new();
         local_vars.insert("global".to_owned(), Local {
             ty: StaticType::Type(objtree.root()),
             symbol: objtree.root().id,
@@ -328,6 +326,24 @@ impl<'o> WalkProc<'o> {
             Statement::Crash(_) => {},
             Statement::Label { name: _, block } => self.visit_block(block),
             Statement::Del(expr) => { self.visit_expression(location, expr, None); },
+            Statement::ForKeyValue(for_key_value) => {
+                let ForKeyValueStatement { var_type, key, value, in_list, block } = &**for_key_value;
+                if let Some(in_list) = in_list {
+                    self.visit_expression(location, in_list, None);
+                }
+                if let Some(var_type) = var_type {
+                    self.visit_var(location, var_type, key, None);
+                }
+                // the "v" in a DM for (var/k, v) statement is essentially typeless.
+                // There is currently no way to change that.
+                let var_type_value = VarType {
+                    flags: VarTypeFlags::from_bits_truncate(0),
+                    type_path: Box::new([]),
+                    input_type: InputType::from_bits_truncate(0),
+                };
+                self.visit_var(location, &var_type_value, value, None);
+                self.visit_block(block);
+            },
         }
     }
 
@@ -521,9 +537,11 @@ impl<'o> WalkProc<'o> {
                 self.visit_arguments(location, args_2);
                 StaticType::None
             },
-            Term::ExternalCall { library_name, function_name, args } => {
-                self.visit_expression(location, library_name, None);
-                self.visit_expression(location, function_name, None);
+            Term::ExternalCall { library, function, args } => {
+                if let Some(library) = library {
+                    self.visit_expression(location, library, None);
+                }
+                self.visit_expression(location, function, None);
                 self.visit_arguments(location, args);
                 StaticType::None
             },

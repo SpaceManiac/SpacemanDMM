@@ -8,10 +8,12 @@ extern crate walkdir;
 mod markdown;
 mod template;
 
+use dm::ast::{InputType, ProcReturnType};
 use dm::objtree::ObjectTree;
 use maud::{Markup, PreEscaped};
 use pulldown_cmark::{BrokenLink, CowStr};
 use std::collections::{BTreeMap, BTreeSet};
+use foldhash::HashSet;
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -22,7 +24,7 @@ use dm::docs::*;
 use markdown::DocBlock;
 
 const BUILD_INFO: &str = concat!(
-    "dmdoc ", env!("CARGO_PKG_VERSION"), "  Copyright (C) 2017-2024  Tad Hardesty\n",
+    "dmdoc ", env!("CARGO_PKG_VERSION"), "  Copyright (C) 2017-2025  Tad Hardesty\n",
     include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")), "\n",
     "This program comes with ABSOLUTELY NO WARRANTY. This is free software,\n",
     "and you are welcome to redistribute it under the conditions of the GNU\n",
@@ -36,7 +38,7 @@ const DM_REFERENCE_BASE: &str = "https://www.byond.com/docs/ref/#";
 
 fn main() {
     if let Err(e) = main2() {
-        eprintln!("{}", e);
+        eprintln!("{e}");
         std::process::exit(1);
     }
 }
@@ -52,7 +54,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     let _ = args.next();  // skip executable name
     while let Some(arg) = args.next() {
         if arg == "-V" || arg == "--version" {
-            println!("{}", BUILD_INFO);
+            println!("{BUILD_INFO}");
             return Ok(());
         } else if arg == "-e" {
             environment = Some(args.next().expect("must specify a value for -e"));
@@ -63,7 +65,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         } else if arg == "--dry-run" {
             dry_run = true;
         } else {
-            return Err(format!("unknown argument: {}", arg).into());
+            return Err(format!("unknown argument: {arg}").into());
         }
     }
 
@@ -82,12 +84,13 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     println!("parsing {}", environment.display());
 
     let mut context = dm::Context::default();
-    context.autodetect_config(&environment);
     context.set_print_severity(Some(dm::Severity::Error));
+    context.autodetect_config(&environment);
     let mut pp = dm::preprocessor::Preprocessor::new(&context, environment.clone())?;
     let (objtree, module_docs) = {
         let indents = dm::indents::IndentProcessor::new(&context, &mut pp);
-        let parser = dm::parser::Parser::new(&context, indents);
+        let mut parser = dm::parser::Parser::new(&context, indents);
+        parser.enable_procs();  // for `set SpacemanDMM_return_type`
         parser.parse_with_module_docs()
     };
     let define_history = pp.finalize();
@@ -98,7 +101,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         index_path.clone_from(&context.config().dmdoc.index_file);
     }
 
-    let mut code_directories: std::collections::HashSet<std::ffi::OsString>;
+    let mut code_directories: HashSet<std::ffi::OsString>;
     if context.config().dmdoc.module_directories.is_empty() {
         // Any top-level directory which is `#include`d in the `.dme` (most
         // importantly "code", but also "_maps", "interface", and any downstream
@@ -202,7 +205,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         if docs.is_empty() {
             continue;
         }
-        error_entity_put(format!("#define {}", name));
+        error_entity_put(format!("#define {name}"));
         let broken_link_callback = &mut |link: BrokenLink| -> Option<(CowStr, CowStr)> {
             broken_link_fixer(link, &macro_to_module_map, &macro_exists, &diagnostic_count, &error_entity, &modules_which_exist, &objtree, &types_with_docs)
         };
@@ -348,13 +351,14 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                     //is_private: decl.var_type.flags.is_private(),
                     //is_protected: decl.var_type.flags.is_protected(),
                     path: &decl.var_type.type_path,
+                    input_type: decl.var_type.input_type,
                 });
                 parsed_type.vars.insert(name, Var {
                     docs: block,
                     type_,
                     // but `decl` is only used if it's on this type
                     decl: if var.declaration.is_some() { "var" } else { "" },
-                    file: context.file_path(var.value.location.file),
+                    file: context.file_path(var.value.location.file).to_owned(),
                     line: var.value.location.line,
                     parent,
                 });
@@ -398,19 +402,29 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                     ));
                 }
 
+                let return_type = proc.declaration.as_ref()
+                    .map(|decl| &decl.return_type)
+                    .filter(|ret| !ret.is_empty())
+                    .cloned() // could use Cow maybe
+                    .or_else(|| {
+                        proc_value.code.as_ref().and_then(find_return_type).map(ProcReturnType::TypePath)
+                    });
+
                 // add the proc to the type containing it
                 parsed_type.procs.insert(name, Proc {
                     docs: block,
                     params: proc_value.parameters.iter().map(|p| Param {
                         name: p.name.clone(),
                         type_path: format_type_path(&p.var_type.type_path),
+                        input_type: p.input_type,
                     }).collect(),
                     decl: match proc.declaration {
                         Some(ref decl) => decl.kind.name(),
                         None => "",
                     },
-                    file: context.file_path(proc_value.location.file),
+                    file: context.file_path(proc_value.location.file).to_owned(),
                     line: proc_value.location.line,
+                    return_type,
                     parent,
                 });
                 anything = true;
@@ -432,7 +446,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         if anything {
-            parsed_type.file = context.file_path(ty.location.file);
+            parsed_type.file = context.file_path(ty.location.file).to_owned();
             parsed_type.line = ty.location.line;
             parsed_type.substance = substance;
             if substance {
@@ -607,7 +621,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(world_name);
     let mut git = Default::default();
     if let Err(e) = git_info(&mut git) {
-        println!("incomplete git info: {}", e);
+        println!("incomplete git info: {e}");
     }
     let env = &Environment {
         all_type_names: &all_type_names,
@@ -704,6 +718,22 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn find_return_type(code: &dm::ast::Block) -> Option<Vec<String>> {
+    for stmt in code.iter() {
+        if let dm::ast::Statement::Setting { name, mode: dm::ast::SettingMode::Assign, value } = &stmt.elem {
+            if name.as_str() == "SpacemanDMM_return_type" {
+                if let Some(dm::ast::Term::Prefab(fab)) = value.as_term() {
+                    let bits: Vec<_> = fab.path.iter().map(|(_, name)| name.to_owned()).collect();
+                    return Some(bits);
+                }
+            }
+        } else {
+            break;
+        }
+    }
+    None
+}
+
 // reference & other captures -> (href, tooltip)
 // this function's purpose is to prevent code copying in above closures
 #[allow(clippy::too_many_arguments)]
@@ -723,20 +753,20 @@ fn broken_link_fixer<'str>(
         let error_entity_print = || {
             diagnostic_count.set(diagnostic_count.get() + 1);
             if let Some(name) = error_entity.take() {
-                eprintln!("{}:", name);
+                eprintln!("{name}:");
             }
         };
         // macros
         if let Some(module) = macro_to_module_map.get(reference) {
-            return Some((format!("{}.html#define/{}", module, reference).into(), reference.to_owned().into()));
+            return Some((format!("{module}.html#define/{reference}").into(), reference.to_owned().into()));
         } else if macro_exists.contains(reference) {
             error_entity_print();
-            eprintln!("    [{}]: macro not documented", reference);
+            eprintln!("    [{reference}]: macro not documented");
             return None;
         } else if reference.ends_with(".dm") || reference.ends_with(".txt") || reference.ends_with(".md") {
             let mod_path = module_path(reference.as_ref());
             if modules_which_exist.contains(&mod_path) {
-                return Some((format!("{}.html", mod_path).into(), reference.to_owned().into()));
+                return Some((format!("{mod_path}.html").into(), reference.to_owned().into()));
             }
             error_entity_print();
             eprintln!("    [{}]: module {}", reference, if Path::new(reference).exists() { "not documented" } else { "does not exist" });
@@ -783,14 +813,14 @@ fn broken_link_fixer<'str>(
                     proc_name = Some(rest);
                     ty_path = parent;
                     error_entity_print();
-                    eprintln!("    [{}]: correcting to [{}/proc/{}]", reference, parent, rest);
+                    eprintln!("    [{reference}]: correcting to [{parent}/proc/{rest}]");
                     entity_exists = true;
                 } else if ty.vars.contains_key(rest) {
                     // correct `[/ty/varname]` to `[/ty/var/varname]`
                     var_name = Some(rest);
                     ty_path = parent;
                     error_entity_print();
-                    eprintln!("    [{}]: correcting to [{}/var/{}]", reference, parent, rest);
+                    eprintln!("    [{reference}]: correcting to [{parent}/var/{rest}]");
                     entity_exists = true;
                 }
             }
@@ -798,7 +828,7 @@ fn broken_link_fixer<'str>(
             ty_path = "";
             var_name = Some(reference);
             error_entity_print();
-            eprintln!("    [{0}]: correcting to [/var/{0}]", reference);
+            eprintln!("    [{reference}]: correcting to [/var/{reference}]");
             entity_exists = true;
         }
         // else `[/ty]`
@@ -814,7 +844,7 @@ fn broken_link_fixer<'str>(
                         if var.location.is_builtins() {
                             external_url = Some(match var.docs.builtin_docs {
                                 BuiltinDocs::None => format!("{}{}/var/{}", DM_REFERENCE_BASE, ty.path, var_name),
-                                BuiltinDocs::ReferenceHash(hash) => format!("{}{}", DM_REFERENCE_BASE, hash),
+                                BuiltinDocs::ReferenceHash(hash) => format!("{DM_REFERENCE_BASE}{hash}"),
                             })
                         }
                     }
@@ -823,14 +853,14 @@ fn broken_link_fixer<'str>(
                         if proc.location.is_builtins() {
                             external_url = Some(match proc.docs.builtin_docs {
                                 BuiltinDocs::None => format!("{}{}/proc/{}", DM_REFERENCE_BASE, ty.path, proc_name),
-                                BuiltinDocs::ReferenceHash(hash) => format!("{}{}", DM_REFERENCE_BASE, hash),
+                                BuiltinDocs::ReferenceHash(hash) => format!("{DM_REFERENCE_BASE}{hash}"),
                             })
                         }
                     }
                 } else if ty.location.is_builtins() {
                     external_url = Some(match ty.docs.builtin_docs {
                         BuiltinDocs::None => format!("{}{}", DM_REFERENCE_BASE, ty.path),
-                        BuiltinDocs::ReferenceHash(hash) => format!("{}{}", DM_REFERENCE_BASE, hash),
+                        BuiltinDocs::ReferenceHash(hash) => format!("{DM_REFERENCE_BASE}{hash}"),
                     })
                 }
             }
@@ -885,9 +915,9 @@ fn broken_link_fixer<'str>(
                     eprint!("    [{}]: unknown crosslink, guessing [{}", reference, &progress[..best]);
                 }
                 if let Some(proc_name) = proc_name {
-                    eprint!("/proc/{}", proc_name);
+                    eprint!("/proc/{proc_name}");
                 } else if let Some(var_name) = var_name {
-                    eprint!("/var/{}", var_name);
+                    eprint!("/var/{var_name}");
                 }
                 eprintln!("]");
                 progress.truncate(best);
@@ -895,9 +925,9 @@ fn broken_link_fixer<'str>(
 
             let mut href = format!("{}.html", &progress[1..]);
             if let Some(proc_name) = proc_name {
-                let _ = write!(href, "#proc/{}", proc_name);
+                let _ = write!(href, "#proc/{proc_name}");
             } else if let Some(var_name) = var_name {
-                let _ = write!(href, "#var/{}", var_name);
+                let _ = write!(href, "#var/{var_name}");
             }
             Some((href.into(), progress.into()))
         } else if let Some(external) = external_url {
@@ -905,9 +935,9 @@ fn broken_link_fixer<'str>(
         } else {
             error_entity_print();
             if entity_exists {
-                eprintln!("    [{}]: not documented", reference);
+                eprintln!("    [{reference}]: not documented");
             } else {
-                eprintln!("    [{}]: unknown crosslink", reference);
+                eprintln!("    [{reference}]: unknown crosslink");
             }
             None
         }
@@ -918,7 +948,7 @@ fn broken_link_fixer<'str>(
 
 fn module_path(path: &Path) -> String {
     let mut path = path.with_extension("");
-    if path.file_name().map_or(false, |x| x.to_string_lossy().eq_ignore_ascii_case("README")) {
+    if path.file_name().is_some_and(|x| x.to_string_lossy().eq_ignore_ascii_case("README")) {
         path.pop();
     }
     path.display().to_string().replace('\\', "/")
@@ -964,6 +994,11 @@ fn linkify_type<'a, I: Iterator<Item=&'a str>>(all_type_names: &BTreeSet<String>
                 &all_progress[1..],
                 &progress[1..]
             );
+            progress.clear();
+        } else if all_progress == "/list" {
+            // Let `/list/datum` resolve to `/list/<a href="/datum.html">datum</a>`.
+            output.push_str("/list");
+            all_progress.clear();
             progress.clear();
         }
     }
@@ -1012,7 +1047,7 @@ fn git_info(git: &mut Git) -> Result<(), git2::Error> {
     let upstream_oid = upstream.get().peel_to_commit()?.id();
     let upstream_name = req!(upstream.name()?);
     if repo.merge_base(head_oid, upstream_oid)? != head_oid {
-        println!("incomplete git info: HEAD is not an ancestor of {}", upstream_name);
+        println!("incomplete git info: HEAD is not an ancestor of {upstream_name}");
         return Ok(());
     }
 
@@ -1044,7 +1079,7 @@ fn git_info(git: &mut Git) -> Result<(), git2::Error> {
         if colon >= at {
             git.web_url = format!("https://{}/{}", &url[at + 1..colon], &url[colon + 1..]);
         } else {
-            println!("incomplete git info: weird SSH path: {}", url);
+            println!("incomplete git info: weird SSH path: {url}");
         }
     }
     Ok(())
@@ -1162,7 +1197,7 @@ fn combine(stack: &mut Vec<IndexTree>, to: usize) {
 }
 
 fn last_element(path: &str) -> &str {
-    path.split('/').last().unwrap_or("")
+    path.split('/').next_back().unwrap_or("")
 }
 
 // ----------------------------------------------------------------------------
@@ -1284,6 +1319,7 @@ struct VarType<'a> {
     //is_private: bool,
     //is_protected: bool,
     path: &'a [String],
+    input_type: InputType,
 }
 
 struct Proc {
@@ -1293,11 +1329,13 @@ struct Proc {
     file: PathBuf,
     line: u32,
     parent: Option<String>,
+    return_type: Option<ProcReturnType>,
 }
 
 struct Param {
     name: String,
     type_path: String,
+    input_type: Option<InputType>,
 }
 
 /// Module struct exposed to templates.

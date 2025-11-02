@@ -1,20 +1,21 @@
 [package]
 name = "dmdoc"
-version = "1.9.0"
-authors = ["Tad Hardesty <tad@platymuus.com>"]
 homepage = "https://github.com/SpaceManiac/SpacemanDMM/blob/master/crates/dmdoc/README.md"
-edition = "2018"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
 
 [dependencies]
 dreammaker = { path = "../dreammaker" }
-pulldown-cmark = "0.9.2"
-walkdir = "2.3.2"
-git2 = { version = "0.18.2", default-features = false }
-maud = "0.25.0"
+pulldown-cmark = "0.9.6"
+walkdir = "2.5.0"
+git2 = { version = "0.20.2", default-features = false }
+maud = "0.27.0"
+foldhash = "0.2.0"
 
 [dev-dependencies]
-walkdir = "2.3.2"
+walkdir = "2.5.0"
 
 [build-dependencies]
-chrono = "0.4.22"
-git2 = { version = "0.18.2", default-features = false }
+chrono = "0.4.38"
+git2 = { version = "0.20.2", default-features = false }

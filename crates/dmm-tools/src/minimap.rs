@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::sync::RwLock;
 
 use ndarray::Axis;
@@ -10,7 +10,7 @@ use crate::render_passes::RenderPass;
 use dm::constants::Constant;
 use dm::objtree::*;
 
-use ahash::RandomState;
+use foldhash::HashSet;
 
 const TILE_SIZE: u32 = 32;
 
@@ -25,7 +25,7 @@ pub struct Context<'a> {
     pub min: (usize, usize),
     pub max: (usize, usize),
     pub render_passes: &'a [Box<dyn RenderPass>],
-    pub errors: &'a RwLock<HashSet<String, RandomState>>,
+    pub errors: &'a RwLock<HashSet<String>>,
     pub bump: &'a bumpalo::Bump,
 }
 
@@ -125,17 +125,22 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
     drop(underlays);
     drop(overlays);
 
-    // sorts the atom list and renders them onto the output image
-    sprites.sort_by_key(|(_, s)| (s.plane, s.layer));
-
-    let mut map_image = Image::new_rgba(len_x as u32 * TILE_SIZE, len_y as u32 * TILE_SIZE);
-    'sprite: for (loc, sprite) in sprites {
+    // Drop sprites rejected by any render pass.
+    sprites.retain(|(_, sprite)| {
         for pass in render_passes.iter() {
-            if !pass.sprite_filter(&sprite) {
-                continue 'sprite;
+            if !pass.sprite_filter(sprite) {
+                return false;
             }
         }
+        true
+    });
 
+    // Sort the sprite list by depth.
+    sprites.sort_by_key(|(_, s)| (s.plane, s.layer));
+
+    // Composite the sorted sprites onto the output image.
+    let mut map_image = Image::new_rgba(len_x as u32 * TILE_SIZE, len_y as u32 * TILE_SIZE);
+    for ((x, y), sprite) in sprites {
         let icon_file = match icon_cache.retrieve_shared(sprite.icon.as_ref()) {
             Some(icon_file) => icon_file,
             None => continue,
@@ -145,8 +150,8 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
             let pixel_x = sprite.ofs_x;
             let pixel_y = sprite.ofs_y + icon_file.metadata.height as i32;
             let loc = (
-                ((loc.0 - ctx.min.0 as u32) * TILE_SIZE) as i32 + pixel_x,
-                ((loc.1 + 1 - min_y as u32) * TILE_SIZE) as i32 - pixel_y,
+                ((x - ctx.min.0 as u32) * TILE_SIZE) as i32 + pixel_x,
+                ((y + 1 - min_y as u32) * TILE_SIZE) as i32 - pixel_y,
             );
 
             if let Some((loc, rect)) = clip((map_image.width, map_image.height), loc, rect) {
@@ -155,7 +160,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
         } else {
             let key = format!("bad icon: {:?}, state: {:?}", sprite.icon, sprite.icon_state);
             if !ctx.errors.read().unwrap().contains(&key) {
-                eprintln!("{}", key);
+                eprintln!("{key}");
                 ctx.errors.write().unwrap().insert(key);
             }
         }
@@ -168,31 +173,21 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
 fn clip(bounds: dmi::Coordinate, mut loc: (i32, i32), mut rect: dmi::Rect) -> Option<(dmi::Coordinate, dmi::Rect)> {
     if loc.0 < 0 {
         rect.0 += (-loc.0) as u32;
-        match rect.2.checked_sub((-loc.0) as u32) {
-            Some(s) => rect.2 = s,
-            None => return None,  // out of the viewport
-        }
+        rect.2 = rect.2.checked_sub((-loc.0) as u32)?;
         loc.0 = 0;
     }
-    while loc.0 + rect.2 as i32 > bounds.0 as i32 {
-        rect.2 -= 1;
-        if rect.2 == 0 {
-            return None;
-        }
+    let overhang = loc.0 + rect.2 as i32 - bounds.0 as i32;
+    if overhang > 0 {
+        rect.2 = rect.2.checked_sub(overhang as u32)?;
     }
     if loc.1 < 0 {
         rect.1 += (-loc.1) as u32;
-        match rect.3.checked_sub((-loc.1) as u32) {
-            Some(s) => rect.3 = s,
-            None => return None,  // out of the viewport
-        }
+        rect.3 = rect.3.checked_sub((-loc.1) as u32)?;
         loc.1 = 0;
     }
-    while loc.1 + rect.3 as i32 > bounds.1 as i32 {
-        rect.3 -= 1;
-        if rect.3 == 0 {
-            return None;
-        }
+    let overhang = loc.1 + rect.3 as i32 - bounds.1 as i32;
+    if overhang > 0 {
+        rect.3 = rect.3.checked_sub(overhang as u32)?;
     }
     Some(((loc.0 as u32, loc.1 as u32), rect))
 }
@@ -201,7 +196,7 @@ fn get_atom_list<'a>(
     objtree: &'a ObjectTree,
     prefabs: &'a [Prefab],
     render_passes: &[Box<dyn RenderPass>],
-    errors: &RwLock<HashSet<String, RandomState>>,
+    errors: &RwLock<HashSet<String>>,
 ) -> Vec<Atom<'a>> {
     let mut result = Vec::new();
 
@@ -218,7 +213,7 @@ fn get_atom_list<'a>(
             None => {
                 let key = format!("bad path: {}", fab.path);
                 if !errors.read().unwrap().contains(&key) {
-                    println!("{}", key);
+                    println!("{key}");
                     errors.write().unwrap().insert(key);
                 }
                 continue;
@@ -263,7 +258,7 @@ impl<'a> Atom<'a> {
     }
 
     pub fn istype(&self, parent: &str) -> bool {
-        subpath(&self.type_.path, parent)
+        ispath(&self.type_.path, parent)
     }
 }
 
@@ -412,45 +407,6 @@ impl<'a> GetVar<'a> for TypeRef<'a> {
 // ----------------------------------------------------------------------------
 // Renderer-agnostic sprite structure
 
-/// Information about when a sprite should be shown or hidden.
-#[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub struct Category {
-    raw: u32,
-}
-
-impl Category {
-    const AREA: Category = Category { raw: 1 };
-    const TURF: Category = Category { raw: 2 };
-    const OBJ: Category = Category { raw: 3 };
-    const MOB: Category = Category { raw: 4 };
-
-    pub fn from_path(path: &str) -> Category {
-        if path.starts_with("/area") {
-            Category::AREA
-        } else if path.starts_with("/turf") {
-            Category::TURF
-        } else if path.starts_with("/obj") {
-            Category::OBJ
-        } else if path.starts_with("/mob") {
-            Category::MOB
-        } else {
-            Category { raw: 0 }
-        }
-    }
-
-    /// Encode this category for FFI representation.
-    pub fn matches_basic_layers(self, visible: &[bool]) -> bool {
-        visible.get(self.raw as usize).copied().unwrap_or(false)
-    }
-}
-
-#[cfg(feature="gfx_core")]
-impl gfx_core::shade::BaseTyped for Category {
-    fn get_base_type() -> gfx_core::shade::BaseType {
-        u32::get_base_type()
-    }
-}
-
 /// A guaranteed sortable representation of a `layer` float.
 #[derive(Default, Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct Layer {
@@ -490,9 +446,6 @@ impl gfx_core::shade::BaseTyped for Layer {
 /// overlays.
 #[derive(Debug, Clone)]
 pub struct Sprite<'s> {
-    // filtering
-    pub category: Category,
-
     // visual appearance
     pub icon: &'s str,
     pub icon_state: &'s str,
@@ -518,7 +471,6 @@ impl<'s> Sprite<'s> {
         let step_y = vars.get_var("step_y", objtree).to_int().unwrap_or(0);
 
         Sprite {
-            category: Category::from_path(vars.get_path()),
             icon: vars.get_var("icon", objtree).as_path_str().unwrap_or(""),
             icon_state: vars.get_var("icon_state", objtree).as_str().unwrap_or(""),
             dir: vars.get_var("dir", objtree).to_int().and_then(Dir::from_int).unwrap_or_default(),
@@ -534,7 +486,6 @@ impl<'s> Sprite<'s> {
 impl<'s> Default for Sprite<'s> {
     fn default() -> Self {
         Sprite {
-            category: Category::default(),
             icon: "",
             icon_state: "",
             dir: Dir::default(),

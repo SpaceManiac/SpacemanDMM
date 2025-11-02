@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 
-use ahash::RandomState;
+use foldhash::fast::RandomState;
 use indexmap::IndexMap;
 use ndarray::{self, Array3, Axis};
 
@@ -146,7 +146,7 @@ impl std::hash::Hash for Prefab {
 
 impl Map {
     pub fn new(x: usize, y: usize, z: usize, turf: String, area: String) -> Map {
-        assert!(x > 0 && y > 0 && z > 0, "({}, {}, {})", x, y, z);
+        assert!(x > 0 && y > 0 && z > 0, "({x}, {y}, {z})");
 
         let mut dictionary = BTreeMap::new();
         dictionary.insert(Key(0), vec![
@@ -218,7 +218,7 @@ impl Map {
     }
 
     #[inline]
-    pub fn z_level(&self, z: usize) -> ZLevel {
+    pub fn z_level(&self, z: usize) -> ZLevel<'_> {
         ZLevel { grid: self.grid.index_axis(Axis(0), z) }
     }
 
@@ -281,7 +281,7 @@ impl fmt::Display for Prefab {
                 if f.alternate() {
                     f.write_str("\n    ")?;
                 }
-                write!(f, "{} = {}", k, v)?;
+                write!(f, "{k} = {v}")?;
             }
             if f.alternate() {
                 f.write_str("\n")?;
@@ -306,7 +306,7 @@ impl fmt::Display for Coord3 {
 
 impl Key {
     pub fn invalid() -> Key {
-        Key(KeyType::max_value())
+        Key(KeyType::MAX)
     }
 
     pub fn next(self) -> Key {

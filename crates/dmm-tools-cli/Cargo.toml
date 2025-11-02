@@ -1,24 +1,24 @@
 [package]
 name = "dmm-tools-cli"
-version = "1.9.0"
-authors = ["Tad Hardesty <tad@platymuus.com>"]
 description = "BYOND map rendering and analysis tools powered by SpacemanDMM"
-edition = "2018"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
 
 [[bin]]
 name = "dmm-tools"
 path = "src/main.rs"
 
 [dependencies]
-clap = { version = "4.3.17", features = ["derive"] }
-serde = "1.0.144"
-serde_derive = "1.0.144"
-serde_json = "1.0.85"
-rayon = "1.5.3"
+clap = { version = "4.5.20", features = ["derive"] }
+serde = "1.0.213"
+serde_derive = "1.0.213"
+serde_json = "1.0.132"
+rayon = "1.10.0"
 dreammaker = { path = "../dreammaker" }
 dmm-tools = { path = "../dmm-tools", features = ["png"] }
-ahash = "0.8.0"
+foldhash = "0.2.0"
 
 [build-dependencies]
-chrono = "0.4.22"
-git2 = { version = "0.18.2", default-features = false }
+chrono = "0.4.38"
+git2 = { version = "0.20.2", default-features = false }

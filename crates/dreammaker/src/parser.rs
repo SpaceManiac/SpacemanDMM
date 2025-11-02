@@ -52,7 +52,7 @@ macro_rules! take_match {
     (
         $self:ident {
             $(
-                $($p:pat)|* $( if $condition:expr )? => $branch:expr,
+                $p:pat $( if $condition:expr )? => $branch:expr,
             )*
         }
         // else mandatory because you should never be matching on every option
@@ -65,11 +65,11 @@ macro_rules! take_match {
             #[allow(unused_variables)]
             match $self.peek() {
                 $(
-                    $($p)|* $( if $condition )? => {
+                    $p $( if $condition )? => {
                         // inner match that moves instead of refs
                         match $self.take() {
                             // no duplicate `if` because types are different
-                            $($p)|* => {
+                            $p => {
                                 #[warn(unused_variables)]
                                 $branch
                             }
@@ -208,6 +208,7 @@ oper_table! { BINARY_OPS;
         (BinaryOp, Greater),
         (BinaryOp, LessEq),
         (BinaryOp, GreaterEq),
+        (BinaryOp, LessOrGreater),
     }
     // << >>
     Shift {
@@ -458,14 +459,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     fn describe_parse_error(&mut self) -> DMError {
         let expected = self.expected.join(", ");
         if self.eof {
-            let mut error = self.error(format!("got EOF, expected one of: {}", expected));
+            let mut error = self.error(format!("got EOF, expected one of: {expected}"));
             if let Some(loc) = self.skipping_location {
                 error.add_note(loc, "unmatched pair here");
             }
             error
         } else {
             let got = self.peek();
-            let message = format!("got '{:#}', expected one of: {}", got, expected);
+            let message = format!("got '{got:#}', expected one of: {expected}");
             let mut error = self.error(message);
             if self.possible_indentation_error {
                 let mut loc = error.location();
@@ -587,11 +588,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     }
 
     fn exact(&mut self, tok: Token) -> Status<()> {
-        match tok {
-            Token::Eof => self.expected("EOF"),
-            Token::Punct(p) => self.expected(p.single_quoted()),
-            ref other => self.expected(format!("'{}'", other)),
-        }
+        self.expected(tok.single_quoted());
         if self.peek() == &tok {
             self.take();
             SUCCESS
@@ -618,7 +615,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     }
 
     fn exact_ident(&mut self, ident: &'static str) -> Status<()> {
-        self.expected(format!("'{}'", ident));
+        self.expected(format!("'{ident}'"));
         take_match!(self {
             Token::Ident(i, _) if i == ident => SUCCESS,
         } else try_another())
@@ -650,7 +647,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         loop {
             self.expected("';'");
             if terminator != Token::Eof {
-                self.expected(format!("'{terminator}'"));
+                self.expected(terminator.single_quoted());
             }
 
             if current == self.tree.root_index() {
@@ -704,11 +701,18 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             }
         }
         // followed by ('/' ident)*
-        while parts.last().unwrap() != "operator" && self.slash()?.is_some() {
+        while self.slash()?.is_some() {
             let mut slash_loc = self.location;
             if let Some(i) = self.ident_in_seq(parts.len())? {
                 parts.push(i);
             } else {
+                // .../operator/<non-ident> = ... / "operator/"
+                // but .../operator/ident = ... / "operator" / "ident"
+                let last = parts.last_mut().unwrap();
+                if last == "operator" {
+                    last.push('/');
+                }
+
                 slash_loc.column += 1;
                 self.annotate_precise(slash_loc..slash_loc, || {
                     Annotation::IncompleteTreePath(absolute || always_absolute, parts.clone())
@@ -730,7 +734,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Token::Punct(p @ Punctuation::Dot) |
             Token::Punct(p @ Punctuation::CloseColon) |
             Token::Punct(p @ Punctuation::Colon) => {
-                self.error(format!("path started by '{}', should be unprefixed", p))
+                self.error(format!("path started by '{p}', should be unprefixed"))
                     .set_severity(Severity::Warning)
                     .register(self.context);
                 Ok((false, true))
@@ -746,7 +750,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Token::Punct(p @ Punctuation::Dot) |
             Token::Punct(p @ Punctuation::CloseColon) |
             Token::Punct(p @ Punctuation::Colon) => {
-                self.error(format!("path separated by '{}', should be '/'", p))
+                self.error(format!("path separated by '{p}', should be '/'"))
                     .set_severity(Severity::Warning)
                     .register(self.context);
                 SUCCESS
@@ -789,7 +793,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         let (last_part, traverse) = match path.split_last_mut() {
             Some(x) => x,
             None => {
-                self.error("what?")
+                self.error("tree entry appears to have no name")
                     .register(self.context);
                 return SUCCESS;
             }
@@ -844,7 +848,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
         // parse operator overloading definitions
         if last_part == "operator" {
-            self.try_read_operator_name(last_part)?;
+            let () = self.try_read_operator_name(last_part)?;
         }
 
         let var_suffix = if var_type.is_some() {
@@ -896,7 +900,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 let location = self.location;
 
                 let expression = require!(self.expression());
-                let _ = require!(self.input_specifier());  // TODO: save to VarType instead of ignoring
+                // TODO: save `in` expression?
+                let (input_type, _) = require!(self.input_specifier());
 
                 // We have to annotate prior to consuming the statement terminator, as we
                 // will otherwise consume following whitespace resulting in a bad annotation range
@@ -912,6 +917,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
                 if let Some(mut var_type) = var_type {
                     var_type.suffix(&var_suffix);
+                    var_type.input_type = input_type;
                     self.tree.declare_var(current, last_part, location, docs, var_type.build(), Some(expression));
                 } else {
                     self.tree.override_var(current, last_part, location, docs, expression);
@@ -927,9 +933,12 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             _ => {
                 // usually `thing;` - a contentless declaration
 
-                if var_type.is_some() {
-                    let _ = require!(self.input_specifier());  // TODO: save to VarType instead of ignoring
-                }
+                let input_type = if var_type.is_some() {
+                    // TODO: save `in` expression?
+                    require!(self.input_specifier()).0
+                } else {
+                    None
+                };
 
                 // Same-line `//!` comment AFTER
                 while let Some(comment) = self.enclosing_doc_comment()? {
@@ -942,11 +951,12 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         .register(self.context);
                 } else if let Some(mut var_type) = var_type.take() {
                     if VarTypeFlags::from_name(last_part).is_some() {
-                        self.error(format!("`var/{};` item has no effect", last_part))
+                        self.error(format!("`var/{last_part};` item has no effect"))
                             .set_severity(Severity::Warning)
                             .register(self.context);
                     } else {
                         var_type.suffix(&var_suffix);
+                        var_type.input_type = input_type;
                         let node = self.tree.get_path(current).to_owned();
                         self.annotate(entry_start, || Annotation::Variable(reconstruct_path(&node, proc_builder, Some(&var_type), last_part)));
                         self.tree.declare_var(current, last_part, self.location, docs, var_type.build(), var_suffix.into_initializer());
@@ -956,7 +966,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         .set_severity(Severity::Warning)
                         .register(self.context);
                 } else if proc_builder.is_some() {
-                    eprintln!("-- {:?}", last_part);
                     self.error("child of `proc/` without body")
                         .register(self.context);
                 } else {
@@ -977,7 +986,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     // ------------------------------------------------------------------------
     // Object tree - Procs
 
-    fn try_read_operator_name(&mut self, last_part: &mut String) -> Status<()> {
+    fn try_read_operator_name(&mut self, last_part: &mut String) -> Result<(), DMError> {
         use super::lexer::Token::Punct;
         use super::lexer::Punctuation::*;
 
@@ -1000,6 +1009,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         } else if self.exact(Punct(MulAssign))?.is_some() {
             last_part.push_str("*=");
         } else if self.exact(Punct(Slash))?.is_some() {
+            // Here for completeness, but REALLY handled in tree_path().
             last_part.push('/');
         } else if self.exact(Punct(DivAssign))?.is_some() {
             last_part.push_str("/=");
@@ -1023,6 +1033,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             last_part.push_str("<<=");
         } else if self.exact(Punct(LessEq))?.is_some() {
             last_part.push_str("<=")
+        } else if self.exact(Punct(LessOrGreater))?.is_some() {
+            last_part.push_str("<=>");
         } else if self.exact(Punct(Greater))?.is_some() {
             last_part.push('>');
         } else if self.exact(Punct(GreaterEq))?.is_some() {
@@ -1055,7 +1067,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         } else if self.exact(Token::String("".to_string()))?.is_some() {
             last_part.push_str("\"\"")
         }
-        SUCCESS
+        Ok(())
     }
 
     fn proc_params_and_body(&mut self, current: NodeIndex, proc_builder: Option<ProcDeclBuilder>, name: &str, entry_start: Location, absolute: bool, mut docs: DocCollection) -> Status<()> {
@@ -1130,7 +1142,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             None
         };
 
-        match self.tree.register_proc(self.context, location, current, name, proc_builder, parameters, return_type, code) {
+        match self.tree.register_proc(self.context, location, current, name, proc_builder, parameters, return_type, code, Some(body_start..self.location)) {
             Ok((idx, proc)) => {
                 proc.docs.extend(docs);
                 // manually performed for borrowck reasons
@@ -1173,7 +1185,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 "".to_owned()
             }
         };
-        if path.first().map_or(false, |i| i == "var") {
+        if path.first().is_some_and(|i| i == "var") {
             path.remove(0);
             DMError::new(leading_loc, "'var/' is unnecessary here")
                 .set_severity(Severity::Hint)
@@ -1298,7 +1310,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         let mut as_what = match InputType::from_str(&ident) {
             Ok(what) => what,
             Err(()) => {
-                self.context.register_error(self.error(format!("bad input type: '{}'", ident)));
+                self.context.register_error(self.error(format!("bad input type: '{ident}'")));
                 InputType::empty()
             }
         };
@@ -1307,7 +1319,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             match InputType::from_str(&ident) {
                 Ok(what) => as_what |= what,
                 Err(()) => {
-                    self.context.register_error(self.error(format!("bad input type: '{}'", ident)));
+                    self.context.register_error(self.error(format!("bad input type: '{ident}'")));
                 }
             }
         }
@@ -1398,10 +1410,11 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             // for (Var = Low to High)
             require!(self.exact(Token::Punct(Punctuation::LParen)));
             let init = self.simple_statement(true, vars)?;
-            if let Some(()) = self.comma_or_semicolon()? {
-                // three-pronged loop form ("for loop")
+            // three-pronged loop form ("for loop")
+            if let Some(()) = self.semicolon()? {
+                // for(init; test; [inc])
                 let test = self.expression()?;
-                let inc = match self.comma_or_semicolon()? {
+                let inc = match self.semicolon()? {
                     Some(()) => self.simple_statement(false, vars)?,
                     None => None,
                 };
@@ -1412,6 +1425,76 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     inc: inc.map(Box::new),
                     block: require!(self.block(&LoopContext::ForLoop)),
                 })
+            // ... copypasted but with commas
+            } else if let Some(()) = self.comma()? {
+                // for(init, test [, inc])
+                let test = self.expression()?;
+                let inc = match self.comma()? {
+                    Some(()) => self.simple_statement(false, vars)?,
+                    None => None,
+                };
+                // Increment exists
+                if inc.is_some() {
+                    require!(self.exact(Token::Punct(Punctuation::RParen)));
+                    spanned(Statement::ForLoop {
+                        init: init.map(Box::new),
+                        test: test.map(Box::new),
+                        inc: inc.map(Box::new),
+                        block: require!(self.block(&LoopContext::ForLoop)),
+                    })
+                } else {
+                    // for (..., ... in ...)
+                    match test {
+                        // This should necessarily be caught because the expression is going be
+                        //for(var/k, [v in x]) and [v in x] will be passed as BinaryOp::In
+                        // This is a bit ugly but it workss
+                        Some(Expression::BinaryOp {
+                            op: BinaryOp::In,
+                            lhs,
+                            rhs,
+                        }) => {
+                            // First thing first: for (var/k, v in x) REQUIRES the var/k.
+                            // This unboxes it and rejects other type for(x, [...]), for(0, [...])
+                            let (var_type, key) = match init {
+                            // this is a really terrible way to do this
+                                Some(Statement::Var(var_statement)) => match var_statement.value {
+                                    None => (Some(var_statement.var_type), var_statement.name),
+                                    _ => return Err(self.error("cannot assigned a value to var/key in a for(var/key, value) statement")),
+                                },
+                                _ => return Err(self.error("for (var/key, value) requires a 'var' keyword")),
+                            };
+                            // Value is the lhs of for(var, k [v in x])
+                            // It should also pass only if it's an ident
+                            let value = match lhs.into_term() {
+                                Some(Term::Ident(value)) => value,
+                                _ => return Err(self.error(
+                                    "value must be a variable in a for (var/key, value) statement",
+                                )),
+                            };
+                            // TODO : check if `x` is an ident/a "list()" or "alist()" statement ?
+                            require!(self.exact(Token::Punct(Punctuation::RParen)));
+                            // Returns a for(k,v)
+                            spanned(Statement::ForKeyValue(Box::new(ForKeyValueStatement {
+                                var_type: Some(var_type.expect("/")),
+                                key: key.into(),
+                                value: value.into(),
+                                in_list: Some(*rhs), // We'll assume the rhs of [v in x] is a list. Any other case, DM will catch anyway.
+                                block: require!(self.block(&LoopContext::ForLoop)),
+                            })))
+                        }
+                        // We will just assume everything else for(k, [...]) is a two-pronged for loop
+                        // for (init, test) {...}
+                        _ => {
+                            require!(self.exact(Token::Punct(Punctuation::RParen)));
+                            spanned(Statement::ForLoop {
+                                init: init.map(Box::new),
+                                test: test.map(Box::new),
+                                inc: inc.map(Box::new),
+                                block: require!(self.block(&LoopContext::ForLoop)),
+                            })
+                        }
+                    }
+                }
             } else if let Some(init) = init {
                 // in-list form ("for list")
                 let (var_type, name) = match init {
@@ -1422,7 +1505,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                             // for(var/a = 1 to
                             require!(self.exact_ident("to"));
                             let rhs = require!(self.expression());
-                            return spanned(require!(self.for_range(Some(vs.var_type), vs.name, Box::new(value), Box::new(rhs))));
+                            return spanned(require!(self.for_range(Some(vs.var_type), vs.name, value, rhs)));
                         }
                     },
                     Statement::Expr(Expression::AssignOp {
@@ -1437,7 +1520,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         };
                         require!(self.exact_ident("to"));
                         let to_rhs = require!(self.expression());
-                        return spanned(require!(self.for_range(None, name, rhs, Box::new(to_rhs))));
+                        return spanned(require!(self.for_range(None, name, *rhs, to_rhs)));
                     }
                     Statement::Expr(Expression::BinaryOp {
                         op: BinaryOp::In,
@@ -1450,7 +1533,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         };
                         match *rhs {
                             Expression::BinaryOp { op: BinaryOp::To, lhs, rhs } => {
-                                return spanned(require!(self.for_range(None, name, lhs, rhs)));
+                                return spanned(require!(self.for_range(None, name, *lhs, *rhs)));
                             },
                             rhs => {
                                 // I love code duplication, don't you?
@@ -1483,7 +1566,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     let value = require!(self.expression());
                     if let Some(()) = self.exact_ident("to")? {
                         let rhs = require!(self.expression());
-                        return spanned(require!(self.for_range(var_type, name, Box::new(value), Box::new(rhs))));
+                        return spanned(require!(self.for_range(var_type, name, value, rhs)));
                     }
                     Some(value)
                 } else {
@@ -1745,13 +1828,12 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     // for(var/a = 1 to 20
     // for(var/a in 1 to 20
     // This... isn't a boxed local, it's method arguments. Clippy??
-    #[allow(clippy::boxed_local)]
     fn for_range(
         &mut self,
         var_type: Option<VarType>,
         name: Ident,
-        start: Box<Expression>,
-        end: Box<Expression>,
+        start: Expression,
+        end: Expression,
     ) -> Status<Statement> {
         // step 2
         let step = if let Some(()) = self.exact_ident("step")? {
@@ -1765,17 +1847,23 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         success(Statement::ForRange(Box::new(ForRangeStatement {
             var_type,
             name: name.into(),
-            start: *start,
-            end: *end,
+            start,
+            end,
             step,
             block: require!(self.block(&LoopContext::ForRange)),
         })))
     }
 
-    fn comma_or_semicolon(&mut self) -> Status<()> {
+    fn comma(&mut self) -> Status<()> {
         if let Some(()) = self.exact(Token::Punct(Punctuation::Comma))? {
             SUCCESS
-        } else if let Some(()) = self.exact(Token::Punct(Punctuation::Semicolon))? {
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn semicolon(&mut self) -> Status<()> {
+        if let Some(()) = self.exact(Token::Punct(Punctuation::Semicolon))? {
             SUCCESS
         } else {
             Ok(None)
@@ -2124,24 +2212,42 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 None => Term::Ident(i.to_owned()),
             },
 
+            Token::Ident(ref i, _) if i == "alist" => match self.arguments(&[], "alist")? {
+                Some(args) => Term::List(args),
+                None => Term::Ident(i.to_owned()),
+            },
+
             // term :: 'call' arglist arglist
             Token::Ident(ref i, _) if i == "call" => Term::DynamicCall(
                 require!(self.arguments(&[], "call")),
                 require!(self.arguments(&[], "call*")),
             ),
 
-            // term :: 'call_ext' (library_name, function_name) arglist
+            // term :: 'call_ext' ([library,] function) arglist
             Token::Ident(ref i, _) if i == "call_ext" => {
                 require!(self.exact(Token::Punct(Punctuation::LParen)));
-                let library_name = require!(self.expression());
-                require!(self.exact(Token::Punct(Punctuation::Comma)));
-                let function_name = require!(self.expression());
+                let first = require!(self.expression());
+                let second = if self.exact(Token::Punct(Punctuation::Comma))?.is_some() {
+                    Some(require!(self.expression()))
+                } else {
+                    None
+                };
                 require!(self.exact(Token::Punct(Punctuation::RParen)));
 
-                Term::ExternalCall {
-                    library_name: Box::new(library_name),
-                    function_name: Box::new(function_name),
-                    args: require!(self.arguments(&[], "call_ext*")),
+                let args = require!(self.arguments(&[], "call_ext*"));
+                match second {
+                    // call_ext(library, function)(...)
+                    Some(function) => Term::ExternalCall {
+                        library: Some(Box::new(first)),
+                        function: Box::new(function),
+                        args,
+                    },
+                    // call_ext(loaded_func)(...)
+                    None => Term::ExternalCall {
+                        library: None,
+                        function: Box::new(first),
+                        args,
+                    }
                 }
             },
 

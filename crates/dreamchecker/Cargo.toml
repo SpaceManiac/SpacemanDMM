@@ -1,14 +1,14 @@
 [package]
 name = "dreamchecker"
-version = "1.9.0"
-authors = ["Tad Hardesty <tad@platymuus.com>"]
-edition = "2018"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
 
 [dependencies]
 dreammaker = { path = "../dreammaker" }
 serde_json = "1.0"
-ahash = "0.8.0"
+foldhash = "0.2.0"
 
 [build-dependencies]
-chrono = "0.4.22"
-git2 = { version = "0.18.2", default-features = false }
+chrono = "0.4.38"
+git2 = { version = "0.20.2", default-features = false }

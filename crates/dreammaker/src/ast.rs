@@ -123,6 +123,7 @@ pub enum BinaryOp {
     Greater,
     LessEq,
     GreaterEq,
+    LessOrGreater,
     Equiv,
     NotEquiv,
     BitAnd,
@@ -152,6 +153,7 @@ impl fmt::Display for BinaryOp {
             Less => "<",
             Greater => ">",
             LessEq => "<=",
+            LessOrGreater => "<=>",
             GreaterEq => ">=",
             Equiv => "~=",
             NotEquiv => "~!",
@@ -305,6 +307,12 @@ pub enum ProcReturnType {
     TypePath(Vec<Ident>),
 }
 
+impl ProcReturnType {
+    pub fn is_empty(&self) -> bool {
+        matches!(self, ProcReturnType::InputType(InputType { bits: 0 }))
+    }
+}
+
 impl Default for ProcReturnType {
     fn default() -> Self {
         ProcReturnType::InputType(InputType::empty())
@@ -456,6 +464,12 @@ macro_rules! type_table {
             }
         }
 
+        impl $name {
+            pub const ENTRIES: &'static [(&'static str, $name)] = &[
+                $(($txt, $name::$i),)*
+            ];
+        }
+
         impl std::str::FromStr for $name {
             type Err = ();
 
@@ -510,6 +524,44 @@ type_table! {
     "password",     PASSWORD,     1 << 15;
     "command_text", COMMAND_TEXT, 1 << 16;
     "color",        COLOR,        1 << 17;
+    // Non-primitive combinations that are still valid as(X) calls:
+    "movable",      MOVABLE,      Self::OBJ.bits | Self::MOB.bits;
+    "atom",         ATOM,         Self::AREA.bits | Self::TURF.bits | Self::OBJ.bits | Self::MOB.bits;
+    // Placeholder value for `as list` that's technically only legal as a proc return type, but whatever.
+    "list",         LIST,         1 << 31;
+}
+
+impl Default for InputType {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
+impl InputType {
+    /// Get a typepath that approximates this input type, if possible.
+    pub fn to_typepath(&self) -> Option<&'static str> {
+        if self.is_empty() {
+            None
+        } else if *self == InputType::MOB {
+            Some("/mob")
+        } else if *self == InputType::OBJ {
+            Some("/obj")
+        } else if *self == InputType::TURF {
+            Some("/turf")
+        } else if *self == InputType::AREA {
+            Some("/area")
+        } else if *self == InputType::LIST {
+            Some("/list")
+        } else if self.difference(InputType::MOVABLE).is_empty() {
+            // Only applies to exactly movable = mob | obj
+            Some("/atom/movable")
+        } else if self.difference(InputType::ATOM).is_empty() {
+            // Might apply to area|turf or turf|mob or similar combos
+            Some("/atom")
+        } else {
+            None
+        }
+    }
 }
 
 bitflags! {
@@ -684,7 +736,7 @@ impl fmt::Debug for Ident2 {
 
 impl GetSize for Ident2 {
     fn get_heap_size(&self) -> usize {
-        self.inner.as_bytes().len()
+        self.inner.len()
     }
 }
 
@@ -717,7 +769,7 @@ pub struct FormatTreePath<'a, T>(pub &'a [T]);
 impl<'a, T: fmt::Display> fmt::Display for FormatTreePath<'a, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for each in self.0.iter() {
-            write!(f, "/{}", each)?;
+            write!(f, "/{each}")?;
         }
         Ok(())
     }
@@ -892,7 +944,7 @@ impl Expression {
             },
             Expression::AssignOp { op, lhs: _, rhs } => {
                 if let AssignOp::Assign = op {
-                    return match rhs.as_term() {
+                    match rhs.as_term() {
                         Some(term) => term.is_truthy(),
                         _ => None,
                     }
@@ -1019,8 +1071,8 @@ pub enum Term {
     DynamicCall(Box<[Expression]>, Box<[Expression]>),
     /// A use of the `call_ext()()` primitive.
     ExternalCall {
-        library_name: Box<Expression>,
-        function_name: Box<Expression>,
+        library: Option<Box<Expression>>,
+        function: Box<Expression>,
         args: Box<[Expression]>,
     },
     /// Unscoped `::A` is a shorthand for `global.A`
@@ -1190,7 +1242,7 @@ impl fmt::Display for Parameter {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write!(fmt, "{}{}", self.var_type, self.name)?;
         if let Some(input_type) = self.input_type {
-            write!(fmt, " as {}", input_type)?;
+            write!(fmt, " as {input_type}")?;
         }
         Ok(())
     }
@@ -1201,6 +1253,7 @@ impl fmt::Display for Parameter {
 pub struct VarType {
     pub flags: VarTypeFlags,
     pub type_path: TreePath,
+    pub input_type: InputType,
 }
 
 impl VarType {
@@ -1237,6 +1290,7 @@ impl fmt::Display for VarType {
 pub struct VarTypeBuilder {
     pub flags: VarTypeFlags,
     pub type_path: Vec<Ident>,
+    pub input_type: Option<InputType>,
 }
 
 impl VarTypeBuilder {
@@ -1250,6 +1304,7 @@ impl VarTypeBuilder {
         VarType {
             flags: self.flags,
             type_path: self.type_path.into_boxed_slice(),
+            input_type: self.input_type.unwrap_or_default(),
         }
     }
 }
@@ -1271,6 +1326,7 @@ impl FromIterator<String> for VarTypeBuilder {
         VarTypeBuilder {
             flags,
             type_path,
+            input_type: None,
         }
     }
 }
@@ -1336,6 +1392,7 @@ pub enum Statement {
         block: Block,
     },
     ForList(Box<ForListStatement>),
+    ForKeyValue(Box<ForKeyValueStatement>),
     ForRange(Box<ForRangeStatement>),
     Var(Box<VarStatement>),
     Vars(Vec<VarStatement>),
@@ -1388,6 +1445,16 @@ pub struct ForListStatement {
     pub name: Ident2,
     /// If zero, uses the declared type of the variable.
     pub input_type: Option<InputType>,
+    /// Defaults to 'world'.
+    pub in_list: Option<Expression>,
+    pub block: Block,
+}
+
+#[derive(Debug, Clone, PartialEq, GetSize)]
+pub struct ForKeyValueStatement {
+    pub var_type: Option<VarType>,
+    pub key: Ident2,
+    pub value: Ident2,
     /// Defaults to 'world'.
     pub in_list: Option<Expression>,
     pub block: Block,

@@ -109,6 +109,7 @@ table! {
     "<<",  LShift;
     "<<=", LShiftAssign;
     "<=",  LessEq;
+    "<=>", LessOrGreater;
     "<>",  LessGreater;
     "=",   Assign;
     "==",  Eq;
@@ -156,15 +157,15 @@ static SPEEDY_TABLE: [(usize, usize); 127] = [
     (2, 3), (3, 5), (5, 6), (6, 8), (0, 0), (8, 12), (12, 16), (16, 17),
     (17, 18), (18, 19), (19, 22), (22, 25), (25, 26), (26, 29), (29, 32), (32, 36),
     (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
-    (0, 0), (0, 0), (36, 39), (39, 40), (40, 45), (45, 47), (47, 51), (51, 55),
+    (0, 0), (0, 0), (36, 39), (39, 40), (40, 46), (46, 48), (48, 52), (52, 56),
     (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
     (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
     (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
-    (0, 0), (0, 0), (0, 0), (55, 56), (0, 0), (56, 57), (57,59), (0, 0),
+    (0, 0), (0, 0), (0, 0), (56, 57), (0, 0), (57, 58), (58, 60), (0, 0),
     (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
     (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
     (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
-    (0, 0), (0, 0), (0, 0), (59, 61), (61, 65), (65, 66), (66, 69),
+    (0, 0), (0, 0), (0, 0), (60, 62), (62, 66), (66, 67), (67, 70)
 ];
 
 #[test]
@@ -177,8 +178,7 @@ fn make_speedy_table() {
     for each in everything.iter() {
         assert!(
             each.len() == 1 || everything.contains(&&each[..each.len() - 1]),
-            "no prefix: {}",
-            each
+            "no prefix: {each}"
         );
     }
 
@@ -190,7 +190,7 @@ fn make_speedy_table() {
         }
 
         if let Some(prev) = prev {
-            assert!(each > prev, "out-of-order: {:?} is not greater than {:?}", each, prev);
+            assert!(each > prev, "out-of-order: {each:?} is not greater than {prev:?}");
         }
         prev = Some(each);
 
@@ -203,7 +203,7 @@ fn make_speedy_table() {
             table[b].1 = i + 1;
         } else {
             assert!(i >= table[b].0);
-            assert_eq!(i, table[b].1, "{}", each);
+            assert_eq!(i, table[b].1, "{each}");
             table[b].1 = i + 1;
         }
     }
@@ -348,6 +348,14 @@ impl Token {
             _ => false,
         }
     }
+
+    pub fn single_quoted(&self) -> Cow<'static, str> {
+        match self {
+            Token::Eof => Cow::Borrowed("EOF"),
+            Token::Punct(p) => Cow::Borrowed(p.single_quoted()),
+            _ => Cow::Owned(format!("'{self}'")),
+        }
+    }
 }
 
 impl fmt::Display for Token {
@@ -358,10 +366,10 @@ impl fmt::Display for Token {
             Punct(p) => p.fmt(f),
             Ident(ref i, _) => f.write_str(i),
             String(ref i) => Quote(i).fmt(f),
-            InterpStringBegin(ref i) => write!(f, "\"{}[", i),
-            InterpStringPart(ref i) => write!(f, "]{}[", i),
-            InterpStringEnd(ref i) => write!(f, "]{}\"", i),
-            Resource(ref i) => write!(f, "'{}'", i),
+            InterpStringBegin(ref i) => write!(f, "\"{i}["),
+            InterpStringPart(ref i) => write!(f, "]{i}["),
+            InterpStringEnd(ref i) => write!(f, "]{i}\""),
+            Resource(ref i) => write!(f, "'{i}'"),
             Int(i) => FormatFloat(i as f32).fmt(f),
             Float(i) => FormatFloat(i).fmt(f),
             DocComment(ref c) => c.fmt(f),
@@ -378,11 +386,11 @@ impl<'a> fmt::Display for Quote<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = self.0;
         if s.contains("\"}") {
-            write!(f, "@@{}@", s)
+            write!(f, "@@{s}@")
         } else if s.contains('"') || s.contains('\n') {
-            write!(f, "{{\"{}\"}}", s)
+            write!(f, "{{\"{s}\"}}")
         } else {
-            write!(f, "\"{}\"", s)
+            write!(f, "\"{s}\"")
         }
     }
 }
@@ -419,7 +427,7 @@ impl fmt::Display for FormatFloat {
                 write!(f, "{:.*}e{:+04}", precision as usize, n2, exp)
             } else {
                 let n2 = (n * factor).round() / factor;
-                write!(f, "{}", n2)
+                write!(f, "{n2}")
             }
         }
     }
@@ -465,7 +473,7 @@ pub fn from_utf8_or_latin1(bytes: Vec<u8>) -> String {
 }
 
 /// Convert the input bytes to a `String` attempting UTF-8 or falling back to Latin-1.
-pub fn from_utf8_or_latin1_borrowed(bytes: &[u8]) -> Cow<str> {
+pub fn from_utf8_or_latin1_borrowed(bytes: &[u8]) -> Cow<'_, str> {
     match std::str::from_utf8(bytes) {
         Ok(v) => Cow::Borrowed(v),
         Err(_) => Cow::Owned(from_latin1(bytes)),
@@ -492,9 +500,8 @@ fn buffer_read<R: Read>(file: FileId, mut read: R) -> Result<Vec<u8>, DMError> {
     let mut buffer = Vec::new();
 
     if let Err(error) = read.read_to_end(&mut buffer) {
-        let mut tracker = LocationTracker::new(file, buffer.as_slice().into());
-        tracker.by_ref().count();
-        return Err(DMError::new(tracker.location(), "i/o error reading file").with_cause(error));
+        let location = LocationTracker::count_location(file, &buffer);
+        return Err(DMError::new(location, "i/o error reading file").with_cause(error));
     }
 
     Ok(buffer)
@@ -516,9 +523,8 @@ pub fn buffer_file(file: FileId, path: &std::path::Path) -> Result<Vec<u8>, DMEr
     };
 
     if let Err(error) = read.read_to_end(&mut buffer) {
-        let mut tracker = LocationTracker::new(file, buffer.as_slice().into());
-        tracker.by_ref().count();
-        return Err(DMError::new(tracker.location(), "i/o error reading file").with_cause(error));
+        let location = LocationTracker::count_location(file, &buffer);
+        return Err(DMError::new(location, "i/o error reading file").with_cause(error));
     }
 
     Ok(buffer)
@@ -539,20 +545,14 @@ pub struct LocationTracker<'a> {
 }
 
 impl<'a> LocationTracker<'a> {
-    pub fn skip_utf8_bom(input: Cow<'a, [u8]>) -> Cow<'a, [u8]> {
-        const BOM: &[u8] = b"\xEF\xBB\xBF";
-        if input.starts_with(BOM) {
-            match input {
-                Cow::Borrowed(b) => Cow::Borrowed(&b[BOM.len()..]),
-                Cow::Owned(mut o) => { o.drain(..BOM.len()); Cow::Owned(o) }
-            }
-        } else {
-            input
-        }
+    pub fn count_location(file: FileId, content: &[u8]) -> Location {
+        let mut tracker = LocationTracker::new(file, content.into());
+        tracker.by_ref().count();
+        tracker.location()
     }
 
     pub fn new(file: FileId, inner: Cow<'a, [u8]>) -> LocationTracker<'a> {
-        LocationTracker {
+        let mut this = LocationTracker {
             inner,
             offset: 0,
             location: Location {
@@ -561,7 +561,12 @@ impl<'a> LocationTracker<'a> {
                 column: 0,
             },
             at_line_end: true,
+        };
+        // Skip UTF-8 BOM
+        if this.inner.starts_with(b"\xEF\xBB\xBF") {
+            this.offset += 3;
         }
+        this
     }
 
     /// `location` will be taken as the location of the first character of `inner`.
@@ -674,8 +679,7 @@ impl<'ctx> Lexer<'ctx> {
 
     /// Create a new lexer from a byte stream.
     pub fn new<I: Into<Cow<'ctx, [u8]>>>(context: &'ctx Context, file_number: FileId, input: I) -> Self {
-        let inner = LocationTracker::skip_utf8_bom(input.into());
-        Lexer::from_input(context, LocationTracker::new(file_number, inner))
+        Lexer::from_input(context, LocationTracker::new(file_number, input.into()))
     }
 
     /// Create a new lexer from a reader.
@@ -903,7 +907,7 @@ impl<'ctx> Lexer<'ctx> {
                 if let Ok(val) = f32::from_str(&buf) {
                     let val_str = val.to_string();
                     if val_str != buf {
-                        self.error(format!("precision loss of integer constant: \"{}\" to {}", buf, val))
+                        self.error(format!("precision loss of integer constant: \"{buf}\" to {val}"))
                             .set_severity(Severity::Warning)
                             .with_errortype("integer_precision_loss")
                             .register(self.context);
@@ -912,7 +916,7 @@ impl<'ctx> Lexer<'ctx> {
                 }
             }
             self.context.register_error(self.error(
-                format!("bad base-{} integer \"{}\": {}", radix, buf, original_error)));
+                format!("bad base-{radix} integer \"{buf}\": {original_error}")));
             Token::Int(0)  // fallback
         } else {
             // ignore radix
@@ -920,27 +924,32 @@ impl<'ctx> Lexer<'ctx> {
                 Ok(val) => Token::Float(val),
                 Err(e) => {
                     self.context.register_error(self.error(
-                        format!("bad float \"{}\": {}", buf, e)));
+                        format!("bad float \"{buf}\": {e}")));
                     Token::Float(0.0)  // fallback
                 }
             }
         }
     }
 
-    fn read_ident(&mut self, first: u8) -> String {
-        // 12 is ~89% of idents, 24 is ~99.5%, 48 is ~100%
-        let mut ident = Vec::with_capacity(12);
-        ident.push(first);
+    fn read_ident(&mut self, first: u8) -> (String, bool) {
+        let start = self.input.offset - 1;
+        let mut end = start + 1;
+        assert_eq!(first, self.input.inner[start]);
+        let ws;
         loop {
             match self.next() {
-                Some(ch) if is_ident(ch) || is_digit(ch) => ident.push(ch),
+                Some(ch) if is_ident(ch) || is_digit(ch) => {
+                    end += 1;
+                },
                 ch => {
+                    ws = ch == Some(b' ') || ch == Some(b'\t');
                     self.put_back(ch);
                     break;
                 }
             }
         }
-        from_utf8_or_latin1(ident)
+        let ident = &self.input.inner[start..end];
+        (from_utf8_or_latin1_borrowed(ident).into_owned(), ws)
     }
 
     fn read_resource(&mut self) -> String {
@@ -1243,10 +1252,7 @@ impl<'ctx> Iterator for Lexer<'ctx> {
                 None => match first {
                     b'0'..=b'9' => Some(locate(self.read_number(first))),
                     b'_' | b'a'..=b'z' | b'A'..=b'Z' => {
-                        let ident = self.read_ident(first);
-                        let next = self.next();
-                        self.put_back(next);
-                        let ws = next == Some(b' ') || next == Some(b'\t');
+                        let (ident, ws) = self.read_ident(first);
                         if self.directive == Directive::Hash {
                             if ident == "warn" || ident == "error" {
                                 self.directive = Directive::Stringy;
@@ -1255,10 +1261,8 @@ impl<'ctx> Iterator for Lexer<'ctx> {
                             }
                         }
                         // check keywords
-                        for &(name, value) in PUNCT_TABLE.iter() {
-                            if name == ident {
-                                return Some(locate(Punct(value)));
-                            }
+                        if ident == "in" {
+                            return Some(locate(Punct(In)));
                         }
                         self.close_allowed = true;
                         Some(locate(Ident(ident, ws)))
@@ -1271,7 +1275,7 @@ impl<'ctx> Iterator for Lexer<'ctx> {
                     b'@' => Some(locate(self.read_raw_string())),
                     _ => {
                         if !found_illegal {
-                            let mut msg = format!("illegal byte 0x{:x}", first);
+                            let mut msg = format!("illegal byte 0x{first:x}");
                             if (b' '..=b'~').contains(&first) {
                                 use std::fmt::Write;
                                 let _ = write!(msg, " ({:?})", first as char);

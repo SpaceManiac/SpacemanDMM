@@ -1,6 +1,7 @@
 //! DMI metadata parsing and representation.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
+use foldhash::{HashMap, HashMapExt};
 use std::fmt::Display;
 use std::io;
 use std::path::Path;
@@ -407,7 +408,7 @@ fn parse_metadata(data: &str) -> io::Result<Metadata> {
         return Err(
             io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("Wrong dmi metadata header. Expected {:?}, got {:?}", expected_header, header )
+                format!("Wrong dmi metadata header. Expected {expected_header:?}, got {header:?}" )
             )
         );
     }

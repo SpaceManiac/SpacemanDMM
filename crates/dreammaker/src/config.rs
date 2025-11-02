@@ -1,11 +1,10 @@
 //! Configuration file for diagnostics.
 
-use std::collections::HashMap;
+use foldhash::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use ahash::RandomState;
 use serde::Deserialize;
 
 use crate::error::Severity;
@@ -19,7 +18,7 @@ pub struct Config {
 
     // diagnostic configuration
     display: WarningDisplay,
-    diagnostics: HashMap<String, WarningLevel, RandomState>,
+    diagnostics: HashMap<String, WarningLevel>,
     pub code_standards: CodeStandards,
 
     // tool-specific configuration
@@ -101,10 +100,10 @@ pub struct MapRenderer {
     /// Map from render pass name to whether it should be enabled/disabled.
     ///
     /// Priority is: CLI arguments > config > defaults.
-    pub render_passes: HashMap<String, bool, RandomState>,
+    pub render_passes: HashMap<String, bool>,
 
     /// Map from typepath to layer number.
-    pub fancy_layers: HashMap<String, f32, RandomState>,
+    pub fancy_layers: HashMap<String, f32>,
 
     /// List of typepath to just hide
     pub hide_invisible: Vec<String>,
@@ -186,7 +185,7 @@ impl PartialEq<Severity> for WarningLevel {
 
 impl Default for DebugEngine {
     fn default() -> Self {
-        Self::Extools
+        Self::Auxtools
     }
 }
 

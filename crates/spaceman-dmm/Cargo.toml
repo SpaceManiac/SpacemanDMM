@@ -2,7 +2,7 @@
 name = "spaceman-dmm"
 version = "0.1.0"
 authors = ["Tad Hardesty <tad@platymuus.com>"]
-edition = "2018"
+edition = "2021"
 
 [[bin]]
 name = "editor"
@@ -35,4 +35,4 @@ branch = "zenity"
 
 [build-dependencies]
 chrono = "0.4.19"
-git2 = { version = "0.18.2", default-features = false }
+git2 = { version = "0.20.2", default-features = false }

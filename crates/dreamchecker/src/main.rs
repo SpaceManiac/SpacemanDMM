@@ -21,7 +21,7 @@ fn main() {
     while let Some(arg) = args.next() {
         if arg == "-V" || arg == "--version" {
             println!(
-                "dreamchecker {}  Copyright (C) 2017-2024  Tad Hardesty",
+                "dreamchecker {}  Copyright (C) 2017-2025  Tad Hardesty",
                 env!("CARGO_PKG_VERSION")
             );
             println!("{}", include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")));
@@ -38,7 +38,7 @@ fn main() {
         } else if arg == "--parse-only" {
             parse_only = true;
         } else {
-            eprintln!("unknown argument: {}", arg);
+            eprintln!("unknown argument: {arg}");
             return;
         }
     }
@@ -50,12 +50,12 @@ fn main() {
             .expect("no .dme found"));
 
     let mut context = dm::Context::default();
+    context.set_print_severity(Some(dm::Severity::Info));
     if let Some(filepath) = config_file {
         context.force_config(filepath.as_ref());
     } else {
         context.autodetect_config(&dme);
     }
-    context.set_print_severity(Some(dm::Severity::Info));
 
     println!("============================================================");
     println!("Parsing {}...\n", dme.display());
@@ -72,7 +72,7 @@ fn main() {
 
     println!("============================================================");
     let errors = context.errors().iter().filter(|each| each.severity() <= dm::Severity::Info).count();
-    println!("Found {} diagnostics", errors);
+    println!("Found {errors} diagnostics");
 
     if json {
         serde_json::to_writer(std::io::stdout().lock(), &json! {{

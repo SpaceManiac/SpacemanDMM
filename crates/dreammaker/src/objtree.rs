@@ -2,12 +2,14 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::ops::Range;
+use std::mem::size_of;
 
 use get_size::GetSize;
 use get_size_derive::GetSize;
 
-use ahash::RandomState;
 use indexmap::IndexMap;
+use foldhash::fast::RandomState;
 
 use crate::heap_size_of_index_map;
 
@@ -91,12 +93,18 @@ pub struct ProcDeclaration {
     pub id: SymbolId,
 }
 
+fn heap_size_of_location_range(_range: &Option<Range<Location>>) -> usize {
+    size_of::<Range<Location>>()
+}
+
 #[derive(Debug, Clone, GetSize)]
 pub struct ProcValue {
     pub location: Location,
     pub parameters: Box<[Parameter]>,
     pub docs: DocCollection,
     pub code: Option<Block>,
+    #[get_size(size_fn = heap_size_of_location_range)]
+    pub body_range: Option<Range<Location>>,
 }
 
 #[derive(Debug, Clone, Default, GetSize)]
@@ -173,7 +181,7 @@ impl Type {
     /// Checks whether this type's path is a subpath of the given path.
     #[inline]
     pub fn is_subpath_of(&self, parent: &str) -> bool {
-        subpath(&self.path, parent)
+        ispath(&self.path, parent)
     }
 
     // Used in the constant evaluator which holds an &mut ObjectTree and thus
@@ -204,9 +212,13 @@ impl Type {
 }
 
 #[inline]
-pub fn subpath(path: &str, parent: &str) -> bool {
-    debug_assert!(path.starts_with('/') && parent.starts_with('/') && parent.ends_with('/'));
-    path == &parent[..parent.len() - 1] || path.starts_with(parent)
+pub fn ispath(path: &str, parent: &str) -> bool {
+    debug_assert!(path.starts_with('/') && parent.starts_with('/'));
+    let parent = parent.trim_end_matches('/');
+    match path.strip_prefix(parent) {
+        Some(rest) => rest.is_empty() || rest.starts_with('/'),
+        None => false,
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -661,21 +673,21 @@ impl ObjectTree {
         self.node_indices().map(move |idx| TypeRef::new(self, idx))
     }
 
-    pub fn root(&self) -> TypeRef {
+    pub fn root(&self) -> TypeRef<'_> {
         TypeRef::new(self, NodeIndex::new(0))
     }
 
-    pub fn find(&self, path: &str) -> Option<TypeRef> {
+    pub fn find(&self, path: &str) -> Option<TypeRef<'_>> {
         if path.is_empty() {
             return Some(self.root());
         }
         self.types.get(path).map(|&ix| TypeRef::new(self, ix))
     }
 
-    pub fn expect(&self, path: &str) -> TypeRef {
+    pub fn expect(&self, path: &str) -> TypeRef<'_> {
         match self.types.get(path) {
             Some(&ix) => TypeRef::new(self, ix),
-            None => panic!("type not found: {:?}", path),
+            None => panic!("type not found: {path:?}"),
         }
     }
 
@@ -683,7 +695,7 @@ impl ObjectTree {
         self.graph.get(type_.parent_type.index())
     }
 
-    pub fn type_by_path<I>(&self, path: I) -> Option<TypeRef>
+    pub fn type_by_path<I>(&self, path: I) -> Option<TypeRef<'_>>
     where
         I: IntoIterator,
         I::Item: AsRef<str>,
@@ -696,7 +708,7 @@ impl ObjectTree {
         }
     }
 
-    pub fn type_by_path_approx<I>(&self, path: I) -> (bool, TypeRef)
+    pub fn type_by_path_approx<I>(&self, path: I) -> (bool, TypeRef<'_>)
     where
         I: IntoIterator,
         I::Item: AsRef<str>,
@@ -720,7 +732,7 @@ impl ObjectTree {
         (true, TypeRef::new(self, current))
     }
 
-    pub fn type_by_constant(&self, constant: &Constant) -> Option<TypeRef> {
+    pub fn type_by_constant(&self, constant: &Constant) -> Option<TypeRef<'_>> {
         match constant {
             Constant::String(string_path) => self.find(string_path),
             Constant::Prefab(pop) => self.type_by_path(pop.path.iter()),
@@ -825,7 +837,15 @@ impl ObjectTreeBuilder {
     fn assign_parent_types(&mut self, context: &Context) {
         for (path, &type_idx) in self.inner.types.iter() {
             let mut location = self.inner[type_idx].location;
-            let idx = if path == "/datum" || path == "/list" || path == "/savefile" || path == "/world" {
+            let idx = if path == "/datum"
+                || path == "/list"
+                || path == "/alist"
+                || path == "/savefile"
+                || path == "/world"
+                || path == "/vector"
+                || path == "/pixloc"
+                || path == "/callee"
+            {
                 // These types have no parent and cannot have one added. In the official compiler:
                 // - setting list or savefile/parent_type is denied with the same error as setting something's parent type to them;
                 // - setting datum/parent_type infinite loops the compiler;
@@ -837,7 +857,7 @@ impl ObjectTreeBuilder {
                     if var.value.expression.is_some() {
                         context.register_error(DMError::new(
                             var.value.location,
-                            format!("not allowed to change {}/parent_type", path),
+                            format!("not allowed to change {path}/parent_type"),
                         ));
                     }
                 }
@@ -879,7 +899,7 @@ impl ObjectTreeBuilder {
                             Ok(&empty_string)
                         } else {
                             // A weird situation which should not happen.
-                            Err(DMError::new(location, format!("missing {}/parent_type", path)))
+                            Err(DMError::new(location, format!("missing {path}/parent_type")))
                         };
 
                         match constant {
@@ -895,7 +915,7 @@ impl ObjectTreeBuilder {
                                 parent_type = &parent_type_buf;
                             }
                             Ok(other) => {
-                                context.register_error(DMError::new(location, format!("value of {}/parent_type must be a string or typepath, got {}", path, other)));
+                                context.register_error(DMError::new(location, format!("value of {path}/parent_type must be a string or typepath, got {other}")));
                             }
                             Err(e) => {
                                 context.register_error(e);
@@ -913,7 +933,7 @@ impl ObjectTreeBuilder {
                 } else {
                     context.register_error(DMError::new(
                         location,
-                        format!("bad parent type for {}: {}", path, parent_type),
+                        format!("bad parent type for {path}: {parent_type}"),
                     ));
                     NodeIndex::new(0)  // on bad parent_type, fall back to the root
                 }
@@ -1087,6 +1107,7 @@ impl ObjectTreeBuilder {
         let mut var_type = VarTypeBuilder {
             flags,
             type_path,
+            input_type: None,
         };
         var_type.suffix(&suffix);
 
@@ -1125,6 +1146,7 @@ impl ObjectTreeBuilder {
         parameters: Vec<Parameter>,
         return_type: ProcReturnType,
         code: Option<Block>,
+        body_range: Option<Range<Location>>,
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let node = &mut self.inner.graph[parent.index()];
         let proc = node.procs.entry(name.to_owned()).or_insert_with(|| TypeProc {
@@ -1151,7 +1173,8 @@ impl ObjectTreeBuilder {
             location,
             parameters: parameters.into(),
             docs: Default::default(),
-            code
+            code,
+            body_range,
         };
 
         // DM really does reorder the declaration to appear before the override,
@@ -1239,6 +1262,7 @@ impl ObjectTreeBuilder {
             elems.len() + 1,
             params.iter().copied().map(|param| Parameter { name: param.into(), .. Default::default() }).collect(),
             None,
+            None,
         ).unwrap().1
     }
 
@@ -1251,6 +1275,7 @@ impl ObjectTreeBuilder {
         len: usize,
         parameters: Vec<Parameter>,
         code: Option<Block>,
+        body_range: Option<Range<Location>>,
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let (parent, mut proc_name) = self.get_from_path(location, &mut path, len)?;
         let mut declaration = None;
@@ -1272,11 +1297,11 @@ impl ObjectTreeBuilder {
         if let Some(other) = path.next() {
             return Err(DMError::new(
                 location,
-                format!("proc name must be a single identifier (spurious {:?})", other),
+                format!("proc name must be a single identifier (spurious {other:?})"),
             ));
         }
 
-        self.register_proc(context, location, parent, proc_name, declaration, parameters, ProcReturnType::default(), code)
+        self.register_proc(context, location, parent, proc_name, declaration, parameters, ProcReturnType::default(), code, body_range)
     }
 }
 
@@ -1312,7 +1337,7 @@ impl NodeIndex {
 
     #[inline]
     pub fn end() -> Self {
-        NodeIndex(std::u32::MAX)
+        NodeIndex(u32::MAX)
     }
 }
 

@@ -2,7 +2,7 @@
 #![allow(unsafe_code)]
 
 use super::SequenceNumber;
-use std::collections::HashMap;
+use foldhash::HashMap;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 
@@ -166,7 +166,7 @@ impl Launched {
 fn pipe_output<R: std::io::Read + Send + 'static>(seq: Arc<SequenceNumber>, keyword: &'static str, stream: Option<R>) -> std::io::Result<()> {
     let Some(stream2) = stream else { return Ok(()); };
     std::thread::Builder::new()
-        .name(format!("launched debuggee {} relay", keyword))
+        .name(format!("launched debuggee {keyword} relay"))
         .spawn(move || {
             use std::io::BufRead;
 
@@ -185,7 +185,7 @@ fn pipe_output<R: std::io::Read + Send + 'static>(seq: Arc<SequenceNumber>, keyw
                     }
                     Err(e) => {
                         seq.issue_event(dap_types::OutputEvent {
-                            output: format!("[launched {}] {}", keyword, e),
+                            output: format!("[launched {keyword}] {e}"),
                             category: Some("console".to_owned()),
                             ..Default::default()
                         });

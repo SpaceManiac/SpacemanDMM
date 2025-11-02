@@ -154,10 +154,7 @@ impl<K: Clone, V> Iterator for IntoIter<K, V> {
             }
 
             if self.current.is_none() {
-                let mut node = match self.stack.pop() {
-                    Some(node) => node,
-                    None => return None,
-                };
+                let mut node = self.stack.pop()?;
                 self.push_node(node.right.take());
                 self.current = Some((node.key, node.data.into_iter()));
             }
@@ -178,7 +175,7 @@ fn test_iterators() {
     let iter = RangePairIter::new(&tree, Bound::Included(0), Bound::Included(1000));
 
     for (k, v) in iter {
-        println!("{:?} {}", k, v);
+        println!("{k:?} {v}");
     }
 
     let mut iter = RangePairIter::new(&tree, Bound::Included(0), Bound::Included(1000));

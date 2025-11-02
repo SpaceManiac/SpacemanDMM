@@ -72,7 +72,7 @@ var/global/bill = 1
         // Check for errors
         let mut sum_errors: Vec<String> = vec![];
         for error in errors.iter() {
-            sum_errors.push(format!("{}", error));
+            sum_errors.push(format!("{error}"));
         }
         if !sum_errors.is_empty() {
             panic!("\n{}", sum_errors.join("\n").as_str());
@@ -239,9 +239,8 @@ var/global/bill = 1
 }
 
 #[test]
-fn union_return_types() {
+fn return_type_union() {
     // https://github.com/SpaceManiac/SpacemanDMM/issues/385
-
     with_code("
 /proc/returns_num_or_text() as num | text
     ", |context, tree| {
@@ -251,5 +250,41 @@ fn union_return_types() {
             tree.root().get_proc("returns_num_or_text").unwrap().get_declaration().unwrap().return_type,
             ProcReturnType::InputType(InputType::NUM | InputType::TEXT),
         );
+    });
+}
+
+#[test]
+fn return_type_list() {
+    // https://github.com/SpaceManiac/SpacemanDMM/issues/399
+    with_code("
+/proc/returns_list() as list
+    ", |context, tree| {
+        context.assert_success();
+
+        assert_eq!(
+            tree.root().get_proc("returns_list").unwrap().get_declaration().unwrap().return_type,
+            ProcReturnType::InputType(InputType::LIST),
+        );
+    });
+}
+
+#[test]
+fn proc_operator_slash() {
+    // https://github.com/SpaceManiac/SpacemanDMM/issues/399
+    with_code("
+/datum/operator/proc/foo()
+/datum/operator/()
+/datum/operator/=()
+/datum/operator
+    proc/bar()
+    ", |context, tree| {
+        context.assert_success();
+
+        eprintln!("{:#?}", tree.expect("/datum").procs);
+
+        tree.expect("/datum/operator").get_proc("foo").unwrap();
+        tree.expect("/datum").get_proc("operator/").unwrap();
+        tree.expect("/datum").get_proc("operator/=").unwrap();
+        tree.expect("/datum/operator").get_proc("bar").unwrap();
     });
 }

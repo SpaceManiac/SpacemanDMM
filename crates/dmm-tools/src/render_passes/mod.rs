@@ -188,7 +188,7 @@ impl RenderPass for HideSpace {
 pub struct HideAreas;
 impl RenderPass for HideAreas {
     fn path_filter(&self, path: &str) -> bool {
-        !subpath(path, "/area/")
+        !ispath(path, "/area/")
     }
 }
 
@@ -211,7 +211,7 @@ impl RenderPass for HideInvisible {
     }
 
     fn path_filter(&self, path: &str) -> bool {
-        !subpath(path, "/obj/effect/spawner/xmastree/")
+        !ispath(path, "/obj/effect/spawner/xmastree/")
     }
 
     fn early_filter(&self, atom: &Atom, objtree: &ObjectTree) -> bool {
@@ -382,7 +382,7 @@ impl RenderPass for Pretty {
         } else if atom.istype("/obj/structure/tank_dispenser/") {
             if let &Constant::Float(oxygen) = atom.get_var("oxygentanks", objtree) {
                 match oxygen as i32 {
-                    4..=std::i32::MAX => add_to(overlays, atom, "oxygen-4"),
+                    4..=i32::MAX => add_to(overlays, atom, "oxygen-4"),
                     3 => add_to(overlays, atom, "oxygen-3"),
                     2 => add_to(overlays, atom, "oxygen-2"),
                     1 => add_to(overlays, atom, "oxygen-1"),
@@ -391,7 +391,7 @@ impl RenderPass for Pretty {
             }
             if let &Constant::Float(plasma) = atom.get_var("plasmatanks", objtree) {
                 match plasma as i32 {
-                    5..=std::i32::MAX => add_to(overlays, atom, "plasma-5"),
+                    5..=i32::MAX => add_to(overlays, atom, "plasma-5"),
                     4 => add_to(overlays, atom, "plasma-4"),
                     3 => add_to(overlays, atom, "plasma-3"),
                     2 => add_to(overlays, atom, "plasma-2"),
@@ -499,32 +499,32 @@ fn unary_aboveground(atom: &Atom, objtree: &ObjectTree) -> Option<&'static str> 
 impl FancyLayers {
     fn fancy_layer_for_path(&self, p: &str) -> Option<Layer> {
         for &(ref key, val) in self.overrides.iter() {
-            if subpath(p, key) {
+            if ispath(p, key) {
                 return Some(Layer::from(val));
             }
         }
 
-        if subpath(p, "/turf/open/floor/plating/") || subpath(p, "/turf/open/space/") {
+        if ispath(p, "/turf/open/floor/plating/") || ispath(p, "/turf/open/space/") {
             Some(Layer::from(-10))  // under everything
-        } else if subpath(p, "/turf/closed/mineral/") {
+        } else if ispath(p, "/turf/closed/mineral/") {
             Some(Layer::from(-3))   // above hidden stuff and plating but below walls
-        } else if subpath(p, "/turf/open/floor/") || subpath(p, "/turf/closed/") {
+        } else if ispath(p, "/turf/open/floor/") || ispath(p, "/turf/closed/") {
             Some(Layer::from(-2))   // above hidden pipes and wires
-        } else if subpath(p, "/turf/") {
+        } else if ispath(p, "/turf/") {
             Some(Layer::from(-10))  // under everything
-        } else if subpath(p, "/obj/effect/turf_decal/") {
+        } else if ispath(p, "/obj/effect/turf_decal/") {
             Some(Layer::from(-1))   // above turfs
-        } else if subpath(p, "/obj/structure/disposalpipe/") {
+        } else if ispath(p, "/obj/structure/disposalpipe/") {
             Some(Layer::from(-6))
-        } else if subpath(p, "/obj/machinery/atmospherics/pipe/") && !p.contains("visible") {
+        } else if ispath(p, "/obj/machinery/atmospherics/pipe/") && !p.contains("visible") {
             Some(Layer::from(-5))
-        } else if subpath(p, "/obj/structure/cable/") {
+        } else if ispath(p, "/obj/structure/cable/") {
             Some(Layer::from(-4))
-        } else if subpath(p, "/obj/machinery/power/terminal/") {
+        } else if ispath(p, "/obj/machinery/power/terminal/") {
             Some(Layer::from(-3.5))
-        } else if subpath(p, "/obj/structure/lattice/") {
+        } else if ispath(p, "/obj/structure/lattice/") {
             Some(Layer::from(-8))
-        } else if subpath(p, "/obj/machinery/navbeacon/") {
+        } else if ispath(p, "/obj/machinery/navbeacon/") {
             Some(Layer::from(-3))
         } else {
             None
