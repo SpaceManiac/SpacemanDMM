@@ -1454,6 +1454,7 @@ pub struct ForListStatement {
 pub struct ForKeyValueStatement {
     pub var_type: Option<VarType>,
     pub key: Ident2,
+    pub key_input_type: Option<InputType>,
     pub value: Ident2,
     /// Defaults to 'world'.
     pub in_list: Option<Expression>,
