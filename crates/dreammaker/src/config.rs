@@ -85,8 +85,7 @@ pub enum WarningLevel {
 }
 
 /// Available debug engines.
-#[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Default, Deserialize, Clone, Copy, PartialEq)]
 pub enum DebugEngine {
     #[serde(alias = "extools")]
     Extools,
