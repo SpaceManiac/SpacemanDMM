@@ -95,11 +95,13 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
 
                 // smoothing time
                 let mut neighborhood = [&[][..]; 9];
-                for (i, (dx, dy)) in [
+                #[rustfmt::skip]
+                const GRID: [(i32, i32); 9] = [
                     (-1,  1), (0,  1), (1,  1),
                     (-1,  0), (0,  0), (1,  0),
                     (-1, -1), (0, -1), (1, -1),
-                ].iter().enumerate() {
+                ];
+                for (i, (dx, dy)) in GRID.iter().enumerate() {
                     let new_x = x as i32 + dx;
                     let new_y = y as i32 - dy;
                     let (dim_y, dim_x) = ctx.level.grid.dim();

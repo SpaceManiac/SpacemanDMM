@@ -23,6 +23,7 @@ use dm::docs::*;
 
 use markdown::DocBlock;
 
+#[rustfmt::skip]
 const BUILD_INFO: &str = concat!(
     "dmdoc ", env!("CARGO_PKG_VERSION"), "  Copyright (C) 2017-2025  Tad Hardesty\n",
     include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")), "\n",

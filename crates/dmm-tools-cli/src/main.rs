@@ -435,8 +435,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             let result = render_many(context, command);
             let stdout = std::io::stdout();
             serde_json::to_writer(stdout.lock(), &result).unwrap();
-        }
-        // --------------------------------------------------------------------
+        },
     }
 }
 

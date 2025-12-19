@@ -544,7 +544,6 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     /// Consume next token unconditionally. Cannot be undone. Try `take_match!` instead.
     fn take(&mut self) -> Token {
         self.peek(); // Always populates self.next, so .take().unwrap() is OK
-        //assert_ne!(self.peek(), &Token::Eof, "internal parser error: EOF token was consumed");
         self.doc_comments_pending.clear();
         self.expected.clear();
         self.next.take().unwrap()

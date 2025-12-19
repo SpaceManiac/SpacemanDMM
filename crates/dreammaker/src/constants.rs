@@ -776,6 +776,7 @@ impl<'a> ConstantFolder<'a> {
                 }
             }
         }
+        #[rustfmt::skip]
         numeric!(Add +);
         numeric!(Sub -);
         numeric!(Mul *);
