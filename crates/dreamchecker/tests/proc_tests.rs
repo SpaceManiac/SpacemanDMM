@@ -3,9 +3,7 @@ extern crate dreamchecker as dc;
 use dc::test_helpers::check_errors_match;
 use dc::test_helpers::parse_a_file_for_test;
 
-pub const NO_PARENT_ERRORS: &[(u32, u16, &str)] = &[
-    (2, 5, "proc has no parent: /mob/proc/test"),
-];
+pub const NO_PARENT_ERRORS: &[(u32, u16, &str)] = &[(2, 5, "proc has no parent: /mob/proc/test")];
 
 #[test]
 fn no_parent() {
@@ -13,7 +11,8 @@ fn no_parent() {
 /mob/proc/test()
     ..()
     return
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, NO_PARENT_ERRORS);
 }
 
@@ -25,9 +24,14 @@ fn return_type() {
 
 /mob/proc/test2() as num
     return
-"##.trim();
+"##
+    .trim();
     let context = parse_a_file_for_test(code);
-    let error_text: Vec<String> = context.errors().iter().map(|error| format!("{error}")).collect();
+    let error_text: Vec<String> = context
+        .errors()
+        .iter()
+        .map(|error| format!("{error}"))
+        .collect();
     if !error_text.is_empty() {
         panic!("\n{}", error_text.join("\n"))
     }
@@ -49,6 +53,7 @@ fn return_type_failure() {
 
 /mob/proc/test2() as incorrect
     return
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, RETURN_TYPE_FAILURE_ERRORS);
 }

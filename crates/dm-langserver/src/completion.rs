@@ -70,7 +70,7 @@ fn item_var(ty: TypeRef, name: &str, var: &TypeVar) -> CompletionItem {
         kind: Some(CompletionItemKind::FIELD),
         detail: Some(detail),
         documentation: item_documentation(&var.value.docs),
-        .. Default::default()
+        ..Default::default()
     }
 }
 
@@ -125,14 +125,19 @@ fn items_ty<'a>(
         if contains(name, query) {
             results.push(CompletionItem {
                 insert_text: Some(name.to_owned()),
-                .. item_proc(ty, name, proc)
+                ..item_proc(ty, name, proc)
             });
         }
     }
 }
 
-pub fn combine_tree_path<'a, I>(iter: &I, mut absolute: bool, mut parts: &'a [String]) -> impl Iterator<Item=&'a str>
-    where I: Iterator<Item=(Span, &'a Annotation)> + Clone
+pub fn combine_tree_path<'a, I>(
+    iter: &I,
+    mut absolute: bool,
+    mut parts: &'a [String],
+) -> impl Iterator<Item = &'a str>
+where
+    I: Iterator<Item = (Span, &'a Annotation)> + Clone,
 {
     // cut off the part of the path we haven't selected
     if_annotation! { Annotation::InSequence(idx) in iter; {
@@ -167,7 +172,11 @@ pub fn combine_tree_path<'a, I>(iter: &I, mut absolute: bool, mut parts: &'a [St
 }
 
 impl Engine {
-    pub fn follow_type_path<'b, I>(&'b self, iter: &I, mut parts: &'b [(PathOp, String)]) -> Option<TypePathResult<'b>>
+    pub fn follow_type_path<'b, I>(
+        &'b self,
+        iter: &I,
+        mut parts: &'b [(PathOp, String)],
+    ) -> Option<TypePathResult<'b>>
     where
         I: Iterator<Item = (Span, &'b Annotation)> + Clone,
     {
@@ -178,7 +187,7 @@ impl Engine {
         // if we're on the right side of a 'list/', start the lookup there
         match parts.split_first() {
             Some(((PathOp::Slash, kwd), rest)) if kwd == "list" && !rest.is_empty() => parts = rest,
-            _ => {}
+            _ => {},
         }
 
         // use the first path op to select the starting type of the lookup
@@ -190,7 +199,7 @@ impl Engine {
             });
         }
         let mut ty = match parts[0].0 {
-            PathOp::Colon => return None,  // never finds anything, apparently?
+            PathOp::Colon => return None, // never finds anything, apparently?
             PathOp::Slash => self.objtree.root(),
             PathOp::Dot => match self.find_type_context(iter) {
                 (Some(base), _) => base,
@@ -229,14 +238,20 @@ impl Engine {
         Some(TypePathResult { ty, decl, proc })
     }
 
-    pub fn tree_completions(&self, results: &mut Vec<CompletionItem>, exact: bool, ty: TypeRef, query: &str) {
+    pub fn tree_completions(
+        &self,
+        results: &mut Vec<CompletionItem>,
+        exact: bool,
+        ty: TypeRef,
+        query: &str,
+    ) {
         // path keywords
         for &name in ["proc", "var", "verb"].iter() {
             if contains(name, query) {
                 results.push(CompletionItem {
                     label: name.to_owned(),
                     kind: Some(CompletionItemKind::KEYWORD),
-                    .. Default::default()
+                    ..Default::default()
                 })
             }
         }
@@ -249,7 +264,7 @@ impl Engine {
                         label: child.name().to_owned(),
                         kind: Some(CompletionItemKind::CLASS),
                         documentation: item_documentation(&child.docs),
-                        .. Default::default()
+                        ..Default::default()
                     });
                 }
             }
@@ -266,7 +281,7 @@ impl Engine {
                 if contains(name, query) {
                     results.push(CompletionItem {
                         insert_text: Some(format!("{name} = ")),
-                        .. item_var(ty, name, var)
+                        ..item_var(ty, name, var)
                     });
                 }
             }
@@ -293,7 +308,7 @@ impl Engine {
 
                     results.push(CompletionItem {
                         insert_text: Some(completion),
-                        .. item_proc(ty, name, proc)
+                        ..item_proc(ty, name, proc)
                     });
                 }
             }
@@ -325,7 +340,7 @@ impl Engine {
                         results.push(CompletionItem {
                             label: name.to_owned(),
                             kind: Some(CompletionItemKind::KEYWORD),
-                            .. Default::default()
+                            ..Default::default()
                         })
                     }
                 }
@@ -337,7 +352,7 @@ impl Engine {
                             label: child.name().to_owned(),
                             kind: Some(CompletionItemKind::CLASS),
                             documentation: item_documentation(&child.docs),
-                            .. Default::default()
+                            ..Default::default()
                         });
                     }
                 }
@@ -372,12 +387,16 @@ impl Engine {
                     next = ty.parent_type_without_root();
                 }
             },
-            _ => {}
+            _ => {},
         }
     }
 
-    pub fn unscoped_completions<'b, I>(&'b self, results: &mut Vec<CompletionItem>, iter: &I, query: &str)
-    where
+    pub fn unscoped_completions<'b, I>(
+        &'b self,
+        results: &mut Vec<CompletionItem>,
+        iter: &I,
+        query: &str,
+    ) where
         I: Iterator<Item = (Span, &'b Annotation)> + Clone,
     {
         let (ty, proc_name) = self.find_type_context(iter);
@@ -389,7 +408,7 @@ impl Engine {
                     results.push(CompletionItem {
                         label: name.to_owned(),
                         kind: Some(CompletionItemKind::KEYWORD),
-                        .. Default::default()
+                        ..Default::default()
                     });
                 }
             }
@@ -403,7 +422,7 @@ impl Engine {
                         label: name.clone(),
                         kind: Some(CompletionItemKind::VARIABLE),
                         detail: Some("(local)".to_owned()),
-                        .. Default::default()
+                        ..Default::default()
                     });
                 }
             }
@@ -420,7 +439,7 @@ impl Engine {
                                 label: param.name.clone(),
                                 kind: Some(CompletionItemKind::VARIABLE),
                                 detail: Some("(parameter)".to_owned()),
-                                .. Default::default()
+                                ..Default::default()
                             });
                         }
                     }
@@ -438,7 +457,7 @@ impl Engine {
                         kind: Some(CompletionItemKind::CONSTANT),
                         detail: Some(define.display_with_name(name).to_string()),
                         documentation: item_documentation(define.docs()),
-                        .. Default::default()
+                        ..Default::default()
                     });
                 }
             }

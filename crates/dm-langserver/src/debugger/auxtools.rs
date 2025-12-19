@@ -59,7 +59,8 @@ impl Auxtools {
                     seq,
                     responses: responses_sender,
                     last_error,
-                }.run(stream);
+                }
+                .run(stream);
             })
         };
 
@@ -87,25 +88,34 @@ impl Auxtools {
                 seq,
                 responses: responses_sender,
                 last_error,
-            }.spawn_listener(listener, connection_sender)
+            }
+            .spawn_listener(listener, connection_sender)
         };
 
-        Ok((port, Auxtools {
-            seq,
-            responses: responses_receiver,
-            _thread: thread,
-            stream: StreamState::Waiting(connection_receiver),
-            last_error,
-        }))
+        Ok((
+            port,
+            Auxtools {
+                seq,
+                responses: responses_receiver,
+                _thread: thread,
+                stream: StreamState::Waiting(connection_receiver),
+                last_error,
+            },
+        ))
     }
 
     fn read_response_or_disconnect(&mut self) -> Result<Response, Box<dyn std::error::Error>> {
-        match self.responses.recv_timeout(std::time::Duration::from_secs(5)) {
+        match self
+            .responses
+            .recv_timeout(std::time::Duration::from_secs(5))
+        {
             Ok(response) => Ok(response),
             Err(_) => {
                 self.disconnect();
-                Err(Box::new(super::GenericError("timed out waiting for response")))
-            }
+                Err(Box::new(super::GenericError(
+                    "timed out waiting for response",
+                )))
+            },
         }
     }
 
@@ -123,12 +133,12 @@ impl Auxtools {
                 stream.write_all(&data[..])?;
                 stream.flush()?;
                 Ok(())
-            }
+            },
 
             _ => {
                 // Success if not connected (kinda dumb)
                 Ok(())
-            }
+            },
         }
     }
 
@@ -171,8 +181,13 @@ impl Auxtools {
         }
     }
 
-    pub fn eval(&mut self, frame_id: Option<u32>, command: &str, context: Option<String>) -> Result<EvalResponse, Box<dyn std::error::Error>> {
-        self.send_or_disconnect(Request::Eval{
+    pub fn eval(
+        &mut self,
+        frame_id: Option<u32>,
+        command: &str,
+        context: Option<String>,
+    ) -> Result<EvalResponse, Box<dyn std::error::Error>> {
+        self.send_or_disconnect(Request::Eval {
             frame_id,
             command: command.to_owned(),
             context,
@@ -185,17 +200,28 @@ impl Auxtools {
     }
 
     #[allow(dead_code)]
-    pub fn get_current_proc(&mut self, frame_id: u32) -> Result<Option<(String, u32)>, Box<dyn std::error::Error>> {
+    pub fn get_current_proc(
+        &mut self,
+        frame_id: u32,
+    ) -> Result<Option<(String, u32)>, Box<dyn std::error::Error>> {
         self.send_or_disconnect(Request::CurrentInstruction { frame_id })?;
 
         match self.read_response_or_disconnect()? {
             Response::CurrentInstruction(ins) => Ok(ins.map(|x| (x.proc.path, x.proc.override_id))),
-            response => Err(Box::new(UnexpectedResponse::new("CurrentInstruction", response))),
+            response => Err(Box::new(UnexpectedResponse::new(
+                "CurrentInstruction",
+                response,
+            ))),
         }
     }
 
     #[allow(dead_code)]
-    pub fn get_line_number(&mut self, path: &str, override_id: u32, offset: u32) -> Result<Option<u32>, Box<dyn std::error::Error>> {
+    pub fn get_line_number(
+        &mut self,
+        path: &str,
+        override_id: u32,
+        offset: u32,
+    ) -> Result<Option<u32>, Box<dyn std::error::Error>> {
         self.send_or_disconnect(Request::LineNumber {
             proc: ProcRef {
                 path: path.to_owned(),
@@ -210,7 +236,12 @@ impl Auxtools {
         }
     }
 
-    pub fn get_offset(&mut self, path: &str, override_id: u32, line: u32) -> Result<Option<u32>, Box<dyn std::error::Error>> {
+    pub fn get_offset(
+        &mut self,
+        path: &str,
+        override_id: u32,
+        line: u32,
+    ) -> Result<Option<u32>, Box<dyn std::error::Error>> {
         self.send_or_disconnect(Request::Offset {
             proc: ProcRef {
                 path: path.to_owned(),
@@ -225,10 +256,14 @@ impl Auxtools {
         }
     }
 
-    pub fn set_breakpoint(&mut self, instruction: InstructionRef, condition: Option<String>) -> Result<BreakpointSetResult, Box<dyn std::error::Error>> {
+    pub fn set_breakpoint(
+        &mut self,
+        instruction: InstructionRef,
+        condition: Option<String>,
+    ) -> Result<BreakpointSetResult, Box<dyn std::error::Error>> {
         self.send_or_disconnect(Request::BreakpointSet {
             instruction,
-            condition
+            condition,
         })?;
 
         match self.read_response_or_disconnect()? {
@@ -237,14 +272,20 @@ impl Auxtools {
         }
     }
 
-    pub fn unset_breakpoint(&mut self, instruction: &InstructionRef) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn unset_breakpoint(
+        &mut self,
+        instruction: &InstructionRef,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         self.send_or_disconnect(Request::BreakpointUnset {
             instruction: instruction.clone(),
         })?;
 
         match self.read_response_or_disconnect()? {
             Response::BreakpointUnset { .. } => Ok(()),
-            response => Err(Box::new(UnexpectedResponse::new("BreakpointUnset", response))),
+            response => Err(Box::new(UnexpectedResponse::new(
+                "BreakpointUnset",
+                response,
+            ))),
         }
     }
 
@@ -332,25 +373,31 @@ impl Auxtools {
     }
 
     // TODO: return all the scopes
-    pub fn get_scopes(&mut self, frame_id: u32) -> Result<AuxtoolsScopes, Box<dyn std::error::Error>> {
-        self.send_or_disconnect(Request::Scopes {
-            frame_id
-        })?;
+    pub fn get_scopes(
+        &mut self,
+        frame_id: u32,
+    ) -> Result<AuxtoolsScopes, Box<dyn std::error::Error>> {
+        self.send_or_disconnect(Request::Scopes { frame_id })?;
 
         match self.read_response_or_disconnect()? {
             Response::Scopes {
                 arguments,
                 locals,
                 globals,
-            } => Ok(AuxtoolsScopes { arguments, locals, globals }),
+            } => Ok(AuxtoolsScopes {
+                arguments,
+                locals,
+                globals,
+            }),
             response => Err(Box::new(UnexpectedResponse::new("Scopes", response))),
         }
     }
 
-    pub fn get_variables(&mut self, vars: VariablesRef) -> Result<Vec<Variable>, Box<dyn std::error::Error>> {
-        self.send_or_disconnect(Request::Variables {
-            vars
-        })?;
+    pub fn get_variables(
+        &mut self,
+        vars: VariablesRef,
+    ) -> Result<Vec<Variable>, Box<dyn std::error::Error>> {
+        self.send_or_disconnect(Request::Variables { vars })?;
 
         match self.read_response_or_disconnect()? {
             Response::Variables { vars } => Ok(vars),
@@ -362,7 +409,10 @@ impl Auxtools {
         self.last_error.read().unwrap().clone()
     }
 
-    pub fn set_catch_runtimes(&mut self, should_catch: bool) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn set_catch_runtimes(
+        &mut self,
+        should_catch: bool,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         self.send_or_disconnect(Request::CatchRuntimes { should_catch })
     }
 }
@@ -376,19 +426,19 @@ impl AuxtoolsThread {
         thread::spawn(move || match listener.accept() {
             Ok((stream, _)) => {
                 match connection_sender.send(stream.try_clone().unwrap()) {
-                    Ok(_) => {}
+                    Ok(_) => {},
                     Err(e) => {
                         eprintln!("Debug client thread failed to pass cloned TcpStream: {e}");
                         return;
-                    }
+                    },
                 }
 
                 self.run(stream);
-            }
+            },
 
             Err(e) => {
                 eprintln!("Debug client failed to accept connection: {e}");
-            }
+            },
         })
     }
 
@@ -401,7 +451,7 @@ impl AuxtoolsThread {
 
             Response::Notification { message: _message } => {
                 debug_output!(in self.seq, "[auxtools] {}", _message);
-            }
+            },
 
             Response::BreakpointHit { reason } => {
                 let mut description = None;
@@ -414,7 +464,7 @@ impl AuxtoolsThread {
                         self.last_error.write().unwrap().clone_from(&error);
                         description = Some(error);
                         dap_types::StoppedEvent::REASON_EXCEPTION
-                    }
+                    },
                 };
 
                 self.seq.issue_event(dap_types::StoppedEvent {
@@ -424,11 +474,11 @@ impl AuxtoolsThread {
                     allThreadsStopped: Some(true),
                     ..Default::default()
                 });
-            }
+            },
 
             x => {
                 self.responses.send(x)?;
-            }
+            },
         }
 
         Ok(false)
@@ -449,7 +499,7 @@ impl AuxtoolsThread {
                 Err(e) => {
                     eprintln!("Debug server thread read error: {e}");
                     break;
-                }
+                },
             };
 
             buf.resize(len as usize, 0);
@@ -459,7 +509,7 @@ impl AuxtoolsThread {
                 Err(e) => {
                     eprintln!("Debug server thread read error: {e}");
                     break;
-                }
+                },
             };
 
             match self.handle_response(&buf[..]) {
@@ -468,12 +518,12 @@ impl AuxtoolsThread {
                         eprintln!("Debug server disconnected");
                         break;
                     }
-                }
+                },
 
                 Err(e) => {
                     eprintln!("Debug server thread failed to handle request: {e}");
                     break;
-                }
+                },
             }
         }
 
@@ -486,7 +536,9 @@ pub struct UnexpectedResponse(String);
 
 impl UnexpectedResponse {
     fn new(expected: &'static str, received: Response) -> Self {
-        Self(format!("received unexpected response: expected {expected}, got {received:?}"))
+        Self(format!(
+            "received unexpected response: expected {expected}, got {received:?}"
+        ))
     }
 }
 

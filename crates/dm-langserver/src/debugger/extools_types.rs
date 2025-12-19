@@ -5,8 +5,8 @@
 //! > All communication happens over a TCP socket using a JSON-based protocol.
 //! > A null byte signifies the end of a message.
 #![allow(dead_code)]
-use serde_json::Value as Json;
 use foldhash::HashMap;
+use serde_json::Value as Json;
 
 // ----------------------------------------------------------------------------
 // Extools data structures
@@ -132,11 +132,14 @@ impl ValueText {
         let ref_ = Ref(raw);
         let is_list = raw >> 24 == 0x0F;
 
-        (ValueText {
-            literal: Literal::Ref(ref_),
-            has_vars: !is_list,
-            is_list,
-        }, ref_)
+        (
+            ValueText {
+                literal: Literal::Ref(ref_),
+                has_vars: !is_list,
+                is_list,
+            },
+            ref_,
+        )
     }
 
     pub fn to_variables_reference(&self) -> i64 {
@@ -165,12 +168,10 @@ impl std::fmt::Display for Literal {
             Literal::String(s) => write!(fmt, "{s:?}"),
             Literal::Typepath(t) => write!(fmt, "{t}"),
             Literal::Resource(f) => write!(fmt, "'{f}'"),
-            Literal::Proc(p) => {
-                match p.rfind('/') {
-                    Some(idx) => write!(fmt, "{}/proc/{}", &p[..idx], &p[idx + 1..]),
-                    None => write!(fmt, "{p}"),
-                }
-            }
+            Literal::Proc(p) => match p.rfind('/') {
+                Some(idx) => write!(fmt, "{}/proc/{}", &p[..idx], &p[idx + 1..]),
+                None => write!(fmt, "{p}"),
+            },
         }
     }
 }

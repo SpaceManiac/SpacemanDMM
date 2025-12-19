@@ -11,7 +11,7 @@ fn with_test_dme<F: FnOnce(Preprocessor)>(context: &Context, f: F) {
         None => {
             println!("Set TEST_DME to check full pipeline");
             return;
-        }
+        },
     };
     f(Preprocessor::new(context, PathBuf::from(dme)).expect("failed to open test file"))
 }
@@ -35,7 +35,8 @@ fn check_indentor() {
             &mut string,
             indents::IndentProcessor::new(&context, &mut preprocessor).map(|t| t.token),
             true,
-        ).unwrap();
+        )
+        .unwrap();
         context.assert_success();
     });
 }
@@ -44,7 +45,10 @@ fn check_indentor() {
 fn check_parser() {
     let context = Context::default();
     with_test_dme(&context, |mut preprocessor| {
-        let mut parser = parser::Parser::new(&context, indents::IndentProcessor::new(&context, &mut preprocessor));
+        let mut parser = parser::Parser::new(
+            &context,
+            indents::IndentProcessor::new(&context, &mut preprocessor),
+        );
         parser.enable_procs();
         let _tree = parser.parse_object_tree();
         context.assert_success();

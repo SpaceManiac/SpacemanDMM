@@ -121,7 +121,13 @@ pub fn debugger_main<I: Iterator<Item = String>>(mut args: I) {
         extools_dll: None,
         debug_server_dll: None,
     };
-    let mut debugger = Debugger::new(ctx.config().debugger.engine, dreamseeker_exe, None, db, Box::new(std::io::stdout()));
+    let mut debugger = Debugger::new(
+        ctx.config().debugger.engine,
+        dreamseeker_exe,
+        None,
+        db,
+        Box::new(std::io::stdout()),
+    );
     jrpc_io::run_until_stdin_eof(|message| debugger.handle_input(message));
 }
 
@@ -142,8 +148,7 @@ impl DebugDatabaseBuilder {
             extools_dll: _,
             debug_server_dll: _,
         } = self;
-        let mut line_numbers: HashMap<dm::FileId, Vec<LineNumber>> =
-            HashMap::new();
+        let mut line_numbers: HashMap<dm::FileId, Vec<LineNumber>> = HashMap::new();
 
         objtree.root().recurse(&mut |ty| {
             for (name, proc) in ty.procs.iter() {
@@ -196,8 +201,8 @@ fn get_proc<'o>(
     match bits.last() {
         Some(&"proc") | Some(&"verb") => {
             bits.pop();
-        }
-        _ => {}
+        },
+        _ => {},
     }
     let typename = bits.join("/");
 
@@ -260,7 +265,13 @@ struct Debugger {
 }
 
 impl Debugger {
-    fn new(engine: DebugEngine, dreamseeker_exe: String, env: Option<HashMap<String, String>>, mut db: DebugDatabaseBuilder, stream: OutStream) -> Self {
+    fn new(
+        engine: DebugEngine,
+        dreamseeker_exe: String,
+        env: Option<HashMap<String, String>>,
+        mut db: DebugDatabaseBuilder,
+        stream: OutStream,
+    ) -> Self {
         Debugger {
             engine,
             dreamseeker_exe,
@@ -296,7 +307,7 @@ impl Debugger {
                 let handled = match Self::handle_request_table(&request.command) {
                     Some(handler) => {
                         handler(self, request.arguments.unwrap_or(serde_json::Value::Null))
-                    }
+                    },
                     None => Err(format!("Request NYI: {}", request.command).into()),
                 };
 
@@ -316,13 +327,13 @@ impl Debugger {
                             }
                             debug_output!(in self.seq, " - {}", message);
                             None
-                        }
+                        },
                     },
                     command,
                 };
                 self.seq
                     .send_raw(&serde_json::to_string(&response).expect("response encode error"))
-            }
+            },
             other => return Err(format!("unknown `type` field {other:?}").into()),
         }
         Ok(())
@@ -367,9 +378,10 @@ impl Debugger {
                         threadId: k,
                     });
                 }
-            }
+            },
 
-            DebugClient::Auxtools(auxtools) => for stack in auxtools.get_stacks().unwrap_or_default() {
+            DebugClient::Auxtools(auxtools) => {
+                for stack in auxtools.get_stacks().unwrap_or_default() {
                     if stack.id == 0 {
                         continue;
                     }
@@ -377,7 +389,8 @@ impl Debugger {
                         reason: dap_types::ThreadEvent::REASON_EXITED.to_owned(),
                         threadId: stack.id as i64,
                     });
-                },
+                }
+            },
         }
     }
 }
@@ -454,14 +467,12 @@ impl Debugger {
             supportsFunctionBreakpoints: Some(true),
             supportsConditionalBreakpoints: Some(true),
             supportsDisassembleRequest: Some(true),
-            exceptionBreakpointFilters: Some(vec![
-                ExceptionBreakpointsFilter {
-                    filter: EXCEPTION_FILTER_RUNTIMES.to_owned(),
-                    label: "Runtime errors".to_owned(),
-                    default: Some(true),
-                }
-            ]),
-            .. Default::default()
+            exceptionBreakpointFilters: Some(vec![ExceptionBreakpointsFilter {
+                filter: EXCEPTION_FILTER_RUNTIMES.to_owned(),
+                label: "Runtime errors".to_owned(),
+                default: Some(true),
+            }]),
+            ..Default::default()
         }))
     }
 
@@ -484,7 +495,8 @@ impl Debugger {
                         extools_dll = Some(dll.into());
                     }
 
-                    #[cfg(extools_bundle)] {
+                    #[cfg(extools_bundle)]
+                    {
                         if extools_dll.is_none() {
                             extools_dll = Some(self::extools_bundle::extract()?);
                         }
@@ -494,7 +506,7 @@ impl Debugger {
                         port,
                         dll: extools_dll,
                     }
-                }
+                },
 
                 DebugEngine::Auxtools => {
                     let (port, auxtools) = Auxtools::listen(self.seq.clone())?;
@@ -508,7 +520,8 @@ impl Debugger {
                         debug_server_dll = Some(dll.into());
                     }
 
-                    #[cfg(auxtools_bundle)] {
+                    #[cfg(auxtools_bundle)]
+                    {
                         if debug_server_dll.is_none() {
                             debug_server_dll = Some(self::auxtools_bundle::extract()?);
                         }
@@ -518,26 +531,33 @@ impl Debugger {
                         port,
                         dll: debug_server_dll,
                     }
-                }
+                },
             })
         } else {
             None
         };
 
         // Launch the subprocess.
-        self.launched = Some(Launched::new(self.seq.clone(), &self.dreamseeker_exe, self.env.as_ref(), &params.dmb, engine_params)?);
+        self.launched = Some(Launched::new(
+            self.seq.clone(),
+            &self.dreamseeker_exe,
+            self.env.as_ref(),
+            &params.dmb,
+            engine_params,
+        )?);
         Ok(())
     }
 
     fn AttachVsc(&mut self, params: P<AttachVsc>) -> R<AttachVsc> {
         self.client = match self.engine {
-            DebugEngine::Extools => {
-                DebugClient::Extools(ExtoolsHolder::attach(self.seq.clone(), params.port.unwrap_or(extools::DEFAULT_PORT))?)
-            }
+            DebugEngine::Extools => DebugClient::Extools(ExtoolsHolder::attach(
+                self.seq.clone(),
+                params.port.unwrap_or(extools::DEFAULT_PORT),
+            )?),
 
             DebugEngine::Auxtools => {
                 DebugClient::Auxtools(Auxtools::connect(self.seq.clone(), params.port)?)
-            }
+            },
         };
         Ok(())
     }
@@ -549,11 +569,11 @@ impl Debugger {
         match &mut self.client {
             DebugClient::Extools(extools) => {
                 extools.disconnect();
-            }
+            },
 
             DebugClient::Auxtools(auxtools) => {
                 auxtools.disconnect();
-            }
+            },
         }
 
         if let Some(launched) = self.launched.take() {
@@ -575,12 +595,12 @@ impl Debugger {
                 self.stddef_dm_info = Some(StddefDmInfo::new(text));
 
                 extools.configuration_done();
-            }
+            },
 
             DebugClient::Auxtools(auxtools) => {
                 self.stddef_dm_info = auxtools.get_stddef()?.map(StddefDmInfo::new);
                 auxtools.configured()?;
-            }
+            },
         }
         Ok(())
     }
@@ -588,7 +608,6 @@ impl Debugger {
     fn Threads(&mut self, (): P<Threads>) -> R<Threads> {
         match &mut self.client {
             DebugClient::Extools(extools) => {
-
                 let mut threads = Vec::new();
 
                 let extools = extools.get()?;
@@ -606,33 +625,29 @@ impl Debugger {
                     });
                 }
 
-                Ok(ThreadsResponse {
-                    threads,
-                })
+                Ok(ThreadsResponse { threads })
             },
 
             DebugClient::Auxtools(auxtools) => {
-                let mut threads : Vec<Thread> = auxtools.get_stacks()?.into_iter().map(|x| {
-                    Thread {
+                let mut threads: Vec<Thread> = auxtools
+                    .get_stacks()?
+                    .into_iter()
+                    .map(|x| Thread {
                         id: x.id as i64,
                         name: x.name,
-                    }
-                }).collect();
+                    })
+                    .collect();
 
                 // If we tell DAP that there are no threads, Pause requests never get passed through!
                 if threads.is_empty() {
-                    threads.push(
-                        Thread {
-                            id: 0,
-                            name: "Main".to_owned(),
-                        }
-                    );
+                    threads.push(Thread {
+                        id: 0,
+                        name: "Main".to_owned(),
+                    });
                 }
 
-                Ok(ThreadsResponse {
-                    threads,
-                })
-            }
+                Ok(ThreadsResponse { threads })
+            },
         }
     }
 
@@ -645,7 +660,9 @@ impl Debugger {
         };
 
         if params.sourceModified.unwrap_or(false) {
-            return Err(Box::new(GenericError("cannot update breakpoints in modified source")));
+            return Err(Box::new(GenericError(
+                "cannot update breakpoints in modified source",
+            )));
         }
 
         let inputs = params.breakpoints.unwrap_or_default();
@@ -662,14 +679,16 @@ impl Debugger {
                             message: Some("Debugging hooks not available".to_owned()),
                             line: Some(sbp.line),
                             verified: false,
-                            .. Default::default()
+                            ..Default::default()
                         });
                     }
                     return Ok(SetBreakpointsResponse { breakpoints });
                 };
 
                 for sbp in inputs {
-                    if let Some((typepath, name, override_id)) = self.db.location_to_proc_ref(file_id, sbp.line) {
+                    if let Some((typepath, name, override_id)) =
+                        self.db.location_to_proc_ref(file_id, sbp.line)
+                    {
                         // TODO: better discipline around format!("{}/{}") and so on
                         let proc = format!("{typepath}/{name}");
                         if let Some(offset) = extools.line_to_offset(&proc, override_id, sbp.line) {
@@ -682,7 +701,7 @@ impl Debugger {
                                 line: Some(sbp.line),
                                 verified: true,
                                 column: Some(0),
-                                .. Default::default()
+                                ..Default::default()
                             });
                         } else {
                             debug_output!(in self.seq,
@@ -694,7 +713,7 @@ impl Debugger {
                                 message: Some("Unable to determine offset in proc".to_owned()),
                                 line: Some(sbp.line),
                                 verified: false,
-                                .. Default::default()
+                                ..Default::default()
                             });
                         }
                     } else {
@@ -702,7 +721,7 @@ impl Debugger {
                             message: Some("Unable to determine proc ref".to_owned()),
                             line: Some(sbp.line),
                             verified: false,
-                            .. Default::default()
+                            ..Default::default()
                         });
                     }
                 }
@@ -717,43 +736,50 @@ impl Debugger {
                 });
 
                 Ok(SetBreakpointsResponse { breakpoints })
-            }
+            },
 
             DebugClient::Auxtools(auxtools) => {
                 let mut breakpoints = vec![];
 
                 for sbp in inputs {
-                    if let Some((typepath, name, override_id)) = self.db.location_to_proc_ref(file_id, sbp.line) {
+                    if let Some((typepath, name, override_id)) =
+                        self.db.location_to_proc_ref(file_id, sbp.line)
+                    {
                         // TODO: better discipline around format!("{}/{}") and so on
                         let proc = format!("{typepath}/{name}");
 
-                        if let Some(offset) = auxtools.get_offset(proc.as_str(), override_id as u32, sbp.line as u32)? {
+                        if let Some(offset) = auxtools.get_offset(
+                            proc.as_str(),
+                            override_id as u32,
+                            sbp.line as u32,
+                        )? {
                             saved.insert((proc.clone(), override_id, offset as i64));
                             keep.insert((proc.clone(), override_id, offset as i64));
 
-                            let result = auxtools.set_breakpoint(auxtools_types::InstructionRef {
-                                proc: auxtools_types::ProcRef {
-                                    path: proc,
-                                    override_id: override_id as u32
+                            let result = auxtools.set_breakpoint(
+                                auxtools_types::InstructionRef {
+                                    proc: auxtools_types::ProcRef {
+                                        path: proc,
+                                        override_id: override_id as u32,
+                                    },
+                                    offset,
                                 },
-                                offset
-                            }, sbp.condition)?;
+                                sbp.condition,
+                            )?;
 
                             breakpoints.push(match result {
                                 auxtools_types::BreakpointSetResult::Success { line } => {
                                     Breakpoint {
                                         verified: true,
                                         line: line.map(|x| x as i64),
-                                        .. Default::default()
+                                        ..Default::default()
                                     }
                                 },
 
-                                auxtools_types::BreakpointSetResult::Failed => {
-                                    Breakpoint {
-                                        verified: false,
-                                        .. Default::default()
-                                    }
-                                }
+                                auxtools_types::BreakpointSetResult::Failed => Breakpoint {
+                                    verified: false,
+                                    ..Default::default()
+                                },
                             });
                         } else {
                             // debug_output!(in self.seq,
@@ -765,7 +791,7 @@ impl Debugger {
                                 message: Some("Unable to determine offset in proc".to_owned()),
                                 line: Some(sbp.line),
                                 verified: false,
-                                .. Default::default()
+                                ..Default::default()
                             });
                         }
                     } else {
@@ -773,7 +799,7 @@ impl Debugger {
                             message: Some("Unable to determine proc ref".to_owned()),
                             line: Some(sbp.line),
                             verified: false,
-                            .. Default::default()
+                            ..Default::default()
                         });
                     }
                 }
@@ -783,7 +809,7 @@ impl Debugger {
                         let _ = auxtools.unset_breakpoint(&auxtools_types::InstructionRef {
                             proc: auxtools_types::ProcRef {
                                 path: k.0.clone(),
-                                override_id: k.1 as u32
+                                override_id: k.1 as u32,
                             },
                             offset: k.2 as u32,
                         });
@@ -794,11 +820,14 @@ impl Debugger {
                 });
 
                 Ok(SetBreakpointsResponse { breakpoints })
-            }
+            },
         }
     }
 
-    fn SetFunctionBreakpoints(&mut self, params: P<SetFunctionBreakpoints>) -> R<SetFunctionBreakpoints> {
+    fn SetFunctionBreakpoints(
+        &mut self,
+        params: P<SetFunctionBreakpoints>,
+    ) -> R<SetFunctionBreakpoints> {
         let file_id = FileId::default();
 
         let inputs = params.breakpoints;
@@ -813,7 +842,7 @@ impl Debugger {
                         breakpoints.push(Breakpoint {
                             message: Some("Debugging hooks not available".to_owned()),
                             verified: false,
-                            .. Default::default()
+                            ..Default::default()
                         });
                     }
                     return Ok(SetFunctionBreakpointsResponse { breakpoints });
@@ -825,7 +854,7 @@ impl Debugger {
                     let mut override_id = 0;
                     if let Some(idx) = sbp.name.find('#') {
                         proc = &sbp.name[..idx];
-                        override_id = sbp.name[idx+1..].parse()?;
+                        override_id = sbp.name[idx + 1..].parse()?;
                     }
 
                     if let Some(proc_ref) = self.db.get_proc(proc, override_id) {
@@ -839,13 +868,13 @@ impl Debugger {
                             line: Some(proc_ref.location.line as i64),
                             verified: true,
                             column: Some(0),
-                            .. Default::default()
+                            ..Default::default()
                         });
                     } else {
                         breakpoints.push(Breakpoint {
                             message: Some(format!("Unknown proc {proc}#{override_id}")),
                             verified: false,
-                            .. Default::default()
+                            ..Default::default()
                         });
                     }
                 }
@@ -860,8 +889,7 @@ impl Debugger {
                 });
 
                 Ok(SetFunctionBreakpointsResponse { breakpoints })
-            }
-
+            },
 
             DebugClient::Auxtools(auxtools) => {
                 let mut breakpoints = vec![];
@@ -872,7 +900,7 @@ impl Debugger {
                     let mut override_id = 0;
                     if let Some(idx) = sbp.name.find('#') {
                         proc = &sbp.name[..idx];
-                        override_id = sbp.name[idx+1..].parse()?;
+                        override_id = sbp.name[idx + 1..].parse()?;
                     }
 
                     let offset = 0;
@@ -881,29 +909,28 @@ impl Debugger {
                     saved.insert(tup.clone());
                     keep.insert(tup.clone());
 
-                    let result = auxtools.set_breakpoint(auxtools_types::InstructionRef {
-                        proc: auxtools_types::ProcRef {
-                            path: tup.0,
-                            override_id: override_id as u32
+                    let result = auxtools.set_breakpoint(
+                        auxtools_types::InstructionRef {
+                            proc: auxtools_types::ProcRef {
+                                path: tup.0,
+                                override_id: override_id as u32,
+                            },
+                            offset: offset as u32,
                         },
-                        offset: offset as u32,
-                    }, sbp.condition)?;
+                        sbp.condition,
+                    )?;
 
                     breakpoints.push(match result {
-                        auxtools_types::BreakpointSetResult::Success { line } => {
-                            Breakpoint {
-                                verified: true,
-                                line: line.map(|x| x as i64),
-                                .. Default::default()
-                            }
+                        auxtools_types::BreakpointSetResult::Success { line } => Breakpoint {
+                            verified: true,
+                            line: line.map(|x| x as i64),
+                            ..Default::default()
                         },
 
-                        auxtools_types::BreakpointSetResult::Failed => {
-                            Breakpoint {
-                                verified: false,
-                                .. Default::default()
-                            }
-                        }
+                        auxtools_types::BreakpointSetResult::Failed => Breakpoint {
+                            verified: false,
+                            ..Default::default()
+                        },
                     });
                 }
 
@@ -912,7 +939,7 @@ impl Debugger {
                         let _ = auxtools.unset_breakpoint(&auxtools_types::InstructionRef {
                             proc: auxtools_types::ProcRef {
                                 path: k.0.clone(),
-                                override_id: k.1 as u32
+                                override_id: k.1 as u32,
                             },
                             offset: k.2 as u32,
                         });
@@ -923,7 +950,7 @@ impl Debugger {
                 });
 
                 Ok(SetFunctionBreakpointsResponse { breakpoints })
-            }
+            },
         }
     }
 
@@ -939,8 +966,11 @@ impl Debugger {
                     let mut dap_frame = StackFrame {
                         name: ex_frame.proc.clone(),
                         id: (i * extools.get_all_threads().len()) as i64 + params.threadId,
-                        instructionPointerReference: Some(format!("{}@{}#{}", ex_frame.proc, ex_frame.override_id, ex_frame.offset)),
-                        .. Default::default()
+                        instructionPointerReference: Some(format!(
+                            "{}@{}#{}",
+                            ex_frame.proc, ex_frame.override_id, ex_frame.offset
+                        )),
+                        ..Default::default()
                     };
 
                     if i == 0 {
@@ -953,11 +983,15 @@ impl Debugger {
                         if proc.location.is_builtins() {
                             // `stddef.dm` proc.
                             if let Some(stddef_dm_info) = self.stddef_dm_info.as_ref() {
-                                if let Some(proc) = get_proc(&stddef_dm_info.objtree, &ex_frame.proc, ex_frame.override_id) {
+                                if let Some(proc) = get_proc(
+                                    &stddef_dm_info.objtree,
+                                    &ex_frame.proc,
+                                    ex_frame.override_id,
+                                ) {
                                     dap_frame.source = Some(Source {
                                         name: Some("stddef.dm".to_owned()),
                                         sourceReference: Some(STDDEF_SOURCE_REFERENCE),
-                                        .. Default::default()
+                                        ..Default::default()
                                     });
                                     dap_frame.line = i64::from(proc.location.line);
                                     //dap_frame.column = i64::from(proc.location.column);
@@ -968,19 +1002,27 @@ impl Debugger {
                             let path = self.db.files.get_path(proc.location.file);
 
                             dap_frame.source = Some(Source {
-                                name: Some(path.file_name()
-                                    .unwrap_or_default()
-                                    .to_string_lossy()
-                                    .into_owned()),
-                                path: Some(self.db.root_dir.join(&*path).to_string_lossy().into_owned()),
-                                .. Default::default()
+                                name: Some(
+                                    path.file_name()
+                                        .unwrap_or_default()
+                                        .to_string_lossy()
+                                        .into_owned(),
+                                ),
+                                path: Some(
+                                    self.db.root_dir.join(&*path).to_string_lossy().into_owned(),
+                                ),
+                                ..Default::default()
                             });
                             dap_frame.line = i64::from(proc.location.line);
                             //dap_frame.column = i64::from(proc.location.column);
                         }
                     }
 
-                    if let Some(line) = extools.offset_to_line(&ex_frame.proc, ex_frame.override_id, ex_frame.offset) {
+                    if let Some(line) = extools.offset_to_line(
+                        &ex_frame.proc,
+                        ex_frame.override_id,
+                        ex_frame.offset,
+                    ) {
                         dap_frame.line = line;
                     }
 
@@ -991,13 +1033,14 @@ impl Debugger {
                     totalFrames: Some(len as i64),
                     stackFrames: frames,
                 })
-            }
+            },
 
             DebugClient::Auxtools(auxtools) => {
                 let (aux_frames, aux_frames_total) = auxtools.get_stack_frames(
                     params.threadId as u32,
                     params.startFrame.map(|x| x as u32),
-                    params.levels.map(|x| x as u32))?;
+                    params.levels.map(|x| x as u32),
+                )?;
 
                 let mut frames = Vec::with_capacity(aux_frames.len());
                 for (i, aux_frame) in aux_frames.iter().enumerate() {
@@ -1005,8 +1048,11 @@ impl Debugger {
                     let mut dap_frame = StackFrame {
                         name: aux_proc.path.to_owned(),
                         id: aux_frame.id as i64,
-                        instructionPointerReference: Some(format!("{}@{}#{}", aux_proc.path, aux_proc.override_id, aux_frame.instruction.offset)),
-                        .. Default::default()
+                        instructionPointerReference: Some(format!(
+                            "{}@{}#{}",
+                            aux_proc.path, aux_proc.override_id, aux_frame.instruction.offset
+                        )),
+                        ..Default::default()
                     };
 
                     if i == 0 {
@@ -1015,15 +1061,22 @@ impl Debugger {
                         dap_frame.column = 1;
                     }
 
-                    if let Some(proc) = self.db.get_proc(&aux_proc.path, aux_proc.override_id as usize) {
+                    if let Some(proc) = self
+                        .db
+                        .get_proc(&aux_proc.path, aux_proc.override_id as usize)
+                    {
                         if proc.location.is_builtins() {
                             // `stddef.dm` proc.
                             if let Some(stddef_dm_info) = self.stddef_dm_info.as_ref() {
-                                if let Some(proc) = get_proc(&stddef_dm_info.objtree, &aux_proc.path, aux_proc.override_id as usize) {
+                                if let Some(proc) = get_proc(
+                                    &stddef_dm_info.objtree,
+                                    &aux_proc.path,
+                                    aux_proc.override_id as usize,
+                                ) {
                                     dap_frame.source = Some(Source {
                                         name: Some("stddef.dm".to_owned()),
                                         sourceReference: Some(STDDEF_SOURCE_REFERENCE),
-                                        .. Default::default()
+                                        ..Default::default()
                                     });
                                     dap_frame.line = i64::from(proc.location.line);
                                     //dap_frame.column = i64::from(proc.location.column);
@@ -1034,12 +1087,16 @@ impl Debugger {
                             let path = self.db.files.get_path(proc.location.file);
 
                             dap_frame.source = Some(Source {
-                                name: Some(path.file_name()
-                                    .unwrap_or_default()
-                                    .to_string_lossy()
-                                    .into_owned()),
-                                path: Some(self.db.root_dir.join(&*path).to_string_lossy().into_owned()),
-                                .. Default::default()
+                                name: Some(
+                                    path.file_name()
+                                        .unwrap_or_default()
+                                        .to_string_lossy()
+                                        .into_owned(),
+                                ),
+                                path: Some(
+                                    self.db.root_dir.join(&*path).to_string_lossy().into_owned(),
+                                ),
+                                ..Default::default()
                             });
                             dap_frame.line = i64::from(proc.location.line);
                             //dap_frame.column = i64::from(proc.location.column);
@@ -1057,7 +1114,7 @@ impl Debugger {
                     totalFrames: Some(aux_frames_total as i64),
                     stackFrames: frames,
                 })
-            }
+            },
         }
     }
 
@@ -1082,33 +1139,41 @@ impl Debugger {
                             presentationHint: Some("locals".to_owned()),
                             variablesReference: frameId * 2 + 2,
                             indexedVariables: Some(frame.locals.len() as i64),
-                            .. Default::default()
+                            ..Default::default()
                         },
                         Scope {
                             name: "Arguments".to_owned(),
                             presentationHint: Some("arguments".to_owned()),
                             variablesReference: frameId * 2 + 1,
                             namedVariables: Some(2 + frame.args.len() as i64),
-                            .. Default::default()
+                            ..Default::default()
                         },
                         Scope {
                             name: "Globals".to_owned(),
                             variablesReference: 0x0e_000001,
-                            .. Default::default()
+                            ..Default::default()
                         },
-                    ]
+                    ],
                 })
-            }
+            },
 
             DebugClient::Auxtools(auxtools) => {
-                let AuxtoolsScopes { arguments, locals, globals } = auxtools.get_scopes(frameId as u32)?;
-                let mut scopes = Vec::with_capacity(locals.is_some() as usize + arguments.is_some() as usize + globals.is_some() as usize);
+                let AuxtoolsScopes {
+                    arguments,
+                    locals,
+                    globals,
+                } = auxtools.get_scopes(frameId as u32)?;
+                let mut scopes = Vec::with_capacity(
+                    locals.is_some() as usize
+                        + arguments.is_some() as usize
+                        + globals.is_some() as usize,
+                );
 
                 if let Some(locals) = locals {
                     scopes.push(Scope {
                         name: "Locals".to_owned(),
                         variablesReference: locals.0 as i64,
-                        .. Default::default()
+                        ..Default::default()
                     });
                 }
 
@@ -1116,7 +1181,7 @@ impl Debugger {
                     scopes.push(Scope {
                         name: "Arguments".to_owned(),
                         variablesReference: arguments.0 as i64,
-                        .. Default::default()
+                        ..Default::default()
                     });
                 }
 
@@ -1124,14 +1189,12 @@ impl Debugger {
                     scopes.push(Scope {
                         name: "Globals".to_owned(),
                         variablesReference: globals.0 as i64,
-                        .. Default::default()
+                        ..Default::default()
                     });
                 }
 
-                Ok(ScopesResponse {
-                    scopes
-                })
-            }
+                Ok(ScopesResponse { scopes })
+            },
         }
     }
 
@@ -1141,7 +1204,9 @@ impl Debugger {
                 let extools = extools.get()?;
 
                 if params.variablesReference >= 0x01_000000 {
-                    let (var, ref_) = extools_types::ValueText::from_variables_reference(params.variablesReference);
+                    let (var, ref_) = extools_types::ValueText::from_variables_reference(
+                        params.variablesReference,
+                    );
                     let mut variables = Vec::new();
 
                     if var.is_list {
@@ -1153,26 +1218,26 @@ impl Debugger {
                                         name: format!("[{}]", 1 + i),
                                         value: entry.to_string(),
                                         variablesReference: entry.to_variables_reference(),
-                                        .. Default::default()
+                                        ..Default::default()
                                     });
                                 }
-                            }
+                            },
                             extools_types::ListContents::Associative(entries) => {
                                 for (i, (key, val)) in entries.iter().enumerate() {
                                     variables.push(Variable {
                                         name: format!("keys[{}]", 1 + i),
                                         value: key.to_string(),
                                         variablesReference: key.to_variables_reference(),
-                                        .. Default::default()
+                                        ..Default::default()
                                     });
                                     variables.push(Variable {
                                         name: format!("vals[{}]", 1 + i),
                                         value: val.to_string(),
                                         variablesReference: val.to_variables_reference(),
-                                        .. Default::default()
+                                        ..Default::default()
                                     });
                                 }
-                            }
+                            },
                         }
                     } else if var.has_vars {
                         // Datum reference
@@ -1184,7 +1249,7 @@ impl Debugger {
                                 name: name.to_owned(),
                                 value: vt.to_string(),
                                 variablesReference: vt.to_variables_reference(),
-                                .. Default::default()
+                                ..Default::default()
                             })
                         }
                     }
@@ -1211,14 +1276,14 @@ impl Debugger {
                         name: "src".to_owned(),
                         value: frame.src.to_string(),
                         variablesReference: frame.src.to_variables_reference(),
-                        .. Default::default()
+                        ..Default::default()
                     });
                     seen.insert("usr", 0);
                     variables.push(Variable {
                         name: "usr".to_owned(),
                         value: frame.usr.to_string(),
                         variablesReference: frame.usr.to_variables_reference(),
-                        .. Default::default()
+                        ..Default::default()
                     });
 
                     variables.extend(frame.args.iter().enumerate().map(|(i, vt)| Variable {
@@ -1228,12 +1293,12 @@ impl Debugger {
                                     0 => param.clone(),
                                     n => format!("{param} #{n}"),
                                 }
-                            }
+                            },
                             None => format!("args[{}]", i + 1),
                         },
                         value: vt.to_string(),
                         variablesReference: vt.to_variables_reference(),
-                        .. Default::default()
+                        ..Default::default()
                     }));
                     Ok(VariablesResponse { variables })
                 } else if mod2 == 0 {
@@ -1244,7 +1309,7 @@ impl Debugger {
                         name: ".".to_owned(),
                         value: frame.dot.to_string(),
                         variablesReference: frame.dot.to_variables_reference(),
-                        .. Default::default()
+                        ..Default::default()
                     });
 
                     // If VSC receives two Variables with the same name, it only
@@ -1257,21 +1322,23 @@ impl Debugger {
                                     0 => local.clone(),
                                     n => format!("{local} #{n}"),
                                 }
-                            }
+                            },
                             None => i.to_string(),
                         },
                         value: vt.to_string(),
                         variablesReference: vt.to_variables_reference(),
-                        .. Default::default()
+                        ..Default::default()
                     }));
                     Ok(VariablesResponse { variables })
                 } else {
                     Err(Box::new(GenericError("Bad variables reference")))
                 }
-            }
+            },
 
             DebugClient::Auxtools(auxtools) => {
-                let aux_variables = auxtools.get_variables(auxtools_types::VariablesRef(params.variablesReference as i32))?;
+                let aux_variables = auxtools.get_variables(auxtools_types::VariablesRef(
+                    params.variablesReference as i32,
+                ))?;
                 let mut variables = vec![];
 
                 // If VSC receives two Variables with the same name, it only
@@ -1279,7 +1346,11 @@ impl Debugger {
                 let mut seen = HashMap::new();
 
                 for aux_var in aux_variables {
-                    let name = match seen.entry(aux_var.name.clone()).and_modify(|e| *e += 1).or_default() {
+                    let name = match seen
+                        .entry(aux_var.name.clone())
+                        .and_modify(|e| *e += 1)
+                        .or_default()
+                    {
                         0 => aux_var.name,
                         n => format!("{} #{}", aux_var.name, n),
                     };
@@ -1288,14 +1359,12 @@ impl Debugger {
                         name,
                         value: aux_var.value,
                         variablesReference: aux_var.variables.map(|x| x.0 as i64).unwrap_or(0),
-                        .. Default::default()
+                        ..Default::default()
                     });
                 }
 
-                Ok(VariablesResponse {
-                    variables
-                })
-            }
+                Ok(VariablesResponse { variables })
+            },
         }
     }
 
@@ -1306,11 +1375,11 @@ impl Debugger {
             DebugClient::Extools(extools) => {
                 let extools = extools.get()?;
                 extools.continue_execution();
-            }
+            },
 
             DebugClient::Auxtools(auxtools) => {
                 auxtools.continue_execution()?;
-            }
+            },
         }
 
         Ok(ContinueResponse {
@@ -1325,11 +1394,11 @@ impl Debugger {
             DebugClient::Extools(extools) => {
                 let extools = extools.get()?;
                 extools.step_in(params.threadId);
-            }
+            },
 
             DebugClient::Auxtools(auxtools) => {
                 auxtools.step_into(params.threadId as u32)?;
-            }
+            },
         }
         Ok(())
     }
@@ -1341,11 +1410,11 @@ impl Debugger {
             DebugClient::Extools(extools) => {
                 let extools = extools.get()?;
                 extools.step_over(params.threadId);
-            }
+            },
 
             DebugClient::Auxtools(auxtools) => {
                 auxtools.next(params.threadId as u32)?;
-            }
+            },
         }
         Ok(())
     }
@@ -1357,11 +1426,11 @@ impl Debugger {
             DebugClient::Extools(extools) => {
                 let extools = extools.get()?;
                 extools.step_out(params.threadId);
-            }
+            },
 
             DebugClient::Auxtools(auxtools) => {
                 auxtools.step_out(params.threadId as u32)?;
-            }
+            },
         }
         Ok(())
     }
@@ -1371,25 +1440,38 @@ impl Debugger {
             DebugClient::Extools(extools) => {
                 let extools = extools.get()?;
                 extools.pause();
-            }
+            },
 
             DebugClient::Auxtools(auxtools) => {
                 auxtools.pause()?;
-            }
+            },
         }
         Ok(())
     }
 
-    fn SetExceptionBreakpoints(&mut self, params: P<SetExceptionBreakpoints>) -> R<SetExceptionBreakpoints> {
+    fn SetExceptionBreakpoints(
+        &mut self,
+        params: P<SetExceptionBreakpoints>,
+    ) -> R<SetExceptionBreakpoints> {
         match &mut self.client {
             DebugClient::Extools(extools) => {
                 let extools = extools.get()?;
-                extools.set_break_on_runtime(params.filters.iter().any(|x| x == EXCEPTION_FILTER_RUNTIMES));
-            }
+                extools.set_break_on_runtime(
+                    params
+                        .filters
+                        .iter()
+                        .any(|x| x == EXCEPTION_FILTER_RUNTIMES),
+                );
+            },
 
             DebugClient::Auxtools(auxtools) => {
-                auxtools.set_catch_runtimes(params.filters.iter().any(|x| x == EXCEPTION_FILTER_RUNTIMES))?;
-            }
+                auxtools.set_catch_runtimes(
+                    params
+                        .filters
+                        .iter()
+                        .any(|x| x == EXCEPTION_FILTER_RUNTIMES),
+                )?;
+            },
         }
         Ok(())
     }
@@ -1406,16 +1488,14 @@ impl Debugger {
                     breakMode: ExceptionBreakMode::Always,
                     details: None,
                 })
-            }
+            },
 
-            DebugClient::Auxtools(auxtools) => {
-                Ok(ExceptionInfoResponse {
-                    exceptionId: auxtools.get_last_error_message(),
-                    description: None,
-                    breakMode: ExceptionBreakMode::Always,
-                    details: None,
-                })
-            }
+            DebugClient::Auxtools(auxtools) => Ok(ExceptionInfoResponse {
+                exceptionId: auxtools.get_last_error_message(),
+                description: None,
+                breakMode: ExceptionBreakMode::Always,
+                details: None,
+            }),
         }
     }
 
@@ -1445,7 +1525,8 @@ impl Debugger {
     fn Disassemble(&mut self, params: P<Disassemble>) -> R<Disassemble> {
         match &mut self.client {
             DebugClient::Extools(extools) => {
-                let Some(captures) = MEMORY_REFERENCE_REGEX.captures(&params.memoryReference) else {
+                let Some(captures) = MEMORY_REFERENCE_REGEX.captures(&params.memoryReference)
+                else {
                     return Err(Box::new(GenericError("Invalid memory reference")));
                 };
                 let proc = &captures[1];
@@ -1459,18 +1540,18 @@ impl Debugger {
                         address: format!("{}#{}@{}", proc, override_id, instr.offset),
                         instructionBytes: Some(instr.bytes.clone()),
                         instruction: format!("{}  {}", instr.mnemonic, instr.comment),
-                        .. Default::default()
+                        ..Default::default()
                     });
                 }
 
                 Ok(DisassembleResponse {
-                    instructions: result
+                    instructions: result,
                 })
-            }
+            },
 
             DebugClient::Auxtools(_) => {
                 Err(Box::new(GenericError("auxtools can't disassemble yet")))
-            }
+            },
         }
     }
 }

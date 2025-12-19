@@ -1,5 +1,5 @@
 //! SS13 minimap generation tool
-#![deny(unsafe_code)]  // NB deny rather than forbid, ndarray macros use unsafe
+#![deny(unsafe_code)] // NB deny rather than forbid, ndarray macros use unsafe
 
 extern crate dreammaker as dm;
 

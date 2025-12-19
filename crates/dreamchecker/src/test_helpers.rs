@@ -8,7 +8,11 @@ pub const NO_ERRORS: &[(u32, u16, &str)] = &[];
 pub fn parse_a_file_for_test<S: Into<Cow<'static, str>>>(buffer: S) -> Context {
     let context = Context::default();
 
-    let pp = dm::preprocessor::Preprocessor::from_buffer(&context, "unit_tests.rs".into(), buffer.into());
+    let pp = dm::preprocessor::Preprocessor::from_buffer(
+        &context,
+        "unit_tests.rs".into(),
+        buffer.into(),
+    );
 
     let indents = dm::indents::IndentProcessor::new(&context, pp);
 

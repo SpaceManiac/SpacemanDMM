@@ -8,15 +8,15 @@ use dm::constants::{ConstFn, Constant};
 use dm::objtree::{ObjectTree, ProcRef, TypeRef};
 use dm::{Context, DMError, Location, Severity};
 
-use std::collections::{BTreeMap, VecDeque};
 use foldhash::{HashMap, HashMapExt, HashSet, HashSetExt};
+use std::collections::{BTreeMap, VecDeque};
 
 mod type_expr;
 use type_expr::TypeExpr;
 mod switch_rand_range;
 use switch_rand_range::check_switch_rand_range;
 
-#[doc(hidden)]  // Intended for the tests only.
+#[doc(hidden)] // Intended for the tests only.
 pub mod test_helpers;
 
 // ----------------------------------------------------------------------------
@@ -64,11 +64,17 @@ impl<'o> StaticType<'o> {
     }
 
     fn plain_list(tree: &'o ObjectTree) -> StaticType<'o> {
-        StaticType::List { list: tree.expect("/list"), keys: Box::new(StaticType::None) }
+        StaticType::List {
+            list: tree.expect("/list"),
+            keys: Box::new(StaticType::None),
+        }
     }
 
     fn list_of_type(tree: &'o ObjectTree, of: &str) -> StaticType<'o> {
-        StaticType::List { list: tree.expect("/list"), keys: Box::new(StaticType::Type(tree.expect(of))) }
+        StaticType::List {
+            list: tree.expect("/list"),
+            keys: Box::new(StaticType::Type(tree.expect(of))),
+        }
     }
 
     fn is_list(&self) -> bool {
@@ -97,10 +103,10 @@ impl<'o> Assumption<'o> {
         use Assumption::*;
         match (self, other) {
             // trivial conflicts
-            (Truthy(a), Truthy(b)) |
-            (IsNull(a), IsNull(b)) |
-            (IsText(a), IsText(b)) |
-            (IsNum(a), IsNum(b)) => a != b,
+            (Truthy(a), Truthy(b))
+            | (IsNull(a), IsNull(b))
+            | (IsText(a), IsText(b))
+            | (IsNum(a), IsNum(b)) => a != b,
             // null is always false
             (Truthy(true), IsNull(true)) => true,
             // can only be one of null, text, num
@@ -108,12 +114,12 @@ impl<'o> Assumption<'o> {
             (IsNum(true), IsNull(true)) => true,
             (IsText(true), IsNull(true)) => true,
             // types and paths are truthy
-            (IsType(true, _), Truthy(false)) |
-            (IsType(true, _), IsNull(true)) |
-            (IsPath(true, _), Truthy(false)) |
-            (IsPath(true, _), Truthy(true)) => true,
+            (IsType(true, _), Truthy(false))
+            | (IsType(true, _), IsNull(true))
+            | (IsPath(true, _), Truthy(false))
+            | (IsPath(true, _), Truthy(true)) => true,
             // no conflict after all
-            _ => false
+            _ => false,
         }
     }
 }
@@ -132,19 +138,32 @@ macro_rules! assumption_set {
 }
 
 impl<'o> AssumptionSet<'o> {
-    fn from_constant(objtree: &'o ObjectTree, constant: &Constant, type_hint: Option<TypeRef<'o>>) -> AssumptionSet<'o> {
+    fn from_constant(
+        objtree: &'o ObjectTree,
+        constant: &Constant,
+        type_hint: Option<TypeRef<'o>>,
+    ) -> AssumptionSet<'o> {
         match constant {
-            Constant::Null(_) => assumption_set![Assumption::IsNull(true), Assumption::Truthy(false)],
-            Constant::String(val) => assumption_set![Assumption::IsText(true), Assumption::Truthy(!val.is_empty())],
+            Constant::Null(_) => {
+                assumption_set![Assumption::IsNull(true), Assumption::Truthy(false)]
+            },
+            Constant::String(val) => assumption_set![
+                Assumption::IsText(true),
+                Assumption::Truthy(!val.is_empty())
+            ],
             Constant::Resource(_) => assumption_set![Assumption::Truthy(true)],
-            Constant::Float(val) => assumption_set![Assumption::IsNum(true), Assumption::Truthy(*val != 0.0)],
+            Constant::Float(val) => {
+                assumption_set![Assumption::IsNum(true), Assumption::Truthy(*val != 0.0)]
+            },
             Constant::List(_) => AssumptionSet::from_valid_instance(objtree.expect("/list")),
             Constant::Call(func, _) => match func {
                 ConstFn::Icon => AssumptionSet::from_valid_instance(objtree.expect("/icon")),
                 ConstFn::Matrix => AssumptionSet::from_valid_instance(objtree.expect("/matrix")),
                 ConstFn::Newlist => AssumptionSet::from_valid_instance(objtree.expect("/list")),
                 ConstFn::Sound => AssumptionSet::from_valid_instance(objtree.expect("/sound")),
-                ConstFn::Generator => AssumptionSet::from_valid_instance(objtree.expect("/generator")),
+                ConstFn::Generator => {
+                    AssumptionSet::from_valid_instance(objtree.expect("/generator"))
+                },
                 ConstFn::Filter => AssumptionSet::default(),
                 ConstFn::File => AssumptionSet::default(),
             },
@@ -172,11 +191,17 @@ impl<'o> AssumptionSet<'o> {
     }
 
     fn from_valid_instance(ty: TypeRef<'o>) -> AssumptionSet<'o> {
-        assumption_set![Assumption::Truthy(true), Assumption::IsNull(false), Assumption::IsType(true, ty)]
+        assumption_set![
+            Assumption::Truthy(true),
+            Assumption::IsNull(false),
+            Assumption::IsType(true, ty)
+        ]
     }
 
     fn conflicts_with(&self, new: &Assumption) -> Option<&Assumption<'_>> {
-        self.set.iter().find(|&each| each.oneway_conflict(new) || new.oneway_conflict(each))
+        self.set
+            .iter()
+            .find(|&each| each.oneway_conflict(new) || new.oneway_conflict(each))
     }
 }
 
@@ -222,7 +247,11 @@ impl<'o> Analysis<'o> {
         analysis
     }
 
-    fn from_value(objtree: &'o ObjectTree, value: Constant, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
+    fn from_value(
+        objtree: &'o ObjectTree,
+        value: Constant,
+        type_hint: Option<TypeRef<'o>>,
+    ) -> Analysis<'o> {
         Analysis {
             static_ty: StaticType::None,
             aset: AssumptionSet::from_constant(objtree, &value, type_hint),
@@ -247,7 +276,8 @@ trait WithFixHint {
 impl WithFixHint for DMError {
     fn with_fix_hint(mut self, analysis: &Analysis) -> Self {
         if let Some((loc, desc)) = analysis.fix_hint.clone() {
-            if !loc.is_builtins() {  // Don't try to tell people to edit the builtins.
+            if !loc.is_builtins() {
+                // Don't try to tell people to edit the builtins.
                 self.add_note(loc, desc);
             }
         }
@@ -393,7 +423,12 @@ struct ProcDirective<'o> {
 }
 
 impl<'o> ProcDirective<'o> {
-    pub fn new(directive_string: &'static str, can_be_disabled: bool, set_at_definition: bool, can_be_global: bool) -> ProcDirective<'o> {
+    pub fn new(
+        directive_string: &'static str,
+        can_be_disabled: bool,
+        set_at_definition: bool,
+        can_be_global: bool,
+    ) -> ProcDirective<'o> {
         ProcDirective {
             directive: Default::default(),
             directive_string,
@@ -403,21 +438,41 @@ impl<'o> ProcDirective<'o> {
         }
     }
 
-    pub fn insert(&mut self, proc: ProcRef<'o>, enable: bool, location: Location) -> Result<(), DMError> {
+    pub fn insert(
+        &mut self,
+        proc: ProcRef<'o>,
+        enable: bool,
+        location: Location,
+    ) -> Result<(), DMError> {
         if proc.ty().is_root() && !self.can_be_global {
-            return Err(error(location, format!("{} sets {}, which cannot be set on global procs", proc, self.directive_string))
-                .with_errortype("incompatible_directive"))
+            return Err(error(
+                location,
+                format!(
+                    "{} sets {}, which cannot be set on global procs",
+                    proc, self.directive_string
+                ),
+            )
+            .with_errortype("incompatible_directive"));
         }
         if !enable && !self.can_be_disabled {
-            return Err(error(location, format!("{} sets {} false, but it cannot be disabled.", proc, self.directive_string))
-                .with_errortype("disabled_directive")
-                .set_severity(Severity::Warning))
+            return Err(error(
+                location,
+                format!(
+                    "{} sets {} false, but it cannot be disabled.",
+                    proc, self.directive_string
+                ),
+            )
+            .with_errortype("disabled_directive")
+            .set_severity(Severity::Warning));
         }
         if let Some((_, originallocation)) = self.directive.get(&proc) {
-            return Err(error(location, format!("{} sets {} twice", proc, self.directive_string))
-                .with_note(*originallocation, "first definition here")
-                .with_errortype("sets_directive_twice")
-                .set_severity(Severity::Warning))
+            return Err(error(
+                location,
+                format!("{} sets {} twice", proc, self.directive_string),
+            )
+            .with_note(*originallocation, "first definition here")
+            .with_errortype("sets_directive_twice")
+            .set_severity(Severity::Warning));
         }
         self.directive.insert(proc, (enable, location));
         Ok(())
@@ -433,7 +488,7 @@ impl<'o> ProcDirective<'o> {
         let mut next = Some(proc);
         while let Some(current) = next {
             if let Some(&(truthy, location)) = self.get(current) {
-                return Some((current, truthy, location))
+                return Some((current, truthy, location));
             }
             next = current.parent_proc();
         }
@@ -460,7 +515,7 @@ pub fn directive_value_to_truthy(expr: &Expression, location: Location) -> Resul
         Some(Term::Ident(i)) if i == "FALSE" => Ok(false),
         Some(Term::Ident(i)) if i == "TRUE" => Ok(true),
         _ => Err(error(location, format!("invalid value for set {expr:?}"))
-        .set_severity(Severity::Warning)),
+            .set_severity(Severity::Warning)),
     }
 }
 
@@ -512,7 +567,10 @@ pub struct ViolatingProcs<'o> {
 
 impl<'o> ViolatingProcs<'o> {
     pub fn insert_violator(&mut self, proc: ProcRef<'o>, builtin: &str, location: Location) {
-        self.violators.entry(proc).or_default().push((builtin.to_string(), location));
+        self.violators
+            .entry(proc)
+            .or_default()
+            .push((builtin.to_string(), location));
     }
 
     pub fn get_violators(&self, proc: ProcRef<'o>) -> Option<&Vec<(String, Location)>> {
@@ -566,20 +624,38 @@ pub struct AnalyzeObjectTree<'o> {
 impl<'o> AnalyzeObjectTree<'o> {
     pub fn new(context: &'o Context, objtree: &'o ObjectTree) -> Self {
         let mut return_type = HashMap::default();
-        return_type.insert(objtree.root().get_proc("get_step").unwrap(), StaticType::Type(objtree.expect("/turf")).into());
+        return_type.insert(
+            objtree.root().get_proc("get_step").unwrap(),
+            StaticType::Type(objtree.expect("/turf")).into(),
+        );
 
         AnalyzeObjectTree {
             context,
             objtree,
             return_type,
-            must_call_parent: ProcDirective::new("SpacemanDMM_should_call_parent", true, false, false),
-            must_not_override: ProcDirective::new("SpacemanDMM_should_not_override", false, false, false),
+            must_call_parent: ProcDirective::new(
+                "SpacemanDMM_should_call_parent",
+                true,
+                false,
+                false,
+            ),
+            must_not_override: ProcDirective::new(
+                "SpacemanDMM_should_not_override",
+                false,
+                false,
+                false,
+            ),
             private: ProcDirective::new("SpacemanDMM_private_proc", false, true, false),
             protected: ProcDirective::new("SpacemanDMM_protected_proc", false, true, false),
             must_not_sleep: ProcDirective::new("SpacemanDMM_should_not_sleep", false, true, true),
             sleep_exempt: ProcDirective::new("SpacemanDMM_allowed_to_sleep", false, true, true),
             must_be_pure: ProcDirective::new("SpacemanDMM_should_be_pure", false, true, true),
-            can_be_redefined: ProcDirective::new("SpacemanDMM_can_be_redefined", false, false, false),
+            can_be_redefined: ProcDirective::new(
+                "SpacemanDMM_can_be_redefined",
+                false,
+                false,
+                false,
+            ),
             used_kwargs: Default::default(),
             call_tree: Default::default(),
             sleeping_procs: Default::default(),
@@ -599,7 +675,13 @@ impl<'o> AnalyzeObjectTree<'o> {
     }
 
     #[inline]
-    fn add_directive_or_error(&mut self, proc: ProcRef<'o>, directive: &str, expr: &Expression, location: Location) {
+    fn add_directive_or_error(
+        &mut self,
+        proc: ProcRef<'o>,
+        directive: &str,
+        expr: &Expression,
+        location: Location,
+    ) {
         let procdirective = match directive {
             "SpacemanDMM_should_not_override" => &mut self.must_not_override,
             "SpacemanDMM_should_call_parent" => &mut self.must_call_parent,
@@ -614,17 +696,20 @@ impl<'o> AnalyzeObjectTree<'o> {
                     .with_errortype("unknown_linter_setting")
                     .set_severity(Severity::Warning)
                     .register(self.context);
-                return
-            }
+                return;
+            },
         };
 
         if procdirective.set_at_definition {
             if let Some(procdef) = &mut proc.get_declaration() {
                 if procdef.location != proc.get().location {
-                    error(location, format!("Can't define procs {directive} outside their initial definition"))
-                        .set_severity(Severity::Warning)
-                        .register(self.context);
-                    return
+                    error(
+                        location,
+                        format!("Can't define procs {directive} outside their initial definition"),
+                    )
+                    .set_severity(Severity::Warning)
+                    .register(self.context);
+                    return;
                 }
             }
         }
@@ -635,7 +720,9 @@ impl<'o> AnalyzeObjectTree<'o> {
                     self.context.register_error(error);
                 }
             },
-            Err(error) => self.context.register_error(error.with_errortype("invalid_lint_directive_value")),
+            Err(error) => self
+                .context
+                .register_error(error.with_errortype("invalid_lint_directive_value")),
         }
     }
 
@@ -659,16 +746,16 @@ impl<'o> AnalyzeObjectTree<'o> {
             }
             while let Some((nextproc, callstack, new_context)) = to_visit.pop_front() {
                 if !visited.insert(nextproc) {
-                    continue
+                    continue;
                 }
                 if self.waitfor_procs.contains(&nextproc) {
-                    continue
+                    continue;
                 }
                 if self.sleep_exempt.get(nextproc).is_some() {
-                    continue
+                    continue;
                 }
                 if new_context {
-                    continue
+                    continue;
                 }
                 if let Some(sleepvec) = self.sleeping_procs.get_violators(nextproc) {
                     error(procref.get().location, format!("{procref} sets SpacemanDMM_should_not_sleep but calls blocking proc {nextproc}"))
@@ -677,10 +764,14 @@ impl<'o> AnalyzeObjectTree<'o> {
                         .with_callstack(&callstack)
                         .with_blocking_builtins(sleepvec)
                         .register(self.context)
-                } else if let Some(overridesleep) = self.sleeping_overrides.get_override_violators(nextproc) {
+                } else if let Some(overridesleep) =
+                    self.sleeping_overrides.get_override_violators(nextproc)
+                {
                     for child_violator in overridesleep {
-                        if procref.ty().is_subtype_of(&nextproc.ty()) && !child_violator.ty().is_subtype_of(&procref.ty()) {
-                            continue
+                        if procref.ty().is_subtype_of(&nextproc.ty())
+                            && !child_violator.ty().is_subtype_of(&procref.ty())
+                        {
+                            continue;
                         }
                         error(procref.get().location, format!("{procref} calls {nextproc} which has override child proc that sleeps {child_violator}"))
                             .with_note(location, "SpacemanDMM_should_not_sleep set here")
@@ -702,11 +793,14 @@ impl<'o> AnalyzeObjectTree<'o> {
 
         for (procref, (_, location)) in self.must_be_pure.directive.iter() {
             if let Some(impurevec) = self.impure_procs.get_violators(*procref) {
-                error(procref.get().location, format!("{procref} does impure operations"))
-                    .with_errortype("must_be_pure")
-                    .with_note(*location, "SpacemanDMM_should_be_pure set here")
-                    .with_impure_operations(impurevec)
-                    .register(self.context)
+                error(
+                    procref.get().location,
+                    format!("{procref} does impure operations"),
+                )
+                .with_errortype("must_be_pure")
+                .with_note(*location, "SpacemanDMM_should_be_pure set here")
+                .with_impure_operations(impurevec)
+                .register(self.context)
             }
             let mut visited = HashSet::<ProcRef<'o>>::new();
             let mut to_visit = VecDeque::<(ProcRef<'o>, CallStack)>::new();
@@ -719,7 +813,7 @@ impl<'o> AnalyzeObjectTree<'o> {
             }
             while let Some((nextproc, callstack)) = to_visit.pop_front() {
                 if !visited.insert(nextproc) {
-                    continue
+                    continue;
                 }
                 if let Some(impurevec) = self.impure_procs.get_violators(nextproc) {
                     error(procref.get().location, format!("{procref} sets SpacemanDMM_should_be_pure but calls a {nextproc} that does impure operations"))
@@ -728,10 +822,14 @@ impl<'o> AnalyzeObjectTree<'o> {
                         .with_callstack(&callstack)
                         .with_impure_operations(impurevec)
                         .register(self.context)
-                } else if let Some(overrideimpure) = self.impure_overrides.get_override_violators(nextproc) {
+                } else if let Some(overrideimpure) =
+                    self.impure_overrides.get_override_violators(nextproc)
+                {
                     for child_violator in overrideimpure {
-                        if procref.ty().is_subtype_of(&nextproc.ty()) && !child_violator.ty().is_subtype_of(&procref.ty()) {
-                            continue
+                        if procref.ty().is_subtype_of(&nextproc.ty())
+                            && !child_violator.ty().is_subtype_of(&procref.ty())
+                        {
+                            continue;
                         }
                         error(procref.get().location, format!("{procref} calls {nextproc} which has override child proc that does impure operations {child_violator}"))
                             .with_note(*location, "SpacemanDMM_should_not_pure set here")
@@ -774,28 +872,37 @@ impl<'o> AnalyzeObjectTree<'o> {
                 ProcReturnType::InputType(input_type) => {
                     if let Some(path) = input_type.to_typepath() {
                         if let Some(ty) = self.objtree.find(path) {
-                            self.return_type.insert(proc, TypeExpr::from(StaticType::Type(ty)));
+                            self.return_type
+                                .insert(proc, TypeExpr::from(StaticType::Type(ty)));
                         }
                     }
-                }
+                },
                 ProcReturnType::TypePath(bits) => {
                     if let Ok(ty) = crate::static_type(self.objtree, proc_location, bits) {
                         self.return_type.insert(proc, TypeExpr::from(ty));
                     }
-                }
+                },
             }
         }
 
         for statement in code.iter() {
-            if let Statement::Setting { ref name, ref value, .. } = statement.elem {
+            if let Statement::Setting {
+                ref name,
+                ref value,
+                ..
+            } = statement.elem
+            {
                 if name == "SpacemanDMM_return_type" {
                     if let Some(Term::Prefab(fab)) = value.as_term() {
-                        let bits: Vec<_> = fab.path.iter().map(|(_, name)| name.to_owned()).collect();
+                        let bits: Vec<_> =
+                            fab.path.iter().map(|(_, name)| name.to_owned()).collect();
                         let ty = self.static_type(statement.location, &bits);
                         self.return_type.insert(proc, TypeExpr::from(ty));
                     } else {
                         match TypeExpr::compile(proc, statement.location, value) {
-                            Ok(expr) => { self.return_type.insert(proc, expr); },
+                            Ok(expr) => {
+                                self.return_type.insert(proc, expr);
+                            },
                             Err(error) => error
                                 .with_component(dm::Component::DreamChecker)
                                 .register(self.context),
@@ -811,10 +918,13 @@ impl<'o> AnalyzeObjectTree<'o> {
                     match name.as_str() {
                         "background" | "waitfor" | "hidden" | "instant" | "popup_menu" => {
                             if directive_value_to_truthy(value, statement.location).is_err() {
-                                error(statement.location, format!("set {} must be 0/1/TRUE/FALSE", name.as_str()))
-                                    .set_severity(Severity::Warning)
-                                    .with_errortype("invalid_set_value")
-                                    .register(self.context);
+                                error(
+                                    statement.location,
+                                    format!("set {} must be 0/1/TRUE/FALSE", name.as_str()),
+                                )
+                                .set_severity(Severity::Warning)
+                                .with_errortype("invalid_set_value")
+                                .register(self.context);
                             }
                         },
                         "name" | "category" | "desc" => {
@@ -825,10 +935,16 @@ impl<'o> AnalyzeObjectTree<'o> {
                                     // category can be set null to hide it
                                     Term::Null if name.as_str() == "category" => {},
                                     other => {
-                                        error(statement.location, format!("set {} must have a string value", name.as_str()))
-                                            .set_severity(Severity::Warning)
-                                            .with_errortype("invalid_set_value")
-                                            .register(self.context);
+                                        error(
+                                            statement.location,
+                                            format!(
+                                                "set {} must have a string value",
+                                                name.as_str()
+                                            ),
+                                        )
+                                        .set_severity(Severity::Warning)
+                                        .with_errortype("invalid_set_value")
+                                        .register(self.context);
                                     },
                                 }
                             }
@@ -855,7 +971,8 @@ impl<'o> AnalyzeObjectTree<'o> {
 
     /// Propagate violations make up the inheritence graph
     pub fn propagate_violations(&mut self, proc: ProcRef<'o>) {
-        if proc.name() == "New" { // New() propogates via ..() and causes weirdness
+        if proc.name() == "New" {
+            // New() propogates via ..() and causes weirdness
             return;
         }
         if self.sleeping_procs.get_violators(proc).is_some() {
@@ -894,7 +1011,11 @@ impl<'o> AnalyzeObjectTree<'o> {
                 if !missing.is_empty() {
                     kwargs.bad_overrides_at.insert(
                         proc.ty().path.to_owned(),
-                        BadOverride { missing, location: proc.location });
+                        BadOverride {
+                            missing,
+                            location: proc.location,
+                        },
+                    );
                 }
             }
             next = current.parent_proc();
@@ -905,7 +1026,7 @@ impl<'o> AnalyzeObjectTree<'o> {
     pub fn finish_check_kwargs(&self) {
         for (base_procname, kwarg_info) in self.used_kwargs.iter() {
             if kwarg_info.bad_overrides_at.is_empty() {
-                continue
+                continue;
             }
 
             // List out the child procs that are missing overrides.
@@ -913,13 +1034,18 @@ impl<'o> AnalyzeObjectTree<'o> {
                 1 => format!("an override of {base_procname} is missing keyword args"),
                 len => format!("{len} overrides of {base_procname} are missing keyword args"),
             };
-            let mut error = error(kwarg_info.location, msg)
-                .with_errortype("override_missing_keyword_arg");
+            let mut error =
+                error(kwarg_info.location, msg).with_errortype("override_missing_keyword_arg");
             let mut missing = HashSet::new();
             for (child_procname, bad_override) in kwarg_info.bad_overrides_at.iter() {
-                error.add_note(bad_override.location, format!("{} is missing \"{}\"",
-                    child_procname,
-                    bad_override.missing.join("\", \"")));
+                error.add_note(
+                    bad_override.location,
+                    format!(
+                        "{} is missing \"{}\"",
+                        child_procname,
+                        bad_override.missing.join("\", \"")
+                    ),
+                );
                 missing.extend(bad_override.missing.iter());
             }
 
@@ -927,12 +1053,17 @@ impl<'o> AnalyzeObjectTree<'o> {
             // there's not gonna be a problem.
             for (arg_name, called_at) in kwarg_info.called_at.iter() {
                 if !missing.contains(arg_name) {
-                    continue
+                    continue;
                 }
 
                 if called_at.others > 0 {
-                    error.add_note(called_at.location, format!("called with {:?} here, and {} other places",
-                        arg_name, called_at.others));
+                    error.add_note(
+                        called_at.location,
+                        format!(
+                            "called with {:?} here, and {} other places",
+                            arg_name, called_at.others
+                        ),
+                    );
                 } else {
                     error.add_note(called_at.location, format!("called with {arg_name:?} here"));
                 }
@@ -948,13 +1079,29 @@ impl<'o> AnalyzeObjectTree<'o> {
             Err(e) => {
                 e.register(self.context);
                 StaticType::None
-            }
+            },
         }
     }
 }
 
-fn static_type<'o>(objtree: &'o ObjectTree, location: Location, mut of: &[String]) -> Result<StaticType<'o>, DMError> {
-    while !of.is_empty() && ["static", "global", "const", "tmp", "final", "SpacemanDMM_final", "SpacemanDMM_private", "SpacemanDMM_protected"].contains(&&*of[0]) {
+fn static_type<'o>(
+    objtree: &'o ObjectTree,
+    location: Location,
+    mut of: &[String],
+) -> Result<StaticType<'o>, DMError> {
+    while !of.is_empty()
+        && [
+            "static",
+            "global",
+            "const",
+            "tmp",
+            "final",
+            "SpacemanDMM_final",
+            "SpacemanDMM_private",
+            "SpacemanDMM_protected",
+        ]
+        .contains(&&*of[0])
+    {
         of = &of[1..];
     }
 
@@ -969,7 +1116,10 @@ fn static_type<'o>(objtree: &'o ObjectTree, location: Location, mut of: &[String
     } else if let Some(ty) = objtree.type_by_path(of) {
         Ok(StaticType::Type(ty))
     } else {
-        Err(error(location, format!("undefined type: {}", FormatTreePath(of))))
+        Err(error(
+            location,
+            format!("undefined type: {}", FormatTreePath(of)),
+        ))
     }
 }
 
@@ -1002,31 +1152,50 @@ pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
                     continue;
                 }
 
-                let Some(parentvar) = parent.vars.get(varname) else { continue };
+                let Some(parentvar) = parent.vars.get(varname) else {
+                    continue;
+                };
 
-                let Some(decl) = &parentvar.declaration else { continue };
+                let Some(decl) = &parentvar.declaration else {
+                    continue;
+                };
 
                 if let Some(mydecl) = &typevar.declaration {
                     if typevar.value.location.is_builtins() {
                         continue;
                     }
-                    DMError::new(mydecl.location, format!("{path} redeclares var {varname:?}"))
-                        .with_note(decl.location, format!("declared on {} here", parent.path))
-                        .register(context);
+                    DMError::new(
+                        mydecl.location,
+                        format!("{path} redeclares var {varname:?}"),
+                    )
+                    .with_note(decl.location, format!("declared on {} here", parent.path))
+                    .register(context);
                 }
 
                 if decl.var_type.flags.is_final() {
-                    DMError::new(typevar.value.location, format!("{path} overrides final var {varname:?}"))
-                        .with_errortype("final_var")
-                        .with_note(decl.location, format!("declared final on {} here", parent.path))
-                        .register(context);
+                    DMError::new(
+                        typevar.value.location,
+                        format!("{path} overrides final var {varname:?}"),
+                    )
+                    .with_errortype("final_var")
+                    .with_note(
+                        decl.location,
+                        format!("declared final on {} here", parent.path),
+                    )
+                    .register(context);
                 }
 
                 if decl.var_type.flags.is_private() {
-                    DMError::new(typevar.value.location, format!("{path} overrides private var {varname:?}"))
-                        .with_errortype("private_var")
-                        .with_note(decl.location, format!("declared private on {} here", parent.path))
-                        .register(context);
+                    DMError::new(
+                        typevar.value.location,
+                        format!("{path} overrides private var {varname:?}"),
+                    )
+                    .with_errortype("private_var")
+                    .with_note(
+                        decl.location,
+                        format!("declared private on {} here", parent.path),
+                    )
+                    .register(context);
                 }
             }
         }
@@ -1052,6 +1221,7 @@ impl ControlFlow {
             fuzzy: false,
         }
     }
+
     pub fn allfalse() -> ControlFlow {
         ControlFlow {
             returns: false,
@@ -1060,12 +1230,13 @@ impl ControlFlow {
             fuzzy: false,
         }
     }
+
     pub fn terminates(&self) -> bool {
-        !self.fuzzy && ( self.returns || self.continues || self.breaks )
+        !self.fuzzy && (self.returns || self.continues || self.breaks)
     }
 
     pub fn terminates_loop(&self) -> bool {
-        !self.fuzzy && ( self.returns || self.breaks )
+        !self.fuzzy && (self.returns || self.breaks)
     }
 
     pub fn no_else(&mut self) {
@@ -1129,7 +1300,10 @@ struct LocalVar<'o> {
 
 impl<'o> From<Analysis<'o>> for LocalVar<'o> {
     fn from(analysis: Analysis<'o>) -> Self {
-        LocalVar { location: Location::default(), analysis }
+        LocalVar {
+            location: Location::default(),
+            analysis,
+        }
     }
 }
 
@@ -1144,7 +1318,12 @@ struct AnalyzeProc<'o, 's> {
 }
 
 impl<'o, 's> AnalyzeProc<'o, 's> {
-    fn new(env: &'s mut AnalyzeObjectTree<'o>, context: &'o Context, objtree: &'o ObjectTree, proc_ref: ProcRef<'o>) -> Self {
+    fn new(
+        env: &'s mut AnalyzeObjectTree<'o>,
+        context: &'o Context,
+        objtree: &'o ObjectTree,
+        proc_ref: ProcRef<'o>,
+    ) -> Self {
         let ty = proc_ref.ty();
 
         AnalyzeProc {
@@ -1161,28 +1340,47 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     pub fn run(&mut self, block: &'o [Spanned<Statement>]) {
         let mut local_vars = HashMap::<String, LocalVar>::new();
         local_vars.insert(".".to_owned(), Analysis::empty().into());
-        local_vars.insert("args".to_owned(), Analysis::from_static_type_impure(self.objtree.expect("/list")).into());
-        local_vars.insert("usr".to_owned(), Analysis::from_static_type(self.objtree.expect("/mob")).into());
-        local_vars.insert("callee".to_owned(), Analysis::from_static_type(self.objtree.expect("/callee")).into());
-        local_vars.insert("caller".to_owned(), Analysis::from_static_type(self.objtree.expect("/callee")).into());
+        local_vars.insert(
+            "args".to_owned(),
+            Analysis::from_static_type_impure(self.objtree.expect("/list")).into(),
+        );
+        local_vars.insert(
+            "usr".to_owned(),
+            Analysis::from_static_type(self.objtree.expect("/mob")).into(),
+        );
+        local_vars.insert(
+            "callee".to_owned(),
+            Analysis::from_static_type(self.objtree.expect("/callee")).into(),
+        );
+        local_vars.insert(
+            "caller".to_owned(),
+            Analysis::from_static_type(self.objtree.expect("/callee")).into(),
+        );
         if !self.ty.is_root() {
             local_vars.insert("src".to_owned(), Analysis::from_static_type(self.ty).into());
         }
-        local_vars.insert("global".to_owned(), Analysis {
-            static_ty: StaticType::Type(self.objtree.root()),
-            aset: assumption_set![Assumption::IsNull(false)],
-            value: None,
-            fix_hint: None,
-            is_impure: Some(true),
-        }.into());
+        local_vars.insert(
+            "global".to_owned(),
+            Analysis {
+                static_ty: StaticType::Type(self.objtree.root()),
+                aset: assumption_set![Assumption::IsNull(false)],
+                value: None,
+                fix_hint: None,
+                is_impure: Some(true),
+            }
+            .into(),
+        );
 
         for param in self.proc_ref.get().parameters.iter() {
             let mut analysis = self.static_type(param.location, &param.var_type.type_path);
             analysis.is_impure = Some(true); // all params are impure
-            local_vars.insert(param.name.to_owned(), LocalVar {
-                location: self.proc_ref.location,
-                analysis,
-            });
+            local_vars.insert(
+                param.name.to_owned(),
+                LocalVar {
+                    location: self.proc_ref.location,
+                    analysis,
+                },
+            );
             //println!("adding parameters {:#?}", self.local_vars);
         }
 
@@ -1191,49 +1389,77 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         //println!("purity {}", self.is_pure);
 
         if let Some(parent) = self.proc_ref.parent_proc() {
-            if let Some((proc, true, location)) = self.env.private.get_self_or_parent(self.proc_ref) {
+            if let Some((proc, true, location)) = self.env.private.get_self_or_parent(self.proc_ref)
+            {
                 if proc != self.proc_ref {
-                    error(self.proc_ref.location, format!("proc overrides private parent, prohibited by {proc}"))
+                    error(
+                        self.proc_ref.location,
+                        format!("proc overrides private parent, prohibited by {proc}"),
+                    )
                     .with_note(location, "prohibited by this private_proc annotation")
                     .with_errortype("private_proc")
                     .register(self.context);
                 }
             }
-            if let Some((proc, true, location)) = self.env.must_not_override.get_self_or_parent(self.proc_ref) {
+            if let Some((proc, true, location)) =
+                self.env.must_not_override.get_self_or_parent(self.proc_ref)
+            {
                 if proc != self.proc_ref {
-                    error(self.proc_ref.location, format!("proc overrides parent, prohibited by {proc}"))
-                        .with_note(location, "prohibited by this must_not_override annotation")
-                        .with_errortype("must_not_override")
-                        .register(self.context);
+                    error(
+                        self.proc_ref.location,
+                        format!("proc overrides parent, prohibited by {proc}"),
+                    )
+                    .with_note(location, "prohibited by this must_not_override annotation")
+                    .with_errortype("must_not_override")
+                    .register(self.context);
                 }
             }
             if !self.calls_parent {
-                if let Some((proc, true, location)) = self.env.must_call_parent.get_self_or_parent(self.proc_ref) {
-                    error(self.proc_ref.location, format!("proc never calls parent, required by {proc}"))
-                        .with_note(location, "required by this must_call_parent annotation")
-                        .with_errortype("must_call_parent")
-                        .register(self.context);
+                if let Some((proc, true, location)) =
+                    self.env.must_call_parent.get_self_or_parent(self.proc_ref)
+                {
+                    error(
+                        self.proc_ref.location,
+                        format!("proc never calls parent, required by {proc}"),
+                    )
+                    .with_note(location, "required by this must_call_parent annotation")
+                    .with_errortype("must_call_parent")
+                    .register(self.context);
                 }
             }
-            if !parent.is_builtin() && self.proc_ref.ty() == parent.ty()
-                && self.env.can_be_redefined.get_self_or_parent(self.proc_ref).is_none() {
-                error(self.proc_ref.location, format!("redefining proc {}/{}", self.ty, self.proc_ref.name()))
-                    .with_errortype("redefined_proc")
-                    .with_note(parent.location, "previous definition is here")
-                    .set_severity(Severity::Hint)
-                    .register(self.context);
+            if !parent.is_builtin()
+                && self.proc_ref.ty() == parent.ty()
+                && self
+                    .env
+                    .can_be_redefined
+                    .get_self_or_parent(self.proc_ref)
+                    .is_none()
+            {
+                error(
+                    self.proc_ref.location,
+                    format!("redefining proc {}/{}", self.ty, self.proc_ref.name()),
+                )
+                .with_errortype("redefined_proc")
+                .with_note(parent.location, "previous definition is here")
+                .set_severity(Severity::Hint)
+                .register(self.context);
             }
         }
     }
 
-    fn visit_block(&mut self, block: &'o [Spanned<Statement>], local_vars: &mut HashMap<String, LocalVar<'o>>, mut setting_allowed : bool) -> ControlFlow {
+    fn visit_block(
+        &mut self,
+        block: &'o [Spanned<Statement>],
+        local_vars: &mut HashMap<String, LocalVar<'o>>,
+        mut setting_allowed: bool,
+    ) -> ControlFlow {
         let mut term = ControlFlow::allfalse();
         for stmt in block.iter() {
             if term.terminates() {
-                error(stmt.location,"possible unreachable code here")
+                error(stmt.location, "possible unreachable code here")
                     .with_errortype("unreachable_code")
                     .register(self.context);
-                return term // stop evaluating
+                return term; // stop evaluating
             }
             match &stmt.elem {
                 Statement::Setting { name, mode, value } => {
@@ -1244,10 +1470,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                             .with_errortype("set_has_no_effect")
                             .register(self.context);
                     }
-                }
+                },
                 _ => {
                     setting_allowed = false;
-                }
+                },
             }
             let state = self.visit_statement(stmt.location, &stmt.elem, local_vars);
             term.merge(state);
@@ -1258,35 +1484,39 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     fn loop_condition_check(&mut self, location: Location, expression: &'o Expression) {
         match expression.is_truthy() {
             Some(true) => {
-                error(location,"loop condition is always true")
+                error(location, "loop condition is always true")
                     .with_errortype("loop_condition_determinate")
                     .register(self.context);
             },
             Some(false) => {
-                error(location,"loop condition is always false")
+                error(location, "loop condition is always false")
                     .with_errortype("loop_condition_determinate")
                     .register(self.context);
-            }
-            _ => ()
+            },
+            _ => (),
         };
     }
 
     fn visit_control_condition(&mut self, location: Location, expression: &'o Expression) {
         if expression.is_const_eval() {
-            error(location,"control flow condition is a constant evalutation")
+            error(location, "control flow condition is a constant evalutation")
                 .with_errortype("control_condition_static")
                 .register(self.context);
-        }
-        else if let Some(term) = expression.as_term() {
+        } else if let Some(term) = expression.as_term() {
             if term.is_static() {
-                error(location,"control flow condition is a static term")
+                error(location, "control flow condition is a static term")
                     .with_errortype("control_condition_static")
                     .register(self.context);
             }
         }
     }
 
-    fn visit_statement(&mut self, location: Location, statement: &'o Statement, local_vars: &mut HashMap<String, LocalVar<'o>>) -> ControlFlow {
+    fn visit_statement(
+        &mut self,
+        location: Location,
+        statement: &'o Statement,
+        local_vars: &mut HashMap<String, LocalVar<'o>>,
+    ) -> ControlFlow {
         match statement {
             Statement::Expr(expr) => {
                 match expr {
@@ -1294,20 +1524,38 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         if let Term::Call(call, vec) = &term.elem {
                             if !follow.iter().any(|f| matches!(f.elem, Follow::Call(..))) {
                                 if let Some(proc) = self.ty.get_proc(call) {
-                                    if let Some((_, _, loc)) = self.env.must_be_pure.get_self_or_parent(proc) {
-                                        error(location, format!("call to pure proc {call} discards return value"))
-                                            .with_note(loc, "prohibited by this must_be_pure annotation")
-                                            .register(self.context);
+                                    if let Some((_, _, loc)) =
+                                        self.env.must_be_pure.get_self_or_parent(proc)
+                                    {
+                                        error(
+                                            location,
+                                            format!(
+                                                "call to pure proc {call} discards return value"
+                                            ),
+                                        )
+                                        .with_note(
+                                            loc,
+                                            "prohibited by this must_be_pure annotation",
+                                        )
+                                        .register(self.context);
                                     }
                                 }
                             }
                         }
                     },
-                    Expression::BinaryOp { op: BinaryOp::LShift, lhs, rhs } => {
+                    Expression::BinaryOp {
+                        op: BinaryOp::LShift,
+                        lhs,
+                        rhs,
+                    } => {
                         let lhsanalysis = self.visit_expression(location, lhs, None, local_vars);
                         if let Some(impurity) = lhsanalysis.is_impure {
                             if impurity {
-                                self.env.impure_procs.insert_violator(self.proc_ref, "purity breaking << on expression", location);
+                                self.env.impure_procs.insert_violator(
+                                    self.proc_ref,
+                                    "purity breaking << on expression",
+                                    location,
+                                );
                             }
                         }
                     },
@@ -1324,36 +1572,63 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
                 let return_type = self.visit_expression(location, expr, None, local_vars);
                 local_vars.get_mut(".").unwrap().analysis = return_type;
-                return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false }
+                return ControlFlow {
+                    returns: true,
+                    continues: false,
+                    breaks: false,
+                    fuzzy: false,
+                };
             },
-            Statement::Return(None) => { return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false } },
+            Statement::Return(None) => {
+                return ControlFlow {
+                    returns: true,
+                    continues: false,
+                    breaks: false,
+                    fuzzy: false,
+                }
+            },
             Statement::Crash(expr) => {
                 if let Some(expr) = expr {
                     self.visit_expression(location, expr, None, local_vars);
                 }
-                return ControlFlow { returns: true, continues: false, breaks: false, fuzzy: false }
+                return ControlFlow {
+                    returns: true,
+                    continues: false,
+                    breaks: false,
+                    fuzzy: false,
+                };
             },
-            Statement::Throw(expr) => { self.visit_expression(location, expr, None, local_vars); },
+            Statement::Throw(expr) => {
+                self.visit_expression(location, expr, None, local_vars);
+            },
             Statement::While { condition, block } => {
                 let mut scoped_locals = local_vars.clone();
                 // We don't check for static/determine conditions because while(TRUE) is so common.
                 self.visit_expression(location, condition, None, &mut scoped_locals);
                 let mut state = self.visit_block(block, &mut scoped_locals, false);
                 state.end_loop();
-                return state
+                return state;
             },
             Statement::DoWhile { block, condition } => {
                 let mut scoped_locals = local_vars.clone();
                 let mut state = self.visit_block(block, &mut scoped_locals, false);
                 if state.terminates_loop() {
-                    error(location,"do while terminates without ever reaching condition")
-                        .register(self.context);
-                    return state
+                    error(
+                        location,
+                        "do while terminates without ever reaching condition",
+                    )
+                    .register(self.context);
+                    return state;
                 }
-                self.visit_expression(condition.location, &condition.elem, None, &mut scoped_locals);
+                self.visit_expression(
+                    condition.location,
+                    &condition.elem,
+                    None,
+                    &mut scoped_locals,
+                );
 
                 state.end_loop();
-                return state
+                return state;
             },
             Statement::If { arms, else_arm } => {
                 let mut allterm = ControlFlow::alltrue();
@@ -1366,22 +1641,27 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                             .with_errortype("unreachable_code")
                             .register(self.context);
                     }
-                    self.visit_expression(condition.location, &condition.elem, None, &mut scoped_locals);
+                    self.visit_expression(
+                        condition.location,
+                        &condition.elem,
+                        None,
+                        &mut scoped_locals,
+                    );
                     let state = self.visit_block(block, &mut scoped_locals, false);
                     match condition.elem.is_truthy() {
                         Some(true) => {
-                            error(condition.location,"if condition is always true")
+                            error(condition.location, "if condition is always true")
                                 .with_errortype("if_condition_determinate")
                                 .register(self.context);
                             allterm.merge_false(state);
                             alwaystrue = true;
                         },
                         Some(false) => {
-                            error(condition.location,"if condition is always false")
+                            error(condition.location, "if condition is always false")
                                 .with_errortype("if_condition_determinate")
                                 .register(self.context);
                         },
-                        None => allterm.merge_false(state)
+                        None => allterm.merge_false(state),
                     };
                 }
                 if let Some(else_arm) = else_arm {
@@ -1396,18 +1676,23 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     allterm.merge_false(state);
                 } else {
                     allterm.no_else();
-                    return allterm
+                    return allterm;
                 }
                 allterm.finalize();
-                return allterm
+                return allterm;
             },
             Statement::ForInfinite { block } => {
                 let mut scoped_locals = local_vars.clone();
                 let mut state = self.visit_block(block, &mut scoped_locals, false);
                 state.end_loop();
-                return state
-            }
-            Statement::ForLoop { init, test, inc, block } => {
+                return state;
+            },
+            Statement::ForLoop {
+                init,
+                test,
+                inc,
+                block,
+            } => {
                 let mut scoped_locals = local_vars.clone();
                 if let Some(init) = init {
                     self.visit_statement(location, init, &mut scoped_locals);
@@ -1422,10 +1707,16 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
                 let mut state = self.visit_block(block, &mut scoped_locals, false);
                 state.end_loop();
-                return state
+                return state;
             },
             Statement::ForList(for_list) => {
-                let ForListStatement { var_type, name, input_type, in_list, block } = &**for_list;
+                let ForListStatement {
+                    var_type,
+                    name,
+                    input_type,
+                    in_list,
+                    block,
+                } = &**for_list;
                 let mut scoped_locals = local_vars.clone();
                 if let Some(in_list) = in_list {
                     let list = self.visit_expression(location, in_list, None, &mut scoped_locals);
@@ -1433,10 +1724,13 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         StaticType::None => {
                             // Occurs extremely often due to DM not complaining about this, with
                             // over 800 detections on /tg/. Maybe a future lint.
-                        }
-                        StaticType::List { .. } => {/* OK */}
+                        },
+                        StaticType::List { .. } => { /* OK */ },
                         StaticType::Type(ty) => {
-                            if ty != self.objtree.expect("/world") && ty != self.objtree.expect("/list") && ty != self.objtree.expect("/alist") {
+                            if ty != self.objtree.expect("/world")
+                                && ty != self.objtree.expect("/list")
+                                && ty != self.objtree.expect("/alist")
+                            {
                                 let atom = self.objtree.expect("/atom");
                                 if ty.is_subtype_of(&atom) {
                                     // Fine.
@@ -1444,20 +1738,32 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                                     // Iffy conceptually, but the only detections on /tg/ are false positives in the
                                     // component system, where we loop over `var/datum/parent` that is known to be an
                                     // atom in a way that's hard for Dreamchecker to capture.
-                                    error(location, "iterating over a /datum which might not be an /atom")
-                                        .set_severity(Severity::Hint)
-                                        .register(self.context);
+                                    error(
+                                        location,
+                                        "iterating over a /datum which might not be an /atom",
+                                    )
+                                    .set_severity(Severity::Hint)
+                                    .register(self.context);
                                 } else {
                                     // The type is a /datum/foo subtype that definitely can't be looped over.
-                                    error(location, format!("iterating over a {} which cannot be iterated", ty.path))
-                                        .register(self.context);
+                                    error(
+                                        location,
+                                        format!(
+                                            "iterating over a {} which cannot be iterated",
+                                            ty.path
+                                        ),
+                                    )
+                                    .register(self.context);
                                 }
                             }
-                        }
+                        },
                         StaticType::Proc => {
-                            error(location, "iterating over a procpath which cannot be iterated".to_string())
-                                .register(self.context);
-                        }
+                            error(
+                                location,
+                                "iterating over a procpath which cannot be iterated".to_string(),
+                            )
+                            .register(self.context);
+                        },
                     }
                 }
                 if let Some(var_type) = var_type {
@@ -1465,10 +1771,17 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
                 let mut state = self.visit_block(block, &mut scoped_locals, false);
                 state.end_loop();
-                return state
+                return state;
             },
             Statement::ForRange(for_range) => {
-                let ForRangeStatement { var_type, name, start, end, step, block } = &**for_range;
+                let ForRangeStatement {
+                    var_type,
+                    name,
+                    start,
+                    end,
+                    step,
+                    block,
+                } = &**for_range;
                 let mut scoped_locals = local_vars.clone();
                 self.visit_expression(location, end, None, &mut scoped_locals);
                 if let Some(step) = step {
@@ -1482,16 +1795,19 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     if let Some(endterm) = end.as_term() {
                         if let Some(validity) = startterm.valid_for_range(endterm, step.as_ref()) {
                             if !validity {
-                                error(location,"for range loop body is never reached due to invalid range")
-                                    .register(self.context);
+                                error(
+                                    location,
+                                    "for range loop body is never reached due to invalid range",
+                                )
+                                .register(self.context);
                             } else {
-                                return state
+                                return state;
                             }
                         }
                     }
                 }
                 state.end_loop();
-                return state
+                return state;
             },
             Statement::Var(var) => self.visit_var_stmt(location, var, local_vars),
             Statement::Vars(vars) => {
@@ -1499,9 +1815,13 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     self.visit_var_stmt(location, each, local_vars);
                 }
             },
-            Statement::Setting { name, mode: SettingMode::Assign, value } => {
+            Statement::Setting {
+                name,
+                mode: SettingMode::Assign,
+                value,
+            } => {
                 if name != "waitfor" {
-                    return ControlFlow::allfalse()
+                    return ControlFlow::allfalse();
                 }
                 if match value.as_term() {
                     Some(Term::Int(0)) => true,
@@ -1521,25 +1841,44 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 self.visit_block(block, &mut scoped_locals, false);
                 self.inside_newcontext = self.inside_newcontext.wrapping_sub(1);
             },
-            Statement::Switch { input, cases, default } => {
+            Statement::Switch {
+                input,
+                cases,
+                default,
+            } => {
                 check_switch_rand_range(input, cases, default, location, self.context);
                 let mut allterm = ControlFlow::alltrue();
                 self.visit_control_condition(location, input);
                 self.visit_expression(location, input, None, local_vars);
                 for (case, ref block) in cases.iter() {
                     let mut scoped_locals = local_vars.clone();
-                    if let [dm::ast::Case::Exact(Expression::BinaryOp{op: BinaryOp::Or, ..})] = case.elem[..] {
+                    if let [dm::ast::Case::Exact(Expression::BinaryOp {
+                        op: BinaryOp::Or, ..
+                    })] = case.elem[..]
+                    {
                         error(case.location, "Elements in a switch-case branch separated by ||, this is likely in error and should be replaced by a comma")
                             .set_severity(Severity::Warning)
                             .register(self.context);
                     }
                     for case_part in case.elem.iter() {
                         match case_part {
-                            dm::ast::Case::Exact(expr) => { self.visit_expression(case.location, expr, None, &mut scoped_locals); },
+                            dm::ast::Case::Exact(expr) => {
+                                self.visit_expression(
+                                    case.location,
+                                    expr,
+                                    None,
+                                    &mut scoped_locals,
+                                );
+                            },
                             dm::ast::Case::Range(start, end) => {
-                                self.visit_expression(case.location, start, None, &mut scoped_locals);
+                                self.visit_expression(
+                                    case.location,
+                                    start,
+                                    None,
+                                    &mut scoped_locals,
+                                );
                                 self.visit_expression(case.location, end, None, &mut scoped_locals);
-                            }
+                            },
                         }
                     }
                     let state = self.visit_block(block, &mut scoped_locals, false);
@@ -1550,40 +1889,75 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     allterm.merge_false(state);
                 } else {
                     allterm.no_else();
-                    return allterm
+                    return allterm;
                 }
                 allterm.finalize();
-                return allterm
+                return allterm;
             },
-            Statement::TryCatch { try_block, catch_params, catch_block } => {
+            Statement::TryCatch {
+                try_block,
+                catch_params,
+                catch_block,
+            } => {
                 self.visit_block(try_block, &mut local_vars.clone(), false);
                 if catch_params.len() > 1 {
-                    error(location, format!("Expected 0 or 1 catch parameters, got {}", catch_params.len()))
-                        .set_severity(Severity::Warning)
-                        .register(self.context);
+                    error(
+                        location,
+                        format!(
+                            "Expected 0 or 1 catch parameters, got {}",
+                            catch_params.len()
+                        ),
+                    )
+                    .set_severity(Severity::Warning)
+                    .register(self.context);
                 }
                 let mut catch_locals = local_vars.clone();
                 for caught in catch_params.iter() {
                     let (var_name, mut type_path) = match caught.split_last() {
                         Some(x) => x,
-                        None => continue
+                        None => continue,
                     };
                     match type_path.split_first() {
                         Some((first, rest)) if first == "var" => type_path = rest,
-                        _ => {}
+                        _ => {},
                     }
                     let var_type: VarType = type_path.iter().map(ToOwned::to_owned).collect();
                     self.visit_var(location, &var_type, var_name, None, &mut catch_locals);
                 }
                 self.visit_block(catch_block, &mut catch_locals, false);
             },
-            Statement::Continue(_) => { return ControlFlow { returns: false, continues: true, breaks: false, fuzzy: true } },
-            Statement::Break(_) => { return ControlFlow { returns: false, continues: false, breaks: true, fuzzy: true } },
+            Statement::Continue(_) => {
+                return ControlFlow {
+                    returns: false,
+                    continues: true,
+                    breaks: false,
+                    fuzzy: true,
+                }
+            },
+            Statement::Break(_) => {
+                return ControlFlow {
+                    returns: false,
+                    continues: false,
+                    breaks: true,
+                    fuzzy: true,
+                }
+            },
             Statement::Goto(_) => {},
-            Statement::Label { name: _, block } => { self.visit_block(block, &mut local_vars.clone(), false); },
-            Statement::Del(expr) => { self.visit_expression(location, expr, None, local_vars); },
+            Statement::Label { name: _, block } => {
+                self.visit_block(block, &mut local_vars.clone(), false);
+            },
+            Statement::Del(expr) => {
+                self.visit_expression(location, expr, None, local_vars);
+            },
             Statement::ForKeyValue(for_key_value) => {
-                let ForKeyValueStatement { var_type, key, key_input_type: _, value, in_list, block } = &**for_key_value;
+                let ForKeyValueStatement {
+                    var_type,
+                    key,
+                    key_input_type: _,
+                    value,
+                    in_list,
+                    block,
+                } = &**for_key_value;
                 let mut scoped_locals = local_vars.clone();
                 if let Some(in_list) = in_list {
                     let list = self.visit_expression(location, in_list, None, &mut scoped_locals);
@@ -1591,10 +1965,13 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         StaticType::None => {
                             // Occurs extremely often due to DM not complaining about this, with
                             // over 800 detections on /tg/. Maybe a future lint.
-                        }
-                        StaticType::List { .. } => {/* OK */}
+                        },
+                        StaticType::List { .. } => { /* OK */ },
                         StaticType::Type(ty) => {
-                            if ty != self.objtree.expect("/world") && ty != self.objtree.expect("/list") && ty != self.objtree.expect("/alist") {
+                            if ty != self.objtree.expect("/world")
+                                && ty != self.objtree.expect("/list")
+                                && ty != self.objtree.expect("/alist")
+                            {
                                 let atom = self.objtree.expect("/atom");
                                 if ty.is_subtype_of(&atom) {
                                     // Fine.
@@ -1602,20 +1979,32 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                                     // Iffy conceptually, but the only detections on /tg/ are false positives in the
                                     // component system, where we loop over `var/datum/parent` that is known to be an
                                     // atom in a way that's hard for Dreamchecker to capture.
-                                    error(location, "iterating over a /datum which might not be an /atom")
-                                        .set_severity(Severity::Hint)
-                                        .register(self.context);
+                                    error(
+                                        location,
+                                        "iterating over a /datum which might not be an /atom",
+                                    )
+                                    .set_severity(Severity::Hint)
+                                    .register(self.context);
                                 } else {
                                     // The type is a /datum/foo subtype that definitely can't be looped over.
-                                    error(location, format!("iterating over a {} which cannot be iterated", ty.path))
-                                        .register(self.context);
+                                    error(
+                                        location,
+                                        format!(
+                                            "iterating over a {} which cannot be iterated",
+                                            ty.path
+                                        ),
+                                    )
+                                    .register(self.context);
                                 }
                             }
-                        }
+                        },
                         StaticType::Proc => {
-                            error(location, "iterating over a procpath which cannot be iterated".to_string())
-                                .register(self.context);
-                        }
+                            error(
+                                location,
+                                "iterating over a procpath which cannot be iterated".to_string(),
+                            )
+                            .register(self.context);
+                        },
                     }
                 }
                 // This quite ugly but DM doesn't let you do for (var/k, var/v)
@@ -1633,22 +2022,42 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 self.visit_var(location, &var_type_value, value, None, &mut scoped_locals);
                 let mut state = self.visit_block(block, &mut scoped_locals, false);
                 state.end_loop();
-                return state
-            }
+                return state;
+            },
         }
         ControlFlow::allfalse()
     }
 
-    fn visit_var_stmt(&mut self, location: Location, var: &'o VarStatement, local_vars: &mut HashMap<String, LocalVar<'o>>) {
-        self.visit_var(location, &var.var_type, &var.name, var.value.as_ref(), local_vars)
+    fn visit_var_stmt(
+        &mut self,
+        location: Location,
+        var: &'o VarStatement,
+        local_vars: &mut HashMap<String, LocalVar<'o>>,
+    ) {
+        self.visit_var(
+            location,
+            &var.var_type,
+            &var.name,
+            var.value.as_ref(),
+            local_vars,
+        )
     }
 
-    fn visit_var(&mut self, location: Location, var_type: &VarType, name: &str, value: Option<&'o Expression>, local_vars: &mut HashMap<String, LocalVar<'o>>) {
+    fn visit_var(
+        &mut self,
+        location: Location,
+        var_type: &VarType,
+        name: &str,
+        value: Option<&'o Expression>,
+        local_vars: &mut HashMap<String, LocalVar<'o>>,
+    ) {
         // Calculate type hint
         let static_type = self.env.static_type(location, &var_type.type_path);
         // Visit the expression if it's there
         let mut analysis = match value {
-            Some(expr) => self.visit_expression(location, expr, static_type.basic_type(), local_vars),
+            Some(expr) => {
+                self.visit_expression(location, expr, static_type.basic_type(), local_vars)
+            },
             None => Analysis::null(),
         };
         analysis.static_ty = static_type;
@@ -1657,80 +2066,145 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         local_vars.insert(name.to_owned(), LocalVar { location, analysis });
     }
 
-    fn visit_expression(&mut self, location: Location, expression: &'o Expression, type_hint: Option<TypeRef<'o>>, local_vars: &mut HashMap<String, LocalVar<'o>>) -> Analysis<'o> {
+    fn visit_expression(
+        &mut self,
+        location: Location,
+        expression: &'o Expression,
+        type_hint: Option<TypeRef<'o>>,
+        local_vars: &mut HashMap<String, LocalVar<'o>>,
+    ) -> Analysis<'o> {
         match expression {
             Expression::Base { term, follow } => {
-                let base_type_hint = if follow.is_empty() {
-                    type_hint
-                } else {
-                    None
-                };
+                let base_type_hint = if follow.is_empty() { type_hint } else { None };
                 let mut ty = self.visit_term(term.location, &term.elem, base_type_hint, local_vars);
                 for each in follow.iter() {
                     ty = self.visit_follow(each.location, ty, &each.elem, local_vars);
                 }
                 ty
             },
-            Expression::BinaryOp { op: BinaryOp::LShift, lhs, rhs } => {
+            Expression::BinaryOp {
+                op: BinaryOp::LShift,
+                lhs,
+                rhs,
+            } => {
                 let lty = self.visit_expression(location, lhs, None, local_vars);
 
                 if lty.static_ty == StaticType::Type(self.objtree.expect("/mob")) {
-                    self.env.impure_procs.insert_violator(self.proc_ref, "LShift onto mob", location);
+                    self.env.impure_procs.insert_violator(
+                        self.proc_ref,
+                        "LShift onto mob",
+                        location,
+                    );
                 } else if lty.static_ty == StaticType::Type(self.objtree.expect("/savefile")) {
-                    self.env.impure_procs.insert_violator(self.proc_ref, "LShift onto savefile", location);
+                    self.env.impure_procs.insert_violator(
+                        self.proc_ref,
+                        "LShift onto savefile",
+                        location,
+                    );
                 } else if lty.static_ty == StaticType::Type(self.objtree.expect("/list")) {
-                    self.env.impure_procs.insert_violator(self.proc_ref, "LShift onto list", location);
+                    self.env.impure_procs.insert_violator(
+                        self.proc_ref,
+                        "LShift onto list",
+                        location,
+                    );
                 }
 
                 let rty = self.visit_expression(location, rhs, None, local_vars);
                 self.visit_binary(lty, rty, BinaryOp::LShift)
             },
-            Expression::BinaryOp { op: BinaryOp::In, lhs, rhs } => {
+            Expression::BinaryOp {
+                op: BinaryOp::In,
+                lhs,
+                rhs,
+            } => {
                 // check for incorrect/ambiguous in statements
                 match &**lhs {
                     Expression::Base { term, follow } => {
                         for each in follow.iter() {
                             if let Follow::Unary(unary) = each.elem {
-                                error(location, format!("ambiguous `{}` on left side of an `in`", unary.name()))
-                                    .set_severity(Severity::Warning)
-                                    .with_errortype("ambiguous_in_lhs")
-                                    .with_note(location, format!("add parentheses to fix: `{}`", unary.around("(a in b)")))
-                                    .with_note(location, format!("add parentheses to disambiguate: `({}) in b`", unary.around("a")))
-                                    .register(self.context);
+                                error(
+                                    location,
+                                    format!("ambiguous `{}` on left side of an `in`", unary.name()),
+                                )
+                                .set_severity(Severity::Warning)
+                                .with_errortype("ambiguous_in_lhs")
+                                .with_note(
+                                    location,
+                                    format!(
+                                        "add parentheses to fix: `{}`",
+                                        unary.around("(a in b)")
+                                    ),
+                                )
+                                .with_note(
+                                    location,
+                                    format!(
+                                        "add parentheses to disambiguate: `({}) in b`",
+                                        unary.around("a")
+                                    ),
+                                )
+                                .register(self.context);
                                 break;
                             }
                         }
                     },
                     Expression::BinaryOp { op, lhs, rhs } => {
-                        error(location, format!("ambiguous `{op}` on left side of an `in`"))
-                            .set_severity(Severity::Warning)
-                            .with_errortype("ambiguous_in_lhs")
-                            .with_note(location, format!("add parentheses to fix: `a {op} (b in c)`"))
-                            .with_note(location, format!("add parentheses to disambiguate: `(a {op} b) in c`"))
-                            .register(self.context);
+                        error(
+                            location,
+                            format!("ambiguous `{op}` on left side of an `in`"),
+                        )
+                        .set_severity(Severity::Warning)
+                        .with_errortype("ambiguous_in_lhs")
+                        .with_note(
+                            location,
+                            format!("add parentheses to fix: `a {op} (b in c)`"),
+                        )
+                        .with_note(
+                            location,
+                            format!("add parentheses to disambiguate: `(a {op} b) in c`"),
+                        )
+                        .register(self.context);
                     },
                     Expression::AssignOp { op, lhs, rhs } => {
-                        error(location, format!("ambiguous `{op}` on left side of an `in`"))
-                            .set_severity(Severity::Warning)
-                            .with_errortype("ambiguous_in_lhs")
-                            .with_note(location, format!("add parentheses to fix: `a {op} (b in c)`"))
-                            .with_note(location, format!("add parentheses to disambiguate: `(a {op} b) in c`"))
-                            .register(self.context);
+                        error(
+                            location,
+                            format!("ambiguous `{op}` on left side of an `in`"),
+                        )
+                        .set_severity(Severity::Warning)
+                        .with_errortype("ambiguous_in_lhs")
+                        .with_note(
+                            location,
+                            format!("add parentheses to fix: `a {op} (b in c)`"),
+                        )
+                        .with_note(
+                            location,
+                            format!("add parentheses to disambiguate: `(a {op} b) in c`"),
+                        )
+                        .register(self.context);
                     },
                     Expression::TernaryOp { cond, if_, else_ } => {
-                        error(location, "ambiguous ternary on left side of an `in`".to_string())
-                            .set_severity(Severity::Warning)
-                            .with_errortype("ambiguous_in_lhs")
-                            .with_note(location, "add parentheses to fix: `a ? b : (c in d)`")
-                            .with_note(location, "add parentheses to disambiguate: `(a ? b : c) in d`")
-                            .register(self.context);
+                        error(
+                            location,
+                            "ambiguous ternary on left side of an `in`".to_string(),
+                        )
+                        .set_severity(Severity::Warning)
+                        .with_errortype("ambiguous_in_lhs")
+                        .with_note(location, "add parentheses to fix: `a ? b : (c in d)`")
+                        .with_note(
+                            location,
+                            "add parentheses to disambiguate: `(a ? b : c) in d`",
+                        )
+                        .register(self.context);
                     },
                 };
                 let lty = self.visit_expression(location, lhs, None, local_vars);
                 let rty = self.visit_expression(location, rhs, None, local_vars);
                 self.visit_binary(lty, rty, BinaryOp::In)
             },
-            Expression::BinaryOp { op: BinaryOp::Or, lhs, rhs } => {
+            Expression::BinaryOp {
+                op: BinaryOp::Or,
+                lhs,
+                rhs,
+            } => {
                 // It appears that DM does this in more cases than this, but
                 // this is the only case I've seen it used in the wild.
                 // ex: var/datum/cache_entry/E = cache[key] || new
@@ -1742,17 +2216,27 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 let lty = self.visit_expression(location, lhs, None, local_vars);
                 let rty = self.visit_expression(location, rhs, None, local_vars);
                 match op {
-                    BinaryOp::BitAnd => self.check_negated_bitwise(lhs, location, BinaryOp::BitAnd, BinaryOp::And),
-                    BinaryOp::BitOr => self.check_negated_bitwise(lhs, location, BinaryOp::BitOr, BinaryOp::Or),
-                    BinaryOp::BitXor => self.check_negated_bitwise(lhs, location, BinaryOp::BitXor, BinaryOp::NotEq),
-                    _ => {}
+                    BinaryOp::BitAnd => {
+                        self.check_negated_bitwise(lhs, location, BinaryOp::BitAnd, BinaryOp::And)
+                    },
+                    BinaryOp::BitOr => {
+                        self.check_negated_bitwise(lhs, location, BinaryOp::BitOr, BinaryOp::Or)
+                    },
+                    BinaryOp::BitXor => {
+                        self.check_negated_bitwise(lhs, location, BinaryOp::BitXor, BinaryOp::NotEq)
+                    },
+                    _ => {},
                 }
                 self.visit_binary(lty, rty, *op)
             },
             Expression::AssignOp { lhs, rhs, .. } => {
                 let lhs = self.visit_expression(location, lhs, None, local_vars);
                 if let Some(true) = lhs.is_impure {
-                    self.env.impure_procs.insert_violator(self.proc_ref, "Assignment on purity breaking expression", location);
+                    self.env.impure_procs.insert_violator(
+                        self.proc_ref,
+                        "Assignment on purity breaking expression",
+                        location,
+                    );
                 }
                 self.visit_expression(location, rhs, lhs.static_ty.basic_type(), local_vars)
             },
@@ -1762,28 +2246,54 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 let ty = self.visit_expression(location, if_, type_hint, local_vars);
                 self.visit_expression(location, else_, type_hint, local_vars);
                 ty
-            }
+            },
         }
     }
 
-    fn visit_term(&mut self, location: Location, term: &'o Term, type_hint: Option<TypeRef<'o>>, local_vars: &mut HashMap<String, LocalVar<'o>>) -> Analysis<'o> {
+    fn visit_term(
+        &mut self,
+        location: Location,
+        term: &'o Term,
+        type_hint: Option<TypeRef<'o>>,
+        local_vars: &mut HashMap<String, LocalVar<'o>>,
+    ) -> Analysis<'o> {
         match term {
             Term::Null => Analysis::null(),
-            Term::Int(number) => Analysis::from_value(self.objtree, Constant::from(*number), type_hint),
-            Term::Float(number) => Analysis::from_value(self.objtree, Constant::from(*number), type_hint),
-            Term::String(text) => Analysis::from_value(self.objtree, Constant::String(text.as_str().into()), type_hint),
-            Term::Resource(text) => Analysis::from_value(self.objtree, Constant::Resource(text.as_str().into()), type_hint),
+            Term::Int(number) => {
+                Analysis::from_value(self.objtree, Constant::from(*number), type_hint)
+            },
+            Term::Float(number) => {
+                Analysis::from_value(self.objtree, Constant::from(*number), type_hint)
+            },
+            Term::String(text) => Analysis::from_value(
+                self.objtree,
+                Constant::String(text.as_str().into()),
+                type_hint,
+            ),
+            Term::Resource(text) => Analysis::from_value(
+                self.objtree,
+                Constant::Resource(text.as_str().into()),
+                type_hint,
+            ),
             Term::As(_) => assumption_set![Assumption::IsNum(true)].into(),
 
             Term::Ident(unscoped_name) => {
                 if let Some(var) = local_vars.get(unscoped_name) {
-                    var.analysis.clone()
+                    var.analysis
+                        .clone()
                         .with_fix_hint(var.location, "add additional type info here")
                 } else if unscoped_name == "type" {
                     // Strictly speaking "type" might be any subset of our current type, but let's return something useful
                     // so that `nameof(type::foo)` is sensible.
                     let ty = self.ty;
-                    let pop = dm::constants::Pop::from(ty.path.split('/').skip(1).map(ToOwned::to_owned).collect::<Vec<_>>().into_boxed_slice());
+                    let pop = dm::constants::Pop::from(
+                        ty.path
+                            .split('/')
+                            .skip(1)
+                            .map(ToOwned::to_owned)
+                            .collect::<Vec<_>>()
+                            .into_boxed_slice(),
+                    );
                     Analysis {
                         static_ty: StaticType::None,
                         aset: assumption_set![Assumption::IsPath(true, ty)],
@@ -1792,7 +2302,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         is_impure: None,
                     }
                 } else if let Some(decl) = self.ty.get_var_declaration(unscoped_name) {
-                    let mut ana = self.static_type(location, &decl.var_type.type_path)
+                    let mut ana = self
+                        .static_type(location, &decl.var_type.type_path)
                         .with_fix_hint(decl.location, "add additional type info here");
                     ana.is_impure = Some(true);
                     ana
@@ -1804,7 +2315,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Term::GlobalIdent(global_name) => {
                 if let Some(decl) = self.objtree.root().get_var_declaration(global_name) {
-                    let mut ana = self.static_type(location, &decl.var_type.type_path)
+                    let mut ana = self
+                        .static_type(location, &decl.var_type.type_path)
                         .with_fix_hint(decl.location, "add additional type info here");
                     ana.is_impure = Some(true);
                     ana
@@ -1818,8 +2330,15 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Term::Expr(expr) => self.visit_expression(location, expr, type_hint, local_vars),
             Term::Prefab(prefab) => {
                 if let Some(nav) = self.ty.navigate_path(&prefab.path) {
-                    let ty = nav.ty();  // TODO: handle proc/verb paths here
-                    let pop = dm::constants::Pop::from(ty.path.split('/').skip(1).map(ToOwned::to_owned).collect::<Vec<_>>().into_boxed_slice());
+                    let ty = nav.ty(); // TODO: handle proc/verb paths here
+                    let pop = dm::constants::Pop::from(
+                        ty.path
+                            .split('/')
+                            .skip(1)
+                            .map(ToOwned::to_owned)
+                            .collect::<Vec<_>>()
+                            .into_boxed_slice(),
+                    );
                     Analysis {
                         static_ty: StaticType::None,
                         aset: assumption_set![Assumption::IsPath(true, nav.ty())],
@@ -1828,8 +2347,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         is_impure: None,
                     }
                 } else {
-                    error(location, format!("failed to resolve path {}", FormatTypePath(&prefab.path)))
-                        .register(self.context);
+                    error(
+                        location,
+                        format!("failed to resolve path {}", FormatTypePath(&prefab.path)),
+                    )
+                    .register(self.context);
                     Analysis::empty()
                 }
             },
@@ -1843,13 +2365,15 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
 
             Term::Call(unscoped_name, args) => {
-                if self.inside_newcontext == 0 && matches!(unscoped_name.as_str(),
-                    "sleep"
-                    | "alert"
-                    | "shell"
-                    | "winexists"
-                    | "winget") {
-                        self.env.sleeping_procs.insert_violator(self.proc_ref, unscoped_name, location);
+                if self.inside_newcontext == 0
+                    && matches!(
+                        unscoped_name.as_str(),
+                        "sleep" | "alert" | "shell" | "winexists" | "winget"
+                    )
+                {
+                    self.env
+                        .sleeping_procs
+                        .insert_violator(self.proc_ref, unscoped_name, location);
                 }
                 self.check_type_sleepers(self.ty, location, unscoped_name);
                 let src = self.ty;
@@ -1864,12 +2388,18 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 } else if unscoped_name == "SpacemanDMM_debug" {
                     eprintln!("SpacemanDMM_debug:");
                     for arg in args.iter() {
-                        eprintln!("    {:?}", self.visit_expression(location, arg, None, local_vars));
+                        eprintln!(
+                            "    {:?}",
+                            self.visit_expression(location, arg, None, local_vars)
+                        );
                     }
                     Analysis::empty()
                 } else {
-                    error(location, format!("undefined proc: {:?} on {}", unscoped_name, self.ty))
-                        .register(self.context);
+                    error(
+                        location,
+                        format!("undefined proc: {:?} on {}", unscoped_name, self.ty),
+                    )
+                    .register(self.context);
                     Analysis::empty()
                 }
             },
@@ -1918,9 +2448,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     // TODO: handle proc/verb paths here
                     self.visit_new(location, nav.ty(), args, local_vars)
                 } else {
-                    error(location, format!("failed to resolve path {}", FormatTypePath(&prefab.path)))
-                        .register(self.context);
-                        Analysis::empty()
+                    error(
+                        location,
+                        format!("failed to resolve path {}", FormatTypePath(&prefab.path)),
+                    )
+                    .register(self.context);
+                    Analysis::empty()
                 }
             },
             Term::NewMiniExpr { .. } => {
@@ -1932,9 +2465,15 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 self.visit_arguments(location, args, local_vars);
                 Analysis::from_static_type(self.objtree.expect("/list"))
             },
-            Term::Input { args, input_type, in_list } => {
+            Term::Input {
+                args,
+                input_type,
+                in_list,
+            } => {
                 if self.inside_newcontext == 0 {
-                    self.env.sleeping_procs.insert_violator(self.proc_ref, "input", location);
+                    self.env
+                        .sleeping_procs
+                        .insert_violator(self.proc_ref, "input", location);
                 }
                 // TODO: deal with in_list
                 self.visit_arguments(location, args, local_vars);
@@ -1954,7 +2493,13 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     assumption_set![Assumption::IsType(true, self.objtree.expect("/area"))].into()
                 } else if without_null == InputType::TURF {
                     assumption_set![Assumption::IsType(true, self.objtree.expect("/turf"))].into()
-                } else if without_null == InputType::TEXT || without_null == InputType::MESSAGE || without_null == InputType::KEY || without_null == InputType::PASSWORD || without_null == InputType::COLOR || without_null.is_empty() {
+                } else if without_null == InputType::TEXT
+                    || without_null == InputType::MESSAGE
+                    || without_null == InputType::KEY
+                    || without_null == InputType::PASSWORD
+                    || without_null == InputType::COLOR
+                    || without_null.is_empty()
+                {
                     assumption_set![Assumption::IsText(true)].into()
                 } else if without_null == InputType::NUM {
                     assumption_set![Assumption::IsNum(true)].into()
@@ -1973,7 +2518,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     self.visit_expression(location, expr, None, local_vars);
                 }
 
-                if args.len() == 3 {  // X,Y,Z - it's gotta be a turf
+                if args.len() == 3 {
+                    // X,Y,Z - it's gotta be a turf
                     assumption_set![Assumption::IsType(true, self.objtree.expect("/turf"))].into()
                 } else {
                     Analysis::empty()
@@ -1993,19 +2539,31 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Term::DynamicCall(lhs_args, rhs_args) => {
                 self.visit_arguments(location, lhs_args, local_vars);
                 self.visit_arguments(location, rhs_args, local_vars);
-                Analysis::empty()  // TODO
+                Analysis::empty() // TODO
             },
-            Term::ExternalCall { library, function, args } => {
+            Term::ExternalCall {
+                library,
+                function,
+                args,
+            } => {
                 if let Some(library) = library {
                     self.visit_expression(location, library, None, local_vars);
                 }
                 self.visit_expression(location, function, None, local_vars);
                 self.visit_arguments(location, args, local_vars);
-                Analysis::empty()  // TODO
+                Analysis::empty() // TODO
             },
 
             Term::__TYPE__ => {
-                let pop = dm::constants::Pop::from(self.ty.path.split('/').skip(1).map(ToOwned::to_owned).collect::<Vec<_>>().into_boxed_slice());
+                let pop = dm::constants::Pop::from(
+                    self.ty
+                        .path
+                        .split('/')
+                        .skip(1)
+                        .map(ToOwned::to_owned)
+                        .collect::<Vec<_>>()
+                        .into_boxed_slice(),
+                );
                 Analysis {
                     static_ty: StaticType::None,
                     aset: assumption_set![Assumption::IsPath(true, self.ty)],
@@ -2020,9 +2578,17 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Term::__IMPLIED_TYPE__ => {
                 let Some(implied_type) = type_hint else {
-                    return Analysis::empty()
+                    return Analysis::empty();
                 };
-                let pop = dm::constants::Pop::from(implied_type.path.split('/').skip(1).map(ToOwned::to_owned).collect::<Vec<_>>().into_boxed_slice());
+                let pop = dm::constants::Pop::from(
+                    implied_type
+                        .path
+                        .split('/')
+                        .skip(1)
+                        .map(ToOwned::to_owned)
+                        .collect::<Vec<_>>()
+                        .into_boxed_slice(),
+                );
                 Analysis {
                     static_ty: StaticType::None,
                     aset: assumption_set![Assumption::IsPath(true, self.ty)],
@@ -2034,7 +2600,13 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
     }
 
-    fn visit_new(&mut self, location: Location, typepath: TypeRef<'o>, args: &'o Option<Box<[Expression]>>, local_vars: &mut HashMap<String, LocalVar<'o>>) -> Analysis<'o> {
+    fn visit_new(
+        &mut self,
+        location: Location,
+        typepath: TypeRef<'o>,
+        args: &'o Option<Box<[Expression]>>,
+        local_vars: &mut HashMap<String, LocalVar<'o>>,
+    ) -> Analysis<'o> {
         if let Some(new_proc) = typepath.get_proc("New") {
             self.visit_call(
                 location,
@@ -2044,45 +2616,73 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 // New calls are exact: `new /datum()` will always call
                 // `/datum/New()` and never an override.
                 true,
-                local_vars);
-        } else if typepath.path != "/list" && typepath.path != "/alist" && typepath.path != "/vector" && typepath.path != "/pixloc" {
-            error(location, format!("couldn't find {}/proc/New", typepath.path))
-                .register(self.context);
+                local_vars,
+            );
+        } else if typepath.path != "/list"
+            && typepath.path != "/alist"
+            && typepath.path != "/vector"
+            && typepath.path != "/pixloc"
+        {
+            error(
+                location,
+                format!("couldn't find {}/proc/New", typepath.path),
+            )
+            .register(self.context);
         }
         assumption_set![Assumption::IsType(true, typepath)].into()
     }
 
     fn check_type_sleepers(&mut self, ty: TypeRef<'o>, location: Location, unscoped_name: &str) {
         match ty.get().path.as_str() {
-            "/client" => if self.inside_newcontext == 0 && matches!(unscoped_name,
-                "SoundQuery"
-                | "MeasureText") {
-                    self.env.sleeping_procs.insert_violator(self.proc_ref, format!("client.{unscoped_name}").as_str(), location);
+            "/client" => {
+                if self.inside_newcontext == 0
+                    && matches!(unscoped_name, "SoundQuery" | "MeasureText")
+                {
+                    self.env.sleeping_procs.insert_violator(
+                        self.proc_ref,
+                        format!("client.{unscoped_name}").as_str(),
+                        location,
+                    );
+                }
             },
-            "/world" => if self.inside_newcontext == 0 && matches!(unscoped_name,
-                "Import"
-                | "Export") {
-                    self.env.sleeping_procs.insert_violator(self.proc_ref, format!("world.{unscoped_name}").as_str(), location);
+            "/world" => {
+                if self.inside_newcontext == 0 && matches!(unscoped_name, "Import" | "Export") {
+                    self.env.sleeping_procs.insert_violator(
+                        self.proc_ref,
+                        format!("world.{unscoped_name}").as_str(),
+                        location,
+                    );
+                }
             },
             _ => {},
         }
     }
 
-    fn visit_follow(&mut self, location: Location, lhs: Analysis<'o>, rhs: &'o Follow, local_vars: &mut HashMap<String, LocalVar<'o>>) -> Analysis<'o> {
+    fn visit_follow(
+        &mut self,
+        location: Location,
+        lhs: Analysis<'o>,
+        rhs: &'o Follow,
+        local_vars: &mut HashMap<String, LocalVar<'o>>,
+    ) -> Analysis<'o> {
         match rhs {
             Follow::Unary(op) => self.visit_unary(lhs, op, location, local_vars),
 
             Follow::Field(PropertyAccessKind::Colon, _) => Analysis::empty(),
             Follow::Field(PropertyAccessKind::SafeColon, _) => Analysis::empty(),
-            Follow::Call(PropertyAccessKind::Colon, _, args) |
-            Follow::Call(PropertyAccessKind::SafeColon, _, args) => {
+            Follow::Call(PropertyAccessKind::Colon, _, args)
+            | Follow::Call(PropertyAccessKind::SafeColon, _, args) => {
                 // No analysis yet, but be sure to visit the arguments
                 for arg in args.iter() {
                     let mut argument_value = arg;
-                    if let Expression::AssignOp { op: AssignOp::Assign, lhs, rhs } = arg {
+                    if let Expression::AssignOp {
+                        op: AssignOp::Assign,
+                        lhs,
+                        rhs,
+                    } = arg
+                    {
                         match lhs.as_term() {
-                            Some(Term::Ident(name)) |
-                            Some(Term::String(name)) => {
+                            Some(Term::Ident(name)) | Some(Term::String(name)) => {
                                 // Don't visit_expression the kwarg key.
                                 argument_value = rhs;
                             },
@@ -2101,7 +2701,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     StaticType::List { keys, .. } => {
                         let mut res = Analysis::from(*keys);
                         if let Some((loc, _)) = lhs.fix_hint {
-                            res.fix_hint = Some((loc, "add a type annotation after /list here".to_owned()))
+                            res.fix_hint =
+                                Some((loc, "add a type annotation after /list here".to_owned()))
                         }
                         res
                     },
@@ -2113,7 +2714,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         }
                         lhs.clone()
                     },
-                    _ => lhs.clone()  // carry through fix_hint
+                    _ => lhs.clone(), // carry through fix_hint
                 }
             },
             Follow::Field(kind, name) => {
@@ -2123,7 +2724,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         _ => {
                             error(location, format!("undefined field: {name:?} on procpath"))
                                 .register(self.context);
-                        }
+                        },
                     }
                     Analysis::empty()
                 } else if let Some(ty) = lhs.static_ty.basic_type() {
@@ -2133,17 +2734,25 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         Analysis::from(StaticType::Proc)
                     } else if let Some(decl) = ty.get_var_declaration(name) {
                         if ty != self.ty && decl.var_type.flags.is_private() {
-                            error(location, format!("field {name:?} on {ty} is declared as private"))
-                                .with_errortype("private_var")
-                                .set_severity(Severity::Warning)
-                                .with_note(decl.location, "definition is here")
-                                .register(self.context);
-                        } else if !self.ty.is_subtype_of(ty.get()) && decl.var_type.flags.is_protected() {
-                            error(location, format!("field {name:?} on {ty} is declared as protected"))
-                                .with_errortype("protected_var")
-                                .set_severity(Severity::Warning)
-                                .with_note(decl.location, "definition is here")
-                                .register(self.context);
+                            error(
+                                location,
+                                format!("field {name:?} on {ty} is declared as private"),
+                            )
+                            .with_errortype("private_var")
+                            .set_severity(Severity::Warning)
+                            .with_note(decl.location, "definition is here")
+                            .register(self.context);
+                        } else if !self.ty.is_subtype_of(ty.get())
+                            && decl.var_type.flags.is_protected()
+                        {
+                            error(
+                                location,
+                                format!("field {name:?} on {ty} is declared as protected"),
+                            )
+                            .with_errortype("protected_var")
+                            .set_severity(Severity::Warning)
+                            .with_note(decl.location, "definition is here")
+                            .register(self.context);
                         }
                         self.static_type(location, &decl.var_type.type_path)
                             .with_fix_hint(decl.location, "add additional type info here")
@@ -2153,11 +2762,14 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         Analysis::empty()
                     }
                 } else {
-                    error(location, format!("field access requires static type: {name:?}"))
-                        .set_severity(Severity::Warning)
-                        .with_errortype("field_access_static_type")
-                        .with_fix_hint(&lhs)
-                        .register(self.context);
+                    error(
+                        location,
+                        format!("field access requires static type: {name:?}"),
+                    )
+                    .set_severity(Severity::Warning)
+                    .with_errortype("field_access_static_type")
+                    .with_fix_hint(&lhs)
+                    .register(self.context);
                     Analysis::empty()
                 }
             },
@@ -2168,31 +2780,34 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         let Some(to_our_side) = lhs.value else {
                             error(location, format!("no typepath found for: {name:?}"))
                                 .register(self.context);
-                            return Analysis::empty()
+                            return Analysis::empty();
                         };
                         let Constant::Prefab(typepop) = to_our_side else {
                             error(location, format!("static access requires a static typepath, {to_our_side} found instead"))
                                 .register(self.context);
-                            return Analysis::empty()
+                            return Analysis::empty();
                         };
                         if !typepop.vars.is_empty() {
                             error(location, format!("static access requires a static typepath, {typepop} found instead"))
                                 .register(self.context);
-                            return Analysis::empty()
+                            return Analysis::empty();
                         }
                         let typepath = dm::ast::FormatTreePath(&typepop.path).to_string();
                         let Some(found_type) = self.objtree.find(typepath.as_str()) else {
                             error(location, format!("static access requires an existing typepath, {typepath} found instead"))
                                 .register(self.context);
-                            return Analysis::empty()
+                            return Analysis::empty();
                         };
                         found_type
-                    }
+                    },
                 };
                 let Some(decl) = real_type.get_var_declaration(name) else {
-                    error(location, format!("undefined field: {name:?} on {real_type}"))
-                        .register(self.context);
-                    return Analysis::empty()
+                    error(
+                        location,
+                        format!("undefined field: {name:?} on {real_type}"),
+                    )
+                    .register(self.context);
+                    return Analysis::empty();
                 };
 
                 self.static_type(location, &decl.var_type.type_path)
@@ -2203,21 +2818,43 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 if let Some(ty) = lhs.static_ty.basic_type() {
                     self.check_type_sleepers(ty, location, name);
                     if let Some(proc) = ty.get_proc(name) {
-                        if let Some((privateproc, true, decllocation)) = self.env.private.get_self_or_parent(proc) {
+                        if let Some((privateproc, true, decllocation)) =
+                            self.env.private.get_self_or_parent(proc)
+                        {
                             if ty != privateproc.ty() {
-                                error(location, format!("{} attempting to call private proc {}, types do not match", self.proc_ref, privateproc))
-                                    .with_errortype("private_proc")
-                                    .with_note(decllocation, "prohibited by this private_proc annotation")
-                                    .register(self.context);
-                                return Analysis::empty() // dont double up with visit_call()
+                                error(
+                                    location,
+                                    format!(
+                                        "{} attempting to call private proc {}, types do not match",
+                                        self.proc_ref, privateproc
+                                    ),
+                                )
+                                .with_errortype("private_proc")
+                                .with_note(
+                                    decllocation,
+                                    "prohibited by this private_proc annotation",
+                                )
+                                .register(self.context);
+                                return Analysis::empty(); // dont double up with visit_call()
                             }
                         }
-                        if let Some((protectedproc, true, decllocation)) = self.env.protected.get_self_or_parent(proc) {
+                        if let Some((protectedproc, true, decllocation)) =
+                            self.env.protected.get_self_or_parent(proc)
+                        {
                             if !self.ty.is_subtype_of(protectedproc.ty().get()) {
-                                error(location, format!("{} attempting to call protected proc {}", self.proc_ref, protectedproc))
-                                    .with_errortype("protected_proc")
-                                    .with_note(decllocation, "prohibited by this protected_proc annotation")
-                                    .register(self.context);
+                                error(
+                                    location,
+                                    format!(
+                                        "{} attempting to call protected proc {}",
+                                        self.proc_ref, protectedproc
+                                    ),
+                                )
+                                .with_errortype("protected_proc")
+                                .with_note(
+                                    decllocation,
+                                    "prohibited by this protected_proc annotation",
+                                )
+                                .register(self.context);
                             }
                         }
                         self.visit_call(location, ty, proc, arguments, false, local_vars)
@@ -2227,11 +2864,14 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         Analysis::empty()
                     }
                 } else {
-                    error(location, format!("proc call requires static type: {name:?}"))
-                        .set_severity(Severity::Warning)
-                        .with_errortype("proc_call_static_type")
-                        .with_fix_hint(&lhs)
-                        .register(self.context);
+                    error(
+                        location,
+                        format!("proc call requires static type: {name:?}"),
+                    )
+                    .set_severity(Severity::Warning)
+                    .with_errortype("proc_call_static_type")
+                    .with_fix_hint(&lhs)
+                    .register(self.context);
                     Analysis::empty()
                 }
             },
@@ -2242,35 +2882,41 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         let Some(to_our_side) = lhs.value else {
                             error(location, format!("no typepath found for: {name:?}"))
                                 .register(self.context);
-                            return Analysis::empty()
+                            return Analysis::empty();
                         };
                         let Constant::Prefab(typepop) = to_our_side else {
                             error(location, format!("static proc reference requires a static typepath, {to_our_side} found instead"))
                                 .register(self.context);
-                            return Analysis::empty()
+                            return Analysis::empty();
                         };
                         if !&typepop.vars.is_empty() {
                             error(location, format!("static proc reference requires a static typepath, {typepop} found instead"))
                                 .register(self.context);
-                            return Analysis::empty()
+                            return Analysis::empty();
                         }
                         let typepath = dm::ast::FormatTreePath(&typepop.path).to_string();
                         let Some(found_type) = self.objtree.find(typepath.as_str()) else {
                             error(location, format!("static proc reference requires an existing typepath, {typepath} found instead"))
                                 .register(self.context);
-                            return Analysis::empty()
+                            return Analysis::empty();
                         };
                         found_type
-                    }
+                    },
                 };
                 let Some(decl) = real_type.get_proc(name) else {
                     error(location, format!("undefined proc: {name:?} on {real_type}"))
                         .register(self.context);
-                    return Analysis::empty()
+                    return Analysis::empty();
                 };
 
                 // Gonna build the proc's path
-                let mut path_elements: Vec<String> = real_type.get().path.split('/').filter(|elem| !elem.is_empty()).map(|segment| segment.to_string()).collect();
+                let mut path_elements: Vec<String> = real_type
+                    .get()
+                    .path
+                    .split('/')
+                    .filter(|elem| !elem.is_empty())
+                    .map(|segment| segment.to_string())
+                    .collect();
                 // Only tricky bit is adding on the type if required
                 if let Some(declaration) = decl.get_declaration() {
                     path_elements.push(declaration.kind.name().to_string());
@@ -2289,37 +2935,52 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     }
 
     // checks operatorX overloads on types
-    fn check_operator_overload(&mut self, rhs: Analysis<'o>, location: Location, operator: &str, local_vars: &mut HashMap<String, LocalVar<'o>>) -> Analysis<'o> {
+    fn check_operator_overload(
+        &mut self,
+        rhs: Analysis<'o>,
+        location: Location,
+        operator: &str,
+        local_vars: &mut HashMap<String, LocalVar<'o>>,
+    ) -> Analysis<'o> {
         if let Some(impurity) = rhs.is_impure {
             if impurity {
-                self.env.impure_procs.insert_violator(self.proc_ref, &format!("{operator} done on non-local var"), location);
+                self.env.impure_procs.insert_violator(
+                    self.proc_ref,
+                    &format!("{operator} done on non-local var"),
+                    location,
+                );
             }
         }
         let typeerror;
         match rhs.static_ty {
-            StaticType::None => {
-                return Analysis::empty()
-            },
+            StaticType::None => return Analysis::empty(),
             StaticType::Type(typeref) => {
                 // Its been overloaded, assume they really know they want to do this
                 if let Some(proc) = typeref.get_proc(operator) {
-                    return self.visit_call(location, typeref, proc, &[], true, local_vars)
+                    return self.visit_call(location, typeref, proc, &[], true, local_vars);
                 }
                 typeerror = typeref.get().pretty_path();
             },
             StaticType::List { list, .. } => {
                 typeerror = "list";
             },
-            StaticType::Proc => {
-                return Analysis::empty()
-            }
+            StaticType::Proc => return Analysis::empty(),
         };
-        error(location, format!("Attempting {operator} on a {typeerror} which does not overload {operator}"))
-            .register(self.context);
+        error(
+            location,
+            format!("Attempting {operator} on a {typeerror} which does not overload {operator}"),
+        )
+        .register(self.context);
         Analysis::empty()
     }
 
-    fn visit_unary(&mut self, rhs: Analysis<'o>, op: &UnaryOp, location: Location, local_vars: &mut HashMap<String, LocalVar<'o>>) -> Analysis<'o> {
+    fn visit_unary(
+        &mut self,
+        rhs: Analysis<'o>,
+        op: &UnaryOp,
+        location: Location,
+        local_vars: &mut HashMap<String, LocalVar<'o>>,
+    ) -> Analysis<'o> {
         match op {
             // !x just evaluates the "truthiness" of x and negates it, returning 1 or 0
             UnaryOp::Not => Analysis::from(assumption_set![Assumption::IsNum(true)]),
@@ -2338,17 +2999,30 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     }
 
     // checks for bitwise operations on a negated LHS
-    fn check_negated_bitwise(&mut self, lhs: &dm::ast::Expression, location: Location, bit_op: BinaryOp, bool_op: BinaryOp) {
-        let Expression::Base { follow, .. } = lhs else { return };
-        let any_not = follow.iter().any(|f| matches!(f.elem, Follow::Unary(UnaryOp::Not)));
+    fn check_negated_bitwise(
+        &mut self,
+        lhs: &dm::ast::Expression,
+        location: Location,
+        bit_op: BinaryOp,
+        bool_op: BinaryOp,
+    ) {
+        let Expression::Base { follow, .. } = lhs else {
+            return;
+        };
+        let any_not = follow
+            .iter()
+            .any(|f| matches!(f.elem, Follow::Unary(UnaryOp::Not)));
         if any_not {
-            error(location, format!("Ambiguous `!` on left side of bitwise `{bit_op}` operator"))
-                .with_errortype("ambiguous_not_bitwise")
-                .set_severity(Severity::Warning)
-                .with_note(location, format!("Did you mean `!(x {bit_op} y)`?"))
-                .with_note(location, format!("Did you mean `!x {bool_op} y`?"))
-                .with_note(location, format!("Did you mean `~x {bit_op} y`?"))
-                .register(self.context);
+            error(
+                location,
+                format!("Ambiguous `!` on left side of bitwise `{bit_op}` operator"),
+            )
+            .with_errortype("ambiguous_not_bitwise")
+            .set_severity(Severity::Warning)
+            .with_note(location, format!("Did you mean `!(x {bit_op} y)`?"))
+            .with_note(location, format!("Did you mean `!x {bool_op} y`?"))
+            .with_note(location, format!("Did you mean `~x {bit_op} y`?"))
+            .register(self.context);
         }
     }
 
@@ -2357,12 +3031,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         if lhs.static_ty.is_list() {
             // If the LHS of these operators is a list, so is the result.
             match op {
-                BinaryOp::Add |
-                BinaryOp::Sub |
-                BinaryOp::BitOr |
-                BinaryOp::BitAnd |
-                BinaryOp::BitXor => return lhs.static_ty.into(),
-                _ => {}
+                BinaryOp::Add
+                | BinaryOp::Sub
+                | BinaryOp::BitOr
+                | BinaryOp::BitAnd
+                | BinaryOp::BitXor => return lhs.static_ty.into(),
+                _ => {},
             }
         }
         Analysis::empty()
@@ -2370,24 +3044,56 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
     // It's fine.
     #[allow(clippy::too_many_arguments)]
-    fn check_filter_flag(&mut self, expr: &'o Expression, can_be_zero: bool, location: Location, typevalue: &str, valid_flags: &[&str], flagfieldname: &str, exclusive: bool) {
+    fn check_filter_flag(
+        &mut self,
+        expr: &'o Expression,
+        can_be_zero: bool,
+        location: Location,
+        typevalue: &str,
+        valid_flags: &[&str],
+        flagfieldname: &str,
+        exclusive: bool,
+    ) {
         match expr {
-            Expression::BinaryOp{ op: BinaryOp::BitOr, lhs, rhs } => {
+            Expression::BinaryOp {
+                op: BinaryOp::BitOr,
+                lhs,
+                rhs,
+            } => {
                 if exclusive {
                     error(location, format!("filter(type=\"{typevalue}\") '{flagfieldname}' parameter must have one value, found bitwise OR"))
                         .with_filter_args(location, typevalue)
                         .register(self.context);
-                    return
+                    return;
                 }
                 // recurse
-                self.check_filter_flag(lhs, can_be_zero, location, typevalue, valid_flags, flagfieldname, exclusive);
-                self.check_filter_flag(rhs, can_be_zero, location, typevalue, valid_flags, flagfieldname, exclusive);
+                self.check_filter_flag(
+                    lhs,
+                    can_be_zero,
+                    location,
+                    typevalue,
+                    valid_flags,
+                    flagfieldname,
+                    exclusive,
+                );
+                self.check_filter_flag(
+                    rhs,
+                    can_be_zero,
+                    location,
+                    typevalue,
+                    valid_flags,
+                    flagfieldname,
+                    exclusive,
+                );
             },
-            Expression::Base{ term, follow } => {
+            Expression::Base { term, follow } => {
                 if !follow.is_empty() {
-                    error(location, "filter() flag fields cannot have unary ops or field accesses")
-                        .register(self.context);
-                    return
+                    error(
+                        location,
+                        "filter() flag fields cannot have unary ops or field accesses",
+                    )
+                    .register(self.context);
+                    return;
                 }
                 match &term.elem {
                     Term::Ident(flagname) => {
@@ -2409,18 +3115,36 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 error(location, format!("filter(type=\"{typevalue}\"), extremely invalid value passed to '{flagfieldname}' field"))
                     .with_filter_args(location, typevalue)
                     .register(self.context);
-            }
+            },
         }
     }
 
-    fn visit_call(&mut self, location: Location, src: TypeRef<'o>, proc: ProcRef<'o>, args: &'o [Expression], is_exact: bool, local_vars: &mut HashMap<String, LocalVar<'o>>) -> Analysis<'o> {
-        self.env.call_tree.entry(self.proc_ref).or_default().push((proc, location, self.inside_newcontext != 0));
+    fn visit_call(
+        &mut self,
+        location: Location,
+        src: TypeRef<'o>,
+        proc: ProcRef<'o>,
+        args: &'o [Expression],
+        is_exact: bool,
+        local_vars: &mut HashMap<String, LocalVar<'o>>,
+    ) -> Analysis<'o> {
+        self.env.call_tree.entry(self.proc_ref).or_default().push((
+            proc,
+            location,
+            self.inside_newcontext != 0,
+        ));
         if let Some((privateproc, true, decllocation)) = self.env.private.get_self_or_parent(proc) {
             if self.ty != privateproc.ty() {
-                error(location, format!("{} attempting to call private proc {}, types do not match", self.proc_ref, privateproc))
-                    .with_errortype("private_proc")
-                    .with_note(decllocation, "prohibited by this private_proc annotation")
-                    .register(self.context);
+                error(
+                    location,
+                    format!(
+                        "{} attempting to call private proc {}, types do not match",
+                        self.proc_ref, privateproc
+                    ),
+                )
+                .with_errortype("private_proc")
+                .with_note(decllocation, "prohibited by this private_proc annotation")
+                .register(self.context);
             }
         }
 
@@ -2437,10 +3161,13 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             let mut argument_value = arg;
             let mut this_kwarg = None;
             match arg {
-                Expression::AssignOp { op: AssignOp::Assign, lhs, rhs } => {
+                Expression::AssignOp {
+                    op: AssignOp::Assign,
+                    lhs,
+                    rhs,
+                } => {
                     match lhs.as_term() {
-                        Some(Term::Ident(name)) |
-                        Some(Term::String(name)) => {
+                        Some(Term::Ident(name)) | Some(Term::String(name)) => {
                             // Don't visit_expression the kwarg key.
                             any_kwargs_yet = true;
                             this_kwarg = Some(name);
@@ -2449,12 +3176,19 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                             // Check that that kwarg actually exists.
                             if !proc.parameters.iter().any(|p| p.name == *name) {
                                 // Search for a child proc that does have this keyword argument.
-                                let mut error = error(location,
-                                    format!("bad keyword argument {name:?} to {proc}"));
+                                let mut error = error(
+                                    location,
+                                    format!("bad keyword argument {name:?} to {proc}"),
+                                );
                                 proc.recurse_children(&mut |child_proc| {
-                                    if child_proc.ty() == proc.ty() { return }
+                                    if child_proc.ty() == proc.ty() {
+                                        return;
+                                    }
                                     if child_proc.parameters.iter().any(|p| p.name == *name) {
-                                        error.add_note(child_proc.location, format!("an override has this parameter: {child_proc}"));
+                                        error.add_note(
+                                            child_proc.location,
+                                            format!("an override has this parameter: {child_proc}"),
+                                        );
                                     }
                                 });
                                 error.register(self.context);
@@ -2464,10 +3198,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                                 // type the proc actually appears on, so that
                                 // calling /datum/foo() on a /datum/A won't
                                 // complain about /datum/B/foo().
-                                self.env.used_kwargs.entry(format!("{}/proc/{}", src, proc.name()))
+                                self.env
+                                    .used_kwargs
+                                    .entry(format!("{}/proc/{}", src, proc.name()))
                                     .or_insert_with(|| KwargInfo {
                                         location: proc.location,
-                                        .. Default::default()
+                                        ..Default::default()
                                     })
                                     .called_at
                                     // TODO: use a more accurate location
@@ -2478,24 +3214,36 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                                         others: 0,
                                     });
                             }
-                        }
-                        _ => {}
+                        },
+                        _ => {},
                     }
                 },
                 expr => {
                     if let Some(Term::Call(callname, _)) = expr.as_term() {
                         // only interested in the first expression being arglist
-                        if callname.as_str() == "arglist" && param_name_map.is_empty() && param_idx == 0 {
+                        if callname.as_str() == "arglist"
+                            && param_name_map.is_empty()
+                            && param_idx == 0
+                        {
                             arglist_used = true;
                         }
                     }
                 },
             }
 
-            if any_kwargs_yet && this_kwarg.is_none() && !(proc.ty().is_root() && proc.name() == "animate") {
+            if any_kwargs_yet
+                && this_kwarg.is_none()
+                && !(proc.ty().is_root() && proc.name() == "animate")
+            {
                 // TODO: don't hardcode the animate() exception
-                error(location, format!("proc called with non-kwargs after kwargs: {}()", proc.name()))
-                    .register(self.context);
+                error(
+                    location,
+                    format!(
+                        "proc called with non-kwargs after kwargs: {}()",
+                        proc.name()
+                    ),
+                )
+                .register(self.context);
             }
 
             let analysis = self.visit_expression(location, argument_value, None, local_vars);
@@ -2511,7 +3259,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         if proc.ty().is_root() && proc.name() == "astype" {
             if let Some(type_val) = param_idx_map.get(&1) {
                 if let Some(Constant::Prefab(path)) = type_val.clone().value {
-                    let type_val = path.path.iter().map(|x| "/".to_owned() + x).collect::<Vec<_>>().join("");
+                    let type_val = path
+                        .path
+                        .iter()
+                        .map(|x| "/".to_owned() + x)
+                        .collect::<Vec<_>>()
+                        .join("");
 
                     if let Some(path) = self.objtree.find(&type_val) {
                         return Analysis::from_static_type(path);
@@ -2530,20 +3283,34 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         if proc.ty().is_root() && proc.name() == "filter" {
             let Some(typename) = param_name_map.get("type") else {
                 if !arglist_used {
-                    error(location, "filter() called without mandatory keyword parameter 'type'")
-                        .register(self.context);
+                    error(
+                        location,
+                        "filter() called without mandatory keyword parameter 'type'",
+                    )
+                    .register(self.context);
                 } // regardless, we're done here
-                return Analysis::empty()
+                return Analysis::empty();
             };
             let Some(Constant::String(typevalue)) = &typename.value else {
-                error(location, format!("filter() called with non-string type keyword parameter value '{:?}'", typename.value))
-                    .register(self.context);
-                return Analysis::empty()
+                error(
+                    location,
+                    format!(
+                        "filter() called with non-string type keyword parameter value '{:?}'",
+                        typename.value
+                    ),
+                )
+                .register(self.context);
+                return Analysis::empty();
             };
             let Some(arglist) = VALID_FILTER_TYPES.get(typevalue) else {
-                error(location, format!("filter() called with invalid type keyword parameter value '{typevalue}'"))
-                    .register(self.context);
-                return Analysis::empty()
+                error(
+                    location,
+                    format!(
+                        "filter() called with invalid type keyword parameter value '{typevalue}'"
+                    ),
+                )
+                .register(self.context);
+                return Analysis::empty();
             };
             for arg in param_name_map.keys() {
                 if *arg != "type" && *arg != "name" && !arglist.contains(arg) {
@@ -2552,9 +3319,19 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         .register(self.context);
                 }
             }
-            if let Some((flagfieldname, exclusive, can_be_zero, valid_flags)) = VALID_FILTER_FLAGS.get(typevalue) {
+            if let Some((flagfieldname, exclusive, can_be_zero, valid_flags)) =
+                VALID_FILTER_FLAGS.get(typevalue)
+            {
                 if let Some(flagsvalue) = param_expr_map.get(flagfieldname) {
-                    self.check_filter_flag(flagsvalue, *can_be_zero, location, typevalue, valid_flags, flagfieldname, *exclusive);
+                    self.check_filter_flag(
+                        flagsvalue,
+                        *can_be_zero,
+                        location,
+                        typevalue,
+                        valid_flags,
+                        flagfieldname,
+                        *exclusive,
+                    );
                 }
             }
         }
@@ -2576,25 +3353,36 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     err.with_component(dm::Component::DreamChecker)
                         .register(self.context);
                     Analysis::empty()
-                }
+                },
             }
         } else {
-            Analysis::empty()
-                .with_fix_hint(proc.location, format!("add a return type annotation to {proc}"))
+            Analysis::empty().with_fix_hint(
+                proc.location,
+                format!("add a return type annotation to {proc}"),
+            )
         }
     }
 
-    fn visit_arguments(&mut self, location: Location, args: &'o [Expression], local_vars: &mut HashMap<String, LocalVar<'o>>) {
+    fn visit_arguments(
+        &mut self,
+        location: Location,
+        args: &'o [Expression],
+        local_vars: &mut HashMap<String, LocalVar<'o>>,
+    ) {
         for arg in args {
             let mut argument_value = arg;
-            if let Expression::AssignOp { op: AssignOp::Assign, lhs, rhs } = arg {
+            if let Expression::AssignOp {
+                op: AssignOp::Assign,
+                lhs,
+                rhs,
+            } = arg
+            {
                 match lhs.as_term() {
-                    Some(Term::Ident(_name)) |
-                    Some(Term::String(_name)) => {
+                    Some(Term::Ident(_name)) | Some(Term::String(_name)) => {
                         // Don't visit_expression the kwarg key.
                         argument_value = rhs;
-                    }
-                    _ => {}
+                    },
+                    _ => {},
                 }
             }
 

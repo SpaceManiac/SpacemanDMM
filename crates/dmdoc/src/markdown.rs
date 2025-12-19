@@ -6,7 +6,10 @@ use std::ops::Range;
 use maud::PreEscaped;
 use pulldown_cmark::{self, BrokenLinkCallback, Event, HeadingLevel, Parser, Tag};
 
-pub fn render<'string>(markdown: &'string str, broken_link_callback: BrokenLinkCallback<'string, '_>) -> PreEscaped<String> {
+pub fn render<'string>(
+    markdown: &'string str,
+    broken_link_callback: BrokenLinkCallback<'string, '_>,
+) -> PreEscaped<String> {
     let mut buf = String::new();
     push_html(&mut buf, parser(markdown, broken_link_callback));
     PreEscaped(buf)
@@ -20,11 +23,17 @@ pub struct DocBlock {
 }
 
 impl DocBlock {
-    pub fn parse<'string>(markdown: &'string str, broken_link_callback: BrokenLinkCallback<'string, '_>) -> Self {
+    pub fn parse<'string>(
+        markdown: &'string str,
+        broken_link_callback: BrokenLinkCallback<'string, '_>,
+    ) -> Self {
         parse_main(parser(markdown, broken_link_callback).peekable())
     }
 
-    pub fn parse_with_title<'string>(markdown: &'string str, broken_link_callback: BrokenLinkCallback<'string, '_>) -> (Option<String>, Self) {
+    pub fn parse_with_title<'string>(
+        markdown: &'string str,
+        broken_link_callback: BrokenLinkCallback<'string, '_>,
+    ) -> (Option<String>, Self) {
         let mut parser = parser(markdown, broken_link_callback).peekable();
         (
             if let Some(&Event::Start(Tag::Heading(HeadingLevel::H1, _, _))) = parser.peek() {
@@ -52,11 +61,14 @@ impl DocBlock {
     }
 }
 
-fn parser<'string, 'func>(markdown: &'string str, broken_link_callback: BrokenLinkCallback<'string, 'func>) -> Parser<'string, 'func> {
+fn parser<'string, 'func>(
+    markdown: &'string str,
+    broken_link_callback: BrokenLinkCallback<'string, 'func>,
+) -> Parser<'string, 'func> {
     Parser::new_with_broken_link_callback(
         markdown,
         pulldown_cmark::Options::ENABLE_TABLES | pulldown_cmark::Options::ENABLE_STRIKETHROUGH,
-        broken_link_callback
+        broken_link_callback,
     )
 }
 
@@ -83,14 +95,21 @@ fn parse_main(mut parser: std::iter::Peekable<Parser>) -> DocBlock {
     let has_description = parser.peek().is_some();
     push_html(&mut html, parser);
     trim_right(&mut html);
-    DocBlock { html: PreEscaped(html), teaser, has_description }
+    DocBlock {
+        html: PreEscaped(html),
+        teaser,
+        has_description,
+    }
 }
 
-fn push_html<'a, I: IntoIterator<Item=Event<'a>>>(buf: &mut String, iter: I) {
-    pulldown_cmark::html::push_html(buf, HeadingLinker {
-        inner: iter.into_iter(),
-        output: Default::default(),
-    });
+fn push_html<'a, I: IntoIterator<Item = Event<'a>>>(buf: &mut String, iter: I) {
+    pulldown_cmark::html::push_html(
+        buf,
+        HeadingLinker {
+            inner: iter.into_iter(),
+            output: Default::default(),
+        },
+    );
 }
 
 fn trim_right(buf: &mut String) {
@@ -105,7 +124,7 @@ struct HeadingLinker<'a, I> {
     output: VecDeque<Event<'a>>,
 }
 
-impl<'a, I: Iterator<Item=Event<'a>>> Iterator for HeadingLinker<'a, I> {
+impl<'a, I: Iterator<Item = Event<'a>>> Iterator for HeadingLinker<'a, I> {
     type Item = Event<'a>;
 
     fn next(&mut self) -> Option<Event<'a>> {
@@ -129,8 +148,11 @@ impl<'a, I: Iterator<Item=Event<'a>>> Iterator for HeadingLinker<'a, I> {
                 self.output.push_back(event);
             }
 
-            self.output.push_back(Event::Html(format!("</{heading}>").into()));
-            return Some(Event::Html(format!("<{} id=\"{}\">", heading, slugify(&text_buf)).into()));
+            self.output
+                .push_back(Event::Html(format!("</{heading}>").into()));
+            return Some(Event::Html(
+                format!("<{} id=\"{}\">", heading, slugify(&text_buf)).into(),
+            ));
         }
         original
     }

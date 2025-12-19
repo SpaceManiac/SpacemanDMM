@@ -169,13 +169,13 @@ impl<K: Ord + Clone, V> Node<K, V> {
                     self.right = succ.delete(key);
                     return Some(self.updated_node());
                 }
-            }
+            },
             Ordering::Greater => {
                 if let Some(succ) = self.left.take() {
                     self.left = succ.delete(key);
                     return Some(self.updated_node());
                 }
-            }
+            },
         }
         Some(self)
     }
@@ -202,7 +202,7 @@ impl<K: Ord + Clone, V> Node<K, V> {
             Ordering::Equal => {
                 self.data.push(data);
                 return self;
-            }
+            },
             Ordering::Less => self.right = Node::insert_in_successor(self.right.take(), key, data),
             Ordering::Greater => self.left = Node::insert_in_successor(self.left.take(), key, data),
         }

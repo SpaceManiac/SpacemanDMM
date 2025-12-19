@@ -24,6 +24,7 @@ fn local_scope() {
     alabel:
         var/bar
     bar++
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, LOCAL_SCOPE_ERRORS);
 }

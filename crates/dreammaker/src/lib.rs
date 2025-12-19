@@ -43,10 +43,12 @@ impl Context {
     /// return a best-effort parse. Call `print_all_errors` to pretty-print
     /// errors to standard error.
     pub fn parse_environment(&self, dme: &Path) -> Result<objtree::ObjectTree, DMError> {
-        Ok(parser::parse(self,
-            indents::IndentProcessor::new(self,
-                preprocessor::Preprocessor::new(self, dme.to_owned())?
-            )
+        Ok(parser::parse(
+            self,
+            indents::IndentProcessor::new(
+                self,
+                preprocessor::Preprocessor::new(self, dme.to_owned())?,
+            ),
         ))
     }
 }
@@ -58,9 +60,10 @@ impl Context {
 ///
 /// If `show_ws` is true, braces and semicolons are included directly in the
 /// output rather than only being implied by the indentation.
-pub fn pretty_print<W, I>(w: &mut W, input: I, show_ws: bool) -> std::fmt::Result where
+pub fn pretty_print<W, I>(w: &mut W, input: I, show_ws: bool) -> std::fmt::Result
+where
     W: std::fmt::Write,
-    I: IntoIterator<Item=lexer::Token>
+    I: IntoIterator<Item = lexer::Token>,
 {
     let mut indents = 0;
     let mut needs_newline = false;
@@ -73,22 +76,22 @@ pub fn pretty_print<W, I>(w: &mut W, input: I, show_ws: bool) -> std::fmt::Resul
                 if show_ws {
                     write!(w, "{{")?;
                 }
-            }
+            },
             lexer::Token::Punct(lexer::Punctuation::RBrace) => {
                 indents -= 1;
                 needs_newline = true;
                 if show_ws {
                     write!(w, "}}")?;
                 }
-            }
-            lexer::Token::Punct(lexer::Punctuation::Semicolon) |
-            lexer::Token::Punct(lexer::Punctuation::Newline) => {
+            },
+            lexer::Token::Punct(lexer::Punctuation::Semicolon)
+            | lexer::Token::Punct(lexer::Punctuation::Newline) => {
                 needs_newline = true;
                 if show_ws {
                     write!(w, ";")?;
                 }
-            }
-            lexer::Token::DocComment(_) => {}
+            },
+            lexer::Token::DocComment(_) => {},
             other => {
                 if needs_newline {
                     const SPACES: &str = "                                ";
@@ -106,7 +109,7 @@ pub fn pretty_print<W, I>(w: &mut W, input: I, show_ws: bool) -> std::fmt::Resul
                 }
                 write!(w, "{other}")?;
                 prev = Some(other);
-            }
+            },
         }
     }
     if needs_newline {
@@ -165,7 +168,10 @@ pub const DEFAULT_ENV: &str = "tgstation.dme";
 /// Autodetect any `.dme` file in the current folder, or fall back to default.
 ///
 /// If multiple environments exist, the first non-default is preferred.
-pub fn detect_environment(root: &Path, default: &str) -> std::io::Result<Option<std::path::PathBuf>> {
+pub fn detect_environment(
+    root: &Path,
+    default: &str,
+) -> std::io::Result<Option<std::path::PathBuf>> {
     let mut result = None;
     for entry in std::fs::read_dir(root)?.flatten() {
         let name = entry.file_name();
@@ -185,10 +191,12 @@ pub fn detect_environment(root: &Path, default: &str) -> std::io::Result<Option<
 
 pub fn detect_environment_default() -> std::io::Result<Option<std::path::PathBuf>> {
     // Return a path in the current directory `.` ...
-    detect_environment(".".as_ref(), DEFAULT_ENV).map(|o| o.map(|path| {
-        // ... but without `./` preceding it.
-        path.strip_prefix(".").map(|p| p.to_owned()).unwrap_or(path)
-    }))
+    detect_environment(".".as_ref(), DEFAULT_ENV).map(|o| {
+        o.map(|path| {
+            // ... but without `./` preceding it.
+            path.strip_prefix(".").map(|p| p.to_owned()).unwrap_or(path)
+        })
+    })
 }
 
 fn heap_size_of_index_map<K, V>(index_map: &IndexMap<K, V, RandomState>) -> usize

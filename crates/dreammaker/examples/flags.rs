@@ -32,29 +32,24 @@ fn main() {
             .unwrap_or(0);
 
         // Migrate old flags_1 values to their item_flags equivalents
-        let lhs =
-            if flags_1 & (1<<1) != 0 { 1<<8 } else { 0 } |
-            if flags_1 & (1<<2) != 0 { 1<<7 } else { 0 } |
-            if flags_1 & (1<<6) != 0 { 1<<9 } else { 0 } |
-            if flags_1 & (1<<10) != 0 { 1<<6 } else { 0 };
-        flags_1 &= !((1<<1) | (1<<2) | (1<<6) | (1<<10));
+        let lhs = if flags_1 & (1 << 1) != 0 { 1 << 8 } else { 0 }
+            | if flags_1 & (1 << 2) != 0 { 1 << 7 } else { 0 }
+            | if flags_1 & (1 << 6) != 0 { 1 << 9 } else { 0 }
+            | if flags_1 & (1 << 10) != 0 { 1 << 6 } else { 0 };
+        flags_1 &= !((1 << 1) | (1 << 2) | (1 << 6) | (1 << 10));
 
-        let rhs = item_flags & ((1<<6) | (1<<7) | (1<<8) | (1<<9));
+        let rhs = item_flags & ((1 << 6) | (1 << 7) | (1 << 8) | (1 << 9));
         item_flags &= !rhs;
 
         let crossover = if rhs != 0 && lhs != 0 {
-            panic!(
-                "flags_1={flags_1}, item_flags={item_flags}, lhs={lhs}, rhs={rhs}"
-            );
+            panic!("flags_1={flags_1}, item_flags={item_flags}, lhs={lhs}, rhs={rhs}");
         } else if lhs != 0 {
             lhs
         } else {
             rhs
         };
 
-        println!(
-            "flags_1={flags_1}, item_flags={item_flags}, crossover={crossover}"
-        );
+        println!("flags_1={flags_1}, item_flags={item_flags}, crossover={crossover}");
     });
 
     println!("---- anchored example ----");
@@ -68,17 +63,22 @@ fn main() {
         println!("{} -> {}", ty.path, anch);
 
         // print location info for any type with a redundant `anchored = TRUE`
-        if anch && ty
-            .parent_type()
-            .unwrap()
-            .get_value("anchored")
-            .unwrap()
-            .constant
-            .as_ref()
-            .unwrap()
-            .to_bool()
+        if anch
+            && ty
+                .parent_type()
+                .unwrap()
+                .get_value("anchored")
+                .unwrap()
+                .constant
+                .as_ref()
+                .unwrap()
+                .to_bool()
         {
-            println!("{}:{}", ctx.file_path(var.location.file).display(), var.location.line);
+            println!(
+                "{}:{}",
+                ctx.file_path(var.location.file).display(),
+                var.location.line
+            );
         }
     });
 }

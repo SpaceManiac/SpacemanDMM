@@ -19,7 +19,7 @@ impl DocCollection {
     }
 
     /// Combine another collection into this one.
-    pub fn extend(&mut self, collection: impl IntoIterator<Item=DocComment>) {
+    pub fn extend(&mut self, collection: impl IntoIterator<Item = DocComment>) {
         self.elems.extend(collection);
     }
 
@@ -100,8 +100,8 @@ impl DocComment {
         match (self.kind, self.target) {
             (CommentKind::Block, DocTarget::FollowingItem) => "/**",
             (CommentKind::Block, DocTarget::EnclosingItem) => "/*!",
-            (CommentKind::Line,  DocTarget::FollowingItem) => "///",
-            (CommentKind::Line,  DocTarget::EnclosingItem) => "//!",
+            (CommentKind::Line, DocTarget::FollowingItem) => "///",
+            (CommentKind::Line, DocTarget::EnclosingItem) => "//!",
         }
     }
 }
@@ -111,8 +111,8 @@ impl fmt::Display for DocComment {
         match (self.kind, self.target) {
             (CommentKind::Block, DocTarget::FollowingItem) => write!(f, "/**{}*/", self.text),
             (CommentKind::Block, DocTarget::EnclosingItem) => write!(f, "/*!{}*/", self.text),
-            (CommentKind::Line,  DocTarget::FollowingItem) => write!(f, "///{}", self.text),
-            (CommentKind::Line,  DocTarget::EnclosingItem) => write!(f, "//!{}", self.text),
+            (CommentKind::Line, DocTarget::FollowingItem) => write!(f, "///{}", self.text),
+            (CommentKind::Line, DocTarget::EnclosingItem) => write!(f, "//!{}", self.text),
         }
     }
 }
@@ -149,9 +149,10 @@ fn simplify(out: &mut String, text: &str, ignore_char: char) -> bool {
             continue;
         }
 
-        let this_prefix = &line[..line.len() - line
-            .trim_start_matches(|c: char| c.is_whitespace() || c == ignore_char)
-            .len()];
+        let this_prefix = &line[..line.len()
+            - line
+                .trim_start_matches(|c: char| c.is_whitespace() || c == ignore_char)
+                .len()];
         match prefix {
             None => prefix = Some(this_prefix),
             Some(ref mut prefix) => {
@@ -160,17 +161,21 @@ fn simplify(out: &mut String, text: &str, ignore_char: char) -> bool {
                 loop {
                     no_match = chars.as_str();
                     match chars.next() {
-                        Some(ch) => if Some(ch) != this_chars.next() {
-                            break;
+                        Some(ch) => {
+                            if Some(ch) != this_chars.next() {
+                                break;
+                            }
                         },
                         None => break,
                     }
                 }
                 *prefix = &prefix[..prefix.len() - no_match.len()];
-            }
+            },
         }
 
-        let this_suffix = &line[line.trim_end_matches(|c: char| c.is_whitespace() || c == ignore_char).len()..];
+        let this_suffix = &line[line
+            .trim_end_matches(|c: char| c.is_whitespace() || c == ignore_char)
+            .len()..];
         match suffix {
             None => suffix = Some(this_suffix),
             Some(ref mut suffix) => {
@@ -179,14 +184,16 @@ fn simplify(out: &mut String, text: &str, ignore_char: char) -> bool {
                 loop {
                     no_match = chars.as_str();
                     match chars.next_back() {
-                        Some(ch) => if Some(ch) != this_chars.next_back() {
-                            break;
+                        Some(ch) => {
+                            if Some(ch) != this_chars.next_back() {
+                                break;
+                            }
                         },
                         None => break,
                     }
                 }
                 *suffix = &suffix[no_match.len()..];
-            }
+            },
         }
     }
 
@@ -229,8 +236,7 @@ pub enum DocTarget {
 }
 
 /// Information about where builtin docs can be found.
-#[derive(Clone, Debug, PartialEq, GetSize)]
-#[derive(Default)]
+#[derive(Clone, Debug, PartialEq, GetSize, Default)]
 pub enum BuiltinDocs {
     #[default]
     None,

@@ -20,7 +20,9 @@ impl Debugger {
                 }
 
                 let Some(frame_id) = params.frameId else {
-                    return Err(Box::new(GenericError("Must select a stack frame to evaluate in")));
+                    return Err(Box::new(GenericError(
+                        "Must select a stack frame to evaluate in",
+                    )));
                 };
 
                 let (thread, frame_no) = extools.get_thread_by_frame_id(frame_id)?;
@@ -37,21 +39,18 @@ impl Debugger {
                         return Err(Box::new(GenericError("Unknown #command")));
                     }
                 }
-            }
+            },
 
             DebugClient::Auxtools(auxtools) => {
-                let response = auxtools.eval(
-                    params.frameId.map(|x| x as u32),
-                    input,
-                    params.context,
-                )?;
+                let response =
+                    auxtools.eval(params.frameId.map(|x| x as u32), input, params.context)?;
 
                 return Ok(EvaluateResponse {
                     result: response.value,
                     variablesReference: response.variables.map(|x| x.0 as i64).unwrap_or(0),
                     ..Default::default()
                 });
-            }
+            },
         }
 
         Err(Box::new(GenericError("Not yet implemented")))

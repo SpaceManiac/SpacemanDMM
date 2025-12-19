@@ -23,10 +23,14 @@ pub struct IndentProcessor<'ctx, I> {
     eof_yielded: bool,
 }
 
-impl<'ctx, I> IndentProcessor<'ctx, I> where
-    I: Iterator<Item=LocatedToken>
+impl<'ctx, I> IndentProcessor<'ctx, I>
+where
+    I: Iterator<Item = LocatedToken>,
 {
-    pub fn new<J: IntoIterator<Item=LocatedToken, IntoIter=I>>(context: &'ctx Context, inner: J) -> Self {
+    pub fn new<J: IntoIterator<Item = LocatedToken, IntoIter = I>>(
+        context: &'ctx Context,
+        inner: J,
+    ) -> Self {
         IndentProcessor {
             context,
             inner: inner.into_iter(),
@@ -47,12 +51,16 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
 
     #[inline]
     fn push(&mut self, tok: Token) {
-        self.output.push_back(LocatedToken::new(self.last_input_loc, tok));
+        self.output
+            .push_back(LocatedToken::new(self.last_input_loc, tok));
     }
 
     #[inline]
     fn push_eol(&mut self, tok: Token) {
-        self.output.push_back(LocatedToken::new(self.eol_location.unwrap_or(self.last_input_loc), tok));
+        self.output.push_back(LocatedToken::new(
+            self.eol_location.unwrap_or(self.last_input_loc),
+            tok,
+        ));
     }
 
     #[inline]
@@ -72,15 +80,14 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
                     self.eol_location = Some(self.last_input_loc);
                 }
                 return;
-            }
-            Token::Punct(Punctuation::Tab) |
-            Token::Punct(Punctuation::Space) => {
+            },
+            Token::Punct(Punctuation::Tab) | Token::Punct(Punctuation::Space) => {
                 if let Some(spaces) = self.current_spaces.as_mut() {
                     *spaces += 1;
                 }
                 return;
-            }
-            _ => {}
+            },
+            _ => {},
         }
 
         // handle pre-existing braces
@@ -88,8 +95,8 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
             Token::Punct(Punctuation::LBrace) => self.current_spaces = None,
             Token::Punct(Punctuation::RBrace) => {
                 self.current_spaces = None;
-            }
-            _ => {}
+            },
+            _ => {},
         }
 
         // handle indentation
@@ -105,7 +112,7 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
                         new_indents = 1;
                         self.current = Some((spaces, 1));
                     }
-                }
+                },
                 Some((spaces_per_indent, indents_)) => {
                     indents = indents_;
                     if spaces == 0 {
@@ -116,14 +123,18 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
                             // Register the error, but cross our fingers and
                             // hope that truncating division will approximate
                             // a sane situation.
-                            DMError::new(self.last_input_loc, format!(
-                                "inconsistent indentation: {spaces} % {spaces_per_indent} != 0",
-                            )).register(self.context)
+                            DMError::new(
+                                self.last_input_loc,
+                                format!(
+                                    "inconsistent indentation: {spaces} % {spaces_per_indent} != 0",
+                                ),
+                            )
+                            .register(self.context)
                         }
                         new_indents = spaces / spaces_per_indent;
                         self.current = Some((spaces_per_indent, new_indents));
                     }
-                }
+                },
             }
 
             if indents + 1 == new_indents {
@@ -131,10 +142,14 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
                 self.push_eol(Token::Punct(Punctuation::LBrace));
             } else if indents < new_indents {
                 // multiple indent is an error, register it but let it work
-                DMError::new(self.last_input_loc, format!(
-                    "inconsistent multiple indentation: {} > 1",
-                    new_indents - indents,
-                )).register(self.context);
+                DMError::new(
+                    self.last_input_loc,
+                    format!(
+                        "inconsistent multiple indentation: {} > 1",
+                        new_indents - indents,
+                    ),
+                )
+                .register(self.context);
                 for _ in indents..new_indents {
                     self.push_eol(Token::Punct(Punctuation::LBrace));
                 }
@@ -159,24 +174,25 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
                     None => Some((1, 1)),
                     Some((x, y)) => Some((x, y + 1)),
                 };
-            }
+            },
             Token::Punct(Punctuation::RBrace) => {
                 self.current = match self.current {
                     None => {
-                        DMError::new(self.last_input_loc, "unmatched right brace").register(self.context);
+                        DMError::new(self.last_input_loc, "unmatched right brace")
+                            .register(self.context);
                         None
-                    }
+                    },
                     Some((_, 1)) => None,
                     Some((x, y)) => Some((x, y - 1)),
                 };
-            }
+            },
             Token::Punct(Punctuation::LParen) => {
                 self.parentheses += 1;
-            }
+            },
             Token::Punct(Punctuation::RParen) => {
                 self.parentheses = self.parentheses.saturating_sub(1);
-            }
-            _ => {}
+            },
+            _ => {},
         }
 
         self.eol_location = None;
@@ -184,8 +200,9 @@ impl<'ctx, I> IndentProcessor<'ctx, I> where
     }
 }
 
-impl<'ctx, I> Iterator for IndentProcessor<'ctx, I> where
-    I: Iterator<Item=LocatedToken>
+impl<'ctx, I> Iterator for IndentProcessor<'ctx, I>
+where
+    I: Iterator<Item = LocatedToken>,
 {
     type Item = LocatedToken;
 

@@ -4,9 +4,9 @@
 #![deny(unsafe_code)]
 #![allow(non_snake_case)]
 
+use foldhash::HashMap;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::Value;
-use foldhash::HashMap;
 
 pub trait Request {
     type Params;
@@ -175,8 +175,8 @@ pub struct ThreadEvent {
     pub reason: String,
 
     /**
-    * The identifier of the thread.
-    */
+     * The identifier of the thread.
+     */
     pub threadId: i64,
 }
 
@@ -610,13 +610,19 @@ pub struct EvaluateResponse {
 
 impl From<String> for EvaluateResponse {
     fn from(result: String) -> EvaluateResponse {
-        EvaluateResponse { result, .. Default::default() }
+        EvaluateResponse {
+            result,
+            ..Default::default()
+        }
     }
 }
 
 impl From<&str> for EvaluateResponse {
     fn from(result: &str) -> EvaluateResponse {
-        EvaluateResponse { result: result.to_owned(), .. Default::default() }
+        EvaluateResponse {
+            result: result.to_owned(),
+            ..Default::default()
+        }
     }
 }
 
@@ -928,7 +934,10 @@ pub struct SourceResponse {
 
 impl From<String> for SourceResponse {
     fn from(content: String) -> SourceResponse {
-        SourceResponse { content, mimeType: None }
+        SourceResponse {
+            content,
+            mimeType: None,
+        }
     }
 }
 
@@ -1660,7 +1669,6 @@ pub struct Source {
      * Optional data that a debug adapter might want to loop through the client. The client should leave the data intact and persist it across sessions. The client should not interpret the data.
      */
     pub adapterData: Option<Value>,
-
     /*/**
      * The checksums associated with this file.
      */
@@ -1753,7 +1761,6 @@ pub struct StackFrame {
      * The module associated with this frame, if any.
      */
     moduleId?: number | string;*/
-
     /**
      * An optional hint for how to present this frame in the UI. A value of 'label' can be used to indicate that the frame is an artificial frame that is used as a visual label or separator. A value of 'subtle' can be used to change the appearance of a frame in a 'subtle' way.
      */

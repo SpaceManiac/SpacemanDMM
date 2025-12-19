@@ -169,7 +169,12 @@ fn percentage(amt: usize, total: usize) -> Markup {
 }
 
 pub(crate) fn dm_index(index: &Index) -> Markup {
-    let Index { env, html, modules, types } = index;
+    let Index {
+        env,
+        html,
+        modules,
+        types,
+    } = index;
     base(
         env,
         "",
@@ -213,12 +218,16 @@ pub(crate) fn dm_index(index: &Index) -> Markup {
                 }
                 (index_tree(types, ""))
             }
-        }
+        },
     )
 }
 
 pub(crate) fn dm_module(module: &ModuleArgs) -> Markup {
-    let ModuleArgs { env, base_href, details } = *module;
+    let ModuleArgs {
+        env,
+        base_href,
+        details,
+    } = *module;
     base(
         env,
         base_href,
@@ -338,12 +347,17 @@ pub(crate) fn dm_module(module: &ModuleArgs) -> Markup {
                     (define.docs.html)
                 }
             }
-        }
+        },
     )
 }
 
 pub(crate) fn dm_type(ty: &Type) -> Markup {
-    let Type { env, base_href, path, details } = *ty;
+    let Type {
+        env,
+        base_href,
+        path,
+        details,
+    } = *ty;
     base(
         env,
         base_href,
@@ -492,7 +506,7 @@ pub(crate) fn dm_type(ty: &Type) -> Markup {
                     (proc.docs.html)
                 }
             }
-        }
+        },
     )
 }
 

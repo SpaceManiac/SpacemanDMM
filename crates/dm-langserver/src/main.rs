@@ -63,12 +63,20 @@ fn main() {
         Ok(path) => eprintln!("executable: {}", path.display()),
         Err(e) => eprintln!("exe check failure: {e}"),
     }
-    eprint!("{}", include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")));
-    #[cfg(extools_bundle)] {
+    eprint!(
+        "{}",
+        include_str!(concat!(env!("OUT_DIR"), "/build-info.txt"))
+    );
+    #[cfg(extools_bundle)]
+    {
         eprintln!("extools commit: {}", env!("BUNDLE_VERSION_extools.dll"));
     }
-    #[cfg(auxtools_bundle)] {
-        eprintln!("auxtools commit: {}", env!("BUNDLE_VERSION_debug_server.dll"));
+    #[cfg(auxtools_bundle)]
+    {
+        eprintln!(
+            "auxtools commit: {}",
+            env!("BUNDLE_VERSION_debug_server.dll")
+        );
     }
     match std::env::current_dir() {
         Ok(path) => eprintln!("directory: {}", path.display()),
@@ -76,7 +84,7 @@ fn main() {
     }
 
     let mut args = std::env::args();
-    let _ = args.next();  // skip executable name
+    let _ = args.next(); // skip executable name
     if let Some(arg) = args.next() {
         if arg == "--debugger" {
             return debugger::debugger_main(args);
@@ -116,8 +124,12 @@ impl ClientCaps {
         if let Some(ref text_document) = caps.text_document {
             if let Some(ref signature_help) = text_document.signature_help {
                 if let Some(ref signature_information) = signature_help.signature_information {
-                    if let Some(ref parameter_information) = signature_information.parameter_information {
-                        if let Some(label_offset_support) = parameter_information.label_offset_support {
+                    if let Some(ref parameter_information) =
+                        signature_information.parameter_information
+                    {
+                        if let Some(label_offset_support) =
+                            parameter_information.label_offset_support
+                        {
                             this.label_offset_support = label_offset_support;
                         }
                     }
@@ -158,7 +170,12 @@ impl DiagnosticsTracker {
         }
     }
 
-    fn build(root: Option<&Url>, file_list: &dm::FileList, errors: &[dm::DMError], related_info: bool) -> HashMap<Url, Vec<lsp_types::Diagnostic>> {
+    fn build(
+        root: Option<&Url>,
+        file_list: &dm::FileList,
+        errors: &[dm::DMError],
+        related_info: bool,
+    ) -> HashMap<Url, Vec<lsp_types::Diagnostic>> {
         let mut map: HashMap<_, Vec<_>> = HashMap::new();
         for error in errors.iter() {
             let loc = error.location();
@@ -167,7 +184,11 @@ impl DiagnosticsTracker {
             } else {
                 let mut notes = Vec::with_capacity(error.notes().len());
                 for note in error.notes().iter() {
-                    let Some(uri) = DiagnosticsTracker::file_url(root, file_list, note.location().file) else { continue };
+                    let Some(uri) =
+                        DiagnosticsTracker::file_url(root, file_list, note.location().file)
+                    else {
+                        continue;
+                    };
                     notes.push(lsp_types::DiagnosticRelatedInformation {
                         location: lsp_types::Location {
                             uri,
@@ -185,12 +206,12 @@ impl DiagnosticsTracker {
                 source: component_to_source(error.component()),
                 code: convert_errorcode(error.errortype()),
                 related_information,
-                .. Default::default()
+                ..Default::default()
             };
-            let Some(uri) = DiagnosticsTracker::file_url(root, file_list, loc.file) else { continue };
-            map.entry(uri)
-                .or_insert_with(Default::default)
-                .push(diag);
+            let Some(uri) = DiagnosticsTracker::file_url(root, file_list, loc.file) else {
+                continue;
+            };
+            map.entry(uri).or_insert_with(Default::default).push(diag);
 
             if !related_info {
                 // Fallback in case the client does not support related info
@@ -200,12 +221,14 @@ impl DiagnosticsTracker {
                         severity: Some(lsp_types::DiagnosticSeverity::INFORMATION),
                         range: location_to_range(note.location()),
                         source: component_to_source(error.component()),
-                        .. Default::default()
+                        ..Default::default()
                     };
-                    let Some(uri) = DiagnosticsTracker::file_url(root, file_list, note.location().file) else { continue };
-                    map.entry(uri)
-                        .or_insert_with(Default::default)
-                        .push(diag);
+                    let Some(uri) =
+                        DiagnosticsTracker::file_url(root, file_list, note.location().file)
+                    else {
+                        continue;
+                    };
+                    map.entry(uri).or_insert_with(Default::default).push(diag);
                 }
             }
         }
@@ -215,7 +238,7 @@ impl DiagnosticsTracker {
     fn send(&mut self, map: HashMap<Url, Vec<lsp_types::Diagnostic>>) {
         let mut new_sent = HashSet::with_capacity(map.len());
         for (url, diagnostics) in map {
-            self.sent.remove(&url);  // don't erase below
+            self.sent.remove(&url); // don't erase below
             new_sent.insert(url.clone());
             issue_notification::<lsp_types::notification::PublishDiagnostics>(
                 lsp_types::PublishDiagnosticsParams {
@@ -295,18 +318,20 @@ impl Engine {
         issue_notification::<T>(params)
     }
 
-    fn show_message<S>(&mut self, typ: MessageType, message: S) where
-        S: Into<String>
+    fn show_message<S>(&mut self, typ: MessageType, message: S)
+    where
+        S: Into<String>,
     {
         let message = message.into();
         eprintln!("{typ:?}: {message}");
         self.issue_notification::<lsp_types::notification::ShowMessage>(
-            lsp_types::ShowMessageParams { typ, message }
+            lsp_types::ShowMessageParams { typ, message },
         )
     }
 
-    fn show_status<S>(&self, message: S) where
-        S: Into<String>
+    fn show_status<S>(&self, message: S)
+    where
+        S: Into<String>,
     {
         self.issue_notification::<extras::WindowStatus>(extras::WindowStatusParams {
             environment: None,
@@ -334,7 +359,12 @@ impl Engine {
         }
     }
 
-    fn convert_location(&self, loc: dm::Location, docs: &dm::docs::DocCollection, if_builtin: &[&str]) -> Result<lsp_types::Location, jsonrpc::Error> {
+    fn convert_location(
+        &self,
+        loc: dm::Location,
+        docs: &dm::docs::DocCollection,
+        if_builtin: &[&str],
+    ) -> Result<lsp_types::Location, jsonrpc::Error> {
         Ok(lsp_types::Location {
             uri: if loc.is_builtins() {
                 let temp;
@@ -346,7 +376,8 @@ impl Engine {
                         temp = if_builtin.join("");
                         &temp
                     }
-                )).map_err(invalid_request)?
+                ))
+                .map_err(invalid_request)?
             } else {
                 self.file_url(loc.file)?
             },
@@ -363,9 +394,7 @@ impl Engine {
             // offload serialization costs to another thread
             std::thread::spawn(move || {
                 let start = std::time::Instant::now();
-                issue_notification::<extras::ObjectTree>(extras::ObjectTreeParams {
-                    root,
-                });
+                issue_notification::<extras::ObjectTree>(extras::ObjectTreeParams { root });
                 let elapsed = start.elapsed();
                 eprintln!(
                     "serialized objtree in {}.{:03}s",
@@ -380,7 +409,9 @@ impl Engine {
         let mut entry = extras::ObjectTreeType {
             name: ty.name().to_owned(),
             kind: lsp_types::SymbolKind::CLASS,
-            location: self.convert_location(ty.location, &ty.docs, &[&ty.path]).ok(),
+            location: self
+                .convert_location(ty.location, &ty.docs, &[&ty.path])
+                .ok(),
             vars: Vec::new(),
             procs: Vec::new(),
             children: Vec::new(),
@@ -392,7 +423,13 @@ impl Engine {
             entry.vars.push(extras::ObjectTreeVar {
                 name: name.to_owned(),
                 kind: lsp_types::SymbolKind::FIELD,
-                location: self.convert_location(var.value.location, &var.value.docs, &[&ty.path, "/var/", name]).ok(),
+                location: self
+                    .convert_location(
+                        var.value.location,
+                        &var.value.docs,
+                        &[&ty.path, "/var/", name],
+                    )
+                    .ok(),
                 is_declaration,
             });
         }
@@ -405,7 +442,9 @@ impl Engine {
                 entry.procs.push(extras::ObjectTreeProc {
                     name: name.to_owned(),
                     kind: lsp_types::SymbolKind::METHOD,
-                    location: self.convert_location(value.location, &value.docs, &[&ty.path, "/proc/", name]).ok(),
+                    location: self
+                        .convert_location(value.location, &value.docs, &[&ty.path, "/proc/", name])
+                        .ok(),
                     is_verb,
                 });
                 is_verb = None;
@@ -441,7 +480,11 @@ impl Engine {
 
         let print_thread_total = move || {
             let elapsed = original_start.elapsed();
-            eprintln!(" - total {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+            eprintln!(
+                " - total {}.{:03}s",
+                elapsed.as_secs(),
+                elapsed.subsec_millis()
+            );
         };
 
         // Set up the preprocessor.
@@ -455,35 +498,50 @@ impl Engine {
                         uri: path_to_url(environment)?,
                         diagnostics: vec![lsp_types::Diagnostic {
                             message: err.to_string(),
-                            .. Default::default()
+                            ..Default::default()
                         }],
                         version: None,
                     },
                 );
                 eprintln!("{err:?}");
                 return Ok(());
-            }
+            },
         };
 
-        let elapsed = start.elapsed(); start += elapsed;
+        let elapsed = start.elapsed();
+        start += elapsed;
         if elapsed.as_millis() > 0 {
-            eprint!("setup {}.{:03}s - ", elapsed.as_secs(), elapsed.subsec_millis());
+            eprint!(
+                "setup {}.{:03}s - ",
+                elapsed.as_secs(),
+                elapsed.subsec_millis()
+            );
         }
 
         // Parse the environment.
         let fatal_errored;
         {
-            let mut parser = dm::parser::Parser::new(&self.context, dm::indents::IndentProcessor::new(&self.context, &mut pp));
+            let mut parser = dm::parser::Parser::new(
+                &self.context,
+                dm::indents::IndentProcessor::new(&self.context, &mut pp),
+            );
             parser.enable_procs();
             let (fatal_errored_2, objtree) = parser.parse_object_tree_2();
             fatal_errored = fatal_errored_2;
             self.objtree = Arc::new(objtree);
         }
-        let elapsed = start.elapsed(); start += elapsed;
+        let elapsed = start.elapsed();
+        start += elapsed;
         {
             let disk = self.context.get_io_time();
             let parse = elapsed.saturating_sub(disk);
-            eprint!("disk {}.{:03}s - parse {}.{:03}s", disk.as_secs(), disk.subsec_millis(), parse.as_secs(), parse.subsec_millis());
+            eprint!(
+                "disk {}.{:03}s - parse {}.{:03}s",
+                disk.as_secs(),
+                disk.subsec_millis(),
+                parse.as_secs(),
+                parse.subsec_millis()
+            );
         }
 
         // Background thread: prepare the Find All References database.
@@ -491,7 +549,11 @@ impl Engine {
         self.references_table.spawn(move || {
             let table = find_references::ReferencesTable::new(&references_objtree);
             let elapsed = start.elapsed();
-            eprint!("references {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+            eprint!(
+                "references {}.{:03}s",
+                elapsed.as_secs(),
+                elapsed.subsec_millis()
+            );
             print_thread_total();
             table
         });
@@ -509,8 +571,13 @@ impl Engine {
             let diagnostics_tracker = self.diagnostics_tracker.clone();
             std::thread::spawn(move || {
                 dreamchecker::run(&context, &objtree);
-                let elapsed = start.elapsed(); start += elapsed;
-                eprint!("dreamchecker {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+                let elapsed = start.elapsed();
+                start += elapsed;
+                eprint!(
+                    "dreamchecker {}.{:03}s",
+                    elapsed.as_secs(),
+                    elapsed.subsec_millis()
+                );
                 print_thread_total();
 
                 let map = DiagnosticsTracker::build(
@@ -539,14 +606,24 @@ impl Engine {
 
         self.defines = Some(pp.finalize());
 
-        let elapsed = start.elapsed(); start += elapsed;
-        eprint!(" - diagnostics {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+        let elapsed = start.elapsed();
+        start += elapsed;
+        eprint!(
+            " - diagnostics {}.{:03}s",
+            elapsed.as_secs(),
+            elapsed.subsec_millis()
+        );
 
         // If enabled, send the JSON for the object tree panel.
         if self.client_caps.object_tree {
             self.update_objtree();
-            let elapsed = start.elapsed(); start += elapsed;
-            eprint!(" - object tree {}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis());
+            let elapsed = start.elapsed();
+            start += elapsed;
+            eprint!(
+                " - object tree {}.{:03}s",
+                elapsed.as_secs(),
+                elapsed.subsec_millis()
+            );
         }
 
         /*if let Some(objtree) = Arc::get_mut(&mut self.objtree) {
@@ -559,7 +636,10 @@ impl Engine {
         Ok(())
     }
 
-    fn get_annotations(&mut self, url: &Url) -> Result<(FileId, FileId, Rc<AnnotationTree>), jsonrpc::Error> {
+    fn get_annotations(
+        &mut self,
+        url: &Url,
+    ) -> Result<(FileId, FileId, Rc<AnnotationTree>), jsonrpc::Error> {
         Ok(match self.annotations.entry(url.to_owned()) {
             Entry::Occupied(o) => o.get().clone(),
             Entry::Vacant(v) => match self.root {
@@ -582,26 +662,43 @@ impl Engine {
                         None => (FileId::default(), defines.branch_at_end(&self.context)),
                     };
                     let contents = self.docs.read(url).map_err(invalid_request)?;
-                    let file_id = preprocessor.push_file(stripped.to_owned(), contents).map_err(invalid_request)?;
+                    let file_id = preprocessor
+                        .push_file(stripped.to_owned(), contents)
+                        .map_err(invalid_request)?;
                     preprocessor.enable_annotations();
                     let mut annotations = AnnotationTree::default();
                     {
-                        let indent = dm::indents::IndentProcessor::new(&self.context, &mut preprocessor);
+                        let indent =
+                            dm::indents::IndentProcessor::new(&self.context, &mut preprocessor);
                         let parser = dm::parser::Parser::new(&self.context, indent);
                         parser.parse_annotations_only(&mut annotations);
                     }
                     annotations.merge(preprocessor.take_annotations().unwrap());
-                    v.insert((real_file_id, file_id, Rc::new(annotations))).clone()
+                    v.insert((real_file_id, file_id, Rc::new(annotations)))
+                        .clone()
                 },
                 None => {
                     // single-file mode
                     let filename = url.to_string();
 
-                    let contents = self.docs.get_contents(url).map_err(invalid_request)?.into_owned();
-                    let mut pp = dm::preprocessor::Preprocessor::from_buffer(&self.context, filename.clone().into(), contents);
-                    let file_id = self.context.get_file(filename.as_ref()).expect("file didn't exist?");
+                    let contents = self
+                        .docs
+                        .get_contents(url)
+                        .map_err(invalid_request)?
+                        .into_owned();
+                    let mut pp = dm::preprocessor::Preprocessor::from_buffer(
+                        &self.context,
+                        filename.clone().into(),
+                        contents,
+                    );
+                    let file_id = self
+                        .context
+                        .get_file(filename.as_ref())
+                        .expect("file didn't exist?");
                     // Clear old errors for this file. Hacky, but it will work for now.
-                    self.context.errors_mut().retain(|error| error.location().file != file_id);
+                    self.context
+                        .errors_mut()
+                        .retain(|error| error.location().file != file_id);
 
                     pp.enable_annotations();
                     let mut annotations = AnnotationTree::default();
@@ -626,21 +723,22 @@ impl Engine {
                             continue;
                         }
 
-                        let related_information = if !self.client_caps.related_info || error.notes().is_empty() {
-                            None
-                        } else {
-                            let mut notes = Vec::with_capacity(error.notes().len());
-                            for note in error.notes().iter() {
-                                notes.push(lsp_types::DiagnosticRelatedInformation {
-                                    location: lsp_types::Location {
-                                        uri: url.to_owned(),
-                                        range: location_to_range(note.location()),
-                                    },
-                                    message: note.description().to_owned(),
-                                });
-                            }
-                            Some(notes)
-                        };
+                        let related_information =
+                            if !self.client_caps.related_info || error.notes().is_empty() {
+                                None
+                            } else {
+                                let mut notes = Vec::with_capacity(error.notes().len());
+                                for note in error.notes().iter() {
+                                    notes.push(lsp_types::DiagnosticRelatedInformation {
+                                        location: lsp_types::Location {
+                                            uri: url.to_owned(),
+                                            range: location_to_range(note.location()),
+                                        },
+                                        message: note.description().to_owned(),
+                                    });
+                                }
+                                Some(notes)
+                            };
                         let diag = lsp_types::Diagnostic {
                             message: error.description().to_owned(),
                             severity: Some(convert_severity(error.severity())),
@@ -648,7 +746,7 @@ impl Engine {
                             source: component_to_source(error.component()),
                             code: convert_errorcode(error.errortype()),
                             related_information,
-                            .. Default::default()
+                            ..Default::default()
                         };
                         diagnostics.push(diag);
 
@@ -660,7 +758,7 @@ impl Engine {
                                     severity: Some(lsp_types::DiagnosticSeverity::INFORMATION),
                                     range: location_to_range(note.location()),
                                     source: component_to_source(error.component()),
-                                    .. Default::default()
+                                    ..Default::default()
                                 };
                                 diagnostics.push(diag);
                             }
@@ -676,12 +774,15 @@ impl Engine {
                     );
 
                     (file_id, file_id, Rc::new(annotations))
-                }
-            }
+                },
+            },
         })
     }
 
-    fn find_type_context<'b, I, Ign>(&self, iter: &I) -> (Option<TypeRef<'_>>, Option<(&'b str, usize)>)
+    fn find_type_context<'b, I, Ign>(
+        &self,
+        iter: &I,
+    ) -> (Option<TypeRef<'_>>, Option<(&'b str, usize)>)
     where
         I: Iterator<Item = (Ign, &'b Annotation)> + Clone,
     {
@@ -745,7 +846,11 @@ impl Engine {
                 if let Some(value) = proc.value.get(idx) {
                     for param in value.parameters.iter() {
                         if param.name == var_name {
-                            return UnscopedVar::Parameter { ty, proc: proc_name, param };
+                            return UnscopedVar::Parameter {
+                                ty,
+                                proc: proc_name,
+                                param,
+                            };
                         }
                     }
                 }
@@ -764,14 +869,15 @@ impl Engine {
     }
 
     fn find_scoped_type<'b, I>(&'b self, iter: &I, priors: &[String]) -> Option<TypeRef<'b>>
-        where I: Iterator<Item=(Span, &'b Annotation)> + Clone
+    where
+        I: Iterator<Item = (Span, &'b Annotation)> + Clone,
     {
         let (mut next, proc_name) = self.find_type_context(iter);
         // find the first; check the global scope, parameters, and "src"
         let mut priors = priors.iter();
         let first = match priors.next() {
             Some(i) => i,
-            None => return next,  // empty priors acts like unscoped
+            None => return next, // empty priors acts like unscoped
         };
         if first == "args" {
             next = self.objtree.find("/list");
@@ -785,12 +891,16 @@ impl Engine {
             next = self.objtree.find("/callee");
         } else {
             next = match self.find_unscoped_var(iter, next, proc_name, first) {
-                UnscopedVar::Parameter { param, .. } => self.objtree.type_by_path(param.var_type.type_path.iter()),
+                UnscopedVar::Parameter { param, .. } => {
+                    self.objtree.type_by_path(param.var_type.type_path.iter())
+                },
                 UnscopedVar::Variable { ty, .. } => match ty.get_var_declaration(first) {
                     Some(decl) => self.objtree.type_by_path(decl.var_type.type_path.iter()),
                     None => None,
                 },
-                UnscopedVar::Local { var_type, .. } => self.objtree.type_by_path(var_type.type_path.iter()),
+                UnscopedVar::Local { var_type, .. } => {
+                    self.objtree.type_by_path(var_type.type_path.iter())
+                },
                 UnscopedVar::None => None,
             };
         }
@@ -808,8 +918,12 @@ impl Engine {
         next
     }
 
-    fn symbol_id_at(&mut self, text_document_position: lsp_types::TextDocumentPositionParams) -> Result<Option<dm::objtree::SymbolId>, jsonrpc::Error> {
-        let (_, file_id, annotations) = self.get_annotations(&text_document_position.text_document.uri)?;
+    fn symbol_id_at(
+        &mut self,
+        text_document_position: lsp_types::TextDocumentPositionParams,
+    ) -> Result<Option<dm::objtree::SymbolId>, jsonrpc::Error> {
+        let (_, file_id, annotations) =
+            self.get_annotations(&text_document_position.text_document.uri)?;
         let location = dm::Location {
             file: file_id,
             line: text_document_position.position.line + 1,
@@ -932,9 +1046,14 @@ impl Engine {
         Ok(symbol_id)
     }
 
-    fn construct_proc_hover(&self, proc_name: &str, mut provided_tok: Option<TypeRef>, scoped: bool) -> Result<Vec<String>, jsonrpc::Error> {
+    fn construct_proc_hover(
+        &self,
+        proc_name: &str,
+        mut provided_tok: Option<TypeRef>,
+        scoped: bool,
+    ) -> Result<Vec<String>, jsonrpc::Error> {
         let mut results = Vec::new();
-        let mut proclink  = String::new();
+        let mut proclink = String::new();
         let mut defstring = String::new();
         let mut docstring: Option<String> = None;
         while let Some(ty) = provided_tok {
@@ -944,7 +1063,11 @@ impl Engine {
                 // Because we need to find our declaration to get the declaration type, we partially
                 // form the markdown text to be used once the proc's declaration is reached
                 if defstring.is_empty() {
-                    proclink = format!("[{}]({})", ty.pretty_path(), self.location_link(proc_value.location)?);
+                    proclink = format!(
+                        "[{}]({})",
+                        ty.pretty_path(),
+                        self.location_link(proc_value.location)?
+                    );
                     let mut message = format!("{proc_name}(");
                     let mut first = true;
                     for each in proc_value.parameters.iter() {
@@ -961,7 +1084,12 @@ impl Engine {
                 }
 
                 if let Some(ref decl) = proc.declaration {
-                    results.push(format!("{}\n```dm\n{}/{}\n```", proclink, decl.kind.name(), defstring));
+                    results.push(format!(
+                        "{}\n```dm\n{}/{}\n```",
+                        proclink,
+                        decl.kind.name(),
+                        defstring
+                    ));
                 }
 
                 if !proc_value.docs.is_empty() {
@@ -983,7 +1111,12 @@ impl Engine {
         Ok(results)
     }
 
-    fn construct_var_hover(&self, var_name: &str, mut provided_tok: Option<TypeRef>, scoped: bool) -> Result<Vec<String>, jsonrpc::Error> {
+    fn construct_var_hover(
+        &self,
+        var_name: &str,
+        mut provided_tok: Option<TypeRef>,
+        scoped: bool,
+    ) -> Result<Vec<String>, jsonrpc::Error> {
         let mut results = Vec::new();
         let mut infos = String::new();
         let mut docstring: Option<String> = None;
@@ -991,10 +1124,19 @@ impl Engine {
             if let Some(var) = ty.vars.get(var_name) {
                 if let Some(ref decl) = var.declaration {
                     // First get the path of the type containing the declaration
-                    infos.push_str(format!("[{}]({})\n", ty.pretty_path(), self.location_link(var.value.location)?).as_str());
+                    infos.push_str(
+                        format!(
+                            "[{}]({})\n",
+                            ty.pretty_path(),
+                            self.location_link(var.value.location)?
+                        )
+                        .as_str(),
+                    );
 
                     // Next toss on the declaration itself
-                    infos.push_str(format!("```dm\nvar/{}{}\n```", decl.var_type, var_name).as_str());
+                    infos.push_str(
+                        format!("```dm\nvar/{}{}\n```", decl.var_type, var_name).as_str(),
+                    );
                 }
                 if !var.value.docs.is_empty() {
                     docstring = Some(var.value.docs.text());
@@ -1023,7 +1165,10 @@ impl Engine {
     fn handle_input(&mut self, message: &str) {
         let mut outputs: Vec<Output> = match serde_json::from_str(message) {
             Ok(jsonrpc::Request::Single(call)) => self.handle_call(call).into_iter().collect(),
-            Ok(jsonrpc::Request::Batch(calls)) => calls.into_iter().flat_map(|call| self.handle_call(call)).collect(),
+            Ok(jsonrpc::Request::Batch(calls)) => calls
+                .into_iter()
+                .flat_map(|call| self.handle_call(call))
+                .collect(),
             Err(decode_error) => vec![Output::Failure(jsonrpc::Failure {
                 jsonrpc: VERSION,
                 error: jsonrpc::Error {
@@ -1036,7 +1181,7 @@ impl Engine {
         };
 
         let response = match outputs.len() {
-            0 => return,  // wait for another input
+            0 => return, // wait for another input
             1 => Response::Single(outputs.remove(0)),
             _ => Response::Batch(outputs),
         };
@@ -1049,7 +1194,11 @@ impl Engine {
             Call::Invalid { id } => Some(Output::invalid_request(id, VERSION)),
             Call::MethodCall(method_call) => {
                 let id = method_call.id.clone();
-                Some(Output::from(self.handle_method_call(method_call), id, VERSION))
+                Some(Output::from(
+                    self.handle_method_call(method_call),
+                    id,
+                    VERSION,
+                ))
             },
             Call::Notification(notification) => {
                 if let Err(e) = self.handle_notification(notification) {
@@ -1060,7 +1209,10 @@ impl Engine {
         }
     }
 
-    fn handle_method_call(&mut self, call: jsonrpc::MethodCall) -> Result<serde_json::Value, jsonrpc::Error> {
+    fn handle_method_call(
+        &mut self,
+        call: jsonrpc::MethodCall,
+    ) -> Result<serde_json::Value, jsonrpc::Error> {
         // "If the server receives a request... before the initialize request...
         // the response should be an error with code: -32002"
         if call.method != Initialize::METHOD && self.status != InitStatus::Running {
@@ -1068,7 +1220,7 @@ impl Engine {
                 code: jsonrpc::ErrorCode::from(-32002),
                 message: "method call before initialize or after shutdown".to_owned(),
                 data: None,
-            })
+            });
         }
 
         let params_value = params_to_value(call.params);
@@ -1084,13 +1236,22 @@ impl Engine {
         }
     }
 
-    fn handle_notification(&mut self, notification: jsonrpc::Notification) -> Result<(), jsonrpc::Error> {
+    fn handle_notification(
+        &mut self,
+        notification: jsonrpc::Notification,
+    ) -> Result<(), jsonrpc::Error> {
         // "Notifications should be dropped, except for the exit notification"
-        if notification.method == <lsp_types::notification::Exit as lsp_types::notification::Notification>::METHOD {
-            self.exit(if self.status == InitStatus::ShuttingDown { 0 } else { 1 });
+        if notification.method
+            == <lsp_types::notification::Exit as lsp_types::notification::Notification>::METHOD
+        {
+            self.exit(if self.status == InitStatus::ShuttingDown {
+                0
+            } else {
+                1
+            });
         }
         if self.status != InitStatus::Running {
-            return Ok(())
+            return Ok(());
         }
 
         let params_value = params_to_value(notification.params);
@@ -1157,7 +1318,7 @@ impl Engine {
     // basic setup
     fn Initialize(&mut self, init: P<Initialize>) -> R<Initialize> {
         if self.status != InitStatus::Starting {
-            return Err(invalid_request(""))
+            return Err(invalid_request(""));
         }
         self.status = InitStatus::Running;
 
@@ -1202,11 +1363,13 @@ impl Engine {
                 references_provider: Some(OneOf::Left(true)),
                 implementation_provider: Some(ImplementationProviderCapability::Simple(true)),
                 type_definition_provider: Some(TypeDefinitionProviderCapability::Simple(true)),
-                text_document_sync: Some(TextDocumentSyncCapability::Options(TextDocumentSyncOptions {
-                    open_close: Some(true),
-                    change: Some(TextDocumentSyncKind::INCREMENTAL),
-                    .. Default::default()
-                })),
+                text_document_sync: Some(TextDocumentSyncCapability::Options(
+                    TextDocumentSyncOptions {
+                        open_close: Some(true),
+                        change: Some(TextDocumentSyncKind::INCREMENTAL),
+                        ..Default::default()
+                    },
+                )),
                 completion_provider: Some(CompletionOptions {
                     trigger_characters: Some(vec![".".to_owned(), ":".to_owned(), "/".to_owned()]),
                     all_commit_characters: None,
@@ -1223,7 +1386,7 @@ impl Engine {
                     work_done_progress_options: Default::default(),
                 }),
                 color_provider: Some(ColorProviderCapability::Simple(true)),
-                .. Default::default()
+                ..Default::default()
             },
             server_info: Some(ServerInfo {
                 name: "dm-langserver".to_owned(),
@@ -1239,7 +1402,7 @@ impl Engine {
 
     // ------------------------------------------------------------------------
     // actual stuff provision
-    #[allow(deprecated)]  // DocumentSymbol::deprecated is... deprecated. But we need to provide a `None` anyways.
+    #[allow(deprecated)] // DocumentSymbol::deprecated is... deprecated. But we need to provide a `None` anyways.
     fn WorkspaceSymbol(&mut self, params: P<WorkspaceSymbol>) -> R<WorkspaceSymbol> {
         let query = symbol_search::Query::parse(&params.query);
 
@@ -1255,7 +1418,11 @@ impl Engine {
                     results.push(SymbolInformation {
                         name: name.to_owned(),
                         kind: SymbolKind::CONSTANT,
-                        location: self.convert_location(range.start, define.docs(), &["/DM/preprocessor/", name])?,
+                        location: self.convert_location(
+                            range.start,
+                            define.docs(),
+                            &["/DM/preprocessor/", name],
+                        )?,
                         container_name: None,
                         tags: None,
                         deprecated: None,
@@ -1285,7 +1452,11 @@ impl Engine {
                         results.push(SymbolInformation {
                             name: var_name.clone(),
                             kind: SymbolKind::FIELD,
-                            location: self.convert_location(decl.location, &tv.value.docs, &[&ty.path, "/var/", var_name])?,
+                            location: self.convert_location(
+                                decl.location,
+                                &tv.value.docs,
+                                &[&ty.path, "/var/", var_name],
+                            )?,
                             container_name: Some(ty.path.clone()),
                             tags: None,
                             deprecated: None,
@@ -1306,7 +1477,11 @@ impl Engine {
                             } else {
                                 SymbolKind::METHOD
                             },
-                            location: self.convert_location(decl.location, &pv.main_value().docs, &[&ty.path, "/proc/", proc_name])?,
+                            location: self.convert_location(
+                                decl.location,
+                                &pv.main_value().docs,
+                                &[&ty.path, "/proc/", proc_name],
+                            )?,
                             container_name: Some(ty.path.clone()),
                             tags: None,
                             deprecated: None,
@@ -1331,7 +1506,8 @@ impl Engine {
 
         let iter = annotations.get_location(location);
         for (_range, annotation) in iter.clone() {
-            #[cfg(debug_assertions)] {
+            #[cfg(debug_assertions)]
+            {
                 results.push(format!("{annotation:?}"));
             }
             match annotation {
@@ -1340,7 +1516,9 @@ impl Engine {
                     let mut current = objtree.root();
                     let (last, most) = path.split_last().unwrap();
                     for part in most {
-                        if part == "var" { break }
+                        if part == "var" {
+                            break;
+                        }
                         if let Some(child) = current.child(part) {
                             current = child;
                         } else {
@@ -1358,9 +1536,17 @@ impl Engine {
                             } else {
                                 String::new()
                             };
-                            infos.push_front(format!("[{}]({}){}", current.pretty_path(), self.location_link(var.value.location)?, constant));
+                            infos.push_front(format!(
+                                "[{}]({}){}",
+                                current.pretty_path(),
+                                self.location_link(var.value.location)?,
+                                constant
+                            ));
                             if let Some(ref decl) = var.declaration {
-                                infos.push_front(format!("```dm\nvar/{}{}\n```", decl.var_type, last));
+                                infos.push_front(format!(
+                                    "```dm\nvar/{}{}\n```",
+                                    decl.var_type, last
+                                ));
                             }
                             if !var.value.docs.is_empty() {
                                 docstring = Some(var.value.docs.text());
@@ -1374,13 +1560,15 @@ impl Engine {
                     if let Some(ds) = docstring {
                         results.push(ds);
                     }
-                }
+                },
                 Annotation::ProcHeader(path, _idx) if !path.is_empty() => {
                     let objtree = &self.objtree;
                     let mut current = objtree.root();
                     let (last, most) = path.split_last().unwrap();
                     for part in most {
-                        if part == "proc" || part == "verb" { break }
+                        if part == "proc" || part == "verb" {
+                            break;
+                        }
                         if let Some(child) = current.child(part) {
                             current = child;
                         } else {
@@ -1396,7 +1584,12 @@ impl Engine {
                     while let Some(current) = next {
                         if let Some(proc) = current.procs.get(last) {
                             let proc_value = proc.main_value();
-                            let mut message = format!("[{}]({})  \n```dm\n{}(", current.pretty_path(), self.location_link(proc_value.location)?, last);
+                            let mut message = format!(
+                                "[{}]({})  \n```dm\n{}(",
+                                current.pretty_path(),
+                                self.location_link(proc_value.location)?,
+                                last
+                            );
                             let mut first = true;
                             for each in proc_value.parameters.iter() {
                                 use std::fmt::Write;
@@ -1410,7 +1603,11 @@ impl Engine {
                             message.push_str(")\n```");
                             infos.push_front(message);
                             if let Some(ref decl) = proc.declaration {
-                                infos.push_front(format!("```dm\n{}/{}\n```", decl.kind.name(), last));
+                                infos.push_front(format!(
+                                    "```dm\n{}/{}\n```",
+                                    decl.kind.name(),
+                                    last
+                                ));
                             }
 
                             if !proc_value.docs.is_empty() {
@@ -1425,32 +1622,38 @@ impl Engine {
                     if let Some(ds) = docstring {
                         results.push(ds);
                     }
-                }
+                },
                 Annotation::UnscopedVar(var_name) if symbol_id.is_some() => {
                     let (ty, proc_name) = self.find_type_context(&iter);
-                    if let UnscopedVar::Variable { ty, .. } = self.find_unscoped_var(&iter, ty, proc_name, var_name) {
+                    if let UnscopedVar::Variable { ty, .. } =
+                        self.find_unscoped_var(&iter, ty, proc_name, var_name)
+                    {
                         if let Some(_decl) = ty.get_var_declaration(var_name) {
-                            results.append(&mut self.construct_var_hover(var_name, Some(ty), false)?);
+                            results.append(&mut self.construct_var_hover(
+                                var_name,
+                                Some(ty),
+                                false,
+                            )?);
                         }
                     }
-                }
+                },
                 Annotation::UnscopedCall(proc_name) if symbol_id.is_some() => {
                     let (ty, _) = self.find_type_context(&iter);
                     let next = ty.or_else(|| Some(self.objtree.root()));
                     results.append(&mut self.construct_proc_hover(proc_name, next, false)?);
-                }
+                },
                 Annotation::ScopedCall(priors, proc_name) if symbol_id.is_some() => {
                     let next = self.find_scoped_type(&iter, priors);
                     results.append(&mut self.construct_proc_hover(proc_name, next, true)?);
-                }
+                },
                 Annotation::ScopedVar(priors, var_name) if symbol_id.is_some() => {
                     let next = self.find_scoped_type(&iter, priors);
                     results.append(&mut self.construct_var_hover(var_name, next, true)?);
-                }
+                },
                 Annotation::MacroUse { docs: Some(dc), .. } if !dc.is_empty() => {
                     results.push(dc.text());
-                }
-                _ => {}
+                },
+                _ => {},
             }
         }
         if results.is_empty() {
@@ -1458,7 +1661,9 @@ impl Engine {
         } else {
             Ok(Some(Hover {
                 range: None,
-                contents: HoverContents::Array(results.into_iter().map(MarkedString::String).collect()),
+                contents: HoverContents::Array(
+                    results.into_iter().map(MarkedString::String).collect(),
+                ),
             }))
         }
     }
@@ -1693,7 +1898,8 @@ impl Engine {
     }
 
     fn Completion(&mut self, params: P<Completion>) -> R<Completion> {
-        let (_, file_id, annotations) = self.get_annotations(&params.text_document_position.text_document.uri)?;
+        let (_, file_id, annotations) =
+            self.get_annotations(&params.text_document_position.text_document.uri)?;
         let location = dm::Location {
             file: file_id,
             line: params.text_document_position.position.line + 1,
@@ -1757,7 +1963,12 @@ impl Engine {
                 // TODO: unscoped_completions calls find_type_context again
                 self.unscoped_completions(&mut results, &iter, "");
             } else {
-                self.tree_completions(&mut results, true, ty.unwrap_or_else(|| self.objtree.root()), "");
+                self.tree_completions(
+                    &mut results,
+                    true,
+                    ty.unwrap_or_else(|| self.objtree.root()),
+                    "",
+                );
             }
         }
 
@@ -1842,20 +2053,26 @@ impl Engine {
         Ok(result)
     }
 
-    #[allow(deprecated)]  // DocumentSymbol::deprecated is... deprecated. But we need to provide a `None` anyways.
-    fn DocumentSymbolRequest(&mut self, params: P<DocumentSymbolRequest>) -> R<DocumentSymbolRequest> {
+    #[allow(deprecated)] // DocumentSymbol::deprecated is... deprecated. But we need to provide a `None` anyways.
+    fn DocumentSymbolRequest(
+        &mut self,
+        params: P<DocumentSymbolRequest>,
+    ) -> R<DocumentSymbolRequest> {
         fn name_and_detail(path: &[String], skip_front: usize) -> (String, Option<String>) {
             let (name, rest) = path.split_last().unwrap();
             (
                 name.to_owned(),
-                rest.get(skip_front..).and_then(|i|
-                    i.iter().rev().find(|x|
-                        dm::ast::ProcDeclKind::from_name(x).is_none() &&
-                        dm::ast::ProcFlags::from_name(x).is_none() &&
-                        dm::ast::VarTypeFlags::from_name(x).is_none() &&
-                        *x != "var"
-                    ).map(ToOwned::to_owned)
-                )
+                rest.get(skip_front..).and_then(|i| {
+                    i.iter()
+                        .rev()
+                        .find(|x| {
+                            dm::ast::ProcDeclKind::from_name(x).is_none()
+                                && dm::ast::ProcFlags::from_name(x).is_none()
+                                && dm::ast::VarTypeFlags::from_name(x).is_none()
+                                && *x != "var"
+                        })
+                        .map(ToOwned::to_owned)
+                }),
             )
         }
 
@@ -1865,7 +2082,8 @@ impl Engine {
             section_end: dm::Location,
             skip_front: usize,
         ) -> Vec<DocumentSymbol>
-            where I: Iterator<Item=(interval_tree::RangeInclusive<dm::Location>, &'a Annotation)>
+        where
+            I: Iterator<Item = (interval_tree::RangeInclusive<dm::Location>, &'a Annotation)>,
         {
             let mut result = Vec::new();
 
@@ -1885,7 +2103,9 @@ impl Engine {
                 let selection_range = location_to_range(start);
                 match annotation {
                     Annotation::TreeBlock(ref path) => {
-                        if path.is_empty() { continue }
+                        if path.is_empty() {
+                            continue;
+                        }
                         let (name, detail) = name_and_detail(path, skip_front);
                         result.push(DocumentSymbol {
                             name,
@@ -1912,7 +2132,9 @@ impl Engine {
                         });
                     },
                     Annotation::ProcBody(ref path, _) => {
-                        if path.is_empty() { continue }
+                        if path.is_empty() {
+                            continue;
+                        }
                         let (name, detail) = name_and_detail(path, skip_front);
                         let kind = if path.len() == 1 || (path.len() == 2 && path[0] == "proc") {
                             SymbolKind::FUNCTION
@@ -1944,19 +2166,17 @@ impl Engine {
                             children: None,
                         });
                     },
-                    Annotation::MacroDefinition(ref name) => {
-                        result.push(DocumentSymbol {
-                            name: name.to_owned(),
-                            detail: None,
-                            kind: SymbolKind::CONSTANT,
-                            tags: None,
-                            deprecated: None,
-                            range,
-                            selection_range,
-                            children: None,
-                        })
-                    },
-                    _ => {}
+                    Annotation::MacroDefinition(ref name) => result.push(DocumentSymbol {
+                        name: name.to_owned(),
+                        detail: None,
+                        kind: SymbolKind::CONSTANT,
+                        tags: None,
+                        deprecated: None,
+                        range,
+                        selection_range,
+                        children: None,
+                    }),
+                    _ => {},
                 }
             }
 
@@ -1968,20 +2188,43 @@ impl Engine {
         if annotations.is_empty() {
             Ok(None)
         } else {
-            let start = dm::Location { file: file_id, line: 0, column: 0 };
-            let end = dm::Location { file: file_id, line: !0, column: !0 };
+            let start = dm::Location {
+                file: file_id,
+                line: 0,
+                column: 0,
+            };
+            let end = dm::Location {
+                file: file_id,
+                line: !0,
+                column: !0,
+            };
             let mut vec: Vec<_> = annotations.get_range(start..end).collect();
             // Our traversal is outside-in. TreeBlock and Variable can have the
             // same extent if the variable is the only thing in the block, so
             // sort TreeBlocks first as well.
-            vec.sort_by_key(|x| (x.0.start, std::cmp::Reverse(x.0.end), if matches!(x.1, Annotation::TreeBlock(_)) { 0 } else { 1 }));
+            vec.sort_by_key(|x| {
+                (
+                    x.0.start,
+                    std::cmp::Reverse(x.0.end),
+                    if matches!(x.1, Annotation::TreeBlock(_)) {
+                        0
+                    } else {
+                        1
+                    },
+                )
+            });
             let mut iter = vec.into_iter().peekable();
-            Ok(Some(DocumentSymbolResponse::Nested(find_document_symbols(&mut iter, end, 0))))
+            Ok(Some(DocumentSymbolResponse::Nested(find_document_symbols(
+                &mut iter, end, 0,
+            ))))
         }
     }
 
     fn DocumentColor(&mut self, params: P<DocumentColor>) -> R<DocumentColor> {
-        let content = self.docs.get_contents(&params.text_document.uri).map_err(invalid_request)?;
+        let content = self
+            .docs
+            .get_contents(&params.text_document.uri)
+            .map_err(invalid_request)?;
         let mut output = Vec::new();
         for (start, end, [r, g, b, a]) in color::extract_colors(&content) {
             output.push(ColorInformation {
@@ -2000,23 +2243,27 @@ impl Engine {
         Ok(output)
     }
 
-    fn ColorPresentationRequest(&mut self, params: P<ColorPresentationRequest>) -> R<ColorPresentationRequest> {
-        let content = self.docs.get_contents(&params.text_document.uri).map_err(invalid_request)?;
+    fn ColorPresentationRequest(
+        &mut self,
+        params: P<ColorPresentationRequest>,
+    ) -> R<ColorPresentationRequest> {
+        let content = self
+            .docs
+            .get_contents(&params.text_document.uri)
+            .map_err(invalid_request)?;
         let chunk = document::get_range(&content, params.range)?;
         let color_format = color::ColorFormat::parse(chunk).unwrap_or_default();
         // TODO: return compatible alternate presentations for converting
         // between "#..." and rgb().
-        Ok(vec![
-            ColorPresentation {
-                label: color_format.format([
-                    (params.color.red * 255.).round() as u8,
-                    (params.color.green * 255.).round() as u8,
-                    (params.color.blue * 255.).round() as u8,
-                    (params.color.alpha * 255.).round() as u8,
-                ]),
-                .. Default::default()
-            },
-        ])
+        Ok(vec![ColorPresentation {
+            label: color_format.format([
+                (params.color.red * 255.).round() as u8,
+                (params.color.green * 255.).round() as u8,
+                (params.color.blue * 255.).round() as u8,
+                (params.color.alpha * 255.).round() as u8,
+            ]),
+            ..Default::default()
+        }])
     }
 
     fn DocumentLinkRequest(&mut self, params: P<DocumentLinkRequest>) -> R<DocumentLinkRequest> {
@@ -2030,8 +2277,7 @@ impl Engine {
                     continue;
                 }
                 match annotation {
-                    Annotation::Include(path) |
-                    Annotation::Resource(path) => {
+                    Annotation::Include(path) | Annotation::Resource(path) => {
                         let pathbuf = if path.is_relative() {
                             std::env::current_dir().map_err(invalid_request)?.join(path)
                         } else {
@@ -2043,8 +2289,8 @@ impl Engine {
                             tooltip: None,
                             data: None,
                         });
-                    }
-                    _ => {}
+                    },
+                    _ => {},
                 }
             }
 
@@ -2066,7 +2312,13 @@ impl Engine {
             extools_dll: self.extools_dll.clone(),
             debug_server_dll: self.debug_server_dll.clone(),
         };
-        let (port, handle) = debugger::start_server(self.context.config().debugger.engine, params.dreamseeker_exe, params.env, db).map_err(invalid_request)?;
+        let (port, handle) = debugger::start_server(
+            self.context.config().debugger.engine,
+            params.dreamseeker_exe,
+            params.env,
+            db,
+        )
+        .map_err(invalid_request)?;
         self.threads.push(handle);
         Ok(extras::StartDebuggerResult { port })
     }
@@ -2116,7 +2368,8 @@ impl Engine {
                 if let Some(dme) = self.context.config().environment.as_ref() {
                     environment = Some(root_path.join(dme));
                 } else {
-                    environment = dm::detect_environment(&root_path, dm::DEFAULT_ENV).map_err(invalid_request)?;
+                    environment = dm::detect_environment(&root_path, dm::DEFAULT_ENV)
+                        .map_err(invalid_request)?;
                 }
             }
         }
@@ -2157,7 +2410,9 @@ impl Engine {
     }
 
     fn DidChangeTextDocument(&mut self, params: N<DidChangeTextDocument>) -> NR {
-        let url = self.docs.change(params.text_document, params.content_changes)?;
+        let url = self
+            .docs
+            .change(params.text_document, params.content_changes)?;
         self.annotations.remove(&url);
         Ok(())
     }
@@ -2211,14 +2466,13 @@ fn url_to_path(url: &Url) -> Result<PathBuf, jsonrpc::Error> {
     if url.scheme() != "file" {
         return Err(invalid_request("URI must have 'file' scheme"));
     }
-    url.to_file_path().map_err(|_| invalid_request("URI must be a valid path"))
+    url.to_file_path()
+        .map_err(|_| invalid_request("URI must be a valid path"))
 }
 
 fn path_to_url(path: PathBuf) -> Result<Url, jsonrpc::Error> {
     let formatted = path.display().to_string();
-    Url::from_file_path(path).map_err(|_| invalid_request(format!(
-        "bad file path: {formatted}",
-    )))
+    Url::from_file_path(path).map_err(|_| invalid_request(format!("bad file path: {formatted}",)))
 }
 
 fn convert_severity(severity: dm::Severity) -> lsp_types::DiagnosticSeverity {
@@ -2255,7 +2509,7 @@ fn is_constructor_name(name: &str) -> bool {
     name == "New" || name == "init" || name == "Initialize"
 }
 
-fn location_to_position(loc: dm::Location) -> lsp_types::Position  {
+fn location_to_position(loc: dm::Location) -> lsp_types::Position {
     lsp_types::Position {
         line: loc.line.saturating_sub(1),
         character: loc.column.saturating_sub(1) as u32,
@@ -2268,7 +2522,10 @@ fn location_to_range(loc: dm::Location) -> lsp_types::Range {
 }
 
 fn span_to_range(range: std::ops::Range<dm::Location>) -> lsp_types::Range {
-    lsp_types::Range::new(location_to_position(range.start), location_to_position(range.end))
+    lsp_types::Range::new(
+        location_to_position(range.start),
+        location_to_position(range.end),
+    )
 }
 
 fn issue_notification<T>(params: T::Params)

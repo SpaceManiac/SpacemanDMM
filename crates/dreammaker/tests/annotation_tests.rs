@@ -19,7 +19,8 @@ fn annotation_basic() {
 
     proc/Init()
         world.log << new/obj()
-"#.trim();
+"#
+    .trim();
 
     let context = Default::default();
     let lexer = Lexer::new(&context, Default::default(), code.as_bytes());

@@ -1,12 +1,13 @@
-use std::fmt::Write;
-use crate::dmi::Dir;
 use super::*;
+use crate::dmi::Dir;
+use std::fmt::Write;
 
 #[derive(Default)]
 pub struct SmartCables;
 
 impl RenderPass for SmartCables {
-    fn neighborhood_appearance<'a>(&self,
+    fn neighborhood_appearance<'a>(
+        &self,
         atom: &Atom<'a>,
         objtree: &'a ObjectTree,
         neighborhood: &Neighborhood<'a, '_>,
@@ -17,7 +18,10 @@ impl RenderPass for SmartCables {
             return true;
         }
 
-        let cable_layer = atom.get_var("cable_layer", objtree).as_str().unwrap_or("l2");
+        let cable_layer = atom
+            .get_var("cable_layer", objtree)
+            .as_str()
+            .unwrap_or("l2");
 
         let mut under_smes = false;
         let mut under_terminal = false;
@@ -83,7 +87,7 @@ impl RenderPass for SmartCables {
 
         output.push(Sprite {
             icon_state: icon_state.into_bump_str(),
-            .. atom.sprite
+            ..atom.sprite
         });
         false
     }

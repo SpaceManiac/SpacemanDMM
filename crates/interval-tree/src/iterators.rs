@@ -40,7 +40,7 @@ impl<'a, K: Ord, V> RangePairIter<'a, K, V> {
                 } {
                     self.stack.push((&**lsucc, Visiting::Left))
                 }
-            }
+            },
             None => self.stack.push((node, Visiting::Center)),
         }
     }
@@ -80,7 +80,7 @@ impl<'a, K: Ord, V> RangePairIter<'a, K, V> {
                         self.stack.push((node, Visiting::Middle(i + 1)));
                         return Some((node, i));
                     }
-                }
+                },
             }
         }
         None

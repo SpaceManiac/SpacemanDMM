@@ -152,9 +152,7 @@ impl Parse for ProcArgument {
             input.parse::<Token![=]>()?;
             input.parse::<Expr>()?;
         }
-        Ok(ProcArgument {
-            name,
-        })
+        Ok(ProcArgument { name })
     }
 }
 
@@ -172,7 +170,9 @@ impl EntryBody {
         } else if input.peek(syn::token::Paren) {
             let content;
             parenthesized!(content in input);
-            Ok(EntryBody::Proc(content.parse_terminated(ProcArgument::parse)?))
+            Ok(EntryBody::Proc(
+                content.parse_terminated(ProcArgument::parse)?,
+            ))
         } else if path.iter().any(|i| i == "var") {
             Ok(EntryBody::Variable(None))
         } else {
@@ -192,17 +192,18 @@ impl Parse for BuiltinEntry {
         let body = EntryBody::parse_with_path(&header.path, input)?;
 
         input.parse::<Token![;]>()?;
-        Ok(BuiltinEntry {
-            header,
-            body,
-        })
+        Ok(BuiltinEntry { header, body })
     }
 }
 
 struct BuiltinsTable(Vec<BuiltinEntry>);
 
 impl BuiltinsTable {
-    fn parse_with_header_into(vec: &mut Vec<BuiltinEntry>, header: &Header, input: ParseStream) -> Result<()> {
+    fn parse_with_header_into(
+        vec: &mut Vec<BuiltinEntry>,
+        header: &Header,
+        input: ParseStream,
+    ) -> Result<()> {
         while !input.is_empty() {
             let mut new_header = header.clone();
             new_header.parse_mut(input)?;
@@ -247,10 +248,18 @@ pub fn builtins_table(input: TokenStream) -> TokenStream {
     let mut output = Vec::new();
     for entry in builtins {
         let span = entry.header.path.first().unwrap().span();
-        let mut lit_strs: Vec<_> = entry.header.path.into_iter().map(|x| LitStr::new(&x.to_string(), x.span())).collect();
+        let mut lit_strs: Vec<_> = entry
+            .header
+            .path
+            .into_iter()
+            .map(|x| LitStr::new(&x.to_string(), x.span()))
+            .collect();
         if let Some(operator) = entry.header.operator_overload_target {
             let last_entry = lit_strs.pop().unwrap();
-            lit_strs.push(LitStr::new((last_entry.value() + operator.as_str()).as_str(), last_entry.span()));
+            lit_strs.push(LitStr::new(
+                (last_entry.value() + operator.as_str()).as_str(),
+                last_entry.span(),
+            ));
         }
         let path = quote! {
             &[ #(#lit_strs),* ]
@@ -296,11 +305,14 @@ pub fn builtins_table(input: TokenStream) -> TokenStream {
                 }
             },
             EntryBody::Proc(args) => {
-                let args: Vec<_> = args.into_iter().map(|x| LitStr::new(&x.name.to_string(), x.name.span())).collect();
+                let args: Vec<_> = args
+                    .into_iter()
+                    .map(|x| LitStr::new(&x.name.to_string(), x.name.span()))
+                    .collect();
                 quote_spanned! { span =>
                     tree.add_builtin_proc(#path, &[ #(#args),* ]) #attr_calls;
                 }
-            }
+            },
         };
         output.push(line);
     }

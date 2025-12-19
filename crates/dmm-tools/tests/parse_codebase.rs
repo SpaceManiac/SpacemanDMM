@@ -21,7 +21,7 @@ fn files_with_extension<F: FnMut(&Path)>(ext: &str, mut f: F) {
         None => {
             println!("Set TEST_DME to check .{ext} files");
             return;
-        }
+        },
     };
     for entry in WalkDir::new(dir).into_iter().filter_entry(is_visible) {
         let entry = entry.unwrap();
