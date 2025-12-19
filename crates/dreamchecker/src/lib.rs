@@ -2105,11 +2105,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         }
                         res
                     },
-                    StaticType::Type( typeref ) => {
-                        if !typeref.path.starts_with("/list") && typeref.get_proc("operator[]").is_none() {
+                    StaticType::Type(typeref) => {
+                        if typeref.get_proc("operator[]").is_none() {
                             error(location, format!("invalid list access on {}", typeref.path))
-                            .with_errortype("improper_index")
-                            .register(self.context);
+                                .with_errortype("improper_index")
+                                .register(self.context);
                         }
                         lhs.clone()
                     },
