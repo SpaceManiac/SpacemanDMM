@@ -1267,6 +1267,7 @@ impl ObjectTreeBuilder {
     }
 
     // an entry which is definitely a proc because an argument list is specified
+    #[allow(clippy::too_many_arguments)]
     fn add_proc<'a, I: Iterator<Item = &'a str>>(
         &mut self,
         context: &Context,

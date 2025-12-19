@@ -1583,7 +1583,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Statement::Label { name: _, block } => { self.visit_block(block, &mut local_vars.clone(), false); },
             Statement::Del(expr) => { self.visit_expression(location, expr, None, local_vars); },
             Statement::ForKeyValue(for_key_value) => {
-                let ForKeyValueStatement { var_type, key, value, in_list, block } = &**for_key_value;
+                let ForKeyValueStatement { var_type, key, key_input_type: _, value, in_list, block } = &**for_key_value;
                 let mut scoped_locals = local_vars.clone();
                 if let Some(in_list) = in_list {
                     let list = self.visit_expression(location, in_list, None, &mut scoped_locals);

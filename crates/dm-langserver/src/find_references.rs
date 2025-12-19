@@ -327,7 +327,7 @@ impl<'o> WalkProc<'o> {
             Statement::Label { name: _, block } => self.visit_block(block),
             Statement::Del(expr) => { self.visit_expression(location, expr, None); },
             Statement::ForKeyValue(for_key_value) => {
-                let ForKeyValueStatement { var_type, key, value, in_list, block } = &**for_key_value;
+                let ForKeyValueStatement { var_type, key, key_input_type: _, value, in_list, block } = &**for_key_value;
                 if let Some(in_list) = in_list {
                     self.visit_expression(location, in_list, None);
                 }

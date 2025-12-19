@@ -288,3 +288,26 @@ fn proc_operator_slash() {
         tree.expect("/datum/operator").get_proc("bar").unwrap();
     });
 }
+
+#[test]
+fn for_key_value_with_as() {
+    // https://github.com/SpaceManiac/SpacemanDMM/issues/421 - 'as' keyword in for-key-value loops
+    with_code("
+/proc/test()
+    var/alist/foo = list()
+    for (var/index as num, C in foo)
+        world << index
+    ", |context, tree| {
+        context.assert_success();
+
+        let proc = tree.root().get_proc("test").unwrap();
+        let code = proc.get().code.as_ref().unwrap();
+
+        if let Statement::ForKeyValue(ref fkv) = code[1].elem {
+            assert!(fkv.key_input_type.is_some());
+            assert_eq!(fkv.key_input_type.unwrap(), InputType::NUM);
+        } else {
+            panic!("Expected ForKeyValue statement, got {:?}", code[1].elem);
+        }
+    });
+}

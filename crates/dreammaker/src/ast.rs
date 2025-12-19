@@ -1454,6 +1454,7 @@ pub struct ForListStatement {
 pub struct ForKeyValueStatement {
     pub var_type: Option<VarType>,
     pub key: Ident2,
+    pub key_input_type: Option<InputType>,
     pub value: Ident2,
     /// Defaults to 'world'.
     pub in_list: Option<Expression>,
@@ -1492,7 +1493,7 @@ pub static VALID_FILTER_TYPES: phf::Map<&'static str, &[&str]> = phf_map! {
     "angular_blur" => &[ "x", "y", "size" ],
     "bloom" => &[ "threshold", "size", "offset", "alpha" ],
     "color" => &[ "color", "space" ],
-    "displace" => &[ "x", "y", "size", "icon", "render_source" ],
+    "displace" => &[ "x", "y", "size", "icon", "render_source", "flags" ],
     "drop_shadow" => &[ "x", "y", "size", "offset", "color"],
     "blur" => &[ "size" ],
     "layer" => &[ "x", "y", "icon", "render_source", "flags", "color", "transform", "blend_mode" ],
@@ -1508,6 +1509,7 @@ pub static VALID_FILTER_TYPES: phf::Map<&'static str, &[&str]> = phf_map! {
 pub static VALID_FILTER_FLAGS: phf::Map<&'static str, (&str, bool, bool, &[&str])> = phf_map! {
     "alpha" => ("flags", false, true, &[ "MASK_INVERSE", "MASK_SWAP" ]),
     "color" => ("space", true, false, &[ "FILTER_COLOR_RGB", "FILTER_COLOR_HSV", "FILTER_COLOR_HSL", "FILTER_COLOR_HCY" ]),
+    "displace" => ("flags", false, true, &[ "FILTER_OVERLAY" ]),
     "layer" => ("flags", true, true, &[ "FILTER_OVERLAY", "FILTER_UNDERLAY" ]),
     "rays" => ("flags", false, true, &[ "FILTER_OVERLAY", "FILTER_UNDERLAY" ]),
     "outline" => ("flags", false, true, &[ "OUTLINE_SHARP", "OUTLINE_SQUARE" ]),
