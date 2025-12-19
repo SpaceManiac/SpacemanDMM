@@ -1285,6 +1285,7 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         vector/var/y;
         vector/var/z;
 
+        vector/proc/operator[]();
         vector/proc/Cross(B);
         vector/proc/Dot(B);
         vector/proc/Interpolate(B, t);
