@@ -626,6 +626,7 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         list/var/const/parent_type;
         list/var/tag;
         list/var/const/list/vars;
+        list/proc/operator[]();
         list/proc/Add(Item1, Item2/*,...*/);
         list/proc/Copy(Start=1, End=0);
         list/proc/Cut(Start=1, End=0);
@@ -642,6 +643,7 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         alist/var/const/type;
         alist/var/const/parent_type;
         alist/var/tag;
+        alist/proc/operator[]();
         alist/proc/Add(Item1, Item2/*,...*/);
         alist/proc/Copy(Start=1, End=0);
         alist/proc/Cut(Start=1, End=0);
@@ -1110,6 +1112,7 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         savefile/var/list/dir;
         savefile/var/eof;
         savefile/var/name;
+        savefile/proc/operator[]();
         savefile/proc/ExportText(/* path=cd, file */);
         savefile/proc/Flush();
         savefile/proc/ImportText(/* path=cd, file */);
@@ -1282,6 +1285,7 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         vector/var/y;
         vector/var/z;
 
+        vector/proc/operator[]();
         vector/proc/Cross(B);
         vector/proc/Dot(B);
         vector/proc/Interpolate(B, t);
