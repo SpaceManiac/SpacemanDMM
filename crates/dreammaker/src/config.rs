@@ -85,11 +85,12 @@ pub enum WarningLevel {
 }
 
 /// Available debug engines.
-#[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
+#[derive(Debug, Default, Deserialize, Clone, Copy, PartialEq)]
 pub enum DebugEngine {
     #[serde(alias = "extools")]
     Extools,
     #[serde(alias = "auxtools")]
+    #[default]
     Auxtools,
 }
 
@@ -180,12 +181,6 @@ impl PartialEq<Severity> for WarningLevel {
             | (WarningLevel::Warning, Severity::Warning)
             | (WarningLevel::Info, Severity::Info)
             | (WarningLevel::Hint, Severity::Hint))
-    }
-}
-
-impl Default for DebugEngine {
-    fn default() -> Self {
-        Self::Auxtools
     }
 }
 

@@ -1410,6 +1410,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             // for (Var = Low to High)
             require!(self.exact(Token::Punct(Punctuation::LParen)));
             let init = self.simple_statement(true, vars)?;
+
+            // We do this here otherwise it's consumed after the comma (for key-value loops with typed keys)
+            let key_input_type = if let Some(()) = self.exact_ident("as")? {
+                Some(require!(self.input_type()))
+            } else {
+                None
+            };
+
             // three-pronged loop form ("for loop")
             if let Some(()) = self.semicolon()? {
                 // for(init; test; [inc])
@@ -1463,7 +1471,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                                 },
                                 _ => return Err(self.error("for (var/key, value) requires a 'var' keyword")),
                             };
-                            // Value is the lhs of for(var, k [v in x])
+                            // Value is the lhs of for(var/k, [v in x])
                             // It should also pass only if it's an ident
                             let value = match lhs.into_term() {
                                 Some(Term::Ident(value)) => value,
@@ -1477,6 +1485,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                             spanned(Statement::ForKeyValue(Box::new(ForKeyValueStatement {
                                 var_type: Some(var_type.expect("/")),
                                 key: key.into(),
+                                key_input_type,
                                 value: value.into(),
                                 in_list: Some(*rhs), // We'll assume the rhs of [v in x] is a list. Any other case, DM will catch anyway.
                                 block: require!(self.block(&LoopContext::ForLoop)),
