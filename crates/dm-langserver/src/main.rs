@@ -34,7 +34,7 @@ mod find_references;
 mod jrpc_io;
 mod symbol_search;
 
-use crate::extras::{Reparse, StartDebugger};
+use crate::extras::{QueryObjectTree, Reparse, StartDebugger};
 use dm::annotation::{Annotation, AnnotationTree};
 use dm::objtree::TypeRef;
 use dm::FileId;
@@ -116,6 +116,7 @@ struct ClientCaps {
     related_info: bool,
     label_offset_support: bool,
     object_tree: bool,
+    object_tree_2: bool,
 }
 
 impl ClientCaps {
@@ -147,6 +148,11 @@ impl ClientCaps {
                 if let Some(object_tree) = dreammaker.get("objectTree") {
                     if let Some(value) = object_tree.as_bool() {
                         this.object_tree = value;
+                    }
+                }
+                if let Some(object_tree_2) = dreammaker.get("objectTree2") {
+                    if let Some(value) = object_tree_2.as_bool() {
+                        this.object_tree_2 = value;
                     }
                 }
             }
@@ -389,8 +395,10 @@ impl Engine {
     // Object tree explorer
 
     fn update_objtree(&self) {
-        if self.client_caps.object_tree {
-            let root = self.recurse_objtree(self.objtree.root());
+        if self.client_caps.object_tree_2 {
+            issue_notification::<extras::ObjectTree2>(extras::ObjectTree2Params {});
+        } else if self.client_caps.object_tree {
+            let root = self.objtree_recurse(self.objtree.root());
             // offload serialization costs to another thread
             std::thread::spawn(move || {
                 let start = std::time::Instant::now();
@@ -405,8 +413,8 @@ impl Engine {
         }
     }
 
-    fn recurse_objtree(&self, ty: TypeRef) -> extras::ObjectTreeType {
-        let mut entry = extras::ObjectTreeType {
+    fn objtree_stub(&self, ty: TypeRef) -> extras::ObjectTreeType {
+        extras::ObjectTreeType {
             name: ty.name().to_owned(),
             kind: lsp_types::SymbolKind::CLASS,
             location: self
@@ -415,7 +423,14 @@ impl Engine {
             vars: Vec::new(),
             procs: Vec::new(),
             children: Vec::new(),
-        };
+            n_vars: ty.vars.len(),
+            n_procs: ty.procs.len(),
+            n_children: ty.len_children(),
+        }
+    }
+
+    fn objtree_with_vars_and_procs(&self, ty: TypeRef) -> extras::ObjectTreeType {
+        let mut entry: extras::ObjectTreeType = self.objtree_stub(ty);
 
         // vars
         for (name, var) in ty.vars.iter() {
@@ -452,9 +467,27 @@ impl Engine {
         }
         entry.procs.sort_by(|a, b| a.name.cmp(&b.name));
 
+        entry
+    }
+
+    fn objtree_recurse(&self, ty: TypeRef) -> extras::ObjectTreeType {
+        let mut entry = self.objtree_with_vars_and_procs(ty);
+
         // child types
         for child in ty.children() {
-            entry.children.push(self.recurse_objtree(child));
+            entry.children.push(self.objtree_recurse(child));
+        }
+        entry.children.sort_by(|a, b| a.name.cmp(&b.name));
+
+        entry
+    }
+
+    fn objtree_with_placeholders(&self, ty: TypeRef) -> extras::ObjectTreeType {
+        let mut entry = self.objtree_with_vars_and_procs(ty);
+
+        // child types
+        for child in ty.children() {
+            entry.children.push(self.objtree_stub(child));
         }
         entry.children.sort_by(|a, b| a.name.cmp(&b.name));
 
@@ -624,6 +657,8 @@ impl Engine {
                 elapsed.as_secs(),
                 elapsed.subsec_millis()
             );
+        } else if self.client_caps.object_tree_2 {
+            self.update_objtree();
         }
 
         /*if let Some(objtree) = Arc::get_mut(&mut self.objtree) {
@@ -1312,6 +1347,7 @@ impl Engine {
         ColorPresentationRequest;
         DocumentLinkRequest;
         StartDebugger;
+        QueryObjectTree;
     }
 
     // ------------------------------------------------------------------------
@@ -2321,6 +2357,15 @@ impl Engine {
         .map_err(invalid_request)?;
         self.threads.push(handle);
         Ok(extras::StartDebuggerResult { port })
+    }
+
+    // ------------------------------------------------------------------------
+    fn QueryObjectTree(&mut self, params: P<QueryObjectTree>) -> R<QueryObjectTree> {
+        let ty = self
+            .objtree
+            .find(&params.path)
+            .ok_or_else(|| invalid_request(format!("Unknown type path {:?}", params.path)))?;
+        Ok(self.objtree_with_placeholders(ty))
     }
 }
 

@@ -294,6 +294,10 @@ impl<'a> TypeRef<'a> {
             .map(|&idx| TypeRef::new(self.tree, idx))
     }
 
+    pub fn len_children(&self) -> usize {
+        self.children.len()
+    }
+
     /// Iterate over all child **paths**.
     pub fn children<'b>(&'b self) -> impl Iterator<Item = TypeRef<'a>> + 'b {
         self.children
