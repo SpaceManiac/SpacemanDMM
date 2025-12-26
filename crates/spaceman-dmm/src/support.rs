@@ -1,8 +1,16 @@
-use imgui::{FontConfig, Context, MouseCursor};
-use imgui_gfx_renderer::{Renderer, Shaders};
+//! Platform support helpers.
+use imgui::{Context, FontConfig, MouseButton, MouseCursor};
+use imgui_sdl3_renderer::Renderer;
+use sdl3::{
+    event::{Event, WindowEvent}, hint::names::RENDER_VSYNC, keyboard::Scancode, mouse::{Cursor, SystemCursor}, pixels::Color, video::WindowContext
+};
 use std::time::Instant;
 
-use crate::{ColorFormat, DepthFormat, EditorScene};
+use crate::EditorScene;
+
+pub type TextureCreator = sdl3::render::TextureCreator<WindowContext>;
+pub type Canvas = sdl3::render::WindowCanvas;
+pub type ImRenderer<'a> = Renderer<'a>;
 
 #[derive(Copy, Clone, PartialEq, Debug, Default)]
 struct MouseState {
@@ -11,51 +19,20 @@ struct MouseState {
     wheel: f32,
 }
 
-pub fn run(title: String, clear_color: [f32; 4]) -> EditorScene {
-    use gfx::Device;
+pub fn run(title: &str, clear_color: [u8; 4]) -> EditorScene {
+    sdl3::hint::set(RENDER_VSYNC, "1");
 
-    let mut events_loop = glutin::EventsLoop::new();
-    let context = glutin::ContextBuilder::new().with_vsync(true);
-    let window = glutin::WindowBuilder::new()
-        .with_title(title)
-        .with_window_icon(glutin::Icon::from_rgba(include_bytes!("../res/gasmask.raw").to_vec(), 16, 16).ok())
-        .with_min_dimensions(glutin::dpi::LogicalSize::new(640.0, 480.0))
-        .with_dimensions(glutin::dpi::LogicalSize::new(1300.0, 730.0));
-    let (window, mut device, mut factory, mut main_color, mut main_depth) =
-        gfx_window_glutin::init::<ColorFormat, DepthFormat>(window, context, &events_loop)
-        .expect("failed to initialize glutin window");
+    let sdl = sdl3::init().unwrap();
+    let video = sdl.video().unwrap();
 
-    // gfx's gl backend sets FRAMEBUFFER_SRGB permanently by default - actually
-    // we want it off permanently. I've been told this is most sanely set on a
-    // per-render-pass basis, but neither the world nor imgui blend colors
-    // accurately if it is set.
-    unsafe {
-        device.with_gl(|gl| {
-            gl.Disable(::gl::FRAMEBUFFER_SRGB);
-        });
-    }
-
-    let (ww, wh): (f64, f64) = window.window().get_outer_size().unwrap().into();
-    let (dw, dh): (f64, f64) = window.window().get_primary_monitor().get_dimensions().into();
-    window.window().set_position(((dw - ww) / 2.0, (dh - wh) / 2.0).into());
-
-    let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
-    let shaders = {
-        let version = device.get_info().shading_language;
-        if version.is_embedded {
-            if version.major >= 3 {
-                Shaders::GlSlEs300
-            } else {
-                Shaders::GlSlEs100
-            }
-        } else if version.major >= 4 {
-            Shaders::GlSl400
-        } else if version.major >= 3 {
-            Shaders::GlSl130
-        } else {
-            Shaders::GlSl110
-        }
-    };
+    let window = video
+        .window("SpacemanDMM", 1300, 730)
+        .position_centered()
+        .resizable()
+        .build()
+        .unwrap();
+    let mut canvas = window.into_canvas();
+    let mut events = sdl.event_pump().unwrap();
 
     let mut imgui = imgui::Context::create();
     imgui.style_mut().use_dark_colors();
@@ -63,33 +40,27 @@ pub fn run(title: String, clear_color: [f32; 4]) -> EditorScene {
 
     // In the examples we only use integer DPI factors, because the UI can get very blurry
     // otherwise. This might or might not be what you want in a real application.
-    let mut window_hidpi_factor = window.window().get_hidpi_factor();
-    let mut hidpi_factor = window_hidpi_factor.round();
-    let mut logical_size = window.window()
-        .get_inner_size()
-        .unwrap()
-        .to_physical(window_hidpi_factor)
-        .to_logical(hidpi_factor);
+    let mut window_hidpi_factor = 1.0;
+    let mut hidpi_factor = 1.0;
+    let mut logical_size = window.size();
 
     let font_size = (13.0 * hidpi_factor) as f32;
 
-    imgui.fonts().add_font(&[
-        imgui::FontSource::DefaultFontData {
+    imgui
+        .fonts()
+        .add_font(&[imgui::FontSource::DefaultFontData {
             config: Some(FontConfig {
                 oversample_h: 1,
                 pixel_snap_h: true,
                 size_pixels: font_size,
-                .. Default::default()
-            })
-        }
-    ]);
+                ..Default::default()
+            }),
+        }]);
 
-    let mut renderer = Renderer::init(&mut imgui, &mut factory, shaders)
+    let mut im_renderer = Renderer::new(&canvas.texture_creator(), &mut imgui)
         .expect("Failed to initialize renderer");
 
-    configure_keys(&mut imgui);
-
-    let mut scene = EditorScene::new(&mut factory, &main_color, &main_depth);
+    let mut scene = EditorScene::new(canvas.texture_creator());
 
     let mut last_frame = Instant::now();
     let mut mouse_state = MouseState::default();
@@ -98,135 +69,100 @@ pub fn run(title: String, clear_color: [f32; 4]) -> EditorScene {
     let mut kbd_captured = false;
 
     loop {
-        events_loop.poll_events(|event| {
-            use glutin::ElementState::Pressed;
-            use glutin::WindowEvent::*;
-            use glutin::{Event, MouseButton, MouseScrollDelta, TouchPhase};
-
-            if let Event::WindowEvent { event, .. } = event {
-                match event {
-                    CloseRequested => quit = true,
-                    Resized(new_logical_size) => {
-                        gfx_window_glutin::update_views(&window, &mut main_color, &mut main_depth);
-                        window.resize(new_logical_size.to_physical(hidpi_factor));
-                        scene.update_render_target(&main_color, &main_depth);
-                        logical_size = new_logical_size
-                            .to_physical(window_hidpi_factor)
-                            .to_logical(hidpi_factor);
-                    },
-                    HiDpiFactorChanged(new_factor) => {
-                        window_hidpi_factor = new_factor;
-                        hidpi_factor = window_hidpi_factor.round();
-                        logical_size = window.window()
-                            .get_inner_size()
-                            .unwrap()
-                            .to_physical(window_hidpi_factor)
-                            .to_logical(hidpi_factor);
-                    },
-                    Focused(false) => {
-                        // If the window is unfocused, unset modifiers, or
-                        // Alt-Tab will set it permanently & cause trouble. No,
-                        // I don't know why this doesn't just work.
-                        imgui.io_mut().key_ctrl = false;
-                        imgui.io_mut().key_alt = false;
-                        imgui.io_mut().key_shift = false;
-                        imgui.io_mut().key_super = false;
-                    },
-                    KeyboardInput { input, .. } => {
-                        use glutin::VirtualKeyCode as Key;
-
-                        let pressed = input.state == Pressed;
-                        match input.virtual_keycode {
-                            Some(Key::Tab) => imgui.io_mut().keys_down[0] = pressed,
-                            Some(Key::Left) => imgui.io_mut().keys_down[1] = pressed,
-                            Some(Key::Right) => imgui.io_mut().keys_down[2] = pressed,
-                            Some(Key::Up) => imgui.io_mut().keys_down[3] = pressed,
-                            Some(Key::Down) => imgui.io_mut().keys_down[4] = pressed,
-                            Some(Key::PageUp) => imgui.io_mut().keys_down[5] = pressed,
-                            Some(Key::PageDown) => imgui.io_mut().keys_down[6] = pressed,
-                            Some(Key::Home) => imgui.io_mut().keys_down[7] = pressed,
-                            Some(Key::End) => imgui.io_mut().keys_down[8] = pressed,
-                            Some(Key::Delete) => imgui.io_mut().keys_down[9] = pressed,
-                            Some(Key::Back) => imgui.io_mut().keys_down[10] = pressed,
-                            Some(Key::Return) => imgui.io_mut().keys_down[11] = pressed,
-                            Some(Key::Escape) => imgui.io_mut().keys_down[12] = pressed,
-                            Some(Key::A) => imgui.io_mut().keys_down[13] = pressed,
-                            Some(Key::C) => imgui.io_mut().keys_down[14] = pressed,
-                            Some(Key::V) => imgui.io_mut().keys_down[15] = pressed,
-                            Some(Key::X) => imgui.io_mut().keys_down[16] = pressed,
-                            Some(Key::Y) => imgui.io_mut().keys_down[17] = pressed,
-                            Some(Key::Z) => imgui.io_mut().keys_down[18] = pressed,
-                            Some(Key::LControl) | Some(Key::RControl) => imgui.io_mut().key_ctrl = pressed,
-                            Some(Key::LShift) | Some(Key::RShift) => imgui.io_mut().key_shift = pressed,
-                            Some(Key::LAlt) | Some(Key::RAlt) => imgui.io_mut().key_alt = pressed,
-                            Some(Key::LWin) | Some(Key::RWin) => imgui.io_mut().key_super = pressed,
-                            _ => {}
-                        }
-
-                        if pressed && !kbd_captured {
-                            if let Some(key) = input.virtual_keycode {
-                                scene.chord(ctrl(&imgui), imgui.io().key_shift, imgui.io().key_alt, key);
-                            }
-                        }
-                    },
-                    CursorMoved { position, .. } => {
-                        // Rescale position from glutin logical coordinates to our logical
-                        // coordinates
-                        let pos = position
-                            .to_physical(window_hidpi_factor)
-                            .to_logical(hidpi_factor)
-                            .into();
-                        mouse_state.pos = pos;
-                        scene.mouse_moved(pos);
-                    },
-                    MouseInput { state, button, .. } => match button {
-                        MouseButton::Left => mouse_state.pressed[0] = state == Pressed,
-                        MouseButton::Right => mouse_state.pressed[1] = state == Pressed,
-                        MouseButton::Middle => mouse_state.pressed[2] = state == Pressed,
-                        MouseButton::Other(i) => if let Some(b) = mouse_state.pressed.get_mut(2 + i as usize) {
-                            *b = state == Pressed;
-                        },
-                    },
-                    MouseWheel {
-                        delta: MouseScrollDelta::LineDelta(x, y),
-                        phase: TouchPhase::Moved,
-                        ..
-                    } => {
-                        mouse_state.wheel = y;
-                        if !mouse_captured {
-                            scene.mouse_wheel(ctrl(&imgui), imgui.io().key_shift, imgui.io().key_alt, 4.0 * 32.0 * x, 4.0 * 32.0 * y);
-                        }
-                    },
-                    MouseWheel {
-                        delta: MouseScrollDelta::PixelDelta(pos),
-                        phase: TouchPhase::Moved,
-                        ..
-                    } => {
-                        // Rescale pixel delta from glutin logical coordinates to our logical
-                        // coordinates
-                        let diff = pos
-                            .to_physical(window_hidpi_factor)
-                            .to_logical(hidpi_factor);
-                        mouse_state.wheel = diff.y as f32;
-                        if !mouse_captured {
-                            #[cfg(not(target_os = "macos"))]
-                            let diff_x = diff.x as f32;
-                            #[cfg(target_os = "macos")]
-                            let diff_x = -diff.x as f32;
-                            scene.mouse_wheel(
+        for event in events.poll_iter() {
+            match event {
+                Event::Quit { .. } => quit = true,
+                Event::Window {
+                    win_event: WindowEvent::Resized(x, y),
+                    ..
+                } => {
+                    logical_size = (x as u32, y as u32);
+                },
+                /*
+                HiDpiFactorChanged(new_factor) => {
+                    window_hidpi_factor = new_factor;
+                    hidpi_factor = window_hidpi_factor.round();
+                    logical_size = window
+                        .window()
+                        .get_inner_size()
+                        .unwrap()
+                        .to_physical(window_hidpi_factor)
+                        .to_logical(hidpi_factor);
+                },
+                */
+                Event::Window {
+                    win_event: WindowEvent::FocusLost,
+                    ..
+                } => {
+                    // If the window is unfocused, unset modifiers, or
+                    // Alt-Tab will set it permanently & cause trouble. No,
+                    // I don't know why this doesn't just work.
+                    imgui.io_mut().key_ctrl = false;
+                    imgui.io_mut().key_alt = false;
+                    imgui.io_mut().key_shift = false;
+                    imgui.io_mut().key_super = false;
+                },
+                Event::KeyDown {
+                    scancode: Some(scancode),
+                    ..
+                } => {
+                    if let Some(key) = map_scancode(scancode) {
+                        imgui.io_mut().keys_down[key as usize] = true;
+                        if !kbd_captured {
+                            scene.chord(
                                 ctrl(&imgui),
                                 imgui.io().key_shift,
                                 imgui.io().key_alt,
-                                diff_x,
-                                diff.y as f32,
+                                key,
                             );
                         }
-                    },
-                    ReceivedCharacter(c) => imgui.io_mut().add_input_character(c),
-                    _ => (),
-                }
+                    }
+                },
+                Event::KeyUp {
+                    scancode: Some(scancode),
+                    ..
+                } => {
+                    if let Some(key) = map_scancode(scancode) {
+                        imgui.io_mut().keys_down[key as usize] = false;
+                    }
+                },
+                Event::MouseMotion { x, y, .. } => {
+                    let pos = (x as i32, y as i32);
+                    mouse_state.pos = pos;
+                    scene.mouse_moved(pos);
+                },
+                Event::MouseButtonDown { mouse_btn, .. } => {
+                    if let Some(b) = map_mousebtn(mouse_btn) {
+                        mouse_state.pressed[b as usize] = true;
+                    }
+                },
+                Event::MouseButtonUp { mouse_btn, .. } => {
+                    if let Some(b) = map_mousebtn(mouse_btn) {
+                        mouse_state.pressed[b as usize] = false;
+                    }
+                },
+                Event::MouseWheel {
+                    x, y, direction, ..
+                } => {
+                    mouse_state.wheel = y;
+                    if !mouse_captured {
+                        scene.mouse_wheel(
+                            ctrl(&imgui),
+                            imgui.io().key_shift,
+                            imgui.io().key_alt,
+                            4.0 * 32.0 * x,
+                            4.0 * 32.0 * y,
+                        );
+                    }
+                },
+                Event::TextInput { text, .. } => {
+                    for ch in text.chars() {
+                        imgui.io_mut().add_input_character(ch);
+                    }
+                },
+                _ => (),
             }
-        });
+        }
         if quit {
             break;
         }
@@ -241,14 +177,14 @@ pub fn run(title: String, clear_color: [f32; 4]) -> EditorScene {
         // Workaround: imgui-gfx-renderer will not call ui.render() under this
         // condition, which occurs when minimized, and imgui will assert
         // because of missing either a Render() or EndFrame() call.
-        if logical_size.width > 0.0 && logical_size.height > 0.0 {
-            imgui.io_mut().display_size = [logical_size.width as f32, logical_size.height as f32];
+        if logical_size.0 > 0 && logical_size.1 > 0 {
+            imgui.io_mut().display_size = [logical_size.0 as f32, logical_size.1 as f32];
             imgui.io_mut().display_framebuffer_scale = [hidpi_factor as f32, hidpi_factor as f32];
             imgui.io_mut().font_global_scale = 1.0 / hidpi_factor as f32;
             imgui.io_mut().delta_time = delta_s;
 
             let ui = imgui.frame();
-            if !scene.run_ui(&ui, &mut renderer) {
+            if !scene.run_ui(&ui, &mut im_renderer) {
                 break;
             }
 
@@ -257,59 +193,26 @@ pub fn run(title: String, clear_color: [f32; 4]) -> EditorScene {
 
             if let Some(mouse_cursor) = ui.mouse_cursor() {
                 // Set OS cursor
-                window.window().hide_cursor(false);
-                window.window().set_cursor(match mouse_cursor {
-                    MouseCursor::Arrow => glutin::MouseCursor::Arrow,
-                    MouseCursor::TextInput => glutin::MouseCursor::Text,
-                    MouseCursor::ResizeAll => glutin::MouseCursor::Move,
-                    MouseCursor::ResizeNS => glutin::MouseCursor::NsResize,
-                    MouseCursor::ResizeEW => glutin::MouseCursor::EwResize,
-                    MouseCursor::ResizeNESW => glutin::MouseCursor::NeswResize,
-                    MouseCursor::ResizeNWSE => glutin::MouseCursor::NwseResize,
-                    MouseCursor::Hand => glutin::MouseCursor::Hand,
-                });
+                sdl.mouse().show_cursor(true);
+                Cursor::from_system(map_cursor(mouse_cursor)).unwrap().set();
             } else {
                 // Hide OS cursor
-                window.window().hide_cursor(true);
+                sdl.mouse().show_cursor(false);
             }
 
-            encoder.clear(&main_color, clear_color);
-            scene.render(&mut encoder);
-            renderer
-                .render(&mut factory, &mut encoder, &mut main_color, ui.render())
-                .expect("Rendering failed");
-            encoder.flush(&mut device);
-            window.swap_buffers().unwrap();
-            device.cleanup();
+            canvas.set_draw_color(Color::RGBA(
+                clear_color[0],
+                clear_color[1],
+                clear_color[2],
+                clear_color[3],
+            ));
+            canvas.clear();
+            scene.render(&mut canvas);
+            canvas.present();
         }
     }
     scene
 }
-
-fn configure_keys(imgui: &mut Context) {
-    use imgui::Key::*;
-
-    imgui.io_mut()[Tab] = 0;
-    imgui.io_mut()[LeftArrow] = 1;
-    imgui.io_mut()[RightArrow] = 2;
-    imgui.io_mut()[UpArrow] = 3;
-    imgui.io_mut()[DownArrow] = 4;
-    imgui.io_mut()[PageUp] = 5;
-    imgui.io_mut()[PageDown] = 6;
-    imgui.io_mut()[Home] = 7;
-    imgui.io_mut()[End] = 8;
-    imgui.io_mut()[Delete] = 9;
-    imgui.io_mut()[Backspace] = 10;
-    imgui.io_mut()[Enter] = 11;
-    imgui.io_mut()[Escape] = 12;
-    imgui.io_mut()[A] = 13;
-    imgui.io_mut()[C] = 14;
-    imgui.io_mut()[V] = 15;
-    imgui.io_mut()[X] = 16;
-    imgui.io_mut()[Y] = 17;
-    imgui.io_mut()[Z] = 18;
-}
-
 
 fn update_mouse(imgui: &mut Context, mouse_state: &mut MouseState) {
     imgui.io_mut().mouse_pos = [mouse_state.pos.0 as f32, mouse_state.pos.1 as f32];
@@ -326,4 +229,140 @@ fn ctrl(imgui: &Context) -> bool {
 #[cfg(target_os = "macos")]
 fn ctrl(imgui: &Context) -> bool {
     imgui.io().key_super
+}
+
+fn map_cursor(cursor: MouseCursor) -> SystemCursor {
+    match cursor {
+        MouseCursor::Arrow => SystemCursor::Arrow,
+        MouseCursor::TextInput => SystemCursor::IBeam,
+        MouseCursor::ResizeAll => SystemCursor::SizeAll,
+        MouseCursor::ResizeNS => SystemCursor::SizeNS,
+        MouseCursor::ResizeEW => SystemCursor::SizeWE,
+        MouseCursor::ResizeNESW => SystemCursor::SizeNESW,
+        MouseCursor::ResizeNWSE => SystemCursor::SizeNWSE,
+        MouseCursor::Hand => SystemCursor::Hand,
+        MouseCursor::NotAllowed => SystemCursor::No,
+    }
+}
+
+fn map_mousebtn(btn: sdl3::mouse::MouseButton) -> Option<imgui::MouseButton> {
+    match btn {
+        sdl3::mouse::MouseButton::Left => Some(MouseButton::Left),
+        sdl3::mouse::MouseButton::Right => Some(MouseButton::Right),
+        sdl3::mouse::MouseButton::Middle => Some(MouseButton::Middle),
+        sdl3::mouse::MouseButton::X1 => Some(MouseButton::Extra1),
+        sdl3::mouse::MouseButton::X2 => Some(MouseButton::Extra2),
+        _ => None,
+    }
+}
+
+fn map_scancode(key: Scancode) -> Option<imgui::Key> {
+    match key {
+        Scancode::A => Some(imgui::Key::A),
+        Scancode::B => Some(imgui::Key::B),
+        Scancode::C => Some(imgui::Key::C),
+        Scancode::D => Some(imgui::Key::D),
+        Scancode::E => Some(imgui::Key::E),
+        Scancode::F => Some(imgui::Key::F),
+        Scancode::G => Some(imgui::Key::G),
+        Scancode::H => Some(imgui::Key::H),
+        Scancode::I => Some(imgui::Key::I),
+        Scancode::J => Some(imgui::Key::J),
+        Scancode::K => Some(imgui::Key::K),
+        Scancode::L => Some(imgui::Key::L),
+        Scancode::M => Some(imgui::Key::M),
+        Scancode::N => Some(imgui::Key::N),
+        Scancode::O => Some(imgui::Key::O),
+        Scancode::P => Some(imgui::Key::P),
+        Scancode::Q => Some(imgui::Key::Q),
+        Scancode::R => Some(imgui::Key::R),
+        Scancode::S => Some(imgui::Key::S),
+        Scancode::T => Some(imgui::Key::T),
+        Scancode::U => Some(imgui::Key::U),
+        Scancode::V => Some(imgui::Key::V),
+        Scancode::W => Some(imgui::Key::W),
+        Scancode::X => Some(imgui::Key::X),
+        Scancode::Y => Some(imgui::Key::Y),
+        Scancode::Z => Some(imgui::Key::Z),
+        Scancode::_1 => Some(imgui::Key::Keypad1),
+        Scancode::_2 => Some(imgui::Key::Keypad2),
+        Scancode::_3 => Some(imgui::Key::Keypad3),
+        Scancode::_4 => Some(imgui::Key::Keypad4),
+        Scancode::_5 => Some(imgui::Key::Keypad5),
+        Scancode::_6 => Some(imgui::Key::Keypad6),
+        Scancode::_7 => Some(imgui::Key::Keypad7),
+        Scancode::_8 => Some(imgui::Key::Keypad8),
+        Scancode::_9 => Some(imgui::Key::Keypad9),
+        Scancode::_0 => Some(imgui::Key::Keypad0),
+        Scancode::Return => Some(imgui::Key::Enter),
+        Scancode::Escape => Some(imgui::Key::Escape),
+        Scancode::Backspace => Some(imgui::Key::Backspace),
+        Scancode::Tab => Some(imgui::Key::Tab),
+        Scancode::Space => Some(imgui::Key::Space),
+        Scancode::Minus => Some(imgui::Key::Minus),
+        Scancode::Equals => Some(imgui::Key::Equal),
+        Scancode::LeftBracket => Some(imgui::Key::LeftBracket),
+        Scancode::RightBracket => Some(imgui::Key::RightBracket),
+        Scancode::Backslash => Some(imgui::Key::Backslash),
+        Scancode::Semicolon => Some(imgui::Key::Semicolon),
+        Scancode::Apostrophe => Some(imgui::Key::Apostrophe),
+        Scancode::Grave => Some(imgui::Key::GraveAccent),
+        Scancode::Comma => Some(imgui::Key::Comma),
+        Scancode::Period => Some(imgui::Key::Period),
+        Scancode::Slash => Some(imgui::Key::Slash),
+        Scancode::CapsLock => Some(imgui::Key::CapsLock),
+        Scancode::F1 => Some(imgui::Key::F1),
+        Scancode::F2 => Some(imgui::Key::F2),
+        Scancode::F3 => Some(imgui::Key::F3),
+        Scancode::F4 => Some(imgui::Key::F4),
+        Scancode::F5 => Some(imgui::Key::F5),
+        Scancode::F6 => Some(imgui::Key::F6),
+        Scancode::F7 => Some(imgui::Key::F7),
+        Scancode::F8 => Some(imgui::Key::F8),
+        Scancode::F9 => Some(imgui::Key::F9),
+        Scancode::F10 => Some(imgui::Key::F10),
+        Scancode::F11 => Some(imgui::Key::F11),
+        Scancode::F12 => Some(imgui::Key::F12),
+        Scancode::PrintScreen => Some(imgui::Key::PrintScreen),
+        Scancode::ScrollLock => Some(imgui::Key::ScrollLock),
+        Scancode::Pause => Some(imgui::Key::Pause),
+        Scancode::Insert => Some(imgui::Key::Insert),
+        Scancode::Home => Some(imgui::Key::Home),
+        Scancode::PageUp => Some(imgui::Key::PageUp),
+        Scancode::Delete => Some(imgui::Key::Delete),
+        Scancode::End => Some(imgui::Key::End),
+        Scancode::PageDown => Some(imgui::Key::PageDown),
+        Scancode::Right => Some(imgui::Key::RightArrow),
+        Scancode::Left => Some(imgui::Key::LeftArrow),
+        Scancode::Down => Some(imgui::Key::DownArrow),
+        Scancode::Up => Some(imgui::Key::UpArrow),
+        Scancode::KpDivide => Some(imgui::Key::KeypadDivide),
+        Scancode::KpMultiply => Some(imgui::Key::KeypadMultiply),
+        Scancode::KpMinus => Some(imgui::Key::KeypadSubtract),
+        Scancode::KpPlus => Some(imgui::Key::KeypadAdd),
+        Scancode::KpEnter => Some(imgui::Key::KeypadEnter),
+        Scancode::Kp1 => Some(imgui::Key::Keypad1),
+        Scancode::Kp2 => Some(imgui::Key::Keypad2),
+        Scancode::Kp3 => Some(imgui::Key::Keypad3),
+        Scancode::Kp4 => Some(imgui::Key::Keypad4),
+        Scancode::Kp5 => Some(imgui::Key::Keypad5),
+        Scancode::Kp6 => Some(imgui::Key::Keypad6),
+        Scancode::Kp7 => Some(imgui::Key::Keypad7),
+        Scancode::Kp8 => Some(imgui::Key::Keypad8),
+        Scancode::Kp9 => Some(imgui::Key::Keypad9),
+        Scancode::Kp0 => Some(imgui::Key::Keypad0),
+        Scancode::KpPeriod => Some(imgui::Key::KeypadDecimal),
+        Scancode::Application => Some(imgui::Key::Menu),
+        Scancode::KpEquals => Some(imgui::Key::KeypadEqual),
+        Scancode::Menu => Some(imgui::Key::Menu),
+        Scancode::LCtrl => Some(imgui::Key::LeftCtrl),
+        Scancode::LShift => Some(imgui::Key::LeftShift),
+        Scancode::LAlt => Some(imgui::Key::LeftAlt),
+        Scancode::LGui => Some(imgui::Key::LeftSuper),
+        Scancode::RCtrl => Some(imgui::Key::RightCtrl),
+        Scancode::RShift => Some(imgui::Key::RightShift),
+        Scancode::RAlt => Some(imgui::Key::RightAlt),
+        Scancode::RGui => Some(imgui::Key::RightSuper),
+        _ => None,
+    }
 }

@@ -84,7 +84,7 @@ pub struct DrawCall {
 }
 
 impl MapRenderer {
-    pub fn new(factory: &mut Factory, _view: &RenderTargetView) -> MapRenderer {
+    pub fn new(factory: &mut Factory) -> MapRenderer {
         let pso = factory.create_pipeline_simple(
             include_bytes!("shaders/main_150.glslv"),
             include_bytes!("shaders/main_150.glslf"),
