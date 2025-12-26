@@ -437,7 +437,15 @@ impl Engine {
             let is_declaration = var.declaration.is_some();
             entry.vars.push(extras::ObjectTreeVar {
                 name: name.to_owned(),
-                kind: lsp_types::SymbolKind::FIELD,
+                kind: if var
+                    .declaration
+                    .as_ref()
+                    .map_or(false, |d| d.var_type.flags.is_const())
+                {
+                    lsp_types::SymbolKind::CONSTANT
+                } else {
+                    lsp_types::SymbolKind::FIELD
+                },
                 location: self
                     .convert_location(
                         var.value.location,
@@ -456,7 +464,13 @@ impl Engine {
             for value in proc.value.iter() {
                 entry.procs.push(extras::ObjectTreeProc {
                     name: name.to_owned(),
-                    kind: lsp_types::SymbolKind::METHOD,
+                    kind: if ty.is_root() {
+                        lsp_types::SymbolKind::FUNCTION
+                    } else if is_constructor_name(name) {
+                        lsp_types::SymbolKind::CONSTRUCTOR
+                    } else {
+                        lsp_types::SymbolKind::METHOD
+                    },
                     location: self
                         .convert_location(value.location, &value.docs, &[&ty.path, "/proc/", name])
                         .ok(),
