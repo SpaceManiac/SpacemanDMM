@@ -957,6 +957,7 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         // only used by client.SoundQuery() for now:
         sound/var/offset = int!(0);
         sound/var/len = int!(0);
+        sound/proc/RscFile();
 
         // 516
         sound/var/tmp/atom/atom;
@@ -981,6 +982,7 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         icon/proc/SwapColor(old_rgba, new_rgba);
         icon/proc/Turn(angle);
         icon/proc/Height();
+        icon/proc/RscFile();
 
         matrix;
         matrix/var/a;
