@@ -419,12 +419,23 @@ impl ProcFlags {
         self.contains(ProcFlags::FINAL)
     }
 
-    pub fn to_vec(&self) -> Vec<&'static str> {
-        let mut v = Vec::new();
-        if self.is_final() {
-            v.push("final");
+    pub fn iter(&self) -> impl Iterator<Item = &'static str> {
+        struct ProcFlagsIter(ProcFlags);
+
+        impl Iterator for ProcFlagsIter {
+            type Item = &'static str;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                if self.0.is_final() {
+                    self.0 &= !ProcFlags::FINAL;
+                    Some("final")
+                } else {
+                    None
+                }
+            }
         }
-        v
+
+        ProcFlagsIter(*self)
     }
 }
 
@@ -646,27 +657,38 @@ impl VarTypeFlags {
         !self.intersects(VarTypeFlags::CONST | VarTypeFlags::STATIC | VarTypeFlags::PROTECTED)
     }
 
-    pub fn to_vec(&self) -> Vec<&'static str> {
-        let mut v = Vec::new();
-        if self.is_static() {
-            v.push("static");
+    pub fn iter(&self) -> impl Iterator<Item = &'static str> {
+        struct VarTypeFlagsIter(VarTypeFlags);
+
+        impl Iterator for VarTypeFlagsIter {
+            type Item = &'static str;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                if self.0.is_static() {
+                    self.0 &= !VarTypeFlags::STATIC;
+                    Some("static")
+                } else if self.0.is_const() {
+                    self.0 &= !VarTypeFlags::CONST;
+                    Some("const")
+                } else if self.0.is_tmp() {
+                    self.0 &= !VarTypeFlags::TMP;
+                    Some("tmp")
+                } else if self.0.is_final() {
+                    self.0 &= !VarTypeFlags::FINAL;
+                    Some("final")
+                } else if self.0.is_private() {
+                    self.0 &= !VarTypeFlags::PRIVATE;
+                    Some("SpacemanDMM_private")
+                } else if self.0.is_protected() {
+                    self.0 &= !VarTypeFlags::PROTECTED;
+                    Some("SpacemanDMM_protected")
+                } else {
+                    None
+                }
+            }
         }
-        if self.is_const() {
-            v.push("const");
-        }
-        if self.is_tmp() {
-            v.push("tmp");
-        }
-        if self.is_final() {
-            v.push("final");
-        }
-        if self.is_private() {
-            v.push("SpacemanDMM_private");
-        }
-        if self.is_protected() {
-            v.push("SpacemanDMM_protected");
-        }
-        v
+
+        VarTypeFlagsIter(*self)
     }
 }
 

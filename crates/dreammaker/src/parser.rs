@@ -2888,22 +2888,18 @@ fn reconstruct_path(
 ) -> Vec<Ident> {
     let mut result: Vec<Ident> = Vec::new();
     for entry in node.split('/').skip(1) {
-        result.push(entry.to_owned().into());
+        result.push(Ident::from_nonstatic(entry));
     }
     if let Some(deets) = proc_deets {
-        result.push(deets.kind.name().into());
-        deets
-            .flags
-            .to_vec()
-            .into_iter()
-            .for_each(|elem| result.push(elem.into()));
+        result.push(deets.kind.into());
+        result.extend(deets.flags.iter().map(From::from));
     }
     if let Some(var) = var_type {
-        result.extend(var.flags.to_vec().into_iter().map(From::from));
+        result.extend(var.flags.iter().map(From::from));
         result.extend(var.type_path.iter().cloned());
     }
     if !last.is_empty() {
-        result.push(last.to_owned().into());
+        result.push(Ident::from_nonstatic(last));
     }
     result
 }

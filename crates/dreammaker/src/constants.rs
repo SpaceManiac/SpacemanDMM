@@ -1098,7 +1098,7 @@ impl<'a> ConstantFolder<'a> {
             .collect();
         // Only tricky bit is adding on the type if required
         if let Some(declaration) = proc_ref.get_declaration() {
-            path_elements.push(declaration.kind.name().into());
+            path_elements.push(declaration.kind.into());
         }
         path_elements.push(proc_ref.name().to_owned().into());
         Ok(Constant::Prefab(Box::new(Pop::from(Box::from(

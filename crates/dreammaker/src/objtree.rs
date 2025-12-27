@@ -547,7 +547,7 @@ impl<'o> NavigatePathResult<'o> {
             .collect();
         match self {
             NavigatePathResult::Type(_) => {},
-            NavigatePathResult::ProcGroup(_, kind) => path.push(kind.name().into()),
+            NavigatePathResult::ProcGroup(_, kind) => path.push(kind.into()),
             NavigatePathResult::ProcPath(proc, kind) => {
                 path.push(kind.into());
                 path.push(Ident::from_nonstatic(proc.name()));
