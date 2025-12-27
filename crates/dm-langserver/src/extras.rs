@@ -4,7 +4,16 @@ use foldhash::HashMap;
 
 use lsp_types::notification::*;
 use lsp_types::request::*;
+use lsp_types::SetTraceParams;
 use lsp_types::SymbolKind;
+
+// ----------------------------------------------------------------------------
+// SetTrace variant that VSC sends
+pub enum SetTraceVsc {}
+impl Notification for SetTraceVsc {
+    const METHOD: &'static str = "$/setTraceNotification";
+    type Params = SetTraceParams;
+}
 
 // ----------------------------------------------------------------------------
 // WindowStatus

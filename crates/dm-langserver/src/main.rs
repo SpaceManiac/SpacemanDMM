@@ -34,7 +34,7 @@ mod find_references;
 mod jrpc_io;
 mod symbol_search;
 
-use crate::extras::{QueryObjectTree, Reparse, StartDebugger};
+use crate::extras::{QueryObjectTree, Reparse, SetTraceVsc, StartDebugger};
 use dm::annotation::{Annotation, AnnotationTree};
 use dm::objtree::TypeRef;
 use dm::FileId;
@@ -2411,6 +2411,8 @@ impl Engine {
         Initialized;
         Reparse;
         Cancel;
+        SetTrace;
+        SetTraceVsc;
         DidOpenTextDocument;
         DidCloseTextDocument;
         DidChangeTextDocument;
@@ -2453,6 +2455,15 @@ impl Engine {
     fn Cancel(&mut self, _: N<Cancel>) -> NR {
         // Not implemented, but don't log that.
         Ok(())
+    }
+
+    fn SetTrace(&mut self, _: N<SetTrace>) -> NR {
+        // Not implemented, but don't log that.
+        Ok(())
+    }
+
+    fn SetTraceVsc(&mut self, p: N<SetTrace>) -> NR {
+        self.SetTrace(p)
     }
 
     // ------------------------------------------------------------------------
