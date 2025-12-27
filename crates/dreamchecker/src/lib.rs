@@ -2267,12 +2267,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Term::String(text) => Analysis::from_value(
                 self.objtree,
-                Constant::String(text.as_str().into()),
+                Constant::String(text.clone().into()),
                 type_hint,
             ),
             Term::Resource(text) => Analysis::from_value(
                 self.objtree,
-                Constant::Resource(text.as_str().into()),
+                Constant::Resource(text.clone().into()),
                 type_hint,
             ),
             Term::As(_) => assumption_set![Assumption::IsNum(true)].into(),
@@ -2960,9 +2960,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
                 typeref.get().pretty_path()
             },
-            StaticType::List { list, .. } => {
-                "list"
-            },
+            StaticType::List { list, .. } => "list",
             StaticType::Proc => return Analysis::empty(),
         };
         error(

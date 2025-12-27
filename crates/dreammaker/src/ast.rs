@@ -4,6 +4,7 @@
 use std::fmt;
 use std::iter::FromIterator;
 
+use beef::lean::Cow;
 use get_size::GetSize;
 use get_size_derive::GetSize;
 use phf::phf_map;
@@ -702,12 +703,16 @@ pub type Ident = String;
 // but could be replaced by interning later.
 #[derive(Clone, Eq, PartialEq)]
 pub struct Ident2 {
-    inner: Box<str>,
+    inner: Cow<'static, str>,
 }
 
 impl Ident2 {
     pub fn as_str(&self) -> &str {
         &self.inner
+    }
+
+    pub fn into_owned(self) -> String {
+        self.inner.into_owned()
     }
 }
 
@@ -717,8 +722,8 @@ impl PartialEq<str> for Ident2 {
     }
 }
 
-impl<'a> From<&'a str> for Ident2 {
-    fn from(v: &'a str) -> Self {
+impl From<&'static str> for Ident2 {
+    fn from(v: &'static str) -> Self {
         Ident2 { inner: v.into() }
     }
 }
@@ -726,12 +731,6 @@ impl<'a> From<&'a str> for Ident2 {
 impl From<String> for Ident2 {
     fn from(v: String) -> Self {
         Ident2 { inner: v.into() }
-    }
-}
-
-impl From<Ident2> for String {
-    fn from(v: Ident2) -> Self {
-        v.inner.into()
     }
 }
 
@@ -756,7 +755,11 @@ impl fmt::Debug for Ident2 {
 
 impl GetSize for Ident2 {
     fn get_heap_size(&self) -> usize {
-        self.inner.len()
+        if self.inner.is_owned() {
+            self.inner.len()
+        } else {
+            0
+        }
     }
 }
 
@@ -1541,6 +1544,7 @@ pub static VALID_FILTER_FLAGS: phf::Map<&'static str, (&str, bool, bool, &[&str]
 
 // ----------------------------------------------------------------------------
 // Guard against sizeof regression.
+const _: [(); 0 - !(std::mem::size_of::<Ident2>() <= 16) as usize] = [];
 const _: [(); 0 - !(std::mem::size_of::<Statement>() <= 56) as usize] = [];
 const _: [(); 0 - !(std::mem::size_of::<Expression>() <= 32) as usize] = [];
 const _: [(); 0 - !(std::mem::size_of::<Term>() <= 40) as usize] = [];

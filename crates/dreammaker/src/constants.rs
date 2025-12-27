@@ -820,7 +820,7 @@ impl<'a> ConstantFolder<'a> {
 
         match (op, lhs, rhs) {
             (BinaryOp::Add, String(lhs), String(rhs)) => {
-                Ok(String((std::string::String::from(lhs) + &rhs).into()))
+                Ok(String((lhs.into_owned() + &rhs).into()))
             },
             (BinaryOp::Eq, lhs, rhs) => Ok(Constant::from(lhs == rhs)),
             (BinaryOp::NotEq, lhs, rhs) => Ok(Constant::from(lhs != rhs)),
@@ -888,7 +888,7 @@ impl<'a> ConstantFolder<'a> {
                         )));
                     }
                     match args[0].nameof() {
-                        Some(name) => Constant::string(name),
+                        Some(name) => Constant::string(name.to_owned()),
                         None => {
                             return Err(self.error(
                                 "malformed nameof() call, expression appears to have no name",
@@ -1062,7 +1062,7 @@ impl<'a> ConstantFolder<'a> {
         let mut vars = IndexMap::with_hasher(RandomState::default());
         for (k, v) in input {
             // TODO: find a type annotation by looking up 'k' on the prefab's type
-            vars.insert(String::from(k), self.expr(v, None)?);
+            vars.insert(k.into_owned(), self.expr(v, None)?);
         }
         Ok(vars)
     }
