@@ -395,7 +395,7 @@ fn run_inner(context: &Context, objtree: &ObjectTree, cli: bool) {
 // Analysis environment
 
 struct BadOverride {
-    missing: Vec<String>,
+    missing: Vec<Ident>,
     location: Location,
 }
 
@@ -408,9 +408,9 @@ struct CalledAt {
 struct KwargInfo {
     location: Location,
     // kwarg name -> location that the proc is called with that arg
-    called_at: BTreeMap<String, CalledAt>,
+    called_at: BTreeMap<Ident, CalledAt>,
     // Debug(ProcRef) -> its definition location
-    bad_overrides_at: BTreeMap<String, BadOverride>,
+    bad_overrides_at: BTreeMap<Ident, BadOverride>,
 }
 
 /// Struct for SpacemanDMM_* directives
@@ -993,7 +993,7 @@ impl<'o> AnalyzeObjectTree<'o> {
 
     /// Check and build a list of bad overrides of kwargs for a ProcRef
     pub fn check_kwargs(&mut self, proc: ProcRef) {
-        let param_names: HashSet<&String> = proc.parameters.iter().map(|p| &p.name).collect();
+        let param_names: HashSet<&Ident> = proc.parameters.iter().map(|p| &p.name).collect();
 
         // Start at the parent - calls which immediately resolve to bad kwargs
         // error earlier in the process.
@@ -1010,7 +1010,7 @@ impl<'o> AnalyzeObjectTree<'o> {
 
                 if !missing.is_empty() {
                     kwargs.bad_overrides_at.insert(
-                        proc.ty().path.to_owned(),
+                        proc.ty().path.clone().into(),
                         BadOverride {
                             missing,
                             location: proc.location,
@@ -1073,7 +1073,7 @@ impl<'o> AnalyzeObjectTree<'o> {
         }
     }
 
-    fn static_type(&mut self, location: Location, of: &[String]) -> StaticType<'o> {
+    fn static_type(&mut self, location: Location, of: &[Ident]) -> StaticType<'o> {
         match static_type(self.objtree, location, of) {
             Ok(s) => s,
             Err(e) => {
@@ -1087,7 +1087,7 @@ impl<'o> AnalyzeObjectTree<'o> {
 fn static_type<'o>(
     objtree: &'o ObjectTree,
     location: Location,
-    mut of: &[String],
+    mut of: &[Ident],
 ) -> Result<StaticType<'o>, DMError> {
     while !of.is_empty()
         && [
@@ -1338,29 +1338,29 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     }
 
     pub fn run(&mut self, block: &'o [Spanned<Statement>]) {
-        let mut local_vars = HashMap::<String, LocalVar>::new();
-        local_vars.insert(".".to_owned(), Analysis::empty().into());
+        let mut local_vars = HashMap::<Ident, LocalVar>::new();
+        local_vars.insert(".".into(), Analysis::empty().into());
         local_vars.insert(
-            "args".to_owned(),
+            "args".into(),
             Analysis::from_static_type_impure(self.objtree.expect("/list")).into(),
         );
         local_vars.insert(
-            "usr".to_owned(),
+            "usr".into(),
             Analysis::from_static_type(self.objtree.expect("/mob")).into(),
         );
         local_vars.insert(
-            "callee".to_owned(),
+            "callee".into(),
             Analysis::from_static_type(self.objtree.expect("/callee")).into(),
         );
         local_vars.insert(
-            "caller".to_owned(),
+            "caller".into(),
             Analysis::from_static_type(self.objtree.expect("/callee")).into(),
         );
         if !self.ty.is_root() {
-            local_vars.insert("src".to_owned(), Analysis::from_static_type(self.ty).into());
+            local_vars.insert("src".into(), Analysis::from_static_type(self.ty).into());
         }
         local_vars.insert(
-            "global".to_owned(),
+            "global".into(),
             Analysis {
                 static_ty: StaticType::Type(self.objtree.root()),
                 aset: assumption_set![Assumption::IsNull(false)],
@@ -1375,7 +1375,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             let mut analysis = self.static_type(param.location, &param.var_type.type_path);
             analysis.is_impure = Some(true); // all params are impure
             local_vars.insert(
-                param.name.to_owned(),
+                param.name.clone(),
                 LocalVar {
                     location: self.proc_ref.location,
                     analysis,
@@ -1450,7 +1450,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     fn visit_block(
         &mut self,
         block: &'o [Spanned<Statement>],
-        local_vars: &mut HashMap<String, LocalVar<'o>>,
+        local_vars: &mut HashMap<Ident, LocalVar<'o>>,
         mut setting_allowed: bool,
     ) -> ControlFlow {
         let mut term = ControlFlow::allfalse();
@@ -1515,7 +1515,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         &mut self,
         location: Location,
         statement: &'o Statement,
-        local_vars: &mut HashMap<String, LocalVar<'o>>,
+        local_vars: &mut HashMap<Ident, LocalVar<'o>>,
     ) -> ControlFlow {
         match statement {
             Statement::Expr(expr) => {
@@ -2032,7 +2032,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         &mut self,
         location: Location,
         var: &'o VarStatement,
-        local_vars: &mut HashMap<String, LocalVar<'o>>,
+        local_vars: &mut HashMap<Ident, LocalVar<'o>>,
     ) {
         self.visit_var(
             location,
@@ -2047,9 +2047,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         &mut self,
         location: Location,
         var_type: &VarType,
-        name: &str,
+        name: &Ident,
         value: Option<&'o Expression>,
-        local_vars: &mut HashMap<String, LocalVar<'o>>,
+        local_vars: &mut HashMap<Ident, LocalVar<'o>>,
     ) {
         // Calculate type hint
         let static_type = self.env.static_type(location, &var_type.type_path);
@@ -2063,7 +2063,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         analysis.static_ty = static_type;
 
         // Save var to locals
-        local_vars.insert(name.to_owned(), LocalVar { location, analysis });
+        local_vars.insert(name.clone(), LocalVar { location, analysis });
     }
 
     fn visit_expression(
@@ -2071,7 +2071,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         location: Location,
         expression: &'o Expression,
         type_hint: Option<TypeRef<'o>>,
-        local_vars: &mut HashMap<String, LocalVar<'o>>,
+        local_vars: &mut HashMap<Ident, LocalVar<'o>>,
     ) -> Analysis<'o> {
         match expression {
             Expression::Base { term, follow } => {
@@ -2255,7 +2255,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         location: Location,
         term: &'o Term,
         type_hint: Option<TypeRef<'o>>,
-        local_vars: &mut HashMap<String, LocalVar<'o>>,
+        local_vars: &mut HashMap<Ident, LocalVar<'o>>,
     ) -> Analysis<'o> {
         match term {
             Term::Null => Analysis::null(),
@@ -2286,14 +2286,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     // Strictly speaking "type" might be any subset of our current type, but let's return something useful
                     // so that `nameof(type::foo)` is sensible.
                     let ty = self.ty;
-                    let pop = dm::constants::Pop::from(
-                        ty.path
-                            .split('/')
-                            .skip(1)
-                            .map(ToOwned::to_owned)
-                            .collect::<Vec<_>>()
-                            .into_boxed_slice(),
-                    );
+                    let pop = dm::constants::Pop::from_path_str(&ty.path);
                     Analysis {
                         static_ty: StaticType::None,
                         aset: assumption_set![Assumption::IsPath(true, ty)],
@@ -2331,14 +2324,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Term::Prefab(prefab) => {
                 if let Some(nav) = self.ty.navigate_path(&prefab.path) {
                     let ty = nav.ty(); // TODO: handle proc/verb paths here
-                    let pop = dm::constants::Pop::from(
-                        ty.path
-                            .split('/')
-                            .skip(1)
-                            .map(ToOwned::to_owned)
-                            .collect::<Vec<_>>()
-                            .into_boxed_slice(),
-                    );
+                    let pop = dm::constants::Pop::from_path_str(&ty.path);
                     Analysis {
                         static_ty: StaticType::None,
                         aset: assumption_set![Assumption::IsPath(true, nav.ty())],
@@ -2555,15 +2541,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
 
             Term::__TYPE__ => {
-                let pop = dm::constants::Pop::from(
-                    self.ty
-                        .path
-                        .split('/')
-                        .skip(1)
-                        .map(ToOwned::to_owned)
-                        .collect::<Vec<_>>()
-                        .into_boxed_slice(),
-                );
+                let pop = dm::constants::Pop::from_path_str(&self.ty.path);
                 Analysis {
                     static_ty: StaticType::None,
                     aset: assumption_set![Assumption::IsPath(true, self.ty)],
@@ -2580,15 +2558,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 let Some(implied_type) = type_hint else {
                     return Analysis::empty();
                 };
-                let pop = dm::constants::Pop::from(
-                    implied_type
-                        .path
-                        .split('/')
-                        .skip(1)
-                        .map(ToOwned::to_owned)
-                        .collect::<Vec<_>>()
-                        .into_boxed_slice(),
-                );
+                let pop = dm::constants::Pop::from_path_str(&self.ty.path);
                 Analysis {
                     static_ty: StaticType::None,
                     aset: assumption_set![Assumption::IsPath(true, self.ty)],
@@ -2605,7 +2575,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         location: Location,
         typepath: TypeRef<'o>,
         args: &'o Option<Box<[Expression]>>,
-        local_vars: &mut HashMap<String, LocalVar<'o>>,
+        local_vars: &mut HashMap<Ident, LocalVar<'o>>,
     ) -> Analysis<'o> {
         if let Some(new_proc) = typepath.get_proc("New") {
             self.visit_call(
@@ -2663,7 +2633,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         location: Location,
         lhs: Analysis<'o>,
         rhs: &'o Follow,
-        local_vars: &mut HashMap<String, LocalVar<'o>>,
+        local_vars: &mut HashMap<Ident, LocalVar<'o>>,
     ) -> Analysis<'o> {
         match rhs {
             Follow::Unary(op) => self.visit_unary(lhs, op, location, local_vars),
@@ -2681,12 +2651,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         rhs,
                     } = arg
                     {
-                        match lhs.as_term() {
-                            Some(Term::Ident(name)) | Some(Term::String(name)) => {
+                        if let Some(term) = lhs.as_term() {
+                            if let Some(_name) = term.as_kwarg_key() {
                                 // Don't visit_expression the kwarg key.
                                 argument_value = rhs;
-                            },
-                            _ => {},
+                            }
                         }
                     }
                     self.visit_expression(location, argument_value, None, local_vars);
@@ -2910,18 +2879,18 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 };
 
                 // Gonna build the proc's path
-                let mut path_elements: Vec<String> = real_type
+                let mut path_elements: Vec<Ident> = real_type
                     .get()
                     .path
                     .split('/')
                     .filter(|elem| !elem.is_empty())
-                    .map(|segment| segment.to_string())
+                    .map(|segment| Ident::from_nonstatic(segment))
                     .collect();
                 // Only tricky bit is adding on the type if required
                 if let Some(declaration) = decl.get_declaration() {
-                    path_elements.push(declaration.kind.name().to_string());
+                    path_elements.push(declaration.kind.into());
                 }
-                path_elements.push(decl.name().to_string());
+                path_elements.push(Ident::from_nonstatic(decl.name()));
                 let path_const = dm::constants::Pop::from(path_elements.into_boxed_slice());
                 Analysis {
                     static_ty: StaticType::None,
@@ -2940,7 +2909,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         rhs: Analysis<'o>,
         location: Location,
         operator: &str,
-        local_vars: &mut HashMap<String, LocalVar<'o>>,
+        local_vars: &mut HashMap<Ident, LocalVar<'o>>,
     ) -> Analysis<'o> {
         if let Some(impurity) = rhs.is_impure {
             if impurity {
@@ -2976,7 +2945,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         rhs: Analysis<'o>,
         op: &UnaryOp,
         location: Location,
-        local_vars: &mut HashMap<String, LocalVar<'o>>,
+        local_vars: &mut HashMap<Ident, LocalVar<'o>>,
     ) -> Analysis<'o> {
         match op {
             // !x just evaluates the "truthiness" of x and negates it, returning 1 or 0
@@ -3123,7 +3092,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         proc: ProcRef<'o>,
         args: &'o [Expression],
         is_exact: bool,
-        local_vars: &mut HashMap<String, LocalVar<'o>>,
+        local_vars: &mut HashMap<Ident, LocalVar<'o>>,
     ) -> Analysis<'o> {
         self.env.call_tree.entry(self.proc_ref).or_default().push((
             proc,
@@ -3163,8 +3132,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     lhs,
                     rhs,
                 } => {
-                    match lhs.as_term() {
-                        Some(Term::Ident(name)) | Some(Term::String(name)) => {
+                    if let Some(term) = lhs.as_term() {
+                        if let Some(name) = term.as_kwarg_key() {
                             // Don't visit_expression the kwarg key.
                             any_kwargs_yet = true;
                             this_kwarg = Some(name);
@@ -3204,15 +3173,14 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                                     })
                                     .called_at
                                     // TODO: use a more accurate location
-                                    .entry(name.clone())
+                                    .entry(Ident::from_nonstatic(name))
                                     .and_modify(|ca| ca.others += 1)
                                     .or_insert(CalledAt {
                                         location,
                                         others: 0,
                                     });
                             }
-                        },
-                        _ => {},
+                        }
                     }
                 },
                 expr => {
@@ -3245,8 +3213,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
             let analysis = self.visit_expression(location, argument_value, None, local_vars);
             if let Some(kw) = this_kwarg {
-                param_name_map.insert(kw.as_str(), analysis);
-                param_expr_map.insert(kw.as_str(), argument_value);
+                param_name_map.insert(kw, analysis);
+                param_expr_map.insert(kw, argument_value);
             } else {
                 param_idx_map.insert(param_idx, analysis);
                 param_idx += 1;
@@ -3364,7 +3332,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         &mut self,
         location: Location,
         args: &'o [Expression],
-        local_vars: &mut HashMap<String, LocalVar<'o>>,
+        local_vars: &mut HashMap<Ident, LocalVar<'o>>,
     ) {
         for arg in args {
             let mut argument_value = arg;
@@ -3374,12 +3342,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 rhs,
             } = arg
             {
-                match lhs.as_term() {
-                    Some(Term::Ident(_name)) | Some(Term::String(_name)) => {
+                if let Some(term) = lhs.as_term() {
+                    if let Some(_name) = term.as_kwarg_key() {
                         // Don't visit_expression the kwarg key.
                         argument_value = rhs;
-                    },
-                    _ => {},
+                    }
                 }
             }
 
@@ -3387,7 +3354,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
     }
 
-    fn static_type(&mut self, location: Location, of: &[String]) -> Analysis<'o> {
+    fn static_type(&mut self, location: Location, of: &[Ident]) -> Analysis<'o> {
         Analysis::from(self.env.static_type(location, of))
     }
 

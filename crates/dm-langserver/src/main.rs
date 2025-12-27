@@ -36,6 +36,7 @@ mod symbol_search;
 
 use crate::extras::{QueryObjectTree, Reparse, SetTraceVsc, StartDebugger};
 use dm::annotation::{Annotation, AnnotationTree};
+use dm::ast::Ident;
 use dm::objtree::TypeRef;
 use dm::FileId;
 use foldhash::{HashMap, HashMapExt, HashSet, HashSetExt};
@@ -436,7 +437,7 @@ impl Engine {
         for (name, var) in ty.vars.iter() {
             let is_declaration = var.declaration.is_some();
             entry.vars.push(extras::ObjectTreeVar {
-                name: name.to_owned(),
+                name: name.to_string(),
                 kind: if var
                     .declaration
                     .as_ref()
@@ -463,7 +464,7 @@ impl Engine {
             let mut is_verb = proc.declaration.as_ref().map(|d| d.kind.is_verb());
             for value in proc.value.iter() {
                 entry.procs.push(extras::ObjectTreeProc {
-                    name: name.to_owned(),
+                    name: name.to_string(),
                     kind: if ty.is_root() {
                         lsp_types::SymbolKind::FUNCTION
                     } else if is_constructor_name(name) {
@@ -917,7 +918,7 @@ impl Engine {
         UnscopedVar::None
     }
 
-    fn find_scoped_type<'b, I>(&'b self, iter: &I, priors: &[String]) -> Option<TypeRef<'b>>
+    fn find_scoped_type<'b, I>(&'b self, iter: &I, priors: &[Ident]) -> Option<TypeRef<'b>>
     where
         I: Iterator<Item = (Span, &'b Annotation)> + Clone,
     {
@@ -1466,7 +1467,7 @@ impl Engine {
             for (range, (name, define)) in defines.iter() {
                 if query.matches_define(name) {
                     results.push(SymbolInformation {
-                        name: name.to_owned(),
+                        name: name.to_string(),
                         kind: SymbolKind::CONSTANT,
                         location: self.convert_location(
                             range.start,
@@ -1500,7 +1501,7 @@ impl Engine {
                 if let Some(decl) = tv.declaration.as_ref() {
                     if query.matches_var(var_name) {
                         results.push(SymbolInformation {
-                            name: var_name.clone(),
+                            name: var_name.to_string(),
                             kind: SymbolKind::FIELD,
                             location: self.convert_location(
                                 decl.location,
@@ -1519,7 +1520,7 @@ impl Engine {
                 if let Some(decl) = pv.declaration.as_ref() {
                     if query.matches_proc(proc_name, decl.kind) {
                         results.push(SymbolInformation {
-                            name: proc_name.clone(),
+                            name: proc_name.to_string(),
                             kind: if ty.is_root() {
                                 SymbolKind::FUNCTION
                             } else if is_constructor_name(proc_name.as_str()) {
@@ -1858,7 +1859,7 @@ impl Engine {
             column: tdp.position.character as u16 + 1,
         };
 
-        let mut type_path: &[String] = &[];
+        let mut type_path: &[Ident] = &[];
 
         let iter = annotations.get_location(location);
         match_annotation! { iter;
@@ -2072,7 +2073,7 @@ impl Engine {
                             });
                         } else {
                             params.push(ParameterInformation {
-                                label: ParameterLabel::Simple(param.name.clone()),
+                                label: ParameterLabel::Simple(param.name.to_string()),
                                 documentation: None,
                             });
                         }
@@ -2108,10 +2109,10 @@ impl Engine {
         &mut self,
         params: P<DocumentSymbolRequest>,
     ) -> R<DocumentSymbolRequest> {
-        fn name_and_detail(path: &[String], skip_front: usize) -> (String, Option<String>) {
+        fn name_and_detail(path: &[Ident], skip_front: usize) -> (String, Option<String>) {
             let (name, rest) = path.split_last().unwrap();
             (
-                name.to_owned(),
+                name.to_string(),
                 rest.get(skip_front..).and_then(|i| {
                     i.iter()
                         .rev()
@@ -2121,7 +2122,7 @@ impl Engine {
                                 && dm::ast::VarTypeFlags::from_name(x).is_none()
                                 && *x != "var"
                         })
-                        .map(ToOwned::to_owned)
+                        .map(|i| i.to_string())
                 }),
             )
         }
@@ -2206,7 +2207,7 @@ impl Engine {
                     },
                     Annotation::LocalVarScope(_, ref name) => {
                         result.push(DocumentSymbol {
-                            name: name.to_owned(),
+                            name: name.to_string(),
                             detail: None,
                             kind: SymbolKind::VARIABLE,
                             tags: None,
@@ -2217,7 +2218,7 @@ impl Engine {
                         });
                     },
                     Annotation::MacroDefinition(ref name) => result.push(DocumentSymbol {
-                        name: name.to_owned(),
+                        name: name.to_string(),
                         detail: None,
                         kind: SymbolKind::CONSTANT,
                         tags: None,

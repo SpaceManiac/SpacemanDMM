@@ -164,7 +164,7 @@ impl DebugDatabaseBuilder {
                     line_numbers.entry(pv.location.file).or_default().push((
                         pv.location.line.into(),
                         ty.path.to_owned(),
-                        name.to_owned(),
+                        name.to_string(),
                         override_id,
                     ));
                 }

@@ -8,7 +8,7 @@ extern crate walkdir;
 mod markdown;
 mod template;
 
-use dm::ast::{InputType, ProcReturnType};
+use dm::ast::{Ident, InputType, ProcReturnType};
 use dm::objtree::ObjectTree;
 use foldhash::HashSet;
 use maud::{Markup, PreEscaped};
@@ -835,7 +835,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn find_return_type(code: &dm::ast::Block) -> Option<Vec<String>> {
+fn find_return_type(code: &dm::ast::Block) -> Option<Vec<Ident>> {
     for stmt in code.iter() {
         if let dm::ast::Statement::Setting {
             name,
@@ -1130,7 +1130,7 @@ fn is_visible(entry: &walkdir::DirEntry) -> bool {
         .unwrap_or(true)
 }
 
-fn format_type_path(vec: &[String]) -> String {
+fn format_type_path(vec: &[Ident]) -> String {
     if vec.is_empty() {
         String::new()
     } else {
@@ -1426,7 +1426,7 @@ impl<'a> Environment<'a> {
         ))
     }
 
-    fn linkify_type_array(&self, a: &[String]) -> Markup {
+    fn linkify_type_array(&self, a: &[Ident]) -> Markup {
         PreEscaped(linkify_type(
             self.all_type_names,
             a.iter().map(|x| x.as_str()),
@@ -1487,7 +1487,7 @@ struct VarType<'a> {
     is_final: bool,
     //is_private: bool,
     //is_protected: bool,
-    path: &'a [String],
+    path: &'a [Ident],
     input_type: InputType,
 }
 
@@ -1502,7 +1502,7 @@ struct Proc {
 }
 
 struct Param {
-    name: String,
+    name: Ident,
     type_path: String,
     input_type: Option<InputType>,
 }
@@ -1521,7 +1521,7 @@ struct Module<'a> {
 struct Define<'a> {
     docs: DocBlock,
     has_params: bool,
-    params: &'a [String],
+    params: &'a [Ident],
     is_variadic: bool,
     line: u32,
 }

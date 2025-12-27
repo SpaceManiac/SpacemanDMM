@@ -950,7 +950,7 @@ impl<'ctx> Lexer<'ctx> {
         }
     }
 
-    fn read_ident(&mut self, first: u8) -> (String, bool) {
+    fn read_ident(&mut self, first: u8) -> (Ident, bool) {
         let start = self.input.offset - 1;
         let mut end = start + 1;
         assert_eq!(first, self.input.inner[start]);
@@ -968,7 +968,7 @@ impl<'ctx> Lexer<'ctx> {
             }
         }
         let ident = &self.input.inner[start..end];
-        (from_utf8_or_latin1_borrowed(ident).into_owned(), ws)
+        (from_utf8_or_latin1_borrowed(ident).into_owned().into(), ws)
     }
 
     fn read_resource(&mut self) -> String {

@@ -2,6 +2,8 @@
 
 use builtins_proc_macro::builtins_table;
 
+use crate::ast::Ident;
+
 use super::constants::Constant;
 use super::docs::{BuiltinDocs, DocCollection};
 use super::objtree::*;
@@ -19,18 +21,18 @@ pub fn default_defines(defines: &mut DefineMap) {
 
     // #define EXCEPTION(value) new /exception(value)
     defines.insert(
-        "EXCEPTION".to_owned(),
+        "EXCEPTION".into(),
         (
             location,
             Define::Function {
-                params: vec!["value".to_owned()],
+                params: vec!["value".into()],
                 variadic: false,
                 subst: vec![
-                    Ident("new".to_owned(), true),
+                    Ident("new".into(), true),
                     Punct(Punctuation::Slash),
-                    Ident("exception".to_owned(), false),
+                    Ident("exception".into(), false),
                     Punct(Punctuation::LParen),
-                    Ident("value".to_owned(), false),
+                    Ident("value".into(), false),
                     Punct(Punctuation::RParen),
                 ],
                 docs: Default::default(),
@@ -40,30 +42,30 @@ pub fn default_defines(defines: &mut DefineMap) {
 
     // #define ASSERT(expression) if (!(expression)) { CRASH("[__FILE__]:[__LINE__]:Assertion Failed: [#X]") }
     defines.insert(
-        "ASSERT".to_owned(),
+        "ASSERT".into(),
         (
             location,
             Define::Function {
-                params: vec!["expression".to_owned()],
+                params: vec!["expression".into()],
                 variadic: false,
                 subst: vec![
-                    Ident("if".to_owned(), true),
+                    Ident("if".into(), true),
                     Punct(Punctuation::LParen),
                     Punct(Punctuation::Not),
                     Punct(Punctuation::LParen),
-                    Ident("expression".to_owned(), false),
+                    Ident("expression".into(), false),
                     Punct(Punctuation::RParen),
                     Punct(Punctuation::RParen),
                     Punct(Punctuation::LBrace),
-                    Ident("CRASH".to_owned(), false),
+                    Ident("CRASH".into(), false),
                     Punct(Punctuation::LParen),
                     InterpStringBegin("".to_owned()),
-                    Ident("__FILE__".to_owned(), false),
-                    InterpStringPart(":".to_owned()),
-                    Ident("__LINE__".to_owned(), false),
+                    Ident("__FILE__".into(), false),
+                    InterpStringPart(":".into()),
+                    Ident("__LINE__".into(), false),
                     InterpStringPart(":Assertion Failed: ".to_owned()),
                     Punct(Punctuation::Hash),
-                    Ident("expression".to_owned(), false),
+                    Ident("expression".into(), false),
                     InterpStringEnd("".to_owned()),
                     Punct(Punctuation::RParen),
                     Punct(Punctuation::RBrace),
@@ -76,10 +78,10 @@ pub fn default_defines(defines: &mut DefineMap) {
     // constants
     macro_rules! c {
         ($($i:ident = $($x:expr),*;)*) => {
-            for (name, value) in &[
+            for &(name, ref value) in &[
                 $((stringify!($i), [$($x,)*]),)*
             ] {
-                let previous = defines.insert(name.to_string(), (location, Define::Constant { subst: value.to_vec(), docs: Default::default() }));
+                let previous = defines.insert(name.into(), (location, Define::Constant { subst: value.to_vec(), docs: Default::default() }));
                 assert!(previous.is_none(), "redefined: {}", name);
             }
         }
@@ -225,7 +227,7 @@ pub fn default_defines(defines: &mut DefineMap) {
 pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
     fn path(path: &'static [&'static str]) -> Constant {
         Constant::Prefab(Box::new(super::constants::Pop {
-            path: path.iter().copied().map(String::from).collect::<Box<[_]>>(),
+            path: path.iter().copied().map(Ident::from).collect::<Box<[_]>>(),
             vars: Default::default(),
         }))
     }

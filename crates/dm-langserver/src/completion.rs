@@ -5,7 +5,7 @@ use foldhash::{HashSet, HashSetExt};
 use lsp_types::*;
 
 use dm::annotation::Annotation;
-use dm::ast::PathOp;
+use dm::ast::{Ident, PathOp};
 use dm::objtree::{ProcValue, TypeProc, TypeRef, TypeVar};
 
 use crate::symbol_search::contains;
@@ -103,7 +103,7 @@ fn item_documentation(docs: &dm::docs::DocCollection) -> Option<Documentation> {
 
 fn items_ty<'a>(
     results: &mut Vec<CompletionItem>,
-    skip: &mut HashSet<(&str, &'a String)>,
+    skip: &mut HashSet<(&str, &'a str)>,
     ty: TypeRef<'a>,
     query: &str,
 ) {
@@ -124,7 +124,7 @@ fn items_ty<'a>(
         }
         if contains(name, query) {
             results.push(CompletionItem {
-                insert_text: Some(name.to_owned()),
+                insert_text: Some(name.to_string()),
                 ..item_proc(ty, name, proc)
             });
         }
@@ -134,7 +134,7 @@ fn items_ty<'a>(
 pub fn combine_tree_path<'a, I>(
     iter: &I,
     mut absolute: bool,
-    mut parts: &'a [String],
+    mut parts: &'a [Ident],
 ) -> impl Iterator<Item = &'a str>
 where
     I: Iterator<Item = (Span, &'a Annotation)> + Clone,
@@ -175,7 +175,7 @@ impl Engine {
     pub fn follow_type_path<'b, I>(
         &'b self,
         iter: &I,
-        mut parts: &'b [(PathOp, String)],
+        mut parts: &'b [(PathOp, Ident)],
     ) -> Option<TypePathResult<'b>>
     where
         I: Iterator<Item = (Span, &'b Annotation)> + Clone,
@@ -320,7 +320,7 @@ impl Engine {
         &'b self,
         results: &mut Vec<CompletionItem>,
         iter: &I,
-        parts: &'b [(PathOp, String)],
+        parts: &'b [(PathOp, Ident)],
         _last_op: PathOp,
         query: &str,
     ) where
@@ -419,7 +419,7 @@ impl Engine {
             if let Annotation::LocalVarScope(_var_type, name) = annotation {
                 if contains(name, query) {
                     results.push(CompletionItem {
-                        label: name.clone(),
+                        label: name.as_str().to_owned(),
                         kind: Some(CompletionItemKind::VARIABLE),
                         detail: Some("(local)".to_owned()),
                         ..Default::default()
@@ -436,7 +436,7 @@ impl Engine {
                     for param in value.parameters.iter() {
                         if contains(&param.name, query) {
                             results.push(CompletionItem {
-                                label: param.name.clone(),
+                                label: param.name.as_str().to_owned(),
                                 kind: Some(CompletionItemKind::VARIABLE),
                                 detail: Some("(parameter)".to_owned()),
                                 ..Default::default()
@@ -453,7 +453,7 @@ impl Engine {
             for (_, (name, define)) in defines.iter() {
                 if contains(name, query) {
                     results.push(CompletionItem {
-                        label: name.to_owned(),
+                        label: name.as_str().to_owned(),
                         kind: Some(CompletionItemKind::CONSTANT),
                         detail: Some(define.display_with_name(name).to_string()),
                         documentation: item_documentation(define.docs()),
@@ -476,7 +476,7 @@ impl Engine {
         &'b self,
         results: &mut Vec<CompletionItem>,
         iter: &I,
-        priors: &[String],
+        priors: &[Ident],
         query: &str,
     ) where
         I: Iterator<Item = (Span, &'b Annotation)> + Clone,

@@ -30,6 +30,12 @@ pub struct Pop {
     pub vars: IndexMap<Ident, Constant, RandomState>,
 }
 
+impl Pop {
+    pub fn from_path_str(path: &str) -> Self {
+        Self::from(treepath_from_str(path))
+    }
+}
+
 impl PartialEq for Pop {
     fn eq(&self, other: &Self) -> bool {
         self.path == other.path && self.vars == other.vars
@@ -91,9 +97,9 @@ pub enum Constant {
     /// A prefab literal.
     Prefab(Box<Pop>),
     /// A string literal.
-    String(Ident2),
+    String(Ident),
     /// A resource literal.
-    Resource(Ident2),
+    Resource(Ident),
     /// A floating-point (or integer) literal, following BYOND's rules.
     Float(f32),
 }
@@ -183,7 +189,7 @@ impl Constant {
     }
 
     #[inline]
-    pub fn string<S: Into<Ident2>>(s: S) -> Constant {
+    pub fn string<S: Into<Ident>>(s: S) -> Constant {
         Constant::String(s.into())
     }
 
@@ -490,7 +496,7 @@ pub fn preprocessor_evaluate(
 /// Evaluate all the type-level variables in an object tree into constants.
 pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree) {
     for ty in tree.node_indices() {
-        let keys: Vec<String> = tree[ty].vars.keys().cloned().collect();
+        let keys: Vec<Ident> = tree[ty].vars.keys().cloned().collect();
         for key in keys {
             if !tree[ty].get_var_declaration(&key, tree).is_none_or(|x| {
                 x.var_type.is_const_evaluable()
@@ -930,14 +936,7 @@ impl<'a> ConstantFolder<'a> {
                 "type" => {
                     if let Some(obj_tree) = &self.tree {
                         let typeval = TypeRef::new(obj_tree, self.ty).get();
-                        let pop = Pop::from(
-                            typeval
-                                .path
-                                .split('/')
-                                .filter(|elem| !elem.is_empty())
-                                .map(|segment| segment.to_string())
-                                .collect::<TreePath>(),
-                        );
+                        let pop = Pop::from_path_str(&typeval.path);
                         Constant::Prefab(Box::new(pop))
                     } else {
                         return Err(self.error("no type context".to_owned()));
@@ -949,14 +948,7 @@ impl<'a> ConstantFolder<'a> {
                         let Some(parent_type) = typeref.parent_type() else {
                             return Err(self.error(format!("no parent type for {typeref}")));
                         };
-                        let pop = Pop::from(
-                            parent_type
-                                .path
-                                .split('/')
-                                .filter(|elem| !elem.is_empty())
-                                .map(|segment| segment.to_string())
-                                .collect::<TreePath>(),
-                        );
+                        let pop = Pop::from_path_str(&parent_type.path);
                         Constant::Prefab(Box::new(pop))
                     } else {
                         return Err(self.error("no type context".to_owned()));
@@ -972,14 +964,7 @@ impl<'a> ConstantFolder<'a> {
             Term::__TYPE__ => {
                 if let Some(obj_tree) = &self.tree {
                     let typeval = TypeRef::new(obj_tree, self.ty).get();
-                    let pop = Pop::from(
-                        typeval
-                            .path
-                            .split('/')
-                            .filter(|elem| !elem.is_empty())
-                            .map(|segment| segment.to_string())
-                            .collect::<TreePath>(),
-                    );
+                    let pop = Pop::from_path_str(&typeval.path);
                     Constant::Prefab(Box::new(pop))
                 } else {
                     return Err(self.error("No type context".to_owned()));
@@ -1056,13 +1041,13 @@ impl<'a> ConstantFolder<'a> {
 
     fn vars(
         &mut self,
-        input: Vec<(Ident2, Expression)>,
+        input: Vec<(Ident, Expression)>,
     ) -> Result<IndexMap<Ident, Constant, RandomState>, DMError> {
         // Visit the vars recursively.
         let mut vars = IndexMap::with_hasher(RandomState::default());
         for (k, v) in input {
             // TODO: find a type annotation by looking up 'k' on the prefab's type
-            vars.insert(k.into_owned(), self.expr(v, None)?);
+            vars.insert(k.clone(), self.expr(v, None)?);
         }
         Ok(vars)
     }
@@ -1104,18 +1089,18 @@ impl<'a> ConstantFolder<'a> {
             return Err(self.error(format!("unknown proc: {name}")));
         };
         // Gonna build the proc's path
-        let mut path_elements: Vec<String> = proc_type
+        let mut path_elements: Vec<Ident> = proc_type
             .get()
             .path
             .split('/')
             .filter(|elem| !elem.is_empty())
-            .map(|segment| segment.to_string())
+            .map(|segment| Ident::from_nonstatic(segment))
             .collect();
         // Only tricky bit is adding on the type if required
         if let Some(declaration) = proc_ref.get_declaration() {
-            path_elements.push(declaration.kind.name().to_string());
+            path_elements.push(declaration.kind.name().into());
         }
-        path_elements.push(proc_ref.name().to_string());
+        path_elements.push(proc_ref.name().to_owned().into());
         Ok(Constant::Prefab(Box::new(Pop::from(Box::from(
             path_elements,
         )))))

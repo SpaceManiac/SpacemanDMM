@@ -1,7 +1,9 @@
 //! The DM abstract syntax tree.
 //!
 //! Most AST types can be pretty-printed using the `Display` trait.
+use std::borrow::Borrow;
 use std::fmt;
+use std::hash::Hash;
 use std::iter::FromIterator;
 
 use beef::lean::Cow;
@@ -695,18 +697,18 @@ impl fmt::Display for VarTypeFlags {
 // ----------------------------------------------------------------------------
 // Helper types
 
-// Original `Ident` is an alias for `String`.
-pub type Ident = String;
-
 // Ident2 is an opaque type which promises a limited interface.
-// It's a `Box<str>` for now (smaller than `Ident` by 8 bytes),
-// but could be replaced by interning later.
-#[derive(Clone, Eq, PartialEq)]
-pub struct Ident2 {
+// Its implementation can be modified as Cow/interning strategy changes.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Default, Hash)]
+pub struct Ident {
     inner: Cow<'static, str>,
 }
 
-impl Ident2 {
+impl Ident {
+    pub fn from_nonstatic(str: &str) -> Self {
+        str.to_owned().into()
+    }
+
     pub fn as_str(&self) -> &str {
         &self.inner
     }
@@ -714,46 +716,86 @@ impl Ident2 {
     pub fn into_owned(self) -> String {
         self.inner.into_owned()
     }
+
+    pub fn to_string(&self) -> String {
+        self.as_str().to_owned()
+    }
 }
 
-impl PartialEq<str> for Ident2 {
+impl AsRef<str> for Ident {
+    fn as_ref(&self) -> &str {
+        self.inner.borrow()
+    }
+}
+
+impl Borrow<str> for Ident {
+    fn borrow(&self) -> &str {
+        self.inner.borrow()
+    }
+}
+
+impl PartialEq<str> for Ident {
     fn eq(&self, other: &str) -> bool {
         &*self.inner == other
     }
 }
 
-impl From<&'static str> for Ident2 {
+impl<'a> PartialEq<&'a str> for Ident {
+    fn eq(&self, other: &&'a str) -> bool {
+        &*self.inner == *other
+    }
+}
+
+impl PartialEq<Ident> for str {
+    fn eq(&self, other: &Ident) -> bool {
+        &*other.inner == self
+    }
+}
+
+impl<'a> PartialEq<Ident> for &'a str {
+    fn eq(&self, other: &Ident) -> bool {
+        &*other.inner == *self
+    }
+}
+
+impl From<&'static str> for Ident {
     fn from(v: &'static str) -> Self {
-        Ident2 { inner: v.into() }
+        Ident { inner: v.into() }
     }
 }
 
-impl From<String> for Ident2 {
+impl From<String> for Ident {
     fn from(v: String) -> Self {
-        Ident2 { inner: v.into() }
+        Ident { inner: v.into() }
     }
 }
 
-impl std::ops::Deref for Ident2 {
+impl From<ProcDeclKind> for Ident {
+    fn from(value: ProcDeclKind) -> Self {
+        value.name().into()
+    }
+}
+
+impl std::ops::Deref for Ident {
     type Target = str;
     fn deref(&self) -> &str {
         &self.inner
     }
 }
 
-impl fmt::Display for Ident2 {
+impl fmt::Display for Ident {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.inner.fmt(f)
     }
 }
 
-impl fmt::Debug for Ident2 {
+impl fmt::Debug for Ident {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.inner.fmt(f)
     }
 }
 
-impl GetSize for Ident2 {
+impl GetSize for Ident {
     fn get_heap_size(&self) -> usize {
         if self.inner.is_owned() {
             self.inner.len()
@@ -784,8 +826,15 @@ impl<T> Spanned<T> {
     }
 }
 
-/// A (typically absolute) tree path where the path operator is irrelevant.
+/// An absolute tree path like `/ident/ident`.
 pub type TreePath = Box<[Ident]>;
+
+pub fn treepath_from_str(str: &str) -> TreePath {
+    str.split('/')
+        .filter(|elem| !elem.is_empty())
+        .map(|segment| Ident::from_nonstatic(segment))
+        .collect::<TreePath>()
+}
 
 pub struct FormatTreePath<'a, T>(pub &'a [T]);
 
@@ -819,7 +868,7 @@ impl<'a> fmt::Display for FormatTypePath<'a> {
 #[derive(Clone, PartialEq, Debug, GetSize)]
 pub struct Prefab {
     pub path: TypePath,
-    pub vars: Box<[(Ident2, Expression)]>,
+    pub vars: Box<[(Ident, Expression)]>,
 }
 
 impl From<TypePath> for Prefab {
@@ -1050,11 +1099,11 @@ pub enum Term {
     /// A prefab literal (path + vars).
     Prefab(Box<Prefab>),
     /// An interpolated string, alternating string/expr/string/expr.
-    InterpString(Ident2, Box<[(Option<Expression>, Box<str>)]>),
+    InterpString(Ident, Box<[(Option<Expression>, Box<str>)]>),
 
     // Function calls with recursive contents ---------------------------------
     /// An unscoped function call.
-    Call(Ident2, Box<[Expression]>),
+    Call(Ident, Box<[Expression]>),
     /// A `.()` call.
     SelfCall(Box<[Expression]>),
     /// A `..()` call. If arguments is empty, the proc's arguments are passed.
@@ -1102,9 +1151,9 @@ pub enum Term {
         args: Box<[Expression]>,
     },
     /// Unscoped `::A` is a shorthand for `global.A`
-    GlobalIdent(Ident2),
+    GlobalIdent(Ident),
     /// Unscoped `::A(...)` is a shorthand for `global.A(...)`
-    GlobalCall(Ident2, Box<[Expression]>),
+    GlobalCall(Ident, Box<[Expression]>),
 }
 
 impl Term {
@@ -1179,6 +1228,14 @@ impl Term {
             _ => None,
         }
     }
+
+    pub fn as_kwarg_key(&self) -> Option<&str> {
+        match self {
+            Term::Ident(i) => Some(i.as_str()),
+            Term::String(s) => Some(s.as_str()),
+            _ => None,
+        }
+    }
 }
 
 impl From<Expression> for Term {
@@ -1201,7 +1258,7 @@ impl From<Expression> for Term {
 
 #[derive(Clone, PartialEq, Debug, GetSize)]
 pub struct MiniExpr {
-    pub ident: Ident2,
+    pub ident: Ident,
     pub fields: Box<[Field]>,
 }
 
@@ -1211,9 +1268,9 @@ pub enum Follow {
     /// Index the value by an expression.
     Index(ListAccessKind, Box<Expression>),
     /// Access a field of the value.
-    Field(PropertyAccessKind, Ident2),
+    Field(PropertyAccessKind, Ident),
     /// Call a method of the value.
-    Call(PropertyAccessKind, Ident2, Box<[Expression]>),
+    Call(PropertyAccessKind, Ident, Box<[Expression]>),
     /// Apply a unary operator to the value.
     Unary(UnaryOp),
     /// Any of:
@@ -1221,11 +1278,11 @@ pub enum Follow {
     /// - `/typepath::normal_var` gets the initial value of any type var.
     /// - `parent_type::normal_var` gets the initial value on the parent type. Only works outside procs.
     /// - `type::normal_var` gets the initial value on the current type. Only works outside procs. Beware loops.
-    StaticField(Ident2),
+    StaticField(Ident),
     /// `foo::bar()` is a proc reference.
     /// If the LHS is a constant typepath, that is used.
     /// Otherwise the **static** type of LHS is used.
-    ProcReference(Ident2),
+    ProcReference(Ident),
 }
 
 impl Follow {
@@ -1243,7 +1300,7 @@ impl Follow {
 #[derive(Debug, Clone, PartialEq, GetSize)]
 pub struct Field {
     pub kind: PropertyAccessKind,
-    pub ident: Ident2,
+    pub ident: Ident,
 }
 
 impl From<Field> for Follow {
@@ -1293,8 +1350,8 @@ impl VarType {
     }
 }
 
-impl FromIterator<String> for VarType {
-    fn from_iter<T: IntoIterator<Item = String>>(iter: T) -> Self {
+impl FromIterator<Ident> for VarType {
+    fn from_iter<T: IntoIterator<Item = Ident>>(iter: T) -> Self {
         VarTypeBuilder::from_iter(iter).build()
     }
 }
@@ -1321,7 +1378,7 @@ pub struct VarTypeBuilder {
 impl VarTypeBuilder {
     pub fn suffix(&mut self, suffix: &VarSuffix) {
         if !suffix.list.is_empty() {
-            self.type_path.insert(0, "list".to_owned());
+            self.type_path.insert(0, "list".into());
         }
     }
 
@@ -1334,8 +1391,8 @@ impl VarTypeBuilder {
     }
 }
 
-impl FromIterator<String> for VarTypeBuilder {
-    fn from_iter<T: IntoIterator<Item = String>>(iter: T) -> Self {
+impl FromIterator<Ident> for VarTypeBuilder {
+    fn from_iter<T: IntoIterator<Item = Ident>>(iter: T) -> Self {
         let mut flags = VarTypeFlags::default();
         let type_path = iter
             .into_iter()
@@ -1376,7 +1433,7 @@ impl VarSuffix {
             None
         } else {
             Some(Expression::from(Term::NewPrefab {
-                prefab: Box::new(Prefab::from(vec![(PathOp::Slash, "list".to_owned())])),
+                prefab: Box::new(Prefab::from(vec![(PathOp::Slash, "list".into())])),
                 args: Some(args.into_boxed_slice()),
             }))
         }
@@ -1422,7 +1479,7 @@ pub enum Statement {
     Var(Box<VarStatement>),
     Vars(Vec<VarStatement>),
     Setting {
-        name: Ident2,
+        name: Ident,
         mode: SettingMode,
         value: Expression,
     },
@@ -1467,7 +1524,7 @@ pub enum Case {
 #[derive(Debug, Clone, PartialEq, GetSize)]
 pub struct ForListStatement {
     pub var_type: Option<VarType>,
-    pub name: Ident2,
+    pub name: Ident,
     /// If zero, uses the declared type of the variable.
     pub input_type: Option<InputType>,
     /// Defaults to 'world'.
@@ -1478,9 +1535,9 @@ pub struct ForListStatement {
 #[derive(Debug, Clone, PartialEq, GetSize)]
 pub struct ForKeyValueStatement {
     pub var_type: Option<VarType>,
-    pub key: Ident2,
+    pub key: Ident,
     pub key_input_type: Option<InputType>,
-    pub value: Ident2,
+    pub value: Ident,
     /// Defaults to 'world'.
     pub in_list: Option<Expression>,
     pub block: Block,
@@ -1489,7 +1546,7 @@ pub struct ForKeyValueStatement {
 #[derive(Debug, Clone, PartialEq, GetSize)]
 pub struct ForRangeStatement {
     pub var_type: Option<VarType>,
-    pub name: Ident2,
+    pub name: Ident,
     pub start: Expression,
     pub end: Expression,
     pub step: Option<Expression>,
@@ -1544,7 +1601,7 @@ pub static VALID_FILTER_FLAGS: phf::Map<&'static str, (&str, bool, bool, &[&str]
 
 // ----------------------------------------------------------------------------
 // Guard against sizeof regression.
-const _: [(); 0 - !(std::mem::size_of::<Ident2>() <= 16) as usize] = [];
+const _: [(); 0 - !(std::mem::size_of::<Ident>() <= 16) as usize] = [];
 const _: [(); 0 - !(std::mem::size_of::<Statement>() <= 56) as usize] = [];
 const _: [(); 0 - !(std::mem::size_of::<Expression>() <= 32) as usize] = [];
 const _: [(); 0 - !(std::mem::size_of::<Term>() <= 40) as usize] = [];

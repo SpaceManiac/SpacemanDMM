@@ -35,7 +35,7 @@ pub enum TypeExpr<'o> {
 
     // The value of a parameter, if it is a typepath.
     ParamTypepath {
-        name: String,
+        name: Ident,
         p_idx: usize,
         // Number of /list to strip.
         index_ct: usize,
@@ -43,7 +43,7 @@ pub enum TypeExpr<'o> {
 
     // The static type of a parameter.
     ParamStaticType {
-        name: String,
+        name: Ident,
         p_idx: usize,
         // Number of /list to strip.
         index_ct: usize,
@@ -187,7 +187,7 @@ impl<'o> TypeExprCompiler<'o> {
                 for (i, param) in self.proc.parameters.iter().enumerate() {
                     if *unscoped_name == param.name {
                         return Ok(TypeExpr::ParamTypepath {
-                            name: unscoped_name.to_owned(),
+                            name: unscoped_name.clone(),
                             p_idx: i,
                             index_ct: 0,
                         });

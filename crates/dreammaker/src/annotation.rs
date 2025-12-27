@@ -47,8 +47,8 @@ pub enum Annotation {
     IncompleteTypePath(TypePath, PathOp),
     IncompleteTreePath(bool, Vec<Ident>),
 
-    ProcArguments(Vec<Ident>, String, usize), // Vec empty for unscoped call
-    ProcArgument(usize),                      // where in the prog arguments we are
+    ProcArguments(Vec<Ident>, Ident, usize), // Vec empty for unscoped call
+    ProcArgument(usize),                     // where in the prog arguments we are
 }
 
 #[derive(Debug)]

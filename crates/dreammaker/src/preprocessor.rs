@@ -82,7 +82,7 @@ impl<'a> fmt::Display for NameAndDefine<'a> {
     }
 }
 
-type InnerDefineHistory = IntervalTree<Location, (String, Define)>;
+type InnerDefineHistory = IntervalTree<Location, (Ident, Define)>;
 
 /// An interval tree representing historic macro definitions.
 #[derive(Debug)]
@@ -157,7 +157,7 @@ impl DefineHistory {
 }
 
 impl std::ops::Deref for DefineHistory {
-    type Target = IntervalTree<Location, (String, Define)>;
+    type Target = IntervalTree<Location, (Ident, Define)>;
 
     fn deref(&self) -> &Self::Target {
         &self.tree
@@ -177,7 +177,7 @@ impl std::ops::DerefMut for DefineHistory {
 /// stack is exhausted.
 #[derive(Debug, Clone, Default)]
 pub struct DefineMap {
-    inner: HashMap<String, Vec<(Location, Define)>>,
+    inner: HashMap<Ident, Vec<(Location, Define)>>,
 }
 
 impl DefineMap {
@@ -213,7 +213,7 @@ impl DefineMap {
     ///
     /// Returns `None` if the key was not present, or its most recent location
     /// if it was.
-    pub fn insert(&mut self, key: String, value: (Location, Define)) -> Option<Location> {
+    pub fn insert(&mut self, key: Ident, value: (Location, Define)) -> Option<Location> {
         let stack = self
             .inner
             .entry(key)
@@ -604,7 +604,7 @@ impl<'ctx> Preprocessor<'ctx> {
         }
     }
 
-    fn move_to_history(&mut self, name: String, previous: (Location, Define)) {
+    fn move_to_history(&mut self, name: Ident, previous: (Location, Define)) {
         self.history
             .insert(range(previous.0, self.last_input_loc), (name, previous.1));
     }
@@ -934,7 +934,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                         match next!() {
                                             Token::Ident(name, _) => params.push(name),
                                             Token::Punct(Punctuation::Ellipsis) => {
-                                                params.push("__VA_ARGS__".to_owned()); // default
+                                                params.push("__VA_ARGS__".into()); // default
                                                 variadic = true;
                                             },
                                             _ => {
@@ -1267,13 +1267,13 @@ impl<'ctx> Preprocessor<'ctx> {
                                                 match arg.next() {
                                                     Some(Token::Ident(param_ident, ws)) => {
                                                         expansion.push_back(Token::Ident(
-                                                            format!("{first}{param_ident}"),
+                                                            format!("{first}{param_ident}").into(),
                                                             ws,
                                                         ));
                                                     },
                                                     Some(Token::Int(param_int)) => expansion
                                                         .push_back(Token::Ident(
-                                                            format!("{first}{param_int}"),
+                                                            format!("{first}{param_int}").into(),
                                                             ws,
                                                         )),
                                                     Some(other) => {
@@ -1286,7 +1286,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                                 expansion.extend(arg);
                                             },
                                             None => expansion.push_back(Token::Ident(
-                                                format!("{first}{param_name}"),
+                                                format!("{first}{param_name}").into(),
                                                 ws,
                                             )),
                                         },

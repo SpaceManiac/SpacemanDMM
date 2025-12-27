@@ -148,35 +148,35 @@ struct WalkProc<'o> {
     objtree: &'o ObjectTree,
     ty: TypeRef<'o>,
     proc: Option<ProcRef<'o>>,
-    local_vars: HashMap<String, Local<'o>>,
+    local_vars: HashMap<Ident, Local<'o>>,
 }
 
 impl<'o> WalkProc<'o> {
     fn from_proc(tab: &'o mut ReferencesTable, objtree: &'o ObjectTree, proc: ProcRef<'o>) -> Self {
         let mut local_vars = HashMap::new();
         local_vars.insert(
-            "global".to_owned(),
+            "global".into(),
             Local {
                 ty: StaticType::Type(objtree.root()),
                 symbol: objtree.root().id,
             },
         );
         local_vars.insert(
-            ".".to_owned(),
+            ".".into(),
             Local {
                 ty: StaticType::None,
                 symbol: tab.new_symbol(proc.location),
             },
         );
         local_vars.insert(
-            "args".to_owned(),
+            "args".into(),
             Local {
                 ty: StaticType::Type(objtree.expect("/list")),
                 symbol: tab.new_symbol(proc.location),
             },
         );
         local_vars.insert(
-            "usr".to_owned(),
+            "usr".into(),
             Local {
                 ty: StaticType::Type(objtree.expect("/mob")),
                 symbol: tab.new_symbol(proc.location),
@@ -186,7 +186,7 @@ impl<'o> WalkProc<'o> {
         let ty = proc.ty();
         if !ty.is_root() {
             local_vars.insert(
-                "src".to_owned(),
+                "src".into(),
                 Local {
                     ty: StaticType::Type(ty),
                     symbol: tab.new_symbol(proc.location),
@@ -206,7 +206,7 @@ impl<'o> WalkProc<'o> {
     fn from_ty(tab: &'o mut ReferencesTable, objtree: &'o ObjectTree, ty: TypeRef<'o>) -> Self {
         let mut local_vars = HashMap::new();
         local_vars.insert(
-            "global".to_owned(),
+            "global".into(),
             Local {
                 ty: StaticType::Type(objtree.root()),
                 symbol: objtree.root().id,
@@ -433,7 +433,7 @@ impl<'o> WalkProc<'o> {
         &mut self,
         location: Location,
         var_type: &VarType,
-        name: &str,
+        name: &Ident,
         value: Option<&'o Expression>,
     ) {
         let ty = self.static_type(location, &var_type.type_path);
@@ -442,7 +442,7 @@ impl<'o> WalkProc<'o> {
             self.visit_expression(location, expr, ty.basic_type());
         }
         self.local_vars.insert(
-            name.to_owned(),
+            name.clone(),
             Local {
                 ty,
                 symbol: self.tab.new_symbol(location),
@@ -844,15 +844,14 @@ impl<'o> WalkProc<'o> {
                 rhs,
             } = arg
             {
-                match lhs.as_term() {
-                    Some(Term::Ident(_name)) | Some(Term::String(_name)) => {
+                if let Some(term) = lhs.as_term() {
+                    if let Some(_name) = term.as_kwarg_key() {
                         // Don't visit_expression the kwarg key.
                         argument_value = rhs;
 
                         // TODO: register a usage of the kwarg symbol here.
                         // Recurse to children too?
-                    },
-                    _ => {},
+                    }
                 }
             }
 
@@ -871,12 +870,11 @@ impl<'o> WalkProc<'o> {
                 rhs,
             } = arg
             {
-                match lhs.as_term() {
-                    Some(Term::Ident(_name)) | Some(Term::String(_name)) => {
+                if let Some(term) = lhs.as_term() {
+                    if let Some(_name) = term.as_kwarg_key() {
                         // Don't visit_expression the kwarg key.
                         argument_value = rhs;
-                    },
-                    _ => {},
+                    }
                 }
             }
 
@@ -885,7 +883,7 @@ impl<'o> WalkProc<'o> {
     }
 
     #[allow(clippy::only_used_in_recursion)]
-    fn static_type(&mut self, location: Location, mut of: &[String]) -> StaticType<'o> {
+    fn static_type(&mut self, location: Location, mut of: &[Ident]) -> StaticType<'o> {
         while !of.is_empty()
             && [
                 "static",

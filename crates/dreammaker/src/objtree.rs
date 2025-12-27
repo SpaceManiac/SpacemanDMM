@@ -83,7 +83,7 @@ pub struct TypeVar {
     pub declaration: Option<VarDeclaration>,
 }
 
-#[derive(Debug, Clone, GetSize)]
+#[derive(Debug, GetSize)]
 pub struct ProcDeclaration {
     pub location: Location,
     pub kind: ProcDeclKind,
@@ -107,7 +107,7 @@ pub struct ProcValue {
     pub body_range: Option<Range<Location>>,
 }
 
-#[derive(Debug, Clone, Default, GetSize)]
+#[derive(Debug, Default, GetSize)]
 pub struct TypeProc {
     pub value: Vec<ProcValue>,
     pub declaration: Option<ProcDeclaration>,
@@ -131,15 +131,15 @@ pub struct Type {
     location_specificity: usize,
     /// Variables which this type has declarations or overrides for.
     #[get_size(size_fn = heap_size_of_index_map)]
-    pub vars: IndexMap<String, TypeVar, RandomState>,
+    pub vars: IndexMap<Ident, TypeVar, RandomState>,
     /// Procs and verbs which this type has declarations or overrides for.
     #[get_size(size_fn = heap_size_of_index_map)]
-    pub procs: IndexMap<String, TypeProc, RandomState>,
+    pub procs: IndexMap<Ident, TypeProc, RandomState>,
     parent_path: NodeIndex,
     parent_type: NodeIndex,
     pub docs: DocCollection,
     pub id: SymbolId,
-    children: BTreeMap<String, NodeIndex>,
+    children: BTreeMap<Ident, NodeIndex>,
 }
 
 impl Type {
@@ -543,14 +543,14 @@ impl<'o> NavigatePathResult<'o> {
             .path
             .split('/')
             .skip(1)
-            .map(ToOwned::to_owned)
+            .map(|p| Ident::from_nonstatic(p))
             .collect();
         match self {
             NavigatePathResult::Type(_) => {},
-            NavigatePathResult::ProcGroup(_, kind) => path.push(kind.to_string()),
+            NavigatePathResult::ProcGroup(_, kind) => path.push(kind.name().into()),
             NavigatePathResult::ProcPath(proc, kind) => {
-                path.push(kind.to_string());
-                path.push(proc.name().to_owned());
+                path.push(kind.into());
+                path.push(Ident::from_nonstatic(proc.name()));
             },
         }
         path
@@ -1022,7 +1022,9 @@ impl ObjectTreeBuilder {
             children: Default::default(),
             parent_path: parent,
         });
-        self.inner[parent].children.insert(child.to_owned(), node);
+        self.inner[parent]
+            .children
+            .insert(Ident::from_nonstatic(child), node);
         self.inner.types.insert(path, node);
         node
     }
@@ -1030,12 +1032,12 @@ impl ObjectTreeBuilder {
     fn insert_var(
         &mut self,
         ty: NodeIndex,
-        name: &str,
+        name: &Ident,
         value: VarValue,
         declaration: Option<VarDeclaration>,
     ) -> &mut TypeVar {
         // TODO: warn and merge docs for repeats
-        match self.inner[ty].vars.entry(name.to_owned()) {
+        match self.inner[ty].vars.entry(name.clone()) {
             indexmap::map::Entry::Vacant(slot) => slot.insert(TypeVar { value, declaration }),
             indexmap::map::Entry::Occupied(slot) => {
                 let type_var = slot.into_mut();
@@ -1051,7 +1053,7 @@ impl ObjectTreeBuilder {
     pub(crate) fn declare_var(
         &mut self,
         ty: NodeIndex,
-        name: &str,
+        name: &Ident,
         location: Location,
         docs: DocCollection,
         var_type: VarType,
@@ -1079,7 +1081,7 @@ impl ObjectTreeBuilder {
     pub(crate) fn override_var(
         &mut self,
         ty: NodeIndex,
-        name: &str,
+        name: &Ident,
         location: Location,
         docs: DocCollection,
         expression: Expression,
@@ -1159,7 +1161,7 @@ impl ObjectTreeBuilder {
 
         let mut type_path = Vec::new();
         for each in rest {
-            type_path.push(prev.to_owned());
+            type_path.push(prev.to_owned().into());
             prev = each;
         }
         let mut var_type = VarTypeBuilder {
@@ -1172,26 +1174,28 @@ impl ObjectTreeBuilder {
         let symbols = &mut self.symbols;
         let node = &mut self.inner.graph[parent.index()];
         // TODO: warn and merge docs for repeats
-        Ok(Some(node.vars.entry(prev.to_owned()).or_insert_with(
-            || TypeVar {
-                value: VarValue {
-                    location,
-                    expression: suffix.into_initializer(),
-                    constant: None,
-                    being_evaluated: false,
-                    docs: comment,
-                },
-                declaration: if is_declaration {
-                    Some(VarDeclaration {
-                        var_type: var_type.build(),
+        Ok(Some(
+            node.vars
+                .entry(Ident::from_nonstatic(prev))
+                .or_insert_with(|| TypeVar {
+                    value: VarValue {
                         location,
-                        id: symbols.allocate(),
-                    })
-                } else {
-                    None
-                },
-            },
-        )))
+                        expression: suffix.into_initializer(),
+                        constant: None,
+                        being_evaluated: false,
+                        docs: comment,
+                    },
+                    declaration: if is_declaration {
+                        Some(VarDeclaration {
+                            var_type: var_type.build(),
+                            location,
+                            id: symbols.allocate(),
+                        })
+                    } else {
+                        None
+                    },
+                }),
+        ))
     }
 
     // It's fine.
@@ -1211,7 +1215,7 @@ impl ObjectTreeBuilder {
         let node = &mut self.inner.graph[parent.index()];
         let proc = node
             .procs
-            .entry(name.to_owned())
+            .entry(Ident::from_nonstatic(name))
             .or_insert_with(|| TypeProc {
                 value: Vec::with_capacity(1),
                 declaration: None,

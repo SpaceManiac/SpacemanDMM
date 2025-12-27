@@ -710,7 +710,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         let mut slash_loc = self.location;
 
         // 2 is ~66.0%, 4 is ~83.4%, 8 is ~99.9%
-        let mut parts = Vec::with_capacity(2);
+        let mut parts: Vec<Ident> = Vec::with_capacity(2);
         // expect at least one ident
         match self.ident_in_seq(parts.len())? {
             Some(i) => parts.push(i),
@@ -733,9 +733,11 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             } else {
                 // .../operator/<non-ident> = ... / "operator/"
                 // but .../operator/ident = ... / "operator" / "ident"
-                let last = parts.last_mut().unwrap();
+                let last: &mut Ident = parts.last_mut().unwrap();
                 if last == "operator" {
-                    last.push('/');
+                    let mut owned = std::mem::take(last).into_owned();
+                    owned.push('/');
+                    *last = owned.into();
                 }
 
                 slash_loc.column += 1;
@@ -897,7 +899,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
         // parse operator overloading definitions
         if last_part == "operator" {
-            let () = self.try_read_operator_name(last_part)?;
+            if let Some(operator_x) = self.try_read_operator_name()? {
+                *last_part = operator_x.into();
+            }
         }
 
         let var_suffix = if var_type.is_some() {
@@ -1094,88 +1098,89 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     // ------------------------------------------------------------------------
     // Object tree - Procs
 
-    fn try_read_operator_name(&mut self, last_part: &mut String) -> Result<(), DMError> {
+    fn try_read_operator_name(&mut self) -> Result<Option<&'static str>, DMError> {
         use super::lexer::Punctuation::*;
         use super::lexer::Token::Punct;
 
         if self.exact(Punct(Mod))?.is_some() {
-            last_part.push('%');
+            Ok(Some("operator%"))
         } else if self.exact(Punct(ModAssign))?.is_some() {
-            last_part.push_str("%=");
+            Ok(Some("operator%="))
         } else if self.exact(Punct(FloatMod))?.is_some() {
-            last_part.push_str("%%");
+            Ok(Some("operator%%"))
         } else if self.exact(Punct(FloatModAssign))?.is_some() {
-            last_part.push_str("%%=");
+            Ok(Some("operator%%="))
         } else if self.exact(Punct(BitAnd))?.is_some() {
-            last_part.push('&');
+            Ok(Some("operator&"))
         } else if self.exact(Punct(BitAndAssign))?.is_some() {
-            last_part.push_str("&=");
+            Ok(Some("operator&="))
         } else if self.exact(Punct(Mul))?.is_some() {
-            last_part.push('*');
+            Ok(Some("operator*"))
         } else if self.exact(Punct(Pow))?.is_some() {
-            last_part.push_str("**");
+            Ok(Some("operator**"))
         } else if self.exact(Punct(MulAssign))?.is_some() {
-            last_part.push_str("*=");
+            Ok(Some("operator*="))
         } else if self.exact(Punct(Slash))?.is_some() {
             // Here for completeness, but REALLY handled in tree_path().
-            last_part.push('/');
+            Ok(Some("operator/"))
         } else if self.exact(Punct(DivAssign))?.is_some() {
-            last_part.push_str("/=");
+            Ok(Some("operator/="))
         } else if self.exact(Punct(Add))?.is_some() {
-            last_part.push('+');
+            Ok(Some("operator+"))
         } else if self.exact(Punct(PlusPlus))?.is_some() {
-            last_part.push_str("++");
+            Ok(Some("operator++"))
         } else if self.exact(Punct(AddAssign))?.is_some() {
-            last_part.push_str("+=");
+            Ok(Some("operator+="))
         } else if self.exact(Punct(Sub))?.is_some() {
-            last_part.push('-');
+            Ok(Some("operator-"))
         } else if self.exact(Punct(MinusMinus))?.is_some() {
-            last_part.push_str("--");
+            Ok(Some("operator--"))
         } else if self.exact(Punct(SubAssign))?.is_some() {
-            last_part.push_str("-=");
+            Ok(Some("operator-="))
         } else if self.exact(Punct(Less))?.is_some() {
-            last_part.push('<');
+            Ok(Some("operator<"))
         } else if self.exact(Punct(LShift))?.is_some() {
-            last_part.push_str("<<");
+            Ok(Some("operator<<"))
         } else if self.exact(Punct(LShiftAssign))?.is_some() {
-            last_part.push_str("<<=");
+            Ok(Some("operator<<="))
         } else if self.exact(Punct(LessEq))?.is_some() {
-            last_part.push_str("<=")
+            Ok(Some("operator<="))
         } else if self.exact(Punct(LessOrGreater))?.is_some() {
-            last_part.push_str("<=>");
+            Ok(Some("operator<=>"))
         } else if self.exact(Punct(Greater))?.is_some() {
-            last_part.push('>');
+            Ok(Some("operator>"))
         } else if self.exact(Punct(GreaterEq))?.is_some() {
-            last_part.push_str(">=");
+            Ok(Some("operator>="))
         } else if self.exact(Punct(RShift))?.is_some() {
-            last_part.push_str(">>");
+            Ok(Some("operator>>"))
         } else if self.exact(Punct(RShiftAssign))?.is_some() {
-            last_part.push_str(">>=");
+            Ok(Some("operator>>="))
         } else if self.exact(Punct(BitXor))?.is_some() {
-            last_part.push('^');
+            Ok(Some("operator^"))
         } else if self.exact(Punct(BitXorAssign))?.is_some() {
-            last_part.push_str("^=");
+            Ok(Some("operator^="))
         } else if self.exact(Punct(BitOr))?.is_some() {
-            last_part.push('|');
+            Ok(Some("operator|"))
         } else if self.exact(Punct(BitOrAssign))?.is_some() {
-            last_part.push_str("|=");
+            Ok(Some("operator|="))
         } else if self.exact(Punct(BitNot))?.is_some() {
-            last_part.push('~');
+            Ok(Some("operator~"))
         } else if self.exact(Punct(Equiv))?.is_some() {
-            last_part.push_str("~=");
+            Ok(Some("operator~="))
         } else if self.exact(Punct(AssignInto))?.is_some() {
-            last_part.push_str(":=");
+            Ok(Some("operator:="))
         } else if self.exact(Punct(LBracket))?.is_some() {
             require!(self.exact(Punct(RBracket)));
             if self.exact(Punct(Assign))?.is_some() {
-                last_part.push_str("[]=");
+                Ok(Some("operator[]="))
             } else {
-                last_part.push_str("[]");
+                Ok(Some("operator[]"))
             }
         } else if self.exact(Token::String("".to_string()))?.is_some() {
-            last_part.push_str("\"\"")
+            Ok(Some("operator\"\""))
+        } else {
+            Ok(None)
         }
-        Ok(())
     }
 
     fn proc_params_and_body(
@@ -1306,7 +1311,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
         if let Some(()) = self.exact(Punct(Ellipsis))? {
             return success(Parameter {
-                name: "...".to_owned(),
+                name: "...".into(),
                 location: self.location,
                 ..Default::default()
             });
@@ -1319,7 +1324,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Some(name) => name,
             None => {
                 self.describe_parse_error().register(self.context);
-                "".to_owned()
+                "".into()
             },
         };
         if path.first().is_some_and(|i| i == "var") {
@@ -2118,7 +2123,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
         // avoid problems with returning an empty Vec
         if parts.is_empty() {
-            parts.push((PathOp::Slash, "PARSE_ERROR".to_owned()));
+            parts.push((PathOp::Slash, "PARSE_ERROR".into()));
         }
 
         self.annotate(start, || Annotation::TypePath(parts.clone()));
@@ -2381,7 +2386,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         // TODO: arrange for this ident to end up in the prefab's annotation
                         Term::NewPrefab {
                             prefab: require!(self.prefab_ex(vec![(PathOp::Dot, ident)])),
-                            args: self.arguments(&[], "New")?,
+                            args: self.arguments(&[], &"New".into())?,
                         }
                     } else {
                         // bare dot
@@ -2390,7 +2395,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                                 ident: ".".into(),
                                 fields: Default::default(),
                             }),
-                            args: self.arguments(&[], "New")?,
+                            args: self.arguments(&[], &"New".into())?,
                         }
                     }
                 } else if let Some(ident) = self.ident()? {
@@ -2404,16 +2409,16 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                             ident: ident.into(),
                             fields: fields.into_boxed_slice(),
                         }),
-                        args: self.arguments(&[], "New")?,
+                        args: self.arguments(&[], &"New".into())?,
                     }
                 } else if let Some(prefab) = self.prefab()? {
                     Term::NewPrefab {
                         prefab,
-                        args: self.arguments(&[], "New")?,
+                        args: self.arguments(&[], &"New".into())?,
                     }
                 } else {
                     Term::NewImplicit {
-                        args: self.arguments(&[], "New")?,
+                        args: self.arguments(&[], &"New".into())?,
                     }
                 }
             },
@@ -2422,20 +2427,20 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             // TODO: list arguments are actually subtly different, but
             // we're going to pretend they're not to make code simpler, and
             // anyone relying on the difference needs to fix their garbage
-            Token::Ident(ref i, _) if i == "list" => match self.arguments(&[], "list")? {
+            Token::Ident(ref i, _) if i == "list" => match self.arguments(&[], &"list".into())? {
                 Some(args) => Term::List(args),
                 None => Term::Ident(i.to_owned()),
             },
 
-            Token::Ident(ref i, _) if i == "alist" => match self.arguments(&[], "alist")? {
+            Token::Ident(ref i, _) if i == "alist" => match self.arguments(&[], &"alist".into())? {
                 Some(args) => Term::List(args),
                 None => Term::Ident(i.to_owned()),
             },
 
             // term :: 'call' arglist arglist
             Token::Ident(ref i, _) if i == "call" => Term::DynamicCall(
-                require!(self.arguments(&[], "call")),
-                require!(self.arguments(&[], "call*")),
+                require!(self.arguments(&[], &"call".into())),
+                require!(self.arguments(&[], &"call*".into())),
             ),
 
             // term :: 'call_ext' ([library,] function) arglist
@@ -2449,7 +2454,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 };
                 require!(self.exact(Token::Punct(Punctuation::RParen)));
 
-                let args = require!(self.arguments(&[], "call_ext*"));
+                let args = require!(self.arguments(&[], &"call_ext*".into()));
                 match second {
                     // call_ext(library, function)(...)
                     Some(function) => Term::ExternalCall {
@@ -2467,7 +2472,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             },
 
             // term :: 'input' arglist input_specifier
-            Token::Ident(ref i, _) if i == "input" => match self.arguments(&[], "input")? {
+            Token::Ident(ref i, _) if i == "input" => match self.arguments(&[], &"input".into())? {
                 Some(args) => {
                     let (input_type, in_list) = require!(self.input_specifier());
                     Term::Input {
@@ -2480,7 +2485,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             },
 
             // term :: 'locate' arglist ('in' expression)?
-            Token::Ident(ref i, _) if i == "locate" => match self.arguments(&[], "locate")? {
+            Token::Ident(ref i, _) if i == "locate" => match self.arguments(&[], &"locate".into())? {
                 Some(args) => {
                     // warn against this mistake
                     if let Some(&Expression::BinaryOp { op: BinaryOp::In, .. } ) = args.first() {
@@ -2557,7 +2562,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             // term :: '..' arglist
             Token::Punct(Punctuation::Super) => {
                 self.annotate(start, || Annotation::ParentCall);
-                Term::ParentCall(require!(self.arguments(&[], "..")))
+                Term::ParentCall(require!(self.arguments(&[], &"..".into())))
             },
 
             // term :: '.'
@@ -2567,7 +2572,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     // prefab
                     // TODO: arrange for this ident to end up in the prefab's annotation
                     Term::Prefab(require!(self.prefab_ex(vec![(PathOp::Dot, ident)])))
-                } else if let Some(args) = self.arguments(&[], ".")? {
+                } else if let Some(args) = self.arguments(&[], &".".into())? {
                     // .() call
                     Term::SelfCall(args)
                 } else {
@@ -2577,15 +2582,15 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         Annotation::IncompleteTypePath(Vec::new(), PathOp::Dot)
                     });
                     self.annotate(start, || Annotation::ReturnVal);
-                    Term::Ident(".".to_owned())
+                    Term::Ident(".".into())
                 }
             },
             Token::Punct(Punctuation::Scope) => {
                 if let Some(ident) = self.ident()? {
-                    if let Some(args) = self.arguments(&[], "::")? {
-                        Term::GlobalCall(Ident2::from(ident), args)
+                    if let Some(args) = self.arguments(&[], &"::".into())? {
+                        Term::GlobalCall(Ident::from(ident), args)
                     } else {
-                        Term::GlobalIdent(Ident2::from(ident))
+                        Term::GlobalIdent(Ident::from(ident))
                     }
                 } else {
                     // Go away
@@ -2692,7 +2697,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 });
                 // register the parse error, but keep going
                 self.context.register_error(self.describe_parse_error());
-                String::new()
+                Ident::default()
             },
         };
         let end = self.updated_location();
@@ -2750,7 +2755,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 });
                 // register the parse error, but keep going
                 self.context.register_error(self.describe_parse_error());
-                String::new()
+                Ident::default()
             },
         };
         let end = self.updated_location();
@@ -2768,7 +2773,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     }
 
     /// a parenthesized, comma-separated list of expressions
-    fn arguments(&mut self, parents: &[Ident], proc: &str) -> Status<Box<[Expression]>> {
+    fn arguments(&mut self, parents: &[Ident], proc: &Ident) -> Status<Box<[Expression]>> {
         leading!(self.exact(Token::Punct(Punctuation::LParen)));
         let start = self.location;
 
@@ -2789,7 +2794,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         });
         let end = self.location; // location of the closing parenthesis
         self.annotate_precise(start..end, || {
-            Annotation::ProcArguments(parents.to_owned(), proc.to_owned(), arguments.len())
+            Annotation::ProcArguments(parents.to_owned(), proc.clone(), arguments.len())
         });
         match result {
             Ok(Some(_)) => success(arguments.into()),
@@ -2881,24 +2886,24 @@ fn reconstruct_path(
     var_type: Option<&VarTypeBuilder>,
     last: &str,
 ) -> Vec<Ident> {
-    let mut result = Vec::new();
+    let mut result: Vec<Ident> = Vec::new();
     for entry in node.split('/').skip(1) {
-        result.push(entry.to_owned());
+        result.push(entry.to_owned().into());
     }
     if let Some(deets) = proc_deets {
-        result.push(deets.kind.to_string());
+        result.push(deets.kind.name().into());
         deets
             .flags
             .to_vec()
             .into_iter()
-            .for_each(|elem| result.push(elem.to_string()));
+            .for_each(|elem| result.push(elem.into()));
     }
     if let Some(var) = var_type {
-        result.extend(var.flags.to_vec().into_iter().map(ToOwned::to_owned));
+        result.extend(var.flags.to_vec().into_iter().map(From::from));
         result.extend(var.type_path.iter().cloned());
     }
     if !last.is_empty() {
-        result.push(last.to_owned());
+        result.push(last.to_owned().into());
     }
     result
 }
