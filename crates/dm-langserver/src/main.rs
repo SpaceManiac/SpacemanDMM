@@ -662,7 +662,9 @@ impl Engine {
         );
 
         // If enabled, send the JSON for the object tree panel.
-        if self.client_caps.object_tree {
+        if self.client_caps.object_tree_2 {
+            self.update_objtree();
+        } else if self.client_caps.object_tree {
             self.update_objtree();
             let elapsed = start.elapsed();
             start += elapsed;
@@ -671,8 +673,6 @@ impl Engine {
                 elapsed.as_secs(),
                 elapsed.subsec_millis()
             );
-        } else if self.client_caps.object_tree_2 {
-            self.update_objtree();
         }
 
         /*if let Some(objtree) = Arc::get_mut(&mut self.objtree) {
