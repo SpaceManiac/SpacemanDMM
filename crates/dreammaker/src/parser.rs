@@ -900,7 +900,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         // parse operator overloading definitions
         if last_part == "operator" {
             if let Some(operator_x) = self.try_read_operator_name()? {
-                *last_part = operator_x.into();
+                *last_part = crate::ast::Ident::from_static(operator_x);
             }
         }
 
@@ -1311,7 +1311,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
         if let Some(()) = self.exact(Punct(Ellipsis))? {
             return success(Parameter {
-                name: "...".into(),
+                name: ident!("..."),
                 location: self.location,
                 ..Default::default()
             });
@@ -1324,7 +1324,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Some(name) => name,
             None => {
                 self.describe_parse_error().register(self.context);
-                "".into()
+                crate::ast::Ident::default()
             },
         };
         if path.first().is_some_and(|i| i == "var") {
@@ -2123,7 +2123,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
         // avoid problems with returning an empty Vec
         if parts.is_empty() {
-            parts.push((PathOp::Slash, "PARSE_ERROR".into()));
+            parts.push((PathOp::Slash, ident!("__PARSE_ERROR__")));
         }
 
         self.annotate(start, || Annotation::TypePath(parts.clone()));
@@ -2386,16 +2386,16 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         // TODO: arrange for this ident to end up in the prefab's annotation
                         Term::NewPrefab {
                             prefab: require!(self.prefab_ex(vec![(PathOp::Dot, ident)])),
-                            args: self.arguments(&[], &"New".into())?,
+                            args: self.arguments(&[], &ident!("New"))?,
                         }
                     } else {
                         // bare dot
                         Term::NewMiniExpr {
                             expr: Box::new(MiniExpr {
-                                ident: ".".into(),
+                                ident: ident!("."),
                                 fields: Default::default(),
                             }),
-                            args: self.arguments(&[], &"New".into())?,
+                            args: self.arguments(&[], &ident!("New"))?,
                         }
                     }
                 } else if let Some(ident) = self.ident()? {
@@ -2409,16 +2409,16 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                             ident: ident.into(),
                             fields: fields.into_boxed_slice(),
                         }),
-                        args: self.arguments(&[], &"New".into())?,
+                        args: self.arguments(&[], &ident!("New"))?,
                     }
                 } else if let Some(prefab) = self.prefab()? {
                     Term::NewPrefab {
                         prefab,
-                        args: self.arguments(&[], &"New".into())?,
+                        args: self.arguments(&[], &ident!("New"))?,
                     }
                 } else {
                     Term::NewImplicit {
-                        args: self.arguments(&[], &"New".into())?,
+                        args: self.arguments(&[], &ident!("New"))?,
                     }
                 }
             },
@@ -2427,20 +2427,20 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             // TODO: list arguments are actually subtly different, but
             // we're going to pretend they're not to make code simpler, and
             // anyone relying on the difference needs to fix their garbage
-            Token::Ident(ref i, _) if i == "list" => match self.arguments(&[], &"list".into())? {
+            Token::Ident(ref i, _) if i == "list" => match self.arguments(&[], &ident!("list"))? {
                 Some(args) => Term::List(args),
                 None => Term::Ident(i.to_owned()),
             },
 
-            Token::Ident(ref i, _) if i == "alist" => match self.arguments(&[], &"alist".into())? {
+            Token::Ident(ref i, _) if i == "alist" => match self.arguments(&[], &ident!("alist"))? {
                 Some(args) => Term::List(args),
                 None => Term::Ident(i.to_owned()),
             },
 
             // term :: 'call' arglist arglist
             Token::Ident(ref i, _) if i == "call" => Term::DynamicCall(
-                require!(self.arguments(&[], &"call".into())),
-                require!(self.arguments(&[], &"call*".into())),
+                require!(self.arguments(&[], &ident!("call"))),
+                require!(self.arguments(&[], &ident!("call*"))),
             ),
 
             // term :: 'call_ext' ([library,] function) arglist
@@ -2454,7 +2454,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 };
                 require!(self.exact(Token::Punct(Punctuation::RParen)));
 
-                let args = require!(self.arguments(&[], &"call_ext*".into()));
+                let args = require!(self.arguments(&[], &ident!("call_ext*")));
                 match second {
                     // call_ext(library, function)(...)
                     Some(function) => Term::ExternalCall {
@@ -2472,7 +2472,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             },
 
             // term :: 'input' arglist input_specifier
-            Token::Ident(ref i, _) if i == "input" => match self.arguments(&[], &"input".into())? {
+            Token::Ident(ref i, _) if i == "input" => match self.arguments(&[], &ident!("input"))? {
                 Some(args) => {
                     let (input_type, in_list) = require!(self.input_specifier());
                     Term::Input {
@@ -2485,7 +2485,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             },
 
             // term :: 'locate' arglist ('in' expression)?
-            Token::Ident(ref i, _) if i == "locate" => match self.arguments(&[], &"locate".into())? {
+            Token::Ident(ref i, _) if i == "locate" => match self.arguments(&[], &ident!("locate"))? {
                 Some(args) => {
                     // warn against this mistake
                     if let Some(&Expression::BinaryOp { op: BinaryOp::In, .. } ) = args.first() {
@@ -2562,7 +2562,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             // term :: '..' arglist
             Token::Punct(Punctuation::Super) => {
                 self.annotate(start, || Annotation::ParentCall);
-                Term::ParentCall(require!(self.arguments(&[], &"..".into())))
+                Term::ParentCall(require!(self.arguments(&[], &ident!(".."))))
             },
 
             // term :: '.'
@@ -2572,7 +2572,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     // prefab
                     // TODO: arrange for this ident to end up in the prefab's annotation
                     Term::Prefab(require!(self.prefab_ex(vec![(PathOp::Dot, ident)])))
-                } else if let Some(args) = self.arguments(&[], &".".into())? {
+                } else if let Some(args) = self.arguments(&[], &ident!("."))? {
                     // .() call
                     Term::SelfCall(args)
                 } else {
@@ -2582,12 +2582,12 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         Annotation::IncompleteTypePath(Vec::new(), PathOp::Dot)
                     });
                     self.annotate(start, || Annotation::ReturnVal);
-                    Term::Ident(".".into())
+                    Term::Ident(ident!("."))
                 }
             },
             Token::Punct(Punctuation::Scope) => {
                 if let Some(ident) = self.ident()? {
-                    if let Some(args) = self.arguments(&[], &"::".into())? {
+                    if let Some(args) = self.arguments(&[], &ident!("::"))? {
                         Term::GlobalCall(Ident::from(ident), args)
                     } else {
                         Term::GlobalIdent(Ident::from(ident))
@@ -2892,10 +2892,10 @@ fn reconstruct_path(
     }
     if let Some(deets) = proc_deets {
         result.push(deets.kind.into());
-        result.extend(deets.flags.iter().map(From::from));
+        result.extend(deets.flags.iter().map(Ident::from_static));
     }
     if let Some(var) = var_type {
-        result.extend(var.flags.iter().map(From::from));
+        result.extend(var.flags.iter().map(Ident::from_static));
         result.extend(var.type_path.iter().cloned());
     }
     if !last.is_empty() {

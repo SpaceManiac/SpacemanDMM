@@ -934,7 +934,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                         match next!() {
                                             Token::Ident(name, _) => params.push(name),
                                             Token::Punct(Punctuation::Ellipsis) => {
-                                                params.push("__VA_ARGS__".into()); // default
+                                                params.push(ident!("__VA_ARGS__")); // default
                                                 variadic = true;
                                             },
                                             _ => {

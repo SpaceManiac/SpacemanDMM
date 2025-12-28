@@ -936,7 +936,7 @@ impl ObjectTreeBuilder {
                                 Err(e) => Err(e),
                             }
                         } else if path == "/client" {
-                            empty_string = Constant::String("".into());
+                            empty_string = Constant::String(Ident::default());
                             Ok(&empty_string)
                         } else {
                             // A weird situation which should not happen.
@@ -1278,7 +1278,7 @@ impl ObjectTreeBuilder {
     pub(crate) fn add_builtin_type(&mut self, elems: &[&'static str]) -> &mut Type {
         self.add_type(
             Location::builtins(),
-            elems.iter().copied().map(Ident::from),
+            elems.iter().copied().map(Ident::from_static),
             elems.len() + 1,
             Default::default(),
         )
@@ -1306,7 +1306,7 @@ impl ObjectTreeBuilder {
         value: Option<Constant>,
     ) -> &mut VarValue {
         let location = Location::builtins();
-        let mut path = elems.iter().copied().map(Ident::from);
+        let mut path = elems.iter().copied().map(Ident::from_static);
         let len = elems.len() + 1;
 
         let (parent, initial) = self.get_from_path(location, &mut path, len).unwrap();
@@ -1337,13 +1337,14 @@ impl ObjectTreeBuilder {
         self.add_proc(
             &Default::default(),
             Location::builtins(),
-            elems.iter().copied().map(Ident::from),
+            elems.iter().copied().map(Ident::from_static),
             elems.len() + 1,
             params
                 .iter()
                 .copied()
                 .map(|param| Parameter {
-                    name: param.into(),
+                    // NB: not intering proc arguments yet...
+                    name: Ident::from(param),
                     ..Default::default()
                 })
                 .collect(),

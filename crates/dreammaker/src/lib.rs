@@ -22,7 +22,8 @@ use get_size::GetSize;
 use foldhash::fast::RandomState;
 use indexmap::IndexMap;
 
-// roughly in order of stage
+#[macro_use]
+mod intern;
 pub mod annotation;
 pub mod ast;
 mod builtins;

@@ -12,6 +12,7 @@ use get_size_derive::GetSize;
 use phf::phf_map;
 
 use crate::error::Location;
+use crate::intern::intern_static;
 
 /// Arguments for [`Term::Pick`]
 pub type PickArgs = [(Option<Expression>, Expression)];
@@ -728,7 +729,24 @@ pub struct Ident {
 
 impl Ident {
     pub fn from_nonstatic(str: &str) -> Self {
-        str.to_owned().into()
+        if let Some(i) = intern_static(str) {
+            Ident {
+                inner: Cow::borrowed(i),
+            }
+        } else {
+            Ident {
+                inner: Cow::owned(str.to_owned()),
+            }
+        }
+    }
+
+    pub(crate) fn from_static(str: &'static str) -> Self {
+        debug_assert!(
+            intern_static(str).is_some(),
+            "Missing from STATIC_INDENTS: {:?}",
+            str
+        );
+        Ident { inner: str.into() }
     }
 
     pub fn as_str(&self) -> &str {
@@ -782,19 +800,29 @@ impl<'a> PartialEq<Ident> for &'a str {
 
 impl From<&'static str> for Ident {
     fn from(v: &'static str) -> Self {
-        Ident { inner: v.into() }
+        Ident {
+            inner: Cow::borrowed(v),
+        }
     }
 }
 
 impl From<String> for Ident {
     fn from(v: String) -> Self {
-        Ident { inner: v.into() }
+        if let Some(i) = intern_static(&v) {
+            Ident {
+                inner: Cow::borrowed(i),
+            }
+        } else {
+            Ident {
+                inner: Cow::owned(v),
+            }
+        }
     }
 }
 
 impl From<ProcDeclKind> for Ident {
     fn from(value: ProcDeclKind) -> Self {
-        value.name().into()
+        Ident::from_static(value.name())
     }
 }
 
@@ -1400,7 +1428,7 @@ pub struct VarTypeBuilder {
 impl VarTypeBuilder {
     pub fn suffix(&mut self, suffix: &VarSuffix) {
         if !suffix.list.is_empty() {
-            self.type_path.insert(0, "list".into());
+            self.type_path.insert(0, ident!("list"));
         }
     }
 
@@ -1455,7 +1483,7 @@ impl VarSuffix {
             None
         } else {
             Some(Expression::from(Term::NewPrefab {
-                prefab: Box::new(Prefab::from(vec![(PathOp::Slash, "list".into())])),
+                prefab: Box::new(Prefab::from(vec![(PathOp::Slash, ident!("list"))])),
                 args: Some(args.into_boxed_slice()),
             }))
         }

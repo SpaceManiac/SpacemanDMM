@@ -21,18 +21,18 @@ pub fn default_defines(defines: &mut DefineMap) {
 
     // #define EXCEPTION(value) new /exception(value)
     defines.insert(
-        "EXCEPTION".into(),
+        ident!("EXCEPTION"),
         (
             location,
             Define::Function {
-                params: vec!["value".into()],
+                params: vec![ident!("value")],
                 variadic: false,
                 subst: vec![
-                    Ident("new".into(), true),
+                    Ident(ident!("new"), true),
                     Punct(Punctuation::Slash),
-                    Ident("exception".into(), false),
+                    Ident(ident!("exception"), false),
                     Punct(Punctuation::LParen),
-                    Ident("value".into(), false),
+                    Ident(ident!("value"), false),
                     Punct(Punctuation::RParen),
                 ],
                 docs: Default::default(),
@@ -42,30 +42,30 @@ pub fn default_defines(defines: &mut DefineMap) {
 
     // #define ASSERT(expression) if (!(expression)) { CRASH("[__FILE__]:[__LINE__]:Assertion Failed: [#X]") }
     defines.insert(
-        "ASSERT".into(),
+        ident!("ASSERT"),
         (
             location,
             Define::Function {
-                params: vec!["expression".into()],
+                params: vec![ident!("expression")],
                 variadic: false,
                 subst: vec![
-                    Ident("if".into(), true),
+                    Ident(ident!("if"), true),
                     Punct(Punctuation::LParen),
                     Punct(Punctuation::Not),
                     Punct(Punctuation::LParen),
-                    Ident("expression".into(), false),
+                    Ident(ident!("expression"), false),
                     Punct(Punctuation::RParen),
                     Punct(Punctuation::RParen),
                     Punct(Punctuation::LBrace),
-                    Ident("CRASH".into(), false),
+                    Ident(ident!("CRASH"), false),
                     Punct(Punctuation::LParen),
                     InterpStringBegin("".to_owned()),
-                    Ident("__FILE__".into(), false),
-                    InterpStringPart(":".into()),
-                    Ident("__LINE__".into(), false),
+                    Ident(ident!("__FILE__"), false),
+                    InterpStringPart(":".to_owned()),
+                    Ident(ident!("__LINE__"), false),
                     InterpStringPart(":Assertion Failed: ".to_owned()),
                     Punct(Punctuation::Hash),
-                    Ident("expression".into(), false),
+                    Ident(ident!("expression"), false),
                     InterpStringEnd("".to_owned()),
                     Punct(Punctuation::RParen),
                     Punct(Punctuation::RBrace),
@@ -76,14 +76,26 @@ pub fn default_defines(defines: &mut DefineMap) {
     );
 
     // constants
+    fn constants(defines: &mut DefineMap, values: &[(&'static str, [Token; 1])]) {
+        for &(name, ref value) in values {
+            let previous = defines.insert(
+                crate::ast::Ident::from_static(name),
+                (
+                    Location::builtins(),
+                    Define::Constant {
+                        subst: value.to_vec(),
+                        docs: Default::default(),
+                    },
+                ),
+            );
+            assert!(previous.is_none(), "redefined: {}", name);
+        }
+    }
     macro_rules! c {
         ($($i:ident = $($x:expr),*;)*) => {
-            for &(name, ref value) in &[
+            constants(defines, &[
                 $((stringify!($i), [$($x,)*]),)*
-            ] {
-                let previous = defines.insert(name.into(), (location, Define::Constant { subst: value.to_vec(), docs: Default::default() }));
-                assert!(previous.is_none(), "redefined: {}", name);
-            }
+            ]);
         }
     }
     c! {
@@ -213,7 +225,6 @@ pub fn default_defines(defines: &mut DefineMap) {
         LINEAR_RAND = Int(2);
         SQUARE_RAND = Int(3);
 
-
         // json encode flags (515)
         JSON_PRETTY_PRINT = Int(1);
 
@@ -227,7 +238,11 @@ pub fn default_defines(defines: &mut DefineMap) {
 pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
     fn path(path: &'static [&'static str]) -> Constant {
         Constant::Prefab(Box::new(super::constants::Pop {
-            path: path.iter().copied().map(Ident::from).collect::<Box<[_]>>(),
+            path: path
+                .iter()
+                .copied()
+                .map(Ident::from_static)
+                .collect::<Box<[_]>>(),
             vars: Default::default(),
         }))
     }
@@ -244,7 +259,7 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
     }
     macro_rules! string {
         ($e:expr) => {
-            Constant::String($e.into())
+            Constant::String(ident!($e))
         };
     }
 

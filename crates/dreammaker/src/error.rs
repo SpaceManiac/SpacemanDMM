@@ -296,7 +296,7 @@ pub struct Location {
 }
 
 impl Location {
-    pub fn builtins() -> Location {
+    pub const fn builtins() -> Location {
         Location {
             file: FILEID_BUILTINS,
             line: 1,
