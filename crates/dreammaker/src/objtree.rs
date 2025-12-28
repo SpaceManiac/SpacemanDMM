@@ -994,7 +994,7 @@ impl ObjectTreeBuilder {
         &mut self,
         location: Location,
         parent: NodeIndex,
-        child: &str,
+        child: &Ident,
         len: usize,
     ) -> NodeIndex {
         if let Some(&target) = self.inner[parent].children.get(child) {
@@ -1100,24 +1100,24 @@ impl ObjectTreeBuilder {
         )
     }
 
-    fn get_from_path<'a, I: Iterator<Item = &'a str>>(
+    fn get_from_path<I: Iterator<Item = Ident>>(
         &mut self,
         location: Location,
         mut path: I,
         len: usize,
-    ) -> Result<(NodeIndex, &'a str), DMError> {
+    ) -> Result<(NodeIndex, Ident), DMError> {
         let mut current = NodeIndex::new(0);
         let mut last = match path.next() {
             Some(name) => name,
             None => return Err(DMError::new(location, "cannot register root path")),
         };
-        if is_decl(last) {
+        if is_decl(&last) {
             return Ok((current, last));
         }
         for each in path {
-            current = self.subtype_or_add(location, current, last, len);
+            current = self.subtype_or_add(location, current, &last, len);
             last = each;
-            if is_decl(last) {
+            if is_decl(&last) {
                 break;
             }
         }
@@ -1129,25 +1129,25 @@ impl ObjectTreeBuilder {
         &mut self,
         location: Location,
         parent: NodeIndex,
-        mut prev: &'a str,
+        mut prev: Ident,
         mut rest: I,
         comment: DocCollection,
         suffix: VarSuffix,
     ) -> Result<Option<&mut TypeVar>, DMError>
     where
-        I: Iterator<Item = &'a str>,
+        I: Iterator<Item = Ident>,
     {
         use super::ast::VarTypeFlags;
         let mut is_declaration = false;
         let mut flags = VarTypeFlags::default();
 
-        if is_var_decl(prev) {
+        if is_var_decl(&prev) {
             is_declaration = true;
             prev = match rest.next() {
                 Some(name) => name,
                 None => return Ok(None), // var{} block, children will be real vars
             };
-            while let Some(flag) = VarTypeFlags::from_name(prev) {
+            while let Some(flag) = VarTypeFlags::from_name(&prev) {
                 if let Some(name) = rest.next() {
                     flags |= flag;
                     prev = name;
@@ -1155,7 +1155,7 @@ impl ObjectTreeBuilder {
                     return Ok(None); // var/const{} block, children will be real vars
                 }
             }
-        } else if is_proc_decl(prev) {
+        } else if is_proc_decl(&prev) {
             return Err(DMError::new(location, "proc looks like a var"));
         }
 
@@ -1174,28 +1174,26 @@ impl ObjectTreeBuilder {
         let symbols = &mut self.symbols;
         let node = &mut self.inner.graph[parent.index()];
         // TODO: warn and merge docs for repeats
-        Ok(Some(
-            node.vars
-                .entry(Ident::from_nonstatic(prev))
-                .or_insert_with(|| TypeVar {
-                    value: VarValue {
+        Ok(Some(node.vars.entry(prev.clone()).or_insert_with(|| {
+            TypeVar {
+                value: VarValue {
+                    location,
+                    expression: suffix.into_initializer(),
+                    constant: None,
+                    being_evaluated: false,
+                    docs: comment,
+                },
+                declaration: if is_declaration {
+                    Some(VarDeclaration {
+                        var_type: var_type.build(),
                         location,
-                        expression: suffix.into_initializer(),
-                        constant: None,
-                        being_evaluated: false,
-                        docs: comment,
-                    },
-                    declaration: if is_declaration {
-                        Some(VarDeclaration {
-                            var_type: var_type.build(),
-                            location,
-                            id: symbols.allocate(),
-                        })
-                    } else {
-                        None
-                    },
-                }),
-        ))
+                        id: symbols.allocate(),
+                    })
+                } else {
+                    None
+                },
+            }
+        })))
     }
 
     // It's fine.
@@ -1205,7 +1203,7 @@ impl ObjectTreeBuilder {
         context: &Context,
         location: Location,
         parent: NodeIndex,
-        name: &str,
+        name: &Ident,
         declaration: Option<ProcDeclBuilder>,
         parameters: Vec<Parameter>,
         return_type: ProcReturnType,
@@ -1213,13 +1211,10 @@ impl ObjectTreeBuilder {
         body_range: Option<Range<Location>>,
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let node = &mut self.inner.graph[parent.index()];
-        let proc = node
-            .procs
-            .entry(Ident::from_nonstatic(name))
-            .or_insert_with(|| TypeProc {
-                value: Vec::with_capacity(1),
-                declaration: None,
-            });
+        let proc = node.procs.entry(name.clone()).or_insert_with(|| TypeProc {
+            value: Vec::with_capacity(1),
+            declaration: None,
+        });
         if let Some(decl_builder) = declaration {
             if let Some(ref decl) = proc.declaration {
                 DMError::new(
@@ -1283,7 +1278,7 @@ impl ObjectTreeBuilder {
     pub(crate) fn add_builtin_type(&mut self, elems: &[&'static str]) -> &mut Type {
         self.add_type(
             Location::builtins(),
-            elems.iter().cloned(),
+            elems.iter().copied().map(Ident::from),
             elems.len() + 1,
             Default::default(),
         )
@@ -1291,7 +1286,7 @@ impl ObjectTreeBuilder {
     }
 
     // an entry which may be anything depending on the path
-    fn add_type<'a, I: Iterator<Item = &'a str>>(
+    fn add_type<I: Iterator<Item = Ident>>(
         &mut self,
         location: Location,
         mut path: I,
@@ -1299,8 +1294,8 @@ impl ObjectTreeBuilder {
         comment: DocCollection,
     ) -> Result<&mut Type, DMError> {
         let (parent, child) = self.get_from_path(location, &mut path, len)?;
-        assert!(!is_var_decl(child) && !is_proc_decl(child));
-        let idx = self.subtype_or_add(location, parent, child, len);
+        assert!(!is_var_decl(&child) && !is_proc_decl(&child));
+        let idx = self.subtype_or_add(location, parent, &child, len);
         self.inner[idx].docs.extend(comment);
         Ok(&mut self.inner[idx])
     }
@@ -1311,7 +1306,7 @@ impl ObjectTreeBuilder {
         value: Option<Constant>,
     ) -> &mut VarValue {
         let location = Location::builtins();
-        let mut path = elems.iter().copied();
+        let mut path = elems.iter().copied().map(Ident::from);
         let len = elems.len() + 1;
 
         let (parent, initial) = self.get_from_path(location, &mut path, len).unwrap();
@@ -1342,7 +1337,7 @@ impl ObjectTreeBuilder {
         self.add_proc(
             &Default::default(),
             Location::builtins(),
-            elems.iter().copied(),
+            elems.iter().copied().map(Ident::from),
             elems.len() + 1,
             params
                 .iter()
@@ -1361,7 +1356,7 @@ impl ObjectTreeBuilder {
 
     // an entry which is definitely a proc because an argument list is specified
     #[allow(clippy::too_many_arguments)]
-    fn add_proc<'a, I: Iterator<Item = &'a str>>(
+    fn add_proc<I: Iterator<Item = Ident>>(
         &mut self,
         context: &Context,
         location: Location,
@@ -1373,9 +1368,9 @@ impl ObjectTreeBuilder {
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let (parent, mut proc_name) = self.get_from_path(location, &mut path, len)?;
         let mut declaration = None;
-        if let Some(kind) = ProcDeclKind::from_name(proc_name) {
+        if let Some(kind) = ProcDeclKind::from_name(&proc_name) {
             let mut next_entry = path.next();
-            let flags = ProcFlags::from_name(next_entry.unwrap_or(""));
+            let flags = ProcFlags::from_name(next_entry.as_ref().map_or("", Ident::as_str));
             if flags.is_some() {
                 // did something? take another step
                 next_entry = path.next();
@@ -1385,7 +1380,7 @@ impl ObjectTreeBuilder {
                 Some(name) => name,
                 None => return Err(DMError::new(location, "proc must have a name")),
             };
-        } else if is_var_decl(proc_name) {
+        } else if is_var_decl(&proc_name) {
             return Err(DMError::new(location, "var looks like a proc"));
         }
         if let Some(other) = path.next() {
@@ -1399,7 +1394,7 @@ impl ObjectTreeBuilder {
             context,
             location,
             parent,
-            proc_name,
+            &proc_name,
             declaration,
             parameters,
             ProcReturnType::default(),

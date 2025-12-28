@@ -1187,7 +1187,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         &mut self,
         current: NodeIndex,
         proc_builder: Option<ProcDeclBuilder>,
-        name: &str,
+        name: &Ident,
         entry_start: Location,
         absolute: bool,
         mut docs: DocCollection,

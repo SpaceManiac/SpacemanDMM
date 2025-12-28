@@ -20,7 +20,7 @@ fn ternary_precedence() {
         parse_expr("foo = 1 + 2 ? 3 + 4 : 5 + 6"),
         Expression::AssignOp {
             op: AssignOp::Assign,
-            lhs: Box::new(Expression::from(Term::Ident("foo".to_owned()))),
+            lhs: Box::new(Expression::from(Term::Ident("foo".into()))),
             rhs: Box::new(Expression::TernaryOp {
                 cond: Box::new(Expression::BinaryOp {
                     op: BinaryOp::Add,
@@ -51,7 +51,7 @@ fn in_after_ternary() {
             op: BinaryOp::In,
             lhs: Box::new(Expression::AssignOp {
                 op: AssignOp::Assign,
-                lhs: Box::new(Expression::from(Term::Ident("foo".to_owned()))),
+                lhs: Box::new(Expression::from(Term::Ident("foo".into()))),
                 rhs: Box::new(Expression::TernaryOp {
                     cond: Box::new(Expression::from(Term::Int(1))),
                     if_: Box::new(Expression::from(Term::Int(2))),
@@ -173,7 +173,7 @@ fn loaded_call_ext() {
                 Default::default(),
                 Term::ExternalCall {
                     library: None,
-                    function: Box::new(Expression::from(Term::Ident("loaded_cat_meow".to_owned()))),
+                    function: Box::new(Expression::from(Term::Ident("loaded_cat_meow".into()))),
                     args: Box::new([
                         Expression::Base {
                             term: Box::new(Spanned::new(Default::default(), Term::Int(1))),
