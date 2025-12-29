@@ -2,9 +2,9 @@
 
 use std::cell::Cell;
 
-use petgraph::Direction;
-use petgraph::graph::{NodeIndex, Graph};
+use petgraph::graph::{Graph, NodeIndex};
 use petgraph::visit::EdgeRef;
+use petgraph::Direction;
 
 pub struct History<T, E> {
     current: T,
@@ -52,23 +52,32 @@ impl<T, E> History<T, E> {
         self.clean_idx.set(self.idx);
     }
 
-    pub fn edit<F: 'static + Fn(&E, &mut T) -> Box<dyn Fn(&E, &mut T)>>(&mut self, env: &E, desc: String, f: F) {
+    pub fn edit<F: 'static + Fn(&E, &mut T) -> Box<dyn Fn(&E, &mut T)>>(
+        &mut self,
+        env: &E,
+        desc: String,
+        f: F,
+    ) {
         // perform the edit immediately
         let undo = f(env, &mut self.current);
 
         // save the edit to the history
-        let new_idx = self.graph.add_node(Entry {
-            desc,
-        });
-        self.graph.add_edge(self.idx, new_idx, Edit {
-            redo: Box::new(f),
-            undo,
-        });
+        let new_idx = self.graph.add_node(Entry { desc });
+        self.graph.add_edge(
+            self.idx,
+            new_idx,
+            Edit {
+                redo: Box::new(f),
+                undo,
+            },
+        );
         self.idx = new_idx;
     }
 
     fn parent(&self, idx: NodeIndex) -> Option<NodeIndex> {
-        self.graph.neighbors_directed(idx, Direction::Incoming).next()
+        self.graph
+            .neighbors_directed(idx, Direction::Incoming)
+            .next()
     }
 
     pub fn can_undo(&self) -> bool {
@@ -76,7 +85,11 @@ impl<T, E> History<T, E> {
     }
 
     pub fn undo(&mut self, env: &E) {
-        if let Some(edge) = self.graph.edges_directed(self.idx, Direction::Incoming).last() {
+        if let Some(edge) = self
+            .graph
+            .edges_directed(self.idx, Direction::Incoming)
+            .last()
+        {
             (edge.weight().undo)(env, &mut self.current);
             self.idx = edge.source();
         }
@@ -91,7 +104,11 @@ impl<T, E> History<T, E> {
 
     pub fn redo(&mut self, env: &E) {
         let mut undo = None;
-        if let Some(edge) = self.graph.edges_directed(self.idx, Direction::Outgoing).last() {
+        if let Some(edge) = self
+            .graph
+            .edges_directed(self.idx, Direction::Outgoing)
+            .last()
+        {
             undo = Some((edge.id(), (edge.weight().redo)(env, &mut self.current)));
             self.idx = edge.target();
         }

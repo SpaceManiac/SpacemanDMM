@@ -1,18 +1,20 @@
 //! Editor-environment specific DMI (texture) handling.
 
+use std::collections::hash_map::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::collections::hash_map::HashMap;
 use std::sync::{Arc, RwLock};
 
-use lodepng::{self, RGBA, Decoder, ColorType};
+use lodepng::{self, ColorType, Decoder, RGBA};
+use sdl3::pixels::{PixelFormat, PixelFormatEnum};
+use sdl3::render::Texture;
+use sdl3::surface::Surface;
 
-use gfx::{self, Factory as FactoryTrait};
-use crate::{Factory, Texture};
+use crate::support::TextureCreator;
 
 type Rect = (u32, u32, u32, u32);
 
-pub use dm::dmi::*;
+pub use dreammaker::dmi::*;
 
 // ----------------------------------------------------------------------------
 // Icon file and metadata handling
@@ -23,8 +25,8 @@ pub struct IconCache {
 }
 
 #[derive(Default)]
-pub struct TextureCache {
-    textures: Vec<Option<Texture>>,
+pub struct TextureCache<'r> {
+    textures: Vec<Option<Texture<'r>>>,
 }
 
 #[derive(Default)]
@@ -61,12 +63,12 @@ impl IconCache {
                     lock.icons.push(arc);
                     lock.paths.insert(relative_file_path.to_owned(), Some(i));
                     Some(i)
-                }
+                },
                 None => {
                     let mut lock = self.lock.write().expect("IconCache poisoned");
                     lock.paths.insert(relative_file_path.to_owned(), None);
                     None
-                }
+                },
             },
         }
     }
@@ -84,13 +86,17 @@ impl IconCache {
     }*/
 }
 
-impl TextureCache {
-    pub fn retrieve(&mut self, factory: &mut Factory, icons: &IconCache, id: usize) -> &Texture {
-        use crate::Fulfill;
+impl<'r> TextureCache<'r> {
+    pub fn retrieve(
+        &mut self,
+        factory: &'r TextureCreator,
+        icons: &IconCache,
+        id: usize,
+    ) -> &Texture {
         if id >= self.textures.len() {
-            self.textures.resize(id + 1, None);
+            self.textures.resize_with(id + 1, Default::default);
         }
-        self.textures[id].fulfill(|| load_texture(factory, &icons.get_icon(id).bitmap))
+        self.textures[id].get_or_insert_with(|| load_texture(factory, &icons.get_icon(id).bitmap))
     }
 
     pub fn clear(&mut self) {
@@ -104,7 +110,7 @@ fn load(path: &Path) -> Option<IconFile> {
         Err(err) => {
             eprintln!("error loading icon: {}\n  {}", path.display(), err);
             None
-        }
+        },
     }
 }
 
@@ -130,21 +136,27 @@ impl IconFile {
     }
 
     pub fn uv_of(&self, icon_state: &str, dir: Dir) -> Option<[f32; 4]> {
-        self.rect_of(icon_state, dir).map(|(x1, y1, w, h)| [
-            x1 as f32 / self.width as f32,
-            y1 as f32 / self.height as f32,
-            (x1 + w) as f32 / self.width as f32,
-            (y1 + h) as f32 / self.height as f32,
-        ])
+        self.rect_of(icon_state, dir).map(|(x1, y1, w, h)| {
+            [
+                x1 as f32 / self.width as f32,
+                y1 as f32 / self.height as f32,
+                (x1 + w) as f32 / self.width as f32,
+                (y1 + h) as f32 / self.height as f32,
+            ]
+        })
     }
 
     #[inline]
     pub fn rect_of(&self, icon_state: &str, dir: Dir) -> Option<Rect> {
-        self.metadata.rect_of(self.width, icon_state, dir, 0)
+        self.metadata
+            .rect_of(self.width, &StateIndex::from(icon_state), dir, 0)
     }
 }
 
-pub fn texture_from_bytes(factory: &mut Factory, bytes: &[u8]) -> io::Result<Texture> {
+pub fn texture_from_bytes<'r>(
+    factory: &'r TextureCreator,
+    bytes: &[u8],
+) -> io::Result<Texture<'r>> {
     let mut decoder = Decoder::new();
     decoder.info_raw_mut().colortype = ColorType::RGBA;
     decoder.info_raw_mut().set_bitdepth(8);
@@ -157,22 +169,30 @@ pub fn texture_from_bytes(factory: &mut Factory, bytes: &[u8]) -> io::Result<Tex
     Ok(load_texture(factory, &bitmap))
 }
 
-pub fn load_texture(factory: &mut Factory, bitmap: &lodepng::Bitmap<RGBA>) -> Texture {
+pub fn load_texture<'r>(
+    factory: &'r TextureCreator,
+    bitmap: &lodepng::Bitmap<RGBA>,
+) -> Texture<'r> {
     let width = bitmap.width;
     let height = bitmap.height;
-    let mut new_buffer = Vec::with_capacity(4 * width * height);
-    for pixel in &bitmap.buffer {
-        new_buffer.push(pixel.r);
-        new_buffer.push(pixel.g);
-        new_buffer.push(pixel.b);
-        new_buffer.push(pixel.a);
-    }
 
-    let kind = gfx::texture::Kind::D2(width as u16, height as u16, gfx::texture::AaMode::Single);
-    let (_, view) = factory.create_texture_immutable_u8::<crate::ColorFormat>(
-        kind,
-        gfx::texture::Mipmap::Provided,
-        &[&new_buffer[..]]
-    ).expect("create_texture_immutable_u8");
-    view
+    let mut surface = Surface::new(
+        width as u32,
+        height as u32,
+        PixelFormat::from(PixelFormatEnum::RGBA8888),
+    )
+    .expect("Surface::new");
+    surface.with_lock_mut(|dest| {
+        let mut dest = dest.iter_mut();
+        for pixel in &bitmap.buffer {
+            *dest.next().unwrap() = pixel.r;
+            *dest.next().unwrap() = pixel.g;
+            *dest.next().unwrap() = pixel.b;
+            *dest.next().unwrap() = pixel.a;
+        }
+    });
+
+    factory
+        .create_texture_from_surface(surface)
+        .expect("create_texture_from_surface")
 }

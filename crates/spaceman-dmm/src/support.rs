@@ -2,7 +2,12 @@
 use imgui::{Context, FontConfig, MouseButton, MouseCursor};
 use imgui_sdl3_renderer::Renderer;
 use sdl3::{
-    event::{Event, WindowEvent}, hint::names::RENDER_VSYNC, keyboard::Scancode, mouse::{Cursor, SystemCursor}, pixels::Color, video::WindowContext
+    event::{Event, WindowEvent},
+    hint::names::RENDER_VSYNC,
+    keyboard::Scancode,
+    mouse::{Cursor, SystemCursor},
+    pixels::Color,
+    video::WindowContext,
 };
 use std::time::Instant;
 
@@ -26,7 +31,7 @@ pub fn run(title: &str, clear_color: [u8; 4]) -> EditorScene {
     let video = sdl.video().unwrap();
 
     let window = video
-        .window("SpacemanDMM", 1300, 730)
+        .window(title, 1300, 730)
         .position_centered()
         .resizable()
         .build()
@@ -40,9 +45,10 @@ pub fn run(title: &str, clear_color: [u8; 4]) -> EditorScene {
 
     // In the examples we only use integer DPI factors, because the UI can get very blurry
     // otherwise. This might or might not be what you want in a real application.
-    let mut window_hidpi_factor = 1.0;
-    let mut hidpi_factor = 1.0;
-    let mut logical_size = window.size();
+    // let mut window_hidpi_factor = 1.0;
+    let hidpi_factor = 1.0;
+    let logical_size = canvas.logical_size();
+    let mut logical_size = (logical_size.0, logical_size.1);
 
     let font_size = (13.0 * hidpi_factor) as f32;
 
@@ -57,8 +63,9 @@ pub fn run(title: &str, clear_color: [u8; 4]) -> EditorScene {
             }),
         }]);
 
-    let mut im_renderer = Renderer::new(&canvas.texture_creator(), &mut imgui)
-        .expect("Failed to initialize renderer");
+    let texture_creator = canvas.texture_creator();
+    let mut im_renderer =
+        Renderer::new(&texture_creator, &mut imgui).expect("Failed to initialize renderer");
 
     let mut scene = EditorScene::new(canvas.texture_creator());
 
@@ -141,9 +148,7 @@ pub fn run(title: &str, clear_color: [u8; 4]) -> EditorScene {
                         mouse_state.pressed[b as usize] = false;
                     }
                 },
-                Event::MouseWheel {
-                    x, y, direction, ..
-                } => {
+                Event::MouseWheel { x, y, .. } => {
                     mouse_state.wheel = y;
                     if !mouse_captured {
                         scene.mouse_wheel(

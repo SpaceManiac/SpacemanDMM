@@ -1,16 +1,16 @@
 //! GPU map renderer.
-use std::time::Instant;
 use std::sync::Arc;
+use std::time::Instant;
 
+use crate::{ColorFormat, Encoder, Factory, RenderTargetView, Resources, Texture};
 use gfx;
 use gfx::traits::{Factory as FactoryTrait, FactoryExt};
-use crate::{Resources, Factory, Encoder, ColorFormat, RenderTargetView, Texture};
 
 use slice_of_array::prelude::*;
 
 use dm::objtree::ObjectTree;
 use dmm_tools::dmm::Prefab;
-use dmm_tools::minimap::{Sprite, Category, Layer};
+use dmm_tools::minimap::{Category, Layer, Sprite};
 
 use crate::dmi::*;
 use crate::map_repr::AtomMap;
@@ -85,11 +85,13 @@ pub struct DrawCall {
 
 impl MapRenderer {
     pub fn new(factory: &mut Factory) -> MapRenderer {
-        let pso = factory.create_pipeline_simple(
-            include_bytes!("shaders/main_150.glslv"),
-            include_bytes!("shaders/main_150.glslf"),
-            pipe::new()
-        ).expect("create_pipeline_simple failed");
+        let pso = factory
+            .create_pipeline_simple(
+                include_bytes!("shaders/main_150.glslv"),
+                include_bytes!("shaders/main_150.glslf"),
+                pipe::new(),
+            )
+            .expect("create_pipeline_simple failed");
 
         let transform_buffer = factory.create_constant_buffer(1);
 
@@ -119,36 +121,51 @@ impl MapRenderer {
         let ibuf_data = map.index_buffer(z);
         let ibuf_data = ibuf_data.flat();
 
-        let vbuf = self.factory.create_buffer::<Vertex>(
-            vbuf_data.len(),
-            gfx::buffer::Role::Vertex,
-            gfx::memory::Usage::Dynamic,
-            gfx::memory::Bind::empty(),
-        ).expect("create vertex buffer");
-        let ibuf = self.factory.create_buffer::<u32>(
-            ibuf_data.len(),
-            gfx::buffer::Role::Index,
-            gfx::memory::Usage::Dynamic,
-            gfx::memory::Bind::empty(),
-        ).expect("create index buffer");
+        let vbuf = self
+            .factory
+            .create_buffer::<Vertex>(
+                vbuf_data.len(),
+                gfx::buffer::Role::Vertex,
+                gfx::memory::Usage::Dynamic,
+                gfx::memory::Bind::empty(),
+            )
+            .expect("create vertex buffer");
+        let ibuf = self
+            .factory
+            .create_buffer::<u32>(
+                ibuf_data.len(),
+                gfx::buffer::Role::Index,
+                gfx::memory::Usage::Dynamic,
+                gfx::memory::Bind::empty(),
+            )
+            .expect("create index buffer");
 
-        let texture = self.factory.create_texture::<gfx::format::R8_G8_B8_A8>(
-            gfx::texture::Kind::D2(crate::THUMBNAIL_SIZE, crate::THUMBNAIL_SIZE, gfx::texture::AaMode::Single),
-            1,
-            gfx::memory::Bind::RENDER_TARGET | gfx::memory::Bind::SHADER_RESOURCE,
-            gfx::memory::Usage::Data,
-            Some(gfx::format::ChannelType::Unorm),
-        ).expect("create thumbnail texture");
-        let thumbnail = self.factory.view_texture_as_shader_resource::<ColorFormat>(
-            &texture,
-            (0, 0),
-            gfx::format::Swizzle::new(),
-        ).expect("view thumbnail as shader resource");
-        let thumbnail_target = self.factory.view_texture_as_render_target::<ColorFormat>(
-            &texture,
-            0,
-            None,
-        ).expect("view thumbnail as render target");
+        let texture = self
+            .factory
+            .create_texture::<gfx::format::R8_G8_B8_A8>(
+                gfx::texture::Kind::D2(
+                    crate::THUMBNAIL_SIZE,
+                    crate::THUMBNAIL_SIZE,
+                    gfx::texture::AaMode::Single,
+                ),
+                1,
+                gfx::memory::Bind::RENDER_TARGET | gfx::memory::Bind::SHADER_RESOURCE,
+                gfx::memory::Usage::Data,
+                Some(gfx::format::ChannelType::Unorm),
+            )
+            .expect("create thumbnail texture");
+        let thumbnail = self
+            .factory
+            .view_texture_as_shader_resource::<ColorFormat>(
+                &texture,
+                (0, 0),
+                gfx::format::Swizzle::new(),
+            )
+            .expect("view thumbnail as shader resource");
+        let thumbnail_target = self
+            .factory
+            .view_texture_as_render_target::<ColorFormat>(&texture, 0, None)
+            .expect("view thumbnail as render target");
 
         RenderedMap {
             duration: [to_seconds(map.duration), to_seconds(Instant::now() - start)],
@@ -163,30 +180,44 @@ impl MapRenderer {
 }
 
 impl RenderedMap {
-    fn update_buffers(&mut self, map: &AtomMap, z: u32, factory: &mut Factory, encoder: &mut Encoder) {
+    fn update_buffers(
+        &mut self,
+        map: &AtomMap,
+        z: u32,
+        factory: &mut Factory,
+        encoder: &mut Encoder,
+    ) {
         let vbuf_data = map.vertex_buffer(z).flat();
         let ibuf_data = map.index_buffer(z);
         let ibuf_data = ibuf_data.flat();
 
         if self.vbuf.len() < vbuf_data.len() {
-            self.vbuf = factory.create_buffer::<Vertex>(
-                vbuf_data.len(),
-                gfx::buffer::Role::Vertex,
-                gfx::memory::Usage::Dynamic,
-                gfx::memory::Bind::empty(),
-            ).expect("create vertex buffer");
+            self.vbuf = factory
+                .create_buffer::<Vertex>(
+                    vbuf_data.len(),
+                    gfx::buffer::Role::Vertex,
+                    gfx::memory::Usage::Dynamic,
+                    gfx::memory::Bind::empty(),
+                )
+                .expect("create vertex buffer");
         }
-        encoder.update_buffer(&self.vbuf, vbuf_data, 0).expect("update vbuf");
+        encoder
+            .update_buffer(&self.vbuf, vbuf_data, 0)
+            .expect("update vbuf");
 
         if self.ibuf.len() < ibuf_data.len() {
-            self.ibuf = factory.create_buffer::<u32>(
-                ibuf_data.len(),
-                gfx::buffer::Role::Index,
-                gfx::memory::Usage::Dynamic,
-                gfx::memory::Bind::empty(),
-            ).expect("create index buffer");
+            self.ibuf = factory
+                .create_buffer::<u32>(
+                    ibuf_data.len(),
+                    gfx::buffer::Role::Index,
+                    gfx::memory::Usage::Dynamic,
+                    gfx::memory::Bind::empty(),
+                )
+                .expect("create index buffer");
         }
-        encoder.update_buffer(&self.ibuf, ibuf_data, 0).expect("update ibuf");
+        encoder
+            .update_buffer(&self.ibuf, ibuf_data, 0)
+            .expect("update ibuf");
     }
 
     fn inner_paint(
@@ -209,9 +240,10 @@ impl RenderedMap {
                 start += call.len;
                 continue;
             }
-            let texture = parent
-                .icon_textures
-                .retrieve(factory, &parent.icons, call.texture as usize);
+            let texture =
+                parent
+                    .icon_textures
+                    .retrieve(factory, &parent.icons, call.texture as usize);
             let slice = gfx::Slice {
                 start: start,
                 end: start + call.len,
@@ -248,23 +280,49 @@ impl RenderedMap {
 
         // thumbnail render
         encoder.clear(&self.thumbnail_target, [0.0, 0.0, 0.0, 0.0]);
-        self.inner_paint(parent, map, z, factory, encoder, &self.thumbnail_target, [
-            [2.0 / map.size.0 as f32 / TILE_SIZE as f32, 0.0, 0.0, -1.0],
-            [0.0, -2.0 / map.size.1 as f32 / TILE_SIZE as f32, 0.0, 1.0],
-            [0.0, 0.0, 1.0, 0.0],
-            [0.0, 0.0, 0.0, 1.0],
-        ]);
+        self.inner_paint(
+            parent,
+            map,
+            z,
+            factory,
+            encoder,
+            &self.thumbnail_target,
+            [
+                [2.0 / map.size.0 as f32 / TILE_SIZE as f32, 0.0, 0.0, -1.0],
+                [0.0, -2.0 / map.size.1 as f32 / TILE_SIZE as f32, 0.0, 1.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+        );
 
         // regular render
         let (x, y, _, _) = view.get_dimensions();
         let zoom = parent.zoom;
-        self.inner_paint(parent, map, z, factory, encoder, view, [
-            // (0, 0) is the center of the screen, 1.0 = 1 pixel
-            [2.0 / x as f32, 0.0, 0.0, -2.0 * (center[0] * zoom).round() / zoom / x as f32],
-            [0.0, 2.0 / y as f32, 0.0, -2.0 * (center[1] * zoom).round() / zoom / y as f32],
-            [0.0, 0.0, 1.0, 0.0],
-            [0.0, 0.0, 0.0, 1.0 / zoom],
-        ]);
+        self.inner_paint(
+            parent,
+            map,
+            z,
+            factory,
+            encoder,
+            view,
+            [
+                // (0, 0) is the center of the screen, 1.0 = 1 pixel
+                [
+                    2.0 / x as f32,
+                    0.0,
+                    0.0,
+                    -2.0 * (center[0] * zoom).round() / zoom / x as f32,
+                ],
+                [
+                    0.0,
+                    2.0 / y as f32,
+                    0.0,
+                    -2.0 * (center[1] * zoom).round() / zoom / y as f32,
+                ],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0 / zoom],
+            ],
+        );
     }
 }
 
@@ -303,7 +361,7 @@ impl RenderPop {
 
         let texture_id = match icons.get_index(sprite.icon.as_ref()) {
             Some(id) => id,
-            None => return None,  // couldn't load
+            None => return None, // couldn't load
         };
         let icon_file = icons.get_icon(texture_id);
         let width = icon_file.metadata.width as f32;
@@ -343,10 +401,26 @@ impl RenderPop {
         let color = self.color;
 
         [
-            Vertex { color, position: [loc.0, loc.1], uv: [uv[0], uv[3]] },
-            Vertex { color, position: [loc.0, loc.1 + height], uv: [uv[0], uv[1]] },
-            Vertex { color, position: [loc.0 + width, loc.1 + height], uv: [uv[2], uv[1]] },
-            Vertex { color, position: [loc.0 + width, loc.1], uv: [uv[2], uv[3]] },
+            Vertex {
+                color,
+                position: [loc.0, loc.1],
+                uv: [uv[0], uv[3]],
+            },
+            Vertex {
+                color,
+                position: [loc.0, loc.1 + height],
+                uv: [uv[0], uv[1]],
+            },
+            Vertex {
+                color,
+                position: [loc.0 + width, loc.1 + height],
+                uv: [uv[2], uv[1]],
+            },
+            Vertex {
+                color,
+                position: [loc.0 + width, loc.1],
+                uv: [uv[2], uv[3]],
+            },
         ]
     }
 

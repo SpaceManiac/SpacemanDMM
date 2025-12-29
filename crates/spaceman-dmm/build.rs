@@ -4,8 +4,8 @@ extern crate git2;
 use std::env;
 use std::fs::File;
 use std::io::Write;
-use std::process::Command;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 fn main() {
     // build info
@@ -21,7 +21,7 @@ fn main() {
     if cfg!(windows) {
         let out_dir = env::var("OUT_DIR").ok().expect("can't find out_dir");
 
-        if cfg!(target_env="msvc") {
+        if cfg!(target_env = "msvc") {
             if let Err(e) = Command::new("windres")
                 .args(&["res/editor.rc", "-o"])
                 .arg(&format!("{}/editor_rc.lib", out_dir))

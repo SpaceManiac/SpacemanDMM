@@ -1,16 +1,16 @@
-use imgui::*;
-use dmm_tools::dmm::Prefab;
 use crate::{Environment, GREEN_TEXT, RED_TEXT};
+use dmm_tools::dmm::Prefab;
+use imgui::*;
 
 pub struct EditPrefab {
-    filter: ImString,
+    filter: String,
     fab: Prefab,
 }
 
 impl EditPrefab {
     pub fn new(fab: Prefab) -> EditPrefab {
         EditPrefab {
-            filter: ImString::with_capacity(128),
+            filter: String::with_capacity(128),
             fab,
         }
     }
@@ -24,9 +24,9 @@ impl EditPrefab {
     }
 
     pub fn menu(&mut self, ui: &Ui) {
-        ui.menu(im_str!("Filter..."), true, || {
-            ui.input_text(im_str!(""), &mut self.filter).build();
-            if MenuItem::new(im_str!("Clear")).build(ui) {
+        ui.menu("Filter...", || {
+            ui.input_text("", &mut self.filter).build();
+            if ui.menu_item_config("Clear").build() {
                 self.filter.clear();
             }
         });
@@ -70,36 +70,36 @@ impl EditPrefab {
         ui.text(im_str!("Instance variables ({})", fab.vars.len()));
         let mut remove = std::collections::HashSet::new();
         for (name, value) in fab.vars.iter() {
-            if !name.contains(filter.to_str()) {
+            if !name.contains(filter.as_str()) {
                 continue;
             }
             // TODO: red instead of green if invalid var
             {
-                let style = ui.push_style_colors(GREEN_TEXT);
+                let style = ui.push_style_color(GREEN_TEXT[0].0, GREEN_TEXT[0].1);
                 ui.text(&im_str!("  {}", name));
-                style.pop(ui);
+                style.pop();
             }
-            ui.same_line(offset);
+            ui.same_line_with_spacing(offset, 0.);
             if ui.small_button(&im_str!("X##editprefab_remove_{}", name)) {
                 remove.insert(name.to_owned());
             }
             if ui.is_item_hovered() {
                 ui.tooltip_text("Reset");
             }
-            ui.same_line(0.);
+            ui.same_line();
             ui.text(im_str!("{}", value));
         }
         for key in remove {
-            fab.vars.remove(&key);
+            fab.vars.shift_remove(&key);
         }
 
         // show the red path on error
         if red_paths {
             ui.separator();
             {
-                let style = ui.push_style_colors(RED_TEXT);
-                ui.text(im_str!("{}", &fab.path));
-                style.pop(ui);
+                let style = ui.push_style_color(RED_TEXT[0].0, RED_TEXT[0].1);
+                ui.text(&fab.path);
+                style.pop();
             }
         }
 
@@ -110,7 +110,7 @@ impl EditPrefab {
             ui.text(im_str!("{}", &search.path));
 
             for (name, var) in search.vars.iter() {
-                if !name.contains(filter.to_str()) {
+                if !name.contains(filter.as_str()) {
                     continue;
                 }
                 if let Some(decl) = var.declaration.as_ref() {
@@ -122,12 +122,12 @@ impl EditPrefab {
                         prefix = "-";
                     }
 
-                    let instance_value = self.fab.vars.get(name);
+                    let instance_value = self.fab.vars.get(name.as_str());
 
                     if instance_value.is_some() {
-                        let style = ui.push_style_colors(GREEN_TEXT);
+                        let style = ui.push_style_color(GREEN_TEXT[0].0, GREEN_TEXT[0].1);
                         ui.text(im_str!("{} {}", prefix, name));
-                        style.pop(ui);
+                        style.pop();
                     } else {
                         ui.text(im_str!("{} {}", prefix, name));
                     }
@@ -137,26 +137,29 @@ impl EditPrefab {
                     }
 
                     // search_ty is seeded with ty and must be Some to get here
-                    let original_value = ty.unwrap().get_value(name).and_then(|v| v.constant.as_ref());
+                    let original_value = ty
+                        .unwrap()
+                        .get_value(name)
+                        .and_then(|v| v.constant.as_ref());
                     if let Some(c) = instance_value {
-                        ui.same_line(offset);
-                        let style = ui.push_style_colors(GREEN_TEXT);
+                        ui.same_line_with_spacing(offset, 0.);
+                        let style = ui.push_style_color(GREEN_TEXT[0].0, GREEN_TEXT[0].1);
                         ui.text(im_str!(" {}    ", c));
-                        style.pop(ui);
+                        style.pop();
                         if ui.is_item_hovered() {
                             if let Some(c) = original_value {
                                 ui.tooltip_text(im_str!("Was: {}", c));
                             }
                         }
                     } else if let Some(c) = original_value {
-                        ui.same_line(offset);
+                        ui.same_line_with_spacing(offset, 0.);
                         ui.text(im_str!(" {}    ", c));
                         if ui.is_item_hovered() {
                             ui.set_mouse_cursor(Some(MouseCursor::TextInput));
                             ui.tooltip_text("Click to edit");
                             if ui.is_mouse_clicked(MouseButton::Left) {
                                 ui.set_scroll_y(0.);
-                                self.fab.vars.insert(name.clone(), c.clone());
+                                self.fab.vars.insert(name.to_string(), c.clone());
                             }
                         }
                     }

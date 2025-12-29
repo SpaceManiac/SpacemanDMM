@@ -1,5 +1,7 @@
-use std::{io, env, fs};
 use std::path::{Path, PathBuf};
+use std::{env, fs, io};
+
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Config {
@@ -20,7 +22,7 @@ impl Config {
     pub fn make_recent(&mut self, recent: &Path) {
         if let Some(first) = self.recent.first() {
             if first == recent {
-                return;  // no work to do
+                return; // no work to do
             }
         }
 
@@ -54,13 +56,13 @@ fn load(path: &Path) -> io::Result<Config> {
         Err(e) => {
             println!("Config read error:\n{}", e);
             Ok(Config::default())
-        }
+        },
     }
 }
 
 fn save(cfg: &Config, path: &Path) -> io::Result<()> {
-    use std::io::Write;
     use serde::Serialize;
+    use std::io::Write;
 
     let mut buffer = String::new();
     cfg.serialize(
@@ -68,7 +70,8 @@ fn save(cfg: &Config, path: &Path) -> io::Result<()> {
             .pretty_string(true)
             .pretty_string_literal(false)
             .pretty_array(true),
-    ).unwrap();
+    )
+    .unwrap();
 
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;

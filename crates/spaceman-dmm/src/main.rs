@@ -26,9 +26,11 @@ use imgui::*;
 use dmi::IconCache;
 use dmm_tools::dmm::Map;
 use dreammaker::objtree::{ObjectTree, TypeRef};
-type History = history::History<map_repr::AtomMap, Environment>;
-
 use edit_prefab::EditPrefab;
+
+use crate::support::ImRenderer;
+
+type History = history::History<map_repr::AtomMap, Environment>;
 
 const RED_TEXT: &[(StyleColor, [f32; 4])] = &[(StyleColor::Text, [1.0, 0.25, 0.25, 1.0])];
 const GREEN_TEXT: &[(StyleColor, [f32; 4])] = &[(StyleColor::Text, [0.25, 1.0, 0.25, 1.0])];
@@ -357,7 +359,7 @@ impl EditorScene {
                 for z in levels {
                     if let Some(rendered) = map.rendered.get_mut(z) {
                         rendered
-                            .fulfill(|| map_renderer.render(hist.current(), z as u32))
+                            .get_or_insert_with(|| map_renderer.render(hist.current(), z as u32))
                             .paint(
                                 map_renderer,
                                 hist.current(),
@@ -719,14 +721,10 @@ impl EditorScene {
                 let count = ui.fits_width(34.0); // 32 + 2px border
                 for (i, tool) in self.tools.iter().enumerate() {
                     if i % count != 0 {
-                        ui.same_line(0.0);
+                        ui.same_line();
                     }
 
-                    if ui.tool_icon(
-                        i == self.tool_current,
-                        &tool.icon,
-                        &im_str!("{}", tool.name),
-                    ) {
+                    if ui.tool_icon(i == self.tool_current, &tool.icon, &tool.name) {
                         self.tool_current = i;
                     }
                     if ui.is_item_hovered() {
@@ -755,11 +753,11 @@ impl EditorScene {
                 }
             });
 
-        Window::new(im_str!("Object Tree"))
+        ui.window(im_str!("Object Tree"))
             .position([10.0, 340.0], window_positions_cond)
             .movable(!self.ui_lock_windows)
             .size([300.0, 400.0], Condition::FirstUseEver)
-            .build(ui, || {
+            .build(|| {
                 if let Some(env) = self.environment.as_ref() {
                     let root = env.objtree.root();
                     root_node(ui, root, "area");
@@ -772,7 +770,7 @@ impl EditorScene {
             });
 
         let logical_size = ui.io().display_size;
-        Window::new(im_str!("Maps"))
+        ui.window("Maps")
             .position(
                 [logical_size[0] as f32 - 230.0, 30.0],
                 window_positions_cond,
@@ -783,7 +781,7 @@ impl EditorScene {
                 window_positions_cond,
             )
             .resizable(!self.ui_lock_windows)
-            .build(ui, || {
+            .build(|| {
                 for (map_idx, map) in self.maps.iter_mut().enumerate() {
                     let dirty = map.state.hist().map_or(false, |h| h.is_dirty());
                     let title = match map.path {
@@ -795,11 +793,7 @@ impl EditorScene {
                         ),
                         None => format!("Untitled##{}", map_idx),
                     };
-                    if ui
-                        .collapsing_header(&ImString::from(title))
-                        .default_open(true)
-                        .build()
-                    {
+                    if ui.collapsing_header(&title, TreeNodeFlags::DEFAULT_OPEN) {
                         if let Some(hist) = map.state.hist() {
                             let world = hist.current();
                             let dims = world.dim_xyz();
@@ -824,7 +818,7 @@ impl EditorScene {
                                         ..
                                     } = rendered;
                                     let map_renderer = &self.map_renderer;
-                                    let tex = *thumbnail_id.fulfill(|| {
+                                    let tex = *thumbnail_id.get_or_insert_with(|| {
                                         renderer.textures().insert((
                                             thumbnail.clone(),
                                             map_renderer.sampler.clone(),
@@ -835,7 +829,7 @@ impl EditorScene {
                                         self.map_current == map_idx && map.z_current == z as usize;
                                     Image::new(tex, [THUMBNAIL_SIZE as f32, THUMBNAIL_SIZE as f32])
                                         .border_col(ui.frame_color(is_current))
-                                        .build();
+                                        .build(ui);
                                     clicked = ui.is_item_hovered()
                                         && ui.is_mouse_clicked(MouseButton::Left);
                                     if clicked
@@ -854,7 +848,7 @@ impl EditorScene {
                                         ];
                                     }
                                 } else {
-                                    clicked = ui.button(
+                                    clicked = ui.button_with_size(
                                         &im_str!("z = {}##map_{}_{}", z + 1, map_idx, z),
                                         [THUMBNAIL_SIZE as f32 + 2.0, THUMBNAIL_SIZE as f32 + 2.0],
                                     );
@@ -948,14 +942,14 @@ impl EditorScene {
                             }
 
                             {
-                                let style = ui.push_style_colors(color_vars);
+                                let style = ui.push_style_color(color_vars);
                                 if ui.menu_item_config(&im_str!("{}", fab.path)).build() {
                                     edit_atoms.push(EditInstance {
                                         inst,
                                         base: EditPrefab::new(fab.clone()),
                                     });
                                 }
-                                style.pop(ui);
+                                style.pop();
                             }
                         }
                     }
@@ -970,23 +964,23 @@ impl EditorScene {
             let mut opened = true;
             let mut closed = false;
 
-            Window::new(im_str!("New Map"))
+            ui.window("New Map")
                 .opened(&mut opened)
                 .resizable(false)
-                .build(ui, || {
+                .build(|| {
                     ui.input_int(im_str!("X"), &mut new_map.x).build();
                     ui.input_int(im_str!("Y"), &mut new_map.y).build();
                     ui.input_int(im_str!("Z"), &mut new_map.z).build();
 
                     if !new_map.created {
-                        if ui.button(im_str!("New"), [80.0, 20.0]) {
+                        if ui.button_with_size(im_str!("New"), [80.0, 20.0]) {
                             new_map.created = true;
                         }
                     } else {
-                        ui.button(im_str!("Wait..."), [80.0, 20.0]);
+                        ui.button_with_size(im_str!("Wait..."), [80.0, 20.0]);
                     }
-                    ui.same_line(0.0);
-                    if ui.button(im_str!("Cancel"), [80.0, 20.0]) {
+                    ui.same_line();
+                    if ui.button_with_size(im_str!("Cancel"), [80.0, 20.0]) {
                         closed = true;
                     }
                 });
@@ -1048,13 +1042,13 @@ impl EditorScene {
                     ref mut inst,
                     ref mut base,
                 } = edit;
-                Window::new(&im_str!("{}##{}/{:?}", base.path(), uid, inst))
+                ui.window(&im_str!("{}##{}/{:?}", base.path(), uid, inst))
                     .opened(&mut keep)
                     .position(ui.io().mouse_pos, Condition::Appearing)
                     .size([450.0, 550.0], Condition::FirstUseEver)
                     .horizontal_scrollbar(true)
                     .menu_bar(true)
-                    .build(ui, || {
+                    .build(|| {
                         ui.menu_bar(|| {
                             if ui.menu_item_config(im_str!("Apply")).build() {
                                 // TODO: actually apply
@@ -1105,11 +1099,11 @@ impl EditorScene {
         if self.ui_debug_mode {
             if self.ui_debug_window {
                 let mut opened = self.ui_debug_window;
-                Window::new(im_str!("Debug"))
+                ui.window("Debug")
                     .position([320.0, 30.0], Condition::FirstUseEver)
                     .always_auto_resize(true)
                     .opened(&mut opened)
-                    .build(ui, || {
+                    .build(|| {
                         ui.text(im_str!(
                             "maps[{}], map = {}, zoom = {}",
                             self.maps.len(),
@@ -1151,9 +1145,9 @@ impl EditorScene {
                 self.ui_debug_window = opened;
             }
             if self.ui_style_editor {
-                Window::new(im_str!("Style Editor"))
+                ui.window("Style Editor")
                     .opened(&mut self.ui_style_editor)
-                    .build(ui, || ui.show_default_style_editor());
+                    .build(|| ui.show_default_style_editor());
             }
             if self.ui_imgui_metrics {
                 ui.show_metrics_window(&mut self.ui_imgui_metrics);
@@ -1163,13 +1157,13 @@ impl EditorScene {
         if self.ui_errors {
             self.last_errors = self.errors.len();
             let mut ui_errors = self.ui_errors;
-            Window::new(im_str!("Errors"))
+            ui.window("Errors")
                 .position([320.0, 340.0], Condition::FirstUseEver)
                 .size([600.0, 400.0], Condition::FirstUseEver)
                 .horizontal_scrollbar(true)
                 .opened(&mut ui_errors)
                 .menu_bar(true)
-                .build(ui, || {
+                .build(|| {
                     ui.menu_bar(|| {
                         if ui.menu_item_config(im_str!("Clear")).build() {
                             self.errors.clear();
@@ -1286,17 +1280,17 @@ impl EditorScene {
             k!(Ctrl + Z) => self.undo(),
             k!(Ctrl + Shift + Z) | k!(Ctrl + Y) => self.redo(),
             // Layers
-            k!(Ctrl + Key1) => self.toggle_layer(1),
-            k!(Ctrl + Key2) => self.toggle_layer(2),
-            k!(Ctrl + Key3) => self.toggle_layer(3),
-            k!(Ctrl + Key4) => self.toggle_layer(4),
+            k!(Ctrl + Alpha1) => self.toggle_layer(1),
+            k!(Ctrl + Alpha2) => self.toggle_layer(2),
+            k!(Ctrl + Alpha3) => self.toggle_layer(3),
+            k!(Ctrl + Alpha4) => self.toggle_layer(4),
             // misc
-            k!(Ctrl + Equals) | k!(Ctrl + Add) => {
+            k!(Ctrl + Equal) | k!(Ctrl + KeypadAdd) => {
                 if self.map_renderer.zoom < 16.0 {
                     self.map_renderer.zoom *= 2.0
                 }
             },
-            k!(Ctrl + Subtract) | k!(Ctrl + Minus) => {
+            k!(Ctrl + Minus) | k!(Ctrl + KeypadSubtract) => {
                 if self.map_renderer.zoom > 0.0625 {
                     self.map_renderer.zoom *= 0.5
                 }
@@ -1318,9 +1312,16 @@ impl EditorScene {
     }
 
     fn open_environment(&mut self) {
-        if let Ok(nfd::Response::Okay(fname)) = nfd::open_file_dialog(Some("dme"), None) {
-            self.load_environment(fname.into());
-        }
+        sdl3::dialog::show_open_file_dialog(
+            FILTERS_DME,
+            None::<&Path>,
+            false,
+            None,
+            Box::new(|_result, _filter| {
+                // TODO
+                //self.load_environment(fname.into());
+            }),
+        );
     }
 
     fn load_environment(&mut self, path: PathBuf) {
@@ -1710,44 +1711,10 @@ fn prepare_tool_icon(
 // ---------------------------------------------------------------------------
 // Extension traits
 
-trait RetainMut<T> {
-    fn retain_mut<F: FnMut(&mut T) -> bool>(&mut self, f: F);
-}
-
-impl<T> RetainMut<T> for Vec<T> {
-    fn retain_mut<F: FnMut(&mut T) -> bool>(&mut self, mut f: F) {
-        let len = self.len();
-        let mut del = 0;
-        for i in 0..len {
-            if !f(&mut self[i]) {
-                del += 1;
-            } else if del > 0 {
-                self.swap(i - del, i);
-            }
-        }
-        if del > 0 {
-            self.truncate(len - del);
-        }
-    }
-}
-
-trait Fulfill<T> {
-    fn fulfill<F: FnOnce() -> T>(&mut self, f: F) -> &mut T;
-}
-
-impl<T> Fulfill<T> for Option<T> {
-    fn fulfill<F: FnOnce() -> T>(&mut self, f: F) -> &mut T {
-        if self.is_none() {
-            *self = Some(f());
-        }
-        self.as_mut().unwrap()
-    }
-}
-
 trait UiExt {
     fn fits_width(&self, width: f32) -> usize;
     fn objtree_menu<'e>(&self, env: &'e Environment, selection: &mut Option<TypeRef<'e>>);
-    fn tool_icon(&self, active: bool, icon: &tools::ToolIcon, fallback: &ImStr) -> bool;
+    fn tool_icon(&self, active: bool, icon: &tools::ToolIcon, fallback: &str) -> bool;
     fn frame_color(&self, active: bool) -> [f32; 4];
 }
 
@@ -1765,7 +1732,7 @@ impl UiExt for Ui {
         objtree_menu_root(self, root, "mob", selection);
     }
 
-    fn tool_icon(&self, active: bool, icon: &tools::ToolIcon, fallback: &ImStr) -> bool {
+    fn tool_icon(&self, active: bool, icon: &tools::ToolIcon, fallback: &str) -> bool {
         if let &tools::ToolIcon::Loaded {
             tex,
             uv0,

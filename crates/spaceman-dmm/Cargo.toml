@@ -17,8 +17,7 @@ lodepng = "3.10.7"
 ndarray = "0.15.6"
 divrem = "1.0.0"
 sdl3 = "0.14.42"
-serde = "1.0.213"
-serde_derive = "1.0.213"
+serde = { version = "1.0.213", features = ["derive"] }
 toml = "0.5.11"
 petgraph = { version = "0.6.0", default-features = false }
 weak-table = "0.3.2"
