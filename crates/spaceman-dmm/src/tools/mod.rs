@@ -123,15 +123,14 @@ impl ToolIcon {
             .or_else(|| ty.get_value("dir").and_then(|v| v.constant.as_ref()))
             .and_then(|v| v.to_int())
             .and_then(dmi::Dir::from_int)
-            .unwrap_or(dmi::Dir::default());
+            .unwrap_or_default();
         let color = dmm_tools::minimap::color_of(&env.objtree, &prefab);
         let tint = [
             color[0] as f32 / 255.0,
             color[1] as f32 / 255.0,
             color[2] as f32 / 255.0,
             color[3] as f32 / 255.0,
-        ]
-        .into();
+        ];
 
         Some(ToolIcon::Dmi {
             icon,
@@ -187,6 +186,6 @@ pub fn configure(_objtree: &ObjectTree) -> Vec<Tool> {
 struct Dummy;
 impl ToolBehavior for Dummy {
     fn settings(&mut self, ui: &Ui, _: &Environment, _: &mut IconCtx) {
-        ui.text(im_str!("Not yet implemented."));
+        ui.text("Not yet implemented.");
     }
 }

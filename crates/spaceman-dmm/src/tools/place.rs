@@ -35,7 +35,7 @@ impl ToolBehavior for Place {
             ..
         } = self;
 
-        let add_popup_id = im_str!("place_tool_add");
+        let add_popup_id = "place_tool_add";
 
         let count = ui.fits_width(34.0);
         palette.retain_mut(|pal| {
@@ -47,24 +47,22 @@ impl ToolBehavior for Place {
             ui.tool_icon(
                 i == *pal_current,
                 pal.icon.prepare(Some(env), ctx),
-                &im_str!("{}", pal.fab.path),
+                &pal.fab.path,
                 ctx.renderer,
             );
             if ui.is_item_hovered() {
-                ui.tooltip_text(im_str!("{:#}", pal.fab));
+                ui.tooltip_text(format!("{:#}", pal.fab));
                 if ui.is_mouse_clicked(MouseButton::Left) {
                     *pal_current = i;
-                } else if ui.is_mouse_clicked(MouseButton::Right) {
-                    if pal.edit.is_none() {
-                        pal.edit = Some(EditPrefab::new(pal.fab.clone()));
-                    }
+                } else if ui.is_mouse_clicked(MouseButton::Right) && pal.edit.is_none() {
+                    pal.edit = Some(EditPrefab::new(pal.fab.clone()));
                 }
             }
 
             let mut keep_editor = true;
             if let Some(ref mut edit) = pal.edit {
                 let fab = &mut pal.fab;
-                ui.window(&im_str!("Palette: {}##place/{}", edit.path(), i))
+                ui.window(&format!("Palette: {}##place/{}", edit.path(), i))
                     .opened(&mut keep_editor)
                     .position(ui.io().mouse_pos, Condition::Appearing)
                     .size([350.0, 500.0], Condition::FirstUseEver)
@@ -100,11 +98,11 @@ impl ToolBehavior for Place {
         if i % count != 0 {
             ui.same_line();
         }
-        if ui.button_with_size(im_str!("+"), [34.0, 34.0]) {
+        if ui.button_with_size("+", [34.0, 34.0]) {
             ui.open_popup(add_popup_id);
         }
         if ui.is_item_hovered() {
-            ui.tooltip_text(im_str!("Add"));
+            ui.tooltip_text("Add");
         }
 
         ui.popup(add_popup_id, || {

@@ -1,11 +1,7 @@
 //! The map editor proper, with a GUI and everything.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![allow(dead_code)] // TODO: remove when this is not a huge WIP
-
-macro_rules! im_str {
-    ($x:expr) => ($x);
-    ($x:expr, $($rest:tt)*) => (&format!($x, $($rest)*));
-}
+#![allow(unused_variables)]
 
 mod config;
 mod dmi;
@@ -260,10 +256,10 @@ impl EditorScene {
                 other => other,
             };
         }
-        if environment.errors.len() > 0 {
+        if !environment.errors.is_empty() {
             self.ui_errors = true;
         }
-        self.errors.extend(environment.errors.drain(..));
+        self.errors.append(&mut environment.errors);
         self.environment = Some(environment);
     }
 
@@ -421,7 +417,7 @@ impl EditorScene {
         };
 
         ui.main_menu_bar(|| {
-            ui.menu(im_str!("File"), || {
+            ui.menu("File", || {
                 let some_map = self.maps.get(self.map_current).is_some();
                 if ui
                     .menu_item_config("Open environment")
@@ -431,14 +427,14 @@ impl EditorScene {
                     self.open_environment();
                 }
                 ui.menu_with_enabled(
-                    im_str!("Recent environments"),
+                    "Recent environments",
                     !self.config.recent.is_empty(),
                     || {
                         let mut clicked = None;
                         for (i, path) in self.config.recent.iter().enumerate() {
                             if ui
-                                .menu_item_config(&im_str!("{}", path.display()))
-                                .shortcut(&im_str!("{}", i + 1))
+                                .menu_item_config(&format!("{}", path.display()))
+                                .shortcut(&format!("{}", i + 1))
                                 .build()
                             {
                                 clicked = Some(path.to_owned());
@@ -450,7 +446,7 @@ impl EditorScene {
                     },
                 );
                 if ui
-                    .menu_item_config(im_str!("Update environment"))
+                    .menu_item_config("Update environment")
                     .shortcut(ctrl_shortcut!("U"))
                     .enabled(self.environment.is_some())
                     .build()
@@ -459,21 +455,21 @@ impl EditorScene {
                 }
                 ui.separator();
                 if ui
-                    .menu_item_config(im_str!("New"))
+                    .menu_item_config("New")
                     .shortcut(ctrl_shortcut!("N"))
                     .build()
                 {
                     self.new_map();
                 }
                 if ui
-                    .menu_item_config(im_str!("Open"))
+                    .menu_item_config("Open")
                     .shortcut(ctrl_shortcut!("O"))
                     .build()
                 {
                     self.open_map();
                 }
                 if ui
-                    .menu_item_config(im_str!("Close"))
+                    .menu_item_config("Close")
                     .shortcut(ctrl_shortcut!("W"))
                     .enabled(some_map)
                     .build()
@@ -482,7 +478,7 @@ impl EditorScene {
                 }
                 ui.separator();
                 if ui
-                    .menu_item_config(im_str!("Save"))
+                    .menu_item_config("Save")
                     .shortcut(ctrl_shortcut!("S"))
                     .enabled(some_map)
                     .build()
@@ -490,7 +486,7 @@ impl EditorScene {
                     self.save_map();
                 }
                 if ui
-                    .menu_item_config(im_str!("Save As"))
+                    .menu_item_config("Save As")
                     .shortcut(ctrl_shortcut!("Shift+S"))
                     .enabled(some_map)
                     .build()
@@ -498,25 +494,21 @@ impl EditorScene {
                     self.save_map_as(false);
                 }
                 if ui
-                    .menu_item_config(im_str!("Save Copy As"))
+                    .menu_item_config("Save Copy As")
                     .enabled(some_map)
                     .build()
                 {
                     self.save_map_as(true);
                 }
                 if ui
-                    .menu_item_config(im_str!("Save All"))
+                    .menu_item_config("Save All")
                     .enabled(!self.maps.is_empty())
                     .build()
                 {
                     self.save_all();
                 }
                 ui.separator();
-                if ui
-                    .menu_item_config(im_str!("Exit"))
-                    .shortcut(im_str!("Alt+F4"))
-                    .build()
-                {
+                if ui.menu_item_config("Exit").shortcut("Alt+F4").build() {
                     continue_running = false;
                 }
             });
@@ -527,9 +519,9 @@ impl EditorScene {
                     can_redo = hist.can_redo();
                 }
             }
-            ui.menu(im_str!("Edit"), || {
+            ui.menu("Edit", || {
                 if ui
-                    .menu_item_config(im_str!("Undo"))
+                    .menu_item_config("Undo")
                     .shortcut(ctrl_shortcut!("Z"))
                     .enabled(can_undo)
                     .build()
@@ -537,7 +529,7 @@ impl EditorScene {
                     self.undo();
                 }
                 if ui
-                    .menu_item_config(im_str!("Redo"))
+                    .menu_item_config("Redo")
                     .shortcut(ctrl_shortcut!("Shift+Z"))
                     .enabled(can_redo)
                     .build()
@@ -545,63 +537,61 @@ impl EditorScene {
                     self.redo();
                 }
                 ui.separator();
-                ui.menu_item_config(im_str!("Cut"))
+                ui.menu_item_config("Cut")
                     .shortcut(ctrl_shortcut!("X"))
                     .enabled(false)
                     .build();
-                ui.menu_item_config(im_str!("Copy"))
+                ui.menu_item_config("Copy")
                     .shortcut(ctrl_shortcut!("C"))
                     .enabled(false)
                     .build();
-                ui.menu_item_config(im_str!("Paste"))
+                ui.menu_item_config("Paste")
                     .shortcut(ctrl_shortcut!("V"))
                     .enabled(false)
                     .build();
-                ui.menu_item_config(im_str!("Delete"))
-                    .shortcut(im_str!("Del"))
+                ui.menu_item_config("Delete")
+                    .shortcut("Del")
                     .enabled(false)
                     .build();
                 ui.separator();
-                ui.menu_item_config(im_str!("Select All"))
+                ui.menu_item_config("Select All")
                     .shortcut(ctrl_shortcut!("A"))
                     .enabled(false)
                     .build();
-                ui.menu_item_config(im_str!("Select None"))
+                ui.menu_item_config("Select None")
                     .shortcut(ctrl_shortcut!("Shift+A"))
                     .enabled(false)
                     .build();
             });
-            ui.menu(im_str!("Options"), || {
-                ui.menu_item_config(im_str!("Frame areas"))
-                    .enabled(false)
-                    .build();
-                ui.menu_item_config(im_str!("Show extra variables"))
+            ui.menu("Options", || {
+                ui.menu_item_config("Frame areas").enabled(false).build();
+                ui.menu_item_config("Show extra variables")
                     .build_checkbox(&mut self.ui_extra_vars);
                 ui.separator();
-                ui.menu_item_config(im_str!("Stacked rendering"))
+                ui.menu_item_config("Stacked rendering")
                     .build_checkbox(&mut self.stacked_rendering);
-                ui.menu_item_config(im_str!("Invert order"))
+                ui.menu_item_config("Invert order")
                     .build_checkbox(&mut self.stacked_inverted);
                 ui.separator();
                 if ui
-                    .menu_item_config(im_str!("Zoom in"))
+                    .menu_item_config("Zoom in")
                     .enabled(self.map_renderer.zoom < MAX_ZOOM)
-                    .shortcut(im_str!("Alt+Wheel Up"))
+                    .shortcut("Alt+Wheel Up")
                     .build()
                 {
                     self.zoom_in()
                 }
                 if ui
-                    .menu_item_config(im_str!("Zoom out"))
+                    .menu_item_config("Zoom out")
                     .enabled(self.map_renderer.zoom > MIN_ZOOM)
-                    .shortcut(im_str!("Alt+Wheel Down"))
+                    .shortcut("Alt+Wheel Down")
                     .build()
                 {
                     self.zoom_out()
                 }
                 for &zoom in [0.5, 1.0, 2.0, 4.0].iter() {
                     if ui
-                        .menu_item_config(&im_str!("{}%", 100.0 * zoom))
+                        .menu_item_config(&format!("{}%", 100.0 * zoom))
                         .selected(self.map_renderer.zoom == zoom)
                         .build()
                     {
@@ -609,76 +599,69 @@ impl EditorScene {
                     }
                 }
             });
-            ui.menu(im_str!("Layers"), || {
-                ui.menu_item_config(im_str!("Customize filters..."))
+            ui.menu("Layers", || {
+                ui.menu_item_config("Customize filters...")
                     .enabled(false)
                     .build();
                 ui.separator();
-                ui.menu_item_config(im_str!("Area"))
+                ui.menu_item_config("Area")
                     .shortcut(ctrl_shortcut!("1"))
                     .build_checkbox(&mut self.map_renderer.layers[1]);
-                ui.menu_item_config(im_str!("Turf"))
+                ui.menu_item_config("Turf")
                     .shortcut(ctrl_shortcut!("2"))
                     .build_checkbox(&mut self.map_renderer.layers[2]);
-                ui.menu_item_config(im_str!("Obj"))
+                ui.menu_item_config("Obj")
                     .shortcut(ctrl_shortcut!("3"))
                     .build_checkbox(&mut self.map_renderer.layers[3]);
-                ui.menu_item_config(im_str!("Mob"))
+                ui.menu_item_config("Mob")
                     .shortcut(ctrl_shortcut!("4"))
                     .build_checkbox(&mut self.map_renderer.layers[4]);
             });
-            ui.menu(im_str!("Window"), || {
-                ui.menu_item_config(im_str!("Lock positions"))
+            ui.menu("Window", || {
+                ui.menu_item_config("Lock positions")
                     .build_checkbox(&mut self.ui_lock_windows);
                 if ui
-                    .menu_item_config(im_str!("Reset positions"))
+                    .menu_item_config("Reset positions")
                     .enabled(!self.ui_lock_windows)
                     .build()
                 {
                     window_positions_cond = Condition::Always;
                 }
                 ui.separator();
-                ui.menu_item_config(im_str!("Errors"))
+                ui.menu_item_config("Errors")
                     .build_checkbox(&mut self.ui_errors);
             });
             if self.ui_debug_mode {
-                ui.menu(im_str!("Debug"), || {
-                    ui.menu_item_config(im_str!("Debug Window"))
+                ui.menu("Debug", || {
+                    ui.menu_item_config("Debug Window")
                         .build_checkbox(&mut self.ui_debug_window);
-                    ui.menu_item_config(im_str!("Style Editor"))
+                    ui.menu_item_config("Style Editor")
                         .build_checkbox(&mut self.ui_style_editor);
-                    ui.menu_item_config(im_str!("ImGui Metrics"))
+                    ui.menu_item_config("ImGui Metrics")
                         .build_checkbox(&mut self.ui_imgui_metrics);
-                    if ui
-                        .menu_item_config(im_str!("Disable"))
-                        .shortcut(im_str!("F3"))
-                        .build()
-                    {
+                    if ui.menu_item_config("Disable").shortcut("F3").build() {
                         self.ui_debug_mode = false;
                     }
                 });
             }
-            ui.menu(im_str!("Help"), || {
-                ui.menu(im_str!("About SpacemanDMM"), || {
-                    ui.text(&im_str!(
+            ui.menu("Help", || {
+                ui.menu("About SpacemanDMM", || {
+                    ui.text(format!(
                         "{} {}  Copyright (C) 2017-2025  Tad Hardesty",
                         env!("CARGO_PKG_NAME"),
                         env!("CARGO_PKG_VERSION"),
                     ));
-                    ui.text(&im_str!(
-                        "{}",
-                        include_str!(concat!(env!("OUT_DIR"), "/build-info.txt"))
-                    ));
-                    ui.text(im_str!(
+                    ui.text(include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")));
+                    ui.text(
                         "This program comes with ABSOLUTELY NO WARRANTY. This is free software,\n\
                         and you are welcome to redistribute it under the conditions of the GNU\n\
-                        General Public License version 3."
-                    ));
+                        General Public License version 3.",
+                    );
                 });
-                ui.menu_item_config(im_str!("Open-source licenses"))
+                ui.menu_item_config("Open-source licenses")
                     .enabled(false)
                     .build();
-                ui.menu(im_str!("ImGui help"), || {
+                ui.menu("ImGui help", || {
                     ui.show_user_guide();
                 });
             });
@@ -697,7 +680,7 @@ impl EditorScene {
 
             if let Some(loading) = self.loading_env.as_ref() {
                 ui.separator();
-                ui.text(im_str!(
+                ui.text(format!(
                     "{} Loading {}",
                     spinner!(),
                     file_name(&loading.path)
@@ -708,11 +691,11 @@ impl EditorScene {
                     match map.state {
                         MapState::Loading(..) => {
                             ui.separator();
-                            ui.text(im_str!("{} Loading {}", spinner!(), file_name(path)));
+                            ui.text(format!("{} Loading {}", spinner!(), file_name(path)));
                         },
                         MapState::Refreshing { .. } | MapState::Preparing(..) => {
                             ui.separator();
-                            ui.text(im_str!("{} Preparing {}", spinner!(), file_name(path)));
+                            ui.text(format!("{} Preparing {}", spinner!(), file_name(path)));
                         },
                         _ => {},
                     }
@@ -722,7 +705,7 @@ impl EditorScene {
             if self.errors.len() > self.last_errors {
                 ui.separator();
                 if ui
-                    .menu_item_config(&im_str!("{} errors", self.errors.len() - self.last_errors))
+                    .menu_item_config(&format!("{} errors", self.errors.len() - self.last_errors))
                     .build()
                 {
                     self.ui_errors = true;
@@ -730,7 +713,7 @@ impl EditorScene {
             }
         });
 
-        ui.window(im_str!("Tools"))
+        ui.window("Tools")
             .position([10.0, 30.0], window_positions_cond)
             .movable(!self.ui_lock_windows)
             .size([300.0, 300.0], Condition::FirstUseEver)
@@ -742,20 +725,20 @@ impl EditorScene {
                         ui.same_line();
                     }
 
-                    if ui.tool_icon(i == self.tool_current, &tool.icon, &tool.name, renderer) {
+                    if ui.tool_icon(i == self.tool_current, &tool.icon, tool.name, renderer) {
                         self.tool_current = i;
                     }
                     if ui.is_item_hovered() {
-                        ui.tooltip_text(&tool.name);
+                        ui.tooltip_text(tool.name);
                     }
                 }
 
                 if let Some(tool) = self.tools.get_mut(self.tool_current) {
                     ui.separator();
                     if tool.help.is_empty() {
-                        ui.text_wrapped(&im_str!("{}", tool.name));
+                        ui.text_wrapped(tool.name);
                     } else {
-                        ui.text_wrapped(&im_str!("{} - {}", tool.name, tool.help));
+                        ui.text_wrapped(format!("{} - {}", tool.name, tool.help));
                     }
                     if let Some(ref env) = self.environment {
                         tool.behavior.settings(
@@ -764,14 +747,14 @@ impl EditorScene {
                             &mut tools::IconCtx::new(renderer, &mut self.map_renderer),
                         );
                     } else if self.loading_env.is_some() {
-                        ui.text(im_str!("The environment is loading..."));
+                        ui.text("The environment is loading...");
                     } else {
-                        ui.text(im_str!("Load an environment to get started."));
+                        ui.text("Load an environment to get started.");
                     }
                 }
             });
 
-        ui.window(im_str!("Object Tree"))
+        ui.window("Object Tree")
             .position([10.0, 340.0], window_positions_cond)
             .movable(!self.ui_lock_windows)
             .size([300.0, 400.0], Condition::FirstUseEver)
@@ -783,25 +766,22 @@ impl EditorScene {
                     root_node(ui, root, "obj");
                     root_node(ui, root, "mob");
                 } else {
-                    ui.text(im_str!("The object tree is loading..."));
+                    ui.text("The object tree is loading...");
                 }
             });
 
         let logical_size = ui.io().display_size;
         ui.window("Maps")
-            .position(
-                [logical_size[0] as f32 - 230.0, 30.0],
-                window_positions_cond,
-            )
+            .position([logical_size[0] - 230.0, 30.0], window_positions_cond)
             .movable(!self.ui_lock_windows)
             .size(
-                [THUMBNAIL_SIZE as f32 + 34.0, logical_size[1] as f32 - 40.0],
+                [THUMBNAIL_SIZE as f32 + 34.0, logical_size[1] - 40.0],
                 window_positions_cond,
             )
             .resizable(!self.ui_lock_windows)
             .build(|| {
                 for (map_idx, map) in self.maps.iter_mut().enumerate() {
-                    let dirty = map.state.hist().map_or(false, |h| h.is_dirty());
+                    let dirty = map.state.hist().is_some_and(|h| h.is_dirty());
                     let title = match map.path {
                         Some(ref path) => format!(
                             "{}{}##map_{}",
@@ -816,14 +796,14 @@ impl EditorScene {
                             let world = hist.current();
                             let dims = world.dim_xyz();
                             if let Some(dmm) = map.state.base_dmm() {
-                                ui.text(im_str!(
+                                ui.text(format!(
                                     "{:?}; {}-keys: {}",
                                     dims,
                                     dmm.key_length(),
                                     dmm.dictionary.len()
                                 ));
                             } else {
-                                ui.text(im_str!("{:?}", dims));
+                                ui.text(format!("{:?}", dims));
                             }
                             for z in 0..dims.2 {
                                 let clicked;
@@ -867,7 +847,7 @@ impl EditorScene {
                                     }
                                 } else {
                                     clicked = ui.button_with_size(
-                                        &im_str!("z = {}##map_{}_{}", z + 1, map_idx, z),
+                                        format!("z = {}##map_{}_{}", z + 1, map_idx, z),
                                         [THUMBNAIL_SIZE as f32 + 2.0, THUMBNAIL_SIZE as f32 + 2.0],
                                     );
                                 }
@@ -877,7 +857,7 @@ impl EditorScene {
                                 }
                             }
                         } else if let Some(dmm) = map.state.base_dmm() {
-                            ui.text(im_str!(
+                            ui.text(format!(
                                 "{:?}; {}-keys: {}",
                                 dmm.dim_xyz(),
                                 dmm.key_length(),
@@ -888,7 +868,7 @@ impl EditorScene {
                 }
             });
 
-        let context_popup_id = im_str!("context");
+        let context_popup_id = "context";
         if !ui.io().want_capture_mouse {
             if ui.is_mouse_clicked(MouseButton::Left) {
                 if let Some(env) = self.environment.as_ref() {
@@ -960,7 +940,7 @@ impl EditorScene {
                             }
 
                             let style = ui.push_style_color(StyleColor::Text, color);
-                            if ui.menu_item_config(&im_str!("{}", fab.path)).build() {
+                            if ui.menu_item_config(&fab.path).build() {
                                 edit_atoms.push(EditInstance {
                                     inst,
                                     base: EditPrefab::new(fab.clone()),
@@ -984,25 +964,25 @@ impl EditorScene {
                 .opened(&mut opened)
                 .resizable(false)
                 .build(|| {
-                    ui.input_int(im_str!("X"), &mut new_map.x).build();
-                    ui.input_int(im_str!("Y"), &mut new_map.y).build();
-                    ui.input_int(im_str!("Z"), &mut new_map.z).build();
+                    ui.input_int("X", &mut new_map.x).build();
+                    ui.input_int("Y", &mut new_map.y).build();
+                    ui.input_int("Z", &mut new_map.z).build();
 
                     if !new_map.created {
-                        if ui.button_with_size(im_str!("New"), [80.0, 20.0]) {
+                        if ui.button_with_size("New", [80.0, 20.0]) {
                             new_map.created = true;
                         }
                     } else {
-                        ui.button_with_size(im_str!("Wait..."), [80.0, 20.0]);
+                        ui.button_with_size("Wait...", [80.0, 20.0]);
                     }
                     ui.same_line();
-                    if ui.button_with_size(im_str!("Cancel"), [80.0, 20.0]) {
+                    if ui.button_with_size("Cancel", [80.0, 20.0]) {
                         closed = true;
                     }
                 });
-            new_map.x = std::cmp::min(std::cmp::max(new_map.x, 1), 512);
-            new_map.y = std::cmp::min(std::cmp::max(new_map.y, 1), 512);
-            new_map.z = std::cmp::min(std::cmp::max(new_map.z, 1), 32);
+            new_map.x = new_map.x.clamp(1, 512);
+            new_map.y = new_map.y.clamp(1, 512);
+            new_map.z = new_map.z.clamp(1, 32);
 
             if let Some(env) = self.environment.as_ref() {
                 if new_map.created {
@@ -1058,7 +1038,7 @@ impl EditorScene {
                     ref mut inst,
                     ref mut base,
                 } = edit;
-                ui.window(&im_str!("{}##{}/{:?}", base.path(), uid, inst))
+                ui.window(&format!("{}##{}/{:?}", base.path(), uid, inst))
                     .opened(&mut keep)
                     .position(ui.io().mouse_pos, Condition::Appearing)
                     .size([450.0, 550.0], Condition::FirstUseEver)
@@ -1066,20 +1046,20 @@ impl EditorScene {
                     .menu_bar(true)
                     .build(|| {
                         ui.menu_bar(|| {
-                            if ui.menu_item_config(im_str!("Apply")).build() {
+                            if ui.menu_item_config("Apply").build() {
                                 // TODO: actually apply
                                 keep2 = false;
                             }
                             ui.separator();
-                            if ui.menu_item_config(im_str!("Delete")).build() {
+                            if ui.menu_item_config("Delete").build() {
                                 keep2 = false;
                                 delete.push(inst.clone());
                             }
                             ui.separator();
-                            if ui.menu_item_config(im_str!("Pick")).build() {
+                            if ui.menu_item_config("Pick").build() {
                                 if let Some(tool) = tools.get_mut(tool_current) {
                                     if let Some(env) = env {
-                                        tool.behavior.pick(&env, base.fab());
+                                        tool.behavior.pick(env, base.fab());
                                     }
                                 }
                             }
@@ -1120,27 +1100,27 @@ impl EditorScene {
                     .always_auto_resize(true)
                     .opened(&mut opened)
                     .build(|| {
-                        ui.text(im_str!(
+                        ui.text(format!(
                             "maps[{}], map = {}, zoom = {}",
                             self.maps.len(),
                             self.map_current,
                             self.map_renderer.zoom
                         ));
                         if let Some(env) = self.environment.as_ref() {
-                            ui.text(im_str!(
+                            ui.text(format!(
                                 "types[{}], icons[{}]",
                                 env.objtree.node_indices().count(),
                                 env.icons.len()
                             ));
-                            ui.text(im_str!("turf = {}", env.turf));
-                            ui.text(im_str!("area = {}", env.area));
+                            ui.text(format!("turf = {}", env.turf));
+                            ui.text(format!("area = {}", env.area));
                         }
                         if let Some(map) = self.maps.get(self.map_current) {
-                            ui.text(im_str!("center = {:?}", map.center));
+                            ui.text(format!("center = {:?}", map.center));
                             if let Some(hist) = map.state.hist() {
                                 let current = hist.current();
                                 if let Some(level) = current.levels.get(map.z_current) {
-                                    ui.text(im_str!(
+                                    ui.text(format!(
                                         "draw_calls[{}], pops[{}], atoms[{}]",
                                         level.draw_calls.len(),
                                         current.pops.len(),
@@ -1151,11 +1131,11 @@ impl EditorScene {
                             if let Some(rendered) =
                                 map.rendered.get(map.z_current).and_then(|x| x.as_ref())
                             {
-                                ui.text(im_str!("timings: {:?}", rendered.duration));
+                                ui.text(format!("timings: {:?}", rendered.duration));
                             }
                         }
                         if let Some((x, y)) = self.target_tile {
-                            ui.text(im_str!("target: {}, {}", x, y));
+                            ui.text(format!("target: {}, {}", x, y));
                         }
                     });
                 self.ui_debug_window = opened;
@@ -1181,12 +1161,12 @@ impl EditorScene {
                 .menu_bar(true)
                 .build(|| {
                     ui.menu_bar(|| {
-                        if ui.menu_item_config(im_str!("Clear")).build() {
+                        if ui.menu_item_config("Clear").build() {
                             self.errors.clear();
                         }
                     });
                     for error in self.errors.iter() {
-                        ui.text(im_str!("{}", error));
+                        ui.text(error);
                     }
                 });
             self.ui_errors = ui_errors;
@@ -1327,7 +1307,7 @@ impl EditorScene {
     }
 
     fn open_environment(&mut self) {
-        sdl3::dialog::show_open_file_dialog(
+        if let Err(e) = sdl3::dialog::show_open_file_dialog(
             FILTERS_DME,
             None::<&Path>,
             false,
@@ -1337,7 +1317,9 @@ impl EditorScene {
                 eprintln!("{:?}", result);
                 //self.load_environment(fname.into());
             }),
-        );
+        ) {
+            self.errors.push(e.to_string());
+        }
     }
 
     fn load_environment(&mut self, path: PathBuf) {
@@ -1397,7 +1379,7 @@ impl EditorScene {
     }
 
     fn open_map(&mut self) {
-        sdl3::dialog::show_open_file_dialog(
+        if let Err(e) = sdl3::dialog::show_open_file_dialog(
             FILTERS_DMM,
             None::<&Path>,
             true,
@@ -1405,7 +1387,9 @@ impl EditorScene {
             Box::new(|_paths, _| {
                 // TODO
             }),
-        );
+        ) {
+            self.errors.push(e.to_string());
+        }
         /*
         match nfd::open_file_multiple_dialog(Some("dmm"), None) {
             Ok(nfd::Response::Okay(fname)) => {
@@ -1463,7 +1447,7 @@ impl EditorScene {
         if let Some(map) = self.maps.get_mut(self.map_current) {
             if let Some(hist) = map.state.hist() {
                 if map.path.is_none() {
-                    sdl3::dialog::show_save_file_dialog(
+                    if let Err(e) = sdl3::dialog::show_save_file_dialog(
                         FILTERS_DMM,
                         None::<&Path>,
                         None,
@@ -1472,7 +1456,9 @@ impl EditorScene {
                             eprintln!("save_map {:?}", path);
                             // map.path = Some(PathBuf::from(fname));
                         }),
-                    );
+                    ) {
+                        self.errors.push(e.to_string());
+                    }
                     return;
                 }
                 let path = map.path.as_ref().unwrap();
@@ -1488,7 +1474,7 @@ impl EditorScene {
     fn save_map_as(&mut self, _copy: bool) {
         if let Some(map) = self.maps.get_mut(self.map_current) {
             if let Some(_hist) = map.state.hist() {
-                sdl3::dialog::show_save_file_dialog(
+                if let Err(e) = sdl3::dialog::show_save_file_dialog(
                     FILTERS_DMM,
                     None::<&Path>,
                     None,
@@ -1507,7 +1493,9 @@ impl EditorScene {
                         }
                         */
                     }),
-                );
+                ) {
+                    self.errors.push(e.to_string());
+                }
             }
         }
     }
@@ -1568,7 +1556,7 @@ const FILTERS_DMM: &[DialogFileFilter] = &[DialogFileFilter {
 // Helpers
 
 impl Environment {
-    fn find_closest_type(&self, mut path: &str) -> (bool, Option<TypeRef>) {
+    fn find_closest_type(&self, mut path: &str) -> (bool, Option<TypeRef<'_>>) {
         // find the "best" type by chopping the path if needed
         let mut ty = self.objtree.find(path);
         let red_paths = ty.is_none();
@@ -1627,12 +1615,10 @@ fn root_node(ui: &Ui, ty: TypeRef, name: &str) {
 fn tree_node(ui: &Ui, ty: TypeRef) {
     let mut children: Vec<_> = ty.children().collect();
     if children.is_empty() {
-        ui.tree_node_config(&im_str!("{}", ty.name()))
-            .leaf(true)
-            .build(|| {});
+        ui.tree_node_config(ty.name()).leaf(true).build(|| {});
     } else {
         children.sort_by_key(|t| t.name().to_owned()); // TODO: too much to_owned?
-        ui.tree_node_config(&im_str!("{}", ty.name())).build(|| {
+        ui.tree_node_config(ty.name()).build(|| {
             for child in children {
                 tree_node(ui, child);
             }
@@ -1640,7 +1626,7 @@ fn tree_node(ui: &Ui, ty: TypeRef) {
     }
 }
 
-fn file_name(path: &Path) -> Cow<str> {
+fn file_name(path: &Path) -> Cow<'_, str> {
     path.file_name().map_or("".into(), |s| s.to_string_lossy())
 }
 
@@ -1821,13 +1807,13 @@ fn objtree_menu_root<'e>(
 fn objtree_menu_node<'e>(ui: &Ui, ty: TypeRef<'e>, selection: &mut Option<TypeRef<'e>>) {
     let mut children: Vec<_> = ty.children().collect();
     if children.is_empty() {
-        if ui.menu_item_config(&im_str!("{}", ty.name())).build() {
+        if ui.menu_item_config(ty.name()).build() {
             *selection = Some(ty);
         }
     } else {
         children.sort_by_key(|t| t.name().to_owned()); // TODO: too much to_owned?
-        ui.menu(&im_str!("{}", ty.name()), || {
-            if ui.menu_item_config(&im_str!("{}", ty.name())).build() {
+        ui.menu(ty.name(), || {
+            if ui.menu_item_config(ty.name()).build() {
                 *selection = Some(ty);
             }
             ui.separator();

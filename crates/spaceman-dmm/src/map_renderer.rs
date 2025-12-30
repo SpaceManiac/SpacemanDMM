@@ -1,19 +1,11 @@
 //! GPU map renderer.
 use crate::dmi::*;
-use crate::map_repr::AtomMap;
-use crate::ColorFormat;
 use dmm_tools::dmm::Prefab;
 use dmm_tools::minimap::{Layer, Sprite};
 use dreammaker::objtree::ObjectTree;
 use imgui::TextureId;
-use sdl3::gpu::{
-    BlendFactor, Buffer, BufferUsageFlags, ColorTargetBlendState, ColorTargetDescription,
-    CommandBuffer, Device, GraphicsPipeline, Sampler, SamplerCreateInfo, Texture,
-};
-use sdl3::video::Window;
-use slice_of_array::prelude::*;
+use sdl3::gpu::{Buffer, Device, Sampler, SamplerCreateInfo, Texture};
 use std::sync::Arc;
-use std::time::Instant;
 
 const TILE_SIZE: u32 = 32;
 
@@ -383,17 +375,11 @@ impl RenderPop {
             return None;
         }
 
-        let texture_id = match icons.get_index(sprite.icon.as_ref()) {
-            Some(id) => id,
-            None => return None, // couldn't load
-        };
+        let texture_id = icons.get_index(sprite.icon.as_ref())?;
         let icon_file = icons.get_icon(texture_id);
         let width = icon_file.metadata.width as f32;
         let height = icon_file.metadata.height as f32;
-        let uv = match icon_file.uv_of(sprite.icon_state, sprite.dir) {
-            Some(rect) => rect,
-            None => return None,
-        };
+        let uv = icon_file.uv_of(sprite.icon_state, sprite.dir)?;
 
         let color = [
             sprite.color[0] as f32 / 255.0,

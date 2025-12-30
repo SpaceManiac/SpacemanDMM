@@ -102,11 +102,7 @@ impl AtomMap {
         for (z, level) in self.levels.iter().enumerate() {
             for (_, inst) in level.instances.keys_iter() {
                 coords
-                    .entry((
-                        inst.x as usize,
-                        (self.size.1 - 1 - inst.y) as usize,
-                        z as usize,
-                    ))
+                    .entry((inst.x as usize, (self.size.1 - 1 - inst.y) as usize, z))
                     .or_default()
                     .push(&inst.pop);
             }
@@ -152,7 +148,7 @@ impl AtomMap {
         let mut key = Key::default();
         for (coord, pop_list) in coords.iter() {
             map.grid[(coord.2, coord.1, coord.0)] =
-                *reverse_dictionary.entry(&pop_list).or_insert_with(|| {
+                *reverse_dictionary.entry(pop_list).or_insert_with(|| {
                     // Just take the first available key.
                     while map.dictionary.contains_key(&key) {
                         key = key.next();
@@ -187,13 +183,13 @@ impl AtomMap {
         icons: &IconCache,
         objtree: &ObjectTree,
     ) -> Arc<Prefab> {
-        if let Some(key) = self.pops.get_key(&prefab) {
+        if let Some(key) = self.pops.get_key(prefab) {
             key
         } else {
             let rc = Arc::new(prefab.to_owned());
             self.pops.insert(
                 rc.clone(),
-                RenderPop::from_prefab(icons, objtree, &prefab).unwrap_or_default(),
+                RenderPop::from_prefab(icons, objtree, prefab).unwrap_or_default(),
             );
             rc
         }
@@ -411,7 +407,7 @@ impl AtomMap {
         self.levels[z as usize].instances.values()
     }
 
-    pub fn index_buffer(&self, z: u32) -> Ref<[[u32; 6]]> {
+    pub fn index_buffer(&self, z: u32) -> Ref<'_, [[u32; 6]]> {
         let level = &self.levels[z as usize];
         if level.index_buffer_dirty.replace(false) {
             let mut ib = level.index_buffer.borrow_mut();

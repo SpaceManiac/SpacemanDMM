@@ -148,7 +148,7 @@ pub fn run(title: &str) {
 
         // Process scene.
         scene.run();
-        if !scene.run_ui(&ui, &mut im_renderer) {
+        if !scene.run_ui(ui, &mut im_renderer) {
             break;
         }
 

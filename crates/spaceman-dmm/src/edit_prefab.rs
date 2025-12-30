@@ -67,7 +67,7 @@ impl EditPrefab {
 
         // show the instance variables - everything which is
         // actually set is right at the top
-        ui.text(im_str!("Instance variables ({})", fab.vars.len()));
+        ui.text(format!("Instance variables ({})", fab.vars.len()));
         let mut remove = std::collections::HashSet::new();
         for (name, value) in fab.vars.iter() {
             if !name.contains(filter.as_str()) {
@@ -76,18 +76,18 @@ impl EditPrefab {
             // TODO: red instead of green if invalid var
             {
                 let style = ui.push_style_color(StyleColor::Text, GREEN);
-                ui.text(&im_str!("  {}", name));
+                ui.text(format!("  {}", name));
                 style.pop();
             }
             ui.same_line_with_spacing(offset, 0.);
-            if ui.small_button(&im_str!("X##editprefab_remove_{}", name)) {
+            if ui.small_button(format!("X##editprefab_remove_{}", name)) {
                 remove.insert(name.to_owned());
             }
             if ui.is_item_hovered() {
                 ui.tooltip_text("Reset");
             }
             ui.same_line();
-            ui.text(im_str!("{}", value));
+            ui.text(format!("{}", value));
         }
         for key in remove {
             fab.vars.shift_remove(&key);
@@ -107,7 +107,7 @@ impl EditPrefab {
         let mut search_ty = ty;
         while let Some(search) = search_ty {
             ui.separator();
-            ui.text(im_str!("{}", &search.path));
+            ui.text(&search.path);
 
             for (name, var) in search.vars.iter() {
                 if !name.contains(filter.as_str()) {
@@ -126,10 +126,10 @@ impl EditPrefab {
 
                     if instance_value.is_some() {
                         let style = ui.push_style_color(StyleColor::Text, GREEN);
-                        ui.text(im_str!("{} {}", prefix, name));
+                        ui.text(format!("{} {}", prefix, name));
                         style.pop();
                     } else {
-                        ui.text(im_str!("{} {}", prefix, name));
+                        ui.text(format!("{} {}", prefix, name));
                     }
 
                     if prefix == "-" && ui.is_item_hovered() {
@@ -144,16 +144,16 @@ impl EditPrefab {
                     if let Some(c) = instance_value {
                         ui.same_line_with_spacing(offset, 0.);
                         let style = ui.push_style_color(StyleColor::Text, GREEN);
-                        ui.text(im_str!(" {}    ", c));
+                        ui.text(format!(" {}    ", c));
                         style.pop();
                         if ui.is_item_hovered() {
                             if let Some(c) = original_value {
-                                ui.tooltip_text(im_str!("Was: {}", c));
+                                ui.tooltip_text(format!("Was: {}", c));
                             }
                         }
                     } else if let Some(c) = original_value {
                         ui.same_line_with_spacing(offset, 0.);
-                        ui.text(im_str!(" {}    ", c));
+                        ui.text(format!(" {}    ", c));
                         if ui.is_item_hovered() {
                             ui.set_mouse_cursor(Some(MouseCursor::TextInput));
                             ui.tooltip_text("Click to edit");

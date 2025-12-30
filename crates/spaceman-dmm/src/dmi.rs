@@ -85,7 +85,7 @@ impl IconCache {
 }
 
 impl TextureCache {
-    pub fn retrieve(&mut self, device: &Device, icons: &IconCache, id: usize) -> &Texture {
+    pub fn retrieve(&mut self, device: &Device, icons: &IconCache, id: usize) -> &Texture<'_> {
         if id >= self.textures.len() {
             self.textures.resize_with(id + 1, Default::default);
         }
@@ -146,7 +146,7 @@ impl IconFile {
     }
 }
 
-pub fn texture_from_bytes<'r>(device: &Device, bytes: &[u8]) -> io::Result<Texture<'r>> {
+pub fn texture_from_bytes(device: &Device, bytes: &[u8]) -> io::Result<Texture<'static>> {
     let mut decoder = Decoder::new();
     decoder.info_raw_mut().colortype = ColorType::RGBA;
     decoder.info_raw_mut().set_bitdepth(8);
@@ -159,7 +159,7 @@ pub fn texture_from_bytes<'r>(device: &Device, bytes: &[u8]) -> io::Result<Textu
     Ok(load_texture(device, &bitmap))
 }
 
-pub fn load_texture<'r>(device: &Device, bitmap: &lodepng::Bitmap<RGBA>) -> Texture<'static> {
+pub fn load_texture(device: &Device, bitmap: &lodepng::Bitmap<RGBA>) -> Texture<'static> {
     let width = bitmap.width as u32;
     let height = bitmap.height as u32;
 
@@ -186,7 +186,8 @@ pub fn load_texture<'r>(device: &Device, bitmap: &lodepng::Bitmap<RGBA>) -> Text
     let mut mem = transfer_buffer.map::<u8>(device, true);
     let mut dest = mem.mem_mut();
     for pixel in &bitmap.buffer {
-        dest.write_all(&[pixel.a, pixel.b, pixel.g, pixel.r]);
+        dest.write_all(&[pixel.a, pixel.b, pixel.g, pixel.r])
+            .unwrap();
     }
     mem.unmap();
 
