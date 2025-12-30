@@ -48,6 +48,7 @@ impl ToolBehavior for Place {
                 i == *pal_current,
                 pal.icon.prepare(Some(env), ctx),
                 &im_str!("{}", pal.fab.path),
+                ctx.renderer,
             );
             if ui.is_item_hovered() {
                 ui.tooltip_text(im_str!("{:#}", pal.fab));

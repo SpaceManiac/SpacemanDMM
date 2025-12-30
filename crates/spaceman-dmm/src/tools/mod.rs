@@ -1,14 +1,12 @@
 //! Placement and editing tools which appear in the workbench.
 
-use std::path::PathBuf;
-
-use imgui::*;
-
+use crate::{Environment, History, ImRenderer};
 use dmm_tools::dmm::Prefab;
 use dreammaker::dmi;
 use dreammaker::objtree::ObjectTree;
-
-use crate::{Environment, History, ImRenderer};
+use imgui::*;
+use sdl3::gpu::{Sampler, Texture};
+use std::path::PathBuf;
 
 mod place;
 
@@ -34,7 +32,8 @@ pub enum ToolIcon {
         data: &'static [u8],
     },
     Loaded {
-        tex: TextureId,
+        texture: Texture<'static>,
+        sampler: Sampler,
         uv0: [f32; 2],
         uv1: [f32; 2],
         tint: Option<[f32; 4]>,

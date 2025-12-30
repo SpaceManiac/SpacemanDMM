@@ -351,6 +351,11 @@ impl EditorScene {
             .with_clear_color(CLEAR_COLOR)
             .with_load_op(sdl3::gpu::LoadOp::CLEAR);
 
+        let render_pass = self
+            .device
+            .begin_render_pass(command_buffer, &[target], None)
+            .expect("begin_render_pass");
+
         if let Some(map) = self.maps.get_mut(self.map_current) {
             if let Some(hist) = map.state.hist() {
                 let map_renderer = &mut self.map_renderer;
@@ -384,6 +389,8 @@ impl EditorScene {
                 }
             }
         }
+
+        self.device.end_render_pass(render_pass);
     }
 
     fn run_ui(&mut self, ui: &Ui, renderer: &mut ImRenderer) -> bool {
@@ -735,7 +742,7 @@ impl EditorScene {
                         ui.same_line();
                     }
 
-                    if ui.tool_icon(i == self.tool_current, &tool.icon, &tool.name) {
+                    if ui.tool_icon(i == self.tool_current, &tool.icon, &tool.name, renderer) {
                         self.tool_current = i;
                     }
                     if ui.is_item_hovered() {
@@ -1660,12 +1667,11 @@ fn detect_environment(path: &Path) -> Option<PathBuf> {
 }
 
 fn prepare_tool_icon(
-    _renderer: &mut ImRenderer,
-    _environment: Option<&Environment>,
-    _map_renderer: &mut map_renderer::MapRenderer,
+    renderer: &mut ImRenderer,
+    environment: Option<&Environment>,
+    map_renderer: &mut map_renderer::MapRenderer,
     icon: tools::ToolIcon,
 ) -> tools::ToolIcon {
-    /*
     use tools::ToolIcon;
     match icon {
         ToolIcon::Dmi {
@@ -1674,7 +1680,7 @@ fn prepare_tool_icon(
             tint,
             dir,
         } => {
-            if let Some(env) = environment {
+            /*if let Some(env) = environment {
                 if let Some(id) = env.icons.get_index(icon.as_ref()) {
                     let icon = env.icons.get_icon(id);
                     if let Some([u1, v1, u2, v2]) = icon.uv_of(&icon_state, dir) {
@@ -1695,7 +1701,8 @@ fn prepare_tool_icon(
                 } else {
                     ToolIcon::None
                 }
-            } else {
+            } else*/
+            {
                 ToolIcon::Dmi {
                     icon,
                     icon_state,
@@ -1705,10 +1712,10 @@ fn prepare_tool_icon(
             }
         },
         ToolIcon::EmbeddedPng { data } => {
-            if let Ok(tex) = dmi::texture_from_bytes(&mut map_renderer.factory, data) {
-                let samp = map_renderer.sampler.clone();
+            if let Ok(texture) = dmi::texture_from_bytes(&map_renderer.device, data) {
                 ToolIcon::Loaded {
-                    tex: renderer.textures().insert((tex, samp)),
+                    texture,
+                    sampler: map_renderer.sampler.clone(),
                     uv0: [0.0, 0.0],
                     uv1: [1.0, 1.0],
                     tint: None,
@@ -1719,8 +1726,6 @@ fn prepare_tool_icon(
         },
         other => other,
     }
-    */
-    icon
 }
 
 // ---------------------------------------------------------------------------
@@ -1729,7 +1734,13 @@ fn prepare_tool_icon(
 trait UiExt {
     fn fits_width(&self, width: f32) -> usize;
     fn objtree_menu<'e>(&self, env: &'e Environment, selection: &mut Option<TypeRef<'e>>);
-    fn tool_icon(&self, active: bool, icon: &tools::ToolIcon, fallback: &str) -> bool;
+    fn tool_icon(
+        &self,
+        active: bool,
+        icon: &tools::ToolIcon,
+        fallback: &str,
+        renderer: &mut ImRenderer,
+    ) -> bool;
     fn frame_color(&self, active: bool) -> [f32; 4];
 }
 
@@ -1747,14 +1758,22 @@ impl UiExt for Ui {
         objtree_menu_root(self, root, "mob", selection);
     }
 
-    fn tool_icon(&self, active: bool, icon: &tools::ToolIcon, fallback: &str) -> bool {
+    fn tool_icon(
+        &self,
+        active: bool,
+        icon: &tools::ToolIcon,
+        fallback: &str,
+        renderer: &mut ImRenderer,
+    ) -> bool {
         if let &tools::ToolIcon::Loaded {
-            tex,
+            ref texture,
+            ref sampler,
             uv0,
             uv1,
             tint,
         } = icon
         {
+            let tex = renderer.push_texture(texture.clone(), sampler.clone());
             Image::new(tex, [32.0, 32.0])
                 .uv0(uv0)
                 .uv1(uv1)

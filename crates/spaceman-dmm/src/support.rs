@@ -167,7 +167,7 @@ pub fn run(title: &str) {
                 .expect("imgui render");
 
             // Flip it.
-            command_buffer.submit();
+            command_buffer.submit().expect("CommandBuffer::submit");
         } else {
             // Can be triggered by window being minimized on some platforms.
             command_buffer.cancel();
