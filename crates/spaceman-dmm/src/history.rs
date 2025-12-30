@@ -1,10 +1,9 @@
 //! Reified undo/redo history tree.
 
-use std::cell::Cell;
-
 use petgraph::graph::{Graph, NodeIndex};
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
+use std::cell::Cell;
 
 pub struct History<T, E> {
     current: T,

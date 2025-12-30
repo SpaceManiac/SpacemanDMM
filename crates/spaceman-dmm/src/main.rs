@@ -17,36 +17,40 @@ mod support;
 mod tasks;
 mod tools;
 
-use std::borrow::Cow;
-use std::path::{Path, PathBuf};
-use std::sync::{mpsc, Arc};
-
-use imgui::*;
-
 use dmi::IconCache;
 use dmm_tools::dmm::Map;
 use dreammaker::objtree::{ObjectTree, TypeRef};
 use edit_prefab::EditPrefab;
-
-use crate::support::ImRenderer;
+use imgui::*;
+use sdl3::dialog::DialogFileFilter;
+use sdl3::gpu::{ColorTargetInfo, CommandBuffer, Device};
+use sdl3::keyboard::Scancode;
+use sdl3::pixels::Color;
+use std::borrow::Cow;
+use std::path::{Path, PathBuf};
+use std::sync::{mpsc, Arc};
 
 type History = history::History<map_repr::AtomMap, Environment>;
+type ImRenderer = imgui_sdl3::renderer::Renderer;
 
-const RED_TEXT: &[(StyleColor, [f32; 4])] = &[(StyleColor::Text, [1.0, 0.25, 0.25, 1.0])];
-const GREEN_TEXT: &[(StyleColor, [f32; 4])] = &[(StyleColor::Text, [0.25, 1.0, 0.25, 1.0])];
+const RED: [f32; 4] = [1.0, 0.25, 0.25, 1.0];
+const GREEN: [f32; 4] = [0.25, 1.0, 0.25, 1.0];
 const THUMBNAIL_SIZE: u16 = 186;
 const MAX_ZOOM: f32 = 16.;
 const MIN_ZOOM: f32 = 1. / 16.;
 
+const CLEAR_COLOR: Color = Color::RGB(64, 64, 128);
+
 fn main() {
-    support::run("SpacemanDMM", [64, 64, 128, 256]);
+    support::run("SpacemanDMM");
 }
 
 // ---------------------------------------------------------------------------
 // Data structures
 
 pub struct EditorScene {
-    factory: support::TextureCreator,
+    device: sdl3::gpu::Device,
+    logical_size: (u32, u32),
 
     config: config::Config,
     map_renderer: map_renderer::MapRenderer,
@@ -139,12 +143,13 @@ struct EditInstance {
 // Editor scene, including rendering and UI
 
 impl EditorScene {
-    fn new(factory: support::TextureCreator) -> Self {
+    fn new(device: &Device, logical_size: (u32, u32)) -> Self {
         let mut ed = EditorScene {
-            factory,
+            device: device.clone(),
+            logical_size,
 
             config: config::Config::load(),
-            map_renderer: map_renderer::MapRenderer::new(factory),
+            map_renderer: map_renderer::MapRenderer::new(device),
             environment: None,
             loading_env: None,
 
@@ -262,7 +267,7 @@ impl EditorScene {
         self.environment = Some(environment);
     }
 
-    fn render(&mut self, encoder: &mut support::Canvas) {
+    fn run(&mut self) {
         if let Some(loading) = self.loading_env.take() {
             match loading.rx.try_recv() {
                 Ok(Ok(env)) => self.finish_loading_env(env),
@@ -339,11 +344,17 @@ impl EditorScene {
                 other => other,
             };
         }
+    }
+
+    fn render(&mut self, command_buffer: &mut CommandBuffer, target: ColorTargetInfo) {
+        let target = target
+            .with_clear_color(CLEAR_COLOR)
+            .with_load_op(sdl3::gpu::LoadOp::CLEAR);
 
         if let Some(map) = self.maps.get_mut(self.map_current) {
             if let Some(hist) = map.state.hist() {
                 let map_renderer = &mut self.map_renderer;
-                let factory = &mut self.factory;
+                let device = &mut self.device;
                 let mut levels = Vec::new();
                 if !self.stacked_rendering {
                     // normal rendering
@@ -358,17 +369,17 @@ impl EditorScene {
 
                 for z in levels {
                     if let Some(rendered) = map.rendered.get_mut(z) {
-                        rendered
-                            .get_or_insert_with(|| map_renderer.render(hist.current(), z as u32))
-                            .paint(
-                                map_renderer,
-                                hist.current(),
-                                z as u32,
-                                map.center,
-                                factory,
-                                encoder,
-                                &self.target,
-                            );
+                        // rendered
+                        //     .get_or_insert_with(|| map_renderer.render(hist.current(), z as u32))
+                        //     .paint(
+                        //         map_renderer,
+                        //         hist.current(),
+                        //         z as u32,
+                        //         map.center,
+                        //         device,
+                        //         command_buffer,
+                        //         target,
+                        //     );
                     }
                 }
             }
@@ -819,10 +830,10 @@ impl EditorScene {
                                     } = rendered;
                                     let map_renderer = &self.map_renderer;
                                     let tex = *thumbnail_id.get_or_insert_with(|| {
-                                        renderer.textures().insert((
+                                        renderer.push_texture(
                                             thumbnail.clone(),
                                             map_renderer.sampler.clone(),
-                                        ))
+                                        )
                                     });
                                     let start = ui.cursor_screen_pos();
                                     let is_current =
@@ -934,23 +945,21 @@ impl EditorScene {
                     if let Some(hist) = map.state.hist() {
                         let current = hist.current();
                         for (inst, fab) in current.iter_instances((x, y, z)) {
-                            let mut color_vars = RED_TEXT;
+                            let mut color = RED;
                             if let Some(env) = self.environment.as_ref() {
                                 if env.objtree.find(&fab.path).is_some() {
-                                    color_vars = &[];
+                                    color = ui.style_color(StyleColor::Text);
                                 }
                             }
 
-                            {
-                                let style = ui.push_style_color(color_vars);
-                                if ui.menu_item_config(&im_str!("{}", fab.path)).build() {
-                                    edit_atoms.push(EditInstance {
-                                        inst,
-                                        base: EditPrefab::new(fab.clone()),
-                                    });
-                                }
-                                style.pop();
+                            let style = ui.push_style_color(StyleColor::Text, color);
+                            if ui.menu_item_config(&im_str!("{}", fab.path)).build() {
+                                edit_atoms.push(EditInstance {
+                                    inst,
+                                    base: EditPrefab::new(fab.clone()),
+                                });
                             }
+                            style.pop();
                         }
                     }
                 }
@@ -1187,7 +1196,7 @@ impl EditorScene {
     fn tile_under(&self, (x, y): (i32, i32)) -> Option<(u32, u32)> {
         if let Some(map) = self.maps.get(self.map_current) {
             if let Some(hist) = map.state.hist() {
-                let (w, h, _, _) = self.target.get_dimensions();
+                let (w, h) = self.logical_size;
                 let (cx, cy) = (w / 2, h / 2);
                 let tx = ((map.center[0].round() + (x as f32 - cx as f32) / self.map_renderer.zoom)
                     / 32.0)
@@ -1248,11 +1257,10 @@ impl EditorScene {
 
     // Commented out due to https://github.com/rust-lang/rust/issues/82012
     //#[deny(unreachable_patterns)]
-    fn chord(&mut self, ctrl: bool, shift: bool, alt: bool, key: Key) {
-        use Key::*;
+    fn chord(&mut self, ctrl: bool, shift: bool, alt: bool, key: Scancode) {
         macro_rules! k {
-            (@[$ctrl:pat, $shift:pat, $alt:pat] $k:pat) => {
-                ($ctrl, $shift, $alt, $k)
+            (@[$ctrl:pat, $shift:pat, $alt:pat] $k:ident) => {
+                ($ctrl, $shift, $alt, Scancode::$k)
             };
             (@[$ctrl:pat, $shift:pat, $alt:pat] Ctrl + $($rest:tt)*) => {
                 k!(@[true, $shift, $alt] $($rest)*)
@@ -1280,17 +1288,17 @@ impl EditorScene {
             k!(Ctrl + Z) => self.undo(),
             k!(Ctrl + Shift + Z) | k!(Ctrl + Y) => self.redo(),
             // Layers
-            k!(Ctrl + Alpha1) => self.toggle_layer(1),
-            k!(Ctrl + Alpha2) => self.toggle_layer(2),
-            k!(Ctrl + Alpha3) => self.toggle_layer(3),
-            k!(Ctrl + Alpha4) => self.toggle_layer(4),
+            k!(Ctrl + _1) => self.toggle_layer(1),
+            k!(Ctrl + _2) => self.toggle_layer(2),
+            k!(Ctrl + _3) => self.toggle_layer(3),
+            k!(Ctrl + _4) => self.toggle_layer(4),
             // misc
-            k!(Ctrl + Equal) | k!(Ctrl + KeypadAdd) => {
+            k!(Ctrl + Equals) | k!(Ctrl + KpPlus) => {
                 if self.map_renderer.zoom < 16.0 {
                     self.map_renderer.zoom *= 2.0
                 }
             },
-            k!(Ctrl + Minus) | k!(Ctrl + KeypadSubtract) => {
+            k!(Ctrl + Minus) | k!(Ctrl + KpMinus) => {
                 if self.map_renderer.zoom > 0.0625 {
                     self.map_renderer.zoom *= 0.5
                 }
@@ -1317,8 +1325,9 @@ impl EditorScene {
             None::<&Path>,
             false,
             None,
-            Box::new(|_result, _filter| {
+            Box::new(|result, _filter| {
                 // TODO
+                eprintln!("{:?}", result);
                 //self.load_environment(fname.into());
             }),
         );
@@ -1386,7 +1395,7 @@ impl EditorScene {
             None::<&Path>,
             true,
             None,
-            Box::new(|paths, _| {
+            Box::new(|_paths, _| {
                 // TODO
             }),
         );
@@ -1469,9 +1478,9 @@ impl EditorScene {
         }
     }
 
-    fn save_map_as(&mut self, copy: bool) {
+    fn save_map_as(&mut self, _copy: bool) {
         if let Some(map) = self.maps.get_mut(self.map_current) {
-            if let Some(hist) = map.state.hist() {
+            if let Some(_hist) = map.state.hist() {
                 sdl3::dialog::show_save_file_dialog(
                     FILTERS_DMM,
                     None::<&Path>,
@@ -1539,8 +1548,14 @@ impl EditorScene {
     }
 }
 
-const FILTERS_DME: &[sdl3::dialog::DialogFileFilter] = &[];
-const FILTERS_DMM: &[sdl3::dialog::DialogFileFilter] = &[];
+const FILTERS_DME: &[DialogFileFilter] = &[DialogFileFilter {
+    name: "DreamMaker Environment",
+    pattern: "*.dme",
+}];
+const FILTERS_DMM: &[DialogFileFilter] = &[DialogFileFilter {
+    name: "DreamMaker Map",
+    pattern: "*.dmm",
+}];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1645,7 +1660,7 @@ fn detect_environment(path: &Path) -> Option<PathBuf> {
 }
 
 fn prepare_tool_icon(
-    _renderer: &mut support::ImRenderer,
+    _renderer: &mut ImRenderer,
     _environment: Option<&Environment>,
     _map_renderer: &mut map_renderer::MapRenderer,
     icon: tools::ToolIcon,

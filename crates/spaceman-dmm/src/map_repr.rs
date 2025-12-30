@@ -1,15 +1,13 @@
 //! Representation of a map as a collection of atoms rather than a grid.
 
+use crate::dmi::IconCache;
+use crate::map_renderer::{DrawCall, RenderPop, Vertex};
+use dmm_tools::dmm::{Key, Map, Prefab};
+use dreammaker::objtree::{ispath, ObjectTree};
 use std::cell::{Cell, Ref, RefCell};
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 use weak_table::WeakKeyHashMap;
-
-use dmm_tools::dmm::{Key, Map, Prefab};
-use dreammaker::objtree::{ispath, ObjectTree};
-
-use crate::dmi::IconCache;
-use crate::map_renderer::{DrawCall, RenderPop, Vertex};
 
 #[derive(Debug, Clone)]
 pub struct AtomMap {
@@ -290,7 +288,6 @@ impl AtomMap {
                 draw_calls.insert(
                     draw_call,
                     DrawCall {
-                        category: rpop.category,
                         texture: rpop.texture,
                         len: 6,
                     },
@@ -309,7 +306,6 @@ impl AtomMap {
                 draw_calls.insert(
                     draw_call,
                     DrawCall {
-                        category: rpop.category,
                         texture: rpop.texture,
                         len: 6,
                     },
@@ -404,7 +400,6 @@ impl AtomMap {
                 }
             }
             draw_calls.push(DrawCall {
-                category: rpop.category,
                 texture: rpop.texture,
                 len: 6,
             });

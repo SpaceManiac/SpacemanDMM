@@ -8,7 +8,7 @@ use dmm_tools::dmm::Prefab;
 use dreammaker::dmi;
 use dreammaker::objtree::ObjectTree;
 
-use crate::{support::ImRenderer, Environment, History};
+use crate::{Environment, History, ImRenderer};
 
 mod place;
 
@@ -149,14 +149,14 @@ impl ToolIcon {
     }
 }
 
-pub struct IconCtx<'a, 'b> {
-    renderer: &'a mut ImRenderer<'b>,
+pub struct IconCtx<'a> {
+    renderer: &'a mut ImRenderer,
     map_renderer: &'a mut crate::map_renderer::MapRenderer,
 }
 
-impl<'a, 'b> IconCtx<'a, 'b> {
+impl<'a> IconCtx<'a> {
     pub fn new(
-        renderer: &'a mut ImRenderer<'b>,
+        renderer: &'a mut ImRenderer,
         map_renderer: &'a mut crate::map_renderer::MapRenderer,
     ) -> Self {
         IconCtx {

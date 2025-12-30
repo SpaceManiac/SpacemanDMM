@@ -1,4 +1,4 @@
-use crate::{Environment, GREEN_TEXT, RED_TEXT};
+use crate::{Environment, GREEN, RED};
 use dmm_tools::dmm::Prefab;
 use imgui::*;
 
@@ -75,7 +75,7 @@ impl EditPrefab {
             }
             // TODO: red instead of green if invalid var
             {
-                let style = ui.push_style_color(GREEN_TEXT[0].0, GREEN_TEXT[0].1);
+                let style = ui.push_style_color(StyleColor::Text, GREEN);
                 ui.text(&im_str!("  {}", name));
                 style.pop();
             }
@@ -97,7 +97,7 @@ impl EditPrefab {
         if red_paths {
             ui.separator();
             {
-                let style = ui.push_style_color(RED_TEXT[0].0, RED_TEXT[0].1);
+                let style = ui.push_style_color(StyleColor::Text, RED);
                 ui.text(&fab.path);
                 style.pop();
             }
@@ -125,7 +125,7 @@ impl EditPrefab {
                     let instance_value = self.fab.vars.get(name.as_str());
 
                     if instance_value.is_some() {
-                        let style = ui.push_style_color(GREEN_TEXT[0].0, GREEN_TEXT[0].1);
+                        let style = ui.push_style_color(StyleColor::Text, GREEN);
                         ui.text(im_str!("{} {}", prefix, name));
                         style.pop();
                     } else {
@@ -143,7 +143,7 @@ impl EditPrefab {
                         .and_then(|v| v.constant.as_ref());
                     if let Some(c) = instance_value {
                         ui.same_line_with_spacing(offset, 0.);
-                        let style = ui.push_style_color(GREEN_TEXT[0].0, GREEN_TEXT[0].1);
+                        let style = ui.push_style_color(StyleColor::Text, GREEN);
                         ui.text(im_str!(" {}    ", c));
                         style.pop();
                         if ui.is_item_hovered() {
