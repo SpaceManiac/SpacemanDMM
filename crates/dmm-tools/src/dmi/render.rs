@@ -44,13 +44,16 @@ impl<'a> IconRenderer<'a> {
     /// Renders with either [`gif::Encoder`] or [`png::Encoder`] depending on whether the icon state is animated
     /// or not.
     /// Returns a [`RenderType`] to help you determine how to treat the written data.
-    pub fn prepare_render(&self, icon_state: &StateIndex) -> io::Result<RenderStateGuard> {
+    pub fn prepare_render(&self, icon_state: &StateIndex) -> io::Result<RenderStateGuard<'_>> {
         self.prepare_render_state(self.source.get_icon_state(icon_state)?)
     }
 
     /// This is here so that duplicate icon states can be handled by not relying on the btreemap
     /// of state names in [`Metadata`].
-    pub fn prepare_render_state(&'a self, icon_state: &'a State) -> io::Result<RenderStateGuard> {
+    pub fn prepare_render_state(
+        &'a self,
+        icon_state: &'a State,
+    ) -> io::Result<RenderStateGuard<'a>> {
         match icon_state.is_animated() {
             false => Ok(RenderStateGuard {
                 renderer: self,
@@ -133,7 +136,7 @@ impl<'a> IconRenderer<'a> {
     /// Renders each direction to the same canvas, offsetting them to the right
     fn render_dirs(&self, icon_state: &State, canvas: &mut Image, frame: u32) {
         for (dir_no, dir) in Self::ordered_dirs(icon_state.dirs).iter().enumerate() {
-            let frame_idx = icon_state.index_of_frame(*dir, frame as u32);
+            let frame_idx = icon_state.index_of_frame(*dir, frame);
             let frame_rect = self.source.rect_of_index(frame_idx);
             canvas.composite(
                 &self.source.image,
@@ -162,11 +165,11 @@ impl<'a> IconRenderer<'a> {
         let mut canvas = self.get_canvas(icon_state.dirs);
 
         let mut encoder = gif::Encoder::new(target, canvas.width as u16, canvas.height as u16, &[])
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{e}")))?;
+            .map_err(|e| io::Error::other(format!("{e}")))?;
 
         encoder
             .set_repeat(gif::Repeat::Infinite)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{e}")))?;
+            .map_err(|e| io::Error::other(format!("{e}")))?;
 
         let range = if icon_state.rewind {
             Either::Left((0..frames).chain((0..frames).rev()))
