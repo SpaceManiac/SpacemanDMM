@@ -757,6 +757,7 @@ impl Ident {
         self.inner.into_owned()
     }
 
+    #[allow(clippy::inherent_to_string_shadow_display)]
     pub fn to_string(&self) -> String {
         self.as_str().to_owned()
     }
@@ -792,7 +793,7 @@ impl PartialEq<Ident> for str {
     }
 }
 
-impl<'a> PartialEq<Ident> for &'a str {
+impl PartialEq<Ident> for &str {
     fn eq(&self, other: &Ident) -> bool {
         &*other.inner == *self
     }
@@ -882,7 +883,7 @@ pub type TreePath = Box<[Ident]>;
 pub fn treepath_from_str(str: &str) -> TreePath {
     str.split('/')
         .filter(|elem| !elem.is_empty())
-        .map(|segment| Ident::from_nonstatic(segment))
+        .map(Ident::from_nonstatic)
         .collect::<TreePath>()
 }
 

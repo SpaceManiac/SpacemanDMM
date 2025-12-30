@@ -1633,9 +1633,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                             // Returns a for(k,v)
                             spanned(Statement::ForKeyValue(Box::new(ForKeyValueStatement {
                                 var_type: Some(var_type.expect("/")),
-                                key: key.into(),
+                                key,
                                 key_input_type,
-                                value: value.into(),
+                                value,
                                 in_list: Some(*rhs), // We'll assume the rhs of [v in x] is a list. Any other case, DM will catch anyway.
                                 block: require!(self.block(&LoopContext::ForLoop)),
                             })))
@@ -1707,7 +1707,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                                 require!(self.exact(Token::Punct(Punctuation::RParen)));
                                 return spanned(Statement::ForList(Box::new(ForListStatement {
                                     var_type: None,
-                                    name: name.into(),
+                                    name,
                                     input_type: None,
                                     in_list: Some(rhs),
                                     block: require!(self.block(&LoopContext::ForList)),
@@ -1743,7 +1743,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 require!(self.exact(Token::Punct(Punctuation::RParen)));
                 spanned(Statement::ForList(Box::new(ForListStatement {
                     var_type,
-                    name: name.into(),
+                    name,
                     input_type,
                     in_list,
                     block: require!(self.block(&LoopContext::ForList)),
@@ -1834,11 +1834,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             };
             let value = require!(self.expression());
             require!(self.statement_terminator());
-            spanned(Statement::Setting {
-                name: name.into(),
-                mode,
-                value,
-            })
+            spanned(Statement::Setting { name, mode, value })
         } else if let Some(()) = self.exact_ident("break")? {
             let label = self.ident()?;
             require!(self.statement_terminator());
@@ -2037,7 +2033,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         // {...}
         success(Statement::ForRange(Box::new(ForRangeStatement {
             var_type,
-            name: name.into(),
+            name,
             start,
             end,
             step,
@@ -2139,7 +2135,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     let key = require!(this.ident());
                     require!(this.exact(Token::Punct(Punctuation::Assign)));
                     let value = require!(this.expression());
-                    vars.push((key.into(), value));
+                    vars.push((key, value));
                     SUCCESS
                 },
             )?;
@@ -2406,7 +2402,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     }
                     Term::NewMiniExpr {
                         expr: Box::new(MiniExpr {
-                            ident: ident.into(),
+                            ident,
                             fields: fields.into_boxed_slice(),
                         }),
                         args: self.arguments(&[], &ident!("New"))?,
@@ -2549,7 +2545,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 match self.arguments(&[], &i)? {
                     Some(args) => {
                         self.annotate_precise(start..first_token, || Annotation::UnscopedCall(i.clone()));
-                        Term::Call(i.into(), args)
+                        Term::Call(i, args)
                     },
                     None => {
                         belongs_to.push(i.clone());
@@ -2588,9 +2584,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             Token::Punct(Punctuation::Scope) => {
                 if let Some(ident) = self.ident()? {
                     if let Some(args) = self.arguments(&[], &ident!("::"))? {
-                        Term::GlobalCall(Ident::from(ident), args)
+                        Term::GlobalCall(ident, args)
                     } else {
-                        Term::GlobalIdent(Ident::from(ident))
+                        Term::GlobalIdent(ident)
                     }
                 } else {
                     // Go away
@@ -2711,8 +2707,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     });
                 }
                 match kind {
-                    PropertyAccessKind::Scope => Follow::ProcReference(ident.into()),
-                    _ => Follow::Call(kind, ident.into(), args),
+                    PropertyAccessKind::Scope => Follow::ProcReference(ident),
+                    _ => Follow::Call(kind, ident, args),
                 }
             },
             None => {
@@ -2723,8 +2719,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     belongs_to.push(ident.clone());
                 }
                 match kind {
-                    PropertyAccessKind::Scope => Follow::StaticField(ident.into()),
-                    _ => Follow::Field(kind, ident.into()),
+                    PropertyAccessKind::Scope => Follow::StaticField(ident),
+                    _ => Follow::Field(kind, ident),
                 }
             },
         };
@@ -2766,10 +2762,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             });
             belongs_to.push(ident.clone());
         }
-        success(Field {
-            kind,
-            ident: ident.into(),
-        })
+        success(Field { kind, ident })
     }
 
     /// a parenthesized, comma-separated list of expressions

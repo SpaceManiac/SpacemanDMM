@@ -2884,7 +2884,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     .path
                     .split('/')
                     .filter(|elem| !elem.is_empty())
-                    .map(|segment| Ident::from_nonstatic(segment))
+                    .map(Ident::from_nonstatic)
                     .collect();
                 // Only tricky bit is adding on the type if required
                 if let Some(declaration) = decl.get_declaration() {

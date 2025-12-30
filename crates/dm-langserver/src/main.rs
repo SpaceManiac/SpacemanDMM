@@ -441,7 +441,7 @@ impl Engine {
                 kind: if var
                     .declaration
                     .as_ref()
-                    .map_or(false, |d| d.var_type.flags.is_const())
+                    .is_some_and(|d| d.var_type.flags.is_const())
                 {
                     lsp_types::SymbolKind::CONSTANT
                 } else {

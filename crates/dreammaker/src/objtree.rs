@@ -543,7 +543,7 @@ impl<'o> NavigatePathResult<'o> {
             .path
             .split('/')
             .skip(1)
-            .map(|p| Ident::from_nonstatic(p))
+            .map(Ident::from_nonstatic)
             .collect();
         match self {
             NavigatePathResult::Type(_) => {},
@@ -1125,7 +1125,7 @@ impl ObjectTreeBuilder {
         Ok((current, last))
     }
 
-    fn register_var<'a, I>(
+    fn register_var<I>(
         &mut self,
         location: Location,
         parent: NodeIndex,
@@ -1161,7 +1161,7 @@ impl ObjectTreeBuilder {
 
         let mut type_path = Vec::new();
         for each in rest {
-            type_path.push(prev.to_owned().into());
+            type_path.push(prev.clone());
             prev = each;
         }
         let mut var_type = VarTypeBuilder {

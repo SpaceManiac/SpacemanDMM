@@ -665,7 +665,7 @@ impl<'a> ConstantFolder<'a> {
                     rhs,
                 } => {
                     let key = match Term::from(*lhs) {
-                        Term::Ident(ident) => Constant::String(ident.into()),
+                        Term::Ident(ident) => Constant::String(ident),
                         other => self.term(other, None)?,
                     };
                     (key, Some(self.expr(*rhs, None)?))
@@ -1094,7 +1094,7 @@ impl<'a> ConstantFolder<'a> {
             .path
             .split('/')
             .filter(|elem| !elem.is_empty())
-            .map(|segment| Ident::from_nonstatic(segment))
+            .map(Ident::from_nonstatic)
             .collect();
         // Only tricky bit is adding on the type if required
         if let Some(declaration) = proc_ref.get_declaration() {
