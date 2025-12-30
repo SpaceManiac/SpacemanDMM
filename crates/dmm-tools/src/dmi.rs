@@ -133,10 +133,8 @@ impl Image {
             width: bitmap.width as u32,
             height: bitmap.height as u32,
             data: {
-                let cast_input = bytemuck::cast_slice(bitmap.buffer.as_slice());
-                let mut arr = Array2::default((bitmap.width, bitmap.height));
-                arr.as_slice_mut().unwrap().copy_from_slice(cast_input);
-                arr
+                let cast_input = bytemuck::allocation::cast_vec(bitmap.buffer);
+                Array2::from_shape_vec((bitmap.width, bitmap.height), cast_input).unwrap()
             },
         }
     }

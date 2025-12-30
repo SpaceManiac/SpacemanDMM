@@ -180,7 +180,7 @@ impl<'a> IconRenderer<'a> {
         for frame in range {
             self.render_dirs(icon_state, &mut canvas, frame as u32);
 
-            let mut pixels = bytemuck::cast_slice(canvas.data.as_slice().unwrap()).to_owned();
+            let mut pixels = bytemuck::cast_slice_mut(canvas.data.as_slice_mut().unwrap());
             let mut gif_frame =
                 gif::Frame::from_rgba(canvas.width as u16, canvas.height as u16, &mut pixels);
             // gif::Frame delays are measured in "Frame delay in units of 10 ms."

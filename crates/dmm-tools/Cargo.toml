@@ -16,7 +16,7 @@ either = "1.13.0"
 
 [dependencies.bytemuck]
 version = "1.19.0"
-features = ["derive"]
+features = ["derive", "extern_crate_alloc"]
 
 [dependencies.bumpalo]
 version = "3.16.0"
