@@ -85,7 +85,7 @@ impl IconCache {
 }
 
 impl TextureCache {
-    pub fn retrieve(&mut self, device: &Device, icons: &IconCache, id: usize) -> &Texture<'_> {
+    pub fn retrieve(&mut self, device: &Device, icons: &IconCache, id: usize) -> &Texture<'static> {
         if id >= self.textures.len() {
             self.textures.resize_with(id + 1, Default::default);
         }
@@ -186,7 +186,7 @@ pub fn load_texture(device: &Device, bitmap: &lodepng::Bitmap<RGBA>) -> Texture<
     let mut mem = transfer_buffer.map::<u8>(device, true);
     let mut dest = mem.mem_mut();
     for pixel in &bitmap.buffer {
-        dest.write_all(&[pixel.a, pixel.b, pixel.g, pixel.r])
+        dest.write_all(&[pixel.r, pixel.g, pixel.b, pixel.a])
             .unwrap();
     }
     mem.unmap();

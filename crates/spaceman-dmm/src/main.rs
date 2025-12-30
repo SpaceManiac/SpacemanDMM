@@ -18,7 +18,7 @@ use dmm_tools::dmm::Map;
 use dreammaker::objtree::{ObjectTree, TypeRef};
 use edit_prefab::EditPrefab;
 use imgui::*;
-use sdl3::dialog::DialogFileFilter;
+use sdl3::dialog::{DialogError, DialogFileFilter};
 use sdl3::gpu::{ColorTargetInfo, CommandBuffer, Device};
 use sdl3::keyboard::Scancode;
 use sdl3::pixels::Color;
@@ -81,6 +81,20 @@ pub struct EditorScene {
     stacked_inverted: bool,
 
     mouse_drag_pos: Option<(i32, i32)>,
+
+    command_tx: mpsc::Sender<Command>,
+    command_rx: mpsc::Receiver<Command>,
+}
+
+enum Command {
+    DialogError(DialogError),
+    OpenEnvironment(PathBuf),
+    OpenMap(Vec<PathBuf>),
+    SaveMap {
+        uid: usize,
+        path: PathBuf,
+        copy: bool,
+    },
 }
 
 pub struct Environment {
@@ -140,6 +154,7 @@ struct EditInstance {
 
 impl EditorScene {
     fn new(device: &Device, logical_size: (u32, u32)) -> Self {
+        let (command_tx, command_rx) = mpsc::channel();
         let mut ed = EditorScene {
             device: device.clone(),
             logical_size,
@@ -176,6 +191,9 @@ impl EditorScene {
             stacked_rendering: false,
             stacked_inverted: false,
             mouse_drag_pos: None,
+
+            command_tx,
+            command_rx,
         };
         ed.finish_init();
         ed
@@ -264,6 +282,36 @@ impl EditorScene {
     }
 
     fn run(&mut self) {
+        while let Ok(command) = self.command_rx.try_recv() {
+            match command {
+                Command::DialogError(e) => self.handle_dialog_error(e),
+                Command::OpenEnvironment(path) => self.load_environment(path),
+                Command::OpenMap(paths) => {
+                    for path in paths {
+                        self.load_map(path);
+                    }
+                },
+                Command::SaveMap { uid, path, copy } => {
+                    if let Some(map) = self.maps.iter_mut().find(|m| m.uid == uid) {
+                        if let Some(hist) = map.state.hist() {
+                            if let Err(e) = hist.current().save(map.state.base_dmm()).to_file(&path)
+                            {
+                                self.errors.push(format!(
+                                    "Error writing {}:\n{}",
+                                    path.display(),
+                                    e
+                                ));
+                            }
+                            if !copy {
+                                map.path = Some(path);
+                                hist.mark_clean();
+                            }
+                        }
+                    }
+                },
+            }
+        }
+
         if let Some(loading) = self.loading_env.take() {
             match loading.rx.try_recv() {
                 Ok(Ok(env)) => self.finish_loading_env(env),
@@ -1306,19 +1354,26 @@ impl EditorScene {
         }
     }
 
+    fn handle_dialog_error(&mut self, e: DialogError) {
+        match e {
+            DialogError::Canceled => {},
+            e => self.errors.push(e.to_string()),
+        }
+    }
+
     fn open_environment(&mut self) {
+        let tx = self.command_tx.clone();
         if let Err(e) = sdl3::dialog::show_open_file_dialog(
             FILTERS_DME,
             None::<&Path>,
             false,
             None,
-            Box::new(|result, _filter| {
-                // TODO
-                eprintln!("{:?}", result);
-                //self.load_environment(fname.into());
+            Box::new(move |result, _filter| match result {
+                Ok(mut fname) => tx.send(Command::OpenEnvironment(fname.remove(0))).unwrap(),
+                Err(e) => tx.send(Command::DialogError(e)).unwrap(),
             }),
         ) {
-            self.errors.push(e.to_string());
+            self.handle_dialog_error(e);
         }
     }
 
@@ -1379,30 +1434,19 @@ impl EditorScene {
     }
 
     fn open_map(&mut self) {
+        let tx = self.command_tx.clone();
         if let Err(e) = sdl3::dialog::show_open_file_dialog(
             FILTERS_DMM,
             None::<&Path>,
             true,
             None,
-            Box::new(|_paths, _| {
-                // TODO
+            Box::new(move |result, _| match result {
+                Ok(paths) => tx.send(Command::OpenMap(paths)).unwrap(),
+                Err(e) => tx.send(Command::DialogError(e)).unwrap(),
             }),
         ) {
-            self.errors.push(e.to_string());
+            self.handle_dialog_error(e);
         }
-        /*
-        match nfd::open_file_multiple_dialog(Some("dmm"), None) {
-            Ok(nfd::Response::Okay(fname)) => {
-                self.load_map(fname.into());
-            },
-            Ok(nfd::Response::OkayMultiple(fnames)) => {
-                for each in fnames {
-                    self.load_map(each.into());
-                }
-            },
-            _ => {},
-        }
-        */
     }
 
     fn load_map(&mut self, path: PathBuf) {
@@ -1447,17 +1491,24 @@ impl EditorScene {
         if let Some(map) = self.maps.get_mut(self.map_current) {
             if let Some(hist) = map.state.hist() {
                 if map.path.is_none() {
+                    let uid = map.uid;
+                    let tx = self.command_tx.clone();
                     if let Err(e) = sdl3::dialog::show_save_file_dialog(
                         FILTERS_DMM,
                         None::<&Path>,
                         None,
-                        Box::new(|path, _| {
-                            // TODO
-                            eprintln!("save_map {:?}", path);
-                            // map.path = Some(PathBuf::from(fname));
+                        Box::new(move |result, _| match result {
+                            Ok(mut paths) => tx
+                                .send(Command::SaveMap {
+                                    uid,
+                                    path: paths.remove(0),
+                                    copy: false,
+                                })
+                                .unwrap(),
+                            Err(e) => tx.send(Command::DialogError(e)).unwrap(),
                         }),
                     ) {
-                        self.errors.push(e.to_string());
+                        self.handle_dialog_error(e);
                     }
                     return;
                 }
@@ -1471,30 +1522,29 @@ impl EditorScene {
         }
     }
 
-    fn save_map_as(&mut self, _copy: bool) {
+    fn save_map_as(&mut self, copy: bool) {
         if let Some(map) = self.maps.get_mut(self.map_current) {
             if let Some(_hist) = map.state.hist() {
+                let uid = map.uid;
+                let tx = self.command_tx.clone();
                 if let Err(e) = sdl3::dialog::show_save_file_dialog(
                     FILTERS_DMM,
                     None::<&Path>,
                     None,
-                    Box::new(|path, _| {
-                        // TODO
-                        eprintln!("save_map_as {:?}", path);
-                        /*
-                        let path = PathBuf::from(fname);
-                        if let Err(e) = hist.current().save(map.state.base_dmm()).to_file(&path) {
-                            self.errors
-                                .push(format!("Error writing {}:\n{}", path.display(), e));
-                        }
-                        if !copy {
-                            map.path = Some(path);
-                            hist.mark_clean();
-                        }
-                        */
-                    }),
+                    Box::new(
+                        move |result: Result<Vec<PathBuf>, DialogError>, _| match result {
+                            Ok(mut paths) => tx
+                                .send(Command::SaveMap {
+                                    uid,
+                                    path: paths.remove(0),
+                                    copy,
+                                })
+                                .unwrap(),
+                            Err(e) => tx.send(Command::DialogError(e)).unwrap(),
+                        },
+                    ),
                 ) {
-                    self.errors.push(e.to_string());
+                    self.handle_dialog_error(e);
                 }
             }
         }
@@ -1545,11 +1595,11 @@ impl EditorScene {
 
 const FILTERS_DME: &[DialogFileFilter] = &[DialogFileFilter {
     name: "DreamMaker Environment",
-    pattern: "*.dme",
+    pattern: "dme",
 }];
 const FILTERS_DMM: &[DialogFileFilter] = &[DialogFileFilter {
     name: "DreamMaker Map",
-    pattern: "*.dmm",
+    pattern: "dmm",
 }];
 
 // ---------------------------------------------------------------------------
@@ -1666,17 +1716,17 @@ fn prepare_tool_icon(
             tint,
             dir,
         } => {
-            /*if let Some(env) = environment {
+            if let Some(env) = environment {
                 if let Some(id) = env.icons.get_index(icon.as_ref()) {
                     let icon = env.icons.get_icon(id);
                     if let Some([u1, v1, u2, v2]) = icon.uv_of(&icon_state, dir) {
-                        let tex = map_renderer
+                        let texture = map_renderer
                             .icon_textures
-                            .retrieve(&mut map_renderer.factory, &env.icons, id)
+                            .retrieve(&map_renderer.device, &env.icons, id)
                             .clone();
-                        let samp = map_renderer.sampler.clone();
                         ToolIcon::Loaded {
-                            tex: renderer.textures().insert((tex, samp)),
+                            texture,
+                            sampler: map_renderer.sampler.clone(),
                             uv0: [u1, v1],
                             uv1: [u2, v2],
                             tint: Some(tint),
@@ -1687,8 +1737,7 @@ fn prepare_tool_icon(
                 } else {
                     ToolIcon::None
                 }
-            } else*/
-            {
+            } else {
                 ToolIcon::Dmi {
                     icon,
                     icon_state,
