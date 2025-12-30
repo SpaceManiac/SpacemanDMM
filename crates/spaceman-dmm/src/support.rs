@@ -1,5 +1,5 @@
 //! Platform support helpers.
-use imgui::{Context, FontConfig};
+use imgui::{ConfigFlags, Context, FontConfig};
 use imgui_sdl3::{platform::Platform, renderer::Renderer};
 use sdl3::{
     event::{Event, WindowEvent},
@@ -39,6 +39,7 @@ pub fn run(title: &str) {
     imgui.style_mut().use_dark_colors();
     imgui.set_ini_filename(None);
     imgui.set_log_filename(None);
+    imgui.io_mut().config_flags |= ConfigFlags::DOCKING_ENABLE;
     imgui
         .fonts()
         .add_font(&[imgui::FontSource::DefaultFontData {

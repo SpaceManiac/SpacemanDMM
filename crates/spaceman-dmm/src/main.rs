@@ -438,6 +438,8 @@ impl EditorScene {
     }
 
     fn run_ui(&mut self, ui: &Ui, renderer: &mut ImRenderer) -> bool {
+        ui.dockspace_over_main_viewport();
+
         for tool in self.tools.iter_mut() {
             tool.icon.prepare(
                 self.environment.as_ref(),

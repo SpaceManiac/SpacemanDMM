@@ -11,7 +11,7 @@ path = "src/main.rs"
 [dependencies]
 dreammaker = { path = "../dreammaker" }
 dmm-tools = { path = "../dmm-tools", features = ["gfx_core"] }
-imgui = "0.12.0"
+imgui = { version = "0.12.0", features = ["docking"] }
 imgui-sdl3 = "0.5.0"
 lodepng = "3.10.7"
 ndarray = "0.15.6"
