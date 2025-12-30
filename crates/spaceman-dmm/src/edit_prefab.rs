@@ -25,7 +25,7 @@ impl EditPrefab {
 
     pub fn menu(&mut self, ui: &Ui) {
         ui.menu("Filter...", || {
-            ui.input_text("", &mut self.filter).build();
+            ui.input_text("##filter", &mut self.filter).build();
             if ui.menu_item_config("Clear").build() {
                 self.filter.clear();
             }
@@ -109,31 +109,37 @@ impl EditPrefab {
             ui.separator();
             ui.text(&search.path);
 
-            for (name, var) in search.vars.iter() {
+            let mut vars: Vec<_> = search
+                .vars
+                .iter()
+                .filter(|v| !UNMODIFIABLE_VARS.contains(&v.0.as_str()))
+                .collect();
+            vars.sort_by(|a, b| a.0.cmp(&b.0));
+            for (name, var) in vars {
                 if !name.contains(filter.as_str()) {
                     continue;
                 }
                 if let Some(decl) = var.declaration.as_ref() {
-                    let mut prefix = " ";
-                    if !decl.var_type.is_normal() {
-                        if !extra_vars {
-                            continue;
+                    let var_type = decl.var_type.flags.to_string();
+                    if var_type.is_empty() {
+                        ui.text("  ");
+                    } else if !extra_vars {
+                        continue;
+                    } else {
+                        ui.text("- ");
+                        if ui.is_item_hovered() {
+                            ui.tooltip_text(&var_type);
                         }
-                        prefix = "-";
                     }
+                    ui.same_line_with_spacing(0., 0.);
 
                     let instance_value = self.fab.vars.get(name.as_str());
-
                     if instance_value.is_some() {
                         let style = ui.push_style_color(StyleColor::Text, GREEN);
-                        ui.text(format!("{} {}", prefix, name));
+                        ui.text(name);
                         style.pop();
                     } else {
-                        ui.text(format!("{} {}", prefix, name));
-                    }
-
-                    if prefix == "-" && ui.is_item_hovered() {
-                        ui.tooltip_text("/tmp, /static, or /const");
+                        ui.text(name);
                     }
 
                     // search_ty is seeded with ty and must be Some to get here
@@ -166,7 +172,33 @@ impl EditPrefab {
                 }
             }
 
-            search_ty = search.parent_type();
+            search_ty = search.parent_type_without_root();
         }
     }
 }
+
+// DreamMaker never lets you modify these vars, so we won't either.
+const UNMODIFIABLE_VARS: &[&str] = &[
+    "appearance",
+    "bounds",
+    "loc",
+    "locs",
+    "maptext_height",
+    "maptext_width",
+    "maptext_x",
+    "maptext_y",
+    "maptext",
+    "parent_type",
+    "particles",
+    "pixloc",
+    "render_source",
+    "render_target",
+    "type",
+    "vars",
+    "verbs",
+    "vis_contents",
+    "vis_locs",
+    "x",
+    "y",
+    "z",
+];

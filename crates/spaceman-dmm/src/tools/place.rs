@@ -65,7 +65,7 @@ impl ToolBehavior for Place {
                 ui.window(&format!("Palette: {}##place/{}", edit.path(), i))
                     .opened(&mut keep_editor)
                     .position(ui.io().mouse_pos, Condition::Appearing)
-                    .size([350.0, 500.0], Condition::FirstUseEver)
+                    .size([0.0, 550.0], Condition::Appearing)
                     .horizontal_scrollbar(true)
                     .menu_bar(true)
                     .build(|| {

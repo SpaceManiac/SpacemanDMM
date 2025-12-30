@@ -1089,7 +1089,7 @@ impl EditorScene {
                 ui.window(&format!("{}##{}/{:?}", base.path(), uid, inst))
                     .opened(&mut keep)
                     .position(ui.io().mouse_pos, Condition::Appearing)
-                    .size([450.0, 550.0], Condition::FirstUseEver)
+                    .size([0.0, 550.0], Condition::Appearing)
                     .horizontal_scrollbar(true)
                     .menu_bar(true)
                     .build(|| {
