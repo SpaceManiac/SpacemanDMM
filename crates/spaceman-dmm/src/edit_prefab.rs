@@ -1,4 +1,4 @@
-use crate::{Environment, GREEN, RED};
+use crate::editor::{Environment, GREEN, RED};
 use dmm_tools::dmm::Prefab;
 use imgui::*;
 

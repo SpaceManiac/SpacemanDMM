@@ -1,4 +1,18 @@
-//! Platform support helpers.
+//! The map editor proper, with a GUI and everything.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![allow(dead_code)] // TODO: remove when this is not a huge WIP
+#![allow(unused_variables)]
+
+mod config;
+mod dmi;
+mod edit_prefab;
+mod editor;
+mod history;
+mod map_renderer;
+mod map_repr;
+mod tasks;
+mod tools;
+
 use imgui::{ConfigFlags, Context, FontConfig};
 use imgui_sdl3::{platform::Platform, renderer::Renderer};
 use sdl3::{
@@ -7,7 +21,7 @@ use sdl3::{
     hint::names::RENDER_VSYNC,
 };
 
-pub fn run(title: &str) {
+fn main() {
     sdl3::hint::set(RENDER_VSYNC, "1");
 
     let mut sdl = sdl3::init().expect("sdl3::init");
@@ -15,7 +29,7 @@ pub fn run(title: &str) {
     let video = sdl.video().expect("video");
 
     let window = video
-        .window(title, 1300, 730)
+        .window("SpacemanDMM", 1300, 730)
         .position_centered()
         .resizable()
         .build()
@@ -54,7 +68,7 @@ pub fn run(title: &str) {
     let mut im_platform = Platform::new(&mut imgui);
     let mut im_renderer = Renderer::new(&device, &window, &mut imgui).expect("Renderer::new");
 
-    let mut scene = crate::EditorScene::new(&device, window.size());
+    let mut scene = editor::EditorScene::new(&device, window.size());
 
     let mut quit = false;
 

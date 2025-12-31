@@ -1,22 +1,8 @@
-//! The map editor proper, with a GUI and everything.
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-#![allow(dead_code)] // TODO: remove when this is not a huge WIP
-#![allow(unused_variables)]
-
-mod config;
-mod dmi;
-mod edit_prefab;
-mod history;
-mod map_renderer;
-mod map_repr;
-mod support;
-mod tasks;
-mod tools;
-
-use dmi::IconCache;
+use crate::dmi::IconCache;
+use crate::edit_prefab::EditPrefab;
+use crate::{config, dmi, history, map_renderer, map_repr, tasks, tools};
 use dmm_tools::dmm::Map;
 use dreammaker::objtree::{ObjectTree, TypeRef};
-use edit_prefab::EditPrefab;
 use imgui::*;
 use sdl3::dialog::{DialogError, DialogFileFilter};
 use sdl3::gpu::{ColorTargetInfo, CommandBuffer, Device};
@@ -26,27 +12,23 @@ use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Arc};
 
-type History = history::History<map_repr::AtomMap, Environment>;
-type ImRenderer = imgui_sdl3::renderer::Renderer;
+pub type History = history::History<map_repr::AtomMap, Environment>;
+pub type ImRenderer = imgui_sdl3::renderer::Renderer;
 
-const RED: [f32; 4] = [1.0, 0.25, 0.25, 1.0];
-const GREEN: [f32; 4] = [0.25, 1.0, 0.25, 1.0];
+pub const RED: [f32; 4] = [1.0, 0.25, 0.25, 1.0];
+pub const GREEN: [f32; 4] = [0.25, 1.0, 0.25, 1.0];
 const THUMBNAIL_SIZE: u16 = 186;
 const MAX_ZOOM: f32 = 16.;
 const MIN_ZOOM: f32 = 1. / 16.;
 
 const CLEAR_COLOR: Color = Color::RGB(64, 64, 128);
 
-fn main() {
-    support::run("SpacemanDMM");
-}
-
 // ---------------------------------------------------------------------------
 // Data structures
 
 pub struct EditorScene {
     device: sdl3::gpu::Device,
-    logical_size: (u32, u32),
+    pub logical_size: (u32, u32),
 
     config: config::Config,
     map_renderer: map_renderer::MapRenderer,
@@ -100,8 +82,8 @@ enum Command {
 pub struct Environment {
     path: PathBuf,
     errors: Vec<String>,
-    objtree: Arc<ObjectTree>,
-    icons: Arc<IconCache>,
+    pub objtree: Arc<ObjectTree>,
+    pub icons: Arc<IconCache>,
     turf: String,
     area: String,
 }
@@ -153,7 +135,7 @@ struct EditInstance {
 // Editor scene, including rendering and UI
 
 impl EditorScene {
-    fn new(device: &Device, logical_size: (u32, u32)) -> Self {
+    pub fn new(device: &Device, logical_size: (u32, u32)) -> Self {
         let (command_tx, command_rx) = mpsc::channel();
         let mut ed = EditorScene {
             device: device.clone(),
@@ -281,7 +263,7 @@ impl EditorScene {
         self.environment = Some(environment);
     }
 
-    fn run(&mut self) {
+    pub fn run(&mut self) {
         while let Ok(command) = self.command_rx.try_recv() {
             match command {
                 Command::DialogError(e) => self.handle_dialog_error(e),
@@ -390,7 +372,7 @@ impl EditorScene {
         }
     }
 
-    fn render(&mut self, command_buffer: &mut CommandBuffer, target: ColorTargetInfo) {
+    pub fn render(&mut self, command_buffer: &mut CommandBuffer, target: ColorTargetInfo) {
         let target = target
             .with_clear_color(CLEAR_COLOR)
             .with_load_op(sdl3::gpu::LoadOp::CLEAR);
@@ -437,7 +419,7 @@ impl EditorScene {
         self.device.end_render_pass(render_pass);
     }
 
-    fn run_ui(&mut self, ui: &Ui, renderer: &mut ImRenderer) -> bool {
+    pub fn run_ui(&mut self, ui: &Ui, renderer: &mut ImRenderer) -> bool {
         ui.dockspace_over_main_viewport();
 
         for tool in self.tools.iter_mut() {
@@ -1225,7 +1207,7 @@ impl EditorScene {
         continue_running
     }
 
-    fn mouse_moved(&mut self, (x, y): (i32, i32)) {
+    pub fn mouse_moved(&mut self, (x, y): (i32, i32)) {
         self.last_mouse_pos = (x, y);
         self.target_tile = self.tile_under((x, y));
     }
@@ -1262,7 +1244,7 @@ impl EditorScene {
         }
     }
 
-    fn mouse_wheel(&mut self, ctrl: bool, shift: bool, alt: bool, x: f32, y: f32) {
+    pub fn mouse_wheel(&mut self, ctrl: bool, shift: bool, alt: bool, x: f32, y: f32) {
         if alt {
             if y > 0.0 {
                 self.zoom_in();
@@ -1294,7 +1276,7 @@ impl EditorScene {
 
     // Commented out due to https://github.com/rust-lang/rust/issues/82012
     //#[deny(unreachable_patterns)]
-    fn chord(&mut self, ctrl: bool, shift: bool, alt: bool, key: Scancode) {
+    pub fn chord(&mut self, ctrl: bool, shift: bool, alt: bool, key: Scancode) {
         macro_rules! k {
             (@[$ctrl:pat, $shift:pat, $alt:pat] $k:ident) => {
                 ($ctrl, $shift, $alt, Scancode::$k)
@@ -1608,7 +1590,7 @@ const FILTERS_DMM: &[DialogFileFilter] = &[DialogFileFilter {
 // Helpers
 
 impl Environment {
-    fn find_closest_type(&self, mut path: &str) -> (bool, Option<TypeRef<'_>>) {
+    pub fn find_closest_type(&self, mut path: &str) -> (bool, Option<TypeRef<'_>>) {
         // find the "best" type by chopping the path if needed
         let mut ty = self.objtree.find(path);
         let red_paths = ty.is_none();
@@ -1704,7 +1686,7 @@ fn detect_environment(path: &Path) -> Option<PathBuf> {
     None
 }
 
-fn prepare_tool_icon(
+pub fn prepare_tool_icon(
     renderer: &mut ImRenderer,
     environment: Option<&Environment>,
     map_renderer: &mut map_renderer::MapRenderer,
@@ -1768,7 +1750,7 @@ fn prepare_tool_icon(
 // ---------------------------------------------------------------------------
 // Extension traits
 
-trait UiExt {
+pub trait UiExt {
     fn fits_width(&self, width: f32) -> usize;
     fn objtree_menu<'e>(&self, env: &'e Environment, selection: &mut Option<TypeRef<'e>>);
     fn tool_icon(

@@ -1,6 +1,6 @@
 //! Placement and editing tools which appear in the workbench.
 
-use crate::{Environment, History, ImRenderer};
+use crate::editor::{Environment, History, ImRenderer};
 use dmm_tools::dmm::Prefab;
 use dreammaker::dmi;
 use dreammaker::objtree::ObjectTree;
@@ -142,7 +142,7 @@ impl ToolIcon {
 
     pub fn prepare(&mut self, environment: Option<&Environment>, ctx: &mut IconCtx) -> &mut Self {
         let temp = std::mem::replace(self, ToolIcon::None);
-        *self = crate::prepare_tool_icon(ctx.renderer, environment, ctx.map_renderer, temp);
+        *self = crate::editor::prepare_tool_icon(ctx.renderer, environment, ctx.map_renderer, temp);
         self
     }
 }

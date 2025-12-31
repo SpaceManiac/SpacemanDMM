@@ -1,5 +1,6 @@
 use super::*;
-use crate::{EditPrefab, UiExt};
+use crate::edit_prefab::EditPrefab;
+use crate::editor::UiExt;
 use std::collections::HashSet;
 
 /// The standard placement tool.
