@@ -22,6 +22,8 @@ toml = "0.5.11"
 petgraph = { version = "0.6.0", default-features = false }
 weak-table = "0.3.2"
 slice-of-array = "0.3.2"
+sdl3-main = "0.5.4"
+ouroboros = "0.18.5"
 
 [build-dependencies]
 chrono = "0.4.38"
