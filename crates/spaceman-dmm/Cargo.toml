@@ -28,3 +28,6 @@ ouroboros = "0.18.5"
 [build-dependencies]
 chrono = "0.4.38"
 git2 = { version = "0.20.2", default-features = false }
+
+[target.wasm32-unknown-emscripten.dependencies]
+sdl3 = { version = "0.16.4", features = ["build-from-source"] }
