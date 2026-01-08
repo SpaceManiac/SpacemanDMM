@@ -62,6 +62,14 @@ impl Coord2 {
     }
 }
 
+impl std::ops::Add<Dir> for Coord2 {
+    type Output = Coord2;
+
+    fn add(self, rhs: Dir) -> Coord2 {
+        Coord2(self.0 + rhs.offset())
+    }
+}
+
 impl From<IVec2> for Coord2 {
     fn from(value: IVec2) -> Self {
         Self(value)

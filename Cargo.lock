@@ -553,6 +553,7 @@ dependencies = [
  "foldhash",
  "get-size",
  "get-size-derive",
+ "glam",
  "indexmap",
  "interval-tree",
  "lodepng",
