@@ -4,7 +4,9 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 
+use derive_more::Deref;
 use foldhash::fast::RandomState;
+use glam::{IVec2, IVec3};
 use indexmap::IndexMap;
 use ndarray::{self, Array3, Axis};
 
@@ -28,36 +30,25 @@ pub struct Key(KeyType);
 /// An XY coordinate pair in the BYOND coordinate system.
 ///
 /// The lower-left corner is `{ x: 1, y: 1 }`.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct Coord2 {
-    pub x: i32,
-    pub y: i32,
-}
+#[derive(Deref)]
+pub struct Coord2(IVec2);
 
 impl Coord2 {
     #[inline]
-    pub fn new(x: i32, y: i32) -> Coord2 {
-        Coord2 { x, y }
+    pub fn z(self, z: i32) -> Coord3 {
+        self.extend(z).into()
     }
 
     #[inline]
-    pub fn z(self, z: i32) -> Coord3 {
-        Coord3 {
-            x: self.x,
-            y: self.y,
-            z,
-        }
-    }
-
     fn to_raw(self, (dim_y, dim_x): (usize, usize)) -> (usize, usize) {
         assert!(
-            self.x >= 1 && self.x <= dim_x as i32,
+            (1..=(dim_x as i32)).contains(&self.x),
             "x={} not in [1, {}]",
             self.x,
             dim_x
         );
         assert!(
-            self.y >= 1 && self.y <= dim_y as i32,
+            (1..=(dim_y as i32)).contains(&self.y),
             "y={} not in [1, {}]",
             self.y,
             dim_y
@@ -65,23 +56,15 @@ impl Coord2 {
         (dim_y - self.y as usize, self.x as usize - 1)
     }
 
+    #[inline]
     fn from_raw((y, x): (usize, usize), (dim_y, _dim_x): (usize, usize)) -> Coord2 {
-        Coord2 {
-            x: x as i32 + 1,
-            y: (dim_y - y) as i32,
-        }
+        Coord2(IVec2::new(x as i32 + 1, (dim_y - y) as i32))
     }
 }
 
-impl std::ops::Add<Dir> for Coord2 {
-    type Output = Coord2;
-
-    fn add(self, rhs: Dir) -> Coord2 {
-        let (x, y) = rhs.offset();
-        Coord2 {
-            x: self.x + x,
-            y: self.y + y,
-        }
+impl From<IVec2> for Coord2 {
+    fn from(value: IVec2) -> Self {
+        Self(value)
     }
 }
 
@@ -91,42 +74,26 @@ impl std::ops::Add<Dir> for Coord2 {
 ///
 /// Note that BYOND by default considers "UP" to be Z+1, but this does not
 /// necessarily apply to a given game's logic.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct Coord3 {
-    pub x: i32,
-    pub y: i32,
-    pub z: i32,
-}
+#[derive(Deref)]
+pub struct Coord3(IVec3);
 
 impl Coord3 {
     #[inline]
-    pub fn new(x: i32, y: i32, z: i32) -> Coord3 {
-        Coord3 { x, y, z }
-    }
-
-    #[inline]
-    pub fn xy(self) -> Coord2 {
-        Coord2 {
-            x: self.x,
-            y: self.y,
-        }
-    }
-
     fn to_raw(self, (dim_z, dim_y, dim_x): (usize, usize, usize)) -> (usize, usize, usize) {
         assert!(
-            self.x >= 1 && self.x <= dim_x as i32,
+            (1..=(dim_x as i32)).contains(&self.x),
             "x={} not in [1, {}]",
             self.x,
             dim_x
         );
         assert!(
-            self.y >= 1 && self.y <= dim_y as i32,
+            (1..=(dim_y as i32)).contains(&self.y),
             "y={} not in [1, {}]",
             self.y,
             dim_y
         );
         assert!(
-            self.z >= 1 && self.z <= dim_z as i32,
+            (1..=(dim_z as i32)).contains(&self.z),
             "y={} not in [1, {}]",
             self.z,
             dim_z
@@ -139,15 +106,18 @@ impl Coord3 {
     }
 
     #[allow(dead_code)]
+    #[inline]
     fn from_raw(
         (z, y, x): (usize, usize, usize),
         (_dim_z, dim_y, _dim_x): (usize, usize, usize),
     ) -> Coord3 {
-        Coord3 {
-            x: x as i32 + 1,
-            y: (dim_y - y) as i32,
-            z: z as i32 + 1,
-        }
+        Coord3(IVec3::new(x as i32 + 1, (dim_y - y) as i32, z as i32 + 1))
+    }
+}
+
+impl From<IVec3> for Coord3 {
+    fn from(value: IVec3) -> Self {
+        Self(value)
     }
 }
 

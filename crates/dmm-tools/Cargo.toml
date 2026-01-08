@@ -13,6 +13,8 @@ lodepng = "3.10.7"
 indexmap = "2.6.0"
 foldhash = "0.2.0"
 either = "1.13.0"
+glam = "0.30"
+derive_more = {version = "2.1.1", features = ["deref"]}
 
 [dependencies.bytemuck]
 version = "1.19.0"
