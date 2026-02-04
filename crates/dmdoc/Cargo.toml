@@ -9,7 +9,7 @@ edition.workspace = true
 dreammaker = { path = "../dreammaker" }
 pulldown-cmark = "0.9.6"
 walkdir = "2.5.0"
-git2 = { version = "0.20.2", default-features = false }
+git2 = { version = "0.20.4", default-features = false }
 maud = "0.27.0"
 foldhash = "0.2.0"
 
@@ -18,4 +18,4 @@ walkdir = "2.5.0"
 
 [build-dependencies]
 chrono = "0.4.38"
-git2 = { version = "0.20.2", default-features = false }
+git2 = { version = "0.20.4", default-features = false }
