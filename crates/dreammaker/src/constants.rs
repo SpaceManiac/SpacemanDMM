@@ -766,65 +766,48 @@ impl<'a> ConstantFolder<'a> {
         })
     }
 
-    fn binary(
-        &mut self,
-        mut lhs: Constant,
-        mut rhs: Constant,
-        op: BinaryOp,
-    ) -> Result<Constant, DMError> {
-        use self::Constant::*;
+    fn binary(&mut self, lhs: Constant, rhs: Constant, op: BinaryOp) -> Result<Constant, DMError> {
+        use self::Constant::{Float, String};
 
-        macro_rules! numeric {
-            ($name:ident $oper:tt) => {
-                match (op, lhs, rhs) {
-                    (BinaryOp::$name, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs $oper rhs)),
-                    (_, lhs_, rhs_) => { lhs = lhs_; rhs = rhs_; }
-                }
-            }
-        }
-        #[rustfmt::skip]
-        numeric!(Add +);
-        numeric!(Sub -);
-        numeric!(Mul *);
-        numeric!(Div /);
-        numeric!(Mod %);
-        numeric!(Less <);
-        numeric!(LessEq <=);
-        numeric!(Greater >);
-        numeric!(GreaterEq >=);
         match (op, lhs, rhs) {
+            (BinaryOp::Add, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs + rhs)),
+            (BinaryOp::Sub, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs - rhs)),
+            (BinaryOp::Mul, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs * rhs)),
+            (BinaryOp::Div, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs / rhs)),
+            (BinaryOp::Mod, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs % rhs)),
+            (BinaryOp::Less, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs < rhs)),
+            (BinaryOp::LessEq, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs <= rhs)),
+            (BinaryOp::Greater, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs > rhs)),
+            (BinaryOp::GreaterEq, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs >= rhs)),
+
             (BinaryOp::FloatMod, Float(lhs), Float(rhs)) => {
                 return Ok(Constant::from(lhs - ((lhs / rhs).floor() * rhs)))
             },
-            (_, lhs_, rhs_) => {
-                lhs = lhs_;
-                rhs = rhs_;
-            },
-        }
 
-        match (op, lhs, rhs) {
             (BinaryOp::Pow, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs.powf(rhs))),
-            (_, lhs_, rhs_) => {
-                lhs = lhs_;
-                rhs = rhs_;
+
+            (BinaryOp::BitOr, Float(lhs), Float(rhs)) => {
+                return Ok(Constant::from_bit_op((lhs as u32) | (rhs as u32)));
             },
-        }
-
-        macro_rules! integer {
-            ($name:ident $oper:tt) => {
-                match (op, lhs, rhs) {
-                    (BinaryOp::$name, Float(lhs), Float(rhs)) => return Ok(Constant::from_bit_op((lhs as u32) $oper (rhs as u32))),
-                    (_, lhs_, rhs_) => { lhs = lhs_; rhs = rhs_; }
+            (BinaryOp::BitAnd, Float(lhs), Float(rhs)) => {
+                return Ok(Constant::from_bit_op((lhs as u32) & (rhs as u32)));
+            },
+            (BinaryOp::BitXor, Float(lhs), Float(rhs)) => {
+                return Ok(Constant::from_bit_op((lhs as u32) ^ (rhs as u32)));
+            },
+            (BinaryOp::LShift, Float(lhs), Float(rhs)) => {
+                match (lhs as u32).checked_shl(rhs as u32) {
+                    Some(result) => Ok(Constant::from_bit_op(result)),
+                    None => Err(self.error(format!("non-constant {op:?}: {lhs} {op} {rhs}"))),
                 }
-            }
-        }
-        integer!(BitOr |);
-        integer!(BitAnd &);
-        integer!(BitXor ^);
-        integer!(LShift <<);
-        integer!(RShift >>);
+            },
+            (BinaryOp::RShift, Float(lhs), Float(rhs)) => {
+                match (lhs as u32).checked_shr(rhs as u32) {
+                    Some(result) => Ok(Constant::from_bit_op(result)),
+                    None => Err(self.error(format!("non-constant {op:?}: {lhs} {op} {rhs}"))),
+                }
+            },
 
-        match (op, lhs, rhs) {
             (BinaryOp::Add, String(lhs), String(rhs)) => {
                 Ok(String((lhs.into_owned() + &rhs).into()))
             },
