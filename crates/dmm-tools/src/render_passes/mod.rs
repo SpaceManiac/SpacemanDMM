@@ -4,6 +4,7 @@ use dm::objtree::*;
 
 mod icon_smoothing;
 mod icon_smoothing_2020;
+mod icon_smoothing_2025;
 mod random;
 mod smart_cables;
 mod structures;
@@ -11,6 +12,7 @@ mod transit_tube;
 
 pub use self::icon_smoothing::IconSmoothing as IconSmoothing2016;
 pub use self::icon_smoothing_2020::IconSmoothing;
+pub use self::icon_smoothing_2025::IconSmoothing as IconSmoothing2025;
 pub use self::random::Random;
 pub use self::smart_cables::SmartCables;
 pub use self::structures::{GravityGen, Spawners};
@@ -183,6 +185,12 @@ pub const RENDER_PASSES: &[RenderPassInfo] = &[
         "icon-smoothing",
         "Emulate the icon smoothing subsystem (Rohesie, 2020).",
         true
+    ),
+    pass!(
+        IconSmoothing2025,
+        "icon-smoothing-2025",
+        "Emulate the tg icon smoothing subsystem without corner smoothing (LemonInTheDark, Rohesie, 2025).",
+        false
     ),
     pass!(
         SmartCables,
@@ -381,42 +389,82 @@ impl RenderPass for Overlays {
                 icon_state: "grille",
                 ..atom.sprite
             });
-        } else if atom.istype("/obj/structure/closet/") {
-            // closet doors
+        } else if atom.istype("/obj/structure/closet/crate") {
+            if !atom.get_var("opened", objtree).to_bool() {
+                if atom.get_var("broken", objtree).to_bool() {
+                    add_to(overlays, atom, "securecrateemag");
+                } else if atom.get_var("locked", objtree).to_bool() {
+                    add_to(overlays, atom, "securecrater");
+                } else if atom.get_var("secure", objtree).to_bool() {
+                    add_to(overlays, atom, "securecrateg");
+                }
+            }
+
+            if atom.get_var("welded", objtree).to_bool() {
+                let off_x = atom.get_var("weld_w", objtree).to_int().unwrap_or(0);
+                let off_y = atom.get_var("weld_z", objtree).to_int().unwrap_or(0);
+                overlays.push(Sprite {
+                    icon_state: "welded",
+                    ofs_x: atom.sprite.ofs_x + off_x,
+                    ofs_y: atom.sprite.ofs_y + off_y,
+                    ..atom.sprite
+                });
+            }
+
             if atom.get_var("opened", objtree).to_bool() {
-                let var = if atom.get_var("icon_door_override", objtree).to_bool() {
-                    "icon_door"
-                } else {
-                    "icon_state"
-                };
-                if let Constant::String(door) = atom.get_var(var, objtree) {
-                    add_to(
-                        overlays,
-                        atom,
-                        bumpalo::format!(in bump, "{}_open", door).into_bump_str(),
-                    );
+                if let Constant::String(lid_icon_state) = atom.get_var("lid_icon_state", objtree) {
+                    let lid_icon = atom.get_var_notnull("lid_icon", objtree).and_then(|lid_icon| lid_icon.as_path_str());
+                    let off_x = atom.get_var("lid_w", objtree).to_int().unwrap_or(0);
+                    let off_y = atom.get_var("lid_z", objtree).to_int().unwrap_or(0);
+                    overlays.push(Sprite {
+                        icon: lid_icon.unwrap_or(atom.sprite.icon),
+                        icon_state: lid_icon_state,
+                        ofs_x: atom.sprite.ofs_x + off_x,
+                        ofs_y: atom.sprite.ofs_y + off_y,
+                        ..atom.sprite
+                    });
                 }
-            } else {
-                if let Constant::String(door) = atom
-                    .get_var_notnull("icon_door", objtree)
-                    .unwrap_or_else(|| atom.get_var("icon_state", objtree))
-                {
-                    add_to(
-                        overlays,
-                        atom,
-                        bumpalo::format!(in bump, "{}_door", door).into_bump_str(),
-                    );
-                }
-                if atom.get_var("welded", objtree).to_bool() {
-                    add_to(overlays, atom, "welded");
-                }
-                if atom.get_var("secure", objtree).to_bool()
-                    && !atom.get_var("broken", objtree).to_bool()
-                {
-                    if atom.get_var("locked", objtree).to_bool() {
-                        add_to(overlays, atom, "locked");
+            }
+        } else if atom.istype("/obj/structure/closet/") {
+            if atom.get_var("enable_door_overlay", objtree).to_bool() {
+                // closet doors
+                if atom.get_var("opened", objtree).to_bool() {
+                    let var = if atom.get_var("icon_door_override", objtree).to_bool() {
+                        "icon_door"
                     } else {
-                        add_to(overlays, atom, "unlocked");
+                        "icon_state"
+                    };
+                    if let Constant::String(door) = atom.get_var(var, objtree) {
+                        add_to(
+                            overlays,
+                            atom,
+                            bumpalo::format!(in bump, "{}_open", door).into_bump_str(),
+                        );
+                    }
+                } else {
+                    if atom.get_var("has_closed_overlay", objtree).to_bool() {
+                        if let Constant::String(door) = atom
+                            .get_var_notnull("icon_door", objtree)
+                            .unwrap_or_else(|| atom.get_var("icon_state", objtree))
+                        {
+                            add_to(
+                                overlays,
+                                atom,
+                                bumpalo::format!(in bump, "{}_door", door).into_bump_str(),
+                            );
+                        }
+                    }
+                    if atom.get_var("welded", objtree).to_bool() {
+                        add_to(overlays, atom, "welded");
+                    }
+                    if atom.get_var("secure", objtree).to_bool()
+                        && !atom.get_var("broken", objtree).to_bool()
+                    {
+                        if atom.get_var("locked", objtree).to_bool() {
+                            add_to(overlays, atom, "locked");
+                        } else {
+                            add_to(overlays, atom, "unlocked");
+                        }
                     }
                 }
             }
@@ -439,7 +487,7 @@ impl RenderPass for Overlays {
                         ..atom.sprite
                     })
                 }
-            } else {
+            } else if atom.get_var("can_be_glass", objtree).to_bool() {
                 add_to(overlays, atom, "fill_closed");
             }
         } else if atom.istype("/obj/machinery/power/apc/") {
@@ -493,8 +541,7 @@ impl RenderPass for Pretty {
             }
         } else if atom.istype("/obj/machinery/firealarm/") {
             add_to(overlays, atom, "fire_overlay");
-            add_to(overlays, atom, "fire_0");
-            add_to(overlays, atom, "fire_off");
+            add_to(overlays, atom, "fire_disabled");
         } else if atom.istype("/obj/structure/tank_dispenser/") {
             if let &Constant::Float(oxygen) = atom.get_var("oxygentanks", objtree) {
                 match oxygen as i32 {
