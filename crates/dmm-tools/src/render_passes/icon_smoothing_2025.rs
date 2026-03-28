@@ -1,8 +1,7 @@
-//! Port of icon smoothing subsystem as of 2020.
+//! Port of icon smoothing subsystem as of 2025.
 //!
-//! https://github.com/tgstation/tgstation/pull/52864
-//! followed by
-//! https://github.com/tgstation/tgstation/pull/53906
+//! Based off of the [`icon_smoothing_2020`](crate::render_passes::icon_smoothing_2020) subsystem,
+//! followed by https://github.com/tgstation/tgstation/pull/90002
 
 use crate::dmi::Dir;
 use crate::minimap::{Atom, GetVar, Neighborhood, Sprite};

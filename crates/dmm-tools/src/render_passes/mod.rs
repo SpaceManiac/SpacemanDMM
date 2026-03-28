@@ -4,7 +4,7 @@ use dm::objtree::*;
 
 mod icon_smoothing;
 mod icon_smoothing_2020;
-mod icon_smoothing_2020_nc;
+mod icon_smoothing_2025;
 mod random;
 mod smart_cables;
 mod structures;
@@ -12,7 +12,7 @@ mod transit_tube;
 
 pub use self::icon_smoothing::IconSmoothing as IconSmoothing2016;
 pub use self::icon_smoothing_2020::IconSmoothing;
-pub use self::icon_smoothing_2020_nc::IconSmoothing as IconSmoothingNoCorners;
+pub use self::icon_smoothing_2025::IconSmoothing as IconSmoothing2025;
 pub use self::random::Random;
 pub use self::smart_cables::SmartCables;
 pub use self::structures::{GravityGen, Spawners};
@@ -187,9 +187,9 @@ pub const RENDER_PASSES: &[RenderPassInfo] = &[
         true
     ),
     pass!(
-        IconSmoothingNoCorners,
-        "icon-smoothing-nc",
-        "Emulate the icon smoothing subsystem without corner smoothing (LemonInTheDark, Rohesie, 2025).",
+        IconSmoothing2025,
+        "icon-smoothing-2025",
+        "Emulate the tg icon smoothing subsystem without corner smoothing (LemonInTheDark, Rohesie, 2025).",
         false
     ),
     pass!(
