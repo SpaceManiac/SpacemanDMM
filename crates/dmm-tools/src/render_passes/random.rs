@@ -126,15 +126,16 @@ impl RenderPass for Random {
         ];
 
         if atom.istype("/obj/structure/sign/poster/contraband/random/") {
-            sprite.icon_state = CONTRABAND_POSTERS[rng.gen_range(0..CONTRABAND_POSTERS.len())];
+            sprite.icon_state = CONTRABAND_POSTERS.choose(&mut rng).unwrap();
         } else if atom.istype("/obj/structure/sign/poster/official/random/") {
-            sprite.icon_state = LEGIT_POSTERS[rng.gen_range(0..LEGIT_POSTERS.len())];
+            sprite.icon_state = LEGIT_POSTERS.choose(&mut rng).unwrap();
         } else if atom.istype("/obj/structure/sign/poster/random/") {
-            if rng.gen_ratio(CONTRABAND_POSTERS.len() as u32, (CONTRABAND_POSTERS.len() + LEGIT_POSTERS.len()) as u32) {
-                sprite.icon_state = CONTRABAND_POSTERS[rng.gen_range(0..CONTRABAND_POSTERS.len())];
+            let poster_type = if rng.gen_ratio(CONTRABAND_POSTERS.len() as u32, (CONTRABAND_POSTERS.len() + LEGIT_POSTERS.len()) as u32) {
+                CONTRABAND_POSTERS
             } else {
-                sprite.icon_state = LEGIT_POSTERS[rng.gen_range(0..LEGIT_POSTERS.len())];
-            }
+                LEGIT_POSTERS
+            };
+            sprite.icon_state = poster_type.choose(&mut rng).unwrap();
         } else if atom.istype("/obj/item/kirbyplants/random/")
             || atom.istype("/obj/item/twohanded/required/kirbyplants/random/")
         {
