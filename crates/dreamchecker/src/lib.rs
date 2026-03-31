@@ -600,6 +600,7 @@ pub struct AnalyzeObjectTree<'o> {
 
     return_type: HashMap<ProcRef<'o>, TypeExpr<'o>>,
     must_call_parent: ProcDirective<'o>,
+    must_not_call_parent: ProcDirective<'o>,
     must_not_override: ProcDirective<'o>,
     private: ProcDirective<'o>,
     protected: ProcDirective<'o>,
@@ -635,6 +636,12 @@ impl<'o> AnalyzeObjectTree<'o> {
             return_type,
             must_call_parent: ProcDirective::new(
                 "SpacemanDMM_should_call_parent",
+                true,
+                false,
+                false,
+            ),
+            must_not_call_parent: ProcDirective::new(
+                "SpacemanDMM_should_not_call_parent",
                 true,
                 false,
                 false,
@@ -685,6 +692,7 @@ impl<'o> AnalyzeObjectTree<'o> {
         let procdirective = match directive {
             "SpacemanDMM_should_not_override" => &mut self.must_not_override,
             "SpacemanDMM_should_call_parent" => &mut self.must_call_parent,
+            "SpacemanDMM_should_not_call_parent" => &mut self.must_not_call_parent,
             "SpacemanDMM_private_proc" => &mut self.private,
             "SpacemanDMM_protected_proc" => &mut self.protected,
             "SpacemanDMM_should_not_sleep" => &mut self.must_not_sleep,
@@ -1414,7 +1422,19 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     .register(self.context);
                 }
             }
-            if !self.calls_parent {
+            if self.calls_parent {
+                if !matches!(self.env.must_not_call_parent.get(self.proc_ref), Some((false, _))) {
+                    if let Some((true, location)) = self.env.must_not_call_parent.get(parent) {
+                        error(
+                            self.proc_ref.location,
+                            format!("proc calls parent, prohibited by {parent}"),
+                        )
+                        .with_note(*location, "required by this must_not_call_parent annotation")
+                        .with_errortype("must_not_call_parent")
+                        .register(self.context);
+                    }
+                }
+            } else {
                 if let Some((proc, true, location)) =
                     self.env.must_call_parent.get_self_or_parent(self.proc_ref)
                 {
