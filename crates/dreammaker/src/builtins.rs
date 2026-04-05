@@ -833,6 +833,7 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         world/var/name = string!("byond");
         world/var/params;
         world/var/port;
+        world/var/process;
         world/var/realtime;
         world/var/reachable;
         world/var/sleep_offline = int!(0);
