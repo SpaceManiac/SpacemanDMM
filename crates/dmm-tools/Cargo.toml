@@ -7,7 +7,7 @@ edition = "2021"
 [dependencies]
 inflate = "0.4.5"
 ndarray = "0.15.6"
-rand = "0.8.5"
+rand = "0.10.1"
 dreammaker = { path = "../dreammaker" }
 lodepng = "3.10.7"
 indexmap = "2.6.0"

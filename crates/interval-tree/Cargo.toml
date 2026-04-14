@@ -9,4 +9,4 @@ license-file = "LICENSE"
 edition = "2021"
 
 [dev-dependencies]
-rand = "0.8.5"
+rand = "0.10.1"

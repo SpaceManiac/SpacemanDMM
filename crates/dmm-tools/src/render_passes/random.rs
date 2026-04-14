@@ -1,7 +1,7 @@
 use super::*;
 
-use rand::seq::SliceRandom;
-use rand::Rng;
+use rand::seq::IndexedRandom;
+use rand::RngExt;
 
 #[derive(Default)]
 pub struct Random;
@@ -12,7 +12,7 @@ impl RenderPass for Random {
         objtree: &'a ObjectTree,
         output: &mut Vec<Atom<'a>>,
     ) -> bool {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         if atom.istype("/obj/machinery/vending/snack/random/") {
             if let Some(root) = objtree.find("/obj/machinery/vending/snack") {
@@ -96,7 +96,7 @@ impl RenderPass for Random {
         objtree: &'a ObjectTree,
         bump: &'a bumpalo::Bump,
     ) {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         // small selection of contraband and legit poster icon states
         // in theory this could iterate through subtypes of /obj/structure/sign/poster,
@@ -130,7 +130,10 @@ impl RenderPass for Random {
         } else if atom.istype("/obj/structure/sign/poster/official/random/") {
             sprite.icon_state = LEGIT_POSTERS.choose(&mut rng).unwrap();
         } else if atom.istype("/obj/structure/sign/poster/random/") {
-            let poster_type = if rng.gen_ratio(CONTRABAND_POSTERS.len() as u32, (CONTRABAND_POSTERS.len() + LEGIT_POSTERS.len()) as u32) {
+            let poster_type = if rng.random_ratio(
+                CONTRABAND_POSTERS.len() as u32,
+                (CONTRABAND_POSTERS.len() + LEGIT_POSTERS.len()) as u32,
+            ) {
                 CONTRABAND_POSTERS
             } else {
                 LEGIT_POSTERS
@@ -140,7 +143,7 @@ impl RenderPass for Random {
             || atom.istype("/obj/item/twohanded/required/kirbyplants/random/")
         {
             sprite.icon = "icons/obj/fluff/flora/plants.dmi";
-            let random = rng.gen_range(0..=29);
+            let random = rng.random_range(0..=29);
             if random == 0 {
                 sprite.icon_state = "applebush";
             } else {
@@ -211,7 +214,7 @@ fn pickweight<'a>(list: &[&'a (Constant, Option<Constant>)]) -> &'a Constant {
                 .unwrap_or(1)
         })
         .sum();
-    total = rand::thread_rng().gen_range(1..=total);
+    total = rand::rng().random_range(1..=total);
     for (k, v) in list.iter() {
         total -= v
             .as_ref()
