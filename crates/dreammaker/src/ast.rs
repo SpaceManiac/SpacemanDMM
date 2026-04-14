@@ -743,7 +743,7 @@ impl Ident {
     pub(crate) fn from_static(str: &'static str) -> Self {
         debug_assert!(
             intern_static(str).is_some(),
-            "Missing from STATIC_INDENTS: {:?}",
+            "Missing from STATIC_IDENTS: {:?}",
             str
         );
         Ident { inner: str.into() }
