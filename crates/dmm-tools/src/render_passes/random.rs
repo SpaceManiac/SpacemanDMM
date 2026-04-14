@@ -1,7 +1,7 @@
 use super::*;
 
-use rand::seq::SliceRandom;
-use rand::Rng;
+use rand::seq::IndexedRandom;
+use rand::RngExt;
 
 #[derive(Default)]
 pub struct Random;
@@ -12,7 +12,7 @@ impl RenderPass for Random {
         objtree: &'a ObjectTree,
         output: &mut Vec<Atom<'a>>,
     ) -> bool {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         if atom.istype("/obj/machinery/vending/snack/random/") {
             if let Some(root) = objtree.find("/obj/machinery/vending/snack") {
@@ -96,21 +96,21 @@ impl RenderPass for Random {
         objtree: &'a ObjectTree,
         bump: &'a bumpalo::Bump,
     ) {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         const CONTRABAND_POSTERS: u32 = 44;
         const LEGIT_POSTERS: u32 = 35;
 
         if atom.istype("/obj/structure/sign/poster/contraband/random/") {
             sprite.icon_state =
-                bumpalo::format!(in bump, "poster{}", rng.gen_range(1..=CONTRABAND_POSTERS))
+                bumpalo::format!(in bump, "poster{}", rng.random_range(1..=CONTRABAND_POSTERS))
                     .into_bump_str();
         } else if atom.istype("/obj/structure/sign/poster/official/random/") {
             sprite.icon_state =
-                bumpalo::format!(in bump, "poster{}_legit", rng.gen_range(1..=LEGIT_POSTERS))
+                bumpalo::format!(in bump, "poster{}_legit", rng.random_range(1..=LEGIT_POSTERS))
                     .into_bump_str();
         } else if atom.istype("/obj/structure/sign/poster/random/") {
-            let i = 1 + rng.gen_range(0..CONTRABAND_POSTERS + LEGIT_POSTERS);
+            let i = 1 + rng.random_range(0..CONTRABAND_POSTERS + LEGIT_POSTERS);
             if i <= CONTRABAND_POSTERS {
                 sprite.icon_state = bumpalo::format!(in bump, "poster{}", i).into_bump_str();
             } else {
@@ -122,7 +122,7 @@ impl RenderPass for Random {
             || atom.istype("/obj/item/twohanded/required/kirbyplants/random/")
         {
             sprite.icon = "icons/obj/flora/plants.dmi";
-            let random = rng.gen_range(0..26);
+            let random = rng.random_range(0..26);
             if random == 0 {
                 sprite.icon_state = "applebush";
             } else {
@@ -193,7 +193,7 @@ fn pickweight<'a>(list: &[&'a (Constant, Option<Constant>)]) -> &'a Constant {
                 .unwrap_or(1)
         })
         .sum();
-    total = rand::thread_rng().gen_range(1..=total);
+    total = rand::rng().random_range(1..=total);
     for (k, v) in list.iter() {
         total -= v
             .as_ref()
