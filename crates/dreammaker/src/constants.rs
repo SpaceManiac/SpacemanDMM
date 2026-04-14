@@ -770,30 +770,30 @@ impl<'a> ConstantFolder<'a> {
         use self::Constant::{Float, String};
 
         match (op, lhs, rhs) {
-            (BinaryOp::Add, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs + rhs)),
-            (BinaryOp::Sub, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs - rhs)),
-            (BinaryOp::Mul, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs * rhs)),
-            (BinaryOp::Div, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs / rhs)),
-            (BinaryOp::Mod, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs % rhs)),
-            (BinaryOp::Less, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs < rhs)),
-            (BinaryOp::LessEq, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs <= rhs)),
-            (BinaryOp::Greater, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs > rhs)),
-            (BinaryOp::GreaterEq, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs >= rhs)),
+            (BinaryOp::Add, Float(lhs), Float(rhs)) => Ok(Constant::from(lhs + rhs)),
+            (BinaryOp::Sub, Float(lhs), Float(rhs)) => Ok(Constant::from(lhs - rhs)),
+            (BinaryOp::Mul, Float(lhs), Float(rhs)) => Ok(Constant::from(lhs * rhs)),
+            (BinaryOp::Div, Float(lhs), Float(rhs)) => Ok(Constant::from(lhs / rhs)),
+            (BinaryOp::Mod, Float(lhs), Float(rhs)) => Ok(Constant::from(lhs % rhs)),
+            (BinaryOp::Less, Float(lhs), Float(rhs)) => Ok(Constant::from(lhs < rhs)),
+            (BinaryOp::LessEq, Float(lhs), Float(rhs)) => Ok(Constant::from(lhs <= rhs)),
+            (BinaryOp::Greater, Float(lhs), Float(rhs)) => Ok(Constant::from(lhs > rhs)),
+            (BinaryOp::GreaterEq, Float(lhs), Float(rhs)) => Ok(Constant::from(lhs >= rhs)),
 
             (BinaryOp::FloatMod, Float(lhs), Float(rhs)) => {
-                return Ok(Constant::from(lhs - ((lhs / rhs).floor() * rhs)))
+                Ok(Constant::from(lhs - ((lhs / rhs).floor() * rhs)))
             },
 
-            (BinaryOp::Pow, Float(lhs), Float(rhs)) => return Ok(Constant::from(lhs.powf(rhs))),
+            (BinaryOp::Pow, Float(lhs), Float(rhs)) => Ok(Constant::from(lhs.powf(rhs))),
 
             (BinaryOp::BitOr, Float(lhs), Float(rhs)) => {
-                return Ok(Constant::from_bit_op((lhs as u32) | (rhs as u32)));
+                Ok(Constant::from_bit_op((lhs as u32) | (rhs as u32)))
             },
             (BinaryOp::BitAnd, Float(lhs), Float(rhs)) => {
-                return Ok(Constant::from_bit_op((lhs as u32) & (rhs as u32)));
+                Ok(Constant::from_bit_op((lhs as u32) & (rhs as u32)))
             },
             (BinaryOp::BitXor, Float(lhs), Float(rhs)) => {
-                return Ok(Constant::from_bit_op((lhs as u32) ^ (rhs as u32)));
+                Ok(Constant::from_bit_op((lhs as u32) ^ (rhs as u32)))
             },
             (BinaryOp::LShift, Float(lhs), Float(rhs)) => {
                 match (lhs as u32).checked_shl(rhs as u32) {
