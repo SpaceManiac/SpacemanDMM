@@ -549,6 +549,7 @@ static STATIC_IDENTS: Set<&'static str> = phf_set! {
     "priority",
     "prob",
     "proc",
+    "process",
     "PROFILE_AVERAGE",
     "PROFILE_CLEAR",
     "PROFILE_REFRESH",
