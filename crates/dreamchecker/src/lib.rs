@@ -1633,7 +1633,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Statement::If { arms, else_arm } => {
                 let mut allterm = ControlFlow::alltrue();
                 let mut alwaystrue = false;
-                for (condition, ref block) in arms.iter() {
+                for (condition, block) in arms.iter() {
                     let mut scoped_locals = local_vars.clone();
                     self.visit_control_condition(condition.location, &condition.elem);
                     if alwaystrue {
@@ -1850,7 +1850,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 let mut allterm = ControlFlow::alltrue();
                 self.visit_control_condition(location, input);
                 self.visit_expression(location, input, None, local_vars);
-                for (case, ref block) in cases.iter() {
+                for (case, block) in cases.iter() {
                     let mut scoped_locals = local_vars.clone();
                     if let [dm::ast::Case::Exact(Expression::BinaryOp {
                         op: BinaryOp::Or, ..
@@ -2342,7 +2342,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
             },
             Term::InterpString(_, parts) => {
-                for (ref expr, _) in parts.iter() {
+                for (expr, _) in parts.iter() {
                     if let Some(expr) = expr {
                         self.visit_expression(location, expr, None, local_vars);
                     }
@@ -2463,7 +2463,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
                 // TODO: deal with in_list
                 self.visit_arguments(location, args, local_vars);
-                if let Some(ref expr) = in_list {
+                if let Some(expr) = in_list {
                     self.visit_expression(location, expr, None, local_vars);
                 }
 
@@ -2500,7 +2500,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Term::Locate { args, in_list } => {
                 self.visit_arguments(location, args, local_vars);
-                if let Some(ref expr) = in_list {
+                if let Some(expr) = in_list {
                     self.visit_expression(location, expr, None, local_vars);
                 }
 
@@ -2513,7 +2513,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Term::Pick(choices) => {
                 for (weight, choice) in choices.iter() {
-                    if let Some(ref weight) = weight {
+                    if let Some(weight) = weight {
                         self.visit_expression(location, weight, None, local_vars);
                     }
                     self.visit_expression(location, choice, None, local_vars);
