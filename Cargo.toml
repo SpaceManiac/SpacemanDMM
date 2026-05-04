@@ -16,7 +16,7 @@ members = [
 [workspace.package]
 version = "1.11.0"
 authors = ["Tad Hardesty <tad@platymuus.com>"]
-edition = "2021"
+edition = "2024"
 
 [profile.dev]
 opt-level = 1
@@ -24,3 +24,4 @@ opt-level = 1
 [profile.release]
 lto = true
 codegen-units = 1
+

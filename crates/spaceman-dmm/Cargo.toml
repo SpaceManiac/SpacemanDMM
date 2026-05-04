@@ -2,7 +2,7 @@
 name = "spaceman-dmm"
 version = "0.1.0"
 authors = ["Tad Hardesty <tad@platymuus.com>"]
-edition = "2021"
+edition = "2024"
 
 [[bin]]
 name = "editor"
@@ -31,3 +31,4 @@ git2 = { version = "0.20.2", default-features = false }
 
 [target.wasm32-unknown-emscripten.dependencies]
 sdl3 = { version = "0.16.4", features = ["build-from-source"] }
+

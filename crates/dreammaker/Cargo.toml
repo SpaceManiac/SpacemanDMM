@@ -2,7 +2,7 @@
 name = "dreammaker"
 version = "0.1.0"
 authors = ["Tad Hardesty <tad@platymuus.com>"]
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 interval-tree = { path = "../interval-tree" }
@@ -25,3 +25,4 @@ beef = "0.5.2"
 
 [dev-dependencies]
 walkdir = "2.5.0"
+

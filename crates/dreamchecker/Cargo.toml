@@ -12,3 +12,4 @@ foldhash = "0.2.0"
 [build-dependencies]
 chrono = "0.4.38"
 git2 = { version = "0.20.4", default-features = false }
+

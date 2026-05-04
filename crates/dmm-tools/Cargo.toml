@@ -2,7 +2,7 @@
 name = "dmm-tools"
 version = "0.1.0"
 authors = ["Tad Hardesty <tad@platymuus.com>"]
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 inflate = "0.4.5"
@@ -36,3 +36,4 @@ optional = true
 
 [dev-dependencies]
 walkdir = "2.5.0"
+
