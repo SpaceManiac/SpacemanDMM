@@ -1359,6 +1359,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 .with_errortype("semicolon_in_proc_parameter")
                 .register(self.context);
         }
+        let end = self.updated_location();
+        self.annotate_precise(leading_loc..end, || Annotation::ProcParameter(var_type.clone().build(), name.clone()));
 
         success(Parameter {
             var_type: var_type.build(),
