@@ -1360,7 +1360,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 .register(self.context);
         }
         let end = self.updated_location();
-        self.annotate_precise(leading_loc..end, || Annotation::ProcParameter(var_type.clone().build(), name.clone()));
+        let mut var_annotation = var_type.clone();
+        var_annotation.input_type = input_type;
+        self.annotate_precise(leading_loc..end, || Annotation::ProcParameter(var_annotation.build(), name.clone()));
 
         success(Parameter {
             var_type: var_type.build(),
