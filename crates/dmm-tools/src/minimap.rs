@@ -27,6 +27,7 @@ pub struct Context<'a> {
     pub render_passes: &'a [Box<dyn RenderPass>],
     pub errors: &'a RwLock<HashSet<String>>,
     pub bump: &'a bumpalo::Bump,
+    pub print_errors: bool,
 }
 
 // This should eventually be faliable and not just shrug it's shoulders at errors and log them.
@@ -52,7 +53,7 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
     for (key, prefabs) in map.dictionary.iter() {
         atoms.insert(
             key,
-            get_atom_list(objtree, prefabs, render_passes, ctx.errors),
+            get_atom_list(objtree, prefabs, render_passes, ctx.errors, ctx.print_errors),
         );
     }
 
@@ -84,7 +85,9 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
                     pass.adjust_sprite(atom, &mut sprite, objtree, bump);
                 }
                 if sprite.icon.is_empty() {
-                    println!("no icon: {}", atom.type_.path);
+                    if ctx.print_errors {
+                        eprintln!("no icon: {}", atom.type_.path);
+                    }
                     continue;
                 }
                 let atom = Atom { sprite, ..*atom };
@@ -174,7 +177,9 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
                 sprite.icon, sprite.icon_state
             );
             if !ctx.errors.read().unwrap().contains(&key) {
-                eprintln!("{key}");
+                if ctx.print_errors {
+                    eprintln!("{key}");
+                }
                 ctx.errors.write().unwrap().insert(key);
             }
         }
@@ -215,6 +220,7 @@ fn get_atom_list<'a>(
     prefabs: &'a [Prefab],
     render_passes: &[Box<dyn RenderPass>],
     errors: &RwLock<HashSet<String>>,
+    print_errors: bool,
 ) -> Vec<Atom<'a>> {
     let mut result = Vec::new();
 
@@ -231,7 +237,9 @@ fn get_atom_list<'a>(
             None => {
                 let key = format!("bad path: {}", fab.path);
                 if !errors.read().unwrap().contains(&key) {
-                    println!("{key}");
+                    if print_errors {
+                        eprintln!("{key}");
+                    }
                     errors.write().unwrap().insert(key);
                 }
                 continue;

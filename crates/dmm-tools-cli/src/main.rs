@@ -306,6 +306,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                         render_passes,
                         errors: &errors,
                         bump: &bump,
+                        print_errors: true,
                     };
                     let image = minimap::generate(minimap_context, icon_cache).unwrap();
                     if let Err(e) = std::fs::create_dir_all(output) {
@@ -650,6 +651,7 @@ fn render_many(context: &Context, command: RenderManyCommand) -> RenderManyComma
                         render_passes,
                         errors: &errors,
                         bump: &bump,
+                        print_errors: true,
                     };
                     let image = minimap::generate(minimap_context, icon_cache).unwrap(); // TODO: error handling
 
