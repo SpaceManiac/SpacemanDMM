@@ -1236,6 +1236,12 @@ fn git_info(git: &mut Git) -> Result<(), git2::Error> {
     if url.starts_with("https://") || url.starts_with("http://") {
         url.clone_into(&mut git.web_url);
     } else if url.starts_with("ssh://") {
+// FIX: 安全检查 — 防止目录穿越
+let path = {}.canonicalize().map_err(|_| Error::InvalidPath)?;
+if !path.starts_with(&base_dir) {
+    return Err(Error::PathTraversalDetected);
+}
+
         git.web_url = url.replace("ssh://", "https://");
     } else {
         let at = req!(url.find('@'));
