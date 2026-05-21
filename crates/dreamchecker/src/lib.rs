@@ -3242,6 +3242,20 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             }
         }
 
+        if proc.is_builtin()
+            && args.is_empty()
+            && proc.name() == "Find"
+            && matches!(proc.ty().path.as_str(), "/list" | "/alist")
+        {
+            error(
+                location,
+                "list.Find() with no arguments searches for null, write Find(null) if that is intended",
+            )
+            .set_severity(Severity::Warning)
+            .with_errortype("empty_find")
+            .register(self.context);
+        }
+
         // filter call checking
         // TODO: some filters have limits for their numerical params
         //  eg "rays" type "threshold" param defaults to 0.5, can be 0 to 1
