@@ -98,31 +98,52 @@ impl RenderPass for Random {
     ) {
         let mut rng = rand::rng();
 
-        const CONTRABAND_POSTERS: u32 = 44;
-        const LEGIT_POSTERS: u32 = 35;
+        // small selection of contraband and legit poster icon states
+        // in theory this could iterate through subtypes of /obj/structure/sign/poster,
+        // but i am far too lazy for that ~lucy
+        const CONTRABAND_POSTERS: &[&str] = &[
+            "aspev_syndie",
+            "microwave",
+            "singletank_bomb",
+            "kudzu",
+            "free_drone",
+            "lusty_xenomorph",
+        ];
+        const LEGIT_POSTERS: &[&str] = &[
+            "aspev_hardhat",
+            "aspev_piping",
+            "aspev_meth",
+            "aspev_epi",
+            "aspev_delam",
+            "cleanliness",
+            "help_others",
+            "build",
+            "bless_this_spess",
+            "science",
+            "ue_no",
+            "safety_internals",
+            "safety_eye_protection",
+        ];
 
         if atom.istype("/obj/structure/sign/poster/contraband/random/") {
-            sprite.icon_state =
-                bumpalo::format!(in bump, "poster{}", rng.random_range(1..=CONTRABAND_POSTERS))
-                    .into_bump_str();
+            sprite.icon_state = CONTRABAND_POSTERS.choose(&mut rng).unwrap();
         } else if atom.istype("/obj/structure/sign/poster/official/random/") {
-            sprite.icon_state =
-                bumpalo::format!(in bump, "poster{}_legit", rng.random_range(1..=LEGIT_POSTERS))
-                    .into_bump_str();
+            sprite.icon_state = LEGIT_POSTERS.choose(&mut rng).unwrap();
         } else if atom.istype("/obj/structure/sign/poster/random/") {
-            let i = 1 + rng.random_range(0..CONTRABAND_POSTERS + LEGIT_POSTERS);
-            if i <= CONTRABAND_POSTERS {
-                sprite.icon_state = bumpalo::format!(in bump, "poster{}", i).into_bump_str();
+            let poster_type = if rng.random_ratio(
+                CONTRABAND_POSTERS.len() as u32,
+                (CONTRABAND_POSTERS.len() + LEGIT_POSTERS.len()) as u32,
+            ) {
+                CONTRABAND_POSTERS
             } else {
-                sprite.icon_state =
-                    bumpalo::format!(in bump, "poster{}_legit", i - CONTRABAND_POSTERS)
-                        .into_bump_str();
-            }
+                LEGIT_POSTERS
+            };
+            sprite.icon_state = poster_type.choose(&mut rng).unwrap();
         } else if atom.istype("/obj/item/kirbyplants/random/")
             || atom.istype("/obj/item/twohanded/required/kirbyplants/random/")
         {
-            sprite.icon = "icons/obj/flora/plants.dmi";
-            let random = rng.random_range(0..26);
+            sprite.icon = "icons/obj/fluff/flora/plants.dmi";
+            let random = rng.random_range(0..=29);
             if random == 0 {
                 sprite.icon_state = "applebush";
             } else {
