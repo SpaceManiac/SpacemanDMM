@@ -174,6 +174,8 @@ pub enum ConstFn {
     File,
     /// The `generator()` type constructor.
     Generator,
+    /// The `vector()` type constructor.
+    Vector
 }
 
 /// A constant-evaluation error (usually type mismatch).
@@ -435,6 +437,7 @@ impl fmt::Display for ConstFn {
             ConstFn::Filter => "filter",
             ConstFn::File => "file",
             ConstFn::Generator => "generator",
+            ConstFn::Vector => "vector"
         })
     }
 }
@@ -847,6 +850,7 @@ impl<'a> ConstantFolder<'a> {
                 "filter" => Constant::Call(ConstFn::Filter, self.arguments(args)?),
                 "file" => Constant::Call(ConstFn::File, self.arguments(args)?),
                 "generator" => Constant::Call(ConstFn::Generator, self.arguments(args)?),
+                "vector" => Constant::Call(ConstFn::Vector, self.arguments(args)?),
                 // constant-evaluatable functions
                 "sin" => self.trig_op(args, f32::sin)?,
                 "cos" => self.trig_op(args, f32::cos)?,
