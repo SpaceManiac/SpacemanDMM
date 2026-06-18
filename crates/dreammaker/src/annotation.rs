@@ -27,6 +27,7 @@ pub enum Annotation {
     UnscopedVar(Ident),
     ScopedCall(Vec<Ident>, Ident),
     ScopedVar(Vec<Ident>, Ident),
+    StaticScopedVar(Vec<Ident>, Ident),
     ParentCall,        // ..
     ReturnVal,         // .
     InSequence(usize), // where in TreePath or TypePath is this ident
@@ -44,6 +45,7 @@ pub enum Annotation {
 
     // error annotations, mostly for autocompletion
     ScopedMissingIdent(Vec<Ident>), // when a . is followed by a non-ident
+    StaticScopedMissingIdent(Vec<Ident>), // when a :: is followed by a non-ident
     IncompleteTypePath(TypePath, PathOp),
     IncompleteTreePath(bool, Vec<Ident>),
 

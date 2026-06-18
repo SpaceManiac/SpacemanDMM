@@ -488,6 +488,20 @@ impl Engine {
             next = ty.parent_type_without_root();
         }
     }
+
+    pub fn static_scoped_completions<'b>(
+        &'b self,
+        results: &mut Vec<CompletionItem>,
+        priors: &[Ident],
+        query: &str,
+    ) {
+        let mut next = self.find_static_scoped_type(priors);
+        let mut skip = HashSet::new();
+        while let Some(ty) = next {
+            items_ty(results, &mut skip, ty, query);
+            next = ty.parent_type_without_root();
+        }
+    }
 }
 
 pub struct TypePathResult<'a> {

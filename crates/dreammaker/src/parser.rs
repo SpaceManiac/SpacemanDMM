@@ -2566,8 +2566,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 let mut dot_loc = self.location;
                 if let Some(ident) = self.ident()? {
                     // prefab
-                    // TODO: arrange for this ident to end up in the prefab's annotation
-                    Term::Prefab(require!(self.prefab_ex(vec![(PathOp::Dot, ident)])))
+                    let prefab = require!(self.prefab_ex(vec![(PathOp::Dot, ident)]));
+                    belongs_to.extend(prefab.path.iter().map(|(_, part)| part.clone()));
+                    Term::Prefab(prefab)
                 } else if let Some(args) = self.arguments(&[], &ident!("."))? {
                     // .() call
                     Term::SelfCall(args)
@@ -2638,7 +2639,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             // term :: prefab
             Token::Punct(Punctuation::Slash) |
             Token::Punct(Punctuation::CloseColon) => {
-                Term::Prefab(require!(self.prefab()))
+                let prefab = require!(self.prefab());
+                belongs_to.extend(prefab.path.iter().map(|(_, part)| part.clone()));
+                Term::Prefab(prefab)
             },
             _ => return try_another(),
         });
@@ -2689,7 +2692,11 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             None => {
                 index_op_loc.column += kind.name().len() as u16;
                 self.annotate_precise(index_op_loc..index_op_loc, || {
-                    Annotation::ScopedMissingIdent(belongs_to.clone())
+                    if kind == PropertyAccessKind::Scope {
+                        Annotation::StaticScopedMissingIdent(belongs_to.clone())
+                    } else {
+                        Annotation::ScopedMissingIdent(belongs_to.clone())
+                    }
                 });
                 // register the parse error, but keep going
                 self.context.register_error(self.describe_parse_error());
@@ -2714,7 +2721,11 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             None => {
                 if !belongs_to.is_empty() {
                     self.annotate_precise(start..end, || {
-                        Annotation::ScopedVar(belongs_to.clone(), ident.clone())
+                        if kind == PropertyAccessKind::Scope {
+                            Annotation::StaticScopedVar(belongs_to.clone(), ident.clone())
+                        } else {
+                            Annotation::ScopedVar(belongs_to.clone(), ident.clone())
+                        }
                     });
                     belongs_to.push(ident.clone());
                 }
