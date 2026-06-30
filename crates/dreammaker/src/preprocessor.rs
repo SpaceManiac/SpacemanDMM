@@ -1281,7 +1281,9 @@ impl<'ctx> Preprocessor<'ctx> {
                                                             .push_back(Token::Ident(first, ws1));
                                                         expansion.push_back(other);
                                                     },
-                                                    None => {},
+                                                    None => {
+                                                        expansion.push_back(Token::Ident(first, ws1));
+                                                    },
                                                 }
                                                 expansion.extend(arg);
                                             },
