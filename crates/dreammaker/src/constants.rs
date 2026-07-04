@@ -175,7 +175,7 @@ pub enum ConstFn {
     /// The `generator()` type constructor.
     Generator,
     /// The `vector()` type constructor.
-    Vector
+    Vector,
 }
 
 /// A constant-evaluation error (usually type mismatch).
@@ -437,7 +437,7 @@ impl fmt::Display for ConstFn {
             ConstFn::Filter => "filter",
             ConstFn::File => "file",
             ConstFn::Generator => "generator",
-            ConstFn::Vector => "vector"
+            ConstFn::Vector => "vector",
         })
     }
 }
