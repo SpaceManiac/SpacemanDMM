@@ -968,6 +968,10 @@ impl Engine {
         next
     }
 
+    fn find_static_scoped_type<'b>(&'b self, priors: &[Ident]) -> Option<TypeRef<'b>> {
+        self.objtree.type_by_path(priors.iter().map(Ident::as_str))
+    }
+
     fn symbol_id_at(
         &mut self,
         text_document_position: lsp_types::TextDocumentPositionParams,
@@ -1080,6 +1084,18 @@ impl Engine {
             },
             Annotation::ScopedVar(priors, var_name) => {
                 let mut next = self.find_scoped_type(&iter, priors);
+                while let Some(ty) = next {
+                    if let Some(var) = ty.vars.get(var_name) {
+                        if let Some(ref decl) = var.declaration {
+                            symbol_id = Some(decl.id);
+                            break;
+                        }
+                    }
+                    next = ty.parent_type_without_root();
+                }
+            },
+            Annotation::StaticScopedVar(priors, var_name) => {
+                let mut next = self.find_static_scoped_type(priors);
                 while let Some(ty) = next {
                     if let Some(var) = ty.vars.get(var_name) {
                         if let Some(ref decl) = var.declaration {
@@ -1701,6 +1717,10 @@ impl Engine {
                     let next = self.find_scoped_type(&iter, priors);
                     results.append(&mut self.construct_var_hover(var_name, next, true)?);
                 },
+                Annotation::StaticScopedVar(priors, var_name) if symbol_id.is_some() => {
+                    let next = self.find_static_scoped_type(priors);
+                    results.append(&mut self.construct_var_hover(var_name, next, true)?);
+                },
                 Annotation::MacroUse { docs: Some(dc), .. } if !dc.is_empty() => {
                     results.push(dc.text());
                 },
@@ -1813,6 +1833,16 @@ impl Engine {
                     next = ty.parent_type_without_root();
                 }
             },
+            Annotation::StaticScopedVar(priors, var_name) => {
+                let mut next = self.find_static_scoped_type(priors);
+                while let Some(ty) = next {
+                    if let Some(var) = ty.vars.get(var_name) {
+                        results.push(self.convert_location(var.value.location, &var.value.docs, &[&ty.path, "/var/", var_name])?);
+                        break;
+                    }
+                    next = ty.parent_type_without_root();
+                }
+            },
             Annotation::ParentCall => {
                 if let (Some(ty), Some((proc_name, idx))) = self.find_type_context(&iter) {
                     // TODO: idx is always 0 unless there are multiple overrides in
@@ -1882,6 +1912,18 @@ impl Engine {
             },
             Annotation::ScopedVar(priors, var_name) => {
                 let mut next = self.find_scoped_type(&iter, priors);
+                while let Some(ty) = next {
+                    if let Some(var) = ty.get().vars.get(var_name) {
+                        if let Some(ref decl) = var.declaration {
+                            type_path = &decl.var_type.type_path;
+                            break;
+                        }
+                    }
+                    next = ty.parent_type_without_root();
+                }
+            },
+            Annotation::StaticScopedVar(priors, var_name) => {
+                let mut next = self.find_static_scoped_type(priors);
                 while let Some(ty) = next {
                     if let Some(var) = ty.get().vars.get(var_name) {
                         if let Some(ref decl) = var.declaration {
@@ -1984,10 +2026,20 @@ impl Engine {
                 self.scoped_completions(&mut results, &iter, priors, query);
                 any_annotation = true;
             },
+            Annotation::StaticScopedVar(priors, query) => {
+                self.static_scoped_completions(&mut results, priors, query);
+                any_annotation = true;
+            },
             // error annotations, overrides anything else
             Annotation::ScopedMissingIdent(priors) => {
                 results.clear();
                 self.scoped_completions(&mut results, &iter, priors, "");
+                any_annotation = true;
+                break;
+            },
+            Annotation::StaticScopedMissingIdent(priors) => {
+                results.clear();
+                self.static_scoped_completions(&mut results, priors, "");
                 any_annotation = true;
                 break;
             },
