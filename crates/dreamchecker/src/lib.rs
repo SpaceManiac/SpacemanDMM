@@ -164,6 +164,7 @@ impl<'o> AssumptionSet<'o> {
                 ConstFn::Generator => {
                     AssumptionSet::from_valid_instance(objtree.expect("/generator"))
                 },
+                ConstFn::Vector => AssumptionSet::from_valid_instance(objtree.expect("/vector")),
                 ConstFn::Filter => AssumptionSet::default(),
                 ConstFn::File => AssumptionSet::default(),
             },
