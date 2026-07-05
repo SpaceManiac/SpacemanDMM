@@ -119,27 +119,10 @@ fn for_kv_check() {
     check_errors_match(code, NO_ERRORS);
 }
 
-pub const FOR_KV_VAR_ERROR: &[(u32, u16, &str)] =
-    &[(3, 19, "for (var/key, value) requires a 'var' keyword")];
-
-#[test]
-fn for_kv_var_check() {
-    let code = r##"
-/proc/test()
-    var/alist/A = alist()
-    for (k, v in A)
-        world.log << k
-        world.log << v
-
-"##
-    .trim();
-    check_errors_match(code, FOR_KV_VAR_ERROR);
-}
-
 pub const FOR_KV_VALUE_ERROR: &[(u32, u16, &str)] = &[(
     3,
     23,
-    "value must be a variable in a for (var/key, value) statement",
+    "value must be a variable in a for (key, value) statement",
 )];
 
 #[test]
@@ -157,7 +140,7 @@ fn for_kv_value_check() {
 pub const FOR_KV_KEY_ERROR: &[(u32, u16, &str)] = &[(
     3,
     27,
-    "cannot assigned a value to var/key in a for(var/key, value) statement",
+    "cannot assigned a value to key in a for(key, value) statement",
 )];
 
 #[test]
