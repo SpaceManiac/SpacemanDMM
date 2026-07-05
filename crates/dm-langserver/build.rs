@@ -87,11 +87,10 @@ fn download_dll(out_dir: &Path, fname: &str, tag: &str, url: &str, sha256: &str)
     );
     println!("cargo:rustc-env=BUNDLE_VERSION_{fname}={tag}");
 
-    if let Ok(digest) = sha256::try_digest(&full_path) {
-        if digest == sha256 {
+    if let Ok(digest) = sha256::try_digest(&full_path)
+        && digest == sha256 {
             return;
         }
-    }
 
     std::io::copy(
         &mut ureq::get(url)

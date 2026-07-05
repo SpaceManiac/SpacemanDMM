@@ -29,3 +29,4 @@ ureq = "2.10.1"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(auxtools_bundle)', 'cfg(extools_bundle)'] }
+

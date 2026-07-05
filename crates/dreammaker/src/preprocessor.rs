@@ -317,7 +317,7 @@ struct IncludeStack<'ctx> {
 impl<'ctx> IncludeStack<'ctx> {
     fn top_file_path(&self) -> &Path {
         for each in self.stack.iter().rev() {
-            if let Include::File { ref path, .. } = each {
+            if let Include::File { path, .. } = each {
                 return path;
             }
         }

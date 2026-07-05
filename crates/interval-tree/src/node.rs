@@ -34,16 +34,14 @@ impl<K: Ord + Clone, V> Node<K, V> {
     fn update_height(&mut self) {
         self.height = cmp::max(height(&self.left), height(&self.right)) + 1;
         self.max.clone_from(&self.key.end);
-        if let Some(ref left) = self.left {
-            if left.max > self.max {
+        if let Some(ref left) = self.left
+            && left.max > self.max {
                 self.max.clone_from(&left.max);
             }
-        }
-        if let Some(ref right) = self.right {
-            if right.max > self.max {
+        if let Some(ref right) = self.right
+            && right.max > self.max {
                 self.max.clone_from(&right.max);
             }
-        }
     }
 
     ///returns the minimal key,value pair within this tree

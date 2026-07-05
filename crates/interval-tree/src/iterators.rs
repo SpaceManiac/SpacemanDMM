@@ -146,12 +146,11 @@ impl<K: Clone, V> Iterator for IntoIter<K, V> {
 
     fn next(&mut self) -> Option<(RangeInclusive<K>, V)> {
         loop {
-            if let Some((key, mut iter)) = self.current.take() {
-                if let Some(value) = iter.next() {
+            if let Some((key, mut iter)) = self.current.take()
+                && let Some(value) = iter.next() {
                     self.current = Some((key.clone(), iter));
                     return Some((key, value));
                 }
-            }
 
             if self.current.is_none() {
                 let mut node = self.stack.pop()?;
