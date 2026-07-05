@@ -59,6 +59,7 @@ be enabled:
 #ifdef SPACEMAN_DMM
 	#define RETURN_TYPE(X) set SpacemanDMM_return_type = X
 	#define SHOULD_CALL_PARENT(X) set SpacemanDMM_should_call_parent = X
+    #define SHOULD_NOT_CALL_PARENT(X) set SpacemanDMM_should_not_call_parent = X
 	#define UNLINT(X) SpacemanDMM_unlint(X)
 	#define SHOULD_NOT_OVERRIDE(X) set SpacemanDMM_should_not_override = X
 	#define SHOULD_NOT_SLEEP(X) set SpacemanDMM_should_not_sleep = X
@@ -72,6 +73,7 @@ be enabled:
 #else
 	#define RETURN_TYPE(X)
 	#define SHOULD_CALL_PARENT(X)
+    #define SHOULD_NOT_CALL_PARENT(X)
 	#define UNLINT(X) X
 	#define SHOULD_NOT_OVERRIDE(X)
 	#define SHOULD_NOT_SLEEP(X)
@@ -106,6 +108,32 @@ of the proc it is set on which do not contain any `..()` parent calls. This can
 help with finding situations where a signal or other important handling in the
 parent proc is being skipped. Child procs may set this setting to `0` instead
 to override the check.
+
+### Should not call parent
+
+Use `set SpacemanDMM_should_not_call_parent = 1` to raise a warning for a direct child that calls the parent.
+Grandchildren can still call their parent, though.
+
+Child procs may set this setting to `0` instead to override the check.
+
+For example:
+```dm
+/datum/proc/thing()
+    SHOULD_NOT_CALL_PARENT(TRUE)
+    CRASH("This should not be called!")
+
+/datum/a/thing()
+    // This will throw an error!
+    return ..()
+
+/datum/b/thing()
+    // This is fine.
+    return TRUE
+
+/datum/b/c/thing()
+    // This is ALSO fine, as it is a grandchild
+    return ..()
+```
 
 ### Should not override
 

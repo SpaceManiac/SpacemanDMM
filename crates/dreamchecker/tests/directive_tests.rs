@@ -137,3 +137,65 @@ fn no_can_be_redefined() {
     .trim();
     check_errors_match(code, NO_CAN_BE_REDEFINED_ERRORS);
 }
+
+pub const NO_CALL_PARENT_ERRORS: &[(u32, u16, &str)] =
+    &[(4, 18, "proc calls parent, prohibited by /mob/proc/test")];
+
+#[test]
+fn should_not_call_parent() {
+    let code = r##"
+/mob/proc/test()
+    set SpacemanDMM_should_not_call_parent = 1
+
+/mob/subtype/test()
+    return ..()
+"##
+    .trim();
+    check_errors_match(code, NO_CALL_PARENT_ERRORS);
+}
+
+#[test]
+fn should_not_call_parent_override() {
+    let code = r##"
+/mob/proc/test()
+    set SpacemanDMM_should_not_call_parent = 1
+
+/mob/subtype/test()
+    set SpacemanDMM_should_not_call_parent = 0
+    return ..()
+"##
+    .trim();
+    check_errors_match(code, NO_ERRORS);
+}
+
+#[test]
+fn should_not_call_parent_grandchild() {
+    let code = r##"
+/mob/proc/test()
+    set SpacemanDMM_should_not_call_parent = 1
+
+/mob/subtype/test()
+    return 1
+
+/mob/subtype/grandchild/test()
+    return ..()
+"##
+    .trim();
+    check_errors_match(code, NO_ERRORS);
+}
+
+pub const NO_CALL_PARENT_GAP_ERRORS: &[(u32, u16, &str)] =
+    &[(4, 29, "proc calls parent, prohibited by /mob/proc/test")];
+
+#[test]
+fn should_not_call_parent_grandchild_gap() {
+    let code = r##"
+/mob/proc/test()
+    set SpacemanDMM_should_not_call_parent = 1
+
+/mob/subtype/grandchild/test()
+    return ..()
+"##
+    .trim();
+    check_errors_match(code, NO_CALL_PARENT_GAP_ERRORS);
+}
