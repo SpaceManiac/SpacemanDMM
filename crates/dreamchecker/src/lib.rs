@@ -594,6 +594,12 @@ impl<'o> ViolatingOverrides<'o> {
     }
 }
 
+/// An edge in the call tree: the proc called, where it was called, whether the
+/// call was made in a new context (`spawn`), the static type of the receiver,
+/// and whether the call is exact (`..()`, `new`, self- and global calls, which
+/// never dispatch to an override).
+type CallEdge<'o> = (ProcRef<'o>, Location, bool, TypeRef<'o>, bool);
+
 /// A deeper analysis of an ObjectTree
 pub struct AnalyzeObjectTree<'o> {
     context: &'o Context,
@@ -611,14 +617,13 @@ pub struct AnalyzeObjectTree<'o> {
     // Debug(ProcRef) -> KwargInfo
     used_kwargs: BTreeMap<String, KwargInfo>,
 
-    call_tree: HashMap<ProcRef<'o>, Vec<(ProcRef<'o>, Location, bool)>>,
+    call_tree: HashMap<ProcRef<'o>, Vec<CallEdge<'o>>>,
 
     sleeping_procs: ViolatingProcs<'o>,
     impure_procs: ViolatingProcs<'o>,
     /// Procs with waitfor=0 or waitfor=FALSE
     waitfor_procs: HashSet<ProcRef<'o>>,
 
-    sleeping_overrides: ViolatingOverrides<'o>,
     impure_overrides: ViolatingOverrides<'o>,
 }
 
@@ -662,7 +667,6 @@ impl<'o> AnalyzeObjectTree<'o> {
             sleeping_procs: Default::default(),
             impure_procs: Default::default(),
             waitfor_procs: Default::default(),
-            sleeping_overrides: Default::default(),
             impure_overrides: Default::default(),
         }
     }
@@ -728,7 +732,20 @@ impl<'o> AnalyzeObjectTree<'o> {
     }
 
     pub fn check_proc_call_tree(&mut self) {
+        // prepare for the worst case, avoiding the reallocations _is_ faster and less memory expensive
+        let total_procs = self
+            .objtree
+            .iter_types()
+            .flat_map(|type_ref: TypeRef| type_ref.iter_self_procs())
+            .count();
+        let mut visited = HashSet::<ProcRef<'o>>::with_capacity(total_procs);
+        let mut to_visit =
+            VecDeque::<(ProcRef<'o>, CallStack, bool, ProcRef<'o>, TypeRef<'o>, bool)>::new();
         for (procref, &(_, location)) in self.must_not_sleep.directive.iter() {
+            if !visited.insert(*procref) {
+                continue;
+            }
+
             if let Some(sleepvec) = self.sleeping_procs.get_violators(*procref) {
                 error(procref.get().location, format!("{procref} sets SpacemanDMM_should_not_sleep but calls blocking built-in(s)"))
                     .with_note(location, "SpacemanDMM_should_not_sleep set here")
@@ -736,16 +753,22 @@ impl<'o> AnalyzeObjectTree<'o> {
                     .with_blocking_builtins(sleepvec)
                     .register(self.context)
             }
-            let mut visited = HashSet::<ProcRef<'o>>::new();
-            let mut to_visit = VecDeque::<(ProcRef<'o>, CallStack, bool)>::new();
-            if let Some(procscalled) = self.call_tree.get(procref) {
-                for (proccalled, location, new_context) in procscalled {
-                    let mut callstack = CallStack::default();
-                    callstack.add_step(*proccalled, *location, *new_context);
-                    to_visit.push_back((*proccalled, callstack, *new_context));
+
+            if let Some(calledvec) = self.call_tree.get(procref) {
+                for (proccalled, location, new_context, src, is_exact) in calledvec.iter() {
+                    let mut newstack = CallStack::default();
+                    newstack.add_step(*proccalled, *location, *new_context);
+                    to_visit.push_back((*proccalled, newstack, *new_context, *proccalled, *src, *is_exact));
                 }
             }
-            while let Some((nextproc, callstack, new_context)) = to_visit.pop_front() {
+
+            let procref_type_index = procref.ty().index();
+            while let Some((nextproc, callstack, new_context, parent_proc, src, is_exact)) =
+                to_visit.pop_front()
+            {
+                if new_context {
+                    continue;
+                }
                 if !visited.insert(nextproc) {
                     continue;
                 }
@@ -755,42 +778,55 @@ impl<'o> AnalyzeObjectTree<'o> {
                 if self.sleep_exempt.get(nextproc).is_some() {
                     continue;
                 }
-                if new_context {
-                    continue;
-                }
+
                 if let Some(sleepvec) = self.sleeping_procs.get_violators(nextproc) {
-                    error(procref.get().location, format!("{procref} sets SpacemanDMM_should_not_sleep but calls blocking proc {nextproc}"))
+                    let parent_proc_type_index = parent_proc.ty().index();
+                    let next_proc_type_index = nextproc.ty().index();
+
+                    let proc_is_on_same_type_as_setting = next_proc_type_index == procref_type_index;
+                    let proc_is_override = next_proc_type_index != parent_proc_type_index;
+
+                    let desc = if proc_is_on_same_type_as_setting && proc_is_override {
+                        format!("{procref} sets SpacemanDMM_should_not_sleep but has override child proc that sleeps {nextproc}")
+                    } else if proc_is_override {
+                        format!("{procref} calls {parent_proc} which has override child proc that sleeps {nextproc}")
+                    } else {
+                        format!("{procref} sets SpacemanDMM_should_not_sleep but calls blocking proc {nextproc}")
+                    };
+
+                    error(procref.get().location, desc)
                         .with_note(location, "SpacemanDMM_should_not_sleep set here")
                         .with_errortype("must_not_sleep")
                         .with_callstack(&callstack)
                         .with_blocking_builtins(sleepvec)
-                        .register(self.context)
-                } else if let Some(overridesleep) =
-                    self.sleeping_overrides.get_override_violators(nextproc)
-                {
-                    for child_violator in overridesleep {
-                        if procref.ty().is_subtype_of(&nextproc.ty())
-                            && !child_violator.ty().is_subtype_of(&procref.ty())
-                        {
-                            continue;
-                        }
-                        error(procref.get().location, format!("{procref} calls {nextproc} which has override child proc that sleeps {child_violator}"))
-                            .with_note(location, "SpacemanDMM_should_not_sleep set here")
-                            .with_errortype("must_not_sleep")
-                            .with_callstack(&callstack)
-                            .with_blocking_builtins(self.sleeping_procs.get_violators(*child_violator).unwrap())
-                            .register(self.context)
-                    }
+                        .register(self.context);
+
+                    // Abort now, we don't want to go unnecessarily deep
+                    continue;
                 }
+
+                // Dispatch is bounded by the receiver's static type: an
+                // override can only be reached if its type is `src` or a
+                // descendant of it. Exact calls (`..()`, `new`, self-calls,
+                // global calls) never dispatch to an override at all.
+                if !is_exact && nextproc.ty().index() != self.objtree.root().index() {
+                    nextproc.recurse_children_within(src, &mut |child_proc| {
+                        to_visit.push_back((child_proc, callstack.clone(), false, nextproc, src, true));
+                    });
+                }
+
                 if let Some(calledvec) = self.call_tree.get(&nextproc) {
-                    for (proccalled, location, new_context) in calledvec.iter() {
+                    for (proccalled, location, new_context, call_src, call_is_exact) in calledvec.iter() {
                         let mut newstack = callstack.clone();
                         newstack.add_step(*proccalled, *location, *new_context);
-                        to_visit.push_back((*proccalled, newstack, *new_context));
+                        to_visit.push_back((*proccalled, newstack, *new_context, *proccalled, *call_src, *call_is_exact));
                     }
                 }
             }
         }
+
+        drop(visited);
+        drop(to_visit);
 
         for (procref, (_, location)) in self.must_be_pure.directive.iter() {
             if let Some(impurevec) = self.impure_procs.get_violators(*procref) {
@@ -806,7 +842,7 @@ impl<'o> AnalyzeObjectTree<'o> {
             let mut visited = HashSet::<ProcRef<'o>>::new();
             let mut to_visit = VecDeque::<(ProcRef<'o>, CallStack)>::new();
             if let Some(procscalled) = self.call_tree.get(procref) {
-                for (proccalled, location, new_context) in procscalled {
+                for (proccalled, location, new_context, _src, _is_exact) in procscalled {
                     let mut callstack = CallStack::default();
                     callstack.add_step(*proccalled, *location, *new_context);
                     to_visit.push_back((*proccalled, callstack));
@@ -841,7 +877,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                     }
                 }
                 if let Some(calledvec) = self.call_tree.get(&nextproc) {
-                    for (proccalled, location, new_context) in calledvec.iter() {
+                    for (proccalled, location, new_context, _src, _is_exact) in calledvec.iter() {
                         let mut newstack = callstack.clone();
                         newstack.add_step(*proccalled, *location, *new_context);
                         to_visit.push_back((*proccalled, newstack));
@@ -975,13 +1011,6 @@ impl<'o> AnalyzeObjectTree<'o> {
         if proc.name() == "New" {
             // New() propogates via ..() and causes weirdness
             return;
-        }
-        if self.sleeping_procs.get_violators(proc).is_some() {
-            let mut next = proc.parent_proc();
-            while let Some(current) = next {
-                self.sleeping_overrides.insert_override(current, proc);
-                next = current.parent_proc();
-            }
         }
         if self.impure_procs.get_violators(proc).is_some() {
             let mut next = proc.parent_proc();
@@ -3099,6 +3128,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             proc,
             location,
             self.inside_newcontext != 0,
+            src,
+            is_exact,
         ));
         if let Some((privateproc, true, decllocation)) = self.env.private.get_self_or_parent(proc) {
             if self.ty != privateproc.ty() {
