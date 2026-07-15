@@ -313,6 +313,21 @@ impl<'a> TypeRef<'a> {
         }
     }
 
+    /// Recursively visit this and all child **types**.
+    pub fn recurse_types<F: FnMut(TypeRef<'a>)>(&self, f: &mut F) {
+        f(*self);
+        for child in self.children() {
+            child.recurse_types(f);
+        }
+        //else we dont include things like /turf, /obj and /mob
+        for parent_typed_idx in &self.tree.redirected_parent_types {
+            let parent_typed = &self.tree.graph[parent_typed_idx.index()];
+            if parent_typed.parent_type_index().unwrap() == self.index() {
+                TypeRef::new(self.tree, *parent_typed_idx).recurse_types(f);
+            }
+        }
+    }
+
     /// Recursively visit this and all parent **types**.
     pub fn visit_parent_types<F: FnMut(TypeRef<'a>)>(&self, f: &mut F) {
         let mut next = Some(*self);
@@ -626,7 +641,23 @@ impl<'a> ProcRef<'a> {
 
     /// Recursively visit this and all public-facing procs which override it.
     pub fn recurse_children<F: FnMut(ProcRef<'a>)>(self, f: &mut F) {
-        self.ty.recurse(&mut move |ty| {
+        self.ty.recurse_types(&mut move |ty| {
+            if let Some(proc) = ty.get().procs.get(self.name) {
+                f(ProcRef {
+                    ty,
+                    list: &proc.value,
+                    name: self.name,
+                    idx: proc.value.len() - 1,
+                });
+            }
+        });
+    }
+
+    /// Recursively visit all procs which override this one,
+    /// bounded to descendants of `src` (the static type of the receiver at
+    /// the call site) rather than the whole subtree below this proc's type.
+    pub fn recurse_children_within<F: FnMut(ProcRef<'a>)>(self, src: TypeRef<'a>, f: &mut F) {
+        src.recurse_types(&mut move |ty| {
             if let Some(proc) = ty.get().procs.get(self.name) {
                 f(ProcRef {
                     ty,
@@ -692,6 +723,7 @@ impl<'a> std::hash::Hash for ProcRef<'a> {
 pub struct ObjectTree {
     graph: Vec<Type>,
     types: BTreeMap<String, NodeIndex>,
+    redirected_parent_types: Vec<NodeIndex>,
 }
 
 impl ObjectTree {
@@ -818,6 +850,7 @@ impl Default for ObjectTreeBuilder {
         let mut tree = ObjectTree {
             graph: Vec::with_capacity(0x4000),
             types: Default::default(),
+            redirected_parent_types: Vec::new(),
         };
         tree.graph.push(Type {
             path: String::new(),
@@ -983,7 +1016,11 @@ impl ObjectTreeBuilder {
                 }
             };
 
-            self.inner.graph[type_idx.index()].parent_type = idx;
+            let type_ref = &mut self.inner.graph[type_idx.index()];
+            type_ref.parent_type = idx;
+            if type_ref.parent_path != idx {
+                self.inner.redirected_parent_types.push(type_idx);
+            }
         }
     }
 
