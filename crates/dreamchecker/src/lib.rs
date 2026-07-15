@@ -819,8 +819,8 @@ impl<'o> AnalyzeObjectTree<'o> {
                     for (proccalled, location, new_context, call_src, call_is_exact, call_inherit) in calledvec.iter() {
                         let mut newstack = callstack.clone();
                         newstack.add_step(*proccalled, *location, *new_context);
-                        // Self-calls inherit this receiver; explicit calls use their own.
-                        let call_receiver = if *call_inherit { receiver } else { *call_src };
+                        // Self-calls run on nextproc's own type, not the broader receiver used to find nextproc itself.
+                        let call_receiver = if *call_inherit { nextproc.ty() } else { *call_src };
                         to_visit.push_back((*proccalled, newstack, *new_context, *proccalled, call_receiver, *call_is_exact));
                     }
                 }
