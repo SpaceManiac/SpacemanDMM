@@ -594,11 +594,11 @@ impl<'o> ViolatingOverrides<'o> {
     }
 }
 
-/// An edge in the call tree: the proc called, where it was called, whether the
-/// call was made in a new context (`spawn`), the static type of the receiver,
-/// and whether the call is exact (`..()`, `new`, self- and global calls, which
-/// never dispatch to an override).
-type CallEdge<'o> = (ProcRef<'o>, Location, bool, TypeRef<'o>, bool);
+/// An edge in the call tree: proc called, call site, whether it's a new context
+/// (`spawn`), the receiver type, whether the call is exact (never dispatches to
+/// an override), and whether it runs on the caller's own object (self-calls,
+/// `..()`, `.()`) so the receiver is inherited rather than taken from `src`.
+type CallEdge<'o> = (ProcRef<'o>, Location, bool, TypeRef<'o>, bool, bool);
 
 /// A deeper analysis of an ObjectTree
 pub struct AnalyzeObjectTree<'o> {
@@ -754,16 +754,18 @@ impl<'o> AnalyzeObjectTree<'o> {
                     .register(self.context)
             }
 
+            let procref_type = procref.ty();
             if let Some(calledvec) = self.call_tree.get(procref) {
-                for (proccalled, location, new_context, src, is_exact) in calledvec.iter() {
+                for (proccalled, location, new_context, src, is_exact, inherit_receiver) in calledvec.iter() {
                     let mut newstack = CallStack::default();
                     newstack.add_step(*proccalled, *location, *new_context);
-                    to_visit.push_back((*proccalled, newstack, *new_context, *proccalled, *src, *is_exact));
+                    let receiver = if *inherit_receiver { procref_type } else { *src };
+                    to_visit.push_back((*proccalled, newstack, *new_context, *proccalled, receiver, *is_exact));
                 }
             }
 
-            let procref_type_index = procref.ty().index();
-            while let Some((nextproc, callstack, new_context, parent_proc, src, is_exact)) =
+            let procref_type_index = procref_type.index();
+            while let Some((nextproc, callstack, new_context, parent_proc, receiver, is_exact)) =
                 to_visit.pop_front()
             {
                 if new_context {
@@ -805,21 +807,21 @@ impl<'o> AnalyzeObjectTree<'o> {
                     continue;
                 }
 
-                // Dispatch is bounded by the receiver's static type: an
-                // override can only be reached if its type is `src` or a
-                // descendant of it. Exact calls (`..()`, `new`, self-calls,
-                // global calls) never dispatch to an override at all.
+                // Only overrides at or below the receiver type can be dispatched
+                // to; they run on the same object, so keep the same receiver.
                 if !is_exact && nextproc.ty().index() != self.objtree.root().index() {
-                    nextproc.recurse_children_within(src, &mut |child_proc| {
-                        to_visit.push_back((child_proc, callstack.clone(), false, nextproc, src, true));
+                    nextproc.recurse_children_within(receiver, &mut |child_proc| {
+                        to_visit.push_back((child_proc, callstack.clone(), false, nextproc, receiver, true));
                     });
                 }
 
                 if let Some(calledvec) = self.call_tree.get(&nextproc) {
-                    for (proccalled, location, new_context, call_src, call_is_exact) in calledvec.iter() {
+                    for (proccalled, location, new_context, call_src, call_is_exact, call_inherit) in calledvec.iter() {
                         let mut newstack = callstack.clone();
                         newstack.add_step(*proccalled, *location, *new_context);
-                        to_visit.push_back((*proccalled, newstack, *new_context, *proccalled, *call_src, *call_is_exact));
+                        // Self-calls inherit this receiver; explicit calls use their own.
+                        let call_receiver = if *call_inherit { receiver } else { *call_src };
+                        to_visit.push_back((*proccalled, newstack, *new_context, *proccalled, call_receiver, *call_is_exact));
                     }
                 }
             }
@@ -842,7 +844,7 @@ impl<'o> AnalyzeObjectTree<'o> {
             let mut visited = HashSet::<ProcRef<'o>>::new();
             let mut to_visit = VecDeque::<(ProcRef<'o>, CallStack)>::new();
             if let Some(procscalled) = self.call_tree.get(procref) {
-                for (proccalled, location, new_context, _src, _is_exact) in procscalled {
+                for (proccalled, location, new_context, _src, _is_exact, _inherit) in procscalled {
                     let mut callstack = CallStack::default();
                     callstack.add_step(*proccalled, *location, *new_context);
                     to_visit.push_back((*proccalled, callstack));
@@ -877,7 +879,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                     }
                 }
                 if let Some(calledvec) = self.call_tree.get(&nextproc) {
-                    for (proccalled, location, new_context, _src, _is_exact) in calledvec.iter() {
+                    for (proccalled, location, new_context, _src, _is_exact, _inherit) in calledvec.iter() {
                         let mut newstack = callstack.clone();
                         newstack.add_step(*proccalled, *location, *new_context);
                         to_visit.push_back((*proccalled, newstack));
@@ -2394,9 +2396,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 self.check_type_sleepers(self.ty, location, unscoped_name);
                 let src = self.ty;
                 if let Some(proc) = self.ty.get_proc(unscoped_name) {
-                    self.visit_call(location, src, proc, args, false, local_vars)
+                    // Unscoped call: runs on the current object, receiver inherited.
+                    self.visit_call(location, src, proc, args, false, true, local_vars)
                 } else if unscoped_name == "__PROC__" {
-                    self.visit_call(location, src, self.proc_ref, args, false, local_vars)
+                    self.visit_call(location, src, self.proc_ref, args, false, true, local_vars)
                 } else if unscoped_name == "SpacemanDMM_unlint" {
                     // Escape hatch for cases like `src` in macros used in
                     // global procs.
@@ -2422,16 +2425,14 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Term::SelfCall(args) => {
                 let src = self.ty;
                 let proc = self.proc_ref;
-                // Self calls are exact, and won't ever call an override.
-                self.visit_call(location, src, proc, args, true, local_vars)
+                self.visit_call(location, src, proc, args, true, true, local_vars)
             },
             Term::ParentCall(args) => {
                 self.calls_parent = true;
                 if let Some(proc) = self.proc_ref.parent_proc() {
                     // TODO: if args are empty, call w/ same args
                     let src = self.ty;
-                    // Parent calls are exact, and won't ever call an override.
-                    self.visit_call(location, src, proc, args, true, local_vars)
+                    self.visit_call(location, src, proc, args, true, true, local_vars)
                 } else {
                     error(location, format!("proc has no parent: {}", self.proc_ref))
                         .with_errortype("proc_has_no_parent")
@@ -2441,7 +2442,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Term::GlobalCall(global_name, args) => {
                 if let Some(proc) = self.objtree.root().get_proc(global_name) {
-                    self.visit_call(location, self.objtree.root(), proc, args, true, local_vars)
+                    self.visit_call(location, self.objtree.root(), proc, args, true, false, local_vars)
                 } else {
                     error(location, format!("undefined global proc: {global_name:?}"))
                         .register(self.context);
@@ -2616,6 +2617,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 // New calls are exact: `new /datum()` will always call
                 // `/datum/New()` and never an override.
                 true,
+                false,
                 local_vars,
             );
         } else if typepath.path != "/list"
@@ -2856,7 +2858,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                                 .register(self.context);
                             }
                         }
-                        self.visit_call(location, ty, proc, arguments, false, local_vars)
+                        self.visit_call(location, ty, proc, arguments, false, false, local_vars)
                     } else {
                         error(location, format!("undefined proc: {name:?} on {ty}"))
                             .register(self.context);
@@ -2955,7 +2957,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             StaticType::Type(typeref) => {
                 // Its been overloaded, assume they really know they want to do this
                 if let Some(proc) = typeref.get_proc(operator) {
-                    return self.visit_call(location, typeref, proc, &[], true, local_vars);
+                    return self.visit_call(location, typeref, proc, &[], true, false, local_vars);
                 }
                 typeref.get().pretty_path()
             },
@@ -3122,6 +3124,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         proc: ProcRef<'o>,
         args: &'o [Expression],
         is_exact: bool,
+        inherit_receiver: bool,
         local_vars: &mut HashMap<Ident, LocalVar<'o>>,
     ) -> Analysis<'o> {
         self.env.call_tree.entry(self.proc_ref).or_default().push((
@@ -3130,6 +3133,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             self.inside_newcontext != 0,
             src,
             is_exact,
+            inherit_receiver,
         ));
         if let Some((privateproc, true, decllocation)) = self.env.private.get_self_or_parent(proc) {
             if self.ty != privateproc.ty() {
