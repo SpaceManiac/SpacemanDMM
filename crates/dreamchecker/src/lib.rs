@@ -808,10 +808,11 @@ impl<'o> AnalyzeObjectTree<'o> {
                 }
 
                 // Only overrides at or below the receiver type can be dispatched
-                // to; they run on the same object, so keep the same receiver.
+                // to; once dispatched, the candidate's own type is a tighter
+                // bound on the runtime object than the original receiver.
                 if !is_exact && nextproc.ty().index() != self.objtree.root().index() {
                     nextproc.recurse_children_within(receiver, &mut |child_proc| {
-                        to_visit.push_back((child_proc, callstack.clone(), false, nextproc, receiver, true));
+                        to_visit.push_back((child_proc, callstack.clone(), false, nextproc, child_proc.ty(), true));
                     });
                 }
 
@@ -819,8 +820,8 @@ impl<'o> AnalyzeObjectTree<'o> {
                     for (proccalled, location, new_context, call_src, call_is_exact, call_inherit) in calledvec.iter() {
                         let mut newstack = callstack.clone();
                         newstack.add_step(*proccalled, *location, *new_context);
-                        // Self-calls run on nextproc's own type, not the broader receiver used to find nextproc itself.
-                        let call_receiver = if *call_inherit { nextproc.ty() } else { *call_src };
+                        // Self-calls inherit this receiver; explicit calls use their own.
+                        let call_receiver = if *call_inherit { receiver } else { *call_src };
                         to_visit.push_back((*proccalled, newstack, *new_context, *proccalled, call_receiver, *call_is_exact));
                     }
                 }
