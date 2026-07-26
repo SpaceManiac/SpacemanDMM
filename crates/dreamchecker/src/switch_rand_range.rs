@@ -44,7 +44,7 @@ pub fn check_switch_rand_range(
         return;
     }
 
-    case_ranges.sort_by(|a, b| a.0.cmp(&b.0));
+    case_ranges.sort_by_key(|a| a.0);
     let mut first_uncovered = rand_start;
     for (start, end) in case_ranges.iter() {
         if *start > first_uncovered {

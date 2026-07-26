@@ -2616,14 +2616,14 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     );
                 }
             },
-            "/world" => {
-                if self.inside_newcontext == 0 && matches!(unscoped_name, "Import" | "Export") {
-                    self.env.sleeping_procs.insert_violator(
-                        self.proc_ref,
-                        format!("world.{unscoped_name}").as_str(),
-                        location,
-                    );
-                }
+            "/world"
+                if self.inside_newcontext == 0 && matches!(unscoped_name, "Import" | "Export") =>
+            {
+                self.env.sleeping_procs.insert_violator(
+                    self.proc_ref,
+                    format!("world.{unscoped_name}").as_str(),
+                    location,
+                );
             },
             _ => {},
         }
