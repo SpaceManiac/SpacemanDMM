@@ -2584,8 +2584,7 @@ fn is_region_marker(line: &str, marker: &str) -> bool {
         return false;
     };
 
-    // handle doc comments too
-    let rest = comment.strip_prefix('/').unwrap_or(comment);
+    let rest = comment.strip_prefix(' ').unwrap_or(comment);
     let Some(suffix) = rest.strip_prefix(marker) else {
         return false;
     };
