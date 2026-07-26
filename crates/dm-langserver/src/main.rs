@@ -1358,6 +1358,7 @@ impl Engine {
         Completion;
         SignatureHelpRequest;
         DocumentSymbolRequest;
+        FoldingRangeRequest;
         DocumentColor;
         ColorPresentationRequest;
         DocumentLinkRequest;
@@ -1437,6 +1438,7 @@ impl Engine {
                     work_done_progress_options: Default::default(),
                 }),
                 color_provider: Some(ColorProviderCapability::Simple(true)),
+                folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),
                 ..Default::default()
             },
             server_info: Some(ServerInfo {
@@ -2271,6 +2273,37 @@ impl Engine {
         }
     }
 
+    fn FoldingRangeRequest(&mut self, params: P<FoldingRangeRequest>) -> R<FoldingRangeRequest> {
+        let content = self
+            .docs
+            .get_contents(&params.text_document.uri)
+            .map_err(invalid_request)?;
+
+        let mut region_starts = Vec::new();
+        let mut ranges = Vec::new();
+
+        for (index, line) in content.lines().enumerate() {
+            let line = line.trim_start();
+            let line_number = index as u32;
+
+            if is_region_marker(line, "#region") {
+                region_starts.push(line_number);
+            } else if is_region_marker(line, "#endregion") {
+                if let Some(start_line) = region_starts.pop() {
+                    ranges.push(FoldingRange {
+                        start_line,
+                        end_line: line_number,
+                        start_character: None,
+                        end_character: None,
+                        kind: Some(FoldingRangeKind::Region),
+                    });
+                }
+            }
+        }
+
+        Ok(Some(ranges))
+    }
+
     fn DocumentColor(&mut self, params: P<DocumentColor>) -> R<DocumentColor> {
         let content = self
             .docs
@@ -2544,6 +2577,23 @@ fn url_to_path(url: &Url) -> Result<PathBuf, jsonrpc::Error> {
 fn path_to_url(path: PathBuf) -> Result<Url, jsonrpc::Error> {
     let formatted = path.display().to_string();
     Url::from_file_path(path).map_err(|_| invalid_request(format!("bad file path: {formatted}",)))
+}
+
+fn is_region_marker(line: &str, marker: &str) -> bool {
+    let Some(comment) = line.strip_prefix("//") else {
+        return false;
+    };
+
+    // handle doc comments too
+    let rest = comment.strip_prefix('/').unwrap_or(comment);
+    let Some(suffix) = rest.strip_prefix(marker) else {
+        return false;
+    };
+
+    match suffix.chars().next() {
+        None => true,
+        Some(ch) => ch.is_whitespace(),
+    }
 }
 
 fn convert_severity(severity: dm::Severity) -> lsp_types::DiagnosticSeverity {
