@@ -798,6 +798,10 @@ impl<'o> AnalyzeObjectTree<'o> {
                 if self.sleep_exempt.get(nextproc).is_some() {
                     continue;
                 }
+                // Skip A->B->C chains when a B->C chain would be detected.
+                if self.must_not_sleep.directive.contains_key(&nextproc) {
+                    continue;
+                }
 
                 if let Some(sleepvec) = self.sleeping_procs.get_violators(nextproc) {
                     let parent_proc_type_index = parent_proc.ty().index();
