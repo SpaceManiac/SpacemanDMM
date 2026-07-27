@@ -2277,7 +2277,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         // everything in 'ops' should be the same strength
         success(if prev_op.strength.right_binding() {
             let mut result = rhs;
-            for (op, bit) in ops.into_iter().zip(bits.into_iter()).rev() {
+            for (op, bit) in ops.into_iter().zip(bits).rev() {
                 result = op.build(Box::new(bit), Box::new(result));
             }
             result
