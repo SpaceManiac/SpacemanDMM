@@ -1603,36 +1603,38 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     // for (..., ... in ...)
                     match test {
                         // This should necessarily be caught because the expression is going be
-                        //for(var/k, [v in x]) and [v in x] will be passed as BinaryOp::In
+                        //for(k, [v in x]) and [v in x] will be passed as BinaryOp::In
                         // This is a bit ugly but it workss
                         Some(Expression::BinaryOp {
                             op: BinaryOp::In,
                             lhs,
                             rhs,
                         }) => {
-                            // First thing first: for (var/k, v in x) REQUIRES the var/k.
-                            // This unboxes it and rejects other type for(x, [...]), for(0, [...])
+                            // Just... throws an error and pulls some type info if it's there
                             let (var_type, key) = match init {
-                            // this is a really terrible way to do this
                                 Some(Statement::Var(var_statement)) => match var_statement.value {
                                     None => (Some(var_statement.var_type), var_statement.name),
-                                    _ => return Err(self.error("cannot assigned a value to var/key in a for(var/key, value) statement")),
+                                    _ => return Err(self.error("cannot assigned a value to key in a for(key, value) statement")),
                                 },
-                                _ => return Err(self.error("for (var/key, value) requires a 'var' keyword")),
+                                Some(Statement::Expr(expr)) => match expr.into_term() {
+                                    Some(Term::Ident(name)) => (None, name),
+                                    _ => return Err(self.error("for-list must start with variable")),
+                                },
+                                _ => return Err(self.error("for-list must start with variable")),
                             };
-                            // Value is the lhs of for(var/k, [v in x])
+                            // Value is the lhs of for(k, [v in x])
                             // It should also pass only if it's an ident
                             let value = match lhs.into_term() {
                                 Some(Term::Ident(value)) => value,
                                 _ => return Err(self.error(
-                                    "value must be a variable in a for (var/key, value) statement",
+                                    "value must be a variable in a for (key, value) statement",
                                 )),
                             };
                             // TODO : check if `x` is an ident/a "list()" or "alist()" statement ?
                             require!(self.exact(Token::Punct(Punctuation::RParen)));
                             // Returns a for(k,v)
                             spanned(Statement::ForKeyValue(Box::new(ForKeyValueStatement {
-                                var_type: Some(var_type.expect("/")),
+                                var_type: var_type,
                                 key,
                                 key_input_type,
                                 value,
