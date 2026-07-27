@@ -598,7 +598,14 @@ impl<'o> ViolatingOverrides<'o> {
 /// (`spawn`), the receiver type, whether the call is exact (never dispatches to
 /// an override), and whether it runs on the caller's own object (self-calls,
 /// `..()`, `.()`) so the receiver is inherited rather than taken from `src`.
-type CallEdge<'o> = (ProcRef<'o>, Location, bool, TypeRef<'o>, bool, bool);
+struct CallEdge<'o> {
+    proc: ProcRef<'o>,
+    location: Location,
+    new_context: bool,
+    src: TypeRef<'o>,
+    is_exact: bool,
+    inherit_receiver: bool,
+}
 
 /// A deeper analysis of an ObjectTree
 pub struct AnalyzeObjectTree<'o> {
@@ -756,11 +763,22 @@ impl<'o> AnalyzeObjectTree<'o> {
 
             let procref_type = procref.ty();
             if let Some(calledvec) = self.call_tree.get(procref) {
-                for (proccalled, location, new_context, src, is_exact, inherit_receiver) in calledvec.iter() {
+                for each in calledvec.iter() {
                     let mut newstack = CallStack::default();
-                    newstack.add_step(*proccalled, *location, *new_context);
-                    let receiver = if *inherit_receiver { procref_type } else { *src };
-                    to_visit.push_back((*proccalled, newstack, *new_context, *proccalled, receiver, *is_exact));
+                    newstack.add_step(each.proc, each.location, each.new_context);
+                    let receiver = if each.inherit_receiver {
+                        procref_type
+                    } else {
+                        each.src
+                    };
+                    to_visit.push_back((
+                        each.proc,
+                        newstack,
+                        each.new_context,
+                        each.proc,
+                        receiver,
+                        each.is_exact,
+                    ));
                 }
             }
 
@@ -785,7 +803,8 @@ impl<'o> AnalyzeObjectTree<'o> {
                     let parent_proc_type_index = parent_proc.ty().index();
                     let next_proc_type_index = nextproc.ty().index();
 
-                    let proc_is_on_same_type_as_setting = next_proc_type_index == procref_type_index;
+                    let proc_is_on_same_type_as_setting =
+                        next_proc_type_index == procref_type_index;
                     let proc_is_override = next_proc_type_index != parent_proc_type_index;
 
                     let desc = if proc_is_on_same_type_as_setting && proc_is_override {
@@ -812,17 +831,35 @@ impl<'o> AnalyzeObjectTree<'o> {
                 // bound on the runtime object than the original receiver.
                 if !is_exact && nextproc.ty().index() != self.objtree.root().index() {
                     nextproc.recurse_children_within(receiver, &mut |child_proc| {
-                        to_visit.push_back((child_proc, callstack.clone(), false, nextproc, child_proc.ty(), true));
+                        to_visit.push_back((
+                            child_proc,
+                            callstack.clone(),
+                            false,
+                            nextproc,
+                            child_proc.ty(),
+                            true,
+                        ));
                     });
                 }
 
                 if let Some(calledvec) = self.call_tree.get(&nextproc) {
-                    for (proccalled, location, new_context, call_src, call_is_exact, call_inherit) in calledvec.iter() {
+                    for each in calledvec.iter() {
                         let mut newstack = callstack.clone();
-                        newstack.add_step(*proccalled, *location, *new_context);
+                        newstack.add_step(each.proc, each.location, each.new_context);
                         // Self-calls inherit this receiver; explicit calls use their own.
-                        let call_receiver = if *call_inherit { receiver } else { *call_src };
-                        to_visit.push_back((*proccalled, newstack, *new_context, *proccalled, call_receiver, *call_is_exact));
+                        let call_receiver = if each.inherit_receiver {
+                            receiver
+                        } else {
+                            each.src
+                        };
+                        to_visit.push_back((
+                            each.proc,
+                            newstack,
+                            each.new_context,
+                            each.proc,
+                            call_receiver,
+                            each.is_exact,
+                        ));
                     }
                 }
             }
@@ -845,10 +882,10 @@ impl<'o> AnalyzeObjectTree<'o> {
             let mut visited = HashSet::<ProcRef<'o>>::new();
             let mut to_visit = VecDeque::<(ProcRef<'o>, CallStack)>::new();
             if let Some(procscalled) = self.call_tree.get(procref) {
-                for (proccalled, location, new_context, _src, _is_exact, _inherit) in procscalled {
+                for each in procscalled {
                     let mut callstack = CallStack::default();
-                    callstack.add_step(*proccalled, *location, *new_context);
-                    to_visit.push_back((*proccalled, callstack));
+                    callstack.add_step(each.proc, each.location, each.new_context);
+                    to_visit.push_back((each.proc, callstack));
                 }
             }
             while let Some((nextproc, callstack)) = to_visit.pop_front() {
@@ -880,10 +917,10 @@ impl<'o> AnalyzeObjectTree<'o> {
                     }
                 }
                 if let Some(calledvec) = self.call_tree.get(&nextproc) {
-                    for (proccalled, location, new_context, _src, _is_exact, _inherit) in calledvec.iter() {
+                    for each in calledvec.iter() {
                         let mut newstack = callstack.clone();
-                        newstack.add_step(*proccalled, *location, *new_context);
-                        to_visit.push_back((*proccalled, newstack));
+                        newstack.add_step(each.proc, *location, each.new_context);
+                        to_visit.push_back((each.proc, newstack));
                     }
                 }
             }
@@ -2443,7 +2480,15 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Term::GlobalCall(global_name, args) => {
                 if let Some(proc) = self.objtree.root().get_proc(global_name) {
-                    self.visit_call(location, self.objtree.root(), proc, args, true, false, local_vars)
+                    self.visit_call(
+                        location,
+                        self.objtree.root(),
+                        proc,
+                        args,
+                        true,
+                        false,
+                        local_vars,
+                    )
                 } else {
                     error(location, format!("undefined global proc: {global_name:?}"))
                         .register(self.context);
@@ -3128,14 +3173,18 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         inherit_receiver: bool,
         local_vars: &mut HashMap<Ident, LocalVar<'o>>,
     ) -> Analysis<'o> {
-        self.env.call_tree.entry(self.proc_ref).or_default().push((
-            proc,
-            location,
-            self.inside_newcontext != 0,
-            src,
-            is_exact,
-            inherit_receiver,
-        ));
+        self.env
+            .call_tree
+            .entry(self.proc_ref)
+            .or_default()
+            .push(CallEdge {
+                proc,
+                location,
+                new_context: self.inside_newcontext != 0,
+                src,
+                is_exact,
+                inherit_receiver,
+            });
         if let Some((privateproc, true, decllocation)) = self.env.private.get_self_or_parent(proc) {
             if self.ty != privateproc.ty() {
                 error(
