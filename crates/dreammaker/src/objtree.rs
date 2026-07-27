@@ -317,13 +317,16 @@ impl<'a> TypeRef<'a> {
     pub fn recurse_types<F: FnMut(TypeRef<'a>)>(&self, f: &mut F) {
         f(*self);
         for child in self.children() {
-            child.recurse_types(f);
+            // Exclude children which have a parent_type set to something else.
+            if child.parent_type == self.idx {
+                child.recurse_types(f);
+            }
         }
-        //else we dont include things like /turf, /obj and /mob
-        for parent_typed_idx in &self.tree.redirected_parent_types {
-            let parent_typed = &self.tree.graph[parent_typed_idx.index()];
-            if parent_typed.parent_type_index().unwrap() == self.index() {
-                TypeRef::new(self.tree, *parent_typed_idx).recurse_types(f);
+        // Search for all types which have a parent_type set to this type.
+        for &parent_typed_idx in &self.tree.redirected_parent_types {
+            let parent_typed = &self.tree[parent_typed_idx];
+            if parent_typed.parent_type == self.idx {
+                TypeRef::new(self.tree, parent_typed_idx).recurse_types(f);
             }
         }
     }
