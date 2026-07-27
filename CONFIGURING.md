@@ -31,6 +31,7 @@ Raised by DreamChecker:
 * `override_missing_keyword_arg` - Raised when proc overrides are missing keyword arguments
 * `must_not_override` - `SpacemanDMM_should_not_override` directive
 * `must_call_parent` - `SpacemanDMM_should_call_parent` directive
+* `must_not_call_parent` - `SpacemanDMM_should_not_call_parent` directive
 * `final_var` - `SpacemanDMM_final` var type
 * `private_proc` - `SpacemanDMM_private_proc` directive
 * `protected_proc` - `SpacemanDMM_protected_proc` directive
