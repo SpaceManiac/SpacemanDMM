@@ -785,7 +785,7 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         )?;
     }
 
-    for (_path, details) in modules.iter() {
+    for details in modules.values() {
         let fname = format!("{}.html", details.htmlname);
 
         let mut base = String::new();

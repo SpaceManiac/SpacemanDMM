@@ -8,7 +8,7 @@ use std::{fmt, io};
 
 use foldhash::HashMap;
 
-use interval_tree::{range, IntervalTree};
+use interval_tree::{IntervalTree, range};
 
 use super::annotation::*;
 use super::ast::Ident;
@@ -226,14 +226,9 @@ impl DefineMap {
     /// Removes a key from the map, returning the value at the key if the key
     /// was previously in the map.
     pub fn remove(&mut self, key: &str) -> Option<(Location, Define)> {
-        let (remove, result);
-        match self.inner.get_mut(key) {
-            None => return None,
-            Some(stack) => {
-                result = stack.pop();
-                remove = stack.is_empty();
-            },
-        }
+        let stack = self.inner.get_mut(key)?;
+        let result = stack.pop();
+        let remove = stack.is_empty();
         if remove {
             self.inner.remove(key);
         }
@@ -940,7 +935,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                             _ => {
                                                 return Err(self.error(
                                                     "malformed macro parameters, expected name",
-                                                ))
+                                                ));
                                             },
                                         }
                                         match next!() {
@@ -956,7 +951,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                             _ => {
                                                 return Err(self.error(
                                                     "malformed macro parameters, expected comma",
-                                                ))
+                                                ));
                                             },
                                         }
                                     }
@@ -988,8 +983,12 @@ impl<'ctx> Preprocessor<'ctx> {
                                     Token::DocComment(doc) => {
                                         if doc.target != DocTarget::EnclosingItem {
                                             let message = match doc.kind {
-                                                CommentKind::Block => "after a #define, should be `/*!` instead of `/**`",
-                                                CommentKind::Line => "after a #define, should be `//!` instead of `///`",
+                                                CommentKind::Block => {
+                                                    "after a #define, should be `/*!` instead of `/**`"
+                                                },
+                                                CommentKind::Line => {
+                                                    "after a #define, should be `//!` instead of `///`"
+                                                },
                                             };
                                             self.error(message)
                                                 .set_severity(Severity::Hint)
@@ -1359,9 +1358,9 @@ impl<'ctx> Preprocessor<'ctx> {
                                                 return Err(DMError::new(
                                                     self.last_input_loc,
                                                     format!(
-                                                "can't stringify non-argument ident {argname:?}"
-                                            ),
-                                                ))
+                                                        "can't stringify non-argument ident {argname:?}"
+                                                    ),
+                                                ));
                                             },
                                         }
                                     },
@@ -1369,13 +1368,13 @@ impl<'ctx> Preprocessor<'ctx> {
                                         return Err(DMError::new(
                                             self.last_input_loc,
                                             format!("can't stringify non-ident '{tok}'"),
-                                        ))
+                                        ));
                                     },
                                     None => {
                                         return Err(DMError::new(
                                             self.last_input_loc,
                                             "can't stringify EOF",
-                                        ))
+                                        ));
                                     },
                                 },
                                 _ => expansion.push_back(token),

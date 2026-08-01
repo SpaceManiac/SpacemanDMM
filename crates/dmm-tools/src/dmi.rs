@@ -199,10 +199,8 @@ impl Image {
     pub fn composite(&mut self, other: &Image, pos: Coordinate, crop: Rect, color: [u8; 4]) {
         let other_dat = other.data.as_slice().unwrap();
         let self_dat = self.data.as_slice_mut().unwrap();
-        let mut sy = crop.1;
-        for y in pos.1..(pos.1 + crop.3) {
-            let mut sx = crop.0;
-            for x in pos.0..(pos.0 + crop.2) {
+        for (sy, y) in (crop.1..).zip(pos.1..(pos.1 + crop.3)) {
+            for (sx, x) in (crop.0..).zip(pos.0..(pos.0 + crop.2)) {
                 let src = other_dat[(sy * other.width + sx) as usize];
                 macro_rules! tint {
                     ($i:expr) => {
@@ -227,11 +225,7 @@ impl Image {
                     }
                 }
                 dst.a = out_a;
-
-                sx += 1;
             }
-
-            sy += 1;
         }
     }
 }

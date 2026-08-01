@@ -405,41 +405,32 @@ impl<'a> TypeRef<'a> {
         self,
         pieces: &[(PathOp, S)],
     ) -> Option<NavigatePathResult<'a>> {
-        let mut next = Some(self);
+        let mut current = self;
         if let Some(&(PathOp::Slash, _)) = pieces.first() {
-            next = Some(self.tree.root());
+            current = self.tree.root();
         }
 
         let mut iter = pieces.iter();
-        while let Some(&(op, ref s)) = iter.next() {
-            let name = s.as_ref();
-            if let Some(current) = next {
-                // Check if it's `proc` or `verb` in the path.
-                // Note that this doesn't catch this confusing corner case:
-                //    /proc/foo()
-                //    /proc/bar()
-                //        return .foo
-                // It also doesn't yet handle the difference between `:proc`,
-                // `.proc`, and `/proc`, treating everything as `.proc`.
-                if let Some(kind) = ProcDeclKind::from_name(s.as_ref()) {
-                    if let Some((_, name)) = iter.next() {
-                        if let Some(proc_ref) = current.get_proc(name.as_ref()) {
-                            return Some(NavigatePathResult::ProcPath(proc_ref, kind));
-                        } else {
-                            // The proc doesn't exist, so lookup fails.
-                            return None;
-                        }
-                    }
-                    return Some(NavigatePathResult::ProcGroup(current, kind));
+        while let Some(&(op, ref name)) = iter.next() {
+            // Check if it's `proc` or `verb` in the path.
+            // Note that this doesn't catch this confusing corner case:
+            //    /proc/foo()
+            //    /proc/bar()
+            //        return .foo
+            // It also doesn't yet handle the difference between `:proc`,
+            // `.proc`, and `/proc`, treating everything as `.proc`.
+            if let Some(kind) = ProcDeclKind::from_name(name.as_ref()) {
+                if let Some((_, name)) = iter.next() {
+                    let proc_ref = current.get_proc(name.as_ref())?;
+                    return Some(NavigatePathResult::ProcPath(proc_ref, kind));
                 }
-
-                // Otherwise keep navigating as normal.
-                next = current.navigate(op, name.as_ref());
-            } else {
-                return None;
+                return Some(NavigatePathResult::ProcGroup(current, kind));
             }
+
+            // Otherwise keep navigating as normal.
+            current = current.navigate(op, name.as_ref())?;
         }
-        next.map(NavigatePathResult::Type)
+        Some(NavigatePathResult::Type(current))
     }
 
     /// Checks whether this type is a subtype of the given type.
@@ -775,11 +766,7 @@ impl ObjectTree {
         I::Item: AsRef<str>,
     {
         let (exact, ty) = self.type_by_path_approx(path);
-        if exact {
-            Some(ty)
-        } else {
-            None
-        }
+        if exact { Some(ty) } else { None }
     }
 
     pub fn type_by_path_approx<I>(&self, path: I) -> (bool, TypeRef<'_>)

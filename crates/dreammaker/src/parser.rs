@@ -1634,7 +1634,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                             require!(self.exact(Token::Punct(Punctuation::RParen)));
                             // Returns a for(k,v)
                             spanned(Statement::ForKeyValue(Box::new(ForKeyValueStatement {
-                                var_type: var_type,
+                                var_type,
                                 key,
                                 key_input_type,
                                 value,

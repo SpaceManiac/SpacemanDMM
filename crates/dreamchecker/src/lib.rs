@@ -764,11 +764,16 @@ impl<'o> AnalyzeObjectTree<'o> {
             }
 
             if let Some(sleepvec) = self.sleeping_procs.get_violators(*procref) {
-                error(procref.get().location, format!("{procref} sets SpacemanDMM_should_not_sleep but calls blocking built-in(s)"))
-                    .with_note(location, "SpacemanDMM_should_not_sleep set here")
-                    .with_errortype("must_not_sleep")
-                    .with_blocking_builtins(sleepvec)
-                    .register(self.context)
+                error(
+                    procref.get().location,
+                    format!(
+                        "{procref} sets SpacemanDMM_should_not_sleep but calls blocking built-in(s)"
+                    ),
+                )
+                .with_note(location, "SpacemanDMM_should_not_sleep set here")
+                .with_errortype("must_not_sleep")
+                .with_blocking_builtins(sleepvec)
+                .register(self.context)
             }
 
             let procref_type = procref.ty();
@@ -822,11 +827,17 @@ impl<'o> AnalyzeObjectTree<'o> {
                     let proc_is_override = next_proc_type_index != parent_proc_type_index;
 
                     let desc = if proc_is_on_same_type_as_setting && proc_is_override {
-                        format!("{procref} sets SpacemanDMM_should_not_sleep but has override child proc that sleeps {nextproc}")
+                        format!(
+                            "{procref} sets SpacemanDMM_should_not_sleep but has override child proc that sleeps {nextproc}"
+                        )
                     } else if proc_is_override {
-                        format!("{procref} calls {parent_proc} which has override child proc that sleeps {nextproc}")
+                        format!(
+                            "{procref} calls {parent_proc} which has override child proc that sleeps {nextproc}"
+                        )
                     } else {
-                        format!("{procref} sets SpacemanDMM_should_not_sleep but calls blocking proc {nextproc}")
+                        format!(
+                            "{procref} sets SpacemanDMM_should_not_sleep but calls blocking proc {nextproc}"
+                        )
                     };
 
                     error(procref.get().location, desc)
@@ -1501,13 +1512,19 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
             }
             if self.calls_parent {
-                if !matches!(self.env.must_not_call_parent.get(self.proc_ref), Some((false, _))) {
+                if !matches!(
+                    self.env.must_not_call_parent.get(self.proc_ref),
+                    Some((false, _))
+                ) {
                     if let Some((true, location)) = self.env.must_not_call_parent.get(parent) {
                         error(
                             self.proc_ref.location,
                             format!("proc calls parent, prohibited by {parent}"),
                         )
-                        .with_note(*location, "required by this must_not_call_parent annotation")
+                        .with_note(
+                            *location,
+                            "required by this must_not_call_parent annotation",
+                        )
                         .with_errortype("must_not_call_parent")
                         .register(self.context);
                     }
@@ -1683,7 +1700,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     continues: false,
                     breaks: false,
                     fuzzy: false,
-                }
+                };
             },
             Statement::Crash(expr) => {
                 if let Some(expr) = expr {
@@ -1950,9 +1967,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 self.visit_expression(location, input, None, local_vars);
                 for (case, block) in cases.iter() {
                     let mut scoped_locals = local_vars.clone();
-                    if let [dm::ast::Case::Exact(Expression::BinaryOp {
-                        op: BinaryOp::Or, ..
-                    })] = case.elem[..]
+                    if let [
+                        dm::ast::Case::Exact(Expression::BinaryOp {
+                            op: BinaryOp::Or, ..
+                        }),
+                    ] = case.elem[..]
                     {
                         error(case.location, "Elements in a switch-case branch separated by ||, this is likely in error and should be replaced by a comma")
                             .set_severity(Severity::Warning)
@@ -2030,7 +2049,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     continues: true,
                     breaks: false,
                     fuzzy: true,
-                }
+                };
             },
             Statement::Break(_) => {
                 return ControlFlow {
@@ -2038,7 +2057,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     continues: false,
                     breaks: true,
                     fuzzy: true,
-                }
+                };
             },
             Statement::Goto(_) => {},
             Statement::Label { name: _, block } => {
@@ -3191,6 +3210,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn visit_call(
         &mut self,
         location: Location,

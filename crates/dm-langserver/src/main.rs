@@ -1312,7 +1312,7 @@ impl Engine {
         if let Some(func) = Self::handle_notification_table(&notification.method) {
             func(self, params_value)
         } else {
-            eprintln!("Notify NYI: {} -> {:?}", &notification.method, params_value);
+            eprintln!("Notify NYI: {} -> {:?}", notification.method, params_value);
             Ok(())
         }
     }
