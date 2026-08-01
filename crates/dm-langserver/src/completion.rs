@@ -9,7 +9,7 @@ use dm::ast::{Ident, PathOp};
 use dm::objtree::{ProcValue, TypeProc, TypeRef, TypeVar};
 
 use crate::symbol_search::contains;
-use crate::{is_constructor_name, Engine, Span};
+use crate::{Engine, Span, is_constructor_name};
 
 #[rustfmt::skip]
 static PROC_KEYWORDS: &[&str] = &[

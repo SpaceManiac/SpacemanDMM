@@ -5,7 +5,7 @@ use std::mem::take;
 
 use ndarray::Array3;
 
-use dm::lexer::{from_utf8_or_latin1, LocationTracker};
+use dm::lexer::{LocationTracker, from_utf8_or_latin1};
 use dm::{DMError, Location};
 
 use super::{Key, KeyType, Map, Prefab};

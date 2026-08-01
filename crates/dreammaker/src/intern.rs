@@ -1,4 +1,4 @@
-use phf::{phf_set, Set};
+use phf::{Set, phf_set};
 
 pub fn intern_static(str: &str) -> Option<&'static str> {
     STATIC_IDENTS.get_key(str).copied()

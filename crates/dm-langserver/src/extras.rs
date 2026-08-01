@@ -2,10 +2,10 @@
 
 use foldhash::HashMap;
 
-use lsp_types::notification::*;
-use lsp_types::request::*;
 use lsp_types::SetTraceParams;
 use lsp_types::SymbolKind;
+use lsp_types::notification::*;
+use lsp_types::request::*;
 
 // ----------------------------------------------------------------------------
 // SetTrace variant that VSC sends

@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::error::Severity;
 use crate::DMError;
+use crate::error::Severity;
 
 /// Struct for deserializing from a config TOML
 #[derive(Deserialize, Default, Debug, Clone)]

@@ -1,5 +1,5 @@
 use foldhash::fast::RandomState;
-use std::collections::{hash_map, HashMap};
+use std::collections::{HashMap, hash_map};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 

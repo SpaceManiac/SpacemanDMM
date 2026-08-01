@@ -9,8 +9,8 @@ use indexmap::IndexMap;
 use ndarray::{self, Array3, Axis};
 
 use crate::dmi::Dir;
-use dm::constants::Constant;
 use dm::DMError;
+use dm::constants::Constant;
 
 mod read;
 mod save_tgm;

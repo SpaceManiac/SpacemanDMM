@@ -1,5 +1,5 @@
 use crate::iterators::{IntoIter, RangePairIter};
-use crate::node::{height, Node};
+use crate::node::{Node, height};
 use crate::range::RangeInclusive;
 use std::collections::Bound;
 

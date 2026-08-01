@@ -446,7 +446,7 @@ impl fmt::Display for ConstFn {
 // The constant evaluator
 
 pub fn evaluate_str(location: Location, input: &[u8]) -> Result<Constant, DMError> {
-    use super::lexer::{from_utf8_or_latin1_borrowed, Lexer, LocationTracker};
+    use super::lexer::{Lexer, LocationTracker, from_utf8_or_latin1_borrowed};
 
     let ctx = Context::default();
     let mut lexer = Lexer::from_input(&ctx, LocationTracker::from_location(location, input.into()));

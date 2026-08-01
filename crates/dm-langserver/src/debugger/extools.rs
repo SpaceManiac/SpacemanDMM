@@ -4,11 +4,11 @@ use foldhash::{HashMap, HashMapExt};
 use std::error::Error;
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
-use super::extools_types::*;
 use super::SequenceNumber;
+use super::extools_types::*;
 
 pub const DEFAULT_PORT: u16 = 2448;
 

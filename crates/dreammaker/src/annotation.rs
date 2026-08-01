@@ -4,10 +4,10 @@
 use std::rc::Rc;
 
 use crate::docs::DocCollection;
-use interval_tree::{range, IntervalTree, RangeInclusive, RangePairIter};
+use interval_tree::{IntervalTree, RangeInclusive, RangePairIter, range};
 
-use super::ast::*;
 use super::Location;
+use super::ast::*;
 
 pub type Iter<'a> = RangePairIter<'a, Location, Annotation>;
 

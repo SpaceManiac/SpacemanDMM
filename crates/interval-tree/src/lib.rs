@@ -9,7 +9,7 @@ mod range;
 mod tree;
 
 pub use iterators::RangePairIter;
-pub use range::{range, RangeInclusive};
+pub use range::{RangeInclusive, range};
 pub use tree::IntervalTree;
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 //! Helper for running background tasks.
 
-use std::sync::mpsc::{channel, Receiver, TryRecvError};
+use std::sync::mpsc::{Receiver, TryRecvError, channel};
 use std::thread;
 
 pub struct Background<T> {

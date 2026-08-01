@@ -3,9 +3,9 @@
 use std::path::Path;
 
 use dm::ast::{InputType, ProcReturnType};
-use maud::{display, html, Markup, PreEscaped, Render, DOCTYPE};
+use maud::{DOCTYPE, Markup, PreEscaped, Render, display, html};
 
-use crate::{markdown::DocBlock, Environment, Index, IndexTree, ModuleArgs, ModuleItem, Type};
+use crate::{Environment, Index, IndexTree, ModuleArgs, ModuleItem, Type, markdown::DocBlock};
 
 pub(crate) fn base(
     env: &Environment,

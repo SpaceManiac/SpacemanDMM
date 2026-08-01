@@ -1,7 +1,7 @@
 use super::*;
 
-use rand::seq::IndexedRandom;
 use rand::RngExt;
+use rand::seq::IndexedRandom;
 
 #[derive(Default)]
 pub struct Random;
