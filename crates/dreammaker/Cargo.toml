@@ -26,4 +26,3 @@ beef = "0.5.2"
 
 [dev-dependencies]
 walkdir = "2.5.0"
-
