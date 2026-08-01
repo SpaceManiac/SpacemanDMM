@@ -2,7 +2,8 @@
 name = "dap-types"
 version = "0.0.0"
 authors = ["Tad Hardesty <tad@platymuus.com>"]
-edition = "2024"
+edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 serde = "1.0.213"

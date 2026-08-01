@@ -35,25 +35,27 @@ mod jrpc_io;
 mod symbol_search;
 
 use crate::extras::{QueryObjectTree, Reparse, SetTraceVsc, StartDebugger};
+use dm::FileId;
 use dm::annotation::{Annotation, AnnotationTree};
 use dm::ast::Ident;
 use dm::objtree::TypeRef;
-use dm::FileId;
 use foldhash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use jsonrpc::{Call, Output, Response};
 use lsp_types::{notification::*, request::*, *};
-use std::collections::hash_map::Entry;
 use std::collections::VecDeque;
+use std::collections::hash_map::Entry;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use url::Url;
 
 fn main() {
-    #![allow(unsafe_code)]
-    unsafe{
-    std::env::set_var("RUST_BACKTRACE", "1");
+    // TODO: use [std::panic::set_backtrace_style] when stable: https://github.com/rust-lang/rust/issues/93346
+    #[allow(unsafe_code)]
+    unsafe {
+        std::env::set_var("RUST_BACKTRACE", "1");
     }
+
     eprintln!(
         "dm-langserver {}  Copyright (C) 2017-2025  Tad Hardesty",
         env!("CARGO_PKG_VERSION")
@@ -2045,8 +2047,9 @@ impl Engine {
         let iter = annotations.get_location(location);
         let mut result = None;
 
-        if_annotation! { &Annotation::ProcArguments(ref priors, ref proc_name, mut idx) in iter; {
+        if_annotation! { Annotation::ProcArguments(priors, proc_name, idx) in iter; {
             // take the specific argument we're working on
+            let mut idx = *idx;
             if_annotation! { Annotation::ProcArgument(i) in iter; {
                 idx = *i;
             }}

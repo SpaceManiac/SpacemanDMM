@@ -213,10 +213,7 @@ mod raw {
     }
 
     pub unsafe fn kill(handle: Handle) -> bool {
-        #![allow(unsafe_code)]
-        unsafe{
-        libc::kill(handle, libc::SIGKILL) != -1
-        }
+        unsafe { libc::kill(handle, libc::SIGKILL) != -1 }
     }
 }
 

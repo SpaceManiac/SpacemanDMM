@@ -2,9 +2,9 @@
 
 use foldhash::{HashMap, HashMapExt};
 
+use dm::Location;
 use dm::ast::*;
 use dm::objtree::*;
-use dm::Location;
 
 pub struct ReferencesTable {
     uses: HashMap<SymbolId, References>,

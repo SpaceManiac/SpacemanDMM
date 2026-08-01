@@ -3,6 +3,7 @@ name = "dreamchecker"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 dreammaker = { path = "../dreammaker" }
