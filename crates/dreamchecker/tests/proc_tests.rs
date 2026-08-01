@@ -57,3 +57,20 @@ fn return_type_failure() {
     .trim();
     check_errors_match(code, RETURN_TYPE_FAILURE_ERRORS);
 }
+
+pub const EMPTY_LIST_FIND_ERRORS: &[(u32, u16, &str)] = &[ (
+    3,
+    20,
+    "list.Find() with no arguments searches for null, write Find(null) if that is intended",
+) ];
+
+#[test]
+fn empty_list_find_warns() {
+    let code = r##"
+/proc/test()
+    var/list/list_foo = list("a", null, "c")
+    return list_foo.Find()
+"##
+    .trim();
+    check_errors_match(code, EMPTY_LIST_FIND_ERRORS);
+}
