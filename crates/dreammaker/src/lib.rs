@@ -4,43 +4,38 @@
 extern crate indexmap;
 extern crate interval_tree;
 extern crate lodepng;
-#[macro_use] extern crate bitflags;
-#[macro_use] extern crate guard;
-extern crate termcolor;
+#[macro_use]
+extern crate bitflags;
 extern crate ordered_float;
 extern crate serde;
 extern crate serde_derive;
+extern crate termcolor;
 extern crate toml;
 
-use std::path::Path;
 use std::borrow::Cow;
-
-#[allow(unused_macros)]
-macro_rules! try_iter {
-    ($e:expr) => {
-        match $e {
-            Ok(x) => x,
-            Err(e) => return Some(Err(From::from(e))),
-        }
-    };
-}
+use std::path::Path;
 
 mod error;
 pub use error::*;
+use get_size::GetSize;
 
-// roughly in order of stage
-pub mod docs;
-pub mod lexer;
-pub mod preprocessor;
-pub mod indents;
-pub mod parser;
+use foldhash::fast::RandomState;
+use indexmap::IndexMap;
+
+#[macro_use]
+mod intern;
 pub mod annotation;
 pub mod ast;
-pub mod objtree;
 mod builtins;
+pub mod config;
 pub mod constants;
 pub mod dmi;
-pub mod config;
+pub mod docs;
+pub mod indents;
+pub mod lexer;
+pub mod objtree;
+pub mod parser;
+pub mod preprocessor;
 
 impl Context {
     /// Run the parsing suite on a given `.dme` file, producing an object tree.
@@ -49,10 +44,12 @@ impl Context {
     /// return a best-effort parse. Call `print_all_errors` to pretty-print
     /// errors to standard error.
     pub fn parse_environment(&self, dme: &Path) -> Result<objtree::ObjectTree, DMError> {
-        Ok(parser::parse(self,
-            indents::IndentProcessor::new(self,
-                preprocessor::Preprocessor::new(self, dme.to_owned())?
-            )
+        Ok(parser::parse(
+            self,
+            indents::IndentProcessor::new(
+                self,
+                preprocessor::Preprocessor::new(self, dme.to_owned())?,
+            ),
         ))
     }
 }
@@ -64,9 +61,10 @@ impl Context {
 ///
 /// If `show_ws` is true, braces and semicolons are included directly in the
 /// output rather than only being implied by the indentation.
-pub fn pretty_print<W, I>(w: &mut W, input: I, show_ws: bool) -> std::fmt::Result where
+pub fn pretty_print<W, I>(w: &mut W, input: I, show_ws: bool) -> std::fmt::Result
+where
     W: std::fmt::Write,
-    I: IntoIterator<Item=lexer::Token>
+    I: IntoIterator<Item = lexer::Token>,
 {
     let mut indents = 0;
     let mut needs_newline = false;
@@ -79,29 +77,29 @@ pub fn pretty_print<W, I>(w: &mut W, input: I, show_ws: bool) -> std::fmt::Resul
                 if show_ws {
                     write!(w, "{{")?;
                 }
-            }
+            },
             lexer::Token::Punct(lexer::Punctuation::RBrace) => {
                 indents -= 1;
                 needs_newline = true;
                 if show_ws {
                     write!(w, "}}")?;
                 }
-            }
-            lexer::Token::Punct(lexer::Punctuation::Semicolon) |
-            lexer::Token::Punct(lexer::Punctuation::Newline) => {
+            },
+            lexer::Token::Punct(lexer::Punctuation::Semicolon)
+            | lexer::Token::Punct(lexer::Punctuation::Newline) => {
                 needs_newline = true;
                 if show_ws {
                     write!(w, ";")?;
                 }
-            }
-            lexer::Token::DocComment(_) => {}
+            },
+            lexer::Token::DocComment(_) => {},
             other => {
                 if needs_newline {
                     const SPACES: &str = "                                ";
                     let spaces = 2 * indents;
                     writeln!(w)?;
                     for _ in 0..(spaces / SPACES.len()) {
-                        write!(w, "{}", SPACES)?;
+                        write!(w, "{SPACES}")?;
                     }
                     write!(w, "{}", &SPACES[..spaces % SPACES.len()])?;
                     needs_newline = false;
@@ -110,9 +108,9 @@ pub fn pretty_print<W, I>(w: &mut W, input: I, show_ws: bool) -> std::fmt::Resul
                         write!(w, " ")?;
                     }
                 }
-                write!(w, "{}", other)?;
+                write!(w, "{other}")?;
                 prev = Some(other);
-            }
+            },
         }
     }
     if needs_newline {
@@ -129,7 +127,7 @@ pub fn pretty_print<W, I>(w: &mut W, input: I, show_ws: bool) -> std::fmt::Resul
 /// On Windows, this is a no-op.
 #[cfg(windows)]
 #[inline(always)]
-pub fn fix_case(path: &Path) -> Cow<Path> {
+pub fn fix_case(path: &Path) -> Cow<'_, Path> {
     Cow::Borrowed(path)
 }
 
@@ -138,7 +136,7 @@ pub fn fix_case(path: &Path) -> Cow<Path> {
 /// On non-Windows platforms, the parent of the given path is searched for a
 /// file with the same name but a different case.
 #[cfg(not(windows))]
-pub fn fix_case(path: &Path) -> Cow<Path> {
+pub fn fix_case(path: &Path) -> Cow<'_, Path> {
     if path.exists() {
         return Cow::Borrowed(path);
     }
@@ -171,7 +169,10 @@ pub const DEFAULT_ENV: &str = "tgstation.dme";
 /// Autodetect any `.dme` file in the current folder, or fall back to default.
 ///
 /// If multiple environments exist, the first non-default is preferred.
-pub fn detect_environment(root: &Path, default: &str) -> std::io::Result<Option<std::path::PathBuf>> {
+pub fn detect_environment(
+    root: &Path,
+    default: &str,
+) -> std::io::Result<Option<std::path::PathBuf>> {
     let mut result = None;
     for entry in std::fs::read_dir(root)?.flatten() {
         let name = entry.file_name();
@@ -191,8 +192,32 @@ pub fn detect_environment(root: &Path, default: &str) -> std::io::Result<Option<
 
 pub fn detect_environment_default() -> std::io::Result<Option<std::path::PathBuf>> {
     // Return a path in the current directory `.` ...
-    detect_environment(".".as_ref(), DEFAULT_ENV).map(|o| o.map(|path| {
-        // ... but without `./` preceding it.
-        path.strip_prefix(".").map(|p| p.to_owned()).unwrap_or(path)
-    }))
+    detect_environment(".".as_ref(), DEFAULT_ENV).map(|o| {
+        o.map(|path| {
+            // ... but without `./` preceding it.
+            path.strip_prefix(".").map(|p| p.to_owned()).unwrap_or(path)
+        })
+    })
+}
+
+fn heap_size_of_index_map<K, V>(index_map: &IndexMap<K, V, RandomState>) -> usize
+where
+    K: GetSize,
+    V: GetSize,
+{
+    let mut total = 0;
+
+    for (k, v) in index_map.iter() {
+        // We assume that keys and value are hold inside the heap.
+        total += GetSize::get_size(k);
+        total += GetSize::get_size(v);
+    }
+
+    let additional: usize = index_map.capacity() - index_map.len();
+    total += additional * K::get_stack_size();
+    total += additional * V::get_stack_size();
+
+    total += u64::get_stack_size() * 4; // composition of RandomState
+
+    total
 }

@@ -1,18 +1,18 @@
 //! Editor-environment specific DMI (texture) handling.
 
-use std::io;
-use std::path::{Path, PathBuf};
+use lodepng::{self, ColorType, Decoder, RGBA};
+use sdl3::gpu::{
+    Device, Texture, TextureCreateInfo, TextureRegion, TextureTransferInfo, TextureUsage,
+    TransferBufferUsage,
+};
 use std::collections::hash_map::HashMap;
+use std::io::{self, Write};
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
-
-use lodepng::{self, RGBA, Decoder, ColorType};
-
-use gfx::{self, Factory as FactoryTrait};
-use crate::{Factory, Texture};
 
 type Rect = (u32, u32, u32, u32);
 
-pub use dm::dmi::*;
+pub use dreammaker::dmi::*;
 
 // ----------------------------------------------------------------------------
 // Icon file and metadata handling
@@ -24,7 +24,7 @@ pub struct IconCache {
 
 #[derive(Default)]
 pub struct TextureCache {
-    textures: Vec<Option<Texture>>,
+    textures: Vec<Option<Texture<'static>>>,
 }
 
 #[derive(Default)]
@@ -61,12 +61,12 @@ impl IconCache {
                     lock.icons.push(arc);
                     lock.paths.insert(relative_file_path.to_owned(), Some(i));
                     Some(i)
-                }
+                },
                 None => {
                     let mut lock = self.lock.write().expect("IconCache poisoned");
                     lock.paths.insert(relative_file_path.to_owned(), None);
                     None
-                }
+                },
             },
         }
     }
@@ -85,12 +85,11 @@ impl IconCache {
 }
 
 impl TextureCache {
-    pub fn retrieve(&mut self, factory: &mut Factory, icons: &IconCache, id: usize) -> &Texture {
-        use crate::Fulfill;
+    pub fn retrieve(&mut self, device: &Device, icons: &IconCache, id: usize) -> &Texture<'static> {
         if id >= self.textures.len() {
-            self.textures.resize(id + 1, None);
+            self.textures.resize_with(id + 1, Default::default);
         }
-        self.textures[id].fulfill(|| load_texture(factory, &icons.get_icon(id).bitmap))
+        self.textures[id].get_or_insert_with(|| load_texture(device, &icons.get_icon(id).bitmap))
     }
 
     pub fn clear(&mut self) {
@@ -104,7 +103,7 @@ fn load(path: &Path) -> Option<IconFile> {
         Err(err) => {
             eprintln!("error loading icon: {}\n  {}", path.display(), err);
             None
-        }
+        },
     }
 }
 
@@ -130,21 +129,24 @@ impl IconFile {
     }
 
     pub fn uv_of(&self, icon_state: &str, dir: Dir) -> Option<[f32; 4]> {
-        self.rect_of(icon_state, dir).map(|(x1, y1, w, h)| [
-            x1 as f32 / self.width as f32,
-            y1 as f32 / self.height as f32,
-            (x1 + w) as f32 / self.width as f32,
-            (y1 + h) as f32 / self.height as f32,
-        ])
+        self.rect_of(icon_state, dir).map(|(x1, y1, w, h)| {
+            [
+                x1 as f32 / self.width as f32,
+                y1 as f32 / self.height as f32,
+                (x1 + w) as f32 / self.width as f32,
+                (y1 + h) as f32 / self.height as f32,
+            ]
+        })
     }
 
     #[inline]
     pub fn rect_of(&self, icon_state: &str, dir: Dir) -> Option<Rect> {
-        self.metadata.rect_of(self.width, icon_state, dir, 0)
+        self.metadata
+            .rect_of(self.width, &StateIndex::from(icon_state), dir, 0)
     }
 }
 
-pub fn texture_from_bytes(factory: &mut Factory, bytes: &[u8]) -> io::Result<Texture> {
+pub fn texture_from_bytes(device: &Device, bytes: &[u8]) -> io::Result<Texture<'static>> {
     let mut decoder = Decoder::new();
     decoder.info_raw_mut().colortype = ColorType::RGBA;
     decoder.info_raw_mut().set_bitdepth(8);
@@ -154,25 +156,60 @@ pub fn texture_from_bytes(factory: &mut Factory, bytes: &[u8]) -> io::Result<Tex
         Ok(_) => return Err(io::Error::new(io::ErrorKind::InvalidData, "not RGBA")),
         Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidData, e)),
     };
-    Ok(load_texture(factory, &bitmap))
+    Ok(load_texture(device, &bitmap))
 }
 
-pub fn load_texture(factory: &mut Factory, bitmap: &lodepng::Bitmap<RGBA>) -> Texture {
-    let width = bitmap.width;
-    let height = bitmap.height;
-    let mut new_buffer = Vec::with_capacity(4 * width * height);
-    for pixel in &bitmap.buffer {
-        new_buffer.push(pixel.r);
-        new_buffer.push(pixel.g);
-        new_buffer.push(pixel.b);
-        new_buffer.push(pixel.a);
-    }
+pub fn load_texture(device: &Device, bitmap: &lodepng::Bitmap<RGBA>) -> Texture<'static> {
+    let width = bitmap.width as u32;
+    let height = bitmap.height as u32;
 
-    let kind = gfx::texture::Kind::D2(width as u16, height as u16, gfx::texture::AaMode::Single);
-    let (_, view) = factory.create_texture_immutable_u8::<crate::ColorFormat>(
-        kind,
-        gfx::texture::Mipmap::Provided,
-        &[&new_buffer[..]]
-    ).expect("create_texture_immutable_u8");
-    view
+    let texture = device
+        .create_texture(
+            TextureCreateInfo::new()
+                .with_type(sdl3::gpu::TextureType::_2D)
+                .with_format(sdl3::gpu::TextureFormat::R8g8b8a8Unorm)
+                .with_usage(TextureUsage::SAMPLER)
+                .with_width(width)
+                .with_height(height)
+                .with_layer_count_or_depth(1)
+                .with_num_levels(1),
+        )
+        .expect("create_texture");
+
+    let transfer_buffer = device
+        .create_transfer_buffer()
+        .with_usage(TransferBufferUsage::UPLOAD)
+        .with_size(width * height * 4)
+        .build()
+        .expect("create_transfer_buffer");
+
+    let mut mem = transfer_buffer.map::<u8>(device, true);
+    let mut dest = mem.mem_mut();
+    for pixel in &bitmap.buffer {
+        dest.write_all(&[pixel.r, pixel.g, pixel.b, pixel.a])
+            .unwrap();
+    }
+    mem.unmap();
+
+    let source = TextureTransferInfo::new()
+        .with_transfer_buffer(&transfer_buffer)
+        .with_offset(0);
+    let destination = TextureRegion::new()
+        .with_texture(&texture)
+        .with_width(width)
+        .with_height(height)
+        .with_depth(1);
+
+    let command_buffer = device
+        .acquire_command_buffer()
+        .expect("acquire_command_buffer");
+    let copy_pass = device
+        .begin_copy_pass(&command_buffer)
+        .expect("begin_copy_pass");
+
+    copy_pass.upload_to_gpu_texture(source, destination, false);
+    device.end_copy_pass(copy_pass);
+    command_buffer.submit().expect("CommandBuffer::submit");
+
+    texture
 }

@@ -1,7 +1,7 @@
+use crate::node::Node;
+use crate::{IntervalTree, RangeInclusive};
 use std::collections::Bound;
 use std::vec;
-use crate::{IntervalTree, RangeInclusive};
-use crate::node::Node;
 
 #[derive(Debug, Clone)]
 enum Visiting {
@@ -32,7 +32,8 @@ impl<'a, K: Ord, V> RangePairIter<'a, K, V> {
         match node.left {
             Some(ref lsucc) => {
                 self.stack.push((node, Visiting::Center));
-                if match self.start {  // left_subtree_relevant
+                if match self.start {
+                    // left_subtree_relevant
                     Bound::Included(ref start) => node.max >= *start,
                     Bound::Excluded(ref start) => node.max > *start,
                     Bound::Unbounded => true,
@@ -40,16 +41,19 @@ impl<'a, K: Ord, V> RangePairIter<'a, K, V> {
                     self.stack.push((&**lsucc, Visiting::Left))
                 }
             },
-            None => self.stack.push((node, Visiting::Center))
+            None => self.stack.push((node, Visiting::Center)),
         }
     }
 
     fn visit_right(&mut self, node: &'a Node<K, V>) {
-        if !match self.end {  // right_subtree_relevant
+        if !match self.end {
+            // right_subtree_relevant
             Bound::Included(ref end) => *end >= node.key.start,
             Bound::Excluded(ref end) => *end > node.key.start,
             Bound::Unbounded => true,
-        } { return }
+        } {
+            return;
+        }
         if let Some(ref rsucc) = node.right {
             self.stack.push((&**rsucc, Visiting::Left));
         }
@@ -76,7 +80,7 @@ impl<'a, K: Ord, V> RangePairIter<'a, K, V> {
                         self.stack.push((node, Visiting::Middle(i + 1)));
                         return Some((node, i));
                     }
-                }
+                },
             }
         }
         None
@@ -87,7 +91,8 @@ impl<'a, K: Ord + Clone, V> Iterator for RangePairIter<'a, K, V> {
     type Item = (RangeInclusive<K>, &'a V);
 
     fn next(&mut self) -> Option<(RangeInclusive<K>, &'a V)> {
-        self.get_next_node().map(|(n, i)| (n.key.clone(), &n.data[i]))
+        self.get_next_node()
+            .map(|(n, i)| (n.key.clone(), &n.data[i]))
     }
 }
 
@@ -149,10 +154,7 @@ impl<K: Clone, V> Iterator for IntoIter<K, V> {
             }
 
             if self.current.is_none() {
-                let mut node = match self.stack.pop() {
-                    Some(node) => node,
-                    None => return None,
-                };
+                let mut node = self.stack.pop()?;
                 self.push_node(node.right.take());
                 self.current = Some((node.key, node.data.into_iter()));
             }
@@ -163,55 +165,88 @@ impl<K: Clone, V> Iterator for IntoIter<K, V> {
 #[test]
 fn test_iterators() {
     let mut tree = IntervalTree::<u64, i32>::new();
-    tree.insert(RangeInclusive::new(18,18), 1337);
-    tree.insert(RangeInclusive::new(13,13), 1338);
-    tree.insert(RangeInclusive::new(17,17), 1339);
-    tree.insert(RangeInclusive::new(10,10), 1321);
-    tree.insert(RangeInclusive::new(1 ,1), 1321);
-    tree.insert(RangeInclusive::new(3 ,3), 1322);
+    tree.insert(RangeInclusive::new(18, 18), 1337);
+    tree.insert(RangeInclusive::new(13, 13), 1338);
+    tree.insert(RangeInclusive::new(17, 17), 1339);
+    tree.insert(RangeInclusive::new(10, 10), 1321);
+    tree.insert(RangeInclusive::new(1, 1), 1321);
+    tree.insert(RangeInclusive::new(3, 3), 1322);
 
     let iter = RangePairIter::new(&tree, Bound::Included(0), Bound::Included(1000));
 
-    for (k,v) in iter {
-        println!("{:?} {}",k,v);
+    for (k, v) in iter {
+        println!("{k:?} {v}");
     }
 
     let mut iter = RangePairIter::new(&tree, Bound::Included(0), Bound::Included(1000));
-    assert_eq!(iter.next().expect("should have a few values").0, RangeInclusive::new(1 ,1 ));
-    assert_eq!(iter.next().expect("should have a few values").0, RangeInclusive::new(3 ,3 ));
-    assert_eq!(iter.next().expect("should have a few values").0, RangeInclusive::new(10,10));
-    assert_eq!(iter.next().expect("should have a few values").0, RangeInclusive::new(13,13));
-    assert_eq!(iter.next().expect("should have a few values").0, RangeInclusive::new(17,17));
-    assert_eq!(iter.next().expect("should have a few values").0, RangeInclusive::new(18,18));
+    assert_eq!(
+        iter.next().expect("should have a few values").0,
+        RangeInclusive::new(1, 1)
+    );
+    assert_eq!(
+        iter.next().expect("should have a few values").0,
+        RangeInclusive::new(3, 3)
+    );
+    assert_eq!(
+        iter.next().expect("should have a few values").0,
+        RangeInclusive::new(10, 10)
+    );
+    assert_eq!(
+        iter.next().expect("should have a few values").0,
+        RangeInclusive::new(13, 13)
+    );
+    assert_eq!(
+        iter.next().expect("should have a few values").0,
+        RangeInclusive::new(17, 17)
+    );
+    assert_eq!(
+        iter.next().expect("should have a few values").0,
+        RangeInclusive::new(18, 18)
+    );
     assert!(iter.next().is_none());
 
     let mut iter = RangePairIter::new(&tree, Bound::Included(3), Bound::Included(17));
-    assert_eq!(iter.next().expect("should have a few values").0, RangeInclusive::new(3 ,3 ));
-    assert_eq!(iter.next().expect("should have a few values").0, RangeInclusive::new(10,10));
-    assert_eq!(iter.next().expect("should have a few values").0, RangeInclusive::new(13,13));
-    assert_eq!(iter.next().expect("should have a few values").0, RangeInclusive::new(17,17));
+    assert_eq!(
+        iter.next().expect("should have a few values").0,
+        RangeInclusive::new(3, 3)
+    );
+    assert_eq!(
+        iter.next().expect("should have a few values").0,
+        RangeInclusive::new(10, 10)
+    );
+    assert_eq!(
+        iter.next().expect("should have a few values").0,
+        RangeInclusive::new(13, 13)
+    );
+    assert_eq!(
+        iter.next().expect("should have a few values").0,
+        RangeInclusive::new(17, 17)
+    );
     assert!(iter.next().is_none());
 }
 
 #[test]
 fn test_into_iter() {
     let mut tree = IntervalTree::<u64, i32>::new();
-    tree.insert(RangeInclusive::new(18,18), 1337);
-    tree.insert(RangeInclusive::new(13,13), 1338);
-    tree.insert(RangeInclusive::new(17,17), 1339);
-    tree.insert(RangeInclusive::new(10,10), 1321);
-    tree.insert(RangeInclusive::new(1 ,1), 1321);
-    tree.insert(RangeInclusive::new(1 ,1), 1350);
-    tree.insert(RangeInclusive::new(3 ,3), 1322);
+    tree.insert(RangeInclusive::new(18, 18), 1337);
+    tree.insert(RangeInclusive::new(13, 13), 1338);
+    tree.insert(RangeInclusive::new(17, 17), 1339);
+    tree.insert(RangeInclusive::new(10, 10), 1321);
+    tree.insert(RangeInclusive::new(1, 1), 1321);
+    tree.insert(RangeInclusive::new(1, 1), 1350);
+    tree.insert(RangeInclusive::new(3, 3), 1322);
 
     let values: Vec<_> = tree.into_iter().collect();
-    assert_eq!(values, vec![
-        (RangeInclusive::new(1, 1), 1321),
-        (RangeInclusive::new(1, 1), 1350),
-        (RangeInclusive::new(3, 3), 1322),
-        (RangeInclusive::new(10, 10), 1321),
-        (RangeInclusive::new(13, 13), 1338),
-        (RangeInclusive::new(17, 17), 1339),
-        (RangeInclusive::new(18, 18), 1337),
-    ]);
+    assert_eq!(
+        values,
+        vec![
+            (RangeInclusive::new(1, 1), 1321),
+            (RangeInclusive::new(1, 1), 1350),
+            (RangeInclusive::new(3, 3), 1322),
+            (RangeInclusive::new(10, 10), 1321),
+            (RangeInclusive::new(13, 13), 1338),
+            (RangeInclusive::new(17, 17), 1339),
+            (RangeInclusive::new(18, 18), 1337),
+        ]
+    );
 }

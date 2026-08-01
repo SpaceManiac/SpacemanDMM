@@ -1,4 +1,3 @@
-
 extern crate dreamchecker as dc;
 
 use dc::test_helpers::*;
@@ -31,14 +30,19 @@ fn private_proc() {
     M.private2()
     var/mob/subtype/S = new
     S.private()
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, PRIVATE_PROC_ERRORS);
 }
 
 pub const PRIVATE_VAR_ERRORS: &[(u32, u16, &str)] = &[
     (5, 9, "/mob/subtype overrides private var \"foo\""),
     (12, 6, "field \"bar\" on /mob is declared as private"),
-    (14, 6, "field \"foo\" on /mob/subtype is declared as private"),
+    (
+        14,
+        6,
+        "field \"foo\" on /mob/subtype is declared as private",
+    ),
 ];
 
 #[test]
@@ -58,13 +62,22 @@ fn private_var() {
     M.bar = TRUE
     var/mob/subtype/S = new
     S.foo = TRUE
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, PRIVATE_VAR_ERRORS);
 }
 
 pub const PROTECTED_PROC_ERRORS: &[(u32, u16, &str)] = &[
-    (15, 6, "/obj/proc/test attempting to call protected proc /mob/proc/protected2"),
-    (17, 6, "/obj/proc/test attempting to call protected proc /mob/proc/protected"),
+    (
+        15,
+        6,
+        "/obj/proc/test attempting to call protected proc /mob/proc/protected2",
+    ),
+    (
+        17,
+        6,
+        "/obj/proc/test attempting to call protected proc /mob/proc/protected",
+    ),
 ];
 
 #[test]
@@ -87,13 +100,18 @@ fn protected_proc() {
     M.protected2()
     var/mob/subtype/S = new
     S.protected()
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, PROTECTED_PROC_ERRORS);
 }
 
 pub const PROTECTED_VAR_ERRORS: &[(u32, u16, &str)] = &[
     (12, 6, "field \"bar\" on /mob is declared as protected"),
-    (14, 6, "field \"foo\" on /mob/subtype is declared as protected"),
+    (
+        14,
+        6,
+        "field \"foo\" on /mob/subtype is declared as protected",
+    ),
 ];
 
 #[test]
@@ -113,6 +131,7 @@ fn protected_var() {
     M.bar = TRUE
     var/mob/subtype/S = new
     S.foo = TRUE
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, PROTECTED_VAR_ERRORS);
 }

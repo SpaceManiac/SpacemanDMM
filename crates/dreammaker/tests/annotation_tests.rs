@@ -1,14 +1,14 @@
 extern crate dreammaker as dm;
 
-use dm::Location;
-use dm::lexer::*;
 use dm::annotation::*;
-use dm::parser::Parser;
 use dm::indents::IndentProcessor;
+use dm::lexer::*;
+use dm::parser::Parser;
+use dm::Location;
 
 #[test]
 fn annotation_basic() {
-    let code = r##"
+    let code = r#"
 /var/foo = bar
 /datum/globals
     var/number = 7 + 5
@@ -19,7 +19,8 @@ fn annotation_basic() {
 
     proc/Init()
         world.log << new/obj()
-"##.trim();
+"#
+    .trim();
 
     let context = Default::default();
     let lexer = Lexer::new(&context, Default::default(), code.as_bytes());
@@ -33,7 +34,7 @@ fn annotation_basic() {
         line: 9,
         column: 14,
     }) {
-        println!("{:?}", each);
+        println!("{each:?}");
         for each in annotations.get_range_raw(each.0) {
             println!("    {:?}", each.1);
         }

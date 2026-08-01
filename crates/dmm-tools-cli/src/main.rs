@@ -1,46 +1,40 @@
 //! CLI tools, including a map renderer, using the same backend as the editor.
 #![forbid(unsafe_code)]
-#![doc(hidden)]  // Don't interfere with lib docs.
+#![doc(hidden)] // Don't interfere with lib docs.
 
+extern crate clap;
 extern crate rayon;
-extern crate structopt;
 
 extern crate serde;
 extern crate serde_json;
-#[macro_use] extern crate serde_derive;
+#[macro_use]
+extern crate serde_derive;
 
-extern crate dreammaker as dm;
 extern crate dmm_tools;
+extern crate dreammaker as dm;
 
-use std::collections::HashMap;
+use foldhash::{HashMap, HashMapExt, HashSet};
 use std::fmt;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::RwLock;
-use std::collections::HashSet;
 
+use clap::{Parser, Subcommand};
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
-use structopt::StructOpt;
 
 use dm::objtree::ObjectTree;
 use dmm_tools::*;
-
-use ahash::RandomState;
 
 // ----------------------------------------------------------------------------
 // Main driver
 
 fn main() {
-    let opt = Opt::from_clap(&Opt::clap()
-        .long_version(concat!(
-            env!("CARGO_PKG_VERSION"), "\n",
-            include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")),
-        ).trim_end())
-        .get_matches());
-
+    let opt = Opt::parse();
     let mut context = Context::default();
-    context.dm_context.set_print_severity(Some(dm::Severity::Error));
+    context
+        .dm_context
+        .set_print_severity(Some(dm::Severity::Error));
     rayon::ThreadPoolBuilder::new()
         .num_threads(opt.jobs)
         .build_global()
@@ -80,9 +74,9 @@ impl Context {
         let pp = match dm::preprocessor::Preprocessor::new(&self.dm_context, environment) {
             Ok(pp) => pp,
             Err(e) => {
-                eprintln!("i/o error opening environment:\n{}", e);
+                eprintln!("i/o error opening environment:\n{e}");
                 std::process::exit(1);
-            }
+            },
         };
         let indents = dm::indents::IndentProcessor::new(&self.dm_context, pp);
         let parser = dm::parser::Parser::new(&self.dm_context, indents);
@@ -90,87 +84,90 @@ impl Context {
     }
 }
 
-#[derive(StructOpt, Debug)]
-#[structopt(name="dmm-tools",
-author="Copyright (C) 2017-2023  Tad Hardesty",
-about="This program comes with ABSOLUTELY NO WARRANTY. This is free software,
+#[derive(Parser, Debug)]
+#[command(
+    name="dmm-tools",
+    version=concat!(
+        env!("CARGO_PKG_VERSION"), "\n",
+        include_str!(concat!(env!("OUT_DIR"), "/build-info.txt"))
+    ),
+    author="Copyright (C) 2017-2025  Tad Hardesty",
+    about="This program comes with ABSOLUTELY NO WARRANTY. This is free software,
 and you are welcome to redistribute it under the conditions of the GNU
-General Public License version 3.")]
+General Public License version 3.",
+)]
 struct Opt {
     /// The environment file to operate under.
-    #[structopt(short="e", long="env")]
+    #[arg(short = 'e', long = "env")]
     environment: Option<String>,
 
-    #[structopt(short="v", long="verbose")]
+    #[arg(short = 'v', long = "verbose")]
     #[allow(dead_code)]
     verbose: bool,
 
     /// Set the number of threads to be used for parallel execution when
     /// possible. A value of 0 will select automatically, and 1 will be serial.
-    #[structopt(long="jobs", default_value="1")]
+    #[arg(long = "jobs", default_value = "1")]
     jobs: usize,
 
-    #[structopt(subcommand)]
+    #[command(subcommand)]
     command: Command,
 }
 
 // ----------------------------------------------------------------------------
 // Subcommands
 
-#[derive(StructOpt, Debug)]
+#[derive(Subcommand, Debug)]
 enum Command {
     /// Show information about the render-pass list.
-    #[structopt(name = "list-passes")]
+    #[command(name = "list-passes")]
     ListPasses {
         /// Output as JSON.
-        #[structopt(short="j", long="json")]
+        #[arg(short = 'j', long = "json")]
         json: bool,
     },
     /// Build minimaps of the specified maps.
-    #[structopt(name = "minimap")]
+    #[command(name = "minimap")]
     Minimap {
         /// The output directory.
-        #[structopt(short="o", default_value="data/minimaps")]
+        #[arg(short = 'o', default_value = "data/minimaps")]
         output: String,
 
         /// Set the minimum x,y or x,y,z coordinate to act upon (1-indexed, inclusive).
-        #[structopt(long="min")]
+        #[arg(long = "min")]
         min: Option<CoordArg>,
 
         /// Set the maximum x,y or x,y,z coordinate to act upon (1-indexed, inclusive).
-        #[structopt(long="max")]
+        #[arg(long = "max")]
         max: Option<CoordArg>,
 
         /// Enable render-passes, or "all" to only exclude those passed to --disable.
-        #[structopt(long="enable", default_value="")]
+        #[arg(long = "enable", default_value = "")]
         enable: String,
 
         /// Disable render-passes, or "all" to only use those passed to --enable.
-        #[structopt(long="disable", default_value="")]
+        #[arg(long = "disable", default_value = "")]
         disable: String,
 
         /// Run output through pngcrush automatically. Requires pngcrush.
-        #[structopt(long="pngcrush")]
+        #[arg(long = "pngcrush")]
         pngcrush: bool,
 
         /// Run output through optipng automatically. Requires optipng.
-        #[structopt(long="optipng")]
+        #[arg(long = "optipng")]
         optipng: bool,
 
         /// The list of maps to process.
         files: Vec<String>,
     },
     /// List the differing coordinates between two maps.
-    #[structopt(name="diff-maps")]
-    DiffMaps {
-        left: String,
-        right: String,
-    },
+    #[command(name = "diff-maps")]
+    DiffMaps { left: String, right: String },
     /// Show metadata information about the map.
-    #[structopt(name="map-info")]
+    #[command(name = "map-info")]
     MapInfo {
         /// Output as JSON.
-        #[structopt(short="j", long="json")]
+        #[arg(short = 'j', long = "json")]
         json: bool,
 
         /// The list of maps to show info on.
@@ -194,9 +191,17 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
 
                 let mut report = Vec::new();
                 for &render_passes::RenderPassInfo {
-                    name, desc, default, new: _,
-                } in render_passes::RENDER_PASSES {
-                    report.push(Pass { name, desc, default });
+                    name,
+                    desc,
+                    default,
+                    new: _,
+                } in render_passes::RENDER_PASSES
+                {
+                    report.push(Pass {
+                        name,
+                        desc,
+                        default,
+                    });
                 }
                 output_json(&report);
             } else {
@@ -219,8 +224,14 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
         },
         // --------------------------------------------------------------------
         Command::Minimap {
-            ref output, min, max, ref enable, ref disable, ref files,
-            pngcrush, optipng,
+            ref output,
+            min,
+            max,
+            ref enable,
+            ref disable,
+            ref files,
+            pngcrush,
+            optipng,
         } => {
             context.objtree(opt);
             if context
@@ -239,9 +250,13 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                 ..
             } = *context;
 
-            let render_passes = &dmm_tools::render_passes::configure(&context.dm_context.config().map_renderer, enable, disable);
+            let render_passes = &dmm_tools::render_passes::configure(
+                &context.dm_context.config().map_renderer,
+                enable,
+                disable,
+            );
             let paths: Vec<&Path> = files.iter().map(|p| p.as_ref()).collect();
-            let errors: RwLock<HashSet<String, RandomState>> = Default::default();
+            let errors: RwLock<HashSet<String>> = Default::default();
 
             let perform_job = move |path: &Path| {
                 let mut filename;
@@ -261,7 +276,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                         eprintln!("Failed to load {}:\n{}", path.display(), e);
                         exit_status.fetch_add(1, Ordering::Relaxed);
                         return;
-                    }
+                    },
                 };
 
                 let (dim_x, dim_y, dim_z) = map.dim_xyz();
@@ -277,7 +292,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                 max.x = clamp(max.x, min.x, dim_x);
                 max.y = clamp(max.y, min.y, dim_y);
                 max.z = clamp(max.z, min.z, dim_z);
-                println!("{}rendering from {} to {}", prefix, min, max);
+                println!("{prefix}rendering from {min} to {max}");
 
                 let do_z_level = |z| {
                     println!("{}generating z={}", prefix, 1 + z);
@@ -291,10 +306,11 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                         render_passes,
                         errors: &errors,
                         bump: &bump,
+                        print_errors: true,
                     };
                     let image = minimap::generate(minimap_context, icon_cache).unwrap();
                     if let Err(e) = std::fs::create_dir_all(output) {
-                        eprintln!("Failed to create output directory {}:\n{}", output, e);
+                        eprintln!("Failed to create output directory {output}:\n{e}");
                         exit_status.fetch_add(1, Ordering::Relaxed);
                         return;
                     }
@@ -304,35 +320,41 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                         path.file_stem().unwrap().to_string_lossy(),
                         1 + z
                     );
-                    println!("{}saving {}", prefix, outfile);
+                    println!("{prefix}saving {outfile}");
                     image.to_file(outfile.as_ref()).unwrap();
                     if pngcrush {
-                        println!("    pngcrush {}", outfile);
-                        let temp = format!("{}.temp", outfile);
-                        assert!(std::process::Command::new("pngcrush")
-                            .arg("-ow")
-                            .arg(&outfile)
-                            .arg(&temp)
-                            .stderr(std::process::Stdio::null())
-                            .status()
-                            .unwrap()
-                            .success(), "pngcrush failed");
+                        println!("    pngcrush {outfile}");
+                        let temp = format!("{outfile}.temp");
+                        assert!(
+                            std::process::Command::new("pngcrush")
+                                .arg("-ow")
+                                .arg(&outfile)
+                                .arg(&temp)
+                                .stderr(std::process::Stdio::null())
+                                .status()
+                                .unwrap()
+                                .success(),
+                            "pngcrush failed"
+                        );
                     }
                     if optipng {
-                        println!("{}optipng {}", prefix, outfile);
-                        assert!(std::process::Command::new("optipng")
-                            .arg(&outfile)
-                            .stderr(std::process::Stdio::null())
-                            .status()
-                            .unwrap()
-                            .success(), "optipng failed");
+                        println!("{prefix}optipng {outfile}");
+                        assert!(
+                            std::process::Command::new("optipng")
+                                .arg(&outfile)
+                                .stderr(std::process::Stdio::null())
+                                .status()
+                                .unwrap()
+                                .success(),
+                            "optipng failed"
+                        );
                     }
                 };
 
                 if parallel {
                     ((min.z - 1)..(max.z)).into_par_iter().for_each(do_z_level);
                 } else {
-                    ((min.z - 1)..(max.z)).into_iter().for_each(do_z_level);
+                    ((min.z - 1)..(max.z)).for_each(do_z_level);
                 }
             };
 
@@ -346,7 +368,8 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
         },
         // --------------------------------------------------------------------
         Command::DiffMaps {
-            ref left, ref right,
+            ref left,
+            ref right,
         } => {
             use std::cmp::min;
 
@@ -360,14 +383,16 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             let left_dims = left_map.dim_xyz();
             let right_dims = right_map.dim_xyz();
             if left_dims != right_dims {
-                println!("    different size: {:?} {:?}", left_dims, right_dims);
+                println!("    different size: {left_dims:?} {right_dims:?}");
             }
 
             for z in 0..min(left_dims.2, right_dims.2) {
                 for y in 0..min(left_dims.1, right_dims.1) {
                     for x in 0..min(left_dims.0, right_dims.0) {
-                        let left_tile = &left_map.dictionary[&left_map.grid[(z, left_dims.1 - y - 1, x)]];
-                        let right_tile = &right_map.dictionary[&right_map.grid[(z, right_dims.1 - y - 1, x)]];
+                        let left_tile =
+                            &left_map.dictionary[&left_map.grid[(z, left_dims.1 - y - 1, x)]];
+                        let right_tile =
+                            &right_map.dictionary[&right_map.grid[(z, right_dims.1 - y - 1, x)]];
                         if left_tile != right_tile {
                             println!("    different tile: ({}, {}, {})", x + 1, y + 1, z + 1);
                         }
@@ -376,9 +401,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             }
         },
         // --------------------------------------------------------------------
-        Command::MapInfo {
-            json, ref files,
-        } => {
+        Command::MapInfo { json, ref files } => {
             if !json {
                 eprintln!("non-JSON output is not yet supported");
             }
@@ -390,15 +413,18 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
                 num_keys: usize,
             }
 
-            let mut report = HashMap::with_hasher(RandomState::default());
+            let mut report = HashMap::new();
             for path in files.iter() {
                 let path = std::path::Path::new(path);
                 let map = dmm::Map::from_file(path).unwrap();
-                report.insert(path, Map {
-                    size: map.dim_xyz(),
-                    key_length: map.key_length(),
-                    num_keys: map.dictionary.len(),
-                });
+                report.insert(
+                    path,
+                    Map {
+                        size: map.dim_xyz(),
+                        key_length: map.key_length(),
+                        num_keys: map.dictionary.len(),
+                    },
+                );
             }
             output_json(&report);
         },
@@ -410,8 +436,7 @@ fn run(opt: &Opt, command: &Command, context: &mut Context) {
             let result = render_many(context, command);
             let stdout = std::io::stdout();
             serde_json::to_writer(stdout.lock(), &result).unwrap();
-        }
-        // --------------------------------------------------------------------
+        },
     }
 }
 
@@ -559,72 +584,93 @@ fn render_many(context: &Context, command: RenderManyCommand) -> RenderManyComma
         ref exit_status,
         ..
     } = *context;
-    let render_passes = &dmm_tools::render_passes::configure_list(&context.dm_context.config().map_renderer, &command.enable, &command.disable);
-    let errors: RwLock<HashSet<String, RandomState>> = Default::default();
+    let render_passes = &dmm_tools::render_passes::configure_list(
+        &context.dm_context.config().map_renderer,
+        &command.enable,
+        &command.disable,
+    );
+    let errors: RwLock<HashSet<String>> = Default::default();
 
     // Prepare output directory.
     let output_directory = command.output_directory;
     if let Err(e) = std::fs::create_dir_all(&output_directory) {
-        eprintln!("failed to create output directory {}:\n{}", output_directory.display(), e);
+        eprintln!(
+            "failed to create output directory {}:\n{}",
+            output_directory.display(),
+            e
+        );
         exit_status.fetch_add(1, Ordering::Relaxed);
         panic!();
     }
 
-
     // Iterate over the maps
-    let result_files: Vec<_> = command.files.into_par_iter().enumerate().map(|(file_idx, file)| {
-        eprintln!("{}: load {}", file_idx, file.path.display());
-        let stem = file.path.file_stem().unwrap().to_string_lossy();
-        let map = dmm::Map::from_file(&file.path).unwrap();  // TODO: error handling
-        let (dim_x, dim_y, dim_z) = map.dim_xyz();
+    let result_files: Vec<_> = command
+        .files
+        .into_par_iter()
+        .enumerate()
+        .map(|(file_idx, file)| {
+            eprintln!("{}: load {}", file_idx, file.path.display());
+            let stem = file.path.file_stem().unwrap().to_string_lossy();
+            let map = dmm::Map::from_file(&file.path).unwrap(); // TODO: error handling
+            let (dim_x, dim_y, dim_z) = map.dim_xyz();
 
-        // If `chunks` was not specified, render one chunk per z-level.
-        let chunks = file.chunks.unwrap_or_else(|| (1..=dim_z).map(|z| RenderManyChunk {
-            z,
-            min_x: None,
-            min_y: None,
-            max_x: None,
-            max_y: None,
-        }).collect());
+            // If `chunks` was not specified, render one chunk per z-level.
+            let chunks = file.chunks.unwrap_or_else(|| {
+                (1..=dim_z)
+                    .map(|z| RenderManyChunk {
+                        z,
+                        min_x: None,
+                        min_y: None,
+                        max_x: None,
+                        max_y: None,
+                    })
+                    .collect()
+            });
 
-        let result_chunks: Vec<_> = chunks.into_par_iter().enumerate().map(|(chunk_idx, chunk)| {
-            eprintln!("{}/{}: render {:?}", file_idx, chunk_idx, chunk);
+            let result_chunks: Vec<_> = chunks
+                .into_par_iter()
+                .enumerate()
+                .map(|(chunk_idx, chunk)| {
+                    eprintln!("{file_idx}/{chunk_idx}: render {chunk:?}");
 
-            // Render the image.
-            let bump = Default::default();
-            let minimap_context = minimap::Context {
-                objtree,
-                map: &map,
-                level: map.z_level(chunk.z - 1),
-                // Default and clamp to [1, max].
-                min: (chunk.min_x.unwrap_or(1).max(1) - 1, chunk.min_y.unwrap_or(1).max(1) - 1),
-                max: (chunk.max_x.unwrap_or(dim_x).min(dim_x) - 1, chunk.max_y.unwrap_or(dim_y).min(dim_y) - 1),
-                render_passes,
-                errors: &errors,
-                bump: &bump,
-            };
-            let image = minimap::generate(minimap_context, icon_cache).unwrap();  // TODO: error handling
+                    // Render the image.
+                    let bump = Default::default();
+                    let minimap_context = minimap::Context {
+                        objtree,
+                        map: &map,
+                        level: map.z_level(chunk.z - 1),
+                        // Default and clamp to [1, max].
+                        min: (
+                            chunk.min_x.unwrap_or(1).max(1) - 1,
+                            chunk.min_y.unwrap_or(1).max(1) - 1,
+                        ),
+                        max: (
+                            chunk.max_x.unwrap_or(dim_x).min(dim_x) - 1,
+                            chunk.max_y.unwrap_or(dim_y).min(dim_y) - 1,
+                        ),
+                        render_passes,
+                        errors: &errors,
+                        bump: &bump,
+                        print_errors: true,
+                    };
+                    let image = minimap::generate(minimap_context, icon_cache).unwrap(); // TODO: error handling
 
-            // Write it to file.
-            let filename = PathBuf::from(format!(
-                "{}_z{}_chunk{}.png",
-                stem,
-                chunk.z,
-                chunk_idx,
-            ));
-            eprintln!("{}/{}: save {}", file_idx, chunk_idx, filename.display());
-            let outfile = output_directory.join(&filename);
-            image.to_file(&outfile).unwrap();  // TODO: error handling
+                    // Write it to file.
+                    let filename =
+                        PathBuf::from(format!("{}_z{}_chunk{}.png", stem, chunk.z, chunk_idx,));
+                    eprintln!("{}/{}: save {}", file_idx, chunk_idx, filename.display());
+                    let outfile = output_directory.join(&filename);
+                    image.to_file(&outfile).unwrap(); // TODO: error handling
 
-            RenderManyChunkResult {
-                filename,
+                    RenderManyChunkResult { filename }
+                })
+                .collect();
+
+            RenderManyFileResult {
+                chunks: result_chunks,
             }
-        }).collect();
-
-        RenderManyFileResult {
-            chunks: result_chunks,
-        }
-    }).collect();
+        })
+        .collect();
 
     RenderManyCommandResult {
         files: result_files,

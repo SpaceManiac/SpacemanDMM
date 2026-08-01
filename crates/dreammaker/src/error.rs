@@ -1,19 +1,21 @@
 //! Error, warning, and other diagnostics handling.
 
-use std::{fmt, error, io};
-use std::path::{PathBuf, Path};
-use std::cell::{RefCell, Ref, RefMut};
-use std::collections::HashMap;
+use foldhash::HashMap;
+use std::cell::{Ref, RefCell, RefMut};
+use std::path::{Path, PathBuf};
+use std::{error, fmt, io};
 
-use ahash::RandomState;
-
-use termcolor::{ColorSpec, Color};
+use get_size::GetSize;
+use get_size_derive::GetSize;
+use termcolor::{Color, ColorSpec};
 
 use crate::config::Config;
 
 /// An identifier referring to a loaded file.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct FileId(u16);
+
+impl GetSize for FileId {}
 
 const FILEID_BUILTINS: FileId = FileId(0x0000);
 const FILEID_MIN: FileId = FileId(0x0001);
@@ -32,7 +34,7 @@ pub struct FileList {
     /// The list of loaded files.
     files: RefCell<Vec<PathBuf>>,
     /// Reverse mapping from paths to file numbers.
-    reverse_files: RefCell<HashMap<PathBuf, FileId, RandomState>>,
+    reverse_files: RefCell<HashMap<PathBuf, FileId>>,
 }
 
 /// A diagnostics context, tracking loaded files and any observed errors.
@@ -42,7 +44,7 @@ pub struct Context {
     /// A list of errors, warnings, and other diagnostics generated.
     errors: RefCell<Vec<DMError>>,
     /// Warning config
-    config: RefCell<Config>,
+    config: Config,
     print_severity: Option<Severity>,
 
     io_time: std::cell::Cell<std::time::Duration>,
@@ -71,16 +73,16 @@ impl FileList {
     }
 
     /// Look up a file path by its index returned from `register_file`.
-    pub fn get_path(&self, file: FileId) -> PathBuf {
+    pub fn get_path(&self, file: FileId) -> Ref<'_, Path> {
+        let files = self.files.borrow();
         if file == FILEID_BUILTINS {
-            return "(builtins)".into();
+            return Ref::map(files, |_| Path::new("(builtins)"));
         }
         let idx = (file.0 - FILEID_MIN.0) as usize;
-        let files = self.files.borrow();
         if idx > files.len() {
-            "(unknown)".into()
+            Ref::map(files, |_| Path::new("(unknown)"))
         } else {
-            files[idx].to_owned()
+            Ref::map(files, |files| files[idx].as_path())
         }
     }
 
@@ -106,7 +108,7 @@ impl Context {
     }
 
     /// Look up a file path by its index returned from `register_file`.
-    pub fn file_path(&self, file: FileId) -> PathBuf {
+    pub fn file_path(&self, file: FileId) -> Ref<'_, Path> {
         self.files.get_path(file)
     }
 
@@ -122,28 +124,31 @@ impl Context {
     // ------------------------------------------------------------------------
     // Configuration
 
-    pub fn force_config(&self, toml: &Path) {
+    pub fn force_config(&mut self, toml: &Path) {
         match Config::read_toml(toml) {
-            Ok(config) => *self.config.borrow_mut() = config,
+            Ok(config) => self.config = config,
             Err(io_error) => {
                 let file = self.register_file(toml);
                 let (line, column) = io_error.line_col().unwrap_or((1, 1));
-                DMError::new(Location { file, line, column }, "Error reading configuration file")
-                    .with_boxed_cause(io_error.into_boxed_error())
-                    .register(self);
-            }
+                DMError::new(
+                    Location { file, line, column },
+                    "Error reading configuration file",
+                )
+                .with_boxed_cause(io_error.into_boxed_error())
+                .register(self);
+            },
         }
     }
 
-    pub fn autodetect_config(&self, dme: &Path) {
+    pub fn autodetect_config(&mut self, dme: &Path) {
         let toml = dme.parent().unwrap().join("SpacemanDMM.toml");
         if toml.exists() {
             self.force_config(&toml);
         }
     }
 
-    pub fn config(&self) -> Ref<Config> {
-        self.config.borrow()
+    pub fn config(&self) -> &Config {
+        &self.config
     }
 
     /// Set a severity at and above which errors will be printed immediately.
@@ -171,12 +176,12 @@ impl Context {
 
     /// Push an error or other diagnostic to the context.
     pub fn register_error(&self, error: DMError) {
-        guard!(let Some(error) = self.config.borrow().set_configured_severity(error) else {
-            return // errortype is disabled
-        });
+        let Some(error) = self.config.set_configured_severity(error) else {
+            return; // errortype is disabled
+        };
         // ignore errors with severity above configured level
-        if !self.config.borrow().registerable_error(&error) {
-            return
+        if !self.config.registerable_error(&error) {
+            return;
         }
         if let Some(print_severity) = self.print_severity {
             if error.severity() <= print_severity {
@@ -189,18 +194,22 @@ impl Context {
     }
 
     /// Access the list of diagnostics generated so far.
-    pub fn errors(&self) -> Ref<[DMError]> {
+    pub fn errors(&self) -> Ref<'_, [DMError]> {
         Ref::map(self.errors.borrow(), |x| &**x)
     }
 
     /// Mutably access the diagnostics list. Dangerous.
     #[doc(hidden)]
-    pub fn errors_mut(&self) -> RefMut<Vec<DMError>> {
+    pub fn errors_mut(&self) -> RefMut<'_, Vec<DMError>> {
         self.errors.borrow_mut()
     }
 
     /// Pretty-print a `DMError` to the given output.
-    pub fn pretty_print_error<W: termcolor::WriteColor>(&self, w: &mut W, error: &DMError) -> io::Result<()> {
+    pub fn pretty_print_error<W: termcolor::WriteColor>(
+        &self,
+        w: &mut W,
+        error: &DMError,
+    ) -> io::Result<()> {
         writeln!(
             w,
             "{}, line {}, column {}:",
@@ -216,14 +225,12 @@ impl Context {
 
         for note in error.notes().iter() {
             if note.location == error.location {
-                writeln!(w, "- {}", note.description, )?;
+                writeln!(w, "- {}", note.description,)?;
             } else if note.location.file == error.location.file {
                 writeln!(
                     w,
                     "- {}:{}: {}",
-                    note.location.line,
-                    note.location.column,
-                    note.description,
+                    note.location.line, note.location.column, note.description,
                 )?;
             } else {
                 writeln!(
@@ -239,7 +246,11 @@ impl Context {
         writeln!(w)
     }
 
-    pub fn pretty_print_error_nocolor<W: io::Write>(&self, w: &mut W, error: &DMError) -> io::Result<()> {
+    pub fn pretty_print_error_nocolor<W: io::Write>(
+        &self,
+        w: &mut W,
+        error: &DMError,
+    ) -> io::Result<()> {
         self.pretty_print_error(&mut termcolor::NoColor::new(w), error)
     }
 
@@ -253,7 +264,8 @@ impl Context {
         let mut printed = false;
         for err in errors.iter() {
             if err.severity <= min_severity {
-                self.pretty_print_error(stderr, err).expect("error writing to stderr");
+                self.pretty_print_error(stderr, err)
+                    .expect("error writing to stderr");
                 printed = true;
             }
         }
@@ -273,7 +285,7 @@ impl Context {
 // Location handling
 
 /// File, line, and column information for an error.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Default)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Default, GetSize)]
 pub struct Location {
     /// The index into the file table.
     pub file: FileId,
@@ -284,8 +296,12 @@ pub struct Location {
 }
 
 impl Location {
-    pub fn builtins() -> Location {
-        Location { file: FILEID_BUILTINS, line: 1, column: 1 }
+    pub const fn builtins() -> Location {
+        Location {
+            file: FILEID_BUILTINS,
+            line: 1,
+            column: 1,
+        }
     }
 
     /// Pack this Location for use in `u64`-keyed structures.
@@ -340,8 +356,9 @@ pub(crate) trait HasLocation {
 // Error handling
 
 /// The possible diagnostic severities available.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Default)]
 pub enum Severity {
+    #[default]
     Error = 1,
     Warning = 2,
     Info = 3,
@@ -352,18 +369,18 @@ impl Severity {
     fn style(self) -> ColorSpec {
         let mut spec = ColorSpec::new();
         match self {
-            Severity::Error => { spec.set_fg(Some(Color::Red)); }
-            Severity::Warning => { spec.set_fg(Some(Color::Yellow)); }
-            Severity::Info => { spec.set_fg(Some(Color::White)).set_intense(true); }
+            Severity::Error => {
+                spec.set_fg(Some(Color::Red));
+            },
+            Severity::Warning => {
+                spec.set_fg(Some(Color::Yellow));
+            },
+            Severity::Info => {
+                spec.set_fg(Some(Color::White)).set_intense(true);
+            },
             Severity::Hint => {},
         }
         spec
-    }
-}
-
-impl Default for Severity {
-    fn default() -> Severity {
-        Severity::Error
     }
 }
 
@@ -379,8 +396,9 @@ impl fmt::Display for Severity {
 }
 
 /// A component which generated a diagnostic, when separation is desired.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
 pub enum Component {
+    #[default]
     Unspecified,
     DreamChecker,
 }
@@ -391,12 +409,6 @@ impl Component {
             Component::Unspecified => None,
             Component::DreamChecker => Some("dreamchecker"),
         }
-    }
-}
-
-impl Default for Component {
-    fn default() -> Component {
-        Component::Unspecified
     }
 }
 
@@ -524,17 +536,19 @@ impl DMError {
 impl fmt::Display for DMError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // Like `pretty_print_error` above, but without filename information.
-        write!(f, "{}:{}: {}: {}", self.location.line, self.location.column, self.severity, self.description)?;
+        write!(
+            f,
+            "{}:{}: {}: {}",
+            self.location.line, self.location.column, self.severity, self.description
+        )?;
         for note in self.notes.iter() {
             if note.location == self.location {
-                write!(f, "\n- {}", note.description, )?;
+                write!(f, "\n- {}", note.description,)?;
             } else {
                 write!(
                     f,
                     "\n- {}:{}: {}",
-                    note.location.line,
-                    note.location.column,
-                    note.description,
+                    note.location.line, note.location.column, note.description,
                 )?;
             }
         }
@@ -560,7 +574,7 @@ impl Clone for DMError {
             component: self.component,
             description: self.description.clone(),
             notes: self.notes.clone(),
-            cause: None,  // not trivially cloneable
+            cause: None, // not trivially cloneable
             errortype: self.errortype,
         }
     }

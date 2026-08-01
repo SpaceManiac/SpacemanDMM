@@ -3,11 +3,11 @@
 
 use std::rc::Rc;
 
-use interval_tree::{IntervalTree, RangePairIter, RangeInclusive, range};
 use crate::docs::DocCollection;
+use interval_tree::{range, IntervalTree, RangeInclusive, RangePairIter};
 
-use super::Location;
 use super::ast::*;
+use super::Location;
 
 pub type Iter<'a> = RangePairIter<'a, Location, Annotation>;
 
@@ -27,9 +27,9 @@ pub enum Annotation {
     UnscopedVar(Ident),
     ScopedCall(Vec<Ident>, Ident),
     ScopedVar(Vec<Ident>, Ident),
-    ParentCall,  // ..
-    ReturnVal,  // .
-    InSequence(usize),  // where in TreePath or TypePath is this ident
+    ParentCall,        // ..
+    ReturnVal,         // .
+    InSequence(usize), // where in TreePath or TypePath is this ident
 
     // a macro is called here, which is defined at this location
     MacroDefinition(Ident),
@@ -43,12 +43,12 @@ pub enum Annotation {
     Resource(std::path::PathBuf),
 
     // error annotations, mostly for autocompletion
-    ScopedMissingIdent(Vec<Ident>),  // when a . is followed by a non-ident
+    ScopedMissingIdent(Vec<Ident>), // when a . is followed by a non-ident
     IncompleteTypePath(TypePath, PathOp),
     IncompleteTreePath(bool, Vec<Ident>),
 
-    ProcArguments(Vec<Ident>, String, usize),  // Vec empty for unscoped call
-    ProcArgument(usize),  // where in the prog arguments we are
+    ProcArguments(Vec<Ident>, Ident, usize), // Vec empty for unscoped call
+    ProcArgument(usize),                     // where in the prog arguments we are
 }
 
 #[derive(Debug)]
@@ -68,7 +68,8 @@ impl Default for AnnotationTree {
 
 impl AnnotationTree {
     pub fn insert(&mut self, place: std::ops::Range<Location>, value: Annotation) {
-        self.tree.insert(range(place.start, place.end.pred()), value);
+        self.tree
+            .insert(range(place.start, place.end.pred()), value);
         self.len += 1;
     }
 
@@ -85,19 +86,19 @@ impl AnnotationTree {
         self.len == 0
     }
 
-    pub fn iter(&self) -> Iter {
+    pub fn iter(&self) -> Iter<'_> {
         self.tree.iter()
     }
 
-    pub fn get_location(&self, loc: Location) -> Iter {
+    pub fn get_location(&self, loc: Location) -> Iter<'_> {
         self.tree.range(range(loc.pred(), loc))
     }
 
-    pub fn get_range(&self, place: std::ops::Range<Location>) -> Iter {
+    pub fn get_range(&self, place: std::ops::Range<Location>) -> Iter<'_> {
         self.tree.range(range(place.start, place.end.pred()))
     }
 
-    pub fn get_range_raw(&self, place: RangeInclusive<Location>) -> Iter {
+    pub fn get_range_raw(&self, place: RangeInclusive<Location>) -> Iter<'_> {
         self.tree.range(place)
     }
 }

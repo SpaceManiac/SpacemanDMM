@@ -30,13 +30,16 @@ fn in_ambig() {
         return
     if((i ? 1 : 2) in list())
         return
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, IN_AMBIG_ERRORS);
 }
 
-pub const TERNARY_IN_AMBIG_ERRORS: &[(u32, u16, &str)] = &[
-    (2, 14, "got \'in\', expected one of: operator, field access, \':\'"),
-];
+pub const TERNARY_IN_AMBIG_ERRORS: &[(u32, u16, &str)] = &[(
+    2,
+    14,
+    "got \'in\', expected one of: operator, field access, \':\'",
+)];
 
 #[test]
 fn ambig_in_ternary_cond() {
@@ -44,13 +47,16 @@ fn ambig_in_ternary_cond() {
 /proc/test()
     if(i ? 1 in list() : 2)
         return
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, TERNARY_IN_AMBIG_ERRORS);
 }
 
-pub const OP_OVERLOAD_ERRORS: &[(u32, u16, &str)] = &[
-    (6, 6, "Attempting operator++ on a /mob which does not overload operator++"),
-];
+pub const OP_OVERLOAD_ERRORS: &[(u32, u16, &str)] = &[(
+    6,
+    6,
+    "Attempting operator++ on a /mob which does not overload operator++",
+)];
 
 #[test]
 fn operator_overload() {
@@ -63,7 +69,8 @@ fn operator_overload() {
     M++
     var/mob/test/T = new
     T++
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, OP_OVERLOAD_ERRORS);
 }
 
@@ -87,6 +94,7 @@ fn ambigous_not_bitwise() {
         return
     if (1++ & 1)
         return
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, NOT_AMBIG_BITWISE_ERRORS);
 }

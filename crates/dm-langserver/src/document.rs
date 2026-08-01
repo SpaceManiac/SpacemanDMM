@@ -2,29 +2,32 @@
 //! language server protocol.
 #![allow(dead_code)]
 
-use std::io::{self, Read, BufRead};
+use foldhash::HashMap;
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::io::{self, BufRead, Read};
 use std::rc::Rc;
 use url::Url;
 
-use lsp_types::{TextDocumentItem, TextDocumentIdentifier,
-    VersionedTextDocumentIdentifier, TextDocumentContentChangeEvent};
+use lsp_types::{
+    TextDocumentContentChangeEvent, TextDocumentIdentifier, TextDocumentItem,
+    VersionedTextDocumentIdentifier,
+};
 
 use super::{invalid_request, url_to_path};
-
-use ahash::RandomState;
 
 /// A store for the contents of currently-open documents, with appropriate
 /// fallback for documents which are not currently open.
 #[derive(Default)]
 pub struct DocumentStore {
-    map: HashMap<Url, Document, RandomState>,
+    map: HashMap<Url, Document>,
 }
 
 impl DocumentStore {
     pub fn open(&mut self, doc: TextDocumentItem) -> Result<(), jsonrpc::Error> {
-        match self.map.insert(doc.uri.clone(), Document::new(doc.version, doc.text)) {
+        match self
+            .map
+            .insert(doc.uri.clone(), Document::new(doc.version, doc.text))
+        {
             None => Ok(()),
             Some(_) => Err(invalid_request(format!("opened twice: {}", doc.uri))),
         }
@@ -33,7 +36,10 @@ impl DocumentStore {
     pub fn close(&mut self, id: TextDocumentIdentifier) -> Result<Url, jsonrpc::Error> {
         match self.map.remove(&id.uri) {
             Some(_) => Ok(id.uri),
-            None => Err(invalid_request(format!("cannot close non-opened: {}", id.uri))),
+            None => Err(invalid_request(format!(
+                "cannot close non-opened: {}",
+                id.uri
+            ))),
         }
     }
 
@@ -46,12 +52,22 @@ impl DocumentStore {
 
         let document = match self.map.get_mut(&doc_id.uri) {
             Some(doc) => doc,
-            None => return Err(invalid_request(format!("cannot change non-opened: {}", doc_id.uri))),
+            None => {
+                return Err(invalid_request(format!(
+                    "cannot change non-opened: {}",
+                    doc_id.uri
+                )))
+            },
         };
 
         if new_version < document.version {
-            eprintln!("new_version: {} < document_version: {}", new_version, document.version);
-            return Err(invalid_request("document version numbers shouldn't go backwards"));
+            eprintln!(
+                "new_version: {} < document_version: {}",
+                new_version, document.version
+            );
+            return Err(invalid_request(
+                "document version numbers shouldn't go backwards",
+            ));
         }
         document.version = new_version;
 
@@ -77,8 +93,10 @@ impl DocumentStore {
             return Ok(Cow::Owned(text));
         }
 
-        Err(io::Error::new(io::ErrorKind::NotFound,
-            format!("URL not opened and schema is not 'file': {}", url)))
+        Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("URL not opened and schema is not 'file': {url}"),
+        ))
     }
 
     pub fn read(&self, url: &Url) -> io::Result<Box<dyn io::Read>> {
@@ -91,8 +109,10 @@ impl DocumentStore {
             return Ok(Box::new(file) as Box<dyn io::Read>);
         }
 
-        Err(io::Error::new(io::ErrorKind::NotFound,
-            format!("URL not opened and schema is not 'file': {}", url)))
+        Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("URL not opened and schema is not 'file': {url}"),
+        ))
     }
 }
 
@@ -119,7 +139,7 @@ impl Document {
                 // considered to be the full content of the document."
                 self.text = Rc::new(change.text);
                 return Ok(());
-            }
+            },
         };
 
         let start_pos = total_offset(&self.text, range.start.line, range.start.character)?;
@@ -152,7 +172,7 @@ fn total_offset(text: &str, line: u32, mut character: u32) -> Result<usize, json
         if let Some(ch) = chars.next() {
             character = character.saturating_sub(ch.len_utf16() as u32);
         } else {
-            break
+            break;
         }
     }
     Ok(text.len() - chars.as_str().len())
@@ -179,10 +199,10 @@ pub fn offset_to_position(text: &str, offset: usize) -> lsp_types::Position {
 }
 
 pub fn get_range(text: &str, range: lsp_types::Range) -> Result<&str, jsonrpc::Error> {
-    Ok(&text[
-        total_offset(text, range.start.line, range.start.character)?
-        ..total_offset(text, range.end.line, range.end.character)?
-    ])
+    Ok(
+        &text[total_offset(text, range.start.line, range.start.character)?
+            ..total_offset(text, range.end.line, range.end.character)?],
+    )
 }
 
 pub fn find_word(text: &str, offset: usize) -> &str {
@@ -193,7 +213,7 @@ pub fn find_word(text: &str, offset: usize) -> &str {
         while !text.is_char_boundary(start_next) {
             start_next -= 1;
         }
-        if !text[start_next..start].chars().next().map_or(false, is_ident) {
+        if !text[start_next..start].chars().next().is_some_and(is_ident) {
             break;
         }
         start = start_next;
@@ -206,7 +226,7 @@ pub fn find_word(text: &str, offset: usize) -> &str {
         while !text.is_char_boundary(end_next) {
             end_next += 1;
         }
-        if !text[end..end_next].chars().next().map_or(false, is_ident) {
+        if !text[end..end_next].chars().next().is_some_and(is_ident) {
             break;
         }
         end = end_next;
@@ -220,7 +240,7 @@ pub fn find_word(text: &str, offset: usize) -> &str {
 }
 
 fn is_ident(ch: char) -> bool {
-    ('0'..='9').contains(&ch) || ('a'..='z').contains(&ch) || ('A'..='Z').contains(&ch) || ch == '_'
+    ch.is_ascii_digit() || ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch == '_'
 }
 
 /// An adaptation of `std::io::Cursor` which works on an `Rc<String>`, which

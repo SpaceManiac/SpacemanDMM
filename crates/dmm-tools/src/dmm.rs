@@ -1,16 +1,16 @@
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::fmt;
 use std::fs::File;
 use std::io;
-use std::fmt;
+use std::path::Path;
 
-use ndarray::{self, Array3, Axis};
+use foldhash::fast::RandomState;
 use indexmap::IndexMap;
-use ahash::RandomState;
+use ndarray::{self, Array3, Axis};
 
-use dm::DMError;
-use dm::constants::Constant;
 use crate::dmi::Dir;
+use dm::constants::Constant;
+use dm::DMError;
 
 mod read;
 mod save_tgm;
@@ -28,7 +28,7 @@ pub struct Key(KeyType);
 /// An XY coordinate pair in the BYOND coordinate system.
 ///
 /// The lower-left corner is `{ x: 1, y: 1 }`.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Coord2 {
     pub x: i32,
     pub y: i32,
@@ -42,17 +42,34 @@ impl Coord2 {
 
     #[inline]
     pub fn z(self, z: i32) -> Coord3 {
-        Coord3 { x: self.x, y: self.y, z }
+        Coord3 {
+            x: self.x,
+            y: self.y,
+            z,
+        }
     }
 
     fn to_raw(self, (dim_y, dim_x): (usize, usize)) -> (usize, usize) {
-        assert!(self.x >= 1 && self.x <= dim_x as i32, "x={} not in [1, {}]", self.x, dim_x);
-        assert!(self.y >= 1 && self.y <= dim_y as i32, "y={} not in [1, {}]", self.y, dim_y);
+        assert!(
+            self.x >= 1 && self.x <= dim_x as i32,
+            "x={} not in [1, {}]",
+            self.x,
+            dim_x
+        );
+        assert!(
+            self.y >= 1 && self.y <= dim_y as i32,
+            "y={} not in [1, {}]",
+            self.y,
+            dim_y
+        );
         (dim_y - self.y as usize, self.x as usize - 1)
     }
 
     fn from_raw((y, x): (usize, usize), (dim_y, _dim_x): (usize, usize)) -> Coord2 {
-        Coord2 { x: x as i32 + 1, y: (dim_y - y) as i32 }
+        Coord2 {
+            x: x as i32 + 1,
+            y: (dim_y - y) as i32,
+        }
     }
 }
 
@@ -61,7 +78,10 @@ impl std::ops::Add<Dir> for Coord2 {
 
     fn add(self, rhs: Dir) -> Coord2 {
         let (x, y) = rhs.offset();
-        Coord2 { x: self.x + x, y: self.y + y }
+        Coord2 {
+            x: self.x + x,
+            y: self.y + y,
+        }
     }
 }
 
@@ -71,7 +91,7 @@ impl std::ops::Add<Dir> for Coord2 {
 ///
 /// Note that BYOND by default considers "UP" to be Z+1, but this does not
 /// necessarily apply to a given game's logic.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Coord3 {
     pub x: i32,
     pub y: i32,
@@ -86,19 +106,48 @@ impl Coord3 {
 
     #[inline]
     pub fn xy(self) -> Coord2 {
-        Coord2 { x: self.x, y: self.y }
+        Coord2 {
+            x: self.x,
+            y: self.y,
+        }
     }
 
     fn to_raw(self, (dim_z, dim_y, dim_x): (usize, usize, usize)) -> (usize, usize, usize) {
-        assert!(self.x >= 1 && self.x <= dim_x as i32, "x={} not in [1, {}]", self.x, dim_x);
-        assert!(self.y >= 1 && self.y <= dim_y as i32, "y={} not in [1, {}]", self.y, dim_y);
-        assert!(self.z >= 1 && self.z <= dim_z as i32, "y={} not in [1, {}]", self.z, dim_z);
-        (self.z as usize - 1, dim_y - self.y as usize, self.x as usize - 1)
+        assert!(
+            self.x >= 1 && self.x <= dim_x as i32,
+            "x={} not in [1, {}]",
+            self.x,
+            dim_x
+        );
+        assert!(
+            self.y >= 1 && self.y <= dim_y as i32,
+            "y={} not in [1, {}]",
+            self.y,
+            dim_y
+        );
+        assert!(
+            self.z >= 1 && self.z <= dim_z as i32,
+            "y={} not in [1, {}]",
+            self.z,
+            dim_z
+        );
+        (
+            self.z as usize - 1,
+            dim_y - self.y as usize,
+            self.x as usize - 1,
+        )
     }
 
     #[allow(dead_code)]
-    fn from_raw((z, y, x): (usize, usize, usize), (_dim_z, dim_y, _dim_x): (usize, usize, usize)) -> Coord3 {
-        Coord3 { x: x as i32 + 1, y: (dim_y - y) as i32, z: z as i32 + 1 }
+    fn from_raw(
+        (z, y, x): (usize, usize, usize),
+        (_dim_z, dim_y, _dim_x): (usize, usize, usize),
+    ) -> Coord3 {
+        Coord3 {
+            x: x as i32 + 1,
+            y: (dim_y - y) as i32,
+            z: z as i32 + 1,
+        }
     }
 }
 
@@ -146,15 +195,15 @@ impl std::hash::Hash for Prefab {
 
 impl Map {
     pub fn new(x: usize, y: usize, z: usize, turf: String, area: String) -> Map {
-        assert!(x > 0 && y > 0 && z > 0, "({}, {}, {})", x, y, z);
+        assert!(x > 0 && y > 0 && z > 0, "({x}, {y}, {z})");
 
         let mut dictionary = BTreeMap::new();
-        dictionary.insert(Key(0), vec![
-            Prefab::from_path(turf),
-            Prefab::from_path(area),
-        ]);
+        dictionary.insert(
+            Key(0),
+            vec![Prefab::from_path(turf), Prefab::from_path(area)],
+        );
 
-        let grid = Array3::default((z, y, x));  // default = 0
+        let grid = Array3::default((z, y, x)); // default = 0
 
         Map {
             key_length: 1,
@@ -181,9 +230,12 @@ impl Map {
         Ok(map)
     }
 
+    pub fn to_writer(&self, writer: &mut impl std::io::Write) -> io::Result<()> {
+        save_tgm::save_tgm(self, writer)
+    }
+
     pub fn to_file(&self, path: &Path) -> io::Result<()> {
-        // DMM saver later
-        save_tgm::save_tgm(self, File::create(path)?)
+        self.to_writer(&mut File::create(path)?)
     }
 
     pub fn key_length(&self) -> u8 {
@@ -191,12 +243,15 @@ impl Map {
     }
 
     pub fn adjust_key_length(&mut self) {
-        if self.dictionary.len() > 2704 {
-            self.key_length = 3;
-        } else if self.dictionary.len() > 52 {
-            self.key_length = 2;
-        } else {
-            self.key_length = 1;
+        if let Some(max_key) = self.dictionary.keys().max() {
+            let max_key = max_key.0;
+            if max_key >= 2704 {
+                self.key_length = 3;
+            } else if max_key >= 52 {
+                self.key_length = 2;
+            } else {
+                self.key_length = 1;
+            }
         }
     }
 
@@ -212,12 +267,17 @@ impl Map {
     }
 
     #[inline]
-    pub fn z_level(&self, z: usize) -> ZLevel {
-        ZLevel { grid: self.grid.index_axis(Axis(0), z) }
+    pub fn z_level(&self, z: usize) -> ZLevel<'_> {
+        ZLevel {
+            grid: self.grid.index_axis(Axis(0), z),
+        }
     }
 
-    pub fn iter_levels(&self) -> impl Iterator<Item=(i32, ZLevel<'_>)> + '_ {
-        self.grid.axis_iter(Axis(0)).enumerate().map(|(i, grid)| (i as i32 + 1, ZLevel { grid }))
+    pub fn iter_levels(&self) -> impl Iterator<Item = (i32, ZLevel<'_>)> + '_ {
+        self.grid
+            .axis_iter(Axis(0))
+            .enumerate()
+            .map(|(i, grid)| (i as i32 + 1, ZLevel { grid }))
     }
 
     #[inline]
@@ -237,9 +297,11 @@ impl std::ops::Index<Coord3> for Map {
 
 impl<'a> ZLevel<'a> {
     /// Iterate over the z-level in row-major order starting at the top-left.
-    pub fn iter_top_down(&self) -> impl Iterator<Item=(Coord2, Key)> + '_ {
+    pub fn iter_top_down(&self) -> impl Iterator<Item = (Coord2, Key)> + '_ {
         let dim = self.grid.dim();
-        self.grid.indexed_iter().map(move |(c, k)| (Coord2::from_raw(c, dim), *k))
+        self.grid
+            .indexed_iter()
+            .map(move |(c, k)| (Coord2::from_raw(c, dim), *k))
     }
 }
 
@@ -275,7 +337,7 @@ impl fmt::Display for Prefab {
                 if f.alternate() {
                     f.write_str("\n    ")?;
                 }
-                write!(f, "{} = {}", k, v)?;
+                write!(f, "{k} = {v}")?;
             }
             if f.alternate() {
                 f.write_str("\n")?;
@@ -300,7 +362,7 @@ impl fmt::Display for Coord3 {
 
 impl Key {
     pub fn invalid() -> Key {
-        Key(KeyType::max_value())
+        Key(KeyType::MAX)
     }
 
     pub fn next(self) -> Key {
@@ -333,9 +395,9 @@ impl fmt::Display for FormatKey {
 const BASE_52: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 fn base_52_reverse(ch: u8) -> Result<KeyType, String> {
-    if (b'a'..=b'z').contains(&ch) {
+    if ch.is_ascii_lowercase() {
         Ok(ch as KeyType - b'a' as KeyType)
-    } else if (b'A'..=b'Z').contains(&ch) {
+    } else if ch.is_ascii_uppercase() {
         Ok(26 + ch as KeyType - b'A' as KeyType)
     } else {
         Err(format!("Not a base-52 character: {:?}", ch as char))
@@ -343,8 +405,11 @@ fn base_52_reverse(ch: u8) -> Result<KeyType, String> {
 }
 
 fn advance_key(current: KeyType, next_digit: KeyType) -> Result<KeyType, &'static str> {
-    current.checked_mul(52).and_then(|b| b.checked_add(next_digit)).ok_or({
-        // https://www.byond.com/forum/?post=2340796#comment23770802
-        "Key overflow, max is 'ymo'"
-    })
+    current
+        .checked_mul(52)
+        .and_then(|b| b.checked_add(next_digit))
+        .ok_or({
+            // https://www.byond.com/forum/?post=2340796#comment23770802
+            "Key overflow, max is 'ymo'"
+        })
 }

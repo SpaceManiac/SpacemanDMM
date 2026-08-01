@@ -31,6 +31,7 @@ Raised by DreamChecker:
 * `override_missing_keyword_arg` - Raised when proc overrides are missing keyword arguments
 * `must_not_override` - `SpacemanDMM_should_not_override` directive
 * `must_call_parent` - `SpacemanDMM_should_call_parent` directive
+* `must_not_call_parent` - `SpacemanDMM_should_not_call_parent` directive
 * `final_var` - `SpacemanDMM_final` var type
 * `private_proc` - `SpacemanDMM_private_proc` directive
 * `protected_proc` - `SpacemanDMM_protected_proc` directive
@@ -50,6 +51,7 @@ Raised by DreamChecker:
 * `control_condition_static` - Raised on a control condition such as `if`/`while` having a static condition such as `1` or `"string"`
 * `if_condition_determinate` - Raised on if condition being always true or always false
 * `loop_condition_determinate` - Raised on loop condition such as in `for` being always true or always false
+* `improper_index` - Raised on accessing a non list with []
 
 Raised by Lexer:
 

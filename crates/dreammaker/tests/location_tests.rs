@@ -4,7 +4,7 @@ use dm::lexer::*;
 
 #[test]
 fn simple_location_test() {
-    let code = r##"
+    let code = r#"
 #define islist(thing) istype(thing, /list)
 
 /datum/globals
@@ -15,10 +15,12 @@ fn simple_location_test() {
         world.log <<  new/   obj()
 
 /var/foo = bar
-"##.trim();
+"#
+    .trim();
 
     let context = Default::default();
-    let located_tokens: Vec<_> = Lexer::new(&context, Default::default(), code.as_bytes()).collect();
+    let located_tokens: Vec<_> =
+        Lexer::new(&context, Default::default(), code.as_bytes()).collect();
     context.assert_success();
 
     assert_eq!(located_tokens[0].location.line, 1);
@@ -26,23 +28,30 @@ fn simple_location_test() {
 
     println!("---- lexer ----");
     for token in located_tokens.iter() {
-        println!("{}:{}: {:?}", token.location.line, token.location.column, token.token);
+        println!(
+            "{}:{}: {:?}",
+            token.location.line, token.location.column, token.token
+        );
     }
 
     let reconstructed = reconstruct(&located_tokens, false);
     if reconstructed.trim() != code {
-        println!("{}", reconstructed);
+        println!("{reconstructed}");
         panic!("Some lines differed");
     }
 
     println!("---- indent processor ----");
-    let indented_tokens: Vec<_> = dm::indents::IndentProcessor::new(&context, located_tokens).collect();
+    let indented_tokens: Vec<_> =
+        dm::indents::IndentProcessor::new(&context, located_tokens).collect();
     context.assert_success();
     for token in indented_tokens.iter() {
-        println!("{}:{}: {:?}", token.location.line, token.location.column, token.token);
+        println!(
+            "{}:{}: {:?}",
+            token.location.line, token.location.column, token.token
+        );
     }
     let reconstructed = reconstruct(&indented_tokens, true);
-    println!("{}", reconstructed);
+    println!("{reconstructed}");
 }
 
 fn reconstruct(tokens: &[LocatedToken], iffy: bool) -> String {
@@ -74,7 +83,7 @@ fn reconstruct(tokens: &[LocatedToken], iffy: bool) -> String {
         write!(this_line, "{}", token.token).unwrap();
     }
     for each in reconstructed.iter_mut() {
-        if !each.ends_with("\n") {
+        if !each.ends_with('\n') {
             each.push('\n');
         }
     }

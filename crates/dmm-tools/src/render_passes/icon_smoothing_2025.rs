@@ -1,8 +1,7 @@
-//! Port of icon smoothing subsystem as of 2020.
+//! Port of icon smoothing subsystem as of 2025.
 //!
-//! https://github.com/tgstation/tgstation/pull/52864
-//! followed by
-//! https://github.com/tgstation/tgstation/pull/53906
+//! Based off of the [`icon_smoothing_2020`](crate::render_passes::icon_smoothing_2020) subsystem,
+//! followed by https://github.com/tgstation/tgstation/pull/90002
 
 use crate::dmi::Dir;
 use crate::minimap::{Atom, GetVar, Neighborhood, Sprite};
@@ -21,10 +20,8 @@ const SOUTHEAST_JUNCTION: i32 = 1 << 5;
 const SOUTHWEST_JUNCTION: i32 = 1 << 6;
 const NORTHWEST_JUNCTION: i32 = 1 << 7;
 
-/// Smoothing system in where adjacencies are calculated and used to build an image by mounting each corner at runtime.
-const SMOOTH_CORNERS: i32 = 1 << 0;
 /// Smoothing system in where adjacencies are calculated and used to select a pre-baked icon_state, encoded by bitmasking.
-const SMOOTH_BITMASK: i32 = 1 << 1;
+const SMOOTH_BITMASK: i32 = 1 << 0;
 /// Atom has diagonal corners, with underlays under them.
 const SMOOTH_DIAGONAL_CORNERS: i32 = 1 << 2;
 /// Atom will smooth with the borders of the map.
@@ -67,15 +64,7 @@ impl RenderPass for IconSmoothing {
                 .get_var("smoothing_flags", objtree)
                 .to_int()
                 .unwrap_or(0);
-        if smooth_flags & SMOOTH_CORNERS != 0 {
-            let adjacencies = calculate_adjacencies(objtree, neighborhood, atom, smooth_flags);
-            if smooth_flags & SMOOTH_DIAGONAL_CORNERS != 0 {
-                diagonal_smooth(output, objtree, bump, neighborhood, atom, adjacencies);
-            } else {
-                cardinal_smooth(output, objtree, bump, atom, adjacencies);
-            }
-            false
-        } else if smooth_flags & SMOOTH_BITMASK != 0 {
+        if smooth_flags & SMOOTH_BITMASK != 0 {
             let adjacencies = calculate_adjacencies(objtree, neighborhood, atom, smooth_flags);
             bitmask_smooth(
                 output,
@@ -182,118 +171,6 @@ fn find_type_in_direction(
     false
 }
 
-fn cardinal_smooth<'a>(
-    output: &mut Vec<Sprite<'a>>,
-    objtree: &'a ObjectTree,
-    bump: &'a bumpalo::Bump,
-    source: &Atom<'a>,
-    adjacencies: i32,
-) {
-    for &(what, f1, n1, f2, n2, f3) in &[
-        (
-            "1",
-            NORTH_JUNCTION,
-            "n",
-            WEST_JUNCTION,
-            "w",
-            NORTHWEST_JUNCTION,
-        ),
-        (
-            "2",
-            NORTH_JUNCTION,
-            "n",
-            EAST_JUNCTION,
-            "e",
-            NORTHEAST_JUNCTION,
-        ),
-        (
-            "3",
-            SOUTH_JUNCTION,
-            "s",
-            WEST_JUNCTION,
-            "w",
-            SOUTHWEST_JUNCTION,
-        ),
-        (
-            "4",
-            SOUTH_JUNCTION,
-            "s",
-            EAST_JUNCTION,
-            "e",
-            SOUTHEAST_JUNCTION,
-        ),
-    ] {
-        let name = if (adjacencies & f1 != 0) && (adjacencies & f2 != 0) {
-            if (adjacencies & f3) != 0 {
-                bumpalo::format!(in bump, "{}-f", what)
-            } else {
-                bumpalo::format!(in bump, "{}-{}{}", what, n1, n2)
-            }
-        } else if adjacencies & f1 != 0 {
-            bumpalo::format!(in bump, "{}-{}", what, n1)
-        } else if adjacencies & f2 != 0 {
-            bumpalo::format!(in bump, "{}-{}", what, n2)
-        } else {
-            bumpalo::format!(in bump, "{}-i", what)
-        };
-
-        let mut sprite = Sprite {
-            icon_state: name.into_bump_str(),
-            ..source.sprite
-        };
-        if let Some(icon) = source.get_var("smooth_icon", objtree).as_path_str() {
-            sprite.icon = icon;
-        }
-        output.push(sprite);
-    }
-}
-
-fn diagonal_smooth<'a>(
-    output: &mut Vec<Sprite<'a>>,
-    objtree: &'a ObjectTree,
-    bump: &'a bumpalo::Bump,
-    neighborhood: &Neighborhood<'a, '_>,
-    source: &Atom<'a>,
-    adjacencies: i32,
-) {
-    let presets = if adjacencies == NORTH_JUNCTION | WEST_JUNCTION {
-        ["d-se", "d-se-0"]
-    } else if adjacencies == NORTH_JUNCTION | EAST_JUNCTION {
-        ["d-sw", "d-sw-0"]
-    } else if adjacencies == SOUTH_JUNCTION | WEST_JUNCTION {
-        ["d-ne", "d-ne-0"]
-    } else if adjacencies == SOUTH_JUNCTION | EAST_JUNCTION {
-        ["d-nw", "d-nw-0"]
-    } else if adjacencies == NORTH_JUNCTION | WEST_JUNCTION | NORTHWEST_JUNCTION {
-        ["d-se", "d-se-1"]
-    } else if adjacencies == NORTH_JUNCTION | EAST_JUNCTION | NORTHEAST_JUNCTION {
-        ["d-sw", "d-sw-1"]
-    } else if adjacencies == SOUTH_JUNCTION | WEST_JUNCTION | SOUTHWEST_JUNCTION {
-        ["d-ne", "d-ne-1"]
-    } else if adjacencies == SOUTH_JUNCTION | EAST_JUNCTION | SOUTHEAST_JUNCTION {
-        ["d-nw", "d-nw-1"]
-    } else {
-        return cardinal_smooth(output, objtree, bump, source, adjacencies);
-    };
-
-    // turf underneath
-    if source.istype("/turf/closed/wall/") {
-        diagonal_underlay(output, objtree, neighborhood, source, adjacencies);
-    }
-
-    // the diagonal overlay
-    for &each in presets.iter() {
-        let mut copy = Sprite {
-            icon_state: each,
-            ..source.sprite
-        };
-        if let Some(icon) = source.get_var("smooth_icon", objtree).as_path_str() {
-            copy.icon = icon;
-        }
-        output.push(copy);
-    }
-}
-
 fn diagonal_underlay<'a>(
     output: &mut Vec<Sprite<'a>>,
     objtree: &'a ObjectTree,
@@ -381,6 +258,11 @@ fn bitmask_smooth<'a>(
     {
         diagonal_underlay(output, objtree, neighborhood, source, smoothing_junction);
         diagonal = "-d";
+    }
+
+    // if it has post_init_icon_state, that means it has a pre-generated icon
+    if !source.get_var("post_init_icon_state", objtree).is_null() {
+        return true;
     }
 
     let base_icon_state = source

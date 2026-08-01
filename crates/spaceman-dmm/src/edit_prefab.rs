@@ -1,16 +1,16 @@
-use imgui::*;
+use crate::editor::{Environment, GREEN, RED};
 use dmm_tools::dmm::Prefab;
-use crate::{Environment, GREEN_TEXT, RED_TEXT};
+use imgui::*;
 
 pub struct EditPrefab {
-    filter: ImString,
+    filter: String,
     fab: Prefab,
 }
 
 impl EditPrefab {
     pub fn new(fab: Prefab) -> EditPrefab {
         EditPrefab {
-            filter: ImString::with_capacity(128),
+            filter: String::with_capacity(128),
             fab,
         }
     }
@@ -24,9 +24,9 @@ impl EditPrefab {
     }
 
     pub fn menu(&mut self, ui: &Ui) {
-        ui.menu(im_str!("Filter..."), true, || {
-            ui.input_text(im_str!(""), &mut self.filter).build();
-            if MenuItem::new(im_str!("Clear")).build(ui) {
+        ui.menu("Filter...", || {
+            ui.input_text("##filter", &mut self.filter).build();
+            if ui.menu_item_config("Clear").build() {
                 self.filter.clear();
             }
         });
@@ -67,39 +67,39 @@ impl EditPrefab {
 
         // show the instance variables - everything which is
         // actually set is right at the top
-        ui.text(im_str!("Instance variables ({})", fab.vars.len()));
+        ui.text(format!("Instance variables ({})", fab.vars.len()));
         let mut remove = std::collections::HashSet::new();
         for (name, value) in fab.vars.iter() {
-            if !name.contains(filter.to_str()) {
+            if !name.contains(filter.as_str()) {
                 continue;
             }
             // TODO: red instead of green if invalid var
             {
-                let style = ui.push_style_colors(GREEN_TEXT);
-                ui.text(&im_str!("  {}", name));
-                style.pop(ui);
+                let style = ui.push_style_color(StyleColor::Text, GREEN);
+                ui.text(format!("  {}", name));
+                style.pop();
             }
-            ui.same_line(offset);
-            if ui.small_button(&im_str!("X##editprefab_remove_{}", name)) {
+            ui.same_line_with_spacing(offset, 0.);
+            if ui.small_button(format!("X##editprefab_remove_{}", name)) {
                 remove.insert(name.to_owned());
             }
             if ui.is_item_hovered() {
                 ui.tooltip_text("Reset");
             }
-            ui.same_line(0.);
-            ui.text(im_str!("{}", value));
+            ui.same_line();
+            ui.text(format!("{}", value));
         }
         for key in remove {
-            fab.vars.remove(&key);
+            fab.vars.shift_remove(&key);
         }
 
         // show the red path on error
         if red_paths {
             ui.separator();
             {
-                let style = ui.push_style_colors(RED_TEXT);
-                ui.text(im_str!("{}", &fab.path));
-                style.pop(ui);
+                let style = ui.push_style_color(StyleColor::Text, RED);
+                ui.text(&fab.path);
+                style.pop();
             }
         }
 
@@ -107,63 +107,98 @@ impl EditPrefab {
         let mut search_ty = ty;
         while let Some(search) = search_ty {
             ui.separator();
-            ui.text(im_str!("{}", &search.path));
+            ui.text(&search.path);
 
-            for (name, var) in search.vars.iter() {
-                if !name.contains(filter.to_str()) {
+            let mut vars: Vec<_> = search
+                .vars
+                .iter()
+                .filter(|v| !UNMODIFIABLE_VARS.contains(&v.0.as_str()))
+                .collect();
+            vars.sort_by(|a, b| a.0.cmp(&b.0));
+            for (name, var) in vars {
+                if !name.contains(filter.as_str()) {
                     continue;
                 }
                 if let Some(decl) = var.declaration.as_ref() {
-                    let mut prefix = " ";
-                    if !decl.var_type.is_normal() {
-                        if !extra_vars {
-                            continue;
-                        }
-                        prefix = "-";
-                    }
-
-                    let instance_value = self.fab.vars.get(name);
-
-                    if instance_value.is_some() {
-                        let style = ui.push_style_colors(GREEN_TEXT);
-                        ui.text(im_str!("{} {}", prefix, name));
-                        style.pop(ui);
+                    let var_type = decl.var_type.flags.to_string();
+                    if var_type.is_empty() {
+                        ui.text("  ");
+                    } else if !extra_vars {
+                        continue;
                     } else {
-                        ui.text(im_str!("{} {}", prefix, name));
+                        ui.text("- ");
+                        if ui.is_item_hovered() {
+                            ui.tooltip_text(&var_type);
+                        }
                     }
+                    ui.same_line_with_spacing(0., 0.);
 
-                    if prefix == "-" && ui.is_item_hovered() {
-                        ui.tooltip_text("/tmp, /static, or /const");
+                    let instance_value = self.fab.vars.get(name.as_str());
+                    if instance_value.is_some() {
+                        let style = ui.push_style_color(StyleColor::Text, GREEN);
+                        ui.text(name);
+                        style.pop();
+                    } else {
+                        ui.text(name);
                     }
 
                     // search_ty is seeded with ty and must be Some to get here
-                    let original_value = ty.unwrap().get_value(name).and_then(|v| v.constant.as_ref());
+                    let original_value = ty
+                        .unwrap()
+                        .get_value(name)
+                        .and_then(|v| v.constant.as_ref());
                     if let Some(c) = instance_value {
-                        ui.same_line(offset);
-                        let style = ui.push_style_colors(GREEN_TEXT);
-                        ui.text(im_str!(" {}    ", c));
-                        style.pop(ui);
+                        ui.same_line_with_spacing(offset, 0.);
+                        let style = ui.push_style_color(StyleColor::Text, GREEN);
+                        ui.text(format!(" {}    ", c));
+                        style.pop();
                         if ui.is_item_hovered() {
                             if let Some(c) = original_value {
-                                ui.tooltip_text(im_str!("Was: {}", c));
+                                ui.tooltip_text(format!("Was: {}", c));
                             }
                         }
                     } else if let Some(c) = original_value {
-                        ui.same_line(offset);
-                        ui.text(im_str!(" {}    ", c));
+                        ui.same_line_with_spacing(offset, 0.);
+                        ui.text(format!(" {}    ", c));
                         if ui.is_item_hovered() {
                             ui.set_mouse_cursor(Some(MouseCursor::TextInput));
                             ui.tooltip_text("Click to edit");
                             if ui.is_mouse_clicked(MouseButton::Left) {
                                 ui.set_scroll_y(0.);
-                                self.fab.vars.insert(name.clone(), c.clone());
+                                self.fab.vars.insert(name.to_string(), c.clone());
                             }
                         }
                     }
                 }
             }
 
-            search_ty = search.parent_type();
+            search_ty = search.parent_type_without_root();
         }
     }
 }
+
+// DreamMaker never lets you modify these vars, so we won't either.
+const UNMODIFIABLE_VARS: &[&str] = &[
+    "appearance",
+    "bounds",
+    "loc",
+    "locs",
+    "maptext_height",
+    "maptext_width",
+    "maptext_x",
+    "maptext_y",
+    "maptext",
+    "parent_type",
+    "particles",
+    "pixloc",
+    "render_source",
+    "render_target",
+    "type",
+    "vars",
+    "verbs",
+    "vis_contents",
+    "vis_locs",
+    "x",
+    "y",
+    "z",
+];

@@ -1,11 +1,9 @@
-
 extern crate dreamchecker as dc;
 
 use dc::test_helpers::*;
 
-pub const TRUE_SUB_ERRORS: &[(u32, u16, &str)] = &[
-    (4, 18, "proc never calls parent, required by /mob/proc/test"),
-];
+pub const TRUE_SUB_ERRORS: &[(u32, u16, &str)] =
+    &[(4, 18, "proc never calls parent, required by /mob/proc/test")];
 
 #[test]
 fn true_substitution() {
@@ -15,7 +13,8 @@ fn true_substitution() {
 
 /mob/subtype/test()
     return
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, TRUE_SUB_ERRORS);
 }
 
@@ -29,7 +28,8 @@ fn call_parent() {
     return
 /mob/anothertype/test()
     ..()
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, TRUE_SUB_ERRORS);
 }
 
@@ -42,13 +42,13 @@ fn call_parent_disable() {
 /mob/subtype/test()
     set SpacemanDMM_should_call_parent = 0
     return
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, NO_ERRORS);
 }
 
-pub const NO_OVERRIDE_ERRORS: &[(u32, u16, &str)] = &[
-    (4, 18, "proc overrides parent, prohibited by /mob/proc/test"),
-];
+pub const NO_OVERRIDE_ERRORS: &[(u32, u16, &str)] =
+    &[(4, 18, "proc overrides parent, prohibited by /mob/proc/test")];
 
 #[test]
 fn no_override() {
@@ -58,7 +58,21 @@ fn no_override() {
 
 /mob/subtype/test()
     return
-"##.trim();
+"##
+    .trim();
+    check_errors_match(code, NO_OVERRIDE_ERRORS);
+}
+
+#[test]
+fn final_proc() {
+    let code = r##"
+/mob/proc/final/test()
+    return
+
+/mob/subtype/test()
+    return
+"##
+    .trim();
     check_errors_match(code, NO_OVERRIDE_ERRORS);
 }
 
@@ -76,7 +90,22 @@ fn no_override_disable() {
 /mob/subtype/test()
     set SpacemanDMM_should_not_override = 0
     return
-"##.trim();
+"##
+    .trim();
+    check_errors_match(code, NO_OVERRIDE_DISABLE_ERRORS);
+}
+
+#[test]
+fn final_proc_intermix() {
+    let code = r##"
+/mob/proc/final/test()
+    return
+
+/mob/subtype/test()
+    set SpacemanDMM_should_not_override = 0
+    return
+"##
+    .trim();
     check_errors_match(code, NO_OVERRIDE_DISABLE_ERRORS);
 }
 
@@ -89,13 +118,12 @@ fn can_be_redefined() {
 
 /mob/test()
     return
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, NO_ERRORS);
 }
 
-pub const NO_CAN_BE_REDEFINED_ERRORS: &[(u32, u16, &str)] = &[
-    (4, 10, "redefining proc /mob/test"),
-];
+pub const NO_CAN_BE_REDEFINED_ERRORS: &[(u32, u16, &str)] = &[(4, 10, "redefining proc /mob/test")];
 
 #[test]
 fn no_can_be_redefined() {
@@ -105,6 +133,69 @@ fn no_can_be_redefined() {
 
 /mob/test()
     return
-"##.trim();
+"##
+    .trim();
     check_errors_match(code, NO_CAN_BE_REDEFINED_ERRORS);
+}
+
+pub const NO_CALL_PARENT_ERRORS: &[(u32, u16, &str)] =
+    &[(4, 18, "proc calls parent, prohibited by /mob/proc/test")];
+
+#[test]
+fn should_not_call_parent() {
+    let code = r##"
+/mob/proc/test()
+    set SpacemanDMM_should_not_call_parent = 1
+
+/mob/subtype/test()
+    return ..()
+"##
+    .trim();
+    check_errors_match(code, NO_CALL_PARENT_ERRORS);
+}
+
+#[test]
+fn should_not_call_parent_override() {
+    let code = r##"
+/mob/proc/test()
+    set SpacemanDMM_should_not_call_parent = 1
+
+/mob/subtype/test()
+    set SpacemanDMM_should_not_call_parent = 0
+    return ..()
+"##
+    .trim();
+    check_errors_match(code, NO_ERRORS);
+}
+
+#[test]
+fn should_not_call_parent_grandchild() {
+    let code = r##"
+/mob/proc/test()
+    set SpacemanDMM_should_not_call_parent = 1
+
+/mob/subtype/test()
+    return 1
+
+/mob/subtype/grandchild/test()
+    return ..()
+"##
+    .trim();
+    check_errors_match(code, NO_ERRORS);
+}
+
+pub const NO_CALL_PARENT_GAP_ERRORS: &[(u32, u16, &str)] =
+    &[(4, 29, "proc calls parent, prohibited by /mob/proc/test")];
+
+#[test]
+fn should_not_call_parent_grandchild_gap() {
+    let code = r##"
+/mob/proc/test()
+    set SpacemanDMM_should_not_call_parent = 1
+
+/mob/subtype/grandchild/test()
+    return ..()
+"##
+    .trim();
+    check_errors_match(code, NO_CALL_PARENT_GAP_ERRORS);
 }

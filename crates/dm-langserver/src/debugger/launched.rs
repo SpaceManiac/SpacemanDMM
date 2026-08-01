@@ -2,6 +2,7 @@
 #![allow(unsafe_code)]
 
 use super::SequenceNumber;
+use foldhash::HashMap;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 
@@ -30,24 +31,26 @@ pub struct Launched {
 pub enum EngineParams {
     Extools {
         port: u16,
-        dll: Option<std::path::PathBuf>
+        dll: Option<std::path::PathBuf>,
     },
     Auxtools {
         port: u16,
-        dll: Option<std::path::PathBuf>
-    }
+        dll: Option<std::path::PathBuf>,
+    },
 }
 
 impl Launched {
     pub fn new(
         seq: Arc<SequenceNumber>,
         dreamseeker_exe: &str,
+        env: Option<&HashMap<String, String>>,
         dmb: &str,
         params: Option<EngineParams>,
     ) -> std::io::Result<Launched> {
         let mut command = Command::new(dreamseeker_exe);
 
-        #[cfg(unix)] {
+        #[cfg(unix)]
+        {
             if let Some(parent) = std::path::Path::new(dreamseeker_exe).parent() {
                 command.env("LD_LIBRARY_PATH", parent);
             }
@@ -60,6 +63,10 @@ impl Launched {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
+        if let Some(env) = env {
+            command.envs(env);
+        }
+
         match params {
             Some(EngineParams::Extools { port, dll }) => {
                 command.env("EXTOOLS_MODE", "LAUNCHED");
@@ -67,7 +74,7 @@ impl Launched {
                 if let Some(dll) = dll {
                     command.env("EXTOOLS_DLL", dll);
                 }
-            }
+            },
 
             Some(EngineParams::Auxtools { port, dll }) => {
                 command.env("AUXTOOLS_DEBUG_MODE", "LAUNCHED");
@@ -75,7 +82,7 @@ impl Launched {
                 if let Some(dll) = dll {
                     command.env("AUXTOOLS_DEBUG_DLL", dll);
                 }
-            }
+            },
 
             None => (),
         }
@@ -134,12 +141,12 @@ impl Launched {
                     true => Ok(()),
                     false => Err(std::io::Error::last_os_error()),
                 }
-            }
+            },
             State::Exited => Ok(()),
             _other => {
                 debug_output!(in self.seq, "[launched] kill no-op in state {:?}", _other);
                 Ok(())
-            }
+            },
         }
     }
 
@@ -149,18 +156,24 @@ impl Launched {
             State::Active => {
                 output!(in self.seq, "[launched] Detaching from child process...");
                 *state = State::Detached;
-            }
+            },
             _other => {
                 debug_output!(in self.seq, "[launched] detach no-op in state {:?}", _other);
-            }
+            },
         }
     }
 }
 
-fn pipe_output<R: std::io::Read + Send + 'static>(seq: Arc<SequenceNumber>, keyword: &'static str, stream: Option<R>) -> std::io::Result<()> {
-    guard!(let Some(stream2) = stream else { return Ok(()); });
+fn pipe_output<R: std::io::Read + Send + 'static>(
+    seq: Arc<SequenceNumber>,
+    keyword: &'static str,
+    stream: Option<R>,
+) -> std::io::Result<()> {
+    let Some(stream2) = stream else {
+        return Ok(());
+    };
     std::thread::Builder::new()
-        .name(format!("launched debuggee {} relay", keyword))
+        .name(format!("launched debuggee {keyword} relay"))
         .spawn(move || {
             use std::io::BufRead;
 
@@ -176,15 +189,15 @@ fn pipe_output<R: std::io::Read + Send + 'static>(seq: Arc<SequenceNumber>, keyw
                             category: Some(keyword.to_owned()),
                             ..Default::default()
                         });
-                    }
+                    },
                     Err(e) => {
                         seq.issue_event(dap_types::OutputEvent {
-                            output: format!("[launched {}] {}", keyword, e),
+                            output: format!("[launched {keyword}] {e}"),
                             category: Some("console".to_owned()),
                             ..Default::default()
                         });
                         break;
-                    }
+                    },
                 }
             }
         })?;

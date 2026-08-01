@@ -17,10 +17,7 @@ fn floating_point_rgb() {
 
 #[test]
 fn rgb_base() {
-    assert_eq!(
-        eval("rgb(0, 255, 0)").unwrap(),
-        Constant::string("#00ff00"),
-    );
+    assert_eq!(eval("rgb(0, 255, 0)").unwrap(), Constant::string("#00ff00"),);
     assert_eq!(
         eval("rgb(50, 50, 50)").unwrap(),
         Constant::string("#323232"),
@@ -93,7 +90,6 @@ fn rgb_hsl() {
     );
 }
 
-
 #[test]
 fn rgb_hcy() {
     assert_eq!(
@@ -108,5 +104,13 @@ fn rgb_hcy() {
     assert_eq!(
         eval("rgb(360, 0, 0, space=3)").unwrap(),
         Constant::string("#000000"),
+    );
+}
+
+#[test]
+fn no_fexists_outside_preproc() {
+    assert_eq!(
+        eval("fexists()").unwrap_err().description(),
+        "non-constant function call: fexists",
     );
 }

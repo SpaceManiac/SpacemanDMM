@@ -9,8 +9,7 @@ fn main() {
     let env = dm::detect_environment_default()
         .expect("error detecting .dme")
         .expect("no .dme found");
-    let pp = dm::preprocessor::Preprocessor::new(&context, env)
-        .expect("i/o error opening .dme");
+    let pp = dm::preprocessor::Preprocessor::new(&context, env).expect("i/o error opening .dme");
     let indents = dm::indents::IndentProcessor::new(&context, pp);
     let mut parser = dm::parser::Parser::new(&context, indents);
     parser.enable_procs();

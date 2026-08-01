@@ -1,6 +1,7 @@
-use std::collections::HashSet;
-use crate::{UiExt, EditPrefab, RetainMut};
 use super::*;
+use crate::edit_prefab::EditPrefab;
+use crate::editor::UiExt;
+use std::collections::HashSet;
 
 /// The standard placement tool.
 #[derive(Default)]
@@ -29,49 +30,52 @@ impl PaletteEntry {
 impl ToolBehavior for Place {
     fn settings(&mut self, ui: &Ui, env: &Environment, ctx: &mut IconCtx) {
         let mut i = 0;
-        let Place { palette, pal_current, .. } = self;
+        let Place {
+            palette,
+            pal_current,
+            ..
+        } = self;
 
-        let add_popup_id = im_str!("place_tool_add");
+        let add_popup_id = "place_tool_add";
 
         let count = ui.fits_width(34.0);
         palette.retain_mut(|pal| {
             if i % count != 0 {
-                ui.same_line(0.0);
+                ui.same_line();
             }
 
             let mut keep = true;
             ui.tool_icon(
                 i == *pal_current,
                 pal.icon.prepare(Some(env), ctx),
-                &im_str!("{}", pal.fab.path),
+                &pal.fab.path,
+                ctx.renderer,
             );
             if ui.is_item_hovered() {
-                ui.tooltip_text(im_str!("{:#}", pal.fab));
+                ui.tooltip_text(format!("{:#}", pal.fab));
                 if ui.is_mouse_clicked(MouseButton::Left) {
                     *pal_current = i;
-                } else if ui.is_mouse_clicked(MouseButton::Right) {
-                    if pal.edit.is_none() {
-                        pal.edit = Some(EditPrefab::new(pal.fab.clone()));
-                    }
+                } else if ui.is_mouse_clicked(MouseButton::Right) && pal.edit.is_none() {
+                    pal.edit = Some(EditPrefab::new(pal.fab.clone()));
                 }
             }
 
             let mut keep_editor = true;
             if let Some(ref mut edit) = pal.edit {
                 let fab = &mut pal.fab;
-                Window::new(&im_str!("Palette: {}##place/{}", edit.path(), i))
+                ui.window(&format!("Palette: {}##place/{}", edit.path(), i))
                     .opened(&mut keep_editor)
                     .position(ui.io().mouse_pos, Condition::Appearing)
-                    .size([350.0, 500.0], Condition::FirstUseEver)
+                    .size([0.0, 550.0], Condition::Appearing)
                     .horizontal_scrollbar(true)
                     .menu_bar(true)
-                    .build(ui, || {
+                    .build(|| {
                         ui.menu_bar(|| {
-                            if MenuItem::new(im_str!("Apply")).build(ui) {
+                            if ui.menu_item("Apply") {
                                 fab.clone_from(edit.fab());
                             }
                             ui.separator();
-                            if MenuItem::new(im_str!("Remove")).build(ui) {
+                            if ui.menu_item("Remove") {
                                 keep = false;
                             }
                             ui.separator();
@@ -93,13 +97,13 @@ impl ToolBehavior for Place {
         });
 
         if i % count != 0 {
-            ui.same_line(0.0);
+            ui.same_line();
         }
-        if ui.button(im_str!("+"), [34.0, 34.0]) {
+        if ui.button_with_size("+", [34.0, 34.0]) {
             ui.open_popup(add_popup_id);
         }
         if ui.is_item_hovered() {
-            ui.tooltip_text(im_str!("Add"));
+            ui.tooltip_text("Add");
         }
 
         ui.popup(add_popup_id, || {

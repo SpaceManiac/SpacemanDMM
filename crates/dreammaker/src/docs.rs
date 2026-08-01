@@ -2,8 +2,11 @@
 
 use std::fmt;
 
+use get_size::GetSize;
+use get_size_derive::GetSize;
+
 /// A collection of documentation comments targeting the same item.
-#[derive(Default, Clone, Debug, PartialEq)]
+#[derive(Default, Clone, Debug, PartialEq, GetSize)]
 pub struct DocCollection {
     elems: Vec<DocComment>,
     pub builtin_docs: BuiltinDocs,
@@ -16,8 +19,8 @@ impl DocCollection {
     }
 
     /// Combine another collection into this one.
-    pub fn extend(&mut self, collection: DocCollection) {
-        self.elems.extend(collection.elems);
+    pub fn extend(&mut self, collection: impl IntoIterator<Item = DocComment>) {
+        self.elems.extend(collection);
     }
 
     /// Check whether this collection is empty.
@@ -59,8 +62,18 @@ impl DocCollection {
     }
 }
 
+impl IntoIterator for DocCollection {
+    type Item = DocComment;
+
+    type IntoIter = <Vec<DocComment> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.elems.into_iter()
+    }
+}
+
 /// A documentation comment.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, GetSize)]
 pub struct DocComment {
     pub kind: CommentKind,
     pub target: DocTarget,
@@ -81,6 +94,16 @@ impl DocComment {
     fn is_empty(&self) -> bool {
         is_empty(&self.text, self.kind.ignore_char())
     }
+
+    /// Return the 3-character sequence that started this comment.
+    pub fn describe_type(&self) -> &'static str {
+        match (self.kind, self.target) {
+            (CommentKind::Block, DocTarget::FollowingItem) => "/**",
+            (CommentKind::Block, DocTarget::EnclosingItem) => "/*!",
+            (CommentKind::Line, DocTarget::FollowingItem) => "///",
+            (CommentKind::Line, DocTarget::EnclosingItem) => "//!",
+        }
+    }
 }
 
 impl fmt::Display for DocComment {
@@ -88,14 +111,14 @@ impl fmt::Display for DocComment {
         match (self.kind, self.target) {
             (CommentKind::Block, DocTarget::FollowingItem) => write!(f, "/**{}*/", self.text),
             (CommentKind::Block, DocTarget::EnclosingItem) => write!(f, "/*!{}*/", self.text),
-            (CommentKind::Line,  DocTarget::FollowingItem) => write!(f, "///{}", self.text),
-            (CommentKind::Line,  DocTarget::EnclosingItem) => write!(f, "//!{}", self.text),
+            (CommentKind::Line, DocTarget::FollowingItem) => write!(f, "///{}", self.text),
+            (CommentKind::Line, DocTarget::EnclosingItem) => write!(f, "//!{}", self.text),
         }
     }
 }
 
 /// The possible documentation comment kinds.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, GetSize)]
 pub enum CommentKind {
     /// A block `/** */` comment.
     Block,
@@ -126,9 +149,10 @@ fn simplify(out: &mut String, text: &str, ignore_char: char) -> bool {
             continue;
         }
 
-        let this_prefix = &line[..line.len() - line
-            .trim_start_matches(|c: char| c.is_whitespace() || c == ignore_char)
-            .len()];
+        let this_prefix = &line[..line.len()
+            - line
+                .trim_start_matches(|c: char| c.is_whitespace() || c == ignore_char)
+                .len()];
         match prefix {
             None => prefix = Some(this_prefix),
             Some(ref mut prefix) => {
@@ -137,17 +161,21 @@ fn simplify(out: &mut String, text: &str, ignore_char: char) -> bool {
                 loop {
                     no_match = chars.as_str();
                     match chars.next() {
-                        Some(ch) => if Some(ch) != this_chars.next() {
-                            break;
+                        Some(ch) => {
+                            if Some(ch) != this_chars.next() {
+                                break;
+                            }
                         },
                         None => break,
                     }
                 }
                 *prefix = &prefix[..prefix.len() - no_match.len()];
-            }
+            },
         }
 
-        let this_suffix = &line[line.trim_end_matches(|c: char| c.is_whitespace() || c == ignore_char).len()..];
+        let this_suffix = &line[line
+            .trim_end_matches(|c: char| c.is_whitespace() || c == ignore_char)
+            .len()..];
         match suffix {
             None => suffix = Some(this_suffix),
             Some(ref mut suffix) => {
@@ -156,14 +184,16 @@ fn simplify(out: &mut String, text: &str, ignore_char: char) -> bool {
                 loop {
                     no_match = chars.as_str();
                     match chars.next_back() {
-                        Some(ch) => if Some(ch) != this_chars.next_back() {
-                            break;
+                        Some(ch) => {
+                            if Some(ch) != this_chars.next_back() {
+                                break;
+                            }
                         },
                         None => break,
                     }
                 }
                 *suffix = &suffix[no_match.len()..];
-            }
+            },
         }
     }
 
@@ -197,7 +227,7 @@ fn is_empty(text: &str, ignore_char: char) -> bool {
 }
 
 /// The possible items that a documentation comment may target.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, GetSize)]
 pub enum DocTarget {
     /// Starting with `*` or `/`, referring to the following item.
     FollowingItem,
@@ -206,15 +236,10 @@ pub enum DocTarget {
 }
 
 /// Information about where builtin docs can be found.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, GetSize, Default)]
 pub enum BuiltinDocs {
+    #[default]
     None,
     /// A DM reference hash such as "/DM/vars".
     ReferenceHash(&'static str),
-}
-
-impl Default for BuiltinDocs {
-    fn default() -> Self {
-        BuiltinDocs::None
-    }
 }

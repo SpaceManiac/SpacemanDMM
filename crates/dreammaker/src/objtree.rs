@@ -2,14 +2,24 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::mem::size_of;
+use std::ops::Range;
 
+use get_size::GetSize;
+use get_size_derive::GetSize;
+
+use foldhash::fast::RandomState;
 use indexmap::IndexMap;
-use ahash::RandomState;
 
-use super::ast::{Expression, VarType, VarTypeBuilder, VarSuffix, PathOp, Parameter, Block, ProcDeclKind, Ident};
+use crate::heap_size_of_index_map;
+
+use super::ast::{
+    Block, Expression, Ident, Parameter, PathOp, ProcDeclBuilder, ProcDeclKind, ProcFlags,
+    ProcReturnType, VarSuffix, VarType, VarTypeBuilder,
+};
 use super::constants::Constant;
 use super::docs::DocCollection;
-use super::{DMError, Location, Context, Severity};
+use super::{Context, DMError, Location, Severity};
 
 // ----------------------------------------------------------------------------
 // Symbol IDs
@@ -17,6 +27,8 @@ use super::{DMError, Location, Context, Severity};
 /// An identifier referring to a symbol in the object tree.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct SymbolId(u32);
+
+impl GetSize for SymbolId {}
 
 #[derive(Debug)]
 pub struct SymbolIdSource(SymbolId);
@@ -47,14 +59,14 @@ impl SymbolIdSource {
 
 pub type Vars = IndexMap<String, Constant, RandomState>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, GetSize)]
 pub struct VarDeclaration {
     pub var_type: VarType,
     pub location: Location,
     pub id: SymbolId,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, GetSize)]
 pub struct VarValue {
     pub location: Location,
     /// Syntactic value, as specified in the source.
@@ -65,30 +77,37 @@ pub struct VarValue {
     pub docs: DocCollection,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, GetSize)]
 pub struct TypeVar {
     pub value: VarValue,
     pub declaration: Option<VarDeclaration>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, GetSize)]
 pub struct ProcDeclaration {
     pub location: Location,
     pub kind: ProcDeclKind,
+    // todo: tie this into our return type, add support for the funky types
+    pub return_type: ProcReturnType,
+    pub flags: ProcFlags,
     pub id: SymbolId,
-    pub is_private: bool,
-    pub is_protected: bool,
 }
 
-#[derive(Debug, Clone)]
+fn heap_size_of_location_range(_range: &Option<Range<Location>>) -> usize {
+    size_of::<Range<Location>>()
+}
+
+#[derive(Debug, Clone, GetSize)]
 pub struct ProcValue {
     pub location: Location,
     pub parameters: Box<[Parameter]>,
     pub docs: DocCollection,
     pub code: Option<Block>,
+    #[get_size(size_fn = heap_size_of_location_range)]
+    pub body_range: Option<Range<Location>>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default, GetSize)]
 pub struct TypeProc {
     pub value: Vec<ProcValue>,
     pub declaration: Option<ProcDeclaration>,
@@ -104,21 +123,23 @@ impl TypeProc {
 // ----------------------------------------------------------------------------
 // Types
 
-#[derive(Debug)]
+#[derive(Debug, GetSize)]
 pub struct Type {
     pub path: String,
     path_last_slash: usize,
     pub location: Location,
     location_specificity: usize,
     /// Variables which this type has declarations or overrides for.
-    pub vars: IndexMap<String, TypeVar, RandomState>,
+    #[get_size(size_fn = heap_size_of_index_map)]
+    pub vars: IndexMap<Ident, TypeVar, RandomState>,
     /// Procs and verbs which this type has declarations or overrides for.
-    pub procs: IndexMap<String, TypeProc, RandomState>,
+    #[get_size(size_fn = heap_size_of_index_map)]
+    pub procs: IndexMap<Ident, TypeProc, RandomState>,
     parent_path: NodeIndex,
     parent_type: NodeIndex,
     pub docs: DocCollection,
     pub id: SymbolId,
-    children: BTreeMap<String, NodeIndex>,
+    children: BTreeMap<Ident, NodeIndex>,
 }
 
 impl Type {
@@ -160,12 +181,16 @@ impl Type {
     /// Checks whether this type's path is a subpath of the given path.
     #[inline]
     pub fn is_subpath_of(&self, parent: &str) -> bool {
-        subpath(&self.path, parent)
+        ispath(&self.path, parent)
     }
 
     // Used in the constant evaluator which holds an &mut ObjectTree and thus
     // can't be used with TypeRef.
-    pub(crate) fn get_value<'a>(&'a self, name: &str, objtree: &'a ObjectTree) -> Option<&'a VarValue> {
+    pub(crate) fn get_value<'a>(
+        &'a self,
+        name: &str,
+        objtree: &'a ObjectTree,
+    ) -> Option<&'a VarValue> {
         let mut current = Some(self);
         while let Some(ty) = current {
             if let Some(var) = ty.vars.get(name) {
@@ -176,7 +201,11 @@ impl Type {
         None
     }
 
-    pub(crate) fn get_var_declaration<'a>(&'a self, name: &str, objtree: &'a ObjectTree) -> Option<&'a VarDeclaration> {
+    pub(crate) fn get_var_declaration<'a>(
+        &'a self,
+        name: &str,
+        objtree: &'a ObjectTree,
+    ) -> Option<&'a VarDeclaration> {
         let mut current = Some(self);
         while let Some(ty) = current {
             if let Some(var) = ty.vars.get(name) {
@@ -191,9 +220,13 @@ impl Type {
 }
 
 #[inline]
-pub fn subpath(path: &str, parent: &str) -> bool {
-    debug_assert!(path.starts_with('/') && parent.starts_with('/') && parent.ends_with('/'));
-    path == &parent[..parent.len() - 1] || path.starts_with(parent)
+pub fn ispath(path: &str, parent: &str) -> bool {
+    debug_assert!(path.starts_with('/') && parent.starts_with('/'));
+    let parent = parent.trim_end_matches('/');
+    match path.strip_prefix(parent) {
+        Some(rest) => rest.is_empty() || rest.starts_with('/'),
+        None => false,
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -236,7 +269,10 @@ impl<'a> TypeRef<'a> {
     /// Find the parent **type** based on `parent_type` var, or parent path if unspecified.
     pub fn parent_type(&self) -> Option<TypeRef<'a>> {
         let idx = self.parent_type;
-        self.tree.graph.get(idx.index()).map(|_| TypeRef::new(self.tree, idx))
+        self.tree
+            .graph
+            .get(idx.index())
+            .map(|_| TypeRef::new(self.tree, idx))
     }
 
     /// Find the parent type of this without returning root.
@@ -245,17 +281,28 @@ impl<'a> TypeRef<'a> {
         if idx == NodeIndex::new(0) {
             return None;
         }
-        self.tree.graph.get(idx.index()).map(|_| TypeRef::new(self.tree, idx))
+        self.tree
+            .graph
+            .get(idx.index())
+            .map(|_| TypeRef::new(self.tree, idx))
     }
 
     /// Find a child **path** with the given name, if it exists.
     pub fn child(&self, name: &str) -> Option<TypeRef<'a>> {
-        self.children.get(name).map(|&idx| TypeRef::new(self.tree, idx))
+        self.children
+            .get(name)
+            .map(|&idx| TypeRef::new(self.tree, idx))
+    }
+
+    pub fn len_children(&self) -> usize {
+        self.children.len()
     }
 
     /// Iterate over all child **paths**.
-    pub fn children<'b>(&'b self) -> impl Iterator<Item=TypeRef<'a>> + 'b {
-        self.children.values().map(move |&idx| TypeRef::new(self.tree, idx))
+    pub fn children<'b>(&'b self) -> impl Iterator<Item = TypeRef<'a>> + 'b {
+        self.children
+            .values()
+            .map(move |&idx| TypeRef::new(self.tree, idx))
     }
 
     /// Recursively visit this and all child **paths**.
@@ -263,6 +310,24 @@ impl<'a> TypeRef<'a> {
         f(*self);
         for child in self.children() {
             child.recurse(f);
+        }
+    }
+
+    /// Recursively visit this and all child **types**.
+    pub fn recurse_types<F: FnMut(TypeRef<'a>)>(&self, f: &mut F) {
+        f(*self);
+        for child in self.children() {
+            // Exclude children which have a parent_type set to something else.
+            if child.parent_type == self.idx {
+                child.recurse_types(f);
+            }
+        }
+        // Search for all types which have a parent_type set to this type.
+        for &parent_typed_idx in &self.tree.redirected_parent_types {
+            let parent_typed = &self.tree[parent_typed_idx];
+            if parent_typed.parent_type == self.idx {
+                TypeRef::new(self.tree, parent_typed_idx).recurse_types(f);
+            }
         }
     }
 
@@ -275,7 +340,7 @@ impl<'a> TypeRef<'a> {
         }
     }
 
-    pub fn iter_parent_types(&self) -> impl Iterator<Item=TypeRef<'a>> {
+    pub fn iter_parent_types(&self) -> impl Iterator<Item = TypeRef<'a>> {
         struct ParentTypeIter<'a>(Option<TypeRef<'a>>);
         impl<'a> Iterator for ParentTypeIter<'a> {
             type Item = TypeRef<'a>;
@@ -323,7 +388,8 @@ impl<'a> TypeRef<'a> {
                     return Some(child);
                 }
                 for &idx in self.children.values() {
-                    if let Some(child) = TypeRef::new(self.tree, idx).navigate(PathOp::Colon, name) {
+                    if let Some(child) = TypeRef::new(self.tree, idx).navigate(PathOp::Colon, name)
+                    {
                         // Yes, simply returning the first thing that matches
                         // is the correct behavior.
                         return Some(child);
@@ -335,7 +401,10 @@ impl<'a> TypeRef<'a> {
     }
 
     /// Find another type relative to this type.
-    pub fn navigate_path<S: AsRef<str>>(self, pieces: &[(PathOp, S)]) -> Option<NavigatePathResult<'a>> {
+    pub fn navigate_path<S: AsRef<str>>(
+        self,
+        pieces: &[(PathOp, S)],
+    ) -> Option<NavigatePathResult<'a>> {
         let mut next = Some(self);
         if let Some(&(PathOp::Slash, _)) = pieces.first() {
             next = Some(self.tree.root());
@@ -424,7 +493,7 @@ impl<'a> TypeRef<'a> {
         None
     }
 
-    pub fn iter_self_procs(self) -> impl Iterator<Item=ProcRef<'a>> {
+    pub fn iter_self_procs(self) -> impl Iterator<Item = ProcRef<'a>> {
         self.get().procs.iter().flat_map(move |(name, type_proc)| {
             let list = &type_proc.value;
             (0..list.len()).map(move |idx| ProcRef {
@@ -487,14 +556,20 @@ impl<'o> NavigatePathResult<'o> {
     }
 
     pub fn to_path(self) -> Vec<Ident> {
-        let mut path: Vec<Ident> = self.ty().path.split('/').skip(1).map(ToOwned::to_owned).collect();
+        let mut path: Vec<Ident> = self
+            .ty()
+            .path
+            .split('/')
+            .skip(1)
+            .map(Ident::from_nonstatic)
+            .collect();
         match self {
             NavigatePathResult::Type(_) => {},
-            NavigatePathResult::ProcGroup(_, kind) => path.push(kind.to_string()),
+            NavigatePathResult::ProcGroup(_, kind) => path.push(kind.into()),
             NavigatePathResult::ProcPath(proc, kind) => {
-                path.push(kind.to_string());
-                path.push(proc.name().to_owned());
-            }
+                path.push(kind.into());
+                path.push(Ident::from_nonstatic(proc.name()));
+            },
         }
         path
     }
@@ -569,7 +644,23 @@ impl<'a> ProcRef<'a> {
 
     /// Recursively visit this and all public-facing procs which override it.
     pub fn recurse_children<F: FnMut(ProcRef<'a>)>(self, f: &mut F) {
-        self.ty.recurse(&mut move |ty| {
+        self.ty.recurse_types(&mut move |ty| {
+            if let Some(proc) = ty.get().procs.get(self.name) {
+                f(ProcRef {
+                    ty,
+                    list: &proc.value,
+                    name: self.name,
+                    idx: proc.value.len() - 1,
+                });
+            }
+        });
+    }
+
+    /// Recursively visit all procs which override this one,
+    /// bounded to descendants of `src` (the static type of the receiver at
+    /// the call site) rather than the whole subtree below this proc's type.
+    pub fn recurse_children_within<F: FnMut(ProcRef<'a>)>(self, src: TypeRef<'a>, f: &mut F) {
+        src.recurse_types(&mut move |ty| {
             if let Some(proc) = ty.get().procs.get(self.name) {
                 f(ProcRef {
                     ty,
@@ -591,7 +682,14 @@ impl<'a> std::ops::Deref for ProcRef<'a> {
 
 impl<'a> fmt::Debug for ProcRef<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}/proc/{}[{}/{}]", self.ty, self.name, self.idx, self.list.len())
+        write!(
+            f,
+            "{:?}/proc/{}[{}/{}]",
+            self.ty,
+            self.name,
+            self.idx,
+            self.list.len()
+        )
     }
 }
 
@@ -624,10 +722,11 @@ impl<'a> std::hash::Hash for ProcRef<'a> {
 // ----------------------------------------------------------------------------
 // The object tree itself
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, GetSize)]
 pub struct ObjectTree {
     graph: Vec<Type>,
     types: BTreeMap<String, NodeIndex>,
+    redirected_parent_types: Vec<NodeIndex>,
 }
 
 impl ObjectTree {
@@ -640,29 +739,29 @@ impl ObjectTree {
     // ------------------------------------------------------------------------
     // Access
 
-    pub fn node_indices(&self) -> impl Iterator<Item=NodeIndex> {
+    pub fn node_indices(&self) -> impl Iterator<Item = NodeIndex> {
         (0..self.graph.len()).map(NodeIndex::new)
     }
 
-    pub fn iter_types(&self) -> impl Iterator<Item=TypeRef<'_>> + '_ {
+    pub fn iter_types(&self) -> impl Iterator<Item = TypeRef<'_>> + '_ {
         self.node_indices().map(move |idx| TypeRef::new(self, idx))
     }
 
-    pub fn root(&self) -> TypeRef {
+    pub fn root(&self) -> TypeRef<'_> {
         TypeRef::new(self, NodeIndex::new(0))
     }
 
-    pub fn find(&self, path: &str) -> Option<TypeRef> {
+    pub fn find(&self, path: &str) -> Option<TypeRef<'_>> {
         if path.is_empty() {
             return Some(self.root());
         }
         self.types.get(path).map(|&ix| TypeRef::new(self, ix))
     }
 
-    pub fn expect(&self, path: &str) -> TypeRef {
+    pub fn expect(&self, path: &str) -> TypeRef<'_> {
         match self.types.get(path) {
             Some(&ix) => TypeRef::new(self, ix),
-            None => panic!("type not found: {:?}", path),
+            None => panic!("type not found: {path:?}"),
         }
     }
 
@@ -670,7 +769,7 @@ impl ObjectTree {
         self.graph.get(type_.parent_type.index())
     }
 
-    pub fn type_by_path<I>(&self, path: I) -> Option<TypeRef>
+    pub fn type_by_path<I>(&self, path: I) -> Option<TypeRef<'_>>
     where
         I: IntoIterator,
         I::Item: AsRef<str>,
@@ -683,7 +782,7 @@ impl ObjectTree {
         }
     }
 
-    pub fn type_by_path_approx<I>(&self, path: I) -> (bool, TypeRef)
+    pub fn type_by_path_approx<I>(&self, path: I) -> (bool, TypeRef<'_>)
     where
         I: IntoIterator,
         I::Item: AsRef<str>,
@@ -707,7 +806,7 @@ impl ObjectTree {
         (true, TypeRef::new(self, current))
     }
 
-    pub fn type_by_constant(&self, constant: &Constant) -> Option<TypeRef> {
+    pub fn type_by_constant(&self, constant: &Constant) -> Option<TypeRef<'_>> {
         match constant {
             Constant::String(string_path) => self.find(string_path),
             Constant::Prefab(pop) => self.type_by_path(pop.path.iter()),
@@ -737,7 +836,9 @@ impl std::ops::Index<NodeIndex> for ObjectTree {
 
 impl std::ops::IndexMut<NodeIndex> for ObjectTree {
     fn index_mut(&mut self, ix: NodeIndex) -> &mut Type {
-        self.graph.get_mut(ix.index()).expect("node index out of range")
+        self.graph
+            .get_mut(ix.index())
+            .expect("node index out of range")
     }
 }
 
@@ -752,6 +853,7 @@ impl Default for ObjectTreeBuilder {
         let mut tree = ObjectTree {
             graph: Vec::with_capacity(0x4000),
             types: Default::default(),
+            redirected_parent_types: Vec::new(),
         };
         tree.graph.push(Type {
             path: String::new(),
@@ -812,7 +914,15 @@ impl ObjectTreeBuilder {
     fn assign_parent_types(&mut self, context: &Context) {
         for (path, &type_idx) in self.inner.types.iter() {
             let mut location = self.inner[type_idx].location;
-            let idx = if path == "/datum" || path == "/list" || path == "/savefile" || path == "/world" {
+            let idx = if path == "/datum"
+                || path == "/list"
+                || path == "/alist"
+                || path == "/savefile"
+                || path == "/world"
+                || path == "/vector"
+                || path == "/pixloc"
+                || path == "/callee"
+            {
                 // These types have no parent and cannot have one added. In the official compiler:
                 // - setting list or savefile/parent_type is denied with the same error as setting something's parent type to them;
                 // - setting datum/parent_type infinite loops the compiler;
@@ -824,7 +934,7 @@ impl ObjectTreeBuilder {
                     if var.value.expression.is_some() {
                         context.register_error(DMError::new(
                             var.value.location,
-                            format!("not allowed to change {}/parent_type", path),
+                            format!("not allowed to change {path}/parent_type"),
                         ));
                     }
                 }
@@ -858,21 +968,24 @@ impl ObjectTreeBuilder {
                                 Ok(constant) => {
                                     constant_buf = constant;
                                     Ok(&constant_buf)
-                                }
+                                },
                                 Err(e) => Err(e),
                             }
                         } else if path == "/client" {
-                            empty_string = Constant::String("".into());
+                            empty_string = Constant::String(Ident::default());
                             Ok(&empty_string)
                         } else {
                             // A weird situation which should not happen.
-                            Err(DMError::new(location, format!("missing {}/parent_type", path)))
+                            Err(DMError::new(
+                                location,
+                                format!("missing {path}/parent_type"),
+                            ))
                         };
 
                         match constant {
                             Ok(Constant::String(s)) => {
                                 parent_type = s;
-                            }
+                            },
                             Ok(Constant::Prefab(ref pop)) if pop.vars.is_empty() => {
                                 parent_type_buf = String::new();
                                 for piece in pop.path.iter() {
@@ -880,13 +993,13 @@ impl ObjectTreeBuilder {
                                     parent_type_buf.push_str(piece);
                                 }
                                 parent_type = &parent_type_buf;
-                            }
+                            },
                             Ok(other) => {
-                                context.register_error(DMError::new(location, format!("value of {}/parent_type must be a string or typepath, got {}", path, other)));
-                            }
+                                context.register_error(DMError::new(location, format!("value of {path}/parent_type must be a string or typepath, got {other}")));
+                            },
                             Err(e) => {
                                 context.register_error(e);
-                            }
+                            },
                         }
                     }
                     parent_type
@@ -900,20 +1013,30 @@ impl ObjectTreeBuilder {
                 } else {
                     context.register_error(DMError::new(
                         location,
-                        format!("bad parent type for {}: {}", path, parent_type),
+                        format!("bad parent type for {path}: {parent_type}"),
                     ));
-                    NodeIndex::new(0)  // on bad parent_type, fall back to the root
+                    NodeIndex::new(0) // on bad parent_type, fall back to the root
                 }
             };
 
-            self.inner.graph[type_idx.index()].parent_type = idx;
+            let type_ref = &mut self.inner.graph[type_idx.index()];
+            type_ref.parent_type = idx;
+            if type_ref.parent_path != idx {
+                self.inner.redirected_parent_types.push(type_idx);
+            }
         }
     }
 
     // ------------------------------------------------------------------------
     // Parsing
 
-    pub(crate) fn subtype_or_add(&mut self, location: Location, parent: NodeIndex, child: &str, len: usize) -> NodeIndex {
+    pub(crate) fn subtype_or_add(
+        &mut self,
+        location: Location,
+        parent: NodeIndex,
+        child: &Ident,
+        len: usize,
+    ) -> NodeIndex {
         if let Some(&target) = self.inner[parent].children.get(child) {
             let node = &mut self.inner[target];
             if node.location_specificity > len {
@@ -939,7 +1062,9 @@ impl ObjectTreeBuilder {
             children: Default::default(),
             parent_path: parent,
         });
-        self.inner[parent].children.insert(child.to_owned(), node);
+        self.inner[parent]
+            .children
+            .insert(Ident::from_nonstatic(child), node);
         self.inner.types.insert(path, node);
         node
     }
@@ -947,15 +1072,13 @@ impl ObjectTreeBuilder {
     fn insert_var(
         &mut self,
         ty: NodeIndex,
-        name: &str,
+        name: &Ident,
         value: VarValue,
         declaration: Option<VarDeclaration>,
     ) -> &mut TypeVar {
         // TODO: warn and merge docs for repeats
-        match self.inner[ty].vars.entry(name.to_owned()) {
-            indexmap::map::Entry::Vacant(slot) => {
-                slot.insert(TypeVar { value, declaration })
-            },
+        match self.inner[ty].vars.entry(name.clone()) {
+            indexmap::map::Entry::Vacant(slot) => slot.insert(TypeVar { value, declaration }),
             indexmap::map::Entry::Occupied(slot) => {
                 let type_var = slot.into_mut();
                 if let Some(declaration) = declaration {
@@ -970,61 +1093,71 @@ impl ObjectTreeBuilder {
     pub(crate) fn declare_var(
         &mut self,
         ty: NodeIndex,
-        name: &str,
+        name: &Ident,
         location: Location,
         docs: DocCollection,
         var_type: VarType,
         expression: Option<Expression>,
     ) -> &mut TypeVar {
         let id = self.symbols.allocate();
-        self.insert_var(ty, name, VarValue {
-            location,
-            expression,
-            docs,
-            constant: None,
-            being_evaluated: false,
-        }, Some(VarDeclaration {
-            var_type,
-            location,
-            id,
-        }))
+        self.insert_var(
+            ty,
+            name,
+            VarValue {
+                location,
+                expression,
+                docs,
+                constant: None,
+                being_evaluated: false,
+            },
+            Some(VarDeclaration {
+                var_type,
+                location,
+                id,
+            }),
+        )
     }
 
     pub(crate) fn override_var(
         &mut self,
         ty: NodeIndex,
-        name: &str,
+        name: &Ident,
         location: Location,
         docs: DocCollection,
         expression: Expression,
     ) -> &mut TypeVar {
-        self.insert_var(ty, name, VarValue {
-            location,
-            expression: Some(expression),
-            docs,
-            constant: None,
-            being_evaluated: false,
-        }, None)
+        self.insert_var(
+            ty,
+            name,
+            VarValue {
+                location,
+                expression: Some(expression),
+                docs,
+                constant: None,
+                being_evaluated: false,
+            },
+            None,
+        )
     }
 
-    fn get_from_path<'a, I: Iterator<Item=&'a str>>(
+    fn get_from_path<I: Iterator<Item = Ident>>(
         &mut self,
         location: Location,
         mut path: I,
         len: usize,
-    ) -> Result<(NodeIndex, &'a str), DMError> {
+    ) -> Result<(NodeIndex, Ident), DMError> {
         let mut current = NodeIndex::new(0);
         let mut last = match path.next() {
             Some(name) => name,
             None => return Err(DMError::new(location, "cannot register root path")),
         };
-        if is_decl(last) {
+        if is_decl(&last) {
             return Ok((current, last));
         }
         for each in path {
-            current = self.subtype_or_add(location, current, last, len);
+            current = self.subtype_or_add(location, current, &last, len);
             last = each;
-            if is_decl(last) {
+            if is_decl(&last) {
                 break;
             }
         }
@@ -1032,29 +1165,29 @@ impl ObjectTreeBuilder {
         Ok((current, last))
     }
 
-    fn register_var<'a, I>(
+    fn register_var<I>(
         &mut self,
         location: Location,
         parent: NodeIndex,
-        mut prev: &'a str,
+        mut prev: Ident,
         mut rest: I,
         comment: DocCollection,
         suffix: VarSuffix,
     ) -> Result<Option<&mut TypeVar>, DMError>
     where
-        I: Iterator<Item=&'a str>,
+        I: Iterator<Item = Ident>,
     {
         use super::ast::VarTypeFlags;
         let mut is_declaration = false;
         let mut flags = VarTypeFlags::default();
 
-        if is_var_decl(prev) {
+        if is_var_decl(&prev) {
             is_declaration = true;
             prev = match rest.next() {
                 Some(name) => name,
                 None => return Ok(None), // var{} block, children will be real vars
             };
-            while let Some(flag) = VarTypeFlags::from_name(prev) {
+            while let Some(flag) = VarTypeFlags::from_name(&prev) {
                 if let Some(name) = rest.next() {
                     flags |= flag;
                     prev = name;
@@ -1062,41 +1195,44 @@ impl ObjectTreeBuilder {
                     return Ok(None); // var/const{} block, children will be real vars
                 }
             }
-        } else if is_proc_decl(prev) {
+        } else if is_proc_decl(&prev) {
             return Err(DMError::new(location, "proc looks like a var"));
         }
 
         let mut type_path = Vec::new();
         for each in rest {
-            type_path.push(prev.to_owned());
+            type_path.push(prev.clone());
             prev = each;
         }
         let mut var_type = VarTypeBuilder {
             flags,
             type_path,
+            input_type: None,
         };
         var_type.suffix(&suffix);
 
         let symbols = &mut self.symbols;
         let node = &mut self.inner.graph[parent.index()];
         // TODO: warn and merge docs for repeats
-        Ok(Some(node.vars.entry(prev.to_owned()).or_insert_with(|| TypeVar {
-            value: VarValue {
-                location,
-                expression: suffix.into_initializer(),
-                constant: None,
-                being_evaluated: false,
-                docs: comment,
-            },
-            declaration: if is_declaration {
-                Some(VarDeclaration {
-                    var_type: var_type.build(),
+        Ok(Some(node.vars.entry(prev.clone()).or_insert_with(|| {
+            TypeVar {
+                value: VarValue {
                     location,
-                    id: symbols.allocate(),
-                })
-            } else {
-                None
-            },
+                    expression: suffix.into_initializer(),
+                    constant: None,
+                    being_evaluated: false,
+                    docs: comment,
+                },
+                declaration: if is_declaration {
+                    Some(VarDeclaration {
+                        var_type: var_type.build(),
+                        location,
+                        id: symbols.allocate(),
+                    })
+                } else {
+                    None
+                },
+            }
         })))
     }
 
@@ -1107,28 +1243,33 @@ impl ObjectTreeBuilder {
         context: &Context,
         location: Location,
         parent: NodeIndex,
-        name: &str,
-        declaration: Option<ProcDeclKind>,
+        name: &Ident,
+        declaration: Option<ProcDeclBuilder>,
         parameters: Vec<Parameter>,
+        return_type: ProcReturnType,
         code: Option<Block>,
+        body_range: Option<Range<Location>>,
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let node = &mut self.inner.graph[parent.index()];
-        let proc = node.procs.entry(name.to_owned()).or_insert_with(|| TypeProc {
+        let proc = node.procs.entry(name.clone()).or_insert_with(|| TypeProc {
             value: Vec::with_capacity(1),
             declaration: None,
         });
-        if let Some(kind) = declaration {
+        if let Some(decl_builder) = declaration {
             if let Some(ref decl) = proc.declaration {
-                DMError::new(location, format!("duplicate definition of {}/{}", kind, name))
-                    .with_note(decl.location, "previous definition")
-                    .register(context);
+                DMError::new(
+                    location,
+                    format!("duplicate definition of {}/{}", decl_builder.kind, name),
+                )
+                .with_note(decl.location, "previous definition")
+                .register(context);
             } else {
                 proc.declaration = Some(ProcDeclaration {
                     location,
-                    kind,
+                    kind: decl_builder.kind,
+                    flags: decl_builder.flags,
+                    return_type,
                     id: self.symbols.allocate(),
-                    is_private: false,
-                    is_protected: false,
                 });
             }
         }
@@ -1137,7 +1278,8 @@ impl ObjectTreeBuilder {
             location,
             parameters: parameters.into(),
             docs: Default::default(),
-            code
+            code,
+            body_range,
         };
 
         // DM really does reorder the declaration to appear before the override,
@@ -1152,35 +1294,39 @@ impl ObjectTreeBuilder {
                 // Show the hint now, make up for it by putting the original
                 // at the beginning of the list (so `..()` finds it).
                 // Configuration can be used to upgrade this above a hint.
-                DMError::new(proc.value[0].location, format!("override of {}/{} precedes definition", node.path, name))
-                    .set_severity(Severity::Hint)
-                    .with_errortype("override_precedes_definition")
-                    .with_note(location, format!("{}/{}/{} is defined here", node.path, decl, name))
-                    .register(context);
+                DMError::new(
+                    proc.value[0].location,
+                    format!("override of {}/{} precedes definition", node.path, name),
+                )
+                .set_severity(Severity::Hint)
+                .with_errortype("override_precedes_definition")
+                .with_note(
+                    location,
+                    format!("{}/{}/{} is defined here", node.path, decl, name),
+                )
+                .register(context);
                 proc.value.insert(0, value);
                 Ok((len, proc.value.first_mut().unwrap()))
             },
             _ => {
                 proc.value.push(value);
                 Ok((len, proc.value.last_mut().unwrap()))
-            }
+            },
         }
     }
 
-    pub(crate) fn add_builtin_type(
-        &mut self,
-        elems: &[&'static str],
-    ) -> &mut Type {
+    pub(crate) fn add_builtin_type(&mut self, elems: &[&'static str]) -> &mut Type {
         self.add_type(
             Location::builtins(),
-            elems.iter().cloned(),
+            elems.iter().copied().map(Ident::from_static),
             elems.len() + 1,
             Default::default(),
-        ).unwrap()
+        )
+        .unwrap()
     }
 
     // an entry which may be anything depending on the path
-    fn add_type<'a, I: Iterator<Item = &'a str>>(
+    fn add_type<I: Iterator<Item = Ident>>(
         &mut self,
         location: Location,
         mut path: I,
@@ -1188,8 +1334,8 @@ impl ObjectTreeBuilder {
         comment: DocCollection,
     ) -> Result<&mut Type, DMError> {
         let (parent, child) = self.get_from_path(location, &mut path, len)?;
-        assert!(!is_var_decl(child) && !is_proc_decl(child));
-        let idx = self.subtype_or_add(location, parent, child, len);
+        assert!(!is_var_decl(&child) && !is_proc_decl(&child));
+        let idx = self.subtype_or_add(location, parent, &child, len);
         self.inner[idx].docs.extend(comment);
         Ok(&mut self.inner[idx])
     }
@@ -1200,11 +1346,21 @@ impl ObjectTreeBuilder {
         value: Option<Constant>,
     ) -> &mut VarValue {
         let location = Location::builtins();
-        let mut path = elems.iter().copied();
+        let mut path = elems.iter().copied().map(Ident::from_static);
         let len = elems.len() + 1;
 
         let (parent, initial) = self.get_from_path(location, &mut path, len).unwrap();
-        if let Some(type_var) = self.register_var(location, parent, initial, path, Default::default(), Default::default()).unwrap() {
+        if let Some(type_var) = self
+            .register_var(
+                location,
+                parent,
+                initial,
+                path,
+                Default::default(),
+                Default::default(),
+            )
+            .unwrap()
+        {
             type_var.value.location = location;
             type_var.value.constant = value;
             &mut type_var.value
@@ -1221,15 +1377,27 @@ impl ObjectTreeBuilder {
         self.add_proc(
             &Default::default(),
             Location::builtins(),
-            elems.iter().copied(),
+            elems.iter().copied().map(Ident::from_static),
             elems.len() + 1,
-            params.iter().copied().map(|param| Parameter { name: param.into(), .. Default::default() }).collect(),
+            params
+                .iter()
+                .copied()
+                .map(|param| Parameter {
+                    // NB: not intering proc arguments yet...
+                    name: Ident::from(param),
+                    ..Default::default()
+                })
+                .collect(),
             None,
-        ).unwrap().1
+            None,
+        )
+        .unwrap()
+        .1
     }
 
     // an entry which is definitely a proc because an argument list is specified
-    fn add_proc<'a, I: Iterator<Item = &'a str>>(
+    #[allow(clippy::too_many_arguments)]
+    fn add_proc<I: Iterator<Item = Ident>>(
         &mut self,
         context: &Context,
         location: Location,
@@ -1237,26 +1405,43 @@ impl ObjectTreeBuilder {
         len: usize,
         parameters: Vec<Parameter>,
         code: Option<Block>,
+        body_range: Option<Range<Location>>,
     ) -> Result<(usize, &mut ProcValue), DMError> {
         let (parent, mut proc_name) = self.get_from_path(location, &mut path, len)?;
         let mut declaration = None;
-        if let Some(kind) = ProcDeclKind::from_name(proc_name) {
-            declaration = Some(kind);
-            proc_name = match path.next() {
+        if let Some(kind) = ProcDeclKind::from_name(&proc_name) {
+            let mut next_entry = path.next();
+            let flags = ProcFlags::from_name(next_entry.as_ref().map_or("", Ident::as_str));
+            if flags.is_some() {
+                // did something? take another step
+                next_entry = path.next();
+            }
+            declaration = Some(ProcDeclBuilder::new(kind, flags));
+            proc_name = match next_entry {
                 Some(name) => name,
                 None => return Err(DMError::new(location, "proc must have a name")),
             };
-        } else if is_var_decl(proc_name) {
+        } else if is_var_decl(&proc_name) {
             return Err(DMError::new(location, "var looks like a proc"));
         }
         if let Some(other) = path.next() {
             return Err(DMError::new(
                 location,
-                format!("proc name must be a single identifier (spurious {:?})", other),
+                format!("proc name must be a single identifier (spurious {other:?})"),
             ));
         }
 
-        self.register_proc(context, location, parent, proc_name, declaration, parameters, code)
+        self.register_proc(
+            context,
+            location,
+            parent,
+            &proc_name,
+            declaration,
+            parameters,
+            ProcReturnType::default(),
+            code,
+            body_range,
+        )
     }
 }
 
@@ -1292,6 +1477,8 @@ impl NodeIndex {
 
     #[inline]
     pub fn end() -> Self {
-        NodeIndex(std::u32::MAX)
+        NodeIndex(u32::MAX)
     }
 }
+
+impl GetSize for NodeIndex {}
