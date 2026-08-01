@@ -3,7 +3,6 @@ name = "dreammaker"
 version = "0.1.0"
 authors = ["Tad Hardesty <tad@platymuus.com>"]
 edition.workspace = true
-rust-version.workspace = true
 
 [dependencies]
 interval-tree = { path = "../interval-tree" }

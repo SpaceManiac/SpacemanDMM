@@ -4,7 +4,6 @@ homepage = "https://github.com/SpaceManiac/SpacemanDMM/blob/master/crates/dmdoc/
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-rust-version.workspace = true
 
 [dependencies]
 dreammaker = { path = "../dreammaker" }

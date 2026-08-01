@@ -3,7 +3,6 @@ name = "builtins-proc-macro"
 version = "0.0.0"
 authors = ["Tad Hardesty <tad@platymuus.com>"]
 edition.workspace = true
-rust-version.workspace = true
 
 [lib]
 proc-macro = true
