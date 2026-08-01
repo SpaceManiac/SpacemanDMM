@@ -507,7 +507,7 @@ pub fn buffer_file(file: FileId, path: &std::path::Path) -> Result<Vec<u8>, DMEr
                 },
                 "i/o error opening file",
             )
-            .with_cause(error))
+            .with_cause(error));
         },
     };
 

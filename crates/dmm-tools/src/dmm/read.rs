@@ -238,7 +238,7 @@ pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
                         return Err(DMError::new(
                             chars.location(),
                             format!("bad digit {ch:?} in map coordinate"),
-                        ))
+                        ));
                     },
                 }
             }

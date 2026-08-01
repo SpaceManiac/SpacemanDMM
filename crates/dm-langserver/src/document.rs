@@ -56,7 +56,7 @@ impl DocumentStore {
                 return Err(invalid_request(format!(
                     "cannot change non-opened: {}",
                     doc_id.uri
-                )))
+                )));
             },
         };
 

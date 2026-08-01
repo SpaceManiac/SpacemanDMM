@@ -280,7 +280,7 @@ impl Constant {
         match (self, key) {
             // Narrowing conversion is intentional.
             (Constant::List(elements), &Constant::Float(i)) => {
-                return elements.get(i as usize).map(|(k, _)| k)
+                return elements.get(i as usize).map(|(k, _)| k);
             },
             (Constant::List(elements), key) => {
                 for (k, v) in elements.iter() {
@@ -764,7 +764,7 @@ impl<'a> ConstantFolder<'a> {
                 return Err(self.error(format!(
                     "non-constant unary operation: {}",
                     op.around(&term)
-                )))
+                )));
             },
         })
     }
@@ -869,7 +869,7 @@ impl<'a> ConstantFolder<'a> {
                         Some(Term::Ident(ident)) => Constant::from(defines.contains_key(ident)),
                         _ => {
                             return Err(self
-                                .error("malformed defined() call, argument given isn't an Ident."))
+                                .error("malformed defined() call, argument given isn't an Ident."));
                         },
                     }
                 },
@@ -885,7 +885,7 @@ impl<'a> ConstantFolder<'a> {
                         None => {
                             return Err(self.error(
                                 "malformed nameof() call, expression appears to have no name",
-                            ))
+                            ));
                         },
                     }
                 },
@@ -908,7 +908,7 @@ impl<'a> ConstantFolder<'a> {
                         },
                         _ => {
                             return Err(self
-                                .error("malformed fexists() call, argument given isn't a string."))
+                                .error("malformed fexists() call, argument given isn't a string."));
                         },
                     }
                 },
@@ -1006,7 +1006,7 @@ impl<'a> ConstantFolder<'a> {
                 return Err(self.error(format!(
                     "cannot resolve relative type path without an object tree: {}",
                     FormatTypePath(&prefab.path)
-                )))
+                )));
             },
         };
 
@@ -1018,7 +1018,7 @@ impl<'a> ConstantFolder<'a> {
                     "could not resolve {} relative to {}",
                     FormatTypePath(&prefab.path),
                     relative_to
-                )))
+                )));
             },
         };
 
@@ -1151,12 +1151,12 @@ impl<'a> ConstantFolder<'a> {
                             _ => {
                                 return Err(self.error(format!(
                                     "malformed rgb() call, bad color space: {kwarg_value}"
-                                )))
+                                )));
                             },
                         },
                         _ => {
                             return Err(self
-                                .error(format!("malformed rgb() call, bad kwarg passed: {kwarg}")))
+                                .error(format!("malformed rgb() call, bad kwarg passed: {kwarg}")));
                         },
                     }
                 } else {
@@ -1239,7 +1239,7 @@ impl<'a> ConstantFolder<'a> {
                         "space" => continue, // Don't range-check the value of the space
                         _ => {
                             return Err(self
-                                .error(format!("malformed rgb() call, bad kwarg passed: {kwarg}")))
+                                .error(format!("malformed rgb() call, bad kwarg passed: {kwarg}")));
                         },
                     };
                 } else {
