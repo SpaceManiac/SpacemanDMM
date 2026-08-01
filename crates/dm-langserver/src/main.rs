@@ -35,22 +35,26 @@ mod jrpc_io;
 mod symbol_search;
 
 use crate::extras::{QueryObjectTree, Reparse, SetTraceVsc, StartDebugger};
+use dm::FileId;
 use dm::annotation::{Annotation, AnnotationTree};
 use dm::ast::Ident;
 use dm::objtree::TypeRef;
-use dm::FileId;
 use foldhash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use jsonrpc::{Call, Output, Response};
 use lsp_types::{notification::*, request::*, *};
-use std::collections::hash_map::Entry;
 use std::collections::VecDeque;
+use std::collections::hash_map::Entry;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use url::Url;
 
 fn main() {
-    std::env::set_var("RUST_BACKTRACE", "1");
+    // TODO: use [std::panic::set_backtrace_style] when stable: https://github.com/rust-lang/rust/issues/93346
+    #[allow(unsafe_code)]
+    unsafe {
+        std::env::set_var("RUST_BACKTRACE", "1");
+    }
 
     eprintln!(
         "dm-langserver {}  Copyright (C) 2017-2025  Tad Hardesty",
@@ -838,7 +842,7 @@ impl Engine {
     {
         let mut found = None;
         let mut proc_name = None;
-        if_annotation! { Annotation::ProcBody(ref proc_path, ref idx) in iter; {
+        if_annotation! { Annotation::ProcBody(proc_path, idx) in iter; {
             // chop off proc name and 'proc/' or 'verb/' if it's there
             // TODO: factor this logic somewhere
             let mut proc_path = &proc_path[..];
@@ -2043,8 +2047,9 @@ impl Engine {
         let iter = annotations.get_location(location);
         let mut result = None;
 
-        if_annotation! { Annotation::ProcArguments(priors, proc_name, mut idx) in iter; {
+        if_annotation! { Annotation::ProcArguments(priors, proc_name, idx) in iter; {
             // take the specific argument we're working on
+            let mut idx = *idx;
             if_annotation! { Annotation::ProcArgument(i) in iter; {
                 idx = *i;
             }}
@@ -2155,7 +2160,7 @@ impl Engine {
                 let range = span_to_range(start..end);
                 let selection_range = location_to_range(start);
                 match annotation {
-                    Annotation::TreeBlock(ref path) => {
+                    Annotation::TreeBlock(path) => {
                         if path.is_empty() {
                             continue;
                         }
@@ -2171,7 +2176,7 @@ impl Engine {
                             children: Some(find_document_symbols(iter, end, path.len())),
                         });
                     },
-                    Annotation::Variable(ref path) => {
+                    Annotation::Variable(path) => {
                         let (name, detail) = name_and_detail(path, skip_front);
                         result.push(DocumentSymbol {
                             name,
@@ -2184,7 +2189,7 @@ impl Engine {
                             children: None,
                         });
                     },
-                    Annotation::ProcBody(ref path, _) => {
+                    Annotation::ProcBody(path, _) => {
                         if path.is_empty() {
                             continue;
                         }
@@ -2207,7 +2212,7 @@ impl Engine {
                             children: Some(find_document_symbols(iter, end, 0)),
                         });
                     },
-                    Annotation::LocalVarScope(_, ref name) => {
+                    Annotation::LocalVarScope(_, name) => {
                         result.push(DocumentSymbol {
                             name: name.to_string(),
                             detail: None,
@@ -2219,7 +2224,7 @@ impl Engine {
                             children: None,
                         });
                     },
-                    Annotation::MacroDefinition(ref name) => result.push(DocumentSymbol {
+                    Annotation::MacroDefinition(name) => result.push(DocumentSymbol {
                         name: name.to_string(),
                         detail: None,
                         kind: SymbolKind::CONSTANT,

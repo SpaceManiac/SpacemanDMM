@@ -69,7 +69,7 @@ pub fn check_switch_rand_range(
 
 fn get_case_range(case: &Case, location: Location) -> Option<(f32, f32)> {
     match case {
-        Case::Exact(ref value) => {
+        Case::Exact(value) => {
             let value = value
                 .to_owned()
                 .simple_evaluate(location)
@@ -77,7 +77,7 @@ fn get_case_range(case: &Case, location: Location) -> Option<(f32, f32)> {
                 .to_float()?;
             Some((value, value))
         },
-        Case::Range(ref min, ref max) => {
+        Case::Range(min, max) => {
             let min = min.to_owned().simple_evaluate(location).ok()?.to_float()?;
             let max = max.to_owned().simple_evaluate(location).ok()?.to_float()?;
             Some((min, max))
