@@ -4,6 +4,7 @@ description = "BYOND map rendering and analysis tools powered by SpacemanDMM"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 
 [[bin]]
 name = "dmm-tools"

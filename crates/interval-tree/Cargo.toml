@@ -7,6 +7,7 @@ repository = "https://github.com/SpaceManiac/SpacemanDMM/tree/master/crates/inte
 keywords = ["datastructure", "interval", "tree", "map"]
 license-file = "LICENSE"
 edition.workspace = true
+rust-version.workspace = true
 
 [dev-dependencies]
 rand = "0.10.1"

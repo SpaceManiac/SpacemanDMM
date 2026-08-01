@@ -3,6 +3,7 @@ name = "dm-langserver"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 url = "2.5.2"
