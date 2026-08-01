@@ -748,7 +748,9 @@ impl<'o> AnalyzeObjectTree<'o> {
         let mut visited = HashSet::<ProcRef<'o>>::with_capacity(total_procs);
         let mut to_visit =
             VecDeque::<(ProcRef<'o>, CallStack, bool, ProcRef<'o>, TypeRef<'o>, bool)>::new();
-        for (procref, &(_, location)) in self.must_not_sleep.directive.iter() {
+        let mut must_not_sleep: Vec<_> = self.must_not_sleep.directive.iter().collect();
+        must_not_sleep.sort_by_key(|(procref, _)| procref.get().location);
+        for (procref, &(_, location)) in must_not_sleep {
             if !visited.insert(*procref) {
                 continue;
             }
@@ -872,7 +874,9 @@ impl<'o> AnalyzeObjectTree<'o> {
         drop(visited);
         drop(to_visit);
 
-        for (procref, (_, location)) in self.must_be_pure.directive.iter() {
+        let mut must_be_pure: Vec<_> = self.must_be_pure.directive.iter().collect();
+        must_be_pure.sort_by_key(|(procref, _)| procref.get().location);
+        for (procref, (_, location)) in must_be_pure {
             if let Some(impurevec) = self.impure_procs.get_violators(*procref) {
                 error(
                     procref.get().location,
