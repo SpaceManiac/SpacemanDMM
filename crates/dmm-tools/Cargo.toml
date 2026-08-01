@@ -7,7 +7,7 @@ rust-version.workspace = true
 
 [dependencies]
 inflate = "0.4.5"
-ndarray = "0.15.6"
+ndarray = "0.17.2"
 rand = "0.10.1"
 dreammaker = { path = "../dreammaker" }
 lodepng = "3.10.7"
