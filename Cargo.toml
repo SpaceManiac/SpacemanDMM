@@ -19,6 +19,9 @@ authors = ["Tad Hardesty <tad@platymuus.com>"]
 edition = "2024"
 rust-version = "1.86.0"
 
+[workspace.dependencies]
+git2 = { version = "0.21.0", default-features = false }
+
 [profile.dev]
 opt-level = 1
 

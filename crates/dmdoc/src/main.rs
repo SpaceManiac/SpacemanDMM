@@ -1203,7 +1203,7 @@ fn git_info(git: &mut Git) -> Result<(), git2::Error> {
     }
 
     // check that the current revision is an ancestor of its remote
-    let branch = repo.find_branch(req!(head.shorthand()), git2::BranchType::Local)?;
+    let branch = repo.find_branch(head.shorthand()?, git2::BranchType::Local)?;
     if let Ok(Some(name)) = branch.name() {
         name.clone_into(&mut git.branch);
     }
@@ -1223,7 +1223,7 @@ fn git_info(git: &mut Git) -> Result<(), git2::Error> {
     }
 
     let remote = repo.find_remote(remote_name)?;
-    let mut url = req!(remote.url());
+    let mut url = remote.url()?;
     if url.ends_with('/') {
         url = &url[..url.len() - 1];
     }
