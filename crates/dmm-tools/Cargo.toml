@@ -24,7 +24,7 @@ version = "3.16.0"
 features = ["collections"]
 
 [dependencies.png]
-version = "0.17.14"
+version = "0.18.1"
 optional = true
 
 [dependencies.gfx_core]
