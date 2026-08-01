@@ -26,7 +26,7 @@ foldhash = "0.2.0"
 chrono = "0.4.38"
 git2 = { version = "0.20.4", default-features = false }
 sha256 = { version = "1.5.0", default-features = false }
-ureq = "2.10.1"
+ureq = "3.3.0"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(auxtools_bundle)', 'cfg(extools_bundle)'] }

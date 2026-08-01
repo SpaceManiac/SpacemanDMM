@@ -97,6 +97,7 @@ fn download_dll(out_dir: &Path, fname: &str, tag: &str, url: &str, sha256: &str)
         &mut ureq::get(url)
             .call()
             .expect("Error downloading DLL to bundle")
+            .into_body()
             .into_reader(),
         &mut std::fs::File::create(&full_path).unwrap(),
     )
