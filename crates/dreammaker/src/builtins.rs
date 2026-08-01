@@ -4,11 +4,11 @@ use builtins_proc_macro::builtins_table;
 
 use crate::ast::Ident;
 
+use super::Location;
 use super::constants::Constant;
 use super::docs::{BuiltinDocs, DocCollection};
 use super::objtree::*;
 use super::preprocessor::{Define, DefineMap};
-use super::Location;
 
 const DM_VERSION: i32 = 516;
 const DM_BUILD: i32 = 1666;

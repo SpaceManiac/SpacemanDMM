@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, quote_spanned};
+use quote::{ToTokens, quote, quote_spanned};
 use syn::ext::IdentExt;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
@@ -171,7 +171,7 @@ impl EntryBody {
             let content;
             parenthesized!(content in input);
             Ok(EntryBody::Proc(
-                content.parse_terminated(ProcArgument::parse)?,
+                content.parse_terminated(ProcArgument::parse, Token![,])?,
             ))
         } else if path.iter().any(|i| i == "var") {
             Ok(EntryBody::Variable(None))
@@ -271,15 +271,15 @@ pub fn builtins_table(input: TokenStream) -> TokenStream {
         let mut attr_calls = TokenStream2::new();
         for attr in entry.header.attrs {
             let attr_span = attr.span();
-            let path = attr.path;
+            let path = attr.path();
             let ident = &path.segments.last().unwrap().ident;
             if ident == "doc" {
                 markdown_span = Some(attr_span);
-                markdown.push_str(&syn::parse2::<DocComment>(attr.tokens).unwrap().0.value());
+                markdown.push_str(&attr.parse_args::<DocComment>().unwrap().0.value());
                 markdown.push('\n');
             } else {
-                attr_calls.extend(quote_spanned! { attr_span => .docs.#path });
-                attr_calls.extend(attr.tokens);
+                attr_calls.extend(quote_spanned! { attr_span => .docs. });
+                attr.meta.to_tokens(&mut attr_calls);
             }
         }
 
