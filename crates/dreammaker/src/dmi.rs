@@ -1,6 +1,7 @@
 //! DMI metadata parsing and representation.
 
 use foldhash::{HashMap, HashMapExt};
+use glam::IVec2;
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::io;
@@ -190,16 +191,16 @@ impl Dir {
     }
 
     /// Get this direction's offset in BYOND's coordinate system.
-    pub fn offset(self) -> (i32, i32) {
+    pub fn offset(self) -> IVec2 {
         match self {
-            Dir::North => (0, 1),
-            Dir::South => (0, -1),
-            Dir::East => (1, 0),
-            Dir::West => (-1, 0),
-            Dir::Northeast => (1, 1),
-            Dir::Northwest => (-1, 1),
-            Dir::Southeast => (1, -1),
-            Dir::Southwest => (-1, -1),
+            Dir::North => IVec2::new(0, 1),
+            Dir::South => IVec2::new(0, -1),
+            Dir::East => IVec2::new(1, 0),
+            Dir::West => IVec2::new(-1, 0),
+            Dir::Northeast => IVec2::new(1, 1),
+            Dir::Northwest => IVec2::new(-1, 1),
+            Dir::Southeast => IVec2::new(1, -1),
+            Dir::Southwest => IVec2::new(-1, -1),
         }
     }
 }
