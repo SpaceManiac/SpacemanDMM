@@ -19,6 +19,7 @@ pub enum Annotation {
     TypePath(TypePath),
     Variable(Vec<Ident>),
     ProcHeader(Vec<Ident>, usize),
+    ProcParameter(VarType, Ident),
     ProcBody(Vec<Ident>, usize),
     LocalVarScope(VarType, Ident),
 
