@@ -82,12 +82,12 @@ fn if_else_for() {
 fn if_else_ambiguious_for() {
     let code = r##"
 /proc/test()
-	for(var/i in list("a"))
-		if(prob(50))
-			return
-		else
-			return
-	return
+    for(var/i in list("a"))
+        if(prob(50))
+            return
+        else
+            return
+    return
 "##
     .trim();
     check_errors_match(code, NO_ERRORS);
@@ -100,11 +100,11 @@ fn if_else_for_continue() {
     let code = r##"
 /proc/test()
     for(var/i in list("a"))
-		if(prob(50))
-			continue
-		else
-			continue
-		return
+        if(prob(50))
+            continue
+        else
+            continue
+        return
 "##
     .trim();
     check_errors_match(code, IF_ELSE_FOR_CONTINUE_ERRORS);
@@ -115,10 +115,10 @@ fn if_else_for_continue_redundant() {
     let code = r##"
 /proc/test()
     for(var/i in list("a"))
-		if(prob(50))
-			continue
-		else
-			continue
+        if(prob(50))
+            continue
+        else
+            continue
     return
 "##
     .trim();
