@@ -1337,17 +1337,16 @@ impl ControlFlow {
     }
 
     pub fn no_else(&mut self) {
-        self.returns = false;
-        self.continues = false;
-        self.breaks = false;
+        self.fuzzy = true;
     }
 
     pub fn merge(&mut self, other: ControlFlow) {
-        if !self.fuzzy && other.returns {
-            self.returns = true;
-        }
+        // If this statement is fuzzy, it isn't allowed to set anything to true
         if other.fuzzy {
-            self.returns = false;
+            return
+        }
+        if other.returns {
+            self.returns = true;
         }
         if other.continues {
             self.continues = true;
@@ -1361,6 +1360,7 @@ impl ControlFlow {
     }
 
     pub fn merge_false(&mut self, other: ControlFlow) {
+        // Anything they don't have, we can't have either
         if !other.returns {
             self.returns = false;
         }
@@ -1370,21 +1370,24 @@ impl ControlFlow {
         if !other.breaks {
             self.breaks = false;
         }
+        // If they're fuzzy about control flow, so are we
         if other.fuzzy {
             self.fuzzy = true;
         }
     }
 
     pub fn finalize(&mut self) {
-        if self.returns || self.breaks || self.continues {
-            self.fuzzy = false;
-        }
+        // we're sure about who we are
+        self.fuzzy = false;
     }
 
     pub fn end_loop(&mut self) {
-        self.returns = false;
+        // Kill all the control flow stuff that is confined to our loop
         self.continues = false;
         self.breaks = false;
+        // We can't be sure that our loop will ever run, so
+        self.returns = false;
+        // We're done checking all possible paths (if that even matters)
         self.fuzzy = false;
     }
 }
@@ -1915,8 +1918,6 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                                     "for range loop body is never reached due to invalid range",
                                 )
                                 .register(self.context);
-                            } else {
-                                return state;
                             }
                         }
                     }
@@ -2048,16 +2049,16 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     returns: false,
                     continues: true,
                     breaks: false,
-                    fuzzy: true,
-                };
+                    fuzzy: false,
+                }
             },
             Statement::Break(_) => {
                 return ControlFlow {
                     returns: false,
                     continues: false,
                     breaks: true,
-                    fuzzy: true,
-                };
+                    fuzzy: false,
+                }
             },
             Statement::Goto(_) => {},
             Statement::Label { name: _, block } => {

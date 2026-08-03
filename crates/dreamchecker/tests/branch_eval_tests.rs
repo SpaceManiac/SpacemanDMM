@@ -35,6 +35,96 @@ fn if_else() {
     check_errors_match(code, IF_ELSE_ERRORS);
 }
 
+#[test]
+fn if_no_else() {
+    let code = r##"
+/proc/test()
+    if(prob(50))
+        return
+    return
+"##
+    .trim();
+    check_errors_match(code, NO_ERRORS);
+}
+
+#[test]
+fn if_empty_else() {
+    let code = r##"
+/proc/test()
+    if(prob(50))
+        return
+    else
+        var/empty
+    return
+"##
+    .trim();
+    check_errors_match(code, NO_ERRORS);
+}
+
+pub const IF_ELSE_FOR_ERRORS: &[(u32, u16, &str)] = &[(7, 9, "possible unreachable code here")];
+
+#[test]
+fn if_else_for() {
+    let code = r##"
+/proc/test()
+    for(var/i in list("a"))
+        if(prob(50))
+            return
+        else
+            return
+        return
+"##
+    .trim();
+    check_errors_match(code, IF_ELSE_FOR_ERRORS);
+}
+
+#[test]
+fn if_else_ambiguious_for() {
+    let code = r##"
+/proc/test()
+	for(var/i in list("a"))
+		if(prob(50))
+			return
+		else
+			return
+	return
+"##
+    .trim();
+    check_errors_match(code, NO_ERRORS);
+}
+
+pub const IF_ELSE_FOR_CONTINUE_ERRORS: &[(u32, u16, &str)] = &[(7, 9, "possible unreachable code here")];
+
+#[test]
+fn if_else_for_continue() {
+    let code = r##"
+/proc/test()
+    for(var/i in list("a"))
+		if(prob(50))
+			continue
+		else
+			continue
+		return
+"##
+    .trim();
+    check_errors_match(code, IF_ELSE_FOR_CONTINUE_ERRORS);
+}
+
+#[test]
+fn if_else_for_continue_redundant() {
+    let code = r##"
+/proc/test()
+    for(var/i in list("a"))
+		if(prob(50))
+			continue
+		else
+			continue
+    return
+"##
+    .trim();
+    check_errors_match(code, NO_ERRORS);
+}
+
 pub const IF_ARMS_ERRORS: &[(u32, u16, &str)] = &[
     (2, 7, "control flow condition is a static term"),
     (2, 7, "if condition is always true"),
