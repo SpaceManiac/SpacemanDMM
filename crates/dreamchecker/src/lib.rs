@@ -1918,6 +1918,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                                     "for range loop body is never reached due to invalid range",
                                 )
                                 .register(self.context);
+                            } else {
+                                // the body is ALWAYS executed, so it's safe to pass up control fields
+                                return state;
                             }
                         }
                     }
