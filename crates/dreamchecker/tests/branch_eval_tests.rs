@@ -151,7 +151,6 @@ fn guarenteed_for_return() {
     check_errors_match(code, GUARENTEED_FOR_RETURN_ERRORS);
 }
 
-
 pub const IF_ARMS_ERRORS: &[(u32, u16, &str)] = &[
     (2, 7, "control flow condition is a static term"),
     (2, 7, "if condition is always true"),
