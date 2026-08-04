@@ -125,6 +125,33 @@ fn if_else_for_continue_redundant() {
     check_errors_match(code, NO_ERRORS);
 }
 
+#[test]
+fn guarenteed_for_bleeding() {
+    let code = r##"
+/proc/test()
+    for(var/i in 1 to 2)
+        continue
+    return
+"##
+    .trim();
+    check_errors_match(code, NO_ERRORS);
+}
+
+pub const GUARENTEED_FOR_RETURN_ERRORS: &[(u32, u16, &str)] = &[(4, 5, "possible unreachable code here")];
+
+#[test]
+fn guarenteed_for_return() {
+    let code = r##"
+/proc/test()
+    for(var/i in 1 to 2)
+        return
+    return
+"##
+    .trim();
+    check_errors_match(code, GUARENTEED_FOR_RETURN_ERRORS);
+}
+
+
 pub const IF_ARMS_ERRORS: &[(u32, u16, &str)] = &[
     (2, 7, "control flow condition is a static term"),
     (2, 7, "if condition is always true"),

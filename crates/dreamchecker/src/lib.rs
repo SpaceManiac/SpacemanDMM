@@ -1390,6 +1390,16 @@ impl ControlFlow {
         // We're done checking all possible paths (if that even matters)
         self.fuzzy = false;
     }
+
+    // For capping a loop we are sure will run
+    pub fn end_guarenteed_loop(&mut self) {
+        // Kill all the control flow stuff that is confined to our loop
+        // We don't touch return here, because we're sure this loop will execute
+        self.continues = false;
+        self.breaks = false;
+        // We're done checking all possible paths (if that even matters)
+        self.fuzzy = false;
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1736,6 +1746,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         "do while terminates without ever reaching condition",
                     )
                     .register(self.context);
+                    state.end_guarenteed_loop();
                     return state;
                 }
                 self.visit_expression(
@@ -1745,7 +1756,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     &mut scoped_locals,
                 );
 
-                state.end_loop();
+                state.end_guarenteed_loop();
                 return state;
             },
             Statement::If { arms, else_arm } => {
@@ -1919,7 +1930,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                                 )
                                 .register(self.context);
                             } else {
-                                // the body is ALWAYS executed, so it's safe to pass up control fields
+                                // the body is ALWAYS executed, so it's safe to pass up some control fields
+                                state.end_guarenteed_loop();
                                 return state;
                             }
                         }
