@@ -93,7 +93,8 @@ fn if_else_ambiguious_for() {
     check_errors_match(code, NO_ERRORS);
 }
 
-pub const IF_ELSE_FOR_CONTINUE_ERRORS: &[(u32, u16, &str)] = &[(7, 9, "possible unreachable code here")];
+pub const IF_ELSE_FOR_CONTINUE_ERRORS: &[(u32, u16, &str)] =
+    &[(7, 9, "possible unreachable code here")];
 
 #[test]
 fn if_else_for_continue() {
@@ -126,7 +127,7 @@ fn if_else_for_continue_redundant() {
 }
 
 #[test]
-fn guarenteed_for_bleeding() {
+fn guaranteed_for_bleeding() {
     let code = r##"
 /proc/test()
     for(var/i in 1 to 2)
@@ -137,10 +138,11 @@ fn guarenteed_for_bleeding() {
     check_errors_match(code, NO_ERRORS);
 }
 
-pub const GUARENTEED_FOR_RETURN_ERRORS: &[(u32, u16, &str)] = &[(4, 5, "possible unreachable code here")];
+pub const GUARANTEED_FOR_RETURN_ERRORS: &[(u32, u16, &str)] =
+    &[(4, 5, "possible unreachable code here")];
 
 #[test]
-fn guarenteed_for_return() {
+fn guaranteed_for_return() {
     let code = r##"
 /proc/test()
     for(var/i in 1 to 2)
@@ -148,7 +150,7 @@ fn guarenteed_for_return() {
     return
 "##
     .trim();
-    check_errors_match(code, GUARENTEED_FOR_RETURN_ERRORS);
+    check_errors_match(code, GUARANTEED_FOR_RETURN_ERRORS);
 }
 
 pub const IF_ARMS_ERRORS: &[(u32, u16, &str)] = &[

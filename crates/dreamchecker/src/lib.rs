@@ -1343,7 +1343,7 @@ impl ControlFlow {
     pub fn merge(&mut self, other: ControlFlow) {
         // If this statement is fuzzy, it isn't allowed to set anything to true
         if other.fuzzy {
-            return
+            return;
         }
         if other.returns {
             self.returns = true;
@@ -1392,7 +1392,7 @@ impl ControlFlow {
     }
 
     // For capping a loop we are sure will run
-    pub fn end_guarenteed_loop(&mut self) {
+    pub fn end_guaranteed_loop(&mut self) {
         // Kill all the control flow stuff that is confined to our loop
         // We don't touch return here, because we're sure this loop will execute
         self.continues = false;
@@ -1746,7 +1746,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         "do while terminates without ever reaching condition",
                     )
                     .register(self.context);
-                    state.end_guarenteed_loop();
+                    state.end_guaranteed_loop();
                     return state;
                 }
                 self.visit_expression(
@@ -1756,7 +1756,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     &mut scoped_locals,
                 );
 
-                state.end_guarenteed_loop();
+                state.end_guaranteed_loop();
                 return state;
             },
             Statement::If { arms, else_arm } => {
@@ -1931,7 +1931,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                                 .register(self.context);
                             } else {
                                 // the body is ALWAYS executed, so it's safe to pass up some control fields
-                                state.end_guarenteed_loop();
+                                state.end_guaranteed_loop();
                                 return state;
                             }
                         }
@@ -2065,7 +2065,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     continues: true,
                     breaks: false,
                     fuzzy: false,
-                }
+                };
             },
             Statement::Break(_) => {
                 return ControlFlow {
@@ -2073,7 +2073,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     continues: false,
                     breaks: true,
                     fuzzy: false,
-                }
+                };
             },
             Statement::Goto(_) => {},
             Statement::Label { name: _, block } => {
