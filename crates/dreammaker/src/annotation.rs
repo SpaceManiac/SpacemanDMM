@@ -27,6 +27,8 @@ pub enum Annotation {
     UnscopedVar(Ident),
     ScopedCall(Vec<Ident>, Ident),
     ScopedVar(Vec<Ident>, Ident),
+    /// A static var access, e.g. `/type::var`
+    TypePathVar(RelativePath, Ident),
     ParentCall,        // ..
     ReturnVal,         // .
     InSequence(usize), // where in TreePath or TypePath is this ident

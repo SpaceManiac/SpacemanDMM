@@ -1027,6 +1027,14 @@ impl Engine {
                     _ => {}
                 }
             },
+            Annotation::TypePathVar(parts, var_name) => {
+                if let Some(completion::TypePathResult { ty, decl: None, proc: None }) =
+                    self.follow_type_path(&iter, parts.as_slice())
+                    && let Some(decl) = ty.get_var_declaration(var_name)
+                {
+                    symbol_id = Some(decl.id);
+                }
+            },
             Annotation::UnscopedCall(proc_name) => {
                 let (ty, _) = self.find_type_context(&iter);
                 let mut next = ty.or_else(|| Some(self.objtree.root()));
@@ -1666,6 +1674,16 @@ impl Engine {
                         results.push(ds);
                     }
                 },
+                Annotation::TypePathVar(parts, var_name) if symbol_id.is_some() => {
+                    if let Some(completion::TypePathResult {
+                        ty,
+                        decl: None,
+                        proc: None,
+                    }) = self.follow_type_path(&iter, parts.as_slice())
+                    {
+                        results.append(&mut self.construct_var_hover(var_name, Some(ty), false)?);
+                    }
+                },
                 Annotation::UnscopedVar(var_name) if symbol_id.is_some() => {
                     let (ty, proc_name) = self.find_type_context(&iter);
                     if let UnscopedVar::Variable { ty, .. } =
@@ -1752,6 +1770,25 @@ impl Engine {
                         results.push(self.convert_location(ty.location, &ty.docs, &[&ty.path])?);
                     },
                     _ => {}
+                }
+            },
+            Annotation::TypePathVar(parts, var_name) => {
+                if let Some(completion::TypePathResult { ty, decl: None, proc: None }) =
+                    self.follow_type_path(&iter, parts.as_slice())
+                {
+                    let mut next = Some(ty);
+                    // Search the target type and its parents for the variable.
+                    while let Some(ty) = next {
+                        if let Some(var) = ty.vars.get(var_name) {
+                            results.push(self.convert_location(
+                                var.value.location,
+                                &var.value.docs,
+                                &[&ty.path, "/var/", var_name],
+                            )?);
+                            break;
+                        }
+                        next = ty.parent_type();
+                    }
                 }
             },
             Annotation::UnscopedCall(proc_name) => {

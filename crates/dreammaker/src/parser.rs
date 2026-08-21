@@ -2326,6 +2326,11 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         } else {
             require!(self.term(&mut belongs_to))
         };
+        // Preserve base for `/type::var`.
+        let mut typepath_base = match &term.elem {
+            Term::Prefab(prefab) => Some(prefab.path.clone()),
+            _ => None,
+        };
 
         // Read postfix unary ops and field-access follows
         let mut follow = Vec::new();
@@ -2335,7 +2340,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 Token::Punct(Punctuation::PlusPlus) => follow.push(Spanned::new(self.location, Follow::Unary(UnaryOp::PostIncr))),
                 Token::Punct(Punctuation::MinusMinus) => follow.push(Spanned::new(self.location, Follow::Unary(UnaryOp::PostDecr))),
             } else {
-                match self.follow(&mut belongs_to, in_ternary)? {
+                match self.follow(&mut belongs_to, &mut typepath_base, in_ternary)? {
                     Some(f) => follow.push(f),
                     None => break,
                 }
@@ -2672,10 +2677,16 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         ))
     }
 
-    fn follow(&mut self, belongs_to: &mut Vec<Ident>, in_ternary: bool) -> Status<Spanned<Follow>> {
+    fn follow(
+        &mut self,
+        belongs_to: &mut Vec<Ident>,
+        typepath_base: &mut Option<RelativePath>,
+        in_ternary: bool,
+    ) -> Status<Spanned<Follow>> {
         let first_location = self.updated_location();
 
         if let Some(follow) = self.list_access(belongs_to)? {
+            *typepath_base = None;
             return success(follow);
         }
 
@@ -2708,6 +2719,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
         let follow = match self.arguments(belongs_to, &ident)? {
             Some(args) => {
+                *typepath_base = None;
                 if !belongs_to.is_empty() {
                     let past = std::mem::take(belongs_to);
                     self.annotate_precise(start..end, || {
@@ -2725,6 +2737,13 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         Annotation::ScopedVar(belongs_to.clone(), ident.clone())
                     });
                     belongs_to.push(ident.clone());
+                    *typepath_base = None;
+                } else if let Some(typepath) = typepath_base.take() {
+                    if kind == PropertyAccessKind::Scope {
+                        self.annotate_precise(start..end, || {
+                            Annotation::TypePathVar(typepath, ident.clone())
+                        });
+                    }
                 }
                 match kind {
                     PropertyAccessKind::Scope => Follow::StaticField(ident),
