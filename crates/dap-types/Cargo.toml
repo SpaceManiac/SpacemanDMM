@@ -2,10 +2,11 @@
 name = "dap-types"
 version = "0.0.0"
 authors = ["Tad Hardesty <tad@platymuus.com>"]
-edition = "2018"
+edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
-serde = "1.0.136"
-serde_json = "1.0.79"
-serde_derive = "1.0.136"
-ahash = "0.7.6"
+serde = "1.0.213"
+serde_json = "1.0.132"
+serde_derive = "1.0.213"
+foldhash = "0.2.0"

@@ -1,5 +1,5 @@
-use dap_types::*;
 use super::*;
+use dap_types::*;
 
 const EXTOOLS_HELP: &str = "
 #dis, #disassemble: show disassembly for current stack frame";
@@ -19,17 +19,19 @@ impl Debugger {
                     return Ok(EvaluateResponse::from(EXTOOLS_HELP.trim()));
                 }
 
-                guard!(let Some(frame_id) = params.frameId else {
-                    return Err(Box::new(GenericError("Must select a stack frame to evaluate in")));
-                });
+                let Some(frame_id) = params.frameId else {
+                    return Err(Box::new(GenericError(
+                        "Must select a stack frame to evaluate in",
+                    )));
+                };
 
                 let (thread, frame_no) = extools.get_thread_by_frame_id(frame_id)?;
 
                 if input.starts_with('#') {
                     if input == "#dis" || input == "#disassemble" {
-                        guard!(let Some(frame) = thread.call_stack.get(frame_no) else {
+                        let Some(frame) = thread.call_stack.get(frame_no) else {
                             return Err(Box::new(GenericError("Stack frame out of range")));
-                        });
+                        };
 
                         let bytecode = extools.bytecode(&frame.proc, frame.override_id);
                         return Ok(EvaluateResponse::from(Self::format_disassembly(bytecode)));
@@ -37,21 +39,18 @@ impl Debugger {
                         return Err(Box::new(GenericError("Unknown #command")));
                     }
                 }
-            }
+            },
 
             DebugClient::Auxtools(auxtools) => {
-                let response = auxtools.eval(
-                    params.frameId.map(|x| x as u32),
-                    input,
-                    params.context,
-                )?;
+                let response =
+                    auxtools.eval(params.frameId.map(|x| x as u32), input, params.context)?;
 
                 return Ok(EvaluateResponse {
                     result: response.value,
                     variablesReference: response.variables.map(|x| x.0 as i64).unwrap_or(0),
                     ..Default::default()
                 });
-            }
+            },
         }
 
         Err(Box::new(GenericError("Not yet implemented")))

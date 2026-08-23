@@ -1,23 +1,30 @@
 //! The DM abstract syntax tree.
 //!
 //! Most AST types can be pretty-printed using the `Display` trait.
+use std::borrow::Borrow;
 use std::fmt;
+use std::hash::Hash;
 use std::iter::FromIterator;
+
+use beef::lean::Cow;
+use get_size::GetSize;
+use get_size_derive::GetSize;
 use phf::phf_map;
 
 use crate::error::Location;
+use crate::intern::intern_static;
 
 /// Arguments for [`Term::Pick`]
 pub type PickArgs = [(Option<Expression>, Expression)];
 
-/// Cases for [`Term::Switch`]
+/// Cases for [`Statement::Switch`]
 pub type SwitchCases = [(Spanned<Vec<Case>>, Block)];
 
 // ----------------------------------------------------------------------------
 // Simple enums
 
 /// The unary operators, both prefix and postfix.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, GetSize)]
 pub enum UnaryOp {
     Neg,
     Not,
@@ -26,34 +33,26 @@ pub enum UnaryOp {
     PostIncr,
     PreDecr,
     PostDecr,
+    Reference,
+    Dereference,
 }
 
 impl UnaryOp {
     /// Prepare to display this unary operator around (to the left or right of)
     /// its operand.
     pub fn around<T: fmt::Display + ?Sized>(self, expr: &'_ T) -> impl fmt::Display + '_ {
-        /// A formatting wrapper created by `UnaryOp::around`.
-        struct Around<'a, T: 'a + ?Sized> {
-            op: UnaryOp,
-            expr: &'a T,
-        }
-
-        impl<'a, T: fmt::Display + ?Sized> fmt::Display for Around<'a, T> {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                use self::UnaryOp::*;
-                match self.op {
-                    Neg => write!(f, "-{}", self.expr),
-                    Not => write!(f, "!{}", self.expr),
-                    BitNot => write!(f, "~{}", self.expr),
-                    PreIncr => write!(f, "++{}", self.expr),
-                    PostIncr => write!(f, "{}++", self.expr),
-                    PreDecr => write!(f, "--{}", self.expr),
-                    PostDecr => write!(f, "{}--", self.expr),
-                }
-            }
-        }
-
-        Around { op: self, expr }
+        use self::UnaryOp::*;
+        fmt::from_fn(move |f| match self {
+            Neg => write!(f, "-{}", expr),
+            Not => write!(f, "!{}", expr),
+            BitNot => write!(f, "~{}", expr),
+            PreIncr => write!(f, "++{}", expr),
+            PostIncr => write!(f, "{}++", expr),
+            PreDecr => write!(f, "--{}", expr),
+            PostDecr => write!(f, "{}--", expr),
+            Reference => write!(f, "&{}", expr),
+            Dereference => write!(f, "*{}", expr),
+        })
     }
 
     /// Get a human-readable name for this unary operator. May be ambiguous.
@@ -65,6 +64,8 @@ impl UnaryOp {
             BitNot => "~",
             PreIncr | PostIncr => "++",
             PreDecr | PostDecr => "--",
+            Reference => "&",
+            Dereference => "*",
         }
     }
 }
@@ -72,7 +73,7 @@ impl UnaryOp {
 /// The DM path operators.
 ///
 /// Which path operator is used typically only matters at the start of a path.
-#[derive(Copy, Clone, Hash, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, Hash, PartialEq, Eq, Debug, GetSize)]
 pub enum PathOp {
     /// `/` for absolute pathing.
     Slash,
@@ -99,7 +100,7 @@ impl fmt::Display for PathOp {
 }
 
 /// The binary operators.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, GetSize)]
 pub enum BinaryOp {
     Add,
     Sub,
@@ -107,12 +108,14 @@ pub enum BinaryOp {
     Div,
     Pow,
     Mod,
+    FloatMod,
     Eq,
     NotEq,
     Less,
     Greater,
     LessEq,
     GreaterEq,
+    LessOrGreater,
     Equiv,
     NotEquiv,
     BitAnd,
@@ -123,7 +126,7 @@ pub enum BinaryOp {
     And,
     Or,
     In,
-    To,  // only appears in RHS of `In`
+    To, // only appears in RHS of `In`
 }
 
 impl fmt::Display for BinaryOp {
@@ -136,11 +139,13 @@ impl fmt::Display for BinaryOp {
             Div => "/",
             Pow => "**",
             Mod => "%",
+            FloatMod => "%%",
             Eq => "==",
             NotEq => "!=",
             Less => "<",
             Greater => ">",
             LessEq => "<=",
+            LessOrGreater => "<=>",
             GreaterEq => ">=",
             Equiv => "~=",
             NotEquiv => "~!",
@@ -158,7 +163,7 @@ impl fmt::Display for BinaryOp {
 }
 
 /// The assignment operators, including augmented assignment.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, GetSize)]
 pub enum AssignOp {
     Assign,
     AddAssign,
@@ -166,6 +171,7 @@ pub enum AssignOp {
     MulAssign,
     DivAssign,
     ModAssign,
+    FloatModAssign,
     AssignInto,
     BitAndAssign,
     AndAssign,
@@ -186,6 +192,7 @@ impl fmt::Display for AssignOp {
             MulAssign => "*=",
             DivAssign => "/=",
             ModAssign => "%=",
+            FloatModAssign => "%%=",
             AssignInto => ":=",
             BitAndAssign => "&=",
             AndAssign => "&&=",
@@ -227,6 +234,7 @@ augmented! {
     Mul = MulAssign;
     Div = DivAssign;
     Mod = ModAssign;
+    FloatMod = FloatModAssign;
     BitAnd = BitAndAssign;
     BitOr = BitOrAssign;
     BitXor = BitXorAssign;
@@ -243,7 +251,7 @@ pub enum TernaryOp {
 }
 
 /// The possible kinds of access operators for lists
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, GetSize)]
 pub enum ListAccessKind {
     /// `[]`
     Normal,
@@ -252,7 +260,7 @@ pub enum ListAccessKind {
 }
 
 /// The possible kinds of index operators, for both fields and methods.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, GetSize)]
 pub enum PropertyAccessKind {
     /// `a.b`
     Dot,
@@ -262,6 +270,8 @@ pub enum PropertyAccessKind {
     SafeDot,
     /// `a?:b`
     SafeColon,
+    /// 'a::b'
+    Scope,
 }
 
 impl PropertyAccessKind {
@@ -271,6 +281,7 @@ impl PropertyAccessKind {
             PropertyAccessKind::Colon => ":",
             PropertyAccessKind::SafeDot => "?.",
             PropertyAccessKind::SafeColon => "?:",
+            PropertyAccessKind::Scope => "::",
         }
     }
 }
@@ -281,12 +292,64 @@ impl fmt::Display for PropertyAccessKind {
     }
 }
 
+/// Description of a proc's return type (`as` phrase).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, GetSize)]
+pub enum ProcReturnType {
+    InputType(InputType),
+    TypePath(Vec<Ident>),
+}
+
+impl ProcReturnType {
+    pub fn is_empty(&self) -> bool {
+        matches!(self, ProcReturnType::InputType(InputType { bits: 0 }))
+    }
+}
+
+impl Default for ProcReturnType {
+    fn default() -> Self {
+        ProcReturnType::InputType(InputType::empty())
+    }
+}
+
+/// Information about a proc declaration
+///
+/// Holds what sort of decl it was (did it use /proc or /verb), alongside a set of flags
+/// That describe extra info pulled from the path
+#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
+pub struct ProcDeclBuilder {
+    pub kind: ProcDeclKind,
+    pub flags: ProcFlags,
+}
+
+impl ProcDeclBuilder {
+    pub fn new(kind: ProcDeclKind, flags: Option<ProcFlags>) -> ProcDeclBuilder {
+        ProcDeclBuilder {
+            kind,
+            flags: flags.unwrap_or_default(),
+        }
+    }
+
+    pub fn kind(self) -> &'static str {
+        self.kind.name()
+    }
+
+    pub fn is_final(self) -> bool {
+        self.flags.is_final()
+    }
+}
+
+impl fmt::Display for ProcDeclBuilder {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "{}{}", self.kind, self.flags)
+    }
+}
+
 /// The proc declaration kind, either `proc` or `verb`.
 ///
 /// DM requires referencing proc paths to include whether the target is
 /// declared as a proc or verb, even though the two modes are functionally
 /// identical in many other respects.
-#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash, GetSize)]
 pub enum ProcDeclKind {
     Proc,
     Verb,
@@ -322,7 +385,51 @@ impl fmt::Display for ProcDeclKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+bitflags! {
+    #[derive(Default, GetSize)]
+    pub struct ProcFlags: u8 {
+        // DM flags
+        const FINAL = 1 << 0;
+    }
+}
+
+impl ProcFlags {
+    pub fn from_name(name: &str) -> Option<ProcFlags> {
+        match name {
+            // DM flags
+            "final" => Some(ProcFlags::FINAL),
+            // Fallback
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub fn is_final(&self) -> bool {
+        self.contains(ProcFlags::FINAL)
+    }
+
+    pub fn iter(mut self) -> impl Iterator<Item = &'static str> {
+        std::iter::from_fn(move || {
+            if self.is_final() {
+                self &= !ProcFlags::FINAL;
+                Some("final")
+            } else {
+                None
+            }
+        })
+    }
+}
+
+impl fmt::Display for ProcFlags {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        if self.is_final() {
+            fmt.write_str("/final")?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, GetSize)]
 pub enum SettingMode {
     /// As in `set name = "Use"`.
     Assign,
@@ -359,6 +466,12 @@ macro_rules! type_table {
             }
         }
 
+        impl $name {
+            pub const ENTRIES: &'static [(&'static str, $name)] = &[
+                $(($txt, $name::$i),)*
+            ];
+        }
+
         impl std::str::FromStr for $name {
             type Err = ();
 
@@ -392,6 +505,7 @@ macro_rules! type_table {
 
 type_table! {
     /// A type specifier for verb arguments and input() calls.
+    #[derive(GetSize)]
     pub struct InputType;
 
     // These values can be known with an invocation such as:
@@ -412,10 +526,48 @@ type_table! {
     "password",     PASSWORD,     1 << 15;
     "command_text", COMMAND_TEXT, 1 << 16;
     "color",        COLOR,        1 << 17;
+    // Non-primitive combinations that are still valid as(X) calls:
+    "movable",      MOVABLE,      Self::OBJ.bits | Self::MOB.bits;
+    "atom",         ATOM,         Self::AREA.bits | Self::TURF.bits | Self::OBJ.bits | Self::MOB.bits;
+    // Placeholder value for `as list` that's technically only legal as a proc return type, but whatever.
+    "list",         LIST,         1 << 31;
+}
+
+impl Default for InputType {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
+impl InputType {
+    /// Get a typepath that approximates this input type, if possible.
+    pub fn to_typepath(&self) -> Option<&'static str> {
+        if self.is_empty() {
+            None
+        } else if *self == InputType::MOB {
+            Some("/mob")
+        } else if *self == InputType::OBJ {
+            Some("/obj")
+        } else if *self == InputType::TURF {
+            Some("/turf")
+        } else if *self == InputType::AREA {
+            Some("/area")
+        } else if *self == InputType::LIST {
+            Some("/list")
+        } else if self.difference(InputType::MOVABLE).is_empty() {
+            // Only applies to exactly movable = mob | obj
+            Some("/atom/movable")
+        } else if self.difference(InputType::ATOM).is_empty() {
+            // Might apply to area|turf or turf|mob or similar combos
+            Some("/atom")
+        } else {
+            None
+        }
+    }
 }
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Default, GetSize)]
     pub struct VarTypeFlags: u8 {
         // DM flags
         const STATIC = 1 << 0;
@@ -435,6 +587,7 @@ impl VarTypeFlags {
             "global" | "static" => Some(VarTypeFlags::STATIC),
             "const" => Some(VarTypeFlags::CONST),
             "tmp" => Some(VarTypeFlags::TMP),
+            "final" => Some(VarTypeFlags::FINAL),
             // SpacemanDMM flags
             "SpacemanDMM_final" => Some(VarTypeFlags::FINAL),
             "SpacemanDMM_private" => Some(VarTypeFlags::PRIVATE),
@@ -476,7 +629,8 @@ impl VarTypeFlags {
 
     #[inline]
     pub fn is_const_evaluable(&self) -> bool {
-        self.contains(VarTypeFlags::CONST) || !self.intersects(VarTypeFlags::STATIC | VarTypeFlags::PROTECTED)
+        self.contains(VarTypeFlags::CONST)
+            || !self.intersects(VarTypeFlags::STATIC | VarTypeFlags::PROTECTED)
     }
 
     #[inline]
@@ -484,15 +638,30 @@ impl VarTypeFlags {
         !self.intersects(VarTypeFlags::CONST | VarTypeFlags::STATIC | VarTypeFlags::PROTECTED)
     }
 
-    pub fn to_vec(&self) -> Vec<&'static str> {
-        let mut v = Vec::new();
-        if self.is_static() { v.push("static"); }
-        if self.is_const() { v.push("const"); }
-        if self.is_tmp() { v.push("tmp"); }
-        if self.is_final() { v.push("SpacemanDMM_final"); }
-        if self.is_private() { v.push("SpacemanDMM_private"); }
-        if self.is_protected() { v.push("SpacemanDMM_protected"); }
-        v
+    pub fn iter(mut self) -> impl Iterator<Item = &'static str> {
+        std::iter::from_fn(move || {
+            if self.is_static() {
+                self &= !VarTypeFlags::STATIC;
+                Some("static")
+            } else if self.is_const() {
+                self &= !VarTypeFlags::CONST;
+                Some("const")
+            } else if self.is_tmp() {
+                self &= !VarTypeFlags::TMP;
+                Some("tmp")
+            } else if self.is_final() {
+                self &= !VarTypeFlags::FINAL;
+                Some("final")
+            } else if self.is_private() {
+                self &= !VarTypeFlags::PRIVATE;
+                Some("SpacemanDMM_private")
+            } else if self.is_protected() {
+                self &= !VarTypeFlags::PROTECTED;
+                Some("SpacemanDMM_protected")
+            } else {
+                None
+            }
+        })
     }
 }
 
@@ -508,7 +677,7 @@ impl fmt::Display for VarTypeFlags {
             fmt.write_str("tmp/")?;
         }
         if self.is_final() {
-            fmt.write_str("SpacemanDMM_final/")?;
+            fmt.write_str("final/")?;
         }
         if self.is_private() {
             fmt.write_str("SpacemanDMM_private/")?;
@@ -523,68 +692,185 @@ impl fmt::Display for VarTypeFlags {
 // ----------------------------------------------------------------------------
 // Helper types
 
-// Original `Ident` is an alias for `String`.
-pub type Ident = String;
-
 // Ident2 is an opaque type which promises a limited interface.
-// It's a `Box<str>` for now (smaller than `Ident` by 8 bytes),
-// but could be replaced by interning later.
-#[derive(Clone, Eq, PartialEq)]
-pub struct Ident2 {
-    inner: Box<str>,
+// Its implementation can be modified as Cow/interning strategy changes.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Ident {
+    inner: Cow<'static, str>,
 }
 
-impl Ident2 {
-    pub fn as_str(&self) -> &str {
-        &*self.inner
+impl Default for Ident {
+    fn default() -> Self {
+        Ident::EMPTY
     }
 }
 
-impl PartialEq<str> for Ident2 {
+impl Ident {
+    const EMPTY: Ident = Ident {
+        inner: Cow::const_str(""),
+    };
+
+    pub fn from_nonstatic(str: &str) -> Self {
+        if let Some(i) = intern_static(str) {
+            Ident {
+                inner: Cow::borrowed(i),
+            }
+        } else {
+            Ident {
+                inner: Cow::owned(str.to_owned()),
+            }
+        }
+    }
+
+    pub fn from_nonstatic_cow(str: std::borrow::Cow<str>) -> Self {
+        if let Some(i) = intern_static(&str) {
+            Ident {
+                inner: Cow::borrowed(i),
+            }
+        } else {
+            Ident {
+                inner: Cow::owned(str.into_owned()),
+            }
+        }
+    }
+
+    #[inline]
+    pub(crate) fn from_static(str: &'static str) -> Self {
+        debug_assert!(
+            intern_static(str).is_some(),
+            "Missing from STATIC_IDENTS: {:?}",
+            str
+        );
+        Ident {
+            inner: Cow::const_str(str),
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.inner
+    }
+
+    pub fn into_owned(self) -> String {
+        self.inner.into_owned()
+    }
+
+    #[allow(clippy::inherent_to_string_shadow_display)]
+    pub fn to_string(&self) -> String {
+        self.as_str().to_owned()
+    }
+}
+
+impl AsRef<str> for Ident {
+    fn as_ref(&self) -> &str {
+        self.inner.borrow()
+    }
+}
+
+impl Borrow<str> for Ident {
+    fn borrow(&self) -> &str {
+        self.inner.borrow()
+    }
+}
+
+impl PartialEq<str> for Ident {
     fn eq(&self, other: &str) -> bool {
         &*self.inner == other
     }
 }
 
-impl<'a> From<&'a str> for Ident2 {
-    fn from(v: &'a str) -> Self {
-        Ident2 { inner: v.into() }
+impl<'a> PartialEq<&'a str> for Ident {
+    fn eq(&self, other: &&'a str) -> bool {
+        &*self.inner == *other
     }
 }
 
-impl From<String> for Ident2 {
+impl PartialEq<Ident> for str {
+    fn eq(&self, other: &Ident) -> bool {
+        &*other.inner == self
+    }
+}
+
+impl PartialEq<Ident> for &str {
+    fn eq(&self, other: &Ident) -> bool {
+        &*other.inner == *self
+    }
+}
+
+impl From<&'static str> for Ident {
+    fn from(v: &'static str) -> Self {
+        Ident {
+            inner: Cow::borrowed(v),
+        }
+    }
+}
+
+impl From<String> for Ident {
     fn from(v: String) -> Self {
-        Ident2 { inner: v.into() }
+        if let Some(i) = intern_static(&v) {
+            Ident {
+                inner: Cow::borrowed(i),
+            }
+        } else {
+            Ident {
+                inner: Cow::owned(v),
+            }
+        }
     }
 }
 
-impl From<Ident2> for String {
-    fn from(v: Ident2) -> Self {
-        v.inner.into()
+impl From<std::borrow::Cow<'static, str>> for Ident {
+    fn from(value: std::borrow::Cow<'static, str>) -> Self {
+        match (intern_static(&value), value) {
+            (Some(i), _) => Ident {
+                inner: Cow::borrowed(i),
+            },
+            (None, std::borrow::Cow::Borrowed(b)) => Ident {
+                inner: Cow::borrowed(b),
+            },
+            (None, std::borrow::Cow::Owned(o)) => Ident {
+                inner: Cow::owned(o),
+            },
+        }
     }
 }
 
-impl std::ops::Deref for Ident2 {
+impl From<ProcDeclKind> for Ident {
+    fn from(value: ProcDeclKind) -> Self {
+        Ident::from_static(value.name())
+    }
+}
+
+impl std::ops::Deref for Ident {
     type Target = str;
     fn deref(&self) -> &str {
-        &*self.inner
+        &self.inner
     }
 }
 
-impl fmt::Display for Ident2 {
+impl fmt::Display for Ident {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.inner.fmt(f)
     }
 }
 
-impl fmt::Debug for Ident2 {
+impl fmt::Debug for Ident {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.inner.fmt(f)
+    }
+}
+
+impl GetSize for Ident {
+    fn get_heap_size(&self) -> usize {
+        if self.inner.is_owned() {
+            self.inner.len()
+        } else {
+            0
+        }
     }
 }
 
 /// An AST element with an additional location attached.
-#[derive(Copy, Clone, Eq, Debug)]
+#[derive(Copy, Clone, Eq, Debug, GetSize)]
 pub struct Spanned<T> {
     // TODO: add a Span type and use it here
     pub location: Location,
@@ -602,28 +888,115 @@ impl<T> Spanned<T> {
     pub fn new(location: Location, elem: T) -> Spanned<T> {
         Spanned { location, elem }
     }
+
+    pub fn invalid(elem: T) -> Spanned<T> {
+        Spanned {
+            location: Location::INVALID,
+            elem,
+        }
+    }
 }
 
-/// A (typically absolute) tree path where the path operator is irrelevant.
-pub type TreePath = Box<[Ident]>;
+/// An absolute tree path like `/ident/ident`.
+#[derive(Default, Debug, Clone, PartialEq, Eq, Hash, GetSize)]
+pub struct AbsolutePath(Box<[Ident]>);
 
-pub struct FormatTreePath<'a, T>(pub &'a [T]);
+impl<'a> From<&'a str> for AbsolutePath {
+    fn from(value: &'a str) -> Self {
+        value
+            .split('/')
+            .filter(|elem| !elem.is_empty())
+            .map(Ident::from_nonstatic)
+            .collect::<AbsolutePath>()
+    }
+}
 
-impl<'a, T: fmt::Display> fmt::Display for FormatTreePath<'a, T> {
+impl FromIterator<Ident> for AbsolutePath {
+    fn from_iter<T: IntoIterator<Item = Ident>>(iter: T) -> Self {
+        Self(FromIterator::from_iter(iter))
+    }
+}
+
+impl AbsolutePath {
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn as_slice(&self) -> &[Ident] {
+        &self.0
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Ident> {
+        self.0.iter()
+    }
+}
+
+impl fmt::Display for AbsolutePath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for each in self.0.iter() {
+            write!(f, "/{each}")?;
+        }
+        Ok(())
+    }
+}
+
+pub struct DisplayAbsolutePath<'a, T>(pub &'a [T]);
+
+impl<'a, T: fmt::Display> fmt::Display for DisplayAbsolutePath<'a, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for each in self.0.iter() {
-            write!(f, "/{}", each)?;
+            write!(f, "/{each}")?;
         }
         Ok(())
     }
 }
 
 /// A series of identifiers separated by path operators.
-pub type TypePath = Vec<(PathOp, Ident)>;
+#[derive(Default, Debug, Clone, PartialEq, Eq, Hash, GetSize)]
+pub struct RelativePath(Vec<(PathOp, Ident)>);
 
-pub struct FormatTypePath<'a>(pub &'a [(PathOp, Ident)]);
+impl RelativePath {
+    pub fn single(op: PathOp, ident: Ident) -> RelativePath {
+        RelativePath(vec![(op, ident)])
+    }
 
-impl<'a> fmt::Display for FormatTypePath<'a> {
+    pub fn nameof(&self) -> Option<&str> {
+        Some(self.0.last()?.1.as_str())
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn as_slice(&self) -> &[(PathOp, Ident)] {
+        &self.0
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &(PathOp, Ident)> {
+        self.0.iter()
+    }
+
+    pub fn push(&mut self, value: (PathOp, Ident)) {
+        self.0.push(value);
+    }
+}
+
+impl fmt::Display for RelativePath {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for each in self.0.iter() {
+            write!(f, "{}{}", each.0, each.1)?;
+        }
+        Ok(())
+    }
+}
+
+pub struct DisplayRelativePath<'a>(pub &'a [(PathOp, Ident)]);
+
+impl<'a> fmt::Display for DisplayRelativePath<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for each in self.0.iter() {
             write!(f, "{}{}", each.0, each.1)?;
@@ -636,14 +1009,24 @@ impl<'a> fmt::Display for FormatTypePath<'a> {
 // Terms and Expressions
 
 /// A typepath optionally followed by a set of variables.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, GetSize)]
 pub struct Prefab {
-    pub path: TypePath,
-    pub vars: Box<[(Ident2, Expression)]>,
+    pub path: RelativePath,
+    pub vars: Box<[(Ident, Expression)]>,
 }
 
-impl From<TypePath> for Prefab {
-    fn from(path: TypePath) -> Self {
+impl Prefab {
+    fn nameof(&self) -> Option<&str> {
+        if self.vars.is_empty() {
+            self.path.nameof()
+        } else {
+            None
+        }
+    }
+}
+
+impl From<RelativePath> for Prefab {
+    fn from(path: RelativePath) -> Self {
         Prefab {
             path,
             vars: Default::default(),
@@ -656,7 +1039,7 @@ pub struct FormatVars<'a, T>(pub &'a T);
 
 impl<'a, T, K, V> fmt::Display for FormatVars<'a, T>
 where
-    &'a T: IntoIterator<Item=(K, V)>,
+    &'a T: IntoIterator<Item = (K, V)>,
     K: fmt::Display,
     V: fmt::Display,
 {
@@ -674,7 +1057,7 @@ where
 }
 
 /// The structure of an expression, a tree of terms and operators.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, GetSize)]
 pub enum Expression {
     /// An expression containing a term directly. The term is evaluated first,
     /// then its follows, then its unary operators in reverse order.
@@ -710,14 +1093,14 @@ pub enum Expression {
         if_: Box<Expression>,
         /// The value otherwise.
         else_: Box<Expression>,
-    }
+    },
 }
 
 impl Expression {
     /// If this expression consists of a single term, return it.
     pub fn as_term(&self) -> Option<&Term> {
         match self {
-            &Expression::Base { ref term, ref follow } if follow.is_empty() => Some(&term.elem),
+            Expression::Base { term, follow } if follow.is_empty() => Some(&term.elem),
             _ => None,
         }
     }
@@ -739,26 +1122,29 @@ impl Expression {
     pub fn is_const_eval(&self) -> bool {
         match self {
             Expression::BinaryOp { op, lhs, rhs } => {
-                guard!(let Some(lhterm) = lhs.as_term() else {
-                    return false
-                });
-                guard!(let Some(rhterm) = rhs.as_term() else {
-                    return false
-                });
+                let Some(lhterm) = lhs.as_term() else {
+                    return false;
+                };
+                let Some(rhterm) = rhs.as_term() else {
+                    return false;
+                };
                 if !lhterm.is_static() {
-                    return false
+                    return false;
                 }
                 if !rhterm.is_static() {
-                    return false
+                    return false;
                 }
-                matches!(op, BinaryOp::Eq |
-                    BinaryOp::NotEq |
-                    BinaryOp::Less |
-                    BinaryOp::Greater |
-                    BinaryOp::LessEq |
-                    BinaryOp::GreaterEq |
-                    BinaryOp::And |
-                    BinaryOp::Or)
+                matches!(
+                    op,
+                    BinaryOp::Eq
+                        | BinaryOp::NotEq
+                        | BinaryOp::Less
+                        | BinaryOp::Greater
+                        | BinaryOp::LessEq
+                        | BinaryOp::GreaterEq
+                        | BinaryOp::And
+                        | BinaryOp::Or
+                )
             },
             _ => false,
         }
@@ -767,9 +1153,7 @@ impl Expression {
     pub fn is_truthy(&self) -> Option<bool> {
         match self {
             Expression::Base { term, follow } => {
-                guard!(let Some(mut truthy) = term.elem.is_truthy() else {
-                    return None;
-                });
+                let mut truthy = term.elem.is_truthy()?;
                 for follow in follow.iter() {
                     match follow.elem {
                         Follow::Unary(UnaryOp::Not) => truthy = !truthy,
@@ -779,12 +1163,8 @@ impl Expression {
                 Some(truthy)
             },
             Expression::BinaryOp { op, lhs, rhs } => {
-                guard!(let Some(lhtruth) = lhs.is_truthy() else {
-                    return None
-                });
-                guard!(let Some(rhtruth) = rhs.is_truthy() else {
-                    return None
-                });
+                let lhtruth = lhs.is_truthy()?;
+                let rhtruth = rhs.is_truthy()?;
                 match op {
                     BinaryOp::And => Some(lhtruth && rhtruth),
                     BinaryOp::Or => Some(lhtruth || rhtruth),
@@ -793,7 +1173,7 @@ impl Expression {
             },
             Expression::AssignOp { op, lhs: _, rhs } => {
                 if let AssignOp::Assign = op {
-                    return match rhs.as_term() {
+                    match rhs.as_term() {
                         Some(term) => term.is_truthy(),
                         _ => None,
                     }
@@ -802,15 +1182,26 @@ impl Expression {
                 }
             },
             Expression::TernaryOp { cond, if_, else_ } => {
-                guard!(let Some(condtruth) = cond.is_truthy() else {
-                    return None
-                });
+                let condtruth = cond.is_truthy()?;
                 if condtruth {
                     if_.is_truthy()
                 } else {
                     else_.is_truthy()
                 }
-            }
+            },
+        }
+    }
+
+    pub fn nameof(&self) -> Option<&str> {
+        match self {
+            Expression::Base { term, follow } => {
+                if let Some(last) = follow.last() {
+                    last.elem.nameof()
+                } else {
+                    term.elem.nameof()
+                }
+            },
+            _ => None,
         }
     }
 }
@@ -820,7 +1211,7 @@ impl From<Term> for Expression {
         match term {
             Term::Expr(expr) => *expr,
             term => Expression::Base {
-                term: Box::new(Spanned::new(Default::default(), term)),
+                term: Box::new(Spanned::invalid(term)),
                 follow: Default::default(),
             },
         }
@@ -828,7 +1219,8 @@ impl From<Term> for Expression {
 }
 
 /// The structure of a term, the basic building block of the AST.
-#[derive(Clone, PartialEq, Debug)]
+#[allow(non_camel_case_types)]
+#[derive(Clone, PartialEq, Debug, GetSize)]
 pub enum Term {
     // Terms with no recursive contents ---------------------------------------
     /// The literal `null`.
@@ -840,11 +1232,20 @@ pub enum Term {
     /// An identifier.
     Ident(Ident),
     /// A string literal.
-    String(String),
+    String(Ident),
     /// A resource literal.
     Resource(String),
     /// An `as()` call, with an input type. Undocumented.
     As(InputType),
+    /// A reference to our current proc's name
+    __PROC__,
+    /// A reference to the current proc/scope's type
+    __TYPE__,
+    /// If rhs of an assignment op, this is a reference to the lhs var's type.
+    /// If we're used as the second arg of an istype then it's the implied type of the first arg.
+    /// Second case takes precedence over the first, but we don't properly implement because it would be impossible to tell.
+    /// You can't DO anything to the `__IMPLIED_TYPE__` so we don't really need to care about it.
+    __IMPLIED_TYPE__,
 
     // Non-function calls with recursive contents -----------------------------
     /// An expression contained in a term.
@@ -852,11 +1253,11 @@ pub enum Term {
     /// A prefab literal (path + vars).
     Prefab(Box<Prefab>),
     /// An interpolated string, alternating string/expr/string/expr.
-    InterpString(Ident2, Box<[(Option<Expression>, Box<str>)]>),
+    InterpString(Ident, Box<[(Option<Expression>, Ident)]>),
 
     // Function calls with recursive contents ---------------------------------
     /// An unscoped function call.
-    Call(Ident2, Box<[Expression]>),
+    Call(Ident, Box<[Expression]>),
     /// A `.()` call.
     SelfCall(Box<[Expression]>),
     /// A `..()` call. If arguments is empty, the proc's arguments are passed.
@@ -885,7 +1286,7 @@ pub enum Term {
     /// An `input` call.
     Input {
         args: Box<[Expression]>,
-        input_type: Option<InputType>, // as
+        input_type: Option<InputType>,    // as
         in_list: Option<Box<Expression>>, // in
     },
     /// A `locate` call.
@@ -897,21 +1298,28 @@ pub enum Term {
     Pick(Box<PickArgs>),
     /// A use of the `call()()` primitive.
     DynamicCall(Box<[Expression]>, Box<[Expression]>),
+    /// A use of the `call_ext()()` primitive.
+    ExternalCall {
+        library: Option<Box<Expression>>,
+        function: Box<Expression>,
+        args: Box<[Expression]>,
+    },
+    /// Unscoped `::A` is a shorthand for `global.A`
+    GlobalIdent(Ident),
+    /// Unscoped `::A(...)` is a shorthand for `global.A(...)`
+    GlobalCall(Ident, Box<[Expression]>),
 }
 
 impl Term {
     pub fn is_static(&self) -> bool {
-        matches!(self,
-            Term::Null
-            | Term::Int(_)
-            | Term::Float(_)
-            | Term::String(_)
-            | Term::Prefab(_)
+        matches!(
+            self,
+            Term::Null | Term::Int(_) | Term::Float(_) | Term::String(_) | Term::Prefab(_)
         )
     }
 
     pub fn is_truthy(&self) -> Option<bool> {
-        return match self {
+        match self {
             // `null`, `0`, and empty strings are falsey.
             Term::Null => Some(false),
             Term::Int(i) => Some(*i != 0),
@@ -940,72 +1348,113 @@ impl Term {
             Term::Expr(e) => e.is_truthy(),
 
             _ => None,
-        };
+        }
     }
 
     pub fn valid_for_range(&self, other: &Term, step: Option<&Expression>) -> Option<bool> {
-        if let Term::Int(i) = *self {
-            if let Term::Int(o) = *other {
-                // edge case
-                if i == 0 && o == 0 {
-                    return Some(false)
-                }
-                if let Some(stepexp) = step {
-                    if let Some(stepterm) = stepexp.as_term() {
-                        if let Term::Int(_s) = stepterm {
-                            return Some(true)
-                        }
-                    } else {
-                        return Some(true)
-                    }
-                }
-                return Some(i <= o)
+        if let Term::Int(i) = *self
+            && let Term::Int(o) = *other
+        {
+            // edge case
+            if i == 0 && o == 0 {
+                return Some(false);
             }
+            if let Some(stepexp) = step {
+                if let Some(stepterm) = stepexp.as_term() {
+                    if let Term::Int(_s) = stepterm {
+                        return Some(true);
+                    }
+                } else {
+                    return Some(true);
+                }
+            }
+            return Some(i <= o);
         }
         None
+    }
+
+    pub fn nameof(&self) -> Option<&str> {
+        match self {
+            Term::Expr(e) => e.nameof(),
+            Term::Ident(i) => Some(i),
+            Term::Prefab(fab) => fab.nameof(),
+            Term::GlobalIdent(i) => Some(i),
+            _ => None,
+        }
+    }
+
+    pub fn as_kwarg_key(&self) -> Option<&str> {
+        match self {
+            Term::Ident(i) => Some(i.as_str()),
+            Term::String(s) => Some(s.as_str()),
+            _ => None,
+        }
     }
 }
 
 impl From<Expression> for Term {
     fn from(expr: Expression) -> Term {
         match expr {
-            Expression::Base { term, follow } => if follow.is_empty() {
-                match term.elem {
-                    Term::Expr(expr) => Term::from(*expr),
-                    other => other,
+            Expression::Base { term, follow } => {
+                if follow.is_empty() {
+                    match term.elem {
+                        Term::Expr(expr) => Term::from(*expr),
+                        other => other,
+                    }
+                } else {
+                    Term::Expr(Box::new(Expression::Base { term, follow }))
                 }
-            } else {
-                Term::Expr(Box::new(Expression::Base { term, follow }))
             },
             other => Term::Expr(Box::new(other)),
         }
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, GetSize)]
 pub struct MiniExpr {
-    pub ident: Ident2,
+    pub ident: Ident,
     pub fields: Box<[Field]>,
 }
 
 /// An expression part which is applied to a term or another follow.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, GetSize)]
 pub enum Follow {
     /// Index the value by an expression.
     Index(ListAccessKind, Box<Expression>),
     /// Access a field of the value.
-    Field(PropertyAccessKind, Ident2),
+    Field(PropertyAccessKind, Ident),
     /// Call a method of the value.
-    Call(PropertyAccessKind, Ident2, Box<[Expression]>),
+    Call(PropertyAccessKind, Ident, Box<[Expression]>),
     /// Apply a unary operator to the value.
     Unary(UnaryOp),
+    /// Any of:
+    /// - `/typepath::static_var` to read/write any type's static variables.
+    /// - `/typepath::normal_var` gets the initial value of any type var.
+    /// - `parent_type::normal_var` gets the initial value on the parent type. Only works outside procs.
+    /// - `type::normal_var` gets the initial value on the current type. Only works outside procs. Beware loops.
+    StaticField(Ident),
+    /// `foo::bar()` is a proc reference.
+    /// If the LHS is a constant typepath, that is used.
+    /// Otherwise the **static** type of LHS is used.
+    ProcReference(Ident),
+}
+
+impl Follow {
+    pub fn nameof(&self) -> Option<&str> {
+        match self {
+            Follow::Field(_, i) => Some(i),
+            Follow::StaticField(i) => Some(i),
+            Follow::ProcReference(i) => Some(i),
+            _ => None,
+        }
+    }
 }
 
 /// Like a `Follow` but only supports field accesses.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, GetSize)]
 pub struct Field {
     pub kind: PropertyAccessKind,
-    pub ident: Ident2,
+    pub ident: Ident,
 }
 
 impl From<Field> for Follow {
@@ -1015,7 +1464,7 @@ impl From<Field> for Follow {
 }
 
 /// A parameter declaration in the header of a proc.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, GetSize)]
 pub struct Parameter {
     pub var_type: VarType,
     pub name: Ident,
@@ -1029,17 +1478,18 @@ impl fmt::Display for Parameter {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write!(fmt, "{}{}", self.var_type, self.name)?;
         if let Some(input_type) = self.input_type {
-            write!(fmt, " as {}", input_type)?;
+            write!(fmt, " as {input_type}")?;
         }
         Ok(())
     }
 }
 
 /// A type which may be ascribed to a `var`.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, GetSize)]
 pub struct VarType {
     pub flags: VarTypeFlags,
-    pub type_path: TreePath,
+    pub type_path: AbsolutePath,
+    pub input_type: InputType,
 }
 
 impl VarType {
@@ -1054,8 +1504,8 @@ impl VarType {
     }
 }
 
-impl FromIterator<String> for VarType {
-    fn from_iter<T: IntoIterator<Item=String>>(iter: T) -> Self {
+impl FromIterator<Ident> for VarType {
+    fn from_iter<T: IntoIterator<Item = Ident>>(iter: T) -> Self {
         VarTypeBuilder::from_iter(iter).build()
     }
 }
@@ -1076,25 +1526,27 @@ impl fmt::Display for VarType {
 pub struct VarTypeBuilder {
     pub flags: VarTypeFlags,
     pub type_path: Vec<Ident>,
+    pub input_type: Option<InputType>,
 }
 
 impl VarTypeBuilder {
     pub fn suffix(&mut self, suffix: &VarSuffix) {
         if !suffix.list.is_empty() {
-            self.type_path.insert(0, "list".to_owned());
+            self.type_path.insert(0, ident!("list"));
         }
     }
 
     pub fn build(self) -> VarType {
         VarType {
             flags: self.flags,
-            type_path: self.type_path.into_boxed_slice(),
+            type_path: AbsolutePath::from_iter(self.type_path),
+            input_type: self.input_type.unwrap_or_default(),
         }
     }
 }
 
-impl FromIterator<String> for VarTypeBuilder {
-    fn from_iter<T: IntoIterator<Item=String>>(iter: T) -> Self {
+impl FromIterator<Ident> for VarTypeBuilder {
+    fn from_iter<T: IntoIterator<Item = Ident>>(iter: T) -> Self {
         let mut flags = VarTypeFlags::default();
         let type_path = iter
             .into_iter()
@@ -1110,6 +1562,7 @@ impl FromIterator<String> for VarTypeBuilder {
         VarTypeBuilder {
             flags,
             type_path,
+            input_type: None,
         }
     }
 }
@@ -1134,7 +1587,10 @@ impl VarSuffix {
             None
         } else {
             Some(Expression::from(Term::NewPrefab {
-                prefab: Box::new(Prefab::from(vec![(PathOp::Slash, "list".to_owned())])),
+                prefab: Box::new(Prefab::from(RelativePath::single(
+                    PathOp::Slash,
+                    ident!("list"),
+                ))),
                 args: Some(args.into_boxed_slice()),
             }))
         }
@@ -1148,13 +1604,13 @@ impl VarSuffix {
 pub type Block = Box<[Spanned<Statement>]>;
 
 /// A statement in a proc body.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, GetSize)]
 pub enum Statement {
     Expr(Expression),
     Return(Option<Expression>),
     Throw(Expression),
     While {
-        condition: Expression,
+        condition: Box<Spanned<Expression>>,
         block: Block,
     },
     DoWhile {
@@ -1163,7 +1619,7 @@ pub enum Statement {
     },
     If {
         arms: Vec<(Spanned<Expression>, Block)>,
-        else_arm: Option<Block>
+        else_arm: Option<Block>,
     },
     ForInfinite {
         block: Block,
@@ -1175,13 +1631,14 @@ pub enum Statement {
         block: Block,
     },
     ForList(Box<ForListStatement>),
+    ForKeyValue(Box<ForKeyValueStatement>),
     ForRange(Box<ForRangeStatement>),
     Var(Box<VarStatement>),
     Vars(Vec<VarStatement>),
     Setting {
-        name: Ident2,
+        name: Ident,
         mode: SettingMode,
-        value: Expression
+        value: Expression,
     },
     Spawn {
         delay: Option<Expression>,
@@ -1194,7 +1651,7 @@ pub enum Statement {
     },
     TryCatch {
         try_block: Block,
-        catch_params: Box<[TreePath]>,
+        catch_params: Box<[AbsolutePath]>,
         catch_block: Block,
     },
     Continue(Option<Ident>),
@@ -1208,23 +1665,23 @@ pub enum Statement {
     Crash(Option<Expression>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, GetSize)]
 pub struct VarStatement {
     pub var_type: VarType,
     pub name: Ident,
     pub value: Option<Expression>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, GetSize)]
 pub enum Case {
     Exact(Expression),
     Range(Expression, Expression),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, GetSize)]
 pub struct ForListStatement {
     pub var_type: Option<VarType>,
-    pub name: Ident2,
+    pub name: Ident,
     /// If zero, uses the declared type of the variable.
     pub input_type: Option<InputType>,
     /// Defaults to 'world'.
@@ -1232,10 +1689,21 @@ pub struct ForListStatement {
     pub block: Block,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, GetSize)]
+pub struct ForKeyValueStatement {
+    pub var_type: Option<VarType>,
+    pub key: Ident,
+    pub key_input_type: Option<InputType>,
+    pub value: Ident,
+    /// Defaults to 'world'.
+    pub in_list: Option<Expression>,
+    pub block: Block,
+}
+
+#[derive(Debug, Clone, PartialEq, GetSize)]
 pub struct ForRangeStatement {
     pub var_type: Option<VarType>,
-    pub name: Ident2,
+    pub name: Ident,
     pub start: Expression,
     pub end: Expression,
     pub step: Option<Expression>,
@@ -1264,7 +1732,7 @@ pub static VALID_FILTER_TYPES: phf::Map<&'static str, &[&str]> = phf_map! {
     "angular_blur" => &[ "x", "y", "size" ],
     "bloom" => &[ "threshold", "size", "offset", "alpha" ],
     "color" => &[ "color", "space" ],
-    "displace" => &[ "x", "y", "size", "icon", "render_source" ],
+    "displace" => &[ "x", "y", "size", "icon", "render_source", "flags" ],
     "drop_shadow" => &[ "x", "y", "size", "offset", "color"],
     "blur" => &[ "size" ],
     "layer" => &[ "x", "y", "icon", "render_source", "flags", "color", "transform", "blend_mode" ],
@@ -1280,9 +1748,17 @@ pub static VALID_FILTER_TYPES: phf::Map<&'static str, &[&str]> = phf_map! {
 pub static VALID_FILTER_FLAGS: phf::Map<&'static str, (&str, bool, bool, &[&str])> = phf_map! {
     "alpha" => ("flags", false, true, &[ "MASK_INVERSE", "MASK_SWAP" ]),
     "color" => ("space", true, false, &[ "FILTER_COLOR_RGB", "FILTER_COLOR_HSV", "FILTER_COLOR_HSL", "FILTER_COLOR_HCY" ]),
+    "displace" => ("flags", false, true, &[ "FILTER_OVERLAY" ]),
     "layer" => ("flags", true, true, &[ "FILTER_OVERLAY", "FILTER_UNDERLAY" ]),
     "rays" => ("flags", false, true, &[ "FILTER_OVERLAY", "FILTER_UNDERLAY" ]),
     "outline" => ("flags", false, true, &[ "OUTLINE_SHARP", "OUTLINE_SQUARE" ]),
     "ripple" => ("flags", false, true, &[ "WAVE_BOUNDED" ]),
     "wave" => ("flags", false, true, &[ "WAVE_SIDEWAYS", "WAVE_BOUNDED" ]),
 };
+
+// ----------------------------------------------------------------------------
+// Guard against sizeof regression.
+const _: () = assert!(std::mem::size_of::<Ident>() <= 16);
+const _: () = assert!(std::mem::size_of::<Statement>() <= 56);
+const _: () = assert!(std::mem::size_of::<Expression>() <= 32);
+const _: () = assert!(std::mem::size_of::<Term>() <= 40);

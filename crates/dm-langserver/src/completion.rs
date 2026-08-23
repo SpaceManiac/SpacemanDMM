@@ -1,24 +1,25 @@
 //! Supporting functions for completion and go-to-definition.
 
-use std::collections::HashSet;
+use foldhash::{HashSet, HashSetExt};
 
 use lsp_types::*;
 
-use dm::ast::PathOp;
 use dm::annotation::Annotation;
-use dm::objtree::{TypeRef, TypeVar, TypeProc, ProcValue};
+use dm::ast::{Ident, PathOp};
+use dm::objtree::{ProcValue, TypeProc, TypeRef, TypeVar};
 
-use crate::{Engine, Span, is_constructor_name};
 use crate::symbol_search::contains;
+use crate::{Engine, Span, is_constructor_name};
 
-use ahash::RandomState;
-
+#[rustfmt::skip]
 static PROC_KEYWORDS: &[&str] = &[
     // Implicit variables
     "args",
     "global",
     "src",
     "usr",
+    "caller",
+    "callee",
 
     // Term
     "null",
@@ -52,15 +53,14 @@ static PROC_KEYWORDS: &[&str] = &[
 
 fn item_var(ty: TypeRef, name: &str, var: &TypeVar) -> CompletionItem {
     let mut detail = format!("on {}", ty.pretty_path());
-    if let Some(ref decl) = var.declaration {
-        if decl.var_type.flags.is_const() {
-            if let Some(ref constant) = var.value.constant {
-                if ty.is_root() {
-                    detail = constant.to_string();
-                } else {
-                    detail = format!("{} - {}", constant, detail);
-                }
-            }
+    if let Some(ref decl) = var.declaration
+        && decl.var_type.flags.is_const()
+        && let Some(ref constant) = var.value.constant
+    {
+        if ty.is_root() {
+            detail = constant.to_string();
+        } else {
+            detail = format!("{constant} - {detail}");
         }
     }
 
@@ -69,7 +69,7 @@ fn item_var(ty: TypeRef, name: &str, var: &TypeVar) -> CompletionItem {
         kind: Some(CompletionItemKind::FIELD),
         detail: Some(detail),
         documentation: item_documentation(&var.value.docs),
-        .. Default::default()
+        ..Default::default()
     }
 }
 
@@ -102,7 +102,7 @@ fn item_documentation(docs: &dm::docs::DocCollection) -> Option<Documentation> {
 
 fn items_ty<'a>(
     results: &mut Vec<CompletionItem>,
-    skip: &mut HashSet<(&str, &'a String), RandomState>,
+    skip: &mut HashSet<(&str, &'a str)>,
     ty: TypeRef<'a>,
     query: &str,
 ) {
@@ -123,15 +123,20 @@ fn items_ty<'a>(
         }
         if contains(name, query) {
             results.push(CompletionItem {
-                insert_text: Some(name.to_owned()),
-                .. item_proc(ty, name, proc)
+                insert_text: Some(name.to_string()),
+                ..item_proc(ty, name, proc)
             });
         }
     }
 }
 
-pub fn combine_tree_path<'a, I>(iter: &I, mut absolute: bool, mut parts: &'a [String]) -> impl Iterator<Item=&'a str>
-    where I: Iterator<Item=(Span, &'a Annotation)> + Clone
+pub fn combine_tree_path<'a, I>(
+    iter: &I,
+    mut absolute: bool,
+    mut parts: &'a [Ident],
+) -> impl Iterator<Item = &'a str>
+where
+    I: Iterator<Item = (Span, &'a Annotation)> + Clone,
 {
     // cut off the part of the path we haven't selected
     if_annotation! { Annotation::InSequence(idx) in iter; {
@@ -165,10 +170,14 @@ pub fn combine_tree_path<'a, I>(iter: &I, mut absolute: bool, mut parts: &'a [St
     prefix_parts.iter().chain(parts).map(|x| &**x)
 }
 
-impl<'a> Engine<'a> {
-    pub fn follow_type_path<'b, I>(&'b self, iter: &I, mut parts: &'b [(PathOp, String)]) -> Option<TypePathResult<'b>>
+impl Engine {
+    pub fn follow_type_path<'b, I>(
+        &'b self,
+        iter: &I,
+        mut parts: &'b [(PathOp, Ident)],
+    ) -> Option<TypePathResult<'b>>
     where
-        I: Iterator<Item = (Span, &'a Annotation)> + Clone,
+        I: Iterator<Item = (Span, &'b Annotation)> + Clone,
     {
         // cut off the part of the path we haven't selected
         if_annotation! { Annotation::InSequence(idx) in iter; {
@@ -177,7 +186,7 @@ impl<'a> Engine<'a> {
         // if we're on the right side of a 'list/', start the lookup there
         match parts.split_first() {
             Some(((PathOp::Slash, kwd), rest)) if kwd == "list" && !rest.is_empty() => parts = rest,
-            _ => {}
+            _ => {},
         }
 
         // use the first path op to select the starting type of the lookup
@@ -189,7 +198,7 @@ impl<'a> Engine<'a> {
             });
         }
         let mut ty = match parts[0].0 {
-            PathOp::Colon => return None,  // never finds anything, apparently?
+            PathOp::Colon => return None, // never finds anything, apparently?
             PathOp::Slash => self.objtree.root(),
             PathOp::Dot => match self.find_type_context(iter) {
                 (Some(base), _) => base,
@@ -215,27 +224,32 @@ impl<'a> Engine<'a> {
             }
         }
         let mut proc = None;
-        if decl.is_some() {
-            if let Some((_, proc_name)) = iter.next() {
-                // '/datum/proc/proc_name'
-                if let Some(proc_ref) = ty.get_proc(proc_name) {
-                    proc = Some((proc_name.as_str(), proc_ref.get()));
-                }
-            }
-            // else '/datum/proc', no results
+        if decl.is_some()
+            // `/datum/proc` has no results, but if there's a proc name...
+            && let Some((_, proc_name)) = iter.next()
+            // ... then it's `/datum/proc/proc_name`
+            && let Some(proc_ref) = ty.get_proc(proc_name)
+        {
+            proc = Some((proc_name.as_str(), proc_ref.get()));
         }
-        // '/datum'
+        // Just `/datum`
         Some(TypePathResult { ty, decl, proc })
     }
 
-    pub fn tree_completions(&self, results: &mut Vec<CompletionItem>, exact: bool, ty: TypeRef, query: &str) {
+    pub fn tree_completions(
+        &self,
+        results: &mut Vec<CompletionItem>,
+        exact: bool,
+        ty: TypeRef,
+        query: &str,
+    ) {
         // path keywords
         for &name in ["proc", "var", "verb"].iter() {
             if contains(name, query) {
                 results.push(CompletionItem {
                     label: name.to_owned(),
                     kind: Some(CompletionItemKind::KEYWORD),
-                    .. Default::default()
+                    ..Default::default()
                 })
             }
         }
@@ -248,14 +262,14 @@ impl<'a> Engine<'a> {
                         label: child.name().to_owned(),
                         kind: Some(CompletionItemKind::CLASS),
                         documentation: item_documentation(&child.docs),
-                        .. Default::default()
+                        ..Default::default()
                     });
                 }
             }
         }
 
         let mut next = Some(ty).filter(|ty| !ty.is_root());
-        let mut skip = HashSet::with_hasher(RandomState::default());
+        let mut skip = HashSet::new();
         while let Some(ty) = next {
             // override a parent's var
             for (name, var) in ty.get().vars.iter() {
@@ -264,8 +278,8 @@ impl<'a> Engine<'a> {
                 }
                 if contains(name, query) {
                     results.push(CompletionItem {
-                        insert_text: Some(format!("{} = ", name)),
-                        .. item_var(ty, name, var)
+                        insert_text: Some(format!("{name} = ")),
+                        ..item_var(ty, name, var)
                     });
                 }
             }
@@ -278,11 +292,11 @@ impl<'a> Engine<'a> {
                 if contains(name, query) {
                     use std::fmt::Write;
 
-                    let mut completion = format!("{}(", name);
+                    let mut completion = format!("{name}(");
                     let mut sep = "";
                     for param in proc.main_value().parameters.iter() {
                         for each in param.var_type.type_path.iter() {
-                            let _ = write!(completion, "{}{}", sep, each);
+                            let _ = write!(completion, "{sep}{each}");
                             sep = "/";
                         }
                         let _ = write!(completion, "{}{}", sep, param.name);
@@ -292,7 +306,7 @@ impl<'a> Engine<'a> {
 
                     results.push(CompletionItem {
                         insert_text: Some(completion),
-                        .. item_proc(ty, name, proc)
+                        ..item_proc(ty, name, proc)
                     });
                 }
             }
@@ -304,7 +318,7 @@ impl<'a> Engine<'a> {
         &'b self,
         results: &mut Vec<CompletionItem>,
         iter: &I,
-        parts: &'b [(PathOp, String)],
+        parts: &'b [(PathOp, Ident)],
         _last_op: PathOp,
         query: &str,
     ) where
@@ -324,7 +338,7 @@ impl<'a> Engine<'a> {
                         results.push(CompletionItem {
                             label: name.to_owned(),
                             kind: Some(CompletionItemKind::KEYWORD),
-                            .. Default::default()
+                            ..Default::default()
                         })
                     }
                 }
@@ -336,7 +350,7 @@ impl<'a> Engine<'a> {
                             label: child.name().to_owned(),
                             kind: Some(CompletionItemKind::CLASS),
                             documentation: item_documentation(&child.docs),
-                            .. Default::default()
+                            ..Default::default()
                         });
                     }
                 }
@@ -349,7 +363,7 @@ impl<'a> Engine<'a> {
                 proc: None,
             }) => {
                 let mut next = Some(ty);
-                let mut skip = HashSet::with_hasher(RandomState::default());
+                let mut skip = HashSet::new();
                 while let Some(ty) = next {
                     // reference a declared proc
                     for (name, proc) in ty.get().procs.iter() {
@@ -371,12 +385,16 @@ impl<'a> Engine<'a> {
                     next = ty.parent_type_without_root();
                 }
             },
-            _ => {}
+            _ => {},
         }
     }
 
-    pub fn unscoped_completions<'b, I>(&'b self, results: &mut Vec<CompletionItem>, iter: &I, query: &str)
-    where
+    pub fn unscoped_completions<'b, I>(
+        &'b self,
+        results: &mut Vec<CompletionItem>,
+        iter: &I,
+        query: &str,
+    ) where
         I: Iterator<Item = (Span, &'b Annotation)> + Clone,
     {
         let (ty, proc_name) = self.find_type_context(iter);
@@ -388,7 +406,7 @@ impl<'a> Engine<'a> {
                     results.push(CompletionItem {
                         label: name.to_owned(),
                         kind: Some(CompletionItemKind::KEYWORD),
-                        .. Default::default()
+                        ..Default::default()
                     });
                 }
             }
@@ -396,33 +414,32 @@ impl<'a> Engine<'a> {
 
         // local variables
         for (_, annotation) in iter.clone() {
-            if let Annotation::LocalVarScope(_var_type, name) = annotation {
-                if contains(name, query) {
-                    results.push(CompletionItem {
-                        label: name.clone(),
-                        kind: Some(CompletionItemKind::VARIABLE),
-                        detail: Some("(local)".to_owned()),
-                        .. Default::default()
-                    });
-                }
+            if let Annotation::LocalVarScope(_var_type, name) = annotation
+                && contains(name, query)
+            {
+                results.push(CompletionItem {
+                    label: name.as_str().to_owned(),
+                    kind: Some(CompletionItemKind::VARIABLE),
+                    detail: Some("(local)".to_owned()),
+                    ..Default::default()
+                });
             }
         }
 
         // proc parameters
         let ty = ty.unwrap_or_else(|| self.objtree.root());
-        if let Some((proc_name, idx)) = proc_name {
-            if let Some(proc) = ty.get().procs.get(proc_name) {
-                if let Some(value) = proc.value.get(idx) {
-                    for param in value.parameters.iter() {
-                        if contains(&param.name, query) {
-                            results.push(CompletionItem {
-                                label: param.name.clone(),
-                                kind: Some(CompletionItemKind::VARIABLE),
-                                detail: Some("(parameter)".to_owned()),
-                                .. Default::default()
-                            });
-                        }
-                    }
+        if let Some((proc_name, idx)) = proc_name
+            && let Some(proc) = ty.get().procs.get(proc_name)
+            && let Some(value) = proc.value.get(idx)
+        {
+            for param in value.parameters.iter() {
+                if contains(&param.name, query) {
+                    results.push(CompletionItem {
+                        label: param.name.as_str().to_owned(),
+                        kind: Some(CompletionItemKind::VARIABLE),
+                        detail: Some("(parameter)".to_owned()),
+                        ..Default::default()
+                    });
                 }
             }
         }
@@ -430,14 +447,14 @@ impl<'a> Engine<'a> {
         // macros
         if let Some(ref defines) = self.defines {
             // TODO: verify that the macro is in scope at the location
-            for (_, &(ref name, ref define)) in defines.iter() {
+            for (_, (name, define)) in defines.iter() {
                 if contains(name, query) {
                     results.push(CompletionItem {
-                        label: name.to_owned(),
+                        label: name.as_str().to_owned(),
                         kind: Some(CompletionItemKind::CONSTANT),
                         detail: Some(define.display_with_name(name).to_string()),
-                        documentation: item_documentation(define.docs()),
-                        .. Default::default()
+                        documentation: item_documentation(&define.docs),
+                        ..Default::default()
                     });
                 }
             }
@@ -445,7 +462,7 @@ impl<'a> Engine<'a> {
 
         // fields
         let mut next = Some(ty);
-        let mut skip = HashSet::with_hasher(RandomState::default());
+        let mut skip = HashSet::new();
         while let Some(ty) = next {
             items_ty(results, &mut skip, ty, query);
             next = ty.parent_type();
@@ -456,13 +473,13 @@ impl<'a> Engine<'a> {
         &'b self,
         results: &mut Vec<CompletionItem>,
         iter: &I,
-        priors: &[String],
+        priors: &[Ident],
         query: &str,
     ) where
         I: Iterator<Item = (Span, &'b Annotation)> + Clone,
     {
         let mut next = self.find_scoped_type(iter, priors);
-        let mut skip = HashSet::with_hasher(RandomState::default());
+        let mut skip = HashSet::new();
         while let Some(ty) = next {
             items_ty(results, &mut skip, ty, query);
             next = ty.parent_type_without_root();

@@ -1,13 +1,14 @@
 extern crate dreammaker as dm;
 
-use dm::lexer::Lexer;
-use dm::parser::*;
 use dm::ast::*;
+use dm::{FileId, Lexer, Location};
 
 fn parse_expr(f: &str) -> Expression {
     let context = Default::default();
-    let lexer = Lexer::new(&context, Default::default(), f.as_bytes());
-    let result = parse_expression(&context, Default::default(), lexer).expect("failed to parse expression");
+    let lexer = Lexer::new(&context, FileId::INVALID, f.as_bytes());
+    let result = context
+        .parse_expression(Location::INVALID, lexer)
+        .expect("failed to parse expression");
     context.assert_success();
     result
 }
@@ -19,7 +20,7 @@ fn ternary_precedence() {
         parse_expr("foo = 1 + 2 ? 3 + 4 : 5 + 6"),
         Expression::AssignOp {
             op: AssignOp::Assign,
-            lhs: Box::new(Expression::from(Term::Ident("foo".to_owned()))),
+            lhs: Box::new(Expression::from(Term::Ident("foo".into()))),
             rhs: Box::new(Expression::TernaryOp {
                 cond: Box::new(Expression::BinaryOp {
                     op: BinaryOp::Add,
@@ -50,7 +51,7 @@ fn in_after_ternary() {
             op: BinaryOp::In,
             lhs: Box::new(Expression::AssignOp {
                 op: AssignOp::Assign,
-                lhs: Box::new(Expression::from(Term::Ident("foo".to_owned()))),
+                lhs: Box::new(Expression::from(Term::Ident("foo".into()))),
                 rhs: Box::new(Expression::TernaryOp {
                     cond: Box::new(Expression::from(Term::Int(1))),
                     if_: Box::new(Expression::from(Term::Int(2))),
@@ -113,4 +114,75 @@ fn bitop_precedence() {
             }),
         }
     );
+}
+
+#[test]
+fn pointer_ops() {
+    assert_eq!(
+        parse_expr("*&1"),
+        Expression::Base {
+            term: Box::new(Spanned::invalid(Term::Int(1))),
+            follow: vec![
+                Spanned::invalid(Follow::Unary(UnaryOp::Reference)),
+                Spanned::invalid(Follow::Unary(UnaryOp::Dereference)),
+            ]
+            .into_boxed_slice(),
+        }
+    )
+}
+
+#[test]
+fn call_ext() {
+    assert_eq!(
+        parse_expr("call_ext(\"cat.dll\", \"meow\")(1, 2, 3)"),
+        Expression::Base {
+            term: Box::new(Spanned::invalid(Term::ExternalCall {
+                library: Some(Box::new(Expression::from(Term::String("cat.dll".into())))),
+                function: Box::new(Expression::from(Term::String("meow".into()))),
+                args: Box::new([
+                    Expression::Base {
+                        term: Box::new(Spanned::invalid(Term::Int(1))),
+                        follow: Box::new([])
+                    },
+                    Expression::Base {
+                        term: Box::new(Spanned::invalid(Term::Int(2))),
+                        follow: Box::new([])
+                    },
+                    Expression::Base {
+                        term: Box::new(Spanned::invalid(Term::Int(3))),
+                        follow: Box::new([])
+                    }
+                ])
+            })),
+            follow: Box::new([]),
+        }
+    )
+}
+
+#[test]
+fn loaded_call_ext() {
+    assert_eq!(
+        parse_expr("call_ext(loaded_cat_meow)(1, 2, 3)"),
+        Expression::Base {
+            term: Box::new(Spanned::invalid(Term::ExternalCall {
+                library: None,
+                function: Box::new(Expression::from(Term::Ident("loaded_cat_meow".into()))),
+                args: Box::new([
+                    Expression::Base {
+                        term: Box::new(Spanned::invalid(Term::Int(1))),
+                        follow: Box::new([])
+                    },
+                    Expression::Base {
+                        term: Box::new(Spanned::invalid(Term::Int(2))),
+                        follow: Box::new([])
+                    },
+                    Expression::Base {
+                        term: Box::new(Spanned::invalid(Term::Int(3))),
+                        follow: Box::new([])
+                    }
+                ])
+            })),
+            follow: Box::new([]),
+        }
+    )
 }

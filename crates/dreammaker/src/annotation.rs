@@ -1,18 +1,22 @@
 //! Data structures for the parser to output mappings from input ranges to AST
 //! elements at those positions.
 
-use interval_tree::{IntervalTree, RangePairIter, RangeInclusive, range};
+use std::rc::Rc;
+
+use crate::docs::DocCollection;
+use interval_tree::{IntervalTree, RangeInclusive, RangePairIter, range};
+
 use super::Location;
 use super::ast::*;
 
-pub type Iter<'a> = RangePairIter<'a, Location, Annotation>;
+type Iter<'a> = RangePairIter<'a, Location, Annotation>;
 
 #[derive(Debug)]
 pub enum Annotation {
     // contextual information
     TreeBlock(Vec<Ident>),
     TreePath(bool, Vec<Ident>),
-    TypePath(TypePath),
+    TypePath(RelativePath),
     Variable(Vec<Ident>),
     ProcHeader(Vec<Ident>, usize),
     ProcBody(Vec<Ident>, usize),
@@ -23,24 +27,30 @@ pub enum Annotation {
     UnscopedVar(Ident),
     ScopedCall(Vec<Ident>, Ident),
     ScopedVar(Vec<Ident>, Ident),
-    ParentCall,  // ..
-    ReturnVal,  // .
-    InSequence(usize),  // where in TreePath or TypePath is this ident
+    /// A static var access, e.g. `/type::var`
+    TypePathVar(RelativePath, Ident),
+    ParentCall,        // ..
+    ReturnVal,         // .
+    InSequence(usize), // where in TreePath or TypePath is this ident
 
     // a macro is called here, which is defined at this location
     MacroDefinition(Ident),
-    MacroUse(String, Location),
+    MacroUse {
+        name: String,
+        definition_location: Location,
+        docs: Option<Rc<DocCollection>>,
+    },
 
     Include(std::path::PathBuf),
     Resource(std::path::PathBuf),
 
     // error annotations, mostly for autocompletion
-    ScopedMissingIdent(Vec<Ident>),  // when a . is followed by a non-ident
-    IncompleteTypePath(TypePath, PathOp),
+    ScopedMissingIdent(Vec<Ident>), // when a . is followed by a non-ident
+    IncompleteTypePath(RelativePath, PathOp),
     IncompleteTreePath(bool, Vec<Ident>),
 
-    ProcArguments(Vec<Ident>, String, usize),  // Vec empty for unscoped call
-    ProcArgument(usize),  // where in the prog arguments we are
+    ProcArguments(Vec<Ident>, Ident, usize), // Vec empty for unscoped call
+    ProcArgument(usize),                     // where in the prog arguments we are
 }
 
 #[derive(Debug)]
@@ -60,7 +70,8 @@ impl Default for AnnotationTree {
 
 impl AnnotationTree {
     pub fn insert(&mut self, place: std::ops::Range<Location>, value: Annotation) {
-        self.tree.insert(range(place.start, place.end.pred()), value);
+        self.tree
+            .insert(range(place.start, place.end.pred()), value);
         self.len += 1;
     }
 
@@ -77,19 +88,19 @@ impl AnnotationTree {
         self.len == 0
     }
 
-    pub fn iter(&self) -> Iter {
+    pub fn iter(&self) -> Iter<'_> {
         self.tree.iter()
     }
 
-    pub fn get_location(&self, loc: Location) -> Iter {
+    pub fn get_location(&self, loc: Location) -> Iter<'_> {
         self.tree.range(range(loc.pred(), loc))
     }
 
-    pub fn get_range(&self, place: std::ops::Range<Location>) -> Iter {
+    pub fn get_range(&self, place: std::ops::Range<Location>) -> Iter<'_> {
         self.tree.range(range(place.start, place.end.pred()))
     }
 
-    pub fn get_range_raw(&self, place: RangeInclusive<Location>) -> Iter {
+    pub fn get_range_raw(&self, place: RangeInclusive<Location>) -> Iter<'_> {
         self.tree.range(place)
     }
 }

@@ -1,13 +1,13 @@
-extern crate dreammaker as dm;
 extern crate dmm_tools;
-extern crate walkdir;
+extern crate dreammaker as dm;
 extern crate ndarray;
+extern crate walkdir;
 
-use std::path::Path;
-use std::collections::HashMap;
-use walkdir::{DirEntry, WalkDir};
 use dmm_tools::dmi::*;
+use foldhash::{HashMap, HashMapExt};
 use ndarray::s;
+use std::path::Path;
+use walkdir::{DirEntry, WalkDir};
 
 fn is_visible(entry: &DirEntry) -> bool {
     entry
@@ -15,7 +15,7 @@ fn is_visible(entry: &DirEntry) -> bool {
         .file_name()
         .unwrap_or("".as_ref())
         .to_str()
-        .map(|s| !s.starts_with("."))
+        .map(|s| !s.starts_with('.'))
         .unwrap_or(true)
 }
 
@@ -23,9 +23,9 @@ fn files_with_extension<F: FnMut(&Path)>(ext: &str, mut f: F) {
     let dir = match std::env::var_os("TEST_DME") {
         Some(dme) => Path::new(&dme).parent().unwrap().to_owned(),
         None => {
-            println!("Set TEST_DME to check .{} files", ext);
+            println!("Set TEST_DME to check .{ext} files");
             return;
-        }
+        },
     };
     for entry in WalkDir::new(dir).into_iter().filter_entry(is_visible) {
         let entry = entry.unwrap();

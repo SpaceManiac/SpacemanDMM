@@ -53,36 +53,37 @@ impl Query {
     }
 
     pub fn matches_on_type(&self, _path: &str) -> bool {
-        matches!(*self, Query::Anything(_) |
-            Query::Proc(_) |
-            Query::Var(_))
+        matches!(*self, Query::Anything(_) | Query::Proc(_) | Query::Var(_))
     }
 
     pub fn matches_var(&self, name: &str) -> bool {
         match *self {
-            Query::Anything(ref q) |
-            Query::Var(ref q) => starts_with(name, q),
+            Query::Anything(ref q) | Query::Var(ref q) => starts_with(name, q),
             _ => false,
         }
     }
 
     pub fn matches_proc(&self, name: &str, _kind: dm::ast::ProcDeclKind) -> bool {
         match *self {
-            Query::Anything(ref q) |
-            Query::Proc(ref q) => starts_with(name, q),
+            Query::Anything(ref q) | Query::Proc(ref q) => starts_with(name, q),
             _ => false,
         }
     }
 }
 
-fn simplify(s: &str) -> impl Iterator<Item=char> + Clone + '_ {
-    s.chars().flat_map(|c| c.to_lowercase()).filter(|c| c.is_alphanumeric())
+fn simplify(s: &str) -> impl Iterator<Item = char> + Clone + '_ {
+    s.chars()
+        .flat_map(|c| c.to_lowercase())
+        .filter(|c| c.is_alphanumeric())
 }
 
 // ignore case and underscores
 pub fn starts_with<'a>(fulltext: &'a str, query: &'a str) -> bool {
     let mut query_chars = simplify(query);
-    simplify(fulltext).zip(&mut query_chars).all(|(a, b)| a == b) && query_chars.next().is_none()
+    simplify(fulltext)
+        .zip(&mut query_chars)
+        .all(|(a, b)| a == b)
+        && query_chars.next().is_none()
 }
 
 pub fn contains<'a>(fulltext: &'a str, query: &'a str) -> bool {
@@ -99,5 +100,7 @@ pub fn contains<'a>(fulltext: &'a str, query: &'a str) -> bool {
 }
 
 fn any_alphanumeric(text: &str) -> bool {
-    text.chars().flat_map(|c| c.to_lowercase()).any(|c| c.is_alphanumeric())
+    text.chars()
+        .flat_map(|c| c.to_lowercase())
+        .any(|c| c.is_alphanumeric())
 }

@@ -26,16 +26,15 @@ fn read<R: BufRead>(input: &mut R) -> Result<Option<String>, Box<dyn std::error:
         return Ok(None);
     }
     let size = {
-        let parts: Vec<&str> = buffer.split(' ').collect();
-        if parts.len() != 2 {
-            eprintln!("JSON-RPC read error: parts.len() != 2\n{:?}", parts);
+        let Some((header, value)) = buffer.split_once(": ") else {
+            eprintln!("JSON-RPC read error: header missing `: ` delimiter\n{buffer:?}");
+            return Ok(None);
+        };
+        if !header.eq_ignore_ascii_case("content-length") {
+            eprintln!("JSON-RPC read error: header was not `content-length`\n{buffer:?}");
             return Ok(None);
         }
-        if !parts[0].eq_ignore_ascii_case("content-length:") {
-            eprintln!("JSON-RPC read error: !parts[0].eq_ignore_ascii_case(\"content-length:\")\n{:?}", parts);
-            return Ok(None);
-        }
-        parts[1].trim().parse::<usize>()?
+        value.trim().parse::<usize>()?
     };
 
     // skip blank line

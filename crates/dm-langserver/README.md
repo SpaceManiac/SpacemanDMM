@@ -12,7 +12,7 @@ client support.
   compatible.
 
 [language server]: https://langserver.org/
-[BYOND]: https://secure.byond.com/
+[BYOND]: https://www.byond.com/
 
 ## Code completion
 

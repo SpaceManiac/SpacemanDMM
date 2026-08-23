@@ -1,0 +1,13 @@
+[package]
+name = "dmi"
+version = "0.1.0"
+authors = ["Tad Hardesty <tad@platymuus.com>"]
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+lodepng = "3.10.7"
+foldhash = "0.2.0"
+
+[dev-dependencies]
+walkdir = "2.5.0"

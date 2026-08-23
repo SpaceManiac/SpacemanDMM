@@ -20,8 +20,7 @@ pub fn check_switch_rand_range(
         return;
     };
 
-    let mut case_ranges = vec![];
-    case_ranges.reserve(cases.len());
+    let mut case_ranges = Vec::with_capacity(cases.len());
     for case_block in cases.iter() {
         let location = case_block.0.location;
         for case in case_block.0.elem.iter() {
@@ -31,9 +30,9 @@ pub fn check_switch_rand_range(
                 if start <= rand_end && end >= rand_start {
                     case_ranges.push((start, end));
                 } else {
-                    DMError::new(location, format!("Case range '{} to {}' will never trigger as it is outside the rand() range {} to {}", start, end, rand_start, rand_end))
+                    DMError::new(location, format!("Case range '{start} to {end}' will never trigger as it is outside the rand() range {rand_start} to {rand_end}"))
                         .with_component(dm::Component::DreamChecker)
-                        .set_severity(Severity::Warning)
+                        .with_severity(Severity::Warning)
                         .register(context);
                 }
             }
@@ -45,7 +44,7 @@ pub fn check_switch_rand_range(
         return;
     }
 
-    case_ranges.sort_by(|a, b| a.0.cmp(&b.0));
+    case_ranges.sort_by_key(|a| a.0);
     let mut first_uncovered = rand_start;
     for (start, end) in case_ranges.iter() {
         if *start > first_uncovered {
@@ -59,40 +58,32 @@ pub fn check_switch_rand_range(
         DMError::new(
             location,
             format!(
-                "Switch branches on rand() with range {} to {} but no case branch triggers for {}",
-                rand_start, rand_end, first_uncovered
+                "Switch branches on rand() with range {rand_start} to {rand_end} but no case branch triggers for {first_uncovered}"
             ),
         )
         .with_component(dm::Component::DreamChecker)
-        .set_severity(Severity::Warning)
+        .with_severity(Severity::Warning)
         .register(context);
     }
 }
 
 fn get_case_range(case: &Case, location: Location) -> Option<(f32, f32)> {
     match case {
-        Case::Exact(ref value) => {
-            let value = value
-                .to_owned()
-                .simple_evaluate(location)
-                .ok()?
-                .to_float()?;
+        Case::Exact(value) => {
+            let value = value.simple_evaluate(location).ok()?.to_float()?;
             Some((value, value))
-        }
-        Case::Range(ref min, ref max) => {
-            let min = min.to_owned().simple_evaluate(location).ok()?.to_float()?;
-            let max = max.to_owned().simple_evaluate(location).ok()?.to_float()?;
+        },
+        Case::Range(min, max) => {
+            let min = min.simple_evaluate(location).ok()?.to_float()?;
+            let max = max.simple_evaluate(location).ok()?.to_float()?;
             Some((min, max))
-        }
+        },
     }
 }
 
 fn get_rand_range(maybe_rand: &Expression) -> Option<(i32, i32)> {
     let (term, location) = match maybe_rand {
-        &Expression::Base {
-            ref term,
-            ref follow,
-        } if follow.is_empty() => (&term.elem, term.location),
+        Expression::Base { term, follow } if follow.is_empty() => (&term.elem, term.location),
         _ => return None,
     };
 
@@ -103,13 +94,10 @@ fn get_rand_range(maybe_rand: &Expression) -> Option<(i32, i32)> {
 
     let (min, max) = match rand_args {
         [min, max] => (
-            min.to_owned().simple_evaluate(location).ok()?.to_float()?,
-            max.to_owned().simple_evaluate(location).ok()?.to_float()?,
+            min.simple_evaluate(location).ok()?.to_float()?,
+            max.simple_evaluate(location).ok()?.to_float()?,
         ),
-        [max] => (
-            0.,
-            max.to_owned().simple_evaluate(location).ok()?.to_float()?,
-        ),
+        [max] => (0., max.simple_evaluate(location).ok()?.to_float()?),
         _ => return None,
     };
 

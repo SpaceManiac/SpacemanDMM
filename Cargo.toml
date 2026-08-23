@@ -1,9 +1,11 @@
 [workspace]
+resolver = "2"
 members = [
     "crates/builtins-proc-macro",
     "crates/dap-types",
     "crates/dm-langserver",
     "crates/dmdoc",
+    "crates/dmi",
     "crates/dmm-tools",
     "crates/dmm-tools-cli",
     "crates/dreamchecker",
@@ -12,8 +14,19 @@ members = [
     #"crates/spaceman-dmm",
 ]
 
+[workspace.package]
+version = "1.11.0"
+authors = ["Tad Hardesty <tad@platymuus.com>"]
+edition = "2024"
+rust-version = "1.95"
+
+[workspace.dependencies]
+chrono = "0.4.38"
+git2 = { version = "0.21.0", default-features = false }
+
 [profile.dev]
-opt-level = 2
+opt-level = 1
 
 [profile.release]
 lto = true
+codegen-units = 1

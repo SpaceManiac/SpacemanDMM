@@ -1,15 +1,13 @@
 //! Representation of a map as a collection of atoms rather than a grid.
 
-use std::sync::{Arc, Weak};
-use std::cell::{Cell, RefCell, Ref};
-use std::collections::HashMap;
-use weak_table::WeakKeyHashMap;
-
-use dmm_tools::dmm::{Map, Prefab, Key};
-use dm::objtree::{ObjectTree, subpath};
-
 use crate::dmi::IconCache;
-use crate::map_renderer::{RenderPop, Vertex, DrawCall};
+use crate::map_renderer::{DrawCall, RenderPop, Vertex};
+use dmm_tools::dmm::{Key, Map, Prefab};
+use dreammaker::objtree::{ispath, ObjectTree};
+use std::cell::{Cell, Ref, RefCell};
+use std::collections::HashMap;
+use std::sync::{Arc, Weak};
+use weak_table::WeakKeyHashMap;
 
 #[derive(Debug, Clone)]
 pub struct AtomMap {
@@ -104,7 +102,7 @@ impl AtomMap {
         for (z, level) in self.levels.iter().enumerate() {
             for (_, inst) in level.instances.keys_iter() {
                 coords
-                    .entry((inst.x as usize, (self.size.1 - 1 - inst.y) as usize, z as usize))
+                    .entry((inst.x as usize, (self.size.1 - 1 - inst.y) as usize, z))
                     .or_default()
                     .push(&inst.pop);
             }
@@ -112,7 +110,11 @@ impl AtomMap {
 
         let mut base_dictionary;
         let mut reverse_dictionary = HashMap::<&[&Prefab], Key>::new();
-        let mut map = Map::with_empty_dictionary(self.size.0 as usize, self.size.1 as usize, self.levels.len());
+        let mut map = Map::with_empty_dictionary(
+            self.size.0 as usize,
+            self.size.1 as usize,
+            self.levels.len(),
+        );
 
         // If we have a "base" map we want to stay close to, prepopulate the
         // output map's dictionary with any shared tiles.
@@ -132,7 +134,8 @@ impl AtomMap {
             for (&key, pop_list) in base_dictionary.iter() {
                 if reverse_dictionary.contains_key(&pop_list[..]) {
                     reverse_dictionary.insert(pop_list, key);
-                    map.dictionary.insert(key, pop_list.iter().cloned().cloned().collect());
+                    map.dictionary
+                        .insert(key, pop_list.iter().cloned().cloned().collect());
                 }
             }
 
@@ -144,13 +147,14 @@ impl AtomMap {
         // Populate the grid based
         let mut key = Key::default();
         for (coord, pop_list) in coords.iter() {
-            map.grid[(coord.2, coord.1, coord.0)] = *reverse_dictionary.entry(&pop_list)
-                .or_insert_with(|| {
+            map.grid[(coord.2, coord.1, coord.0)] =
+                *reverse_dictionary.entry(pop_list).or_insert_with(|| {
                     // Just take the first available key.
                     while map.dictionary.contains_key(&key) {
                         key = key.next();
                     }
-                    map.dictionary.insert(key, pop_list.iter().cloned().cloned().collect());
+                    map.dictionary
+                        .insert(key, pop_list.iter().cloned().cloned().collect());
                     key
                 });
         }
@@ -173,14 +177,19 @@ impl AtomMap {
         }
     }
 
-    pub fn add_pop(&mut self, prefab: &Prefab, icons: &IconCache, objtree: &ObjectTree) -> Arc<Prefab> {
-        if let Some(key) = self.pops.get_key(&prefab) {
+    pub fn add_pop(
+        &mut self,
+        prefab: &Prefab,
+        icons: &IconCache,
+        objtree: &ObjectTree,
+    ) -> Arc<Prefab> {
+        if let Some(key) = self.pops.get_key(prefab) {
             key
         } else {
             let rc = Arc::new(prefab.to_owned());
             self.pops.insert(
                 rc.clone(),
-                RenderPop::from_prefab(icons, objtree, &prefab).unwrap_or_default(),
+                RenderPop::from_prefab(icons, objtree, prefab).unwrap_or_default(),
             );
             rc
         }
@@ -191,19 +200,30 @@ impl AtomMap {
         self.sort_again(z);
     }
 
-    fn add_instance_unsorted(&mut self, (x, y, z): (u32, u32, u32), prefab: Arc<Prefab>) -> AddedInstance {
+    fn add_instance_unsorted(
+        &mut self,
+        (x, y, z): (u32, u32, u32),
+        prefab: Arc<Prefab>,
+    ) -> AddedInstance {
         let level = &mut self.levels[z as usize];
         let new_instance = level.prep_instance(&mut self.pops, (x, y), prefab);
         level.sorted_order.push(new_instance);
         level.index_buffer.get_mut().push(indices(new_instance));
         level.buffers_dirty.set(true);
         AddedInstance {
-            id: InstanceId { z, idx: new_instance },
+            id: InstanceId {
+                z,
+                idx: new_instance,
+            },
             replaced: None,
         }
     }
 
-    pub fn add_instance(&mut self, (x, y, z): (u32, u32, u32), prefab: Arc<Prefab>) -> AddedInstance {
+    pub fn add_instance(
+        &mut self,
+        (x, y, z): (u32, u32, u32),
+        prefab: Arc<Prefab>,
+    ) -> AddedInstance {
         let level = &mut self.levels[z as usize];
 
         let mut replaced = None;
@@ -211,7 +231,7 @@ impl AtomMap {
             let mut old_instance = None;
             // TODO: use a more efficient structure for this lookup
             for (idx, inst) in level.instances.keys_iter() {
-                if inst.x == x && inst.y == y && subpath(&inst.pop.path, replace) {
+                if inst.x == x && inst.y == y && ispath(&inst.pop.path, replace) {
                     old_instance = Some(idx);
                     break;
                 }
@@ -233,11 +253,14 @@ impl AtomMap {
             rpop.sort_key()
         };
         let pos = match sorted_order.binary_search_by_key(&sort_key(&new_instance), sort_key) {
-            Ok(found) => found,  // TODO: add 1? add more than 1?
+            Ok(found) => found, // TODO: add 1? add more than 1?
             Err(dest) => dest,
         };
         sorted_order.insert(pos, new_instance);
-        level.index_buffer.get_mut().insert(pos, indices(new_instance));
+        level
+            .index_buffer
+            .get_mut()
+            .insert(pos, indices(new_instance));
         level.buffers_dirty.set(true);
 
         // find the draw call which "should" contain the new index
@@ -258,11 +281,13 @@ impl AtomMap {
                 draw_calls[draw_call].len += 6;
             } else {
                 // neither can, insert
-                draw_calls.insert(draw_call, DrawCall {
-                    category: rpop.category,
-                    texture: rpop.texture,
-                    len: 6,
-                });
+                draw_calls.insert(
+                    draw_call,
+                    DrawCall {
+                        texture: rpop.texture,
+                        len: 6,
+                    },
+                );
             }
         } else {
             // in the middle of a call
@@ -274,17 +299,22 @@ impl AtomMap {
                 let mut clone = draw_calls[draw_call].clone();
                 clone.len = pos - start;
                 draw_calls[draw_call].len -= clone.len;
-                draw_calls.insert(draw_call, DrawCall {
-                    category: rpop.category,
-                    texture: rpop.texture,
-                    len: 6,
-                });
+                draw_calls.insert(
+                    draw_call,
+                    DrawCall {
+                        texture: rpop.texture,
+                        len: 6,
+                    },
+                );
                 draw_calls.insert(draw_call, clone);
             }
         }
 
         AddedInstance {
-            id: InstanceId { z, idx: new_instance },
+            id: InstanceId {
+                z,
+                idx: new_instance,
+            },
             replaced,
         }
     }
@@ -312,7 +342,12 @@ impl AtomMap {
         level.remove_instance(id.z, id.idx)
     }
 
-    pub fn undo_remove_instance(&mut self, removed: &RemovedInstance, icons: &IconCache, objtree: &ObjectTree) {
+    pub fn undo_remove_instance(
+        &mut self,
+        removed: &RemovedInstance,
+        icons: &IconCache,
+        objtree: &ObjectTree,
+    ) {
         let pop = self.add_pop(&removed.old.pop, icons, objtree);
         self.add_instance((removed.old.x, removed.old.y, removed.z), pop);
     }
@@ -361,7 +396,6 @@ impl AtomMap {
                 }
             }
             draw_calls.push(DrawCall {
-                category: rpop.category,
                 texture: rpop.texture,
                 len: 6,
             });
@@ -373,7 +407,7 @@ impl AtomMap {
         self.levels[z as usize].instances.values()
     }
 
-    pub fn index_buffer(&self, z: u32) -> Ref<[[u32; 6]]> {
+    pub fn index_buffer(&self, z: u32) -> Ref<'_, [[u32; 6]]> {
         let level = &self.levels[z as usize];
         if level.index_buffer_dirty.replace(false) {
             let mut ib = level.index_buffer.borrow_mut();
@@ -396,7 +430,8 @@ impl AtomZ {
         let vertices = pops
             .get(&prefab)
             .map_or_else(|| [Vertex::default(); 4], |rpop| rpop.instance((x, y)));
-        self.instances.push(Instance { x, y, pop: prefab }, vertices)
+        self.instances
+            .push(Instance { x, y, pop: prefab }, vertices)
     }
 
     fn remove_instance(&mut self, z: u32, idx: usize) -> RemovedInstance {
@@ -428,7 +463,12 @@ impl AtomZ {
 
 impl<'a> Defer<'a> {
     #[inline]
-    pub fn add_pop(&mut self, prefab: &Prefab, icons: &IconCache, objtree: &ObjectTree) -> Arc<Prefab> {
+    pub fn add_pop(
+        &mut self,
+        prefab: &Prefab,
+        icons: &IconCache,
+        objtree: &ObjectTree,
+    ) -> Arc<Prefab> {
         self.map.add_pop(prefab, icons, objtree)
     }
 
@@ -517,9 +557,9 @@ fn find_draw_call(draw_calls: &[DrawCall], pos: u32) -> (usize, u32) {
 }
 
 fn should_replace<'v>(path: &str, turf: &'v str, area: &'v str) -> Option<&'v str> {
-    if subpath(path, "/turf/") {
+    if ispath(path, "/turf/") {
         Some(turf)
-    } else if subpath(path, "/area/") {
+    } else if ispath(path, "/area/") {
         Some(area)
     } else {
         None

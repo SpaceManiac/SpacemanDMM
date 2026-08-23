@@ -1,6 +1,3 @@
-extern crate chrono;
-extern crate git2;
-
 use std::env;
 use std::fs::File;
 use std::io::Write;
@@ -8,16 +5,17 @@ use std::path::PathBuf;
 
 fn main() {
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
-    let mut f = File::create(&out_dir.join("build-info.txt")).unwrap();
-
-    if let Ok(commit) = read_commit() {
-        writeln!(f, "commit: {}", commit).unwrap();
+    let mut f = File::create(out_dir.join("build-info.txt")).unwrap();
+    match read_commit() {
+        Ok((commit, date)) => writeln!(f, "commit: {commit}\ndate: {date}").unwrap(),
+        Err(err) => println!("cargo:warning=Failed to fetch commit info: {err}"),
     }
-    writeln!(f, "build date: {}", chrono::Utc::today()).unwrap();
 }
 
-fn read_commit() -> Result<String, git2::Error> {
+fn read_commit() -> Result<(String, String), git2::Error> {
     let repo = git2::Repository::discover(".")?;
-    let hash = repo.head()?.peel_to_commit()?.id().to_string();
-    Ok(hash)
+    let commit = repo.head()?.peel_to_commit()?;
+    let hash = commit.id().to_string();
+    let time = chrono::DateTime::from_timestamp_secs(commit.time().seconds()).unwrap();
+    Ok((hash, time.to_string()))
 }

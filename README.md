@@ -15,7 +15,7 @@ integration build; see [/tg/station's CI suite][ci] for an example.
 Support is currently provided in /tg/station13's coderbus (ping `SpaceManiac`)
 and on the [issue tracker]. Pull requests are welcome.
 
-[DreamMaker]: https://secure.byond.com/
+[DreamMaker]: https://www.byond.com/
 [language server]: https://langserver.org/
 [releases]: https://github.com/SpaceManiac/SpacemanDMM/releases
 [ci]: https://github.com/tgstation/tgstation/blob/master/.github/workflows/ci_suite.yml#L45
@@ -92,21 +92,6 @@ the individual packages.
 
 [rust]: https://www.rust-lang.org/en-US/install.html
 [source readme]: ./crates/README.md
-
-### Docker
-
-A `dockerfile` is provided for the map generator binary. To build the docker
-image, enter the SpacemanDMM directory and run:
-
-```shell
-docker build -t spacemandmm .
-```
-
-To use the image, switch to the codebase you want to generate maps for and invoke the container:
-
-```shell
-docker run -v "$PWD":/usr/src/codebase --rm -it spacemandmm -e /usr/src/codebase/tgstation.dme minimap /usr/src/codebase/_maps/map_files/BoxStation/BoxStation.dmm
-```
 
 ## License
 

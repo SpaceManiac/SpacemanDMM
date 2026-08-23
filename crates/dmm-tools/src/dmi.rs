@@ -2,14 +2,14 @@
 //!
 //! Includes re-exports from `dreammaker::dmi`.
 
+use bytemuck::Pod;
 use std::io;
 use std::path::Path;
-use bytemuck::Pod;
 
-use lodepng::{self, RGBA, Decoder, ColorType};
+use lodepng::{self, ColorType, Decoder, RGBA};
 use ndarray::Array2;
 
-pub use dm::dmi::*;
+pub use dmi::*;
 use std::ops::{Index, IndexMut};
 
 /// Absolute x and y.
@@ -65,7 +65,7 @@ impl IconFile {
         self.metadata.get_icon_state(icon_state).ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::NotFound,
-                format!("icon_state {} not found", icon_state),
+                format!("icon_state {icon_state} not found"),
             )
         })
     }
@@ -124,9 +124,7 @@ impl Image {
         Image {
             width,
             height,
-            data: {
-                Array2::default((width as usize, height as usize))
-            },
+            data: { Array2::default((width as usize, height as usize)) },
         }
     }
 
@@ -135,10 +133,8 @@ impl Image {
             width: bitmap.width as u32,
             height: bitmap.height as u32,
             data: {
-                let cast_input = bytemuck::cast_slice(bitmap.buffer.as_slice());
-                let mut arr = Array2::default((bitmap.width, bitmap.height));
-                arr.as_slice_mut().unwrap().copy_from_slice(cast_input);
-                arr
+                let cast_input = bytemuck::allocation::cast_vec(bitmap.buffer);
+                Array2::from_shape_vec((bitmap.width, bitmap.height), cast_input).unwrap()
             },
         }
     }
@@ -203,20 +199,15 @@ impl Image {
     pub fn composite(&mut self, other: &Image, pos: Coordinate, crop: Rect, color: [u8; 4]) {
         let other_dat = other.data.as_slice().unwrap();
         let self_dat = self.data.as_slice_mut().unwrap();
-        let mut sy = crop.1;
-        for y in pos.1..(pos.1 + crop.3) {
-            let mut sx = crop.0;
-            for x in pos.0..(pos.0 + crop.2) {
+        for (sy, y) in (crop.1..).zip(pos.1..(pos.1 + crop.3)) {
+            for (sx, x) in (crop.0..).zip(pos.0..(pos.0 + crop.2)) {
                 let src = other_dat[(sy * other.width + sx) as usize];
                 macro_rules! tint {
                     ($i:expr) => {
-                        mul255(
-                            src[$i],
-                            color[$i],
-                        )
+                        mul255(src[$i], color[$i])
                     };
                 }
-                let mut dst = &mut self_dat[(y * self.width + x) as usize];
+                let dst = &mut self_dat[(y * self.width + x) as usize];
                 let src_tint = Rgba8::new(tint!(0), tint!(1), tint!(2), tint!(3));
 
                 // out_A = src_A + dst_A (1 - src_A)
@@ -233,12 +224,8 @@ impl Image {
                         dst[i] = 0;
                     }
                 }
-                dst.a = out_a as u8;
-
-                sx += 1;
+                dst.a = out_a;
             }
-
-            sy += 1;
         }
     }
 }

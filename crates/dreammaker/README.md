@@ -15,4 +15,4 @@ core component of SpacemanDMM and powers the rest of the tooling.
   * Non-constant initial values for object variables.
   * Integer constants which are outside of range.
 
-[2072419]: https://secure.byond.com/forum/?post=2072419
+[2072419]: https://www.byond.com/forum/?post=2072419

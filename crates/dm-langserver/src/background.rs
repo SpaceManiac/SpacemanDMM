@@ -1,6 +1,6 @@
 //! Helper for running background tasks.
 
-use std::sync::mpsc::{channel, Receiver, TryRecvError};
+use std::sync::mpsc::{Receiver, TryRecvError, channel};
 use std::thread;
 
 pub struct Background<T> {
@@ -34,9 +34,9 @@ impl<T: Send + 'static> Background<T> {
             match rx.try_recv() {
                 Ok(v) => {
                     self.value = Some(v);
-                }
+                },
                 Err(TryRecvError::Empty) => self.rx = Some(rx),
-                Err(TryRecvError::Disconnected) => {}
+                Err(TryRecvError::Disconnected) => {},
             }
         }
         self

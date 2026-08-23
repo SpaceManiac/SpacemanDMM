@@ -1,17 +1,17 @@
 //! Map parser, supporting standard DMM or TGM-format files.
-use std::collections::BTreeMap;
 use std::cmp::max;
+use std::collections::BTreeMap;
 use std::mem::take;
 
 use ndarray::Array3;
 
-use dm::{DMError, Location};
 use dm::lexer::{LocationTracker, from_utf8_or_latin1};
+use dm::{DMError, FileId, Location};
 
-use super::{Map, Key, KeyType, Prefab};
+use super::{Key, KeyType, Map, Prefab};
 
 pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
-    let file_id = Default::default();
+    let file_id = FileId::INVALID;
     let mut chars = LocationTracker::new(file_id, dm::lexer::buffer_file(file_id, path)?.into());
 
     let mut in_comment_line = false;
@@ -33,15 +33,15 @@ pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
     let mut escaping = false;
     let mut skip_whitespace = false;
 
-    let mut curr_key_start_location = Location::default();
+    let mut curr_key_start_location = Location::INVALID;
 
-    let mut curr_datum_start_location = Location::default();
+    let mut curr_datum_start_location = Location::INVALID;
     macro_rules! set_curr_datum_start_location {
         () => {
             if curr_datum.is_empty() {
                 curr_datum_start_location = chars.location();
             }
-        }
+        };
     }
 
     macro_rules! insert_current_var {
@@ -49,9 +49,17 @@ pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
             curr_prefab.vars.insert(
                 from_utf8_or_latin1(take(&mut curr_var)),
                 dm::constants::evaluate_str(curr_datum_start_location, &take(&mut curr_datum))
-                    .map_err(|e| e.with_note(curr_key_start_location, format!("within key: \"{}\"", super::FormatKey(curr_key_length, super::Key(curr_key)))))?
+                    .map_err(|e| {
+                        e.with_note(
+                            curr_key_start_location,
+                            format!(
+                                "within key: \"{}\"",
+                                super::Key(curr_key).display(curr_key_length)
+                            ),
+                        )
+                    })?,
             );
-        }
+        };
     }
 
     while let Some(ch) = chars.next() {
@@ -97,7 +105,8 @@ pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
                         set_curr_datum_start_location!();
                         curr_datum.push(ch);
                     }
-                } else { // in_quote_block
+                } else {
+                    // in_quote_block
                     if skip_whitespace && ch == b' ' {
                         skip_whitespace = false;
                         continue;
@@ -211,7 +220,10 @@ pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
                     max_y = max(max_y, curr_y);
                     reading_coord = Coord::Z;
                 } else {
-                    return Err(DMError::new(chars.location(), "Incorrect number of coordinates"));
+                    return Err(DMError::new(
+                        chars.location(),
+                        "Incorrect number of coordinates",
+                    ));
                 }
             } else if ch == b')' {
                 assert_eq!(reading_coord, Coord::Z);
@@ -222,7 +234,12 @@ pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
             } else {
                 match (ch as char).to_digit(10) {
                     Some(x) => curr_num = 10 * curr_num + x as usize,
-                    None => return Err(DMError::new(chars.location(), format!("bad digit {:?} in map coordinate", ch))),
+                    None => {
+                        return Err(DMError::new(
+                            chars.location(),
+                            format!("bad digit {ch:?} in map coordinate"),
+                        ));
+                    },
                 }
             }
         } else if in_map_string {
@@ -246,9 +263,10 @@ pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
                     let key = take(&mut curr_key);
                     curr_key_length = 0;
                     if grid.insert((curr_x, curr_y, curr_z), Key(key)).is_some() {
-                        return Err(DMError::new(chars.location(), format!(
-                            "multiple entries for ({}, {}, {})",
-                            curr_x, curr_y, curr_z)))
+                        return Err(DMError::new(
+                            chars.location(),
+                            format!("multiple entries for ({curr_x}, {curr_y}, {curr_z})"),
+                        ));
                     }
                     max_x = max(max_x, curr_x);
                     curr_x += 1;
@@ -267,9 +285,10 @@ pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
         if let Some(&tile) = grid.get(&(x + 1, y + 1, z + 1)) {
             tile
         } else {
-            result = Err(DMError::new(chars.location(), format!(
-                "no value for tile ({}, {}, {})",
-                x + 1, y + 1, z + 1)));
+            result = Err(DMError::new(
+                chars.location(),
+                format!("no value for tile ({}, {}, {})", x + 1, y + 1, z + 1),
+            ));
             Key(0)
         }
     });
@@ -283,6 +302,6 @@ fn advance_key(loc: Location, curr_key: KeyType, ch: u8) -> Result<KeyType, DMEr
         Ok(single) => match super::advance_key(curr_key, single) {
             Err(err) => Err(DMError::new(loc, err)),
             Ok(key) => Ok(key),
-        }
+        },
     }
 }

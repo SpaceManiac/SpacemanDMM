@@ -1,15 +1,14 @@
 //! Configuration file for diagnostics.
 
+use foldhash::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::collections::HashMap;
 
-use ahash::RandomState;
 use serde::Deserialize;
 
-use crate::error::Severity;
 use crate::DMError;
+use crate::error::Severity;
 
 /// Struct for deserializing from a config TOML
 #[derive(Deserialize, Default, Debug, Clone)]
@@ -19,7 +18,7 @@ pub struct Config {
 
     // diagnostic configuration
     display: WarningDisplay,
-    diagnostics: HashMap<String, WarningLevel, RandomState>,
+    diagnostics: HashMap<String, WarningLevel>,
     pub code_standards: CodeStandards,
 
     // tool-specific configuration
@@ -69,6 +68,7 @@ pub struct Debugger {
 /// Severity overrides from configuration
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
 #[serde(rename_all(deserialize = "lowercase"))]
+#[derive(Default)]
 pub enum WarningLevel {
     #[serde(alias = "errors")]
     Error = 1,
@@ -80,15 +80,17 @@ pub enum WarningLevel {
     Hint = 4,
     #[serde(alias = "false", alias = "off")]
     Disabled = 5,
+    #[default]
     Unset = 6,
 }
 
 /// Available debug engines.
-#[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
+#[derive(Debug, Default, Deserialize, Clone, Copy, PartialEq)]
 pub enum DebugEngine {
     #[serde(alias = "extools")]
     Extools,
     #[serde(alias = "auxtools")]
+    #[default]
     Auxtools,
 }
 
@@ -99,10 +101,10 @@ pub struct MapRenderer {
     /// Map from render pass name to whether it should be enabled/disabled.
     ///
     /// Priority is: CLI arguments > config > defaults.
-    pub render_passes: HashMap<String, bool, RandomState>,
+    pub render_passes: HashMap<String, bool>,
 
     /// Map from typepath to layer number.
-    pub fancy_layers: HashMap<String, f32, RandomState>,
+    pub fancy_layers: HashMap<String, f32>,
 
     /// List of typepath to just hide
     pub hide_invisible: Vec<String>,
@@ -121,7 +123,7 @@ impl Config {
 
     fn config_warninglevel(&self, error: &DMError) -> Option<&WarningLevel> {
         if let Some(errortype) = error.errortype() {
-            return self.diagnostics.get(errortype)
+            return self.diagnostics.get(errortype);
         }
         None
     }
@@ -133,10 +135,10 @@ impl Config {
     /// [`None`]: ../../std/option/enum.Option.html#variant.None
     pub fn set_configured_severity(&self, error: DMError) -> Option<DMError> {
         Some(match self.config_warninglevel(&error) {
-            Some(WarningLevel::Error) => error.set_severity(Severity::Error),
-            Some(WarningLevel::Warning) => error.set_severity(Severity::Warning),
-            Some(WarningLevel::Info) => error.set_severity(Severity::Info),
-            Some(WarningLevel::Hint) => error.set_severity(Severity::Hint),
+            Some(WarningLevel::Error) => error.with_severity(Severity::Error),
+            Some(WarningLevel::Warning) => error.with_severity(Severity::Warning),
+            Some(WarningLevel::Info) => error.with_severity(Severity::Info),
+            Some(WarningLevel::Hint) => error.with_severity(Severity::Hint),
             Some(WarningLevel::Disabled) => return None,
             Some(WarningLevel::Unset) | None => error,
         })
@@ -161,12 +163,6 @@ impl WarningLevel {
     }
 }
 
-impl Default for WarningLevel {
-    fn default() -> WarningLevel {
-        WarningLevel::Unset
-    }
-}
-
 impl From<Severity> for WarningLevel {
     fn from(severity: Severity) -> Self {
         match severity {
@@ -180,17 +176,13 @@ impl From<Severity> for WarningLevel {
 
 impl PartialEq<Severity> for WarningLevel {
     fn eq(&self, other: &Severity) -> bool {
-        matches!((self, other),
+        matches!(
+            (self, other),
             (WarningLevel::Error, Severity::Error)
-            | (WarningLevel::Warning, Severity::Warning)
-            | (WarningLevel::Info, Severity::Info)
-            | (WarningLevel::Hint, Severity::Hint))
-    }
-}
-
-impl Default for DebugEngine {
-    fn default() -> Self {
-        Self::Extools
+                | (WarningLevel::Warning, Severity::Warning)
+                | (WarningLevel::Info, Severity::Info)
+                | (WarningLevel::Hint, Severity::Hint)
+        )
     }
 }
 

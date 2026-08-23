@@ -1,12 +1,12 @@
 //! DMI metadata parsing and representation.
 
+use foldhash::{HashMap, HashMapExt};
+use lodepng::Decoder;
+
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::io;
 use std::path::Path;
-use std::collections::{BTreeMap, HashMap};
-
-use derivative::Derivative;
-use lodepng::Decoder;
 
 const EXPECTED_VERSION_LINE: &str = "version = 4.0";
 
@@ -37,9 +37,10 @@ impl From<&str> for StateIndex {
 }
 
 /// The two-dimensional facing subset of BYOND's direction type.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
 pub enum Dir {
     North = 1,
+    #[default]
     South = 2,
     East = 4,
     West = 8,
@@ -51,8 +52,22 @@ pub enum Dir {
 
 impl Dir {
     pub const CARDINALS: &'static [Dir] = &[Dir::North, Dir::South, Dir::East, Dir::West];
-    pub const DIAGONALS: &'static [Dir] = &[Dir::Northeast, Dir::Northwest, Dir::Southeast, Dir::Southwest];
-    pub const ALL: &'static [Dir] = &[Dir::North, Dir::South, Dir::East, Dir::West, Dir::Northeast, Dir::Northwest, Dir::Southeast, Dir::Southwest];
+    pub const DIAGONALS: &'static [Dir] = &[
+        Dir::Northeast,
+        Dir::Northwest,
+        Dir::Southeast,
+        Dir::Southwest,
+    ];
+    pub const ALL: &'static [Dir] = &[
+        Dir::North,
+        Dir::South,
+        Dir::East,
+        Dir::West,
+        Dir::Northeast,
+        Dir::Northwest,
+        Dir::Southeast,
+        Dir::Southwest,
+    ];
 
     /// Attempt to build a direction from its integer representation.
     pub fn from_int(int: i32) -> Option<Dir> {
@@ -79,11 +94,7 @@ impl Dir {
     }
 
     pub fn is_diagonal(self) -> bool {
-        !matches!(self,
-            Dir::North
-            | Dir::South
-            | Dir::East
-            | Dir::West)
+        !matches!(self, Dir::North | Dir::South | Dir::East | Dir::West)
     }
 
     pub fn flip(self) -> Dir {
@@ -192,12 +203,6 @@ impl Dir {
     }
 }
 
-impl Default for Dir {
-    fn default() -> Self {
-        Dir::South
-    }
-}
-
 /// Embedded metadata describing a DMI spritesheet's layout.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Metadata {
@@ -212,15 +217,13 @@ pub struct Metadata {
 }
 
 /// The metadata belonging to a single icon state.
-#[derive(Derivative, Debug, Clone)]
-#[derivative(PartialEq)]
+#[derive(Debug, Clone)]
 pub struct State {
     /// The state's name, corresponding to the `icon_state` var.
     pub name: String,
     /// Whether this is a movement state (shown during gliding).
     pub movement: bool,
     /// The number of frames in the spritesheet before this state's first frame.
-    #[derivative(PartialEq="ignore")]
     pub offset: usize,
     /// 0 for infinite, 1+ for finite.
     pub loop_: u32,
@@ -229,6 +232,19 @@ pub struct State {
     pub rewind: bool,
     pub dirs: Dirs,
     pub frames: Frames,
+}
+
+impl PartialEq for State {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.movement == other.movement
+            // SKIP self.offset
+            && self.loop_ == other.loop_
+            && self.duplicate_index == other.duplicate_index
+            && self.rewind == other.rewind
+            && self.dirs == other.dirs
+            && self.frames == other.frames
+    }
 }
 
 /// How many directions a state has.
@@ -254,7 +270,6 @@ pub enum Frames {
 impl Metadata {
     /// Read the bitmap and DMI metadata from a given file in a single pass.
     pub fn from_file(path: &Path) -> io::Result<(lodepng::Bitmap<lodepng::RGBA>, Metadata)> {
-        let path = &crate::fix_case(path);
         Self::from_bytes(&std::fs::read(path)?)
     }
 
@@ -297,7 +312,13 @@ impl Metadata {
         parse_metadata(data)
     }
 
-    pub fn rect_of(&self, bitmap_width: u32, icon_state: &StateIndex, dir: Dir, frame: u32) -> Option<(u32, u32, u32, u32)> {
+    pub fn rect_of(
+        &self,
+        bitmap_width: u32,
+        icon_state: &StateIndex,
+        dir: Dir,
+        frame: u32,
+    ) -> Option<(u32, u32, u32, u32)> {
         if self.states.is_empty() {
             return Some((0, 0, self.width, self.height));
         }
@@ -408,12 +429,10 @@ fn parse_metadata(data: &str) -> io::Result<Metadata> {
     let header = (lines.next(), lines.next());
     let expected_header = (Some("# BEGIN DMI"), Some(EXPECTED_VERSION_LINE));
     if header != expected_header {
-        return Err(
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("Wrong dmi metadata header. Expected {:?}, got {:?}", expected_header, header )
-            )
-        );
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Wrong dmi metadata header. Expected {expected_header:?}, got {header:?}"),
+        ));
     }
 
     let mut state: Option<State> = None;
@@ -434,14 +453,18 @@ fn parse_metadata(data: &str) -> io::Result<Metadata> {
                     frames_so_far += state.frames.count() * state.dirs.count();
                     metadata.states.push(state);
                 }
-                let unquoted = value[1..value.len() - 1].to_owned(); // TODO: unquote
-                assert!(!unquoted.contains('\\') && !unquoted.contains('"'));
+                let Some(name) = unquote(value) else {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("Malformed dmi state name line `{line}`"),
+                    ));
+                };
 
-                let count = duplicate_map.entry(unquoted.clone()).or_insert(0);
+                let count = duplicate_map.entry(name.clone()).or_insert(0);
 
                 let new_state = State {
                     offset: frames_so_far,
-                    name: unquoted,
+                    name,
                     loop_: 0,
                     duplicate_index: *count,
                     rewind: false,
@@ -452,14 +475,16 @@ fn parse_metadata(data: &str) -> io::Result<Metadata> {
 
                 let key = new_state.get_state_name_index();
 
-                if let std::collections::btree_map::Entry::Vacant(e) = metadata.state_names.entry(key) {
+                if let std::collections::btree_map::Entry::Vacant(e) =
+                    metadata.state_names.entry(key)
+                {
                     e.insert(metadata.states.len());
                 }
 
                 state = Some(new_state);
 
                 *count += 1;
-            }
+            },
             "dirs" => {
                 let state = state.as_mut().unwrap();
                 let n: u8 = value.parse().unwrap();
@@ -469,7 +494,7 @@ fn parse_metadata(data: &str) -> io::Result<Metadata> {
                     8 => Dirs::Eight,
                     _ => panic!(),
                 };
-            }
+            },
             "frames" => {
                 let state = state.as_mut().unwrap();
                 match state.frames {
@@ -477,33 +502,68 @@ fn parse_metadata(data: &str) -> io::Result<Metadata> {
                     _ => panic!(),
                 }
                 state.frames = Frames::Count(value.parse().unwrap());
-            }
+            },
             "delay" => {
                 let state = state.as_mut().unwrap();
-                let mut vector: Vec<f32> = value.split(',').map(str::parse).collect::<Result<Vec<_>, _>>().unwrap();
+                let mut vector: Vec<f32> = value
+                    .split(',')
+                    .map(str::parse)
+                    .collect::<Result<Vec<_>, _>>()
+                    .unwrap();
                 match state.frames {
-                    Frames::One => if vector.iter().all(|&n| n == 1.) {
-                        state.frames = Frames::Count(vector.len());
-                    } else {
-                        state.frames = Frames::Delays(vector);
+                    Frames::One => {
+                        if vector.iter().all(|&n| n == 1.) {
+                            state.frames = Frames::Count(vector.len());
+                        } else {
+                            state.frames = Frames::Delays(vector);
+                        }
                     },
-                    Frames::Count(n) => if !vector.iter().all(|&n| n == 1.) {
+                    Frames::Count(n) => {
                         vector.truncate(n);
-                        state.frames = Frames::Delays(vector);
+                        if !vector.iter().all(|&n| n == 1.) {
+                            state.frames = Frames::Delays(vector);
+                        }
                     },
                     Frames::Delays(_) => panic!(),
                 }
-            }
+            },
             "loop" => state.as_mut().unwrap().loop_ = value.parse().unwrap(),
             "rewind" => state.as_mut().unwrap().rewind = value.parse::<u8>().unwrap() != 0,
-            "hotspot" => { /* TODO */ }
+            "hotspot" => { /* TODO */ },
             "movement" => state.as_mut().unwrap().movement = value.parse::<u8>().unwrap() != 0,
-            _ => panic!(),
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("Unknown dmi metadata line `{line}`"),
+                ));
+            },
         }
     }
     metadata.states.extend(state);
 
     Ok(metadata)
+}
+
+fn unquote(value: &str) -> Option<String> {
+    if !value.starts_with('"') || !value.ends_with('"') {
+        return None;
+    }
+    let value = &value[1..value.len() - 1];
+    if !value.contains('\\') && !value.contains('"') {
+        return Some(value.to_owned());
+    }
+    let mut result = String::with_capacity(value.len());
+    let mut iter = value.chars();
+    while let Some(ch) = iter.next() {
+        if ch == '\\' {
+            result.push(iter.next()?);
+        } else if ch == '"' {
+            return None;
+        } else {
+            result.push(ch);
+        }
+    }
+    Some(result)
 }
 
 #[cfg(test)]
@@ -512,7 +572,7 @@ mod test {
 
     #[test]
     fn duplicate_states() {
-        let description = r##"
+        let description = r#"
 # BEGIN DMI
 version = 4.0
     width = 32
@@ -527,9 +587,10 @@ state = "duplicate"
     dirs = 1
     frames = 1
 # END DMI
-"##.trim();
+"#
+        .trim();
 
-        let metadata = parse_metadata(description).unwrap();
+        let metadata = parse_metadata(description).expect("Metadata is valid");
         assert_eq!(metadata.state_names.len(), 3);
         assert_eq!(
             metadata.state_names,
@@ -549,7 +610,44 @@ state = "duplicate"
             }
 
             // Note: using `no` here only works by virtue of the test data being only composed of duplicates
-            assert_eq!(no, *metadata.state_names.get(&state.get_state_name_index()).unwrap())
+            assert_eq!(
+                no,
+                *metadata
+                    .state_names
+                    .get(&state.get_state_name_index())
+                    .unwrap()
+            )
         }
+    }
+
+    #[test]
+    /// Sometimes, Dream Maker just doesn't get rid of extra delay
+    /// information when a state has the number of frames edited.
+    ///
+    /// This means we need to truncate our delay list to the number of frames specified by the frames key.
+    ///
+    /// This always worked fine- however, we also simplify `delays = 1,1,...` to `Frames::Count(delays.len())`.
+    ///
+    /// The bug in our code was that we checked if our `delays = 1,1,...` *before* truncating the array
+    /// in the truncation case, so we would output `Frames::Delays([1,1])` for this metadata.
+    fn delay_overflow_edge_case() {
+        let description = r#"
+# BEGIN DMI
+version = 4.0
+    width = 32
+    height = 32
+state = "one"
+    dirs = 1
+    frames = 2
+    delay = 1,1,0.5,0.5
+# END DMI
+"#
+        .trim();
+
+        let metadata = parse_metadata(description).expect("Metadata is valid");
+        let state = metadata
+            .get_icon_state(&StateIndex("one".to_owned(), 0))
+            .expect("Only one state, named one, should be found");
+        assert_eq!(state.frames, Frames::Count(2));
     }
 }

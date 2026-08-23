@@ -8,7 +8,7 @@ use dm::dmi;
 use dm::objtree::ObjectTree;
 use dmm_tools::dmm::Prefab;
 
-use crate::{History, Environment, ImRenderer};
+use crate::{Environment, History, ImRenderer};
 
 mod place;
 
@@ -70,7 +70,10 @@ impl Tool {
     }
 
     fn show_objtree(self) -> Self {
-        Tool { objtree: true, ..self }
+        Tool {
+            objtree: true,
+            ..self
+        }
     }
 
     fn dmi(self, icon: PathBuf, icon_state: String) -> Self {
@@ -102,26 +105,34 @@ impl ToolIcon {
         let (_, ty) = env.find_closest_type(&prefab.path);
         let ty = ty?;
 
-        let icon = prefab.vars.get("icon")
+        let icon = prefab
+            .vars
+            .get("icon")
             .or_else(|| ty.get_value("icon")?.constant.as_ref())?
             .as_path()?
             .to_owned();
-        let icon_state = prefab.vars.get("icon_state")
-            .or_else(|| ty.get_value("icon_state")
-                .and_then(|v| v.constant.as_ref()))
+        let icon_state = prefab
+            .vars
+            .get("icon_state")
+            .or_else(|| ty.get_value("icon_state").and_then(|v| v.constant.as_ref()))
             .and_then(|v| v.as_str())
-            .unwrap_or("").to_owned();
-        let dir = prefab.vars.get("dir")
-            .or_else(|| ty.get_value("dir")
-                .and_then(|v| v.constant.as_ref()))
+            .unwrap_or("")
+            .to_owned();
+        let dir = prefab
+            .vars
+            .get("dir")
+            .or_else(|| ty.get_value("dir").and_then(|v| v.constant.as_ref()))
             .and_then(|v| v.to_int())
             .and_then(dmi::Dir::from_int)
             .unwrap_or(dmi::Dir::default());
         let color = dmm_tools::minimap::color_of(&env.objtree, &prefab);
         let tint = [
-            color[0] as f32 / 255.0, color[1] as f32 / 255.0,
-            color[2] as f32 / 255.0, color[3] as f32 / 255.0,
-        ].into();
+            color[0] as f32 / 255.0,
+            color[1] as f32 / 255.0,
+            color[2] as f32 / 255.0,
+            color[3] as f32 / 255.0,
+        ]
+        .into();
 
         Some(ToolIcon::Dmi {
             icon,
@@ -131,11 +142,7 @@ impl ToolIcon {
         })
     }
 
-    pub fn prepare(
-        &mut self,
-        environment: Option<&Environment>,
-        ctx: &mut IconCtx,
-    ) -> &mut Self {
+    pub fn prepare(&mut self, environment: Option<&Environment>, ctx: &mut IconCtx) -> &mut Self {
         let temp = std::mem::replace(self, ToolIcon::None);
         *self = crate::prepare_tool_icon(ctx.renderer, environment, ctx.map_renderer, temp);
         self
@@ -148,8 +155,14 @@ pub struct IconCtx<'a> {
 }
 
 impl<'a> IconCtx<'a> {
-    pub fn new(renderer: &'a mut ImRenderer, map_renderer: &'a mut crate::map_renderer::MapRenderer) -> Self {
-        IconCtx { renderer, map_renderer }
+    pub fn new(
+        renderer: &'a mut ImRenderer,
+        map_renderer: &'a mut crate::map_renderer::MapRenderer,
+    ) -> Self {
+        IconCtx {
+            renderer,
+            map_renderer,
+        }
     }
 }
 
@@ -175,6 +188,6 @@ pub fn configure(_objtree: &ObjectTree) -> Vec<Tool> {
 struct Dummy;
 impl ToolBehavior for Dummy {
     fn settings(&mut self, ui: &Ui, _: &Environment, _: &mut IconCtx) {
-        ui.text(im_str!("Not yet implemented."));
+        ui.text("Not yet implemented.");
     }
 }
