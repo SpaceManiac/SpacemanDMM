@@ -209,7 +209,7 @@ where
             }
 
             if let Some(tok) = self.inner_next() {
-                self.last_input_loc = tok.location;
+                self.last_input_loc = tok.start;
                 self.real_next(tok.token);
             } else if self.eof_yielded {
                 return None;

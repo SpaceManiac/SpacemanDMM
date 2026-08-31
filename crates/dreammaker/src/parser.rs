@@ -508,12 +508,17 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             }
             match self.input.next() {
                 Some(LocatedToken {
-                    location,
+                    start: location,
+                    end: _,
                     token: Token::DocComment(comment),
                 }) => {
                     self.doc_comments_pending.push_back((location, comment));
                 },
-                Some(LocatedToken { location, token }) => {
+                Some(LocatedToken {
+                    start: location,
+                    end: _,
+                    token,
+                }) => {
                     self.location = location;
                     self.next = Some(token);
                 },
@@ -554,7 +559,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             }
             match self.input.next() {
                 Some(LocatedToken {
-                    location,
+                    start: location,
+                    end: _,
                     token: Token::DocComment(comment),
                 }) => {
                     if comment.target == target {
@@ -567,7 +573,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     }
                 },
                 Some(other) => {
-                    self.location = other.location;
+                    self.location = other.start;
                     self.next = Some(other.token);
                     return Ok(None);
                 },

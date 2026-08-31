@@ -22,14 +22,14 @@ fn simple_location_test() {
     let located_tokens: Vec<_> = Lexer::new(&context, FileId::INVALID, code.as_bytes()).collect();
     context.assert_success();
 
-    assert_eq!(located_tokens[0].location.line, 1);
-    assert_eq!(located_tokens[0].location.column, 1);
+    assert_eq!(located_tokens[0].start.line, 1);
+    assert_eq!(located_tokens[0].start.column, 1);
 
     println!("---- lexer ----");
     for token in located_tokens.iter() {
         println!(
             "{}:{}: {:?}",
-            token.location.line, token.location.column, token.token
+            token.start.line, token.start.column, token.token
         );
     }
 
@@ -45,7 +45,7 @@ fn simple_location_test() {
     for token in indented_tokens.iter() {
         println!(
             "{}:{}: {:?}",
-            token.location.line, token.location.column, token.token
+            token.start.line, token.start.column, token.token
         );
     }
     let reconstructed = reconstruct(&indented_tokens, true);
@@ -57,8 +57,8 @@ fn reconstruct(tokens: &[LocatedToken], iffy: bool) -> String {
     for token in tokens.iter() {
         use std::fmt::Write;
 
-        let line = token.location.line.checked_sub(1).unwrap() as usize;
-        let column = token.location.column.checked_sub(1).unwrap() as usize;
+        let line = token.start.line.checked_sub(1).unwrap() as usize;
+        let column = token.start.column.checked_sub(1).unwrap() as usize;
 
         if reconstructed.len() > line + 1 {
             panic!("line numbers went backwards");

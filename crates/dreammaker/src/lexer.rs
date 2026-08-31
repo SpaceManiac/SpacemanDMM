@@ -539,14 +539,19 @@ pub fn format_float(n: f32) -> impl fmt::Display {
 /// A token with a location attached.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LocatedToken {
-    pub location: Location,
+    pub start: Location,
+    pub end: Location,
     pub token: Token,
 }
 
 impl LocatedToken {
     #[inline]
-    pub fn new(location: Location, token: Token) -> LocatedToken {
-        LocatedToken { location, token }
+    pub fn new(start: Location, token: Token) -> LocatedToken {
+        LocatedToken {
+            start,
+            end: start,
+            token,
+        }
     }
 }
 
@@ -1338,10 +1343,7 @@ impl<'ctx> Iterator for Lexer<'ctx> {
                         self.final_newline = true;
                         let mut location = self.location();
                         location.column += 1;
-                        return Some(LocatedToken {
-                            location,
-                            token: Token!['\n'],
-                        });
+                        return Some(LocatedToken::new(location, Token!['\n']));
                     } else {
                         return None;
                     }

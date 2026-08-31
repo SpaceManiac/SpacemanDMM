@@ -338,7 +338,7 @@ impl<'ctx> Iterator for IncludeStack<'ctx> {
                     ..
                 }) => {
                     if let Some(token) = tokens.pop_front() {
-                        return Some(LocatedToken { location, token });
+                        return Some(LocatedToken::new(location, token));
                     }
                     // else fallthrough to pop()
                 },
@@ -618,7 +618,7 @@ impl<'ctx> Preprocessor<'ctx> {
         // pump real_next to fill output until we get a real newline on input
         let start = self.last_input_loc;
         while let Some(tok) = self.inner_next() {
-            self.last_input_loc = tok.location;
+            self.last_input_loc = tok.start;
 
             if let Token!['\n'] = tok.token {
                 break;
@@ -750,7 +750,7 @@ impl<'ctx> Preprocessor<'ctx> {
                         stringify!($p)
                     )));
                 };
-                let $p2 = lt.location;
+                let $p2 = lt.start;
             };
             ($p:pat) => {
                 expect_token!($p, _);
@@ -1416,16 +1416,16 @@ impl<'ctx> Iterator for Preprocessor<'ctx> {
             if let Some(tok) = self.inner_next() {
                 // linting for https://www.byond.com/forum/?post=2072419
                 if !tok.token.is_whitespace() && tok.token != Token![#] {
-                    if tok.location.file != self.last_printable_input_loc.file
-                        || tok.location.line > self.last_printable_input_loc.line
+                    if tok.start.file != self.last_printable_input_loc.file
+                        || tok.start.line > self.last_printable_input_loc.line
                     {
                         self.danger_idents.clear();
                     }
-                    self.last_printable_input_loc = tok.location;
+                    self.last_printable_input_loc = tok.start;
                 }
 
                 // update last_input_loc and attempt to process the input token
-                self.last_input_loc = tok.location;
+                self.last_input_loc = tok.start;
                 if let Err(e) = self.real_next(tok.token, false) {
                     self.context.register_error(e);
                 }
