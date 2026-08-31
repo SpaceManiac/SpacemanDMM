@@ -45,11 +45,6 @@ where
     }
 
     #[inline]
-    fn inner_next(&mut self) -> Option<LocatedToken> {
-        self.inner.next()
-    }
-
-    #[inline]
     fn push(&mut self, tok: Token) {
         self.output
             .push_back(LocatedToken::new(self.last_input_loc, tok));
@@ -63,21 +58,18 @@ where
         ));
     }
 
-    #[inline]
-    fn push_semicolon(&mut self) {
-        self.push_eol(Token![;]);
-    }
+    fn real_next(&mut self, read: LocatedToken) {
+        self.last_input_loc = read.start;
 
-    fn real_next(&mut self, read: Token) {
         // handle whitespace
-        match read {
+        match read.token {
             Token!['\n'] => {
                 if self.parentheses == 0 {
                     self.current_spaces = Some(0);
                 }
                 // semicolons are placed by the first token on the next line
                 if self.eol_location.is_none() {
-                    self.eol_location = Some(self.last_input_loc);
+                    self.eol_location = Some(read.start);
                 }
                 return;
             },
@@ -91,7 +83,7 @@ where
         }
 
         // handle pre-existing braces
-        if let Token!['{'] | Token!['}'] = read {
+        if let Token!['{'] | Token!['}'] = read.token {
             self.current_spaces = None
         }
 
@@ -120,7 +112,7 @@ where
                             // hope that truncating division will approximate
                             // a sane situation.
                             DMError::new(
-                                self.last_input_loc,
+                                read.start,
                                 format!(
                                     "inconsistent indentation: {spaces} % {spaces_per_indent} != 0",
                                 ),
@@ -139,7 +131,7 @@ where
             } else if indents < new_indents {
                 // multiple indent is an error, register it but let it work
                 DMError::new(
-                    self.last_input_loc,
+                    read.start,
                     format!(
                         "inconsistent multiple indentation: {} > 1",
                         new_indents - indents,
@@ -159,12 +151,12 @@ where
                 }
             } else {
                 // same indent as before
-                self.push_semicolon();
+                self.push_eol(Token![;]);
             }
         }
 
         // handle non-whitespace
-        match read {
+        match read.token {
             Token!['{'] => {
                 self.current = match self.current {
                     None => Some((1, 1)),
@@ -174,8 +166,7 @@ where
             Token!['}'] => {
                 self.current = match self.current {
                     None => {
-                        DMError::new(self.last_input_loc, "unmatched right brace")
-                            .register(self.context);
+                        DMError::new(read.start, "unmatched right brace").register(self.context);
                         None
                     },
                     Some((_, 1)) => None,
@@ -192,7 +183,7 @@ where
         }
 
         self.eol_location = None;
-        self.push(read);
+        self.output.push_back(read);
     }
 }
 
@@ -206,14 +197,9 @@ where
         loop {
             if let Some(token) = self.output.pop_front() {
                 return Some(token);
-            }
-
-            if let Some(tok) = self.inner_next() {
-                self.last_input_loc = tok.start;
-                self.real_next(tok.token);
-            } else if self.eof_yielded {
-                return None;
-            } else {
+            } else if let Some(tok) = self.inner.next() {
+                self.real_next(tok);
+            } else if !self.eof_yielded {
                 self.push(Token![;]);
                 if let Some((_, indents)) = self.current {
                     for _ in 0..indents {
@@ -222,6 +208,8 @@ where
                 }
                 self.current = None;
                 self.eof_yielded = true;
+            } else {
+                return None;
             }
         }
     }
