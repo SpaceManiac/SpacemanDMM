@@ -2885,10 +2885,10 @@ fn reconstruct_path(
     }
     if let Some(deets) = proc_deets {
         result.push(deets.kind.into());
-        result.extend(deets.flags.iter_idents().map(Ident::from_static));
+        result.extend(deets.flags.iter_idents());
     }
     if let Some(var) = var_type {
-        result.extend(var.flags.iter_idents().map(Ident::from_static));
+        result.extend(var.flags.iter_idents());
         result.extend(var.type_path.iter().cloned());
     }
     if !last.is_empty() {

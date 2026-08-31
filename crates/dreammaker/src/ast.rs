@@ -411,11 +411,11 @@ impl ProcFlags {
         self.contains(ProcFlags::FINAL)
     }
 
-    pub fn iter_idents(mut self) -> impl Iterator<Item = &'static str> {
+    pub fn iter_idents(mut self) -> impl Iterator<Item = Ident> {
         std::iter::from_fn(move || {
             if self.is_final() {
                 self &= !ProcFlags::FINAL;
-                Some("final")
+                Some(ident!("final"))
             } else {
                 None
             }
@@ -647,26 +647,26 @@ impl VarTypeFlags {
         !self.intersects(VarTypeFlags::CONST | VarTypeFlags::STATIC | VarTypeFlags::PROTECTED)
     }
 
-    pub fn iter_idents(mut self) -> impl Iterator<Item = &'static str> {
+    pub fn iter_idents(mut self) -> impl Iterator<Item = Ident> {
         std::iter::from_fn(move || {
             if self.is_static() {
                 self &= !VarTypeFlags::STATIC;
-                Some("static")
+                Some(ident!("static"))
             } else if self.is_const() {
                 self &= !VarTypeFlags::CONST;
-                Some("const")
+                Some(ident!("const"))
             } else if self.is_tmp() {
                 self &= !VarTypeFlags::TMP;
-                Some("tmp")
+                Some(ident!("tmp"))
             } else if self.is_final() {
                 self &= !VarTypeFlags::FINAL;
-                Some("final")
+                Some(ident!("final"))
             } else if self.is_private() {
                 self &= !VarTypeFlags::PRIVATE;
-                Some("SpacemanDMM_private")
+                Some(ident!("SpacemanDMM_private"))
             } else if self.is_protected() {
                 self &= !VarTypeFlags::PROTECTED;
-                Some("SpacemanDMM_protected")
+                Some(ident!("SpacemanDMM_protected"))
             } else {
                 None
             }
@@ -745,12 +745,7 @@ impl Ident {
 
     #[inline]
     #[doc(hidden)]
-    pub fn from_static(str: &'static str) -> Self {
-        debug_assert!(
-            intern_static(str).is_some(),
-            "Missing from STATIC_IDENTS: {:?}",
-            str
-        );
+    pub const fn from_static(str: &'static str) -> Self {
         Ident {
             inner: Cow::const_str(str),
         }
@@ -822,7 +817,10 @@ impl From<std::borrow::Cow<'static, str>> for Ident {
 
 impl From<ProcDeclKind> for Ident {
     fn from(value: ProcDeclKind) -> Self {
-        Ident::from_static(value.name())
+        match value {
+            ProcDeclKind::Proc => ident!("proc"),
+            ProcDeclKind::Verb => ident!("verb"),
+        }
     }
 }
 

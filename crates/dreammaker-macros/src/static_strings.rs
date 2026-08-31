@@ -6,10 +6,10 @@ use syn::{punctuated::Punctuated, *};
 pub fn static_strings(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input with Punctuated<LitStr, Token![,]>::parse_terminated);
     let mut macro_branches = TokenStream2::new();
-    for (_, each) in input.iter().enumerate() {
+    for each in input.iter() {
         let value = each.value();
         macro_branches.extend(quote! {
-            (#value) => { $crate::ast::Ident::from_static(#value) };
+            (#value) => { const { $crate::ast::Ident::from_static(#value) } };
         });
     }
     quote! {
