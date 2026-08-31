@@ -1085,15 +1085,11 @@ impl Expression {
         }
     }
 
-    /// If this expression consists of a single term, return it.
-    pub fn into_term(self) -> Option<Term> {
+    pub(crate) fn into_ident(self) -> Option<Ident> {
         match self {
-            Expression::Base { term, follow } => {
-                if follow.is_empty() {
-                    Some(term.elem)
-                } else {
-                    None
-                }
+            Expression::Base { term, follow } if follow.is_empty() => match term.elem {
+                Term::Ident(i) => Some(i),
+                _ => None,
             },
             _ => None,
         }
@@ -1375,15 +1371,9 @@ impl Term {
 impl From<Expression> for Term {
     fn from(expr: Expression) -> Term {
         match expr {
-            Expression::Base { term, follow } => {
-                if follow.is_empty() {
-                    match term.elem {
-                        Term::Expr(expr) => Term::from(*expr),
-                        other => other,
-                    }
-                } else {
-                    Term::Expr(Box::new(Expression::Base { term, follow }))
-                }
+            Expression::Base { term, follow } if follow.is_empty() => match term.elem {
+                Term::Expr(expr) => Term::from(*expr),
+                other => other,
             },
             other => Term::Expr(Box::new(other)),
         }

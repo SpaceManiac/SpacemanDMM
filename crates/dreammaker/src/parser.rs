@@ -1610,21 +1610,19 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                                     None => (Some(var_statement.var_type), var_statement.name),
                                     _ => return Err(self.error("cannot assign a value to key in a for(key, value) statement")),
                                 },
-                                Some(Statement::Expr(expr)) => match expr.into_term() {
-                                    Some(Term::Ident(name)) => (None, name),
+                                Some(Statement::Expr(expr)) => match expr.into_ident() {
+                                    Some(name) => (None, name),
                                     _ => return Err(self.error("for-list must start with variable")),
                                 },
                                 _ => return Err(self.error("for-list must start with variable")),
                             };
                             // Value is the lhs of for(k, [v in x])
                             // It should also pass only if it's an ident
-                            let value =
-                                match lhs.into_term() {
-                                    Some(Term::Ident(value)) => value,
-                                    _ => return Err(self.error(
-                                        "value must be a variable in a for (key, value) statement",
-                                    )),
-                                };
+                            let Some(value) = lhs.into_ident() else {
+                                return Err(self.error(
+                                    "value must be a variable in a for (key, value) statement",
+                                ));
+                            };
                             // TODO : check if `x` is an ident/a "list()" or "alist()" statement ?
                             require!(self.exact(Token![')']));
                             // Returns a for(k,v)
@@ -1674,9 +1672,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         rhs,
                     }) => {
                         // for(a = 1 to
-                        let name = match lhs.into_term() {
-                            Some(Term::Ident(name)) => name,
-                            _ => return Err(self.error("for-list must start with variable")),
+                        let Some(name) = lhs.into_ident() else {
+                            return Err(self.error("for-list must start with variable"));
                         };
                         require!(self.exact_ident(ident!("to")));
                         let to_rhs = require!(self.expression());
@@ -1687,9 +1684,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         lhs,
                         rhs,
                     }) => {
-                        let name = match lhs.into_term() {
-                            Some(Term::Ident(name)) => name,
-                            _ => return Err(self.error("for-list must start with variable")),
+                        let Some(name) = lhs.into_ident() else {
+                            return Err(self.error("for-list must start with variable"));
                         };
                         match *rhs {
                             Expression::BinaryOp {
@@ -1712,8 +1708,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                             },
                         }
                     },
-                    Statement::Expr(expr) => match expr.into_term() {
-                        Some(Term::Ident(name)) => (None, name),
+                    Statement::Expr(expr) => match expr.into_ident() {
+                        Some(name) => (None, name),
                         _ => return Err(self.error("for-list must start with variable")),
                     },
                     _ => return Err(self.error("for-list must start with variable")),
