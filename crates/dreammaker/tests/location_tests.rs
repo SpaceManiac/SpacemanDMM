@@ -40,7 +40,7 @@ fn simple_location_test() {
     }
 
     println!("---- indent processor ----");
-    let indented_tokens: Vec<_> = dm::_test_indent(&context, located_tokens).collect();
+    let indented_tokens: Vec<_> = dm::IndentProcessor::new(&context, located_tokens).collect();
     context.assert_success();
     for token in indented_tokens.iter() {
         println!(

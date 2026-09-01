@@ -9,6 +9,6 @@ fn main() {
     let pp = dm::Preprocessor::new(&context, env).expect("i/o error opening .dme");
     println!(
         "{}",
-        dm::pretty_print(dm::_test_indent(&context, pp), false)
+        dm::pretty_print(dm::IndentProcessor::new(&context, pp), false)
     );
 }

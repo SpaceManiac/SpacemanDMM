@@ -4,9 +4,12 @@ use std::collections::VecDeque;
 use crate::lexer::{LocatedToken, Token};
 use crate::{Context, DMError, Location};
 
-/// Eliminates blank lines, parses and validates indentation, braces, and semicolons.
+/// Eliminates blank lines and parses and validates indentation, braces, and semicolons.
 ///
-/// After processing, no Newline, Tab, or Space tokens remain.
+/// After processing, no `Newline`, `Tab`, or `Space` tokens remain.
+///
+/// It is usually not necessary to construct an `IndentProcessor` manually, since
+/// [Parser][crate::Parser] uses it internally.
 pub struct IndentProcessor<'ctx, I> {
     context: &'ctx Context,
     inner: I,

@@ -35,6 +35,8 @@ mod parser;
 pub mod preprocessor;
 
 pub use error::*;
+#[doc(hidden)]
+pub use indents::IndentProcessor;
 pub use lexer::Lexer;
 pub use parser::Parser;
 pub use preprocessor::Preprocessor;
@@ -239,12 +241,4 @@ where
     total += u64::get_stack_size() * 4; // composition of RandomState
 
     total
-}
-
-#[doc(hidden)]
-pub fn _test_indent(
-    context: &Context,
-    input: impl IntoIterator<Item = lexer::LocatedToken>,
-) -> impl Iterator<Item = lexer::LocatedToken> {
-    indents::IndentProcessor::new(context, input)
 }

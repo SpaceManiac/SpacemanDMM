@@ -28,7 +28,7 @@ fn check_preprocessor() {
 fn check_indentor() {
     let context = Context::default();
     with_test_dme(&context, |preprocessor| {
-        dm::_test_indent(&context, preprocessor).count();
+        dm::IndentProcessor::new(&context, preprocessor).count();
         context.assert_success();
     });
 }

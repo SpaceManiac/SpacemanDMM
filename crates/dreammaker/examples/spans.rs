@@ -24,7 +24,7 @@ pub fn main() {
     }
     // NB: errors because the preprocessor is supposed to be in between.
     for token in
-        dreammaker::_test_indent(&context, Lexer::new(&context, fileid, content.as_bytes()))
+        dreammaker::IndentProcessor::new(&context, Lexer::new(&context, fileid, content.as_bytes()))
     {
         vis.add_spot(
             "3. Indenter",
