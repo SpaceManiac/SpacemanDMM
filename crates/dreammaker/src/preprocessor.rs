@@ -10,11 +10,11 @@ use foldhash::HashMap;
 
 use interval_tree::{IntervalTree, range};
 
-use super::annotation::*;
-use super::ast::Ident;
-use super::docs::{CommentKind, DocCollection, DocComment, DocTarget};
-use super::lexer::*;
-use super::{Context, DMError, FileId, HasLocation, Location, Severity};
+use crate::annotation::*;
+use crate::ast::Ident;
+use crate::docs::{CommentKind, DocCollection, DocComment, DocTarget};
+use crate::lexer::*;
+use crate::{Context, DMError, FileId, HasLocation, Location, Severity};
 
 /// The maximum recursion depth of macro expansion.
 const MAX_RECURSION_DEPTH: usize = 32;
@@ -1112,40 +1112,23 @@ impl<'ctx> Preprocessor<'ctx> {
                 // substitute special macros
                 if *ident == ident!("__FILE__") {
                     let path = self.include_stack.top_file_path().to_str().unwrap();
-                    let dm_path;
-
-                    #[cfg(windows)]
-                    {
-                        dm_path = path.replace("\\", "/");
-                    }
-
-                    #[cfg(not(windows))]
-                    {
-                        dm_path = path.to_string();
-                    }
-
+                    let dm_path: String = cfg_select! {
+                        windows => path.replace("\\", "/"),
+                        _ => path.to_string()
+                    };
                     let mut doc_collection = DocCollection::default();
                     doc_collection.push(DocComment {
-                        kind: crate::docs::CommentKind::Line,
+                        kind: CommentKind::Line,
                         target: DocTarget::FollowingItem,
-                        text: dm_path.into(),
+                        text: Box::new(dm_path.clone()),
                     });
                     self.annotate_macro(ident, Location::BUILTINS, Some(Rc::new(doc_collection)));
-                    for include in self.include_stack.stack.iter().rev() {
-                        if let Include::File { ref path, .. } = *include {
-                            self.push_output(Token::String(
-                                path.display().to_string().into(),
-                                StringKind::Raw,
-                            ));
-                            return Ok(());
-                        }
-                    }
-                    self.push_output(Token::empty_string());
+                    self.push_output(Token::String(dm_path.into(), StringKind::Raw));
                     return Ok(());
                 } else if *ident == ident!("__LINE__") {
                     let mut doc_collection = DocCollection::default();
                     doc_collection.push(DocComment {
-                        kind: crate::docs::CommentKind::Line,
+                        kind: CommentKind::Line,
                         target: DocTarget::FollowingItem,
                         text: self.last_input_loc.line.to_string().into(),
                     });
@@ -1339,11 +1322,7 @@ impl<'ctx> Preprocessor<'ctx> {
                                                     if !string.is_empty() {
                                                         string.push(' ');
                                                     }
-                                                    let _e = write!(string, "{each}");
-                                                    #[cfg(debug_assertions)]
-                                                    {
-                                                        _e.unwrap();
-                                                    }
+                                                    _ = write!(string, "{each}");
                                                 }
                                                 expansion.push_back(Token::String(
                                                     string.into(),
