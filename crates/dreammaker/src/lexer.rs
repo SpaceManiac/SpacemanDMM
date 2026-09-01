@@ -1324,6 +1324,24 @@ impl<'ctx> Lexer<'ctx> {
             }
         }
     }
+
+    fn locate(&self, start: Location, token: Token) -> LocatedToken {
+        let is_newline = matches!(token, Token!['\n']);
+        LocatedToken {
+            start,
+            token,
+            end: {
+                let mut loc = self.location();
+                if is_newline {
+                    loc.line += 1;
+                    loc.column = 1;
+                } else if self.next.is_none() {
+                    loc.column += 1;
+                }
+                loc
+            },
+        }
+    }
 }
 
 impl<'ctx> Iterator for Lexer<'ctx> {
@@ -1349,15 +1367,20 @@ impl<'ctx> Iterator for Lexer<'ctx> {
                     }
                 },
             };
+            let start = self.location();
             skip_newlines = false;
 
-            let loc = self.location();
-            let locate = |token| LocatedToken::new(loc, token);
+            macro_rules! locate {
+                ($t:expr) => {{
+                    let token = $t;
+                    self.locate(start, token)
+                }};
+            }
 
             if self.directive == Directive::Stringy {
                 self.directive = Directive::None;
                 self.put_back(Some(first));
-                return Some(locate(self.read_string(
+                return Some(locate!(self.read_string(
                     StringKind::WholeLine,
                     b"\n",
                     false,
@@ -1371,25 +1394,25 @@ impl<'ctx> Iterator for Lexer<'ctx> {
             return match punct {
                 Some(Hash) if self.directive == Directive::None => {
                     self.directive = Directive::Hash;
-                    Some(locate(Token![#]))
+                    Some(locate!(Token![#]))
                 },
                 Some(BlockComment) => {
                     if let Some(t) = self.skip_block_comments() {
-                        return Some(locate(t));
+                        return Some(locate!(t));
                     }
                     continue;
                 },
                 Some(LineComment) => {
                     if let Some(t) = self.skip_line_comment() {
-                        return Some(locate(t));
+                        return Some(locate!(t));
                     }
                     continue;
                 },
-                Some(SingleQuote) => Some(locate(Resource(self.read_resource().into()))),
+                Some(SingleQuote) => Some(locate!(Resource(self.read_resource().into()))),
                 Some(DoubleQuote) => {
-                    Some(locate(self.read_string(StringKind::Normal, b"\"", false)))
+                    Some(locate!(self.read_string(StringKind::Normal, b"\"", false)))
                 },
-                Some(BlockString) => Some(locate(self.read_string(
+                Some(BlockString) => Some(locate!(self.read_string(
                     StringKind::Document,
                     b"\"}",
                     false,
@@ -1398,26 +1421,26 @@ impl<'ctx> Iterator for Lexer<'ctx> {
                     if let Some(interp) = self.interp_stack.last_mut() {
                         interp.bracket_depth += 1;
                     }
-                    Some(locate(Punct(lbr)))
+                    Some(locate!(Punct(lbr)))
                 },
                 Some(RBracket) => {
                     if let Some(mut interp) = self.interp_stack.pop() {
                         interp.bracket_depth -= 1;
                         if interp.bracket_depth == 0 {
-                            return Some(locate(self.read_string(interp.kind, interp.end, true)));
+                            return Some(locate!(self.read_string(interp.kind, interp.end, true)));
                         }
                         self.interp_stack.push(interp);
                     }
                     self.close_allowed = true;
-                    Some(locate(Token![']']))
+                    Some(locate!(Token![']']))
                 },
                 Some(RParen) => {
                     self.close_allowed = true;
-                    Some(locate(Token![')']))
+                    Some(locate!(Token![')']))
                 },
-                Some(v) => Some(locate(Punct(v))),
+                Some(v) => Some(locate!(Punct(v))),
                 None => match first {
-                    b'0'..=b'9' => Some(locate(self.read_number(first))),
+                    b'0'..=b'9' => Some(locate!(self.read_number(first))),
                     b'_' | b'a'..=b'z' | b'A'..=b'Z' => {
                         let (ident, ws) = self.read_ident(first);
                         if self.directive == Directive::Hash {
@@ -1429,17 +1452,17 @@ impl<'ctx> Iterator for Lexer<'ctx> {
                         }
                         // check keywords
                         if ident == ident!("in") {
-                            return Some(locate(Token![in]));
+                            return Some(locate!(Token![in]));
                         }
                         self.close_allowed = true;
-                        Some(locate(Ident(ident, ws)))
+                        Some(locate!(Ident(ident, ws)))
                     },
                     b'\\' => {
                         self.at_line_head = false;
                         skip_newlines = true;
                         continue;
                     },
-                    b'@' => Some(locate(self.read_raw_string())),
+                    b'@' => Some(locate!(self.read_raw_string())),
                     _ => {
                         if !found_illegal {
                             let mut msg = format!("illegal byte 0x{first:x}");

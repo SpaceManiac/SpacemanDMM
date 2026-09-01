@@ -539,6 +539,7 @@ dependencies = [
  "phf",
  "serde",
  "serde_derive",
+ "serde_json",
  "termcolor",
  "toml",
  "walkdir",

@@ -1,0 +1,164 @@
+<!doctype html>
+<html style="display: flex; flex-direction: column; margin: 0">
+    <head>
+        <title>Span Visualizer</title>
+        <style>
+            * {
+                box-sizing: border-box;
+            }
+            .loc-link {
+                display: block;
+                margin-bottom: 8px;
+            }
+            a {
+                text-decoration: none;
+            }
+            a:hover {
+                text-decoration: underline;
+            }
+            mark {
+                outline: 1px solid red;
+            }
+            mark::before {
+                content: '';
+            }
+            mark::after {
+                content: '';
+            }
+        </style>
+    </head>
+    <body style="display: flex; margin: 0">
+        <div
+            style="
+                flex-grow: 1;
+                height: 100vh;
+                display: flex;
+                flex-direction: column;
+            "
+        >
+            <div style="padding: 16px; padding-bottom: 0">
+                <select id="file-select"></select>
+            </div>
+            <pre
+                id="file-content"
+                style="
+                    overflow-y: scroll;
+                    margin: 0;
+                    padding: 16px;
+                    font-size: 14px;
+                    tab-size: 4;
+                    white-space: pre-wrap;
+                "
+            ></pre>
+        </div>
+        <div
+            style="
+                height: 100vh;
+                display: flex;
+                flex-direction: column;
+                width: 450px;
+                min-width: 450px;
+            "
+        >
+            <div style="padding: 16px; padding-bottom: 0">
+                <select id="group-select"></select>
+            </div>
+            <div
+                id="link-list"
+                style="
+                    flex-grow: 1;
+                    overflow-y: scroll;
+                    padding: 16px;
+                    font-family: monospace;
+                    font-size: 14px;
+                "
+            ></div>
+        </div>
+        <!--DATA-->
+        <script>
+            const data = JSON.parse(
+                document.getElementById("data").textContent,
+            );
+            let currentFile;
+            let currentLineStart;
+            function loadFile(k) {
+                currentFile = k;
+                const v = data.files[k];
+                document.getElementById("file-content").textContent = v.content;
+                let offset = 0;
+                currentLineStart = [];
+                for (let line of v.content.split("\n")) {
+                    currentLineStart.push(offset);
+                    offset += line.length + 1;
+                }
+            }
+            function highlight(spot) {
+                if (spot.start.file == currentFile) {
+                    const start =
+                        currentLineStart[spot.start.line - 1] +
+                        spot.start.column -
+                        1;
+                    const end =
+                        currentLineStart[spot.end.line - 1] +
+                        spot.end.column -
+                        1;
+                    const content = document.getElementById("file-content");
+                    const before = content.textContent.substring(0, start);
+                    const within = content.textContent.substring(start, end);
+                    const after = content.textContent.substring(end);
+                    while (content.lastChild) {
+                        content.lastChild.remove();
+                    }
+                    content.append(before);
+                    const mark = document.createElement("mark");
+                    mark.textContent = within;
+                    content.append(mark);
+                    content.append(after);
+                    mark.scrollIntoView({ block: 'center' });
+                }
+            }
+            function loadGroup(k) {
+                const v = data.tabs[k];
+                const ll = document.getElementById("link-list");
+                while (ll.lastChild) {
+                    ll.lastChild.remove();
+                }
+                for (const spot of v) {
+                    const a = document.createElement("a");
+                    a.href = "#";
+                    a.addEventListener("click", (e) => {
+                        highlight(spot);
+                        e.preventDefault();
+                    });
+                    a.className = "loc-link";
+                    a.textContent = `${spot.start.line}:${spot.start.column}..${spot.end.column}: ${spot.text}`;
+                    ll.append(a);
+                }
+            }
+            document
+                .getElementById("file-select")
+                .addEventListener("change", () => {
+                    loadFile(event.target.value);
+                });
+            document
+                .getElementById("group-select")
+                .addEventListener("change", () => {
+                    loadGroup(event.target.value);
+                });
+            for (let [k, v] of Object.entries(data.files)) {
+                let opt = document.createElement("option");
+                opt.value = k;
+                opt.textContent = v.name;
+                document.getElementById("file-select").appendChild(opt);
+            }
+            for (let [k, v] of Object.entries(data.tabs)) {
+                let opt = document.createElement("option");
+                opt.value = k;
+                opt.textContent = k;
+                document.getElementById("group-select").appendChild(opt);
+            }
+            loadGroup(Object.keys(data.tabs)[0]);
+            loadFile(Object.keys(data.files)[0]);
+        </script>
+    </body>
+</html>

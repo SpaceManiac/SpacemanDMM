@@ -1,6 +1,7 @@
 //! Error, warning, and other diagnostics handling.
 
 use foldhash::HashMap;
+use serde::Serialize;
 use std::cell::{Ref, RefCell, RefMut};
 use std::path::{Path, PathBuf};
 use std::{error, fmt, io};
@@ -12,7 +13,7 @@ use termcolor::{Color, ColorSpec};
 use crate::config::Config;
 
 /// An identifier referring to a loaded file.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
 pub struct FileId(u16);
 
 impl FileId {
@@ -281,7 +282,7 @@ impl Context {
 // Location handling
 
 /// File, line, and column information for an error.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, GetSize)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, GetSize, Serialize)]
 pub struct Location {
     /// The index into the file table.
     pub file: FileId,
