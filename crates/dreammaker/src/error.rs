@@ -121,18 +121,24 @@ impl Context {
     // ------------------------------------------------------------------------
     // Configuration
 
-    pub fn force_config(&mut self, toml: &Path) {
+    pub fn configure_from_dme(&mut self, dme: &Path) {
+        if let Some(parent) = dme.parent() {
+            self.configure_from_directory(parent);
+        }
+    }
+
+    pub fn configure_from_directory(&mut self, directory: &Path) {
+        let toml = directory.join("SpacemanDMM.toml");
+        if toml.exists() {
+            self.configure_from_toml(&toml);
+        }
+    }
+
+    pub fn configure_from_toml(&mut self, toml: &Path) {
         let file = self.register_file(toml);
         match Config::read_toml(file, toml) {
             Ok(config) => self.config = config,
             Err(err) => err.register(self),
-        }
-    }
-
-    pub fn autodetect_config(&mut self, dme: &Path) {
-        let toml = dme.parent().unwrap().join("SpacemanDMM.toml");
-        if toml.exists() {
-            self.force_config(&toml);
         }
     }
 

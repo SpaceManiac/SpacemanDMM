@@ -1367,7 +1367,7 @@ impl EditorScene {
             use dreammaker::constants::Constant;
 
             let mut context = dreammaker::Context::default();
-            context.autodetect_config(&path);
+            context.configure_from_dme(&path);
             let objtree = context.parse_environment(&path)?;
 
             let (mut turf, mut area) = ("/turf".to_owned(), "/area".to_owned());

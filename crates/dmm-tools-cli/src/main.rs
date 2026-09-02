@@ -70,7 +70,7 @@ impl Context {
             self.icon_cache.set_icons_root(parent);
         }
 
-        self.dm_context.autodetect_config(&environment);
+        self.dm_context.configure_from_dme(&environment);
         let pp = match dm::Preprocessor::new(&self.dm_context, environment) {
             Ok(pp) => pp,
             Err(e) => {

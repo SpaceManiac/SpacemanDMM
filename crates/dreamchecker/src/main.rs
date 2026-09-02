@@ -57,9 +57,9 @@ fn main() {
     let mut context = dm::Context::default();
     context.set_print_severity(Some(dm::Severity::Info));
     if let Some(filepath) = config_file {
-        context.force_config(filepath.as_ref());
+        context.configure_from_toml(filepath.as_ref());
     } else {
-        context.autodetect_config(&dme);
+        context.configure_from_dme(&dme);
     }
 
     println!("============================================================");

@@ -535,7 +535,7 @@ impl Engine {
 
         // Set up the preprocessor.
         self.context.reset_io_time();
-        self.context.autodetect_config(&environment);
+        self.context.configure_from_dme(&environment);
         let mut pp = match dm::Preprocessor::new(&self.context, environment.clone()) {
             Ok(pp) => pp,
             Err(err) => {
@@ -1383,10 +1383,7 @@ impl Engine {
             eprintln!("workspace root: {url}");
 
             if let Ok(root_path) = url_to_path(&url) {
-                let config_path = root_path.join("SpacemanDMM.toml");
-                if config_path.exists() {
-                    self.context.force_config(&config_path);
-                }
+                self.context.configure_from_directory(&root_path);
             }
 
             self.root = Some(url);
