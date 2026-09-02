@@ -121,34 +121,57 @@ impl Context {
     // ------------------------------------------------------------------------
     // Configuration
 
+    /// Set a severity at and above which errors will be printed immediately.
+    pub fn set_print_severity(&mut self, print_severity: Option<Severity>) {
+        self.print_severity = print_severity;
+    }
+
+    /// Search for `SpacemanDMM.toml` neighboring the given `.dme` if present,
+    /// then force [Config::environment] to the given `.dme`.
     pub fn configure_from_dme(&mut self, dme: &Path) {
         if let Some(parent) = dme.parent() {
             self.configure_from_directory(parent);
         }
+        // Always override `config.environment`.
+        self.config.environment = Some(dme.strip_prefix(".").unwrap_or(dme).to_owned());
     }
 
+    /// Search for `SpacemanDMM.toml` within the given directory, defaulting
+    /// [Config::environment] if absent by searching the given directory.
     pub fn configure_from_directory(&mut self, directory: &Path) {
         let toml = directory.join("SpacemanDMM.toml");
         if toml.exists() {
             self.configure_from_toml(&toml);
+        } else {
+            self.detect_environment(directory);
         }
     }
 
+    /// Load the given `.toml`, defaulting [Config::environment] if absent by
+    /// searching its neighbors.
     pub fn configure_from_toml(&mut self, toml: &Path) {
         let file = self.register_file(toml);
         match Config::read_toml(file, toml) {
             Ok(config) => self.config = config,
             Err(err) => err.register(self),
         }
+        if let Some(parent) = toml.parent() {
+            self.detect_environment(parent);
+        }
+    }
+
+    fn detect_environment(&mut self, directory: &Path) {
+        // Respect `config.environment` if already set.
+        if self.config.environment.is_none() {
+            if let Ok(Some(env)) = crate::detect_environment(directory, crate::DEFAULT_ENV) {
+                self.config.environment =
+                    Some(env.strip_prefix(".").map(Path::to_owned).unwrap_or(env))
+            }
+        }
     }
 
     pub fn config(&self) -> &Config {
         &self.config
-    }
-
-    /// Set a severity at and above which errors will be printed immediately.
-    pub fn set_print_severity(&mut self, print_severity: Option<Severity>) {
-        self.print_severity = print_severity;
     }
 
     // ------------------------------------------------------------------------
