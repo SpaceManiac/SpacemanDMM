@@ -64,7 +64,7 @@ fn main() {
 
     println!("============================================================");
     println!("Parsing {}...\n", dme.display());
-    let pp = dm::Preprocessor::new(&context, dme).expect("i/o error opening .dme");
+    let pp = context.unwrap(dm::Preprocessor::new(&context, dme));
     let mut parser = dm::Parser::new(&context, pp);
     parser.enable_procs();
     let (fatal_errored, tree) = parser.parse_object_tree_2();

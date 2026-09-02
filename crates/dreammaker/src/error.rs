@@ -188,6 +188,19 @@ impl Context {
         self.errors.borrow_mut().push(error);
     }
 
+    /// Like [Result::unwrap], but pretty-prints the DMError and exits, for CLI use.
+    pub fn unwrap<T>(&self, result: Result<T, DMError>) -> T {
+        match result {
+            Ok(ok) => ok,
+            Err(error) => {
+                let stderr = termcolor::StandardStream::stderr(termcolor::ColorChoice::Auto);
+                self.pretty_print_error(&mut stderr.lock(), &error)
+                    .expect("error writing to stderr");
+                std::process::exit(1);
+            },
+        }
+    }
+
     /// Access the list of diagnostics generated so far.
     pub fn errors(&self) -> Ref<'_, [DMError]> {
         Ref::map(self.errors.borrow(), |x| &**x)

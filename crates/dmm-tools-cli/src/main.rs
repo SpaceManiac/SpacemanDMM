@@ -71,13 +71,9 @@ impl Context {
         }
 
         self.dm_context.configure_from_dme(&environment);
-        let pp = match dm::Preprocessor::new(&self.dm_context, environment) {
-            Ok(pp) => pp,
-            Err(e) => {
-                eprintln!("i/o error opening environment:\n{e}");
-                std::process::exit(1);
-            },
-        };
+        let pp = self
+            .dm_context
+            .unwrap(dm::Preprocessor::new(&self.dm_context, environment));
         let parser = dm::Parser::new(&self.dm_context, pp);
         self.objtree = parser.parse_object_tree();
     }

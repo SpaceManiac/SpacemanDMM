@@ -6,7 +6,7 @@ fn main() {
     let env = dm::detect_environment_default()
         .expect("error detecting .dme")
         .expect("no .dme found");
-    let pp = dm::Preprocessor::new(&context, env).expect("i/o error opening .dme");
+    let pp = context.unwrap(dm::Preprocessor::new(&context, env));
     println!(
         "{}",
         dm::pretty_print(dm::IndentProcessor::new(&context, pp), false)

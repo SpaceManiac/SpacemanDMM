@@ -17,16 +17,8 @@ fn main() {
 
     let mut context = Context::default();
     context.set_print_severity(Some(Severity::Info));
-    'parse: {
-        let pp = match Preprocessor::new(&context, env.clone()) {
-            Ok(p) => p,
-            Err(e) => {
-                context.register_error(e);
-                break 'parse;
-            },
-        };
-        let mut parser = Parser::new(&context, pp);
-        parser.enable_procs();
-        parser.parse_object_tree();
-    }
+    let pp = context.unwrap(Preprocessor::new(&context, env.clone()));
+    let mut parser = Parser::new(&context, pp);
+    parser.enable_procs();
+    parser.parse_object_tree();
 }

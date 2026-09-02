@@ -12,7 +12,7 @@ fn with_test_dme<F: FnOnce(Preprocessor)>(context: &Context, f: F) {
             return;
         },
     };
-    f(Preprocessor::new(context, PathBuf::from(dme)).expect("failed to open test file"))
+    f(context.unwrap(Preprocessor::new(context, PathBuf::from(dme))))
 }
 
 #[test]

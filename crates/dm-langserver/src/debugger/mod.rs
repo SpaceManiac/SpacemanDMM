@@ -106,7 +106,7 @@ pub fn debugger_main<I: Iterator<Item = String>>(mut args: I) {
         .expect("did not detect a .dme");
     let mut ctx = dm::Context::default();
     ctx.configure_from_dme(&environment);
-    let mut pp = dm::Preprocessor::new(&ctx, environment).unwrap();
+    let mut pp = ctx.unwrap(dm::Preprocessor::new(&ctx, environment));
     let objtree = {
         let mut parser = dm::Parser::new(&ctx, &mut pp);
         parser.enable_procs();
