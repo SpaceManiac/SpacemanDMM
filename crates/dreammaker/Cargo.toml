@@ -13,7 +13,7 @@ termcolor = "1.4.1"
 ordered-float = "5.3.0"
 serde = { version = "1.0.213", features = ["derive"] }
 serde_derive = "1.0.213"
-toml = "0.5.11"
+toml = "1.1.4"
 phf = { version = "0.14.0", features = ["macros"] }
 color_space = "0.5.4"
 foldhash = "0.2.0"

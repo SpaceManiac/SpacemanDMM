@@ -122,18 +122,10 @@ impl Context {
     // Configuration
 
     pub fn force_config(&mut self, toml: &Path) {
-        match Config::read_toml(toml) {
+        let file = self.register_file(toml);
+        match Config::read_toml(file, toml) {
             Ok(config) => self.config = config,
-            Err(io_error) => {
-                let file = self.register_file(toml);
-                let (line, column) = io_error.line_col().unwrap_or((1, 1));
-                DMError::new(
-                    Location { file, line, column },
-                    "Error reading configuration file",
-                )
-                .with_boxed_cause(io_error.into_boxed_error())
-                .register(self);
-            },
+            Err(err) => err.register(self),
         }
     }
 

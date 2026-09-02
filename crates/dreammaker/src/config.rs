@@ -1,14 +1,13 @@
 //! Configuration file for diagnostics.
 
 use foldhash::HashMap;
-use std::fs::File;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::DMError;
 use crate::error::Severity;
+use crate::lexer::{LocationTracker, buffer_file};
+use crate::{DMError, Location};
 
 /// Struct for deserializing from a config TOML
 #[derive(Deserialize, Default, Debug, Clone)]
@@ -114,11 +113,23 @@ impl Config {
     /// Read a config TOML and generate a [`Config`] struct
     ///
     /// [`Config`]: struct.Config.html
-    pub fn read_toml(path: &Path) -> Result<Config, Error> {
-        let mut file = File::open(path)?;
-        let mut config_toml = String::new();
-        file.read_to_string(&mut config_toml)?;
-        Ok(toml::from_str(&config_toml)?)
+    pub fn read_toml(file: crate::FileId, path: &Path) -> Result<Config, DMError> {
+        let config_toml = buffer_file(file, path)?;
+        toml::from_slice(&config_toml).map_err(|e| {
+            DMError::new(
+                match dbg!(&e).span() {
+                    Some(span) => LocationTracker::count_location(file, &config_toml[..span.start])
+                        .add_columns(1),
+                    None => Location {
+                        file,
+                        line: 1,
+                        column: 1,
+                    },
+                },
+                e.message(),
+            )
+            // No `with_cause` since its Display is mostly redundant with ours
+        })
     }
 
     fn config_warninglevel(&self, error: &DMError) -> Option<&WarningLevel> {
@@ -183,40 +194,5 @@ impl PartialEq<Severity> for WarningLevel {
                 | (WarningLevel::Info, Severity::Info)
                 | (WarningLevel::Hint, Severity::Hint)
         )
-    }
-}
-
-/// Config parse error
-#[derive(Debug)]
-pub enum Error {
-    Io(std::io::Error),
-    Toml(toml::de::Error),
-}
-
-impl Error {
-    pub fn line_col(&self) -> Option<(u32, u16)> {
-        match self {
-            Error::Io(_) => None,
-            Error::Toml(toml) => toml.line_col().map(|(l, c)| (l as u32 + 1, c as u16 + 1)),
-        }
-    }
-
-    pub fn into_boxed_error(self) -> Box<dyn std::error::Error + Send + Sync> {
-        match self {
-            Error::Io(err) => Box::new(err),
-            Error::Toml(err) => Box::new(err),
-        }
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Error {
-        Error::Io(err)
-    }
-}
-
-impl From<toml::de::Error> for Error {
-    fn from(err: toml::de::Error) -> Error {
-        Error::Toml(err)
     }
 }
