@@ -186,10 +186,8 @@ pub const DEFAULT_ENV: &str = "tgstation.dme";
 /// Autodetect any `.dme` file in the current folder, or fall back to default.
 ///
 /// If multiple environments exist, the first non-default is preferred.
-pub fn detect_environment(
-    root: &Path,
-    default: &str,
-) -> std::io::Result<Option<std::path::PathBuf>> {
+fn detect_environment(root: &Path, default: &str) -> std::io::Result<Option<std::path::PathBuf>> {
+    let root = if root == "" { ".".as_ref() } else { root };
     let mut result = None;
     for entry in std::fs::read_dir(root)?.flatten() {
         let name = entry.file_name();
@@ -205,16 +203,6 @@ pub fn detect_environment(
         }
     }
     Ok(result)
-}
-
-pub fn detect_environment_default() -> std::io::Result<Option<std::path::PathBuf>> {
-    // Return a path in the current directory `.` ...
-    detect_environment(".".as_ref(), DEFAULT_ENV).map(|o| {
-        o.map(|path| {
-            // ... but without `./` preceding it.
-            path.strip_prefix(".").map(|p| p.to_owned()).unwrap_or(path)
-        })
-    })
 }
 
 fn heap_size_of_index_map<K, V>(index_map: &IndexMap<K, V, RandomState>) -> usize

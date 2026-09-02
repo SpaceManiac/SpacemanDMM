@@ -1,6 +1,8 @@
 //! DreamChecker, a robust static analysis and typechecking engine for
 //! DreamMaker.
 
+use std::path::Path;
+
 extern crate dreamchecker;
 extern crate dreammaker as dm;
 #[macro_use]
@@ -46,21 +48,22 @@ fn main() {
         }
     }
 
-    let dme = environment
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| {
-            dm::detect_environment_default()
-                .expect("error detecting .dme")
-                .expect("no .dme found")
-        });
-
     let mut context = dm::Context::default();
     context.set_print_severity(Some(dm::Severity::Info));
-    if let Some(filepath) = config_file {
-        context.configure_from_toml(filepath.as_ref());
-    } else {
-        context.configure_from_dme(&dme);
-    }
+    let dme = match (config_file, environment) {
+        (Some(toml), Some(dme)) => {
+            context.configure_from_toml(toml.as_ref());
+            let dme = Path::new(&dme);
+            dme.strip_prefix(".").unwrap_or(dme).to_owned()
+        },
+        (Some(toml), None) => context
+            .configure_from_toml(toml.as_ref())
+            .unwrap_or_else(|| Path::new(dm::DEFAULT_ENV).to_owned()),
+        (None, Some(dme)) => context.configure_from_dme(dme.as_ref()),
+        (None, None) => context
+            .configure_from_directory(".".as_ref())
+            .unwrap_or_else(|| Path::new(dm::DEFAULT_ENV).to_owned()),
+    };
 
     println!("============================================================");
     println!("Parsing {}...\n", dme.display());

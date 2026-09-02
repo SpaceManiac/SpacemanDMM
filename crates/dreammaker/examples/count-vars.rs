@@ -3,10 +3,8 @@
 extern crate dreammaker as dm;
 
 fn main() {
-    let context = dm::Context::default();
-    let env = dm::detect_environment_default()
-        .expect("error detecting .dme")
-        .expect("no .dme found");
+    let mut context = dm::Context::default();
+    let env = context.configure_cli(None::<String>);
     let pp = context.unwrap(dm::Preprocessor::new(&context, env));
     let mut parser = dm::Parser::new(&context, pp);
     parser.enable_procs();

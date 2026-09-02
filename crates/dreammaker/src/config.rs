@@ -13,7 +13,7 @@ use crate::{DMError, Location};
 #[derive(Deserialize, Default, Debug, Clone)]
 #[serde(default)]
 pub struct Config {
-    pub environment: Option<PathBuf>,
+    pub(crate) environment: Option<PathBuf>,
 
     // diagnostic configuration
     display: WarningDisplay,

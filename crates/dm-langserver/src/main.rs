@@ -274,6 +274,7 @@ struct Engine {
     parent_pid: u32,
     threads: Vec<std::thread::JoinHandle<()>>,
     root: Option<Url>,
+    environment: Option<PathBuf>,
 
     context: dm::Context,
     defines: Option<dm::preprocessor::DefineHistory>,
@@ -297,6 +298,7 @@ impl Engine {
             parent_pid: 0,
             threads: Default::default(),
             root: None,
+            environment: None,
 
             context: dm::Context::default(),
             defines: None,
@@ -1383,7 +1385,7 @@ impl Engine {
             eprintln!("workspace root: {url}");
 
             if let Ok(root_path) = url_to_path(&url) {
-                self.context.configure_from_directory(&root_path);
+                self.environment = self.context.configure_from_directory(&root_path);
             }
 
             self.root = Some(url);
@@ -2477,20 +2479,7 @@ impl Engine {
     // ------------------------------------------------------------------------
     // basic setup
     fn Initialized(&mut self, _: N<Initialized>) -> NR {
-        let mut environment = None;
-        if let Some(ref root) = self.root {
-            // TODO: support non-files here
-            if let Ok(root_path) = url_to_path(root) {
-                if let Some(dme) = self.context.config().environment.as_ref() {
-                    environment = Some(root_path.join(dme));
-                } else {
-                    environment = dm::detect_environment(&root_path, dm::DEFAULT_ENV)
-                        .map_err(invalid_request)?;
-                }
-            }
-        }
-
-        if let Some(environment) = environment {
+        if let Some(environment) = self.environment.clone() {
             self.parse_environment(environment)?;
         } else if self.root.is_some() {
             self.show_status("no .dme file");

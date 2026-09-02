@@ -8,8 +8,7 @@ use serde::Serialize;
 pub fn main() {
     let mut context = Context::default();
     context.set_print_severity(Some(Severity::Info));
-
-    let path = std::env::args().skip(1).next().unwrap();
+    let path = context.configure_cli(std::env::args().nth(1)).to_owned();
 
     let mut vis = Visualizer::default();
     let content = std::fs::read_to_string(&path).unwrap();
@@ -33,7 +32,7 @@ pub fn main() {
             format!("{:?}", token.token),
         );
     }
-    vis.add_file(fileid, path, content);
+    vis.add_file(fileid, path.to_string_lossy().into_owned(), content);
 
     print!("{}", vis);
 }

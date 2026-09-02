@@ -126,47 +126,90 @@ impl Context {
         self.print_severity = print_severity;
     }
 
+    /// Returns the path to the `.dme` to use.
+    pub fn configure_cli(&mut self, dme: Option<impl AsRef<Path>>) -> PathBuf {
+        match dme {
+            Some(env) => {
+                self.configure_from_dme(env.as_ref());
+            },
+            None => {
+                self.configure_from_directory(".".as_ref());
+            },
+        }
+        self.config
+            .environment
+            .as_deref()
+            .unwrap_or_else(|| Path::new(crate::DEFAULT_ENV))
+            .to_owned()
+    }
+
     /// Search for `SpacemanDMM.toml` neighboring the given `.dme` if present,
     /// then force [Config::environment] to the given `.dme`.
-    pub fn configure_from_dme(&mut self, dme: &Path) {
+    ///
+    /// Returns the path to the `.dme` to use.
+    pub fn configure_from_dme(&mut self, dme: &Path) -> PathBuf {
         if let Some(parent) = dme.parent() {
             self.configure_from_directory(parent);
         }
         // Always override `config.environment`.
-        self.config.environment = Some(dme.strip_prefix(".").unwrap_or(dme).to_owned());
+        self.config
+            .environment
+            .insert(dme.strip_prefix(".").unwrap_or(dme).to_owned())
+            .to_owned()
     }
 
     /// Search for `SpacemanDMM.toml` within the given directory, defaulting
     /// [Config::environment] if absent by searching the given directory.
-    pub fn configure_from_directory(&mut self, directory: &Path) {
+    ///
+    /// Sensible CLI behavior is to `configure_from_directory(".".as_ref())`.
+    ///
+    /// Returns the path to the `.dme` to use.
+    pub fn configure_from_directory(&mut self, directory: &Path) -> Option<PathBuf> {
         let toml = directory.join("SpacemanDMM.toml");
         if toml.exists() {
-            self.configure_from_toml(&toml);
+            self.configure_from_toml(&toml)
         } else {
-            self.detect_environment(directory);
+            self.detect_environment(directory)
         }
     }
 
     /// Load the given `.toml`, defaulting [Config::environment] if absent by
     /// searching its neighbors.
-    pub fn configure_from_toml(&mut self, toml: &Path) {
+    ///
+    /// Returns the path to the `.dme` to use.
+    pub fn configure_from_toml(&mut self, toml: &Path) -> Option<PathBuf> {
         let file = self.register_file(toml);
         match Config::read_toml(file, toml) {
             Ok(config) => self.config = config,
             Err(err) => err.register(self),
         }
         if let Some(parent) = toml.parent() {
-            self.detect_environment(parent);
+            self.detect_environment(parent)
+        } else {
+            self.config.environment.clone()
         }
     }
 
-    fn detect_environment(&mut self, directory: &Path) {
-        // Respect `config.environment` if already set.
-        if self.config.environment.is_none() {
-            if let Ok(Some(env)) = crate::detect_environment(directory, crate::DEFAULT_ENV) {
-                self.config.environment =
-                    Some(env.strip_prefix(".").map(Path::to_owned).unwrap_or(env))
-            }
+    fn detect_environment(&mut self, directory: &Path) -> Option<PathBuf> {
+        match &self.config.environment {
+            Some(env) => {
+                // `environment` is set, so join `directory` with it.
+                let env = directory.join(env);
+                let env = env.strip_prefix(".").map(Path::to_owned).unwrap_or(env);
+                Some(self.config.environment.insert(env).to_owned())
+            },
+            None => {
+                // No `environment` set, so search `directory` for it.
+                match crate::detect_environment(directory, crate::DEFAULT_ENV) {
+                    Ok(Some(env)) => Some(
+                        self.config
+                            .environment
+                            .insert(env.strip_prefix(".").map(Path::to_owned).unwrap_or(env))
+                            .to_owned(),
+                    ),
+                    _ => None,
+                }
+            },
         }
     }
 

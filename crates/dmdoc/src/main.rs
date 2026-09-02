@@ -65,21 +65,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let output_path: &Path = output_path.as_ref();
 
-    // parse environment
-    let environment = match environment {
-        Some(e) => e.into(),
-        None => match dm::detect_environment_default()? {
-            Some(env) => env,
-            None => {
-                return Err("Unable to find a .dme file in this directory".into());
-            },
-        },
-    };
-    println!("parsing {}", environment.display());
-
+    // configure
     let mut context = dm::Context::default();
     context.set_print_severity(Some(dm::Severity::Error));
-    context.configure_from_dme(&environment);
+    let environment = context.configure_cli(environment).to_owned();
+
+    // parse environment
+    println!("parsing {}", environment.display());
     let mut pp = context.unwrap(dm::Preprocessor::new(&context, environment.clone()));
     let (objtree, module_docs) = {
         let mut parser = dm::Parser::new(&context, &mut pp);

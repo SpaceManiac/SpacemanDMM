@@ -57,13 +57,8 @@ struct Context {
 
 impl Context {
     fn objtree(&mut self, opt: &Opt) {
-        let environment = match opt.environment {
-            Some(ref env) => env.into(),
-            None => match dm::detect_environment_default() {
-                Ok(Some(found)) => found,
-                _ => dm::DEFAULT_ENV.into(),
-            },
-        };
+        let environment = self.dm_context.configure_cli(opt.environment.as_ref());
+
         eprintln!("parsing {}", environment.display());
 
         if let Some(parent) = environment.parent() {
