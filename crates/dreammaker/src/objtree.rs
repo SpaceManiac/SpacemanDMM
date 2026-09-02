@@ -1271,7 +1271,7 @@ impl ObjectTreeBuilder {
             .entry(prev.clone())
             .or_insert_with(|| TypeVar {
                 value: VarValue {
-                    location: location,
+                    location,
                     expression: None,
                     constant: None,
                     being_evaluated: false,
@@ -1284,7 +1284,7 @@ impl ObjectTreeBuilder {
                             type_path: AbsolutePath::from_iter(type_path),
                             input_type: Default::default(),
                         },
-                        location: location,
+                        location,
                         id: self.symbols.allocate(),
                     })
                 } else {

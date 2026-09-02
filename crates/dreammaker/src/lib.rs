@@ -61,7 +61,7 @@ impl Context {
 ///
 /// If `show_ws` is true, braces and semicolons are included directly in the
 /// output rather than only being implied by the indentation.
-pub fn pretty_print<'a, I>(input: I, show_ws: bool) -> impl std::fmt::Display
+pub fn pretty_print<I>(input: I, show_ws: bool) -> impl std::fmt::Display
 where
     I: IntoIterator,
     I::Item: AsRef<lexer::Token>,
@@ -70,11 +70,7 @@ where
     std::fmt::from_fn(move |w| pretty_print_inner(w, input.take().unwrap(), show_ws))
 }
 
-fn pretty_print_inner<'a, I>(
-    w: &mut std::fmt::Formatter,
-    input: I,
-    show_ws: bool,
-) -> std::fmt::Result
+fn pretty_print_inner<I>(w: &mut std::fmt::Formatter, input: I, show_ws: bool) -> std::fmt::Result
 where
     I: IntoIterator,
     I::Item: AsRef<lexer::Token>,

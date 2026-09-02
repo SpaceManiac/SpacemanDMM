@@ -779,6 +779,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         } else try_another())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn traverse_tree(
         &mut self,
         current: &mut NodeIndex,
@@ -2715,12 +2716,12 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     });
                     belongs_to.push(ident.clone());
                     *typepath_base = None;
-                } else if let Some(typepath) = typepath_base.take() {
-                    if kind == PropertyAccessKind::Scope {
-                        self.annotate_precise(start..end, || {
-                            Annotation::TypePathVar(typepath, ident.clone())
-                        });
-                    }
+                } else if let Some(typepath) = typepath_base.take()
+                    && kind == PropertyAccessKind::Scope
+                {
+                    self.annotate_precise(start..end, || {
+                        Annotation::TypePathVar(typepath, ident.clone())
+                    });
                 }
                 match kind {
                     PropertyAccessKind::Scope => Follow::StaticField(ident),
