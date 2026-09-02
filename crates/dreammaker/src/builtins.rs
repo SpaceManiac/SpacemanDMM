@@ -20,57 +20,53 @@ pub fn default_defines(defines: &mut DefineMap) {
     // #define EXCEPTION(value) new /exception(value)
     defines.insert(
         ident!("EXCEPTION"),
-        (
+        Define {
             location,
-            Define {
-                params: vec![ident!("value")],
-                variadic: false,
-                subst: vec![
-                    Ident(ident!("new"), true),
-                    Token![/],
-                    Ident(ident!("exception"), false),
-                    Token!['('],
-                    Ident(ident!("value"), false),
-                    Token![')'],
-                ],
-                docs: Default::default(),
-            },
-        ),
+            params: vec![ident!("value")],
+            variadic: false,
+            subst: vec![
+                Ident(ident!("new"), true),
+                Token![/],
+                Ident(ident!("exception"), false),
+                Token!['('],
+                Ident(ident!("value"), false),
+                Token![')'],
+            ],
+            docs: Default::default(),
+        },
     );
 
     // #define ASSERT(expression) if (!(expression)) { CRASH("[__FILE__]:[__LINE__]:Assertion Failed: [#X]") }
     defines.insert(
         ident!("ASSERT"),
-        (
+        Define {
             location,
-            Define {
-                params: vec![ident!("expression")],
-                variadic: false,
-                subst: vec![
-                    Ident(ident!("if"), true),
-                    Token!['('],
-                    Token![!],
-                    Token!['('],
-                    Ident(ident!("expression"), false),
-                    Token![')'],
-                    Token![')'],
-                    Token!['{'],
-                    Ident(ident!("CRASH"), false),
-                    Token!['('],
-                    InterpStringBegin(ident!("")),
-                    Ident(ident!("__FILE__"), false),
-                    InterpStringPart(ident!(":")),
-                    Ident(ident!("__LINE__"), false),
-                    InterpStringPart(ident!(":Assertion Failed: ")),
-                    Token![#],
-                    Ident(ident!("expression"), false),
-                    InterpStringEnd(ident!("")),
-                    Token![')'],
-                    Token!['}'],
-                ],
-                docs: Default::default(),
-            },
-        ),
+            params: vec![ident!("expression")],
+            variadic: false,
+            subst: vec![
+                Ident(ident!("if"), true),
+                Token!['('],
+                Token![!],
+                Token!['('],
+                Ident(ident!("expression"), false),
+                Token![')'],
+                Token![')'],
+                Token!['{'],
+                Ident(ident!("CRASH"), false),
+                Token!['('],
+                InterpStringBegin(ident!("")),
+                Ident(ident!("__FILE__"), false),
+                InterpStringPart(ident!(":")),
+                Ident(ident!("__LINE__"), false),
+                InterpStringPart(ident!(":Assertion Failed: ")),
+                Token![#],
+                Ident(ident!("expression"), false),
+                InterpStringEnd(ident!("")),
+                Token![')'],
+                Token!['}'],
+            ],
+            docs: Default::default(),
+        },
     );
 
     // constants
@@ -78,7 +74,7 @@ pub fn default_defines(defines: &mut DefineMap) {
         for &(name, ref value) in values {
             let previous = defines.insert(
                 crate::ast::Ident::from_static(name),
-                (Location::BUILTINS, Define::constant(value.to_vec())),
+                Define::constant(Location::BUILTINS, value.to_vec()),
             );
             assert!(previous.is_none(), "redefined: {}", name);
         }

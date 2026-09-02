@@ -25,6 +25,7 @@ const MAX_RECURSION_DEPTH: usize = 32;
 /// The parameters and output of a macro.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Define {
+    pub location: Location,
     pub docs: Rc<DocCollection>,
     pub params: Vec<Ident>,
     pub variadic: bool,
@@ -33,8 +34,9 @@ pub struct Define {
 
 impl Define {
     /// Construct a basic constant macro.
-    pub fn constant(subst: Vec<Token>) -> Self {
+    pub fn constant(location: Location, subst: Vec<Token>) -> Self {
         Define {
+            location,
             docs: Default::default(),
             params: Default::default(),
             variadic: false,
@@ -43,8 +45,9 @@ impl Define {
     }
 
     /// Construct a basic function macro.
-    pub fn function(params: Vec<Ident>, subst: Vec<Token>) -> Self {
+    pub fn function(location: Location, params: Vec<Ident>, subst: Vec<Token>) -> Self {
         Define {
+            location,
             docs: Default::default(),
             params,
             variadic: false,
@@ -173,7 +176,7 @@ impl std::ops::DerefMut for DefineHistory {
 /// stack is exhausted.
 #[derive(Debug, Clone, Default)]
 pub struct DefineMap {
-    inner: HashMap<Ident, Vec<(Location, Define)>>,
+    inner: HashMap<Ident, Vec<Define>>,
 }
 
 impl DefineMap {
@@ -201,7 +204,7 @@ impl DefineMap {
     }
 
     /// Returns a reference to the value corresponding to the key.
-    pub fn get(&self, key: &str) -> Option<&(Location, Define)> {
+    pub fn get(&self, key: &str) -> Option<&Define> {
         self.inner.get(key).and_then(|v| v.last())
     }
 
@@ -209,19 +212,19 @@ impl DefineMap {
     ///
     /// Returns `None` if the key was not present, or its most recent location
     /// if it was.
-    pub fn insert(&mut self, key: Ident, value: (Location, Define)) -> Option<Location> {
+    pub fn insert(&mut self, key: Ident, value: Define) -> Option<Location> {
         let stack = self
             .inner
             .entry(key)
             .or_insert_with(|| Vec::with_capacity(1));
-        let result = stack.last().map(|&(loc, _)| loc);
+        let result = stack.last().map(|d| d.location);
         stack.push(value);
         result
     }
 
     /// Removes a key from the map, returning the value at the key if the key
     /// was previously in the map.
-    pub fn remove(&mut self, key: &str) -> Option<(Location, Define)> {
+    pub fn remove(&mut self, key: &str) -> Option<Define> {
         let stack = self.inner.get_mut(key)?;
         let result = stack.pop();
         let remove = stack.is_empty();
@@ -234,8 +237,8 @@ impl DefineMap {
     /// Cut a DefineMap from the state of a DefineHistory at the given location.
     fn from_history(history: &InnerDefineHistory, location: Location) -> DefineMap {
         let mut map = DefineMap::default();
-        for (range, (name, define)) in history.range(range(location, location)) {
-            map.insert(name.clone(), (range.start, define.clone()));
+        for (_, (name, define)) in history.range(range(location, location)) {
+            map.insert(name.clone(), define.clone());
         }
         map
     }
@@ -494,7 +497,7 @@ impl<'ctx> Preprocessor<'ctx> {
     pub fn finalize(mut self) -> DefineHistory {
         let mut i = 0;
         for (name, vector) in self.defines.inner.drain() {
-            for (start, define) in vector {
+            for define in vector {
                 // Give each define its own end column in order to avoid key
                 // collisions in the interval tree.
                 i += 1;
@@ -504,7 +507,7 @@ impl<'ctx> Preprocessor<'ctx> {
                     column: i,
                 };
                 self.history
-                    .insert(range(start, end), (name.clone(), define));
+                    .insert(range(define.location, end), (name.clone(), define));
             }
         }
         DefineHistory {
@@ -595,9 +598,11 @@ impl<'ctx> Preprocessor<'ctx> {
         }
     }
 
-    fn move_to_history(&mut self, name: Ident, previous: (Location, Define)) {
-        self.history
-            .insert(range(previous.0, self.last_input_loc), (name, previous.1));
+    fn move_to_history(&mut self, name: Ident, previous: Define) {
+        self.history.insert(
+            range(previous.location, self.last_input_loc),
+            (name, previous),
+        );
     }
 
     // ------------------------------------------------------------------------
@@ -1001,6 +1006,7 @@ impl<'ctx> Preprocessor<'ctx> {
                             }
                         }
                         let define = Define {
+                            location: define_name_loc,
                             docs: Rc::new(docs),
                             params,
                             variadic,
@@ -1009,9 +1015,8 @@ impl<'ctx> Preprocessor<'ctx> {
                         // DEBUG can only be defined in the root .dme file
                         if (define_name != ident!("DEBUG") || self.in_environment())
                             && define_name != ident!("FILE_DIR")
-                            && let Some(previous_loc) = self
-                                .defines
-                                .insert(define_name.clone(), (define_name_loc, define))
+                            && let Some(previous_loc) =
+                                self.defines.insert(define_name.clone(), define)
                         {
                             // DM doesn't issue a warning for this, but it's usually a mistake, so let's.
                             // FILE_DIR is handled specially and sometimes makes sense to define multiple times.
@@ -1160,15 +1165,13 @@ impl<'ctx> Preprocessor<'ctx> {
                 }
 
                 match expansion {
-                    Some((
+                    Some(Define {
                         location,
-                        Define {
-                            subst,
-                            docs,
-                            ref params,
-                            ..
-                        },
-                    )) if params.is_empty() => {
+                        docs,
+                        ref params,
+                        variadic: _,
+                        subst,
+                    }) if params.is_empty() => {
                         self.annotate_macro(ident, location, Some(docs));
                         self.include_stack.stack.push(Include::Expansion {
                             //name: ident.to_owned(),
@@ -1177,15 +1180,13 @@ impl<'ctx> Preprocessor<'ctx> {
                         });
                         return Ok(());
                     },
-                    Some((
+                    Some(Define {
                         location,
-                        Define {
-                            ref params,
-                            ref subst,
-                            variadic,
-                            docs,
-                        },
-                    )) => {
+                        docs,
+                        ref params,
+                        ref subst,
+                        variadic,
+                    }) => {
                         // if it's not followed by an LParen, it isn't really a function call
                         match next!() {
                             Token!['('] => {},
