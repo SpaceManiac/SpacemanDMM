@@ -181,30 +181,6 @@ pub fn fix_case(path: &Path) -> Cow<'_, Path> {
     Cow::Borrowed(path)
 }
 
-pub const DEFAULT_ENV: &str = "tgstation.dme";
-
-/// Autodetect any `.dme` file in the current folder, or fall back to default.
-///
-/// If multiple environments exist, the first non-default is preferred.
-fn detect_environment(root: &Path, default: &str) -> std::io::Result<Option<std::path::PathBuf>> {
-    let root = if root == "" { ".".as_ref() } else { root };
-    let mut result = None;
-    for entry in std::fs::read_dir(root)?.flatten() {
-        let name = entry.file_name();
-        let (dme, default) = {
-            let utf8_name = name.to_string_lossy();
-            (utf8_name.ends_with(".dme"), utf8_name == default)
-        };
-        if dme {
-            result = Some(entry.path());
-            if !default {
-                break;
-            }
-        }
-    }
-    Ok(result)
-}
-
 fn heap_size_of_index_map<K, V>(index_map: &IndexMap<K, V, RandomState>) -> usize
 where
     K: GetSize,

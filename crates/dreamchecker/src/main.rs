@@ -52,17 +52,19 @@ fn main() {
     context.set_print_severity(Some(dm::Severity::Info));
     let dme = match (config_file, environment) {
         (Some(toml), Some(dme)) => {
-            context.configure_from_toml(toml.as_ref());
+            _ = context.configure_from_toml(toml.as_ref());
             let dme = Path::new(&dme);
             dme.strip_prefix(".").unwrap_or(dme).to_owned()
         },
-        (Some(toml), None) => context
-            .configure_from_toml(toml.as_ref())
-            .unwrap_or_else(|| Path::new(dm::DEFAULT_ENV).to_owned()),
+        (Some(toml), None) => {
+            let r = context.configure_from_toml(toml.as_ref());
+            context.unwrap(r)
+        },
         (None, Some(dme)) => context.configure_from_dme(dme.as_ref()),
-        (None, None) => context
-            .configure_from_directory(".".as_ref())
-            .unwrap_or_else(|| Path::new(dm::DEFAULT_ENV).to_owned()),
+        (None, None) => {
+            let r = context.configure_from_directory(".".as_ref());
+            context.unwrap(r)
+        },
     };
 
     println!("============================================================");

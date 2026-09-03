@@ -1385,7 +1385,10 @@ impl Engine {
             eprintln!("workspace root: {url}");
 
             if let Ok(root_path) = url_to_path(&url) {
-                self.environment = self.context.configure_from_directory(&root_path);
+                match self.context.configure_from_directory(&root_path) {
+                    Ok(env) => self.environment = Some(env),
+                    Err(err) => eprintln!("no environment found: {err}"),
+                }
             }
 
             self.root = Some(url);

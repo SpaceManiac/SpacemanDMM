@@ -129,18 +129,12 @@ impl Context {
     /// Returns the path to the `.dme` to use.
     pub fn configure_cli(&mut self, dme: Option<impl AsRef<Path>>) -> PathBuf {
         match dme {
-            Some(env) => {
-                self.configure_from_dme(env.as_ref());
-            },
+            Some(env) => self.configure_from_dme(env.as_ref()),
             None => {
-                self.configure_from_directory(".".as_ref());
+                let result = self.configure_from_directory(".".as_ref());
+                self.unwrap(result)
             },
         }
-        self.config
-            .environment
-            .as_deref()
-            .unwrap_or_else(|| Path::new(crate::DEFAULT_ENV))
-            .to_owned()
     }
 
     /// Search for `SpacemanDMM.toml` neighboring the given `.dme` if present,
@@ -149,7 +143,7 @@ impl Context {
     /// Returns the path to the `.dme` to use.
     pub fn configure_from_dme(&mut self, dme: &Path) -> PathBuf {
         if let Some(parent) = dme.parent() {
-            self.configure_from_directory(parent);
+            _ = self.configure_from_directory(parent);
         }
         // Always override `config.environment`.
         self.config
@@ -164,7 +158,7 @@ impl Context {
     /// Sensible CLI behavior is to `configure_from_directory(".".as_ref())`.
     ///
     /// Returns the path to the `.dme` to use.
-    pub fn configure_from_directory(&mut self, directory: &Path) -> Option<PathBuf> {
+    pub fn configure_from_directory(&mut self, directory: &Path) -> Result<PathBuf, DMError> {
         let toml = directory.join("SpacemanDMM.toml");
         if toml.exists() {
             self.configure_from_toml(&toml)
@@ -177,7 +171,7 @@ impl Context {
     /// searching its neighbors.
     ///
     /// Returns the path to the `.dme` to use.
-    pub fn configure_from_toml(&mut self, toml: &Path) -> Option<PathBuf> {
+    pub fn configure_from_toml(&mut self, toml: &Path) -> Result<PathBuf, DMError> {
         let file = self.register_file(toml);
         match Config::read_toml(file, toml) {
             Ok(config) => self.config = config,
@@ -186,28 +180,105 @@ impl Context {
         if let Some(parent) = toml.parent() {
             self.detect_environment(parent)
         } else {
-            self.config.environment.clone()
+            match self.config.environment.clone() {
+                Some(env) => Ok(env),
+                None => {
+                    // Rare weird situation
+                    Err(DMError::new(
+                        Location {
+                            file,
+                            line: 1,
+                            column: 1,
+                        },
+                        "no .dme file detected: no `environment` set and no parent directory to search",
+                    ))
+                },
+            }
         }
     }
 
-    fn detect_environment(&mut self, directory: &Path) -> Option<PathBuf> {
+    fn detect_environment(&mut self, directory: &Path) -> Result<PathBuf, DMError> {
         match &self.config.environment {
             Some(env) => {
                 // `environment` is set, so join `directory` with it.
                 let env = directory.join(env);
                 let env = env.strip_prefix(".").map(Path::to_owned).unwrap_or(env);
-                Some(self.config.environment.insert(env).to_owned())
+                Ok(self.config.environment.insert(env).to_owned())
             },
             None => {
                 // No `environment` set, so search `directory` for it.
-                match crate::detect_environment(directory, crate::DEFAULT_ENV) {
-                    Ok(Some(env)) => Some(
-                        self.config
-                            .environment
-                            .insert(env.strip_prefix(".").map(Path::to_owned).unwrap_or(env))
-                            .to_owned(),
-                    ),
-                    _ => None,
+                let directory = if directory == "" {
+                    ".".as_ref()
+                } else {
+                    directory
+                };
+
+                let file = self.register_file(directory);
+                let mut error = DMError::new(
+                    Location {
+                        file,
+                        line: 1,
+                        column: 1,
+                    },
+                    "no .dme file detected",
+                );
+                let mut warning = DMError::new(
+                    Location {
+                        file,
+                        line: 1,
+                        column: 1,
+                    },
+                    "to pick another .dme file, set `environment` in SpacemanDMM.toml, or try passing `-e`",
+                )
+                .with_severity(Severity::Info);
+                let mut best = None;
+                match std::fs::read_dir(directory) {
+                    Ok(read_dir) => {
+                        for (i, entry) in read_dir.enumerate() {
+                            let location = Location {
+                                file,
+                                line: (i + 1) as u32,
+                                column: 1,
+                            };
+                            match entry {
+                                Ok(entry) => {
+                                    let name = entry.file_name();
+                                    let utf8_name = name.to_string_lossy();
+                                    if !utf8_name.ends_with(".dme") {
+                                        continue;
+                                    }
+                                    // For determinism, pick the alphabetically first `.dme` file.
+                                    if let Some(best) = &mut best {
+                                        if name < *best {
+                                            warning
+                                                .add_note(location, format!("candidate: {best:?}"));
+                                            *best = name;
+                                        } else {
+                                            warning
+                                                .add_note(location, format!("candidate: {name:?}"));
+                                        }
+                                    } else {
+                                        best = Some(name);
+                                    }
+                                },
+                                Err(err) => {
+                                    error.add_note(location, err.to_string());
+                                },
+                            }
+                        }
+                    },
+                    Err(err) => error = error.with_cause(err),
+                }
+                if !warning.notes.is_empty() {
+                    self.register_error(warning);
+                }
+                match best {
+                    Some(best) => {
+                        let path = directory.join(best);
+                        let path = path.strip_prefix(".").map(Path::to_owned).unwrap_or(path);
+                        Ok(self.config.environment.insert(path).to_owned())
+                    },
+                    None => Err(error),
                 }
             },
         }
@@ -260,8 +331,14 @@ impl Context {
             Ok(ok) => ok,
             Err(error) => {
                 let stderr = termcolor::StandardStream::stderr(termcolor::ColorChoice::Auto);
-                self.pretty_print_error(&mut stderr.lock(), &error)
-                    .expect("error writing to stderr");
+                let stderr = &mut stderr.lock();
+                for err in self.errors().iter() {
+                    // Don't double-print errors which would have been printed immediately.
+                    if self.print_severity.map_or(true, |p| err.severity > p) {
+                        _ = self.pretty_print_error(stderr, err);
+                    }
+                }
+                self.pretty_print_error(stderr, &error).unwrap();
                 std::process::exit(1);
             },
         }
