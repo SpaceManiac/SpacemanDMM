@@ -466,7 +466,7 @@ impl Expression {
             context: None,
             tree: None,
             location,
-            ty: NodeIndex::new(0),
+            ty: TypeIndex::new(0),
             defines: None,
         }
         .expr(self, None)
@@ -484,7 +484,7 @@ pub fn preprocessor_evaluate(
         context,
         tree: None,
         location,
-        ty: NodeIndex::new(0),
+        ty: TypeIndex::new(0),
         defines: Some(defines),
     }
     .expr(expr, None)
@@ -497,7 +497,7 @@ pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree) {
         for key in keys {
             if !tree[ty].get_var_declaration(&key, tree).is_none_or(|x| {
                 x.var_type.is_const_evaluable()
-                    && (x.var_type.flags.is_const() || ty != NodeIndex::new(0))
+                    && (x.var_type.flags.is_const() || ty != TypeIndex::new(0))
             }) {
                 continue; // skip non-constant-evaluable vars
             }
@@ -517,12 +517,12 @@ pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree) {
 
 enum ConstLookup {
     Found(Constant),
-    Continue(Option<NodeIndex>),
+    Continue(Option<TypeIndex>),
 }
 
 fn constant_ident_lookup(
     tree: &mut ObjectTree,
-    ty: NodeIndex,
+    ty: TypeIndex,
     ident: &str,
     must_be_const: bool,
     context: Option<&Context>,
@@ -600,7 +600,7 @@ struct ConstantFolder<'a> {
     tree: Option<&'a mut ObjectTree>,
     defines: Option<&'a DefineMap>,
     location: Location,
-    ty: NodeIndex,
+    ty: TypeIndex,
 }
 
 impl<'a> HasLocation for ConstantFolder<'a> {
@@ -996,7 +996,7 @@ impl<'a> ConstantFolder<'a> {
 
     fn recursive_lookup(
         &mut self,
-        ty: NodeIndex,
+        ty: TypeIndex,
         ident: &str,
         must_be_const: bool,
     ) -> Result<Constant, DMError> {
@@ -1018,7 +1018,7 @@ impl<'a> ConstantFolder<'a> {
         Err(self.error(format!("unknown variable: {ident}")))
     }
 
-    fn proc_ref_lookup(&mut self, ty: NodeIndex, name: &str) -> Result<Constant, DMError> {
+    fn proc_ref_lookup(&mut self, ty: TypeIndex, name: &str) -> Result<Constant, DMError> {
         let tree = self.tree.as_mut().unwrap();
         let proc_type = TypeRef::new(tree, ty);
         let Some(proc_ref) = proc_type.get_proc(name) else {

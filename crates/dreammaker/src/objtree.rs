@@ -133,11 +133,11 @@ pub struct Type {
     /// Procs and verbs which this type has declarations or overrides for.
     #[get_size(size_fn = heap_size_of_index_map)]
     pub procs: IndexMap<Ident, TypeProc, RandomState>,
-    parent_path: NodeIndex,
-    parent_type: NodeIndex,
+    parent_path: TypeIndex,
+    parent_type: TypeIndex,
     pub docs: DocCollection,
     pub id: SymbolId,
-    children: BTreeMap<Ident, NodeIndex>,
+    children: BTreeMap<Ident, TypeIndex>,
 }
 
 impl Type {
@@ -153,8 +153,8 @@ impl Type {
         &self.path[..self.path_last_slash]
     }
 
-    pub fn parent_type_index(&self) -> Option<NodeIndex> {
-        if self.parent_type == NodeIndex::end() {
+    pub fn parent_type_index(&self) -> Option<TypeIndex> {
+        if self.parent_type == TypeIndex::end() {
             None
         } else {
             Some(self.parent_type)
@@ -233,12 +233,12 @@ pub fn ispath(path: &str, parent: &str) -> bool {
 #[derive(Copy, Clone)]
 pub struct TypeRef<'a> {
     tree: &'a ObjectTree,
-    idx: NodeIndex,
+    idx: TypeIndex,
 }
 
 impl<'a> TypeRef<'a> {
     #[inline]
-    pub(crate) fn new(tree: &'a ObjectTree, idx: NodeIndex) -> TypeRef<'a> {
+    pub(crate) fn new(tree: &'a ObjectTree, idx: TypeIndex) -> TypeRef<'a> {
         TypeRef { tree, idx }
     }
 
@@ -251,7 +251,7 @@ impl<'a> TypeRef<'a> {
         self.tree
     }
 
-    pub fn index(self) -> NodeIndex {
+    pub fn index(self) -> TypeIndex {
         self.idx
     }
 
@@ -276,7 +276,7 @@ impl<'a> TypeRef<'a> {
     /// Find the parent type of this without returning root.
     pub fn parent_type_without_root(&self) -> Option<TypeRef<'a>> {
         let idx = self.parent_type;
-        if idx == NodeIndex::new(0) {
+        if idx == TypeIndex::new(0) {
             return None;
         }
         self.tree
@@ -710,8 +710,8 @@ impl<'a> std::hash::Hash for ProcRef<'a> {
 #[derive(Debug, Default, GetSize)]
 pub struct ObjectTree {
     graph: Vec<Type>,
-    types: BTreeMap<String, NodeIndex>,
-    redirected_parent_types: Vec<NodeIndex>,
+    types: BTreeMap<String, TypeIndex>,
+    redirected_parent_types: Vec<TypeIndex>,
 }
 
 impl ObjectTree {
@@ -724,8 +724,8 @@ impl ObjectTree {
     // ------------------------------------------------------------------------
     // Access
 
-    pub fn node_indices(&self) -> impl Iterator<Item = NodeIndex> + use<> {
-        (0..self.graph.len()).map(NodeIndex::new)
+    pub fn node_indices(&self) -> impl Iterator<Item = TypeIndex> + use<> {
+        (0..self.graph.len()).map(TypeIndex::new)
     }
 
     pub fn iter_types(&self) -> impl Iterator<Item = TypeRef<'_>> + '_ {
@@ -733,7 +733,7 @@ impl ObjectTree {
     }
 
     pub fn root(&self) -> TypeRef<'_> {
-        TypeRef::new(self, NodeIndex::new(0))
+        TypeRef::new(self, TypeIndex::new(0))
     }
 
     pub fn find(&self, path: &str) -> Option<TypeRef<'_>> {
@@ -768,7 +768,7 @@ impl ObjectTree {
         I: IntoIterator,
         I::Item: AsRef<str>,
     {
-        let mut current = NodeIndex::new(0);
+        let mut current = TypeIndex::new(0);
         let mut first = true;
         'outer: for each in path {
             let each: &str = each.as_ref();
@@ -807,16 +807,16 @@ impl ObjectTree {
     }
 }
 
-impl std::ops::Index<NodeIndex> for ObjectTree {
+impl std::ops::Index<TypeIndex> for ObjectTree {
     type Output = Type;
 
-    fn index(&self, ix: NodeIndex) -> &Type {
+    fn index(&self, ix: TypeIndex) -> &Type {
         self.graph.get(ix.index()).expect("node index out of range")
     }
 }
 
-impl std::ops::IndexMut<NodeIndex> for ObjectTree {
-    fn index_mut(&mut self, ix: NodeIndex) -> &mut Type {
+impl std::ops::IndexMut<TypeIndex> for ObjectTree {
+    fn index_mut(&mut self, ix: TypeIndex) -> &mut Type {
         self.graph
             .get_mut(ix.index())
             .expect("node index out of range")
@@ -843,12 +843,12 @@ impl Default for ObjectTreeBuilder {
             location_specificity: 0,
             vars: Default::default(),
             procs: Default::default(),
-            parent_type: NodeIndex::end(),
+            parent_type: TypeIndex::end(),
             docs: Default::default(),
             id: symbols.allocate(),
 
             children: Default::default(),
-            parent_path: NodeIndex::end(),
+            parent_path: TypeIndex::end(),
         });
         ObjectTreeBuilder {
             inner: tree,
@@ -861,16 +861,16 @@ impl ObjectTreeBuilder {
     // ------------------------------------------------------------------------
     // Parsing
 
-    pub fn get_path(&self, index: NodeIndex) -> &str {
+    pub fn get_path(&self, index: TypeIndex) -> &str {
         &self.inner[index].path
     }
 
-    pub fn extend_docs(&mut self, index: NodeIndex, collection: DocCollection) {
+    pub fn extend_docs(&mut self, index: TypeIndex, collection: DocCollection) {
         self.inner[index].docs.extend(collection)
     }
 
-    pub fn root_index(&self) -> NodeIndex {
-        NodeIndex(0)
+    pub fn root_index(&self) -> TypeIndex {
+        TypeIndex(0)
     }
 
     pub fn register_builtins(&mut self) {
@@ -920,7 +920,7 @@ impl ObjectTreeBuilder {
                     }
                 }
 
-                NodeIndex::new(0)
+                TypeIndex::new(0)
             } else {
                 let constant_buf;
                 let parent_type_buf;
@@ -984,7 +984,7 @@ impl ObjectTreeBuilder {
 
                 if path == "/client" && parent_type.is_empty() {
                     // client has no parent by default, but can be safely reparented to /datum
-                    NodeIndex::new(0)
+                    TypeIndex::new(0)
                 } else if let Some(&idx) = self.inner.types.get(parent_type) {
                     idx
                 } else {
@@ -992,7 +992,7 @@ impl ObjectTreeBuilder {
                         location,
                         format!("bad parent type for {path}: {parent_type}"),
                     ));
-                    NodeIndex::new(0) // on bad parent_type, fall back to the root
+                    TypeIndex::new(0) // on bad parent_type, fall back to the root
                 }
             };
 
@@ -1010,10 +1010,10 @@ impl ObjectTreeBuilder {
     pub(crate) fn subtype_or_add(
         &mut self,
         location: Location,
-        parent: NodeIndex,
+        parent: TypeIndex,
         child: &Ident,
         len: usize,
-    ) -> NodeIndex {
+    ) -> TypeIndex {
         if let Some(&target) = self.inner[parent].children.get(child) {
             let node = &mut self.inner[target];
             if node.location_specificity > len {
@@ -1025,7 +1025,7 @@ impl ObjectTreeBuilder {
 
         // time to add a new child
         let path = format!("{}/{}", self.inner[parent].path, child);
-        let node = NodeIndex::new(self.inner.graph.len());
+        let node = TypeIndex::new(self.inner.graph.len());
         self.inner.graph.push(Type {
             path: path.clone(),
             path_last_slash: self.inner[parent].path.len(),
@@ -1033,7 +1033,7 @@ impl ObjectTreeBuilder {
             procs: Default::default(),
             location,
             location_specificity: len,
-            parent_type: NodeIndex::end(),
+            parent_type: TypeIndex::end(),
             docs: Default::default(),
             id: self.symbols.allocate(),
             children: Default::default(),
@@ -1048,7 +1048,7 @@ impl ObjectTreeBuilder {
 
     fn insert_var(
         &mut self,
-        ty: NodeIndex,
+        ty: TypeIndex,
         name: &Ident,
         value: VarValue,
         declaration: Option<VarDeclaration>,
@@ -1069,7 +1069,7 @@ impl ObjectTreeBuilder {
 
     pub(crate) fn declare_var(
         &mut self,
-        ty: NodeIndex,
+        ty: TypeIndex,
         name: &Ident,
         location: Location,
         docs: DocCollection,
@@ -1097,7 +1097,7 @@ impl ObjectTreeBuilder {
 
     pub(crate) fn override_var(
         &mut self,
-        ty: NodeIndex,
+        ty: TypeIndex,
         name: &Ident,
         location: Location,
         docs: DocCollection,
@@ -1122,8 +1122,8 @@ impl ObjectTreeBuilder {
         location: Location,
         mut path: I,
         len: usize,
-    ) -> Result<(NodeIndex, Ident), DMError> {
-        let mut current = NodeIndex::new(0);
+    ) -> Result<(TypeIndex, Ident), DMError> {
+        let mut current = TypeIndex::new(0);
         let mut last = match path.next() {
             Some(name) => name,
             None => return Err(DMError::new(location, "cannot register root path")),
@@ -1148,7 +1148,7 @@ impl ObjectTreeBuilder {
         &mut self,
         context: &Context,
         location: Location,
-        parent: NodeIndex,
+        parent: TypeIndex,
         name: &Ident,
         declaration: Option<ProcDeclBuilder>,
         parameters: Vec<Parameter>,
@@ -1368,12 +1368,12 @@ fn is_decl(s: &str) -> bool {
 
 /// Node identifier.
 #[derive(Copy, Clone, Default, PartialEq, PartialOrd, Eq, Ord, Hash, Debug)]
-pub struct NodeIndex(u32);
+pub struct TypeIndex(u32);
 
-impl NodeIndex {
+impl TypeIndex {
     #[inline]
     pub fn new(x: usize) -> Self {
-        NodeIndex(x as u32)
+        TypeIndex(x as u32)
     }
 
     #[inline]
@@ -1383,8 +1383,8 @@ impl NodeIndex {
 
     #[inline]
     pub fn end() -> Self {
-        NodeIndex(u32::MAX)
+        TypeIndex(u32::MAX)
     }
 }
 
-impl GetSize for NodeIndex {}
+impl GetSize for TypeIndex {}

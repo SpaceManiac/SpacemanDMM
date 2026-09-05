@@ -9,7 +9,7 @@ use super::annotation::*;
 use super::ast::*;
 use super::docs::*;
 use super::lexer::{LocatedToken, Punctuation, Token};
-use super::objtree::{NodeIndex, ObjectTree, ObjectTreeBuilder};
+use super::objtree::{ObjectTree, ObjectTreeBuilder, TypeIndex};
 use super::{Context, DMError, FileId, HasLocation, Location, Severity};
 
 // ----------------------------------------------------------------------------
@@ -657,7 +657,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     fn tree_entries(
         &mut self,
-        current: NodeIndex,
+        current: TypeIndex,
         proc_builder: Option<ProcDeclBuilder>,
         var_type: Option<VarTypeBuilder>,
         terminator: Token,
@@ -782,7 +782,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
     #[allow(clippy::too_many_arguments)]
     fn traverse_tree(
         &mut self,
-        current: &mut NodeIndex,
+        current: &mut TypeIndex,
         proc_builder: &mut Option<ProcDeclBuilder>,
         var_type: &mut Option<VarTypeBuilder>,
         path_len: usize,
@@ -832,7 +832,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     fn tree_entry(
         &mut self,
-        mut current: NodeIndex,
+        mut current: TypeIndex,
         mut proc_builder: Option<ProcDeclBuilder>,
         mut var_type: Option<VarTypeBuilder>,
     ) -> Status<()> {
@@ -1190,7 +1190,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     fn proc_params_and_body(
         &mut self,
-        current: NodeIndex,
+        current: TypeIndex,
         proc_builder: Option<ProcDeclBuilder>,
         name: &Ident,
         entry_start: Location,
