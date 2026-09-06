@@ -6,9 +6,9 @@ use std::str::FromStr;
 
 use foldhash::HashSet;
 
-use super::ast::Ident;
-use super::docs::*;
-use super::{Context, DMError, FileId, HasLocation, Location, Severity};
+use crate::ast::Ident;
+use crate::docs::{CommentKind, DocComment, DocTarget};
+use crate::{Context, DMError, FileId, HasLocation, Location, Severity};
 
 macro_rules! table {
     (

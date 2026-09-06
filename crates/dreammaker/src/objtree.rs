@@ -16,8 +16,7 @@ use crate::ast::{
 };
 use crate::constants::Constant;
 use crate::docs::DocCollection;
-use crate::heap_size_of_index_map;
-use crate::{Context, DMError, Location, Severity};
+use crate::{Context, DMError, Location, Severity, heap_size_of_index_map};
 
 // ----------------------------------------------------------------------------
 // Symbol IDs

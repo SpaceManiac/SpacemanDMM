@@ -11,12 +11,11 @@ use foldhash::fast::RandomState;
 use indexmap::IndexMap;
 use ordered_float::OrderedFloat;
 
+use crate::ast::*;
 use crate::heap_size_of_index_map;
-
-use super::ast::*;
-use super::objtree::*;
-use super::preprocessor::DefineMap;
-use super::{Context, DMError, HasLocation, Location, Severity};
+use crate::objtree::*;
+use crate::preprocessor::DefineMap;
+use crate::{Context, DMError, HasLocation, Location, Severity};
 
 pub type Arguments = Box<[(Constant, Option<Constant>)]>;
 
@@ -440,7 +439,7 @@ impl fmt::Display for ConstFn {
 // The constant evaluator
 
 pub fn evaluate_str(location: Location, input: &[u8]) -> Result<Constant, DMError> {
-    use super::lexer::{Lexer, LocationTracker, from_utf8_or_latin1_borrowed};
+    use crate::lexer::{Lexer, LocationTracker, from_utf8_or_latin1_borrowed};
 
     let ctx = Context::default();
     let mut lexer = Lexer::from_input(&ctx, LocationTracker::from_location(location, input.into()));

@@ -5,12 +5,12 @@ use std::collections::{BTreeMap, VecDeque};
 use std::ops::Range;
 use std::str::FromStr;
 
-use super::annotation::*;
-use super::ast::*;
-use super::docs::*;
-use super::lexer::{LocatedToken, Punctuation, Token};
-use super::objtree::{ObjectTree, ObjectTreeBuilder, TypeIndex};
-use super::{Context, DMError, FileId, HasLocation, Location, Severity};
+use crate::annotation::{Annotation, AnnotationTree};
+use crate::ast::*;
+use crate::docs::{DocCollection, DocComment, DocTarget};
+use crate::lexer::{LocatedToken, Punctuation, Token};
+use crate::objtree::{ObjectTree, ObjectTreeBuilder, TypeIndex};
+use crate::{Context, DMError, FileId, HasLocation, Location, Severity};
 
 // ----------------------------------------------------------------------------
 // Error handling

@@ -13,7 +13,7 @@ use lsp_types::{
     VersionedTextDocumentIdentifier,
 };
 
-use super::{invalid_request, url_to_path};
+use crate::{invalid_request, url_to_path};
 
 /// A store for the contents of currently-open documents, with appropriate
 /// fallback for documents which are not currently open.

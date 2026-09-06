@@ -1,20 +1,18 @@
 //! BYOND built-in types, procs, and vars.
 
+use crate::Location;
 use crate::ast::Ident;
-
-use super::Location;
-use super::constants::Constant;
-use super::docs::{BuiltinDocs, DocCollection};
-use super::objtree::*;
-use super::preprocessor::{Define, DefineMap};
+use crate::constants::Constant;
+use crate::docs::{BuiltinDocs, DocCollection};
+use crate::objtree::ObjectTreeBuilder;
+use crate::preprocessor::{Define, DefineMap};
 
 const DM_VERSION: i32 = 516;
 const DM_BUILD: i32 = 1666;
 
 /// Register BYOND builtin macros to the given define map.
 pub fn default_defines(defines: &mut DefineMap) {
-    use super::lexer::Token::*;
-    use super::lexer::*;
+    use crate::lexer::Token::{self, *};
     let location = Location::BUILTINS;
 
     // #define EXCEPTION(value) new /exception(value)

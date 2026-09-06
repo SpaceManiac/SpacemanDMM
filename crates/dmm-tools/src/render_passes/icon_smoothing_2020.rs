@@ -4,11 +4,12 @@
 //! followed by
 //! https://github.com/tgstation/tgstation/pull/53906
 
-use crate::dmi::Dir;
-use crate::minimap::{Atom, GetVar, Neighborhood, Sprite};
 use dm::constants::Constant;
 use dm::objtree::ObjectTree;
 use foldhash::HashSet;
+
+use crate::dmi::Dir;
+use crate::minimap::{Atom, GetVar, Neighborhood, Sprite};
 
 use super::RenderPass;
 

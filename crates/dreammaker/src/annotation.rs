@@ -3,11 +3,11 @@
 
 use std::rc::Rc;
 
-use crate::docs::DocCollection;
 use interval_tree::{IntervalTree, RangeInclusive, RangePairIter, range};
 
-use super::Location;
-use super::ast::*;
+use crate::Location;
+use crate::ast::*;
+use crate::docs::DocCollection;
 
 type Iter<'a> = RangePairIter<'a, Location, Annotation>;
 
