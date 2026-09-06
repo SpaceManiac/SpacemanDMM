@@ -268,7 +268,7 @@ impl<'a> TypeRef<'a> {
     pub fn parent_type(&self) -> Option<TypeRef<'a>> {
         let idx = self.parent_type;
         self.tree
-            .graph
+            .types
             .get(idx.index())
             .map(|_| TypeRef::new(self.tree, idx))
     }
@@ -280,7 +280,7 @@ impl<'a> TypeRef<'a> {
             return None;
         }
         self.tree
-            .graph
+            .types
             .get(idx.index())
             .map(|_| TypeRef::new(self.tree, idx))
     }
@@ -709,8 +709,8 @@ impl<'a> std::hash::Hash for ProcRef<'a> {
 
 #[derive(Debug, Default, GetSize)]
 pub struct ObjectTree {
-    graph: Vec<Type>,
-    types: BTreeMap<String, TypeIndex>,
+    types: Vec<Type>,
+    by_path: BTreeMap<String, TypeIndex>,
     redirected_parent_types: Vec<TypeIndex>,
 }
 
@@ -725,7 +725,7 @@ impl ObjectTree {
     // Access
 
     pub fn node_indices(&self) -> impl Iterator<Item = TypeIndex> + use<> {
-        (0..self.graph.len()).map(TypeIndex::new)
+        (0..self.types.len()).map(TypeIndex::new)
     }
 
     pub fn iter_types(&self) -> impl Iterator<Item = TypeRef<'_>> + '_ {
@@ -740,18 +740,18 @@ impl ObjectTree {
         if path.is_empty() {
             return Some(self.root());
         }
-        self.types.get(path).map(|&ix| TypeRef::new(self, ix))
+        self.by_path.get(path).map(|&ix| TypeRef::new(self, ix))
     }
 
     pub fn expect(&self, path: &str) -> TypeRef<'_> {
-        match self.types.get(path) {
+        match self.by_path.get(path) {
             Some(&ix) => TypeRef::new(self, ix),
             None => panic!("type not found: {path:?}"),
         }
     }
 
     pub fn parent_of(&self, type_: &Type) -> Option<&Type> {
-        self.graph.get(type_.parent_type.index())
+        self.types.get(type_.parent_type.index())
     }
 
     pub fn type_by_path<I>(&self, path: I) -> Option<TypeRef<'_>>
@@ -797,7 +797,7 @@ impl ObjectTree {
 
     /// Drop all code ASTs to attempt to reduce memory usage.
     pub fn drop_code(&mut self) {
-        for node in self.graph.iter_mut() {
+        for node in self.types.iter_mut() {
             for (_, typroc) in node.procs.iter_mut() {
                 for proc in typroc.value.iter_mut() {
                     proc.code = None;
@@ -811,13 +811,13 @@ impl std::ops::Index<TypeIndex> for ObjectTree {
     type Output = Type;
 
     fn index(&self, ix: TypeIndex) -> &Type {
-        self.graph.get(ix.index()).expect("node index out of range")
+        self.types.get(ix.index()).expect("node index out of range")
     }
 }
 
 impl std::ops::IndexMut<TypeIndex> for ObjectTree {
     fn index_mut(&mut self, ix: TypeIndex) -> &mut Type {
-        self.graph
+        self.types
             .get_mut(ix.index())
             .expect("node index out of range")
     }
@@ -832,11 +832,11 @@ impl Default for ObjectTreeBuilder {
     fn default() -> Self {
         let mut symbols = SymbolIdSource::new(SymbolIdCategory::ObjectTree);
         let mut tree = ObjectTree {
-            graph: Vec::with_capacity(0x4000),
-            types: Default::default(),
+            types: Vec::with_capacity(0x4000),
+            by_path: Default::default(),
             redirected_parent_types: Vec::new(),
         };
-        tree.graph.push(Type {
+        tree.types.push(Type {
             path: String::new(),
             path_last_slash: usize::MAX,
             location: Location::INVALID,
@@ -893,7 +893,7 @@ impl ObjectTreeBuilder {
     }
 
     fn assign_parent_types(&mut self, context: &Context) {
-        for (path, &type_idx) in self.inner.types.iter() {
+        for (path, &type_idx) in self.inner.by_path.iter() {
             let mut location = self.inner[type_idx].location;
             let idx = if path == "/datum"
                 || path == "/list"
@@ -985,7 +985,7 @@ impl ObjectTreeBuilder {
                 if path == "/client" && parent_type.is_empty() {
                     // client has no parent by default, but can be safely reparented to /datum
                     TypeIndex::new(0)
-                } else if let Some(&idx) = self.inner.types.get(parent_type) {
+                } else if let Some(&idx) = self.inner.by_path.get(parent_type) {
                     idx
                 } else {
                     context.register_error(DMError::new(
@@ -996,7 +996,7 @@ impl ObjectTreeBuilder {
                 }
             };
 
-            let type_ref = &mut self.inner.graph[type_idx.index()];
+            let type_ref = &mut self.inner.types[type_idx.index()];
             type_ref.parent_type = idx;
             if type_ref.parent_path != idx {
                 self.inner.redirected_parent_types.push(type_idx);
@@ -1025,8 +1025,8 @@ impl ObjectTreeBuilder {
 
         // time to add a new child
         let path = format!("{}/{}", self.inner[parent].path, child);
-        let node = TypeIndex::new(self.inner.graph.len());
-        self.inner.graph.push(Type {
+        let node = TypeIndex::new(self.inner.types.len());
+        self.inner.types.push(Type {
             path: path.clone(),
             path_last_slash: self.inner[parent].path.len(),
             vars: Default::default(),
@@ -1042,7 +1042,7 @@ impl ObjectTreeBuilder {
         self.inner[parent]
             .children
             .insert(Ident::from_nonstatic(child), node);
-        self.inner.types.insert(path, node);
+        self.inner.by_path.insert(path, node);
         node
     }
 
@@ -1156,7 +1156,7 @@ impl ObjectTreeBuilder {
         code: Option<Block>,
         body_range: Option<Range<Location>>,
     ) -> Result<(usize, &mut ProcValue), DMError> {
-        let node = &mut self.inner.graph[parent.index()];
+        let node = &mut self.inner.types[parent.index()];
         let proc = node.procs.entry(name.clone()).or_insert_with(|| TypeProc {
             value: Vec::with_capacity(1),
             declaration: None,
@@ -1266,7 +1266,7 @@ impl ObjectTreeBuilder {
             type_path.push(prev);
             prev = each;
         }
-        let type_var = self.inner.graph[ty.index()]
+        let type_var = self.inner.types[ty.index()]
             .vars
             .entry(prev.clone())
             .or_insert_with(|| TypeVar {
