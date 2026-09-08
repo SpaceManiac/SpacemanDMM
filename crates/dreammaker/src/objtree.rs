@@ -54,7 +54,7 @@ impl SymbolIdSource {
 // ----------------------------------------------------------------------------
 // Variables
 
-pub type Vars = IndexMap<String, Constant, RandomState>;
+pub type Vars = IndexMap<Ident, Constant, RandomState>;
 
 #[derive(Debug, Clone, GetSize)]
 pub struct VarDeclaration {

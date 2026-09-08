@@ -26,7 +26,7 @@ pub type Arguments = Box<[(Constant, Option<Constant>)]>;
 pub struct Pop {
     pub path: AbsolutePath,
     #[get_size(size_fn = heap_size_of_index_map)]
-    pub vars: IndexMap<Ident, Constant, RandomState>,
+    pub vars: Vars,
 }
 
 impl Pop {
@@ -975,10 +975,7 @@ impl<'a> ConstantFolder<'a> {
         Ok(Pop { path, vars })
     }
 
-    fn vars(
-        &mut self,
-        input: &[(Ident, Expression)],
-    ) -> Result<IndexMap<Ident, Constant, RandomState>, DMError> {
+    fn vars(&mut self, input: &[(Ident, Expression)]) -> Result<Vars, DMError> {
         // Visit the vars recursively.
         let mut vars = IndexMap::with_hasher(RandomState::default());
         for (k, v) in input {

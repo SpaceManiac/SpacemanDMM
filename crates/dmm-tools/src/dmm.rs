@@ -4,13 +4,11 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 
-use foldhash::fast::RandomState;
-use indexmap::IndexMap;
+use dm::DMError;
+use dm::objtree::Vars;
 use ndarray::{self, Array3, Axis};
 
 use crate::dmi::Dir;
-use dm::DMError;
-use dm::constants::Constant;
 
 mod read;
 mod save_tgm;
@@ -191,7 +189,7 @@ pub struct ZLevel<'a> {
 pub struct Prefab {
     pub path: String,
     // insertion order, sort of most of the time alphabetical but not quite
-    pub vars: IndexMap<String, Constant, RandomState>,
+    pub vars: Vars,
 }
 
 impl PartialEq for Prefab {

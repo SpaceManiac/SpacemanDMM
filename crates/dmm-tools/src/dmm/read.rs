@@ -47,7 +47,7 @@ pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
     macro_rules! insert_current_var {
         () => {
             curr_prefab.vars.insert(
-                from_utf8_or_latin1(take(&mut curr_var)),
+                from_utf8_or_latin1(take(&mut curr_var)).into(),
                 dm::constants::evaluate_str(curr_datum_start_location, &take(&mut curr_datum))
                     .map_err(|e| {
                         e.with_note(
