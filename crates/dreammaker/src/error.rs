@@ -334,7 +334,7 @@ impl Context {
                 let stderr = &mut stderr.lock();
                 for err in self.errors().iter() {
                     // Don't double-print errors which would have been printed immediately.
-                    if self.print_severity.map_or(true, |p| err.severity > p) {
+                    if self.print_severity.is_none_or(|p| err.severity > p) {
                         _ = self.pretty_print_error(stderr, err);
                     }
                 }

@@ -10,10 +10,10 @@ use foldhash::HashMap;
 
 use interval_tree::{IntervalTree, range};
 
-use crate::annotation::*;
+use crate::annotation::{Annotation, AnnotationTree};
 use crate::ast::Ident;
 use crate::docs::{CommentKind, DocCollection, DocComment, DocTarget};
-use crate::lexer::*;
+use crate::lexer::{Lexer, LocatedToken, StringKind, Token};
 use crate::{Context, DMError, FileId, HasLocation, Location, Severity};
 
 /// The maximum recursion depth of macro expansion.

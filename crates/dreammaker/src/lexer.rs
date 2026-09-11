@@ -1349,7 +1349,6 @@ impl<'ctx> Iterator for Lexer<'ctx> {
 
     fn next(&mut self) -> Option<LocatedToken> {
         use self::Punctuation::*;
-        use self::Token::*;
         let mut skip_newlines = false;
         let mut found_illegal = false;
         loop {
@@ -1408,7 +1407,7 @@ impl<'ctx> Iterator for Lexer<'ctx> {
                     }
                     continue;
                 },
-                Some(SingleQuote) => Some(locate!(Resource(self.read_resource().into()))),
+                Some(SingleQuote) => Some(locate!(Token::Resource(self.read_resource().into()))),
                 Some(DoubleQuote) => {
                     Some(locate!(self.read_string(StringKind::Normal, b"\"", false)))
                 },
@@ -1421,7 +1420,7 @@ impl<'ctx> Iterator for Lexer<'ctx> {
                     if let Some(interp) = self.interp_stack.last_mut() {
                         interp.bracket_depth += 1;
                     }
-                    Some(locate!(Punct(lbr)))
+                    Some(locate!(Token::Punct(lbr)))
                 },
                 Some(RBracket) => {
                     if let Some(mut interp) = self.interp_stack.pop() {
@@ -1438,7 +1437,7 @@ impl<'ctx> Iterator for Lexer<'ctx> {
                     self.close_allowed = true;
                     Some(locate!(Token![')']))
                 },
-                Some(v) => Some(locate!(Punct(v))),
+                Some(v) => Some(locate!(Token::Punct(v))),
                 None => match first {
                     b'0'..=b'9' => Some(locate!(self.read_number(first))),
                     b'_' | b'a'..=b'z' | b'A'..=b'Z' => {
@@ -1455,7 +1454,7 @@ impl<'ctx> Iterator for Lexer<'ctx> {
                             return Some(locate!(Token![in]));
                         }
                         self.close_allowed = true;
-                        Some(locate!(Ident(ident, ws)))
+                        Some(locate!(Token::Ident(ident, ws)))
                     },
                     b'\\' => {
                         self.at_line_head = false;

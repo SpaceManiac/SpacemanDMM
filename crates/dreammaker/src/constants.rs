@@ -1,6 +1,5 @@
 //! The constant folder/evaluator, used by the preprocessor and object tree.
 use std::fmt;
-use std::ops;
 use std::path::Path;
 
 use get_size::GetSize;
@@ -13,61 +12,9 @@ use ordered_float::OrderedFloat;
 
 use crate::ast::*;
 use crate::heap_size_of_index_map;
-use crate::objtree::*;
+use crate::objtree::{ObjectTree, TypeIndex, TypeRef, Vars};
 use crate::preprocessor::DefineMap;
 use crate::{Context, DMError, HasLocation, Location, Severity};
-
-pub type Arguments = Box<[(Constant, Option<Constant>)]>;
-
-/// An absolute typepath and optional variables.
-///
-/// The path may involve `/proc` or `/verb` references.
-#[derive(Clone, Debug, GetSize)]
-pub struct Pop {
-    pub path: AbsolutePath,
-    #[get_size(size_fn = heap_size_of_index_map)]
-    pub vars: Vars,
-}
-
-impl Pop {
-    pub fn from_path_str(path: &str) -> Self {
-        Self::from(AbsolutePath::from(path))
-    }
-}
-
-impl PartialEq for Pop {
-    fn eq(&self, other: &Self) -> bool {
-        self.path == other.path && self.vars == other.vars
-    }
-}
-
-impl Eq for Pop {}
-
-impl std::hash::Hash for Pop {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.path.hash(state);
-        let mut items: Vec<_> = self.vars.iter().collect();
-        items.sort_by_key(|&(k, _)| k);
-        for kvp in items {
-            kvp.hash(state);
-        }
-    }
-}
-
-impl From<AbsolutePath> for Pop {
-    fn from(path: AbsolutePath) -> Self {
-        Pop {
-            path,
-            vars: Default::default(),
-        }
-    }
-}
-
-impl fmt::Display for Pop {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}{}", self.path, FormatVars(&self.vars))
-    }
-}
 
 /// A DM constant, usually a literal or simple combination of other constants.
 ///
@@ -98,58 +45,15 @@ pub enum Constant {
     Float(f32),
 }
 
-impl Constant {
-    const BIT_MASK: u32 = 0xffffff;
-
-    fn from_bit_op(x: u32) -> Constant {
-        Constant::Float((x & Constant::BIT_MASK) as f32)
-    }
+/// An absolute typepath and optional variables.
+///
+/// The path may involve `/proc` or `/verb` references.
+#[derive(Clone, Debug, GetSize)]
+pub struct Pop {
+    pub path: AbsolutePath,
+    #[get_size(size_fn = heap_size_of_index_map)]
+    pub vars: Vars,
 }
-
-// Manual Hash and Eq impls using OrderedFloat, so that we get the desired
-// upstream properties without having to wrap/unwrap at all hours of the day.
-impl std::hash::Hash for Constant {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        std::mem::discriminant(self).hash(state);
-        match self {
-            Constant::Null(p) => p.hash(state),
-            Constant::New { type_, args } => (type_, args).hash(state),
-            Constant::List(list) => list.hash(state),
-            Constant::Call(f, args) => (f, args).hash(state),
-            Constant::Prefab(pop) => pop.hash(state),
-            Constant::String(s) => s.hash(state),
-            Constant::Resource(s) => s.hash(state),
-            Constant::Float(f) => OrderedFloat(*f).hash(state),
-        }
-    }
-}
-
-impl std::cmp::PartialEq for Constant {
-    fn eq(&self, other: &Constant) -> bool {
-        match (self, other) {
-            (Constant::Null(p1), Constant::Null(p2)) => p1 == p2,
-            (
-                Constant::New {
-                    type_: type1,
-                    args: args1,
-                },
-                Constant::New {
-                    type_: type2,
-                    args: args2,
-                },
-            ) => (type1, args1) == (type2, args2),
-            (Constant::List(l1), Constant::List(l2)) => l1 == l2,
-            (Constant::Call(f1, args1), Constant::Call(f2, args2)) => (f1, args1) == (f2, args2),
-            (Constant::Prefab(pop1), Constant::Prefab(pop2)) => pop1 == pop2,
-            (Constant::String(s1), Constant::String(s2)) => s1 == s2,
-            (Constant::Resource(s1), Constant::Resource(s2)) => s1 == s2,
-            (Constant::Float(f1), Constant::Float(f2)) => OrderedFloat(*f1) == OrderedFloat(*f2),
-            _ => false,
-        }
-    }
-}
-
-impl std::cmp::Eq for Constant {}
 
 /// The constant functions which are represented as-is.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, GetSize)]
@@ -172,9 +76,20 @@ pub enum ConstFn {
     Vector,
 }
 
+/// Arguments to a constant function. List of key and optional value.
+pub type Arguments = Box<[(Constant, Option<Constant>)]>;
+
+// ----------------------------------------------------------------------------
+
 impl Constant {
     // ------------------------------------------------------------------------
     // Constructors
+
+    const BIT_MASK: u32 = 0xffffff;
+
+    fn from_bit_op(x: u32) -> Constant {
+        Constant::Float((x & Constant::BIT_MASK) as f32)
+    }
 
     pub const fn null<'a>() -> &'a Constant {
         const NULL: Constant = Constant::Null(None);
@@ -320,6 +235,51 @@ impl From<bool> for Constant {
     }
 }
 
+// Manual Hash and Eq impls using OrderedFloat, so that we get the desired
+// upstream properties without having to wrap/unwrap at all hours of the day.
+impl std::hash::Hash for Constant {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
+        match self {
+            Constant::Null(p) => p.hash(state),
+            Constant::New { type_, args } => (type_, args).hash(state),
+            Constant::List(list) => list.hash(state),
+            Constant::Call(f, args) => (f, args).hash(state),
+            Constant::Prefab(pop) => pop.hash(state),
+            Constant::String(s) => s.hash(state),
+            Constant::Resource(s) => s.hash(state),
+            Constant::Float(f) => OrderedFloat(*f).hash(state),
+        }
+    }
+}
+
+impl PartialEq for Constant {
+    fn eq(&self, other: &Constant) -> bool {
+        match (self, other) {
+            (Constant::Null(p1), Constant::Null(p2)) => p1 == p2,
+            (
+                Constant::New {
+                    type_: type1,
+                    args: args1,
+                },
+                Constant::New {
+                    type_: type2,
+                    args: args2,
+                },
+            ) => (type1, args1) == (type2, args2),
+            (Constant::List(l1), Constant::List(l2)) => l1 == l2,
+            (Constant::Call(f1, args1), Constant::Call(f2, args2)) => (f1, args1) == (f2, args2),
+            (Constant::Prefab(pop1), Constant::Prefab(pop2)) => pop1 == pop2,
+            (Constant::String(s1), Constant::String(s2)) => s1 == s2,
+            (Constant::Resource(s1), Constant::Resource(s2)) => s1 == s2,
+            (Constant::Float(f1), Constant::Float(f2)) => OrderedFloat(*f1) == OrderedFloat(*f2),
+            _ => false,
+        }
+    }
+}
+
+impl std::cmp::Eq for Constant {}
+
 impl PartialEq<str> for Constant {
     fn eq(&self, other: &str) -> bool {
         match self {
@@ -329,7 +289,7 @@ impl PartialEq<str> for Constant {
     }
 }
 
-impl ops::Not for Constant {
+impl std::ops::Not for Constant {
     type Output = Constant;
 
     fn not(self) -> Constant {
@@ -337,7 +297,7 @@ impl ops::Not for Constant {
     }
 }
 
-impl ops::Not for &Constant {
+impl std::ops::Not for &Constant {
     type Output = Constant;
 
     fn not(self) -> Constant {
@@ -360,13 +320,13 @@ impl fmt::Display for Constant {
                 if let Some(args) = args.as_ref() {
                     write!(f, "(")?;
                     let mut first = true;
-                    for each in args.iter() {
+                    for (key, val) in args.iter() {
                         if !first {
                             write!(f, ", ")?;
                         }
                         first = false;
-                        write!(f, "{}", each.0)?;
-                        if let Some(val) = each.1.as_ref() {
+                        write!(f, "{}", key)?;
+                        if let Some(val) = val {
                             write!(f, " = {val}")?;
                         }
                     }
@@ -417,6 +377,46 @@ impl fmt::Display for Constant {
             Constant::Resource(ref val) => write!(f, "'{val}'"),
             Constant::Float(val) => crate::lexer::format_float(val).fmt(f),
         }
+    }
+}
+
+impl Pop {
+    pub fn from_path_str(path: &str) -> Self {
+        Self::from(AbsolutePath::from(path))
+    }
+}
+
+impl PartialEq for Pop {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path && self.vars == other.vars
+    }
+}
+
+impl Eq for Pop {}
+
+impl std::hash::Hash for Pop {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.path.hash(state);
+        let mut items: Vec<_> = self.vars.iter().collect();
+        items.sort_by_key(|&(k, _)| k);
+        for kvp in items {
+            kvp.hash(state);
+        }
+    }
+}
+
+impl From<AbsolutePath> for Pop {
+    fn from(path: AbsolutePath) -> Self {
+        Pop {
+            path,
+            vars: Default::default(),
+        }
+    }
+}
+
+impl fmt::Display for Pop {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}{}", self.path, FormatVars(&self.vars))
     }
 }
 
@@ -719,7 +719,7 @@ impl<'a> ConstantFolder<'a> {
     }
 
     fn unary(&mut self, term: Constant, op: UnaryOp) -> Result<Constant, DMError> {
-        use self::Constant::*;
+        use self::Constant::Float;
 
         Ok(match (op, term) {
             // int ops
