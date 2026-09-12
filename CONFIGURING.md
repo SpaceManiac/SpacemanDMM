@@ -77,6 +77,12 @@ Raised by Object Tree:
 
 * `override_precedes_definition` - Raised where a proc is overridden prior to its definition in the include order, see: http://www.byond.com/forum/post/2441385
 
+### DreamChecker
+
+The `[dreamchecker]` section has the following options:
+
+* `sleep_analysis_version` - Selects the `SpacemanDMM_should_not_sleep` analysis version. Defaults to `2`, the current analysis. You can set the version to `1` for a shallower check.
+
 ### Display
 
 The `[display]` section has the following options:
