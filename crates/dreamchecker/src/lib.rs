@@ -217,6 +217,8 @@ pub struct Analysis<'o> {
     value: Option<Constant>,
     fix_hint: Option<(Location, String)>,
     is_impure: Option<bool>,
+    /// Whether this expression is the current proc's `src` object.
+    receiver_is_self: bool,
 }
 
 impl<'o> Analysis<'o> {
@@ -227,6 +229,7 @@ impl<'o> Analysis<'o> {
             value: None,
             fix_hint: None,
             is_impure: None,
+            receiver_is_self: false,
         }
     }
 
@@ -236,7 +239,7 @@ impl<'o> Analysis<'o> {
             aset: assumption_set![Assumption::IsNull(true)],
             value: Some(Constant::Null(None)),
             fix_hint: None,
-            is_impure: None,
+            ..Analysis::empty()
         }
     }
 
@@ -260,14 +263,18 @@ impl<'o> Analysis<'o> {
             aset: AssumptionSet::from_constant(objtree, &value, type_hint),
             value: Some(value),
             fix_hint: None,
-            is_impure: None,
+            ..Analysis::empty()
         }
     }
-
     fn with_fix_hint<S: Into<String>>(mut self, location: Location, desc: S) -> Self {
         if location != Location::INVALID {
             self.fix_hint = Some((location, desc.into()));
         }
+        self
+    }
+
+    fn with_receiver_is_self(mut self, receiver_is_self: bool) -> Self {
+        self.receiver_is_self = receiver_is_self;
         self
     }
 }
@@ -308,7 +315,7 @@ impl<'o> From<AssumptionSet<'o>> for Analysis<'o> {
             aset,
             value: None,
             fix_hint: None,
-            is_impure: None,
+            ..Analysis::empty()
         }
     }
 }
@@ -326,7 +333,7 @@ impl<'o> From<StaticType<'o>> for Analysis<'o> {
             static_ty,
             fix_hint: None,
             value: None,
-            is_impure: None,
+            ..Analysis::empty()
         }
     }
 }
@@ -594,6 +601,30 @@ impl<'o> ViolatingOverrides<'o> {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SleepAnalysisVersion {
+    CallTree,
+    DynamicDispatch,
+    ReceiverProvenance,
+}
+
+impl From<u8> for SleepAnalysisVersion {
+    fn from(version: u8) -> Self {
+        match version {
+            1 => Self::CallTree,
+            2 => Self::DynamicDispatch,
+            3.. => Self::ReceiverProvenance,
+            _ => Self::DynamicDispatch,
+        }
+    }
+}
+
+impl SleepAnalysisVersion {
+    fn tracks_receiver_provenance(self) -> bool {
+        matches!(self, Self::ReceiverProvenance)
+    }
+}
+
 /// An edge in the call tree: proc called, call site, whether it's a new context
 /// (`spawn`), the receiver type, whether the call is exact (never dispatches to
 /// an override), and whether it runs on the caller's own object (self-calls,
@@ -634,6 +665,8 @@ pub struct AnalyzeObjectTree<'o> {
 
     sleeping_overrides: ViolatingOverrides<'o>,
     impure_overrides: ViolatingOverrides<'o>,
+
+    sleep_analysis_version: SleepAnalysisVersion,
 }
 impl<'o> AnalyzeObjectTree<'o> {
     pub fn new(context: &'o Context, objtree: &'o ObjectTree) -> Self {
@@ -683,6 +716,7 @@ impl<'o> AnalyzeObjectTree<'o> {
             waitfor_procs: Default::default(),
             sleeping_overrides: Default::default(),
             impure_overrides: Default::default(),
+            sleep_analysis_version: context.config().dreamchecker.sleep_analysis_version.into(),
         }
     }
 
@@ -748,6 +782,9 @@ impl<'o> AnalyzeObjectTree<'o> {
 
     fn check_proc_call_tree_legacy(&mut self) {
         for (procref, &(_, location)) in self.must_not_sleep.directive.iter() {
+            if self.waitfor_procs.contains(procref) {
+                continue;
+            }
             if let Some(sleepvec) = self.sleeping_procs.get_violators(*procref) {
                 error(
                     procref.get().location,
@@ -824,10 +861,12 @@ impl<'o> AnalyzeObjectTree<'o> {
     }
 
     pub fn check_proc_call_tree(&mut self) {
-        if self.context.config().dreamchecker.sleep_analysis_version == 1 {
+        let version = self.sleep_analysis_version;
+        if version == SleepAnalysisVersion::CallTree {
             self.check_proc_call_tree_legacy();
             return;
         }
+        let receiver_provenance = version.tracks_receiver_provenance();
         // prepare for the worst case, avoiding the reallocations _is_ faster and less memory expensive
         let total_procs = self
             .objtree
@@ -835,11 +874,21 @@ impl<'o> AnalyzeObjectTree<'o> {
             .flat_map(|type_ref: TypeRef| type_ref.iter_self_procs())
             .count();
         let mut visited = HashSet::<ProcRef<'o>>::with_capacity(total_procs);
-        let mut to_visit =
-            VecDeque::<(ProcRef<'o>, CallStack, bool, ProcRef<'o>, TypeRef<'o>, bool)>::new();
+        let mut to_visit = VecDeque::<(
+            ProcRef<'o>,
+            CallStack,
+            bool,
+            ProcRef<'o>,
+            TypeRef<'o>,
+            bool,
+            bool,
+        )>::new();
         let mut must_not_sleep: Vec<_> = self.must_not_sleep.directive.iter().collect();
         must_not_sleep.sort_by_key(|(procref, _)| procref.get().location);
         for (procref, &(_, location)) in must_not_sleep {
+            if self.waitfor_procs.contains(procref) {
+                continue;
+            }
             if !visited.insert(*procref) {
                 continue;
             }
@@ -874,13 +923,21 @@ impl<'o> AnalyzeObjectTree<'o> {
                         each.proc,
                         receiver,
                         each.is_exact,
+                        !receiver_provenance || each.inherit_receiver,
                     ));
                 }
             }
 
             let procref_type_index = procref_type.index();
-            while let Some((nextproc, callstack, new_context, parent_proc, receiver, is_exact)) =
-                to_visit.pop_front()
+            while let Some((
+                nextproc,
+                callstack,
+                new_context,
+                parent_proc,
+                receiver,
+                is_exact,
+                receiver_is_stable,
+            )) = to_visit.pop_front()
             {
                 if new_context {
                     continue;
@@ -935,7 +992,10 @@ impl<'o> AnalyzeObjectTree<'o> {
                 // Only overrides at or below the receiver type can be dispatched
                 // to; once dispatched, the candidate's own type is a tighter
                 // bound on the runtime object than the original receiver.
-                if !is_exact && nextproc.ty().index() != self.objtree.root().index() {
+                if (!receiver_provenance || receiver_is_stable)
+                    && !is_exact
+                    && nextproc.ty().index() != self.objtree.root().index()
+                {
                     nextproc.recurse_children_within(receiver, &mut |child_proc| {
                         to_visit.push_back((
                             child_proc,
@@ -943,6 +1003,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                             false,
                             nextproc,
                             child_proc.ty(),
+                            true,
                             true,
                         ));
                     });
@@ -958,6 +1019,8 @@ impl<'o> AnalyzeObjectTree<'o> {
                         } else {
                             each.src
                         };
+                        let call_receiver_stable =
+                            !receiver_provenance || (each.inherit_receiver && receiver_is_stable);
                         to_visit.push_back((
                             each.proc,
                             newstack,
@@ -965,6 +1028,7 @@ impl<'o> AnalyzeObjectTree<'o> {
                             each.proc,
                             call_receiver,
                             each.is_exact,
+                            call_receiver_stable,
                         ));
                     }
                 }
@@ -1162,7 +1226,7 @@ impl<'o> AnalyzeObjectTree<'o> {
             // New() propogates via ..() and causes weirdness
             return;
         }
-        if self.context.config().dreamchecker.sleep_analysis_version == 1
+        if self.sleep_analysis_version == SleepAnalysisVersion::CallTree
             && self.sleeping_procs.get_violators(proc).is_some()
         {
             let mut next = proc.parent_proc();
@@ -1572,7 +1636,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Analysis::from_static_type(self.objtree.expect("/callee")).into(),
         );
         if !self.ty.is_root() {
-            local_vars.insert("src".into(), Analysis::from_static_type(self.ty).into());
+            local_vars.insert(
+                "src".into(),
+                Analysis::from_static_type(self.ty)
+                    .with_receiver_is_self(true)
+                    .into(),
+            );
         }
         local_vars.insert(
             "global".into(),
@@ -1582,6 +1651,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 value: None,
                 fix_hint: None,
                 is_impure: Some(true),
+                ..Analysis::empty()
             }
             .into(),
         );
@@ -2491,6 +2561,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         value: Some(Constant::Prefab(Box::new(pop))),
                         fix_hint: None,
                         is_impure: None,
+                        ..Analysis::empty()
                     }
                 } else if let Some(decl) = self.ty.get_var_declaration(unscoped_name) {
                     let mut ana = self
@@ -2529,6 +2600,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         value: Some(Constant::Prefab(Box::new(pop))),
                         fix_hint: None,
                         is_impure: None,
+                        ..Analysis::empty()
                     }
                 } else {
                     error(location, format!("failed to resolve path {}", prefab.path))
@@ -2747,6 +2819,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     value: Some(Constant::Prefab(Box::new(pop))),
                     fix_hint: None,
                     is_impure: None,
+                    ..Analysis::empty()
                 }
             },
             Term::__PROC__ => {
@@ -2764,6 +2837,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     value: Some(Constant::Prefab(Box::new(pop))),
                     fix_hint: None,
                     is_impure: None,
+                    ..Analysis::empty()
                 }
             },
         }
@@ -3016,7 +3090,16 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                             .with_note(decllocation, "prohibited by this protected_proc annotation")
                             .register(self.context);
                         }
-                        self.visit_call(location, ty, proc, arguments, false, false, local_vars)
+                        self.visit_call(
+                            location,
+                            ty,
+                            proc,
+                            arguments,
+                            false,
+                            lhs.receiver_is_self
+                                && self.env.sleep_analysis_version.tracks_receiver_provenance(),
+                            local_vars,
+                        )
                     } else {
                         error(location, format!("undefined proc: {name:?} on {ty}"))
                             .register(self.context);
@@ -3088,6 +3171,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     value: Some(Constant::Prefab(Box::new(path_const))),
                     fix_hint: None,
                     is_impure: None,
+                    ..Analysis::empty()
                 }
             },
         }
