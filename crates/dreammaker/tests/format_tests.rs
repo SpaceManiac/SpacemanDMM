@@ -60,6 +60,6 @@ fn lists() {
             .into()
         )
         .to_string(),
-        r#"list("neutral","Syndicate")"#
+        r#"list("neutral", "Syndicate")"#
     );
 }
