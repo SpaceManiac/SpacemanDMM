@@ -461,6 +461,7 @@ impl Expression {
             location,
             ty: TypeIndex::new(0),
             defines: None,
+            current_file_path: None,
         }
         .expr(self, None)
     }
@@ -472,9 +473,11 @@ pub fn preprocessor_evaluate(
     expr: &Expression,
     defines: &DefineMap,
     context: Option<&Context>,
+    current_file_path: &Path,
 ) -> Result<Constant, DMError> {
     ConstantFolder {
         context,
+        current_file_path: Some(current_file_path),
         tree: None,
         location,
         ty: TypeIndex::new(0),
@@ -570,6 +573,7 @@ fn constant_ident_lookup(
         context,
         tree: Some(tree),
         defines: None,
+        current_file_path: None,
         location,
         ty,
     }
@@ -590,6 +594,7 @@ fn constant_ident_lookup(
 
 struct ConstantFolder<'a> {
     context: Option<&'a Context>,
+    current_file_path: Option<&'a Path>,
     tree: Option<&'a mut ObjectTree>,
     defines: Option<&'a DefineMap>,
     location: Location,
@@ -849,7 +854,8 @@ impl<'a> ConstantFolder<'a> {
                 },
                 "fexists"
                     if self.defines.is_some()
-                        && let Some(context) = self.context =>
+                        && self.context.is_some()
+                        && let Some(current_file_path) = self.current_file_path =>
                 {
                     let [arg] = &args[..] else {
                         return Err(self.error(format!(
@@ -862,7 +868,6 @@ impl<'a> ConstantFolder<'a> {
                             self.error("malformed fexists() call, argument given isn't a string")
                         );
                     };
-                    let current_file_path = context.file_path(self.location.file);
                     let Some(current_dir) = current_file_path.parent() else {
                         return Err(self.error(format!(
                             "fexists() file has no parent: {current_file_path:?}"
