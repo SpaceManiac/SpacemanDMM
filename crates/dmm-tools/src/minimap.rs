@@ -161,9 +161,8 @@ pub fn generate(ctx: Context, icon_cache: &IconCache) -> Result<Image, ()> {
     // Composite the sorted sprites onto the output image.
     let mut map_image = Image::new_rgba(len_x as u32 * TILE_SIZE, len_y as u32 * TILE_SIZE);
     for ((x, y), sprite) in sprites {
-        let icon_file = match icon_cache.retrieve_shared(sprite.icon.as_ref()) {
-            Some(icon_file) => icon_file,
-            None => continue,
+        let Some(icon_file) = icon_cache.retrieve_shared(sprite.icon.as_ref()) else {
+            continue;
         };
 
         if let Some(rect) = icon_file.rect_of(&sprite.icon_state.into(), sprite.dir) {
@@ -238,18 +237,15 @@ fn get_atom_list<'a>(
         }
 
         // look up the type
-        let atom = match Atom::from_prefab(objtree, fab) {
-            Some(x) => x,
-            None => {
-                let key = format!("bad path: {}", fab.path);
-                if !errors.read().unwrap().contains(&key) {
-                    if print_errors {
-                        eprintln!("{key}");
-                    }
-                    errors.write().unwrap().insert(key);
+        let Some(atom) = Atom::from_prefab(objtree, fab) else {
+            let key = format!("bad path: {}", fab.path);
+            if !errors.read().unwrap().contains(&key) {
+                if print_errors {
+                    eprintln!("{key}");
                 }
-                continue;
-            },
+                errors.write().unwrap().insert(key);
+            }
+            continue;
         };
 
         for pass in render_passes {

@@ -1268,10 +1268,7 @@ where
             // determine common position
             while i < stack.len() {
                 {
-                    let bit = match bits.peek() {
-                        Some(bit) => bit,
-                        None => break,
-                    };
+                    let Some(bit) = bits.peek() else { break };
                     if stack[i].full_name != &each.full_name[..len + bit.len()] {
                         break;
                     }

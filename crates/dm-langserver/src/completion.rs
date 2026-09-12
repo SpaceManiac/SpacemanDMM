@@ -374,9 +374,8 @@ impl Engine {
                             continue;
                         }
                         // declarations only
-                        let proc_decl = match proc.declaration.as_ref() {
-                            Some(decl) => decl,
-                            None => continue,
+                        let Some(proc_decl) = proc.declaration.as_ref() else {
+                            continue;
                         };
                         if proc_decl.kind.is_verb() != (decl == "verb") {
                             continue;

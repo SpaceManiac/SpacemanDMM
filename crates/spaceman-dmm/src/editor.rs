@@ -1667,15 +1667,11 @@ fn file_name(path: &Path) -> Cow<'_, str> {
 fn detect_environment(path: &Path) -> Option<PathBuf> {
     let mut current = path.parent();
     while let Some(dir) = current {
-        let read_dir = match std::fs::read_dir(dir) {
-            Ok(r) => r,
-            Err(_) => return None,
+        let Ok(read_dir) = std::fs::read_dir(dir) else {
+            return None;
         };
         for entry in read_dir {
-            let entry = match entry {
-                Ok(e) => e,
-                Err(_) => return None,
-            };
+            let Ok(entry) = entry else { return None };
             let path = entry.path();
             if path.extension() == Some("dme".as_ref()) {
                 return Some(path);

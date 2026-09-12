@@ -50,14 +50,11 @@ impl DocumentStore {
     ) -> Result<Url, jsonrpc::Error> {
         let new_version = doc_id.version;
 
-        let document = match self.map.get_mut(&doc_id.uri) {
-            Some(doc) => doc,
-            None => {
-                return Err(invalid_request(format!(
-                    "cannot change non-opened: {}",
-                    doc_id.uri
-                )));
-            },
+        let Some(document) = self.map.get_mut(&doc_id.uri) else {
+            return Err(invalid_request(format!(
+                "cannot change non-opened: {}",
+                doc_id.uri
+            )));
         };
 
         if new_version < document.version {
@@ -132,14 +129,11 @@ impl Document {
 
     fn change(&mut self, change: TextDocumentContentChangeEvent) -> Result<(), jsonrpc::Error> {
         // rangeLength is deprecated: https://github.com/Microsoft/language-server-protocol/issues/9
-        let range = match change.range {
-            Some(range) => range,
-            _ => {
-                // "If range and rangeLength are omitted the new text is
-                // considered to be the full content of the document."
-                self.text = Rc::new(change.text);
-                return Ok(());
-            },
+        let Some(range) = change.range else {
+            // "If range and rangeLength are omitted the new text is
+            // considered to be the full content of the document."
+            self.text = Rc::new(change.text);
+            return Ok(());
         };
 
         let start_pos = total_offset(&self.text, range.start.line, range.start.character)?;

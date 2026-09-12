@@ -2030,9 +2030,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
                 let mut catch_locals = local_vars.clone();
                 for caught in catch_params.iter() {
-                    let (var_name, mut type_path) = match caught.as_slice().split_last() {
-                        Some(x) => x,
-                        None => continue,
+                    let Some((var_name, mut type_path)) = caught.as_slice().split_last() else {
+                        continue;
                     };
                     match type_path.split_first() {
                         Some((first, rest)) if *first == ident!("var") => type_path = rest,

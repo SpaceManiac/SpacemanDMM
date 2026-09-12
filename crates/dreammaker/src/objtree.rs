@@ -1123,9 +1123,8 @@ impl ObjectTreeBuilder {
         len: usize,
     ) -> Result<(TypeIndex, Ident), DMError> {
         let mut current = TypeIndex::new(0);
-        let mut last = match path.next() {
-            Some(name) => name,
-            None => return Err(DMError::new(location, "cannot register root path")),
+        let Some(mut last) = path.next() else {
+            return Err(DMError::new(location, "cannot register root path"));
         };
         if is_decl(&last) {
             return Ok((current, last));

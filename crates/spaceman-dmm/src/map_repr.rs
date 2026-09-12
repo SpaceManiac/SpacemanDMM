@@ -385,10 +385,7 @@ impl AtomMap {
         draw_calls.clear();
         for &inst in sorted_order.iter() {
             let pop = &instances.get_key(inst).pop;
-            let rpop = match pops.get(pop) {
-                Some(rpop) => rpop,
-                None => continue,
-            };
+            let Some(rpop) = pops.get(pop) else { continue };
             if let Some(call) = draw_calls.last_mut() {
                 if call.can_contain(rpop) {
                     call.len += 6;

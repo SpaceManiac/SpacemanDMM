@@ -870,13 +870,10 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         }
 
         let path_len = path.len();
-        let (last_part, traverse) = match path.split_last_mut() {
-            Some(x) => x,
-            None => {
-                self.error("tree entry appears to have no name")
-                    .register(self.context);
-                return SUCCESS;
-            },
+        let Some((last_part, traverse)) = path.split_last_mut() else {
+            self.error("tree entry appears to have no name")
+                .register(self.context);
+            return SUCCESS;
         };
 
         let mut relative_type_location = None;
@@ -1903,9 +1900,8 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             loop {
                 let type_path_start = self.location();
                 let (_, mut tree_path) = require!(self.tree_path(true));
-                let name = match tree_path.pop() {
-                    Some(name) => name,
-                    None => return Err(self.error("`var` must be followed by a name")),
+                let Some(name) = tree_path.pop() else {
+                    return Err(self.error("`var` must be followed by a name"));
                 };
 
                 let mut var_type = tree_path.into_iter().collect::<VarTypeBuilder>();
@@ -2857,10 +2853,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         let start = self.take();
         let kind = TTKind::from_token(&start);
         target.push(LocatedToken::new(self.location(), start));
-        let kind = match kind {
-            Some(k) => k,
-            None => return SUCCESS,
-        };
+        let Some(kind) = kind else { return SUCCESS };
         let location = self.location;
         loop {
             self.expected(kind.end());

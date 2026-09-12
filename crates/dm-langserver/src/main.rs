@@ -695,9 +695,8 @@ impl Engine {
                     let path = url_to_path(url)?;
                     let root = url_to_path(root)?;
 
-                    let defines = match self.defines {
-                        Some(ref d) => d,
-                        None => return Err(invalid_request("no preprocessor history")),
+                    let Some(defines) = &self.defines else {
+                        return Err(invalid_request("no preprocessor history"));
                     };
 
                     let stripped = match path.strip_prefix(&root) {
@@ -918,9 +917,8 @@ impl Engine {
         let (mut next, proc_name) = self.find_type_context(iter);
         // find the first; check the global scope, parameters, and "src"
         let mut priors = priors.iter();
-        let first = match priors.next() {
-            Some(i) => i,
-            None => return next, // empty priors acts like unscoped
+        let Some(first) = priors.next() else {
+            return next; // empty priors acts like unscoped
         };
         if *first == ident!("args") {
             next = self.objtree.find("/list");
@@ -1459,10 +1457,7 @@ impl Engine {
     fn WorkspaceSymbol(&mut self, params: P<WorkspaceSymbol>) -> R<WorkspaceSymbol> {
         let query = symbol_search::Query::parse(&params.query);
 
-        let query = match query {
-            Some(query) => query,
-            None => return Ok(None),
-        };
+        let Some(query) = query else { return Ok(None) };
 
         let mut results = Vec::new();
         if let Some(ref defines) = self.defines {
