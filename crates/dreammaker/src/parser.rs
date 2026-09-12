@@ -374,7 +374,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             eof: false,
             possible_indentation_error: false,
             next: None,
-            location: Location::INVALID,
+            location: Location::UNKNOWN,
             expected: Vec::new(),
             skipping_location: None,
 

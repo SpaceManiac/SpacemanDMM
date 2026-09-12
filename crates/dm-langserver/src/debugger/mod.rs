@@ -824,7 +824,7 @@ impl Debugger {
         &mut self,
         params: P<SetFunctionBreakpoints>,
     ) -> R<SetFunctionBreakpoints> {
-        let file_id = FileId::INVALID;
+        let file_id = FileId::UNKNOWN;
 
         let inputs = params.breakpoints;
         let mut breakpoints = Vec::new();

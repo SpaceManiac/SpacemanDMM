@@ -17,10 +17,10 @@ use crate::config::Config;
 pub struct FileId(u16);
 
 impl FileId {
-    const BUILTINS: FileId = FileId(0x0000);
+    pub const BUILTINS: FileId = FileId(0x0000);
     const MIN: FileId = FileId(0x0001);
     const MAX: FileId = FileId(0xfffe);
-    pub const INVALID: FileId = FileId(0xffff);
+    pub const UNKNOWN: FileId = FileId(0xffff);
 }
 
 impl GetSize for FileId {}
@@ -453,8 +453,8 @@ impl Location {
         column: 1,
     };
 
-    pub const INVALID: Location = Location {
-        file: FileId::INVALID,
+    pub const UNKNOWN: Location = Location {
+        file: FileId::UNKNOWN,
         line: 1,
         column: 1,
     };
@@ -471,7 +471,7 @@ impl Location {
         } else if self.line != 0 {
             self.column = !0;
             self.line -= 1;
-        } else if self.file == FileId::INVALID {
+        } else if self.file == FileId::UNKNOWN {
             // This file ID generally comes from using Location::default().
             // In that case hopefully it's a test or something, so just let it
             // stay 0:0.

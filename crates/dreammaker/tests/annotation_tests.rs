@@ -20,13 +20,13 @@ fn annotation_basic() {
     .trim();
 
     let context = Default::default();
-    let lexer = Lexer::new(&context, FileId::INVALID, code.as_bytes());
+    let lexer = Lexer::new(&context, FileId::UNKNOWN, code.as_bytes());
     let mut annotations = AnnotationTree::default();
     Parser::new(&context, lexer).parse_annotations_only(&mut annotations);
     context.assert_success();
     println!("len: {}", annotations.len());
     for each in annotations.get_location(Location {
-        file: FileId::INVALID,
+        file: FileId::UNKNOWN,
         line: 9,
         column: 14,
     }) {

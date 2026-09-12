@@ -19,7 +19,7 @@ fn simple_location_test() {
     .trim();
 
     let context = Default::default();
-    let located_tokens: Vec<_> = Lexer::new(&context, FileId::INVALID, code.as_bytes()).collect();
+    let located_tokens: Vec<_> = Lexer::new(&context, FileId::UNKNOWN, code.as_bytes()).collect();
     context.assert_success();
 
     assert_eq!(located_tokens[0].start.line, 1);

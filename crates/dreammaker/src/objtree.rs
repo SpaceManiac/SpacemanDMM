@@ -838,7 +838,7 @@ impl Default for ObjectTreeBuilder {
         tree.types.push(Type {
             path: String::new(),
             path_last_slash: usize::MAX,
-            location: Location::INVALID,
+            location: Location::UNKNOWN,
             location_specificity: 0,
             vars: Default::default(),
             procs: Default::default(),

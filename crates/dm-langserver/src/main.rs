@@ -706,7 +706,7 @@ impl Engine {
                     };
                     let (real_file_id, mut preprocessor) = match self.context.get_file(stripped) {
                         Some(id) => (id, defines.branch_at_file(id, &self.context)),
-                        None => (FileId::INVALID, defines.branch_at_end(&self.context)),
+                        None => (FileId::UNKNOWN, defines.branch_at_end(&self.context)),
                     };
                     let contents = self.docs.read(url).map_err(invalid_request)?;
                     let file_id = preprocessor

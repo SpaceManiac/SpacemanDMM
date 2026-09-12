@@ -37,7 +37,7 @@ where
         IndentProcessor {
             context,
             inner: inner.into_iter(),
-            last_input_loc: Location::INVALID,
+            last_input_loc: Location::UNKNOWN,
             eol_location: None,
             output: VecDeque::new(),
             current: None,

@@ -265,7 +265,7 @@ impl<'o> Analysis<'o> {
     }
 
     fn with_fix_hint<S: Into<String>>(mut self, location: Location, desc: S) -> Self {
-        if location != Location::INVALID {
+        if location != Location::UNKNOWN {
             self.fix_hint = Some((location, desc.into()));
         }
         self
@@ -1425,7 +1425,7 @@ struct LocalVar<'o> {
 impl<'o> From<Analysis<'o>> for LocalVar<'o> {
     fn from(analysis: Analysis<'o>) -> Self {
         LocalVar {
-            location: Location::INVALID,
+            location: Location::UNKNOWN,
             analysis,
         }
     }

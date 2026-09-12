@@ -11,7 +11,7 @@ use dm::{DMError, FileId, Location};
 use super::{Key, KeyType, Map, Prefab};
 
 pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
-    let file_id = FileId::INVALID;
+    let file_id = FileId::UNKNOWN;
     let mut chars = LocationTracker::new(file_id, dm::lexer::buffer_file(file_id, path)?.into());
 
     let mut in_comment_line = false;
@@ -33,9 +33,9 @@ pub fn parse_map(map: &mut Map, path: &std::path::Path) -> Result<(), DMError> {
     let mut escaping = false;
     let mut skip_whitespace = false;
 
-    let mut curr_key_start_location = Location::INVALID;
+    let mut curr_key_start_location = Location::UNKNOWN;
 
-    let mut curr_datum_start_location = Location::INVALID;
+    let mut curr_datum_start_location = Location::UNKNOWN;
     macro_rules! set_curr_datum_start_location {
         () => {
             if curr_datum.is_empty() {
