@@ -288,6 +288,9 @@ impl Context {
         &self.config
     }
 
+    pub fn set_config(&mut self, config: Config) {
+        self.config = config;
+    }
     // ------------------------------------------------------------------------
     // Additional diagnostics
 

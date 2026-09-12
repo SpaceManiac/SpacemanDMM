@@ -3,8 +3,14 @@ use std::borrow::Cow;
 
 use crate::run_inner;
 
-pub fn parse_a_file_for_test<S: Into<Cow<'static, str>>>(buffer: S) -> Context {
-    let context = Context::default();
+pub fn parse_a_file_for_test<S: Into<Cow<'static, str>>>(
+    buffer: S,
+    config: Option<dm::config::Config>,
+) -> Context {
+    let mut context = Context::default();
+    if let Some(config) = config {
+        context.set_config(config);
+    }
     let pp = dm::Preprocessor::from_buffer(&context, "unit_tests.rs".into(), buffer.into());
     let mut parser = dm::Parser::new(&context, pp);
     parser.enable_procs();
@@ -16,7 +22,7 @@ pub fn parse_a_file_for_test<S: Into<Cow<'static, str>>>(buffer: S) -> Context {
 }
 
 pub fn check_errors_match<S: Into<Cow<'static, str>>>(buffer: S, errorlist: &[(u32, u16, &str)]) {
-    let context = parse_a_file_for_test(buffer);
+    let context = parse_a_file_for_test(buffer, None);
     let errors = context.errors();
     let mut iter = errors.iter();
     for &(line, column, desc) in errorlist {
