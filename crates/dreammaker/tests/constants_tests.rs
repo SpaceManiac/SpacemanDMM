@@ -1,7 +1,6 @@
 extern crate dreammaker as dm;
 
-use dm::{Location, Preprocessor, constants::*};
-use std::fs;
+use dm::{Location, Preprocessor, constants::Constant};
 
 fn eval(code: &str) -> Result<Constant, dm::DMError> {
     dm::constants::evaluate_str(Location::INVALID, code.as_bytes())
@@ -118,26 +117,12 @@ fn no_fexists_outside_preproc() {
 
 #[test]
 fn fexists_in_included_file() {
-    let dir = std::env::temp_dir().join(format!("dreammaker-tests/fexists-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&dir);
-    fs::create_dir_all(dir.join("sub")).unwrap();
-    for (path, content) in [
-        (
-            "sub/child.dm",
-            "#if !fexists(\"sibling.txt\")\n#error fexists_in_included_file failed\n#endif\n",
-        ),
-        ("sub/sibling.txt", "foo\n"),
-    ] {
-        fs::write(dir.join(path), content).unwrap();
-    }
-
     let context = dm::Context::default();
     Preprocessor::from_buffer(
         &context,
-        dir.join("root.dme"),
-        "#include \"sub/child.dm\"\n",
+        "tests/root.dme".into(),
+        "#include \"fexists/child.dm\"\n",
     )
     .count();
     context.assert_success();
-    fs::remove_dir_all(dir).unwrap();
 }

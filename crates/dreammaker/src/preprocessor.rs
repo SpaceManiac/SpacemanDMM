@@ -648,7 +648,6 @@ impl<'ctx> Preprocessor<'ctx> {
             start,
             &expr,
             &self.defines,
-            Some(self.context),
             self.include_stack.top_file_path(),
         )?
         .to_bool())
