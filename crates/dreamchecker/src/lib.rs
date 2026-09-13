@@ -786,9 +786,6 @@ impl<'o> AnalyzeObjectTree<'o> {
 
     fn check_proc_call_tree_legacy(&mut self) {
         for (procref, &(_, location)) in self.must_not_sleep.directive.iter() {
-            if self.waitfor_procs.contains(procref) {
-                continue;
-            }
             if let Some(sleepvec) = self.sleeping_procs.get_violators(*procref) {
                 error(
                     procref.get().location,
@@ -890,9 +887,6 @@ impl<'o> AnalyzeObjectTree<'o> {
         let mut must_not_sleep: Vec<_> = self.must_not_sleep.directive.iter().collect();
         must_not_sleep.sort_by_key(|(procref, _)| procref.get().location);
         for (procref, &(_, location)) in must_not_sleep {
-            if self.waitfor_procs.contains(procref) {
-                continue;
-            }
             if !visited.insert(*procref) {
                 continue;
             }
