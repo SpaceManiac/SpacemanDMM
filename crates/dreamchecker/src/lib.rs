@@ -2508,8 +2508,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Expression::TernaryOp { cond, if_, else_ } => {
                 // TODO: be sensible
                 self.visit_expression(location, cond, None, local_vars);
-                let ty = self.visit_expression(location, if_, type_hint, local_vars);
-                self.visit_expression(location, else_, type_hint, local_vars);
+                let mut ty = self.visit_expression(location, if_, type_hint, local_vars);
+                let else_ty = self.visit_expression(location, else_, type_hint, local_vars);
+                ty.receiver_is_self &= else_ty.receiver_is_self;
                 ty
             },
         }

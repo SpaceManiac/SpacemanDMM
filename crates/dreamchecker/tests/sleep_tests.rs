@@ -304,9 +304,9 @@ fn sleep11() {
     config.dreamchecker.sleep_analysis_version = 3;
     let context = parse_a_file_for_test(
         r##"
-/proc/perform(atom/A)
+/atom/proc/perform(atom/A)
     set SpacemanDMM_should_not_sleep = TRUE
-    var/atom/B = A
+    var/atom/B = A ? src : A
     B.overridden_proc()
 
 /atom/proc/overridden_proc()
