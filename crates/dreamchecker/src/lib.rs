@@ -274,11 +274,6 @@ impl<'o> Analysis<'o> {
         }
         self
     }
-
-    fn with_receiver_is_self(mut self, receiver_is_self: bool) -> Self {
-        self.receiver_is_self = receiver_is_self;
-        self
-    }
 }
 
 trait WithFixHint {
@@ -1636,9 +1631,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         if !self.ty.is_root() {
             local_vars.insert(
                 "src".into(),
-                Analysis::from_static_type(self.ty)
-                    .with_receiver_is_self(true)
-                    .into(),
+                Analysis {
+                    receiver_is_self: true,
+                    ..Analysis::from_static_type(self.ty)
+                }
+                .into(),
             );
         }
         local_vars.insert(
