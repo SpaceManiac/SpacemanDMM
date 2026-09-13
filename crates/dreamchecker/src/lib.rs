@@ -239,7 +239,8 @@ impl<'o> Analysis<'o> {
             aset: assumption_set![Assumption::IsNull(true)],
             value: Some(Constant::Null(None)),
             fix_hint: None,
-            ..Analysis::empty()
+            is_impure: None,
+            receiver_is_self: false,
         }
     }
 
@@ -263,7 +264,8 @@ impl<'o> Analysis<'o> {
             aset: AssumptionSet::from_constant(objtree, &value, type_hint),
             value: Some(value),
             fix_hint: None,
-            ..Analysis::empty()
+            is_impure: None,
+            receiver_is_self: false,
         }
     }
     fn with_fix_hint<S: Into<String>>(mut self, location: Location, desc: S) -> Self {
@@ -315,7 +317,8 @@ impl<'o> From<AssumptionSet<'o>> for Analysis<'o> {
             aset,
             value: None,
             fix_hint: None,
-            ..Analysis::empty()
+            is_impure: None,
+            receiver_is_self: false,
         }
     }
 }
@@ -333,7 +336,8 @@ impl<'o> From<StaticType<'o>> for Analysis<'o> {
             static_ty,
             fix_hint: None,
             value: None,
-            ..Analysis::empty()
+            is_impure: None,
+            receiver_is_self: false,
         }
     }
 }
@@ -1651,7 +1655,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 value: None,
                 fix_hint: None,
                 is_impure: Some(true),
-                ..Analysis::empty()
+                receiver_is_self: false,
             }
             .into(),
         );
@@ -2561,7 +2565,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         value: Some(Constant::Prefab(Box::new(pop))),
                         fix_hint: None,
                         is_impure: None,
-                        ..Analysis::empty()
+                        receiver_is_self: false,
                     }
                 } else if let Some(decl) = self.ty.get_var_declaration(unscoped_name) {
                     let mut ana = self
@@ -2600,7 +2604,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         value: Some(Constant::Prefab(Box::new(pop))),
                         fix_hint: None,
                         is_impure: None,
-                        ..Analysis::empty()
+                        receiver_is_self: false,
                     }
                 } else {
                     error(location, format!("failed to resolve path {}", prefab.path))
@@ -2819,7 +2823,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     value: Some(Constant::Prefab(Box::new(pop))),
                     fix_hint: None,
                     is_impure: None,
-                    ..Analysis::empty()
+                    receiver_is_self: false,
                 }
             },
             Term::__PROC__ => {
@@ -2837,7 +2841,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     value: Some(Constant::Prefab(Box::new(pop))),
                     fix_hint: None,
                     is_impure: None,
-                    ..Analysis::empty()
+                    receiver_is_self: false,
                 }
             },
         }
@@ -3171,7 +3175,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     value: Some(Constant::Prefab(Box::new(path_const))),
                     fix_hint: None,
                     is_impure: None,
-                    ..Analysis::empty()
+                    receiver_is_self: false,
                 }
             },
         }
