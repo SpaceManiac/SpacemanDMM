@@ -2412,12 +2412,20 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             // anyone relying on the difference needs to fix their garbage
             Token::Ident(i, _) if *i == ident!("list") => match self.arguments(&[], &ident!("list"))? {
                 Some(args) => Term::List(args),
-                None => Term::Ident(i.to_owned()),
+                None => {
+                    belongs_to.push(i.clone());
+                    self.annotate(start, || Annotation::UnscopedVar(i.clone()));
+                    Term::Ident(i)
+                },
             },
 
             Token::Ident(i, _) if *i == ident!("alist") => match self.arguments(&[], &ident!("alist"))? {
                 Some(args) => Term::List(args),
-                None => Term::Ident(i.to_owned()),
+                None => {
+                    belongs_to.push(i.clone());
+                    self.annotate(start, || Annotation::UnscopedVar(i.clone()));
+                    Term::Ident(i)
+                },
             },
 
             // term :: 'call' arglist arglist
@@ -2463,8 +2471,12 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         input_type,
                         in_list: in_list.map(Box::new),
                     }
-                }
-                None => Term::Ident(i.to_owned()),
+                },
+                None => {
+                    belongs_to.push(i.clone());
+                    self.annotate(start, || Annotation::UnscopedVar(i.clone()));
+                    Term::Ident(i)
+                },
             },
 
             // term :: 'locate' arglist ('in' expression)?
@@ -2489,14 +2501,22 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                         None
                     };
                     Term::Locate { args, in_list }
-                }
-                None => Term::Ident(i.to_owned()),
+                },
+                None => {
+                    belongs_to.push(i.clone());
+                    self.annotate(start, || Annotation::UnscopedVar(i.clone()));
+                    Term::Ident(i)
+                },
             },
 
             // term :: 'pick' pick_arglist
             Token::Ident(i, _) if *i == ident!("pick") => match self.pick_arguments()? {
                 Some(args) => Term::Pick(args),
-                None => Term::Ident(i.to_owned()),
+                None => {
+                    belongs_to.push(i.clone());
+                    self.annotate(start, || Annotation::UnscopedVar(i.clone()));
+                    Term::Ident(i)
+                },
             },
 
             Token::Ident(i, _) if *i == ident!("null") => Term::Null,
