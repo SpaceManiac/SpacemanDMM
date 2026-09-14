@@ -23,6 +23,10 @@ pub fn parse_a_file_for_test<S: Into<Cow<'static, str>>>(
 
 pub fn check_errors_match<S: Into<Cow<'static, str>>>(buffer: S, errorlist: &[(u32, u16, &str)]) {
     let context = parse_a_file_for_test(buffer, None);
+    assert_errors_match(context, errorlist);
+}
+
+pub fn assert_errors_match(context: Context, errorlist: &[(u32, u16, &str)]) {
     let errors = context.errors();
     let mut iter = errors.iter();
     for &(line, column, desc) in errorlist {

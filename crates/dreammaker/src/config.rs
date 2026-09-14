@@ -46,7 +46,7 @@ pub struct DreamChecker {
 impl Default for DreamChecker {
     fn default() -> Self {
         Self {
-            sleep_analysis_version: 2,
+            sleep_analysis_version: 3,
         }
     }
 }

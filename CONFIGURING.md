@@ -81,7 +81,10 @@ Raised by Object Tree:
 
 The `[dreamchecker]` section has the following options:
 
-* `sleep_analysis_version` - Selects the `SpacemanDMM_should_not_sleep` analysis version. Defaults to `2`. Set to `1` for a basic call-tree analysis, or `3` to enable stability evaluation for dynamic override dispatches, which has less false positives but will ignore possible edge cases.
+* `sleep_analysis_version` - Selects the `SpacemanDMM_should_not_sleep` analysis version.
+  * `1` - Basic call-tree analysis. Default before 2026-09.
+  * `2` - Full dynamic dispatch analysis. Catches nearly every case, but has false positives, especially with procs that sleep or not depending on their arguments.
+  * `3` - Receiver provenance analysis. Has much fewer false positives but doesn't catch some edge cases. Default.
 
 ### Display
 
