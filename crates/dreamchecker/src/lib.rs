@@ -779,7 +779,7 @@ impl<'o> AnalyzeObjectTree<'o> {
         }
     }
 
-    fn check_proc_call_tree_legacy(&mut self) {
+    fn check_proc_call_tree_v1(&mut self) {
         for (procref, &(_, location)) in self.must_not_sleep.directive.iter() {
             if let Some(sleepvec) = self.sleeping_procs.get_violators(*procref) {
                 error(
@@ -857,12 +857,17 @@ impl<'o> AnalyzeObjectTree<'o> {
     }
 
     pub fn check_proc_call_tree(&mut self) {
-        let version = self.sleep_analysis_version;
-        if version == SleepAnalysisVersion::CallTree {
-            self.check_proc_call_tree_legacy();
-            return;
+        match self.sleep_analysis_version {
+            SleepAnalysisVersion::CallTree => self.check_proc_call_tree_v1(),
+            SleepAnalysisVersion::DynamicDispatch | SleepAnalysisVersion::ReceiverProvenance => {
+                self.check_proc_call_tree_v2_v3(
+                    self.sleep_analysis_version.tracks_receiver_provenance(),
+                )
+            },
         }
-        let receiver_provenance = version.tracks_receiver_provenance();
+    }
+
+    fn check_proc_call_tree_v2_v3(&mut self, receiver_provenance: bool) {
         // prepare for the worst case, avoiding the reallocations _is_ faster and less memory expensive
         let total_procs = self
             .objtree
