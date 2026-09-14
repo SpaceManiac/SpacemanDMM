@@ -268,11 +268,19 @@ impl<'o> Analysis<'o> {
             receiver_is_self: false,
         }
     }
+
     fn with_fix_hint<S: Into<String>>(mut self, location: Location, desc: S) -> Self {
         if location != Location::UNKNOWN {
             self.fix_hint = Some((location, desc.into()));
         }
         self
+    }
+
+    fn just_fix_hint(&self) -> Analysis<'o> {
+        Analysis {
+            fix_hint: self.fix_hint.clone(),
+            ..Analysis::empty()
+        }
     }
 }
 
@@ -2937,9 +2945,9 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
             Follow::Index(_, expr) => {
                 self.visit_expression(location, expr, None, local_vars);
-                // TODO: differentiate between L[1] and L[non_numeric_key]
                 match lhs.static_ty {
                     StaticType::List { keys, .. } => {
+                        // TODO: differentiate between L[1] and L[non_numeric_key]
                         let mut res = Analysis::from(*keys);
                         if let Some((loc, _)) = lhs.fix_hint {
                             res.fix_hint =
@@ -2947,15 +2955,24 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         }
                         res
                     },
-                    StaticType::Type(typeref) => {
-                        if typeref.get_proc("operator[]").is_none() {
+                    StaticType::Type(typeref) => match typeref.get_proc("operator[]") {
+                        Some(proc) => self.visit_call(
+                            location,
+                            typeref,
+                            proc,
+                            std::slice::from_ref(expr),
+                            false,
+                            false,
+                            local_vars,
+                        ),
+                        None => {
                             error(location, format!("invalid list access on {}", typeref.path))
                                 .with_errortype("improper_index")
                                 .register(self.context);
-                        }
-                        lhs.clone()
+                            lhs.just_fix_hint()
+                        },
                     },
-                    _ => lhs.clone(), // carry through fix_hint
+                    _ => lhs.just_fix_hint(),
                 }
             },
             Follow::Field(kind, name) => {
@@ -3505,14 +3522,14 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
 
         if proc.ty().is_root() && proc.name() == "astype" {
             if let Some(type_val) = param_idx_map.get(&1)
-                && let Some(Constant::Prefab(pop)) = type_val.clone().value
+                && let Some(Constant::Prefab(pop)) = &type_val.value
                 && let Some(path) = self.objtree.find(&pop.path.to_string())
             {
                 return Analysis::from_static_type(path);
             }
 
             if let Some(type_val) = param_idx_map.get(&0) {
-                return Analysis::from(type_val.clone().static_ty);
+                return Analysis::from(type_val.static_ty.clone());
             }
         }
 
