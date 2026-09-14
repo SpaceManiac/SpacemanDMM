@@ -5,9 +5,9 @@ use dm::{FileId, Lexer, Location};
 
 fn parse_expr(f: &str) -> Expression {
     let context = Default::default();
-    let lexer = Lexer::new(&context, FileId::INVALID, f.as_bytes());
+    let lexer = Lexer::new(&context, FileId::UNKNOWN, f.as_bytes());
     let result = context
-        .parse_expression(Location::INVALID, lexer)
+        .parse_expression(Location::UNKNOWN, lexer)
         .expect("failed to parse expression");
     context.assert_success();
     result

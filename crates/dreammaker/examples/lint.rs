@@ -6,7 +6,7 @@ use dreammaker::{Context, Parser, Preprocessor, Severity};
 fn main() {
     let mut context = Context::default();
     context.set_print_severity(Some(Severity::Info));
-    let env = context.configure_cli(std::env::args_os().nth(1));
+    let env = context.configure_cli(std::env::args_os().nth(1).unwrap_or(".".into()));
     let pp = context.unwrap(Preprocessor::new(&context, env.clone()));
     let mut parser = Parser::new(&context, pp);
     parser.enable_procs();

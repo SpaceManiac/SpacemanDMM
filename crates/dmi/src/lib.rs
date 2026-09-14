@@ -336,10 +336,7 @@ impl Metadata {
     }
 
     pub fn get_icon_state(&self, icon_state: &StateIndex) -> Option<&State> {
-        let state_index = match self.state_names.get(icon_state) {
-            Some(&i) => i,
-            None => return None,
-        };
+        let &state_index = self.state_names.get(icon_state)?;
         Some(&self.states[state_index])
     }
 }

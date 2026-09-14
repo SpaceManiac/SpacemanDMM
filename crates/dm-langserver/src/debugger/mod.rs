@@ -102,7 +102,7 @@ pub fn debugger_main<I: Iterator<Item = String>>(mut args: I) {
     // This isn't the preferred way to run the DAP server so it's okay for it
     // to be kind of sloppy.
     let mut ctx = dm::Context::default();
-    let environment = ctx.configure_cli(None::<String>);
+    let environment = ctx.configure_cli(".");
     let mut pp = ctx.unwrap(dm::Preprocessor::new(&ctx, environment));
     let objtree = {
         let mut parser = dm::Parser::new(&ctx, &mut pp);
@@ -112,7 +112,7 @@ pub fn debugger_main<I: Iterator<Item = String>>(mut args: I) {
 
     let db = DebugDatabaseBuilder {
         root_dir: Default::default(),
-        files: ctx.clone_file_list(),
+        files: ctx.files().clone(),
         objtree,
         extools_dll: None,
         debug_server_dll: None,
@@ -824,7 +824,7 @@ impl Debugger {
         &mut self,
         params: P<SetFunctionBreakpoints>,
     ) -> R<SetFunctionBreakpoints> {
-        let file_id = FileId::INVALID;
+        let file_id = FileId::UNKNOWN;
 
         let inputs = params.breakpoints;
         let mut breakpoints = Vec::new();

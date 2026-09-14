@@ -875,7 +875,7 @@ impl<T> Spanned<T> {
 
     pub fn invalid(elem: T) -> Spanned<T> {
         Spanned {
-            location: Location::INVALID,
+            location: Location::UNKNOWN,
             elem,
         }
     }

@@ -158,18 +158,16 @@ pub fn fix_case(path: &Path) -> Cow<'_, Path> {
         return Cow::Borrowed(path);
     }
 
-    let parent = match path.parent() {
-        Some(x) => x,
-        None => return Cow::Borrowed(path),
+    let Some(parent) = path.parent() else {
+        return Cow::Borrowed(path);
     };
 
     for entry in match parent.read_dir() {
         Ok(x) => x,
         Err(_) => return Cow::Borrowed(path),
     } {
-        let entry = match entry {
-            Ok(x) => x,
-            Err(_) => return Cow::Borrowed(path),
+        let Ok(entry) = entry else {
+            return Cow::Borrowed(path);
         };
         let epath = entry.path();
         let epath_str = epath.display().to_string();

@@ -2,7 +2,7 @@
 
 use foldhash::HashMap;
 use serde::Serialize;
-use std::cell::{Ref, RefCell, RefMut};
+use std::cell::{Cell, Ref, RefCell, RefMut};
 use std::path::{Path, PathBuf};
 use std::{error, fmt, io};
 
@@ -17,10 +17,10 @@ use crate::config::Config;
 pub struct FileId(u16);
 
 impl FileId {
-    const BUILTINS: FileId = FileId(0x0000);
+    pub const BUILTINS: FileId = FileId(0x0000);
     const MIN: FileId = FileId(0x0001);
     const MAX: FileId = FileId(0xfffe);
-    pub const INVALID: FileId = FileId(0xffff);
+    pub const UNKNOWN: FileId = FileId(0xffff);
 }
 
 impl GetSize for FileId {}
@@ -37,19 +37,20 @@ pub struct FileList {
 /// A diagnostics context, tracking loaded files and any observed errors.
 #[derive(Debug, Default, Clone)]
 pub struct Context {
+    /// Configuration.
+    config: Config,
+    print_severity: Option<Severity>,
+    /// Mapping between [FileId] and [Path].
     files: FileList,
     /// A list of errors, warnings, and other diagnostics generated.
     errors: RefCell<Vec<DMError>>,
-    /// Warning config
-    config: Config,
-    print_severity: Option<Severity>,
-
-    io_time: std::cell::Cell<std::time::Duration>,
+    /// Time spent reading from disk during preprocessing.
+    io_time: Cell<std::time::Duration>,
 }
 
 impl FileList {
     /// Add a new file to the context and return its index.
-    pub fn register(&self, path: &Path) -> FileId {
+    fn register(&self, path: &Path) -> FileId {
         if let Some(id) = self.reverse_files.borrow().get(path).cloned() {
             return id;
         }
@@ -83,6 +84,7 @@ impl FileList {
         }
     }
 
+    /// Iterate over known file paths.
     pub fn for_each<F: FnMut(&Path)>(&self, mut f: F) {
         for each in self.files.borrow().iter() {
             f(each);
@@ -92,33 +94,6 @@ impl FileList {
 
 impl Context {
     // ------------------------------------------------------------------------
-    // Files
-
-    /// Add a new file to the context and return its index.
-    pub fn register_file(&self, path: &Path) -> FileId {
-        self.files.register(path)
-    }
-
-    /// Look up a file's ID by its path, without inserting it.
-    pub fn get_file(&self, path: &Path) -> Option<FileId> {
-        self.files.get_id(path)
-    }
-
-    /// Look up a file path by its index returned from `register_file`.
-    pub fn file_path(&self, file: FileId) -> Ref<'_, Path> {
-        self.files.get_path(file)
-    }
-
-    /// Clone the file list of this Context but not its error list.
-    pub fn clone_file_list(&self) -> FileList {
-        self.files.clone()
-    }
-
-    pub fn file_list(&self) -> &FileList {
-        &self.files
-    }
-
-    // ------------------------------------------------------------------------
     // Configuration
 
     /// Set a severity at and above which errors will be printed immediately.
@@ -126,15 +101,57 @@ impl Context {
         self.print_severity = print_severity;
     }
 
-    /// Returns the path to the `.dme` to use.
-    pub fn configure_cli(&mut self, dme: Option<impl AsRef<Path>>) -> PathBuf {
-        match dme {
-            Some(env) => self.configure_from_dme(env.as_ref()),
-            None => {
-                let result = self.configure_from_directory(".".as_ref());
-                self.unwrap(result)
-            },
+    /// Get the configuration.
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
+    pub fn set_config(&mut self, config: Config) {
+        self.config = config;
+    }
+
+    /// Load configuration and detect root `.dme` file.
+    ///
+    /// The root may be one of:
+    /// - A directory, containing `SpacemanDMM.toml` or at least one `.dme` file.
+    /// - A `.toml` file. If it sets `environment` then that `.dme` is loaded, otherwise a sibling `.dme` is chosen.
+    /// - A `.dme` file. If it has a sibling `SpacemanDMM.toml` it is loaded, and `environment` is ignored.
+    ///
+    /// Returns the root `.dme` file name, or `Err` if none could be found.
+    pub fn configure(&mut self, root: &Path) -> Result<PathBuf, DMError> {
+        let dme: PathBuf;
+        if root.is_dir() {
+            // Root is a directory, so look for SpacemanDMM.toml and a .dme.
+            dme = self.configure_from_directory(root)?;
+        } else if let Some(ext) = root.extension()
+            && ext == "toml"
+        {
+            // Root is a .toml file, so load it and look for a .dme.
+            dme = self.configure_from_toml(root)?;
+        } else if let Some(ext) = root.extension()
+            && (ext == "dme" || ext == "dm")
+        {
+            // Root is a .dme file, so look for SpacemanDMM.toml.
+            dme = self.configure_from_dme(root);
+        } else {
+            let file = self.register_file(root);
+            return Err(DMError::new(
+                Location {
+                    file,
+                    line: 1,
+                    column: 1,
+                },
+                "root must be a .dme file, .toml file, or directory",
+            ));
         }
+        // Remove `./` from the front of the `.dme` name in case `root` started with it.
+        Ok(dme.strip_prefix(".").map(Path::to_owned).unwrap_or(dme))
+    }
+
+    /// Like [configure][Self::configure] but exits on failure.
+    pub fn configure_cli(&mut self, root: impl AsRef<Path>) -> PathBuf {
+        let result = self.configure(root.as_ref());
+        self.unwrap(result)
     }
 
     /// Search for `SpacemanDMM.toml` neighboring the given `.dme` if present,
@@ -284,26 +301,21 @@ impl Context {
         }
     }
 
-    pub fn config(&self) -> &Config {
-        &self.config
-    }
-
-    pub fn set_config(&mut self, config: Config) {
-        self.config = config;
-    }
     // ------------------------------------------------------------------------
-    // Additional diagnostics
+    // Files
 
-    pub fn reset_io_time(&self) {
-        self.io_time.take();
+    pub fn files(&self) -> &FileList {
+        &self.files
     }
 
-    pub fn add_io_time(&self, add: std::time::Duration) {
-        self.io_time.set(self.io_time.get() + add);
+    /// Add a new file to the context and return its index.
+    pub fn register_file(&self, path: &Path) -> FileId {
+        self.files.register(path)
     }
 
-    pub fn get_io_time(&self) -> std::time::Duration {
-        self.io_time.get()
+    /// Look up a file path by its index returned from `register_file`.
+    pub fn file_path(&self, file: FileId) -> Ref<'_, Path> {
+        self.files.get_path(file)
     }
 
     // ------------------------------------------------------------------------
@@ -433,6 +445,21 @@ impl Context {
             panic!("there were parse errors");
         }
     }
+
+    // ------------------------------------------------------------------------
+    // Additional diagnostics
+
+    pub fn reset_io_time(&self) {
+        self.io_time.take();
+    }
+
+    pub fn add_io_time(&self, add: std::time::Duration) {
+        self.io_time.set(self.io_time.get() + add);
+    }
+
+    pub fn get_io_time(&self) -> std::time::Duration {
+        self.io_time.get()
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -456,8 +483,8 @@ impl Location {
         column: 1,
     };
 
-    pub const INVALID: Location = Location {
-        file: FileId::INVALID,
+    pub const UNKNOWN: Location = Location {
+        file: FileId::UNKNOWN,
         line: 1,
         column: 1,
     };
@@ -474,7 +501,7 @@ impl Location {
         } else if self.line != 0 {
             self.column = !0;
             self.line -= 1;
-        } else if self.file == FileId::INVALID {
+        } else if self.file == FileId::UNKNOWN {
             // This file ID generally comes from using Location::default().
             // In that case hopefully it's a test or something, so just let it
             // stay 0:0.

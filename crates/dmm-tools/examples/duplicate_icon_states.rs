@@ -20,13 +20,11 @@ fn is_visible(entry: &DirEntry) -> bool {
 }
 
 fn files_with_extension<F: FnMut(&Path)>(ext: &str, mut f: F) {
-    let dir = match std::env::var_os("TEST_DME") {
-        Some(dme) => Path::new(&dme).parent().unwrap().to_owned(),
-        None => {
-            println!("Set TEST_DME to check .{ext} files");
-            return;
-        },
+    let Some(dme) = std::env::var_os("TEST_DME") else {
+        println!("Set TEST_DME to check .{ext} files");
+        return;
     };
+    let dir = Path::new(&dme).parent().unwrap();
     for entry in WalkDir::new(dir).into_iter().filter_entry(is_visible) {
         let entry = entry.unwrap();
         if entry.file_type().is_file() && entry.path().extension() == Some(ext.as_ref()) {

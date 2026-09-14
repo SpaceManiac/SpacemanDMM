@@ -375,10 +375,7 @@ impl Token {
         use self::Punctuation::*;
         // space-surrounded tokens
         for &each in &[self, prev] {
-            let p = match *each {
-                Token::Punct(p) => p,
-                _ => continue,
-            };
+            let Token::Punct(p) = *each else { continue };
             match p {
                 In | Eq | NotEq | Mod | FloatMod | And | BitAndAssign | AndAssign | Mul | Pow
                 | MulAssign | Add | AddAssign | Sub | SubAssign | DivAssign | Colon
@@ -738,10 +735,7 @@ impl<'a> Iterator for LocationTracker<'a> {
             self.location.column = 0;
         }
 
-        let ch = match self.inner.get(self.offset) {
-            Some(&ch) => ch,
-            None => return None,
-        };
+        let &ch = self.inner.get(self.offset)?;
         self.offset += 1;
 
         if ch == b'\n' {
@@ -1139,13 +1133,10 @@ impl<'ctx> Lexer<'ctx> {
         let mut interp_opened = false;
 
         loop {
-            let ch = match self.next() {
-                Some(ch) => ch,
-                None => {
-                    self.context
-                        .register_error(DMError::new(start_loc, "unterminated string literal"));
-                    break;
-                },
+            let Some(ch) = self.next() else {
+                self.context
+                    .register_error(DMError::new(start_loc, "unterminated string literal"));
+                break;
             };
             if ch == end[idx] && !backslash {
                 idx += 1;
@@ -1352,19 +1343,16 @@ impl<'ctx> Iterator for Lexer<'ctx> {
         let mut skip_newlines = false;
         let mut found_illegal = false;
         loop {
-            let first = match self.skip_ws(skip_newlines) {
-                Some(t) => t,
-                None => {
-                    // always end with a newline
-                    if !self.final_newline {
-                        self.final_newline = true;
-                        let mut location = self.location();
-                        location.column += 1;
-                        return Some(LocatedToken::new(location, Token!['\n']));
-                    } else {
-                        return None;
-                    }
-                },
+            let Some(first) = self.skip_ws(skip_newlines) else {
+                // always end with a newline
+                if !self.final_newline {
+                    self.final_newline = true;
+                    let mut location = self.location();
+                    location.column += 1;
+                    return Some(LocatedToken::new(location, Token!['\n']));
+                } else {
+                    return None;
+                }
             };
             let start = self.location();
             skip_newlines = false;

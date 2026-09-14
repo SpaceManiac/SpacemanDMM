@@ -269,7 +269,7 @@ impl<'o> Analysis<'o> {
         }
     }
     fn with_fix_hint<S: Into<String>>(mut self, location: Location, desc: S) -> Self {
-        if location != Location::INVALID {
+        if location != Location::UNKNOWN {
             self.fix_hint = Some((location, desc.into()));
         }
         self
@@ -1573,7 +1573,7 @@ struct LocalVar<'o> {
 impl<'o> From<Analysis<'o>> for LocalVar<'o> {
     fn from(analysis: Analysis<'o>) -> Self {
         LocalVar {
-            location: Location::INVALID,
+            location: Location::UNKNOWN,
             analysis,
         }
     }
@@ -2186,9 +2186,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 }
                 let mut catch_locals = local_vars.clone();
                 for caught in catch_params.iter() {
-                    let (var_name, mut type_path) = match caught.as_slice().split_last() {
-                        Some(x) => x,
-                        None => continue,
+                    let Some((var_name, mut type_path)) = caught.as_slice().split_last() else {
+                        continue;
                     };
                     match type_path.split_first() {
                         Some((first, rest)) if *first == ident!("var") => type_path = rest,

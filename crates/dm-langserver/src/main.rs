@@ -627,7 +627,7 @@ impl Engine {
 
                 let map = DiagnosticsTracker::build(
                     root.as_ref(),
-                    context.file_list(),
+                    context.files(),
                     &context.errors(),
                     related_info,
                 );
@@ -642,7 +642,7 @@ impl Engine {
         // Send the first round of diagnostics from parsing.
         let map = DiagnosticsTracker::build(
             self.root.as_ref(),
-            self.context.file_list(),
+            self.context.files(),
             &self.context.errors(),
             self.client_caps.related_info,
         );
@@ -695,19 +695,19 @@ impl Engine {
                     let path = url_to_path(url)?;
                     let root = url_to_path(root)?;
 
-                    let defines = match self.defines {
-                        Some(ref d) => d,
-                        None => return Err(invalid_request("no preprocessor history")),
+                    let Some(defines) = &self.defines else {
+                        return Err(invalid_request("no preprocessor history"));
                     };
 
                     let stripped = match path.strip_prefix(&root) {
                         Ok(path) => path,
                         Err(_) => "<outside workspace>".as_ref(),
                     };
-                    let (real_file_id, mut preprocessor) = match self.context.get_file(stripped) {
-                        Some(id) => (id, defines.branch_at_file(id, &self.context)),
-                        None => (FileId::INVALID, defines.branch_at_end(&self.context)),
-                    };
+                    let (real_file_id, mut preprocessor) =
+                        match self.context.files().get_id(stripped) {
+                            Some(id) => (id, defines.branch_at_file(id, &self.context)),
+                            None => (FileId::UNKNOWN, defines.branch_at_end(&self.context)),
+                        };
                     let contents = self.docs.read(url).map_err(invalid_request)?;
                     let file_id = preprocessor
                         .push_file(stripped.to_owned(), contents)
@@ -738,7 +738,8 @@ impl Engine {
                     );
                     let file_id = self
                         .context
-                        .get_file(filename.as_ref())
+                        .files()
+                        .get_id(filename.as_ref())
                         .expect("file didn't exist?");
                     // Clear old errors for this file. Hacky, but it will work for now.
                     self.context
@@ -918,9 +919,8 @@ impl Engine {
         let (mut next, proc_name) = self.find_type_context(iter);
         // find the first; check the global scope, parameters, and "src"
         let mut priors = priors.iter();
-        let first = match priors.next() {
-            Some(i) => i,
-            None => return next, // empty priors acts like unscoped
+        let Some(first) = priors.next() else {
+            return next; // empty priors acts like unscoped
         };
         if *first == ident!("args") {
             next = self.objtree.find("/list");
@@ -1459,10 +1459,7 @@ impl Engine {
     fn WorkspaceSymbol(&mut self, params: P<WorkspaceSymbol>) -> R<WorkspaceSymbol> {
         let query = symbol_search::Query::parse(&params.query);
 
-        let query = match query {
-            Some(query) => query,
-            None => return Ok(None),
-        };
+        let Some(query) = query else { return Ok(None) };
 
         let mut results = Vec::new();
         if let Some(ref defines) = self.defines {
@@ -2417,7 +2414,7 @@ impl Engine {
         };
         let db = debugger::DebugDatabaseBuilder {
             root_dir,
-            files: self.context.clone_file_list(),
+            files: self.context.files().clone(),
             objtree: self.objtree.clone(),
             extools_dll: self.extools_dll.clone(),
             debug_server_dll: self.debug_server_dll.clone(),

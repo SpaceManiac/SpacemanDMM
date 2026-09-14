@@ -5,12 +5,9 @@ use std::path::PathBuf;
 use dm::{Context, Parser, Preprocessor};
 
 fn with_test_dme<F: FnOnce(Preprocessor)>(context: &Context, f: F) {
-    let dme = match std::env::var_os("TEST_DME") {
-        Some(dme) => dme,
-        None => {
-            println!("Set TEST_DME to check full pipeline");
-            return;
-        },
+    let Some(dme) = std::env::var_os("TEST_DME") else {
+        println!("Set TEST_DME to check full pipeline");
+        return;
     };
     f(context.unwrap(Preprocessor::new(context, PathBuf::from(dme))))
 }

@@ -456,10 +456,9 @@ impl Expression {
     /// Evaluate this expression in the absence of any surrounding context.
     pub fn simple_evaluate(&self, location: Location) -> Result<Constant, DMError> {
         ConstantFolder {
-            context: None,
-            tree: None,
             location,
             ty: TypeIndex::new(0),
+            tree: None,
             defines: None,
             current_file_path: None,
         }
@@ -472,16 +471,14 @@ pub fn preprocessor_evaluate(
     location: Location,
     expr: &Expression,
     defines: &DefineMap,
-    context: Option<&Context>,
     current_file_path: &Path,
 ) -> Result<Constant, DMError> {
     ConstantFolder {
-        context,
-        current_file_path: Some(current_file_path),
-        tree: None,
         location,
         ty: TypeIndex::new(0),
+        tree: None,
         defines: Some(defines),
+        current_file_path: Some(current_file_path),
     }
     .expr(expr, None)
 }
@@ -497,7 +494,7 @@ pub(crate) fn evaluate_all(context: &Context, tree: &mut ObjectTree) {
             }) {
                 continue; // skip non-constant-evaluable vars
             }
-            match constant_ident_lookup(tree, ty, &key, false, Some(context)) {
+            match constant_ident_lookup(tree, ty, &key, false) {
                 Err(err) => context.register_error(err),
                 Ok(ConstLookup::Found(_)) => {},
                 Ok(ConstLookup::Continue(_)) => {
@@ -521,7 +518,6 @@ fn constant_ident_lookup(
     ty: TypeIndex,
     ident: &str,
     must_be_const: bool,
-    context: Option<&Context>,
 ) -> Result<ConstLookup, DMError> {
     // try to read the currently-set value if we can and
     // substitute that in, otherwise try to evaluate it.
@@ -570,12 +566,11 @@ fn constant_ident_lookup(
     };
     // evaluate full_value
     let value = ConstantFolder {
-        context,
+        location,
+        ty,
         tree: Some(tree),
         defines: None,
         current_file_path: None,
-        location,
-        ty,
     }
     .expr(
         &expr,
@@ -593,12 +588,14 @@ fn constant_ident_lookup(
 }
 
 struct ConstantFolder<'a> {
-    context: Option<&'a Context>,
-    current_file_path: Option<&'a Path>,
-    tree: Option<&'a mut ObjectTree>,
-    defines: Option<&'a DefineMap>,
     location: Location,
     ty: TypeIndex,
+    /// If set, variables and typepaths are available.
+    tree: Option<&'a mut ObjectTree>,
+    /// If set, `defined()` is available.
+    defines: Option<&'a DefineMap>,
+    /// If set, `fexists()` is available.
+    current_file_path: Option<&'a Path>,
 }
 
 impl<'a> HasLocation for ConstantFolder<'a> {
@@ -852,11 +849,7 @@ impl<'a> ConstantFolder<'a> {
                     };
                     Constant::from(defines.contains_key(ident))
                 },
-                "fexists"
-                    if self.defines.is_some()
-                        && self.context.is_some()
-                        && let Some(current_file_path) = self.current_file_path =>
-                {
+                "fexists" if let Some(current_file_path) = self.current_file_path => {
                     let [arg] = &args[..] else {
                         return Err(self.error(format!(
                             "malformed fexists() call, must have 1 argument and instead has {}",
@@ -1003,7 +996,7 @@ impl<'a> ConstantFolder<'a> {
                     "cannot reference variable {ident:?} in this context"
                 )));
             };
-            match constant_ident_lookup(tree, ty, ident, must_be_const, self.context)
+            match constant_ident_lookup(tree, ty, ident, must_be_const)
                 .map_err(|e| e.with_location(location))?
             {
                 ConstLookup::Found(v) => return Ok(v),

@@ -421,7 +421,7 @@ impl<'ctx> HasLocation for Preprocessor<'ctx> {
         match self.include_stack.stack.last() {
             Some(Include::File { lexer, .. }) => lexer.location(),
             Some(&Include::Expansion { location, .. }) => location,
-            None => Location::INVALID,
+            None => Location::UNKNOWN,
         }
     }
 }
@@ -448,8 +448,8 @@ impl<'ctx> Preprocessor<'ctx> {
             scripts: Default::default(),
             ifdef_stack: Default::default(),
             ifdef_history: Default::default(),
-            last_input_loc: Location::INVALID,
-            last_printable_input_loc: Location::INVALID,
+            last_input_loc: Location::UNKNOWN,
+            last_printable_input_loc: Location::UNKNOWN,
             output: Default::default(),
             danger_idents: Default::default(),
             docs_in: Default::default(),
@@ -483,8 +483,8 @@ impl<'ctx> Preprocessor<'ctx> {
             scripts: Default::default(),
             ifdef_stack: Default::default(),
             ifdef_history: Default::default(),
-            last_input_loc: Location::INVALID,
-            last_printable_input_loc: Location::INVALID,
+            last_input_loc: Location::UNKNOWN,
+            last_printable_input_loc: Location::UNKNOWN,
             output: Default::default(),
             danger_idents: Default::default(),
             docs_in: Default::default(),
@@ -502,7 +502,7 @@ impl<'ctx> Preprocessor<'ctx> {
                 // collisions in the interval tree.
                 i += 1;
                 let end = Location {
-                    file: FileId::INVALID,
+                    file: FileId::UNKNOWN,
                     line: !0,
                     column: i,
                 };
@@ -648,7 +648,6 @@ impl<'ctx> Preprocessor<'ctx> {
             start,
             &expr,
             &self.defines,
-            Some(self.context),
             self.include_stack.top_file_path(),
         )?
         .to_bool())

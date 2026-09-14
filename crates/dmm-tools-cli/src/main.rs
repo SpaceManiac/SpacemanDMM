@@ -57,7 +57,9 @@ struct Context {
 
 impl Context {
     fn objtree(&mut self, opt: &Opt) {
-        let environment = self.dm_context.configure_cli(opt.environment.as_ref());
+        let environment = self
+            .dm_context
+            .configure_cli(opt.environment.as_deref().unwrap_or("."));
 
         eprintln!("parsing {}", environment.display());
 
@@ -65,7 +67,6 @@ impl Context {
             self.icon_cache.set_icons_root(parent);
         }
 
-        self.dm_context.configure_from_dme(&environment);
         let pp = self
             .dm_context
             .unwrap(dm::Preprocessor::new(&self.dm_context, environment));

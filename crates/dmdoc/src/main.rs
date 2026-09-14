@@ -68,7 +68,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // configure
     let mut context = dm::Context::default();
     context.set_print_severity(Some(dm::Severity::Error));
-    let environment = context.configure_cli(environment).to_owned();
+    let environment = context.configure_cli(environment.as_deref().unwrap_or("."));
 
     // parse environment
     println!("parsing {}", environment.display());
@@ -92,7 +92,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // importantly "code", but also "_maps", "interface", and any downstream
         // modular folders) will be searched for `.md` files to include in the docs.
         code_directories = Default::default();
-        context.file_list().for_each(|path| {
+        context.files().for_each(|path| {
             if let Some(std::path::Component::Normal(first)) = path.components().next() {
                 code_directories.insert(first.to_owned());
             }
@@ -1268,10 +1268,7 @@ where
             // determine common position
             while i < stack.len() {
                 {
-                    let bit = match bits.peek() {
-                        Some(bit) => bit,
-                        None => break,
-                    };
+                    let Some(bit) = bits.peek() else { break };
                     if stack[i].full_name != &each.full_name[..len + bit.len()] {
                         break;
                     }
