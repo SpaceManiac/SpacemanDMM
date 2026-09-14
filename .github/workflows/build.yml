@@ -1,0 +1,22 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  linux:
+    name: Linux
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v6
+      # https://docs.github.com/en/actions/tutorials/build-and-test-code/rust#caching-dependencies
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock' )}}
+      - run: |
+          cargo test
