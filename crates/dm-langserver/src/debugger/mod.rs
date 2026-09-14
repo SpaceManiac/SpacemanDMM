@@ -2,7 +2,6 @@
 //!
 //! * https://microsoft.github.io/debug-adapter-protocol/
 // In BYOND references 0xAA_BBBBBB, A is the the type and B is the instance ID.
-#![allow(clippy::unusual_byte_groupings)]
 
 macro_rules! output {
     (in $seq:expr, $fmt:expr) => {
