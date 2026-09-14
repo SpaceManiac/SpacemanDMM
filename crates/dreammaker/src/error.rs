@@ -2,7 +2,7 @@
 
 use foldhash::HashMap;
 use serde::Serialize;
-use std::cell::{Ref, RefCell, RefMut};
+use std::cell::{Cell, Ref, RefCell, RefMut};
 use std::path::{Path, PathBuf};
 use std::{error, fmt, io};
 
@@ -37,19 +37,20 @@ pub struct FileList {
 /// A diagnostics context, tracking loaded files and any observed errors.
 #[derive(Debug, Default, Clone)]
 pub struct Context {
+    /// Configuration.
+    config: Config,
+    print_severity: Option<Severity>,
+    /// Mapping between [FileId] and [Path].
     files: FileList,
     /// A list of errors, warnings, and other diagnostics generated.
     errors: RefCell<Vec<DMError>>,
-    /// Warning config
-    config: Config,
-    print_severity: Option<Severity>,
-
-    io_time: std::cell::Cell<std::time::Duration>,
+    /// Time spent reading from disk during preprocessing.
+    io_time: Cell<std::time::Duration>,
 }
 
 impl FileList {
     /// Add a new file to the context and return its index.
-    pub fn register(&self, path: &Path) -> FileId {
+    fn register(&self, path: &Path) -> FileId {
         if let Some(id) = self.reverse_files.borrow().get(path).cloned() {
             return id;
         }
@@ -83,6 +84,7 @@ impl FileList {
         }
     }
 
+    /// Iterate over known file paths.
     pub fn for_each<F: FnMut(&Path)>(&self, mut f: F) {
         for each in self.files.borrow().iter() {
             f(each);
@@ -92,38 +94,15 @@ impl FileList {
 
 impl Context {
     // ------------------------------------------------------------------------
-    // Files
-
-    /// Add a new file to the context and return its index.
-    pub fn register_file(&self, path: &Path) -> FileId {
-        self.files.register(path)
-    }
-
-    /// Look up a file's ID by its path, without inserting it.
-    pub fn get_file(&self, path: &Path) -> Option<FileId> {
-        self.files.get_id(path)
-    }
-
-    /// Look up a file path by its index returned from `register_file`.
-    pub fn file_path(&self, file: FileId) -> Ref<'_, Path> {
-        self.files.get_path(file)
-    }
-
-    /// Clone the file list of this Context but not its error list.
-    pub fn clone_file_list(&self) -> FileList {
-        self.files.clone()
-    }
-
-    pub fn file_list(&self) -> &FileList {
-        &self.files
-    }
-
-    // ------------------------------------------------------------------------
     // Configuration
 
     /// Set a severity at and above which errors will be printed immediately.
     pub fn set_print_severity(&mut self, print_severity: Option<Severity>) {
         self.print_severity = print_severity;
+    }
+
+    pub fn config(&self) -> &Config {
+        &self.config
     }
 
     /// Returns the path to the `.dme` to use.
@@ -284,23 +263,21 @@ impl Context {
         }
     }
 
-    pub fn config(&self) -> &Config {
-        &self.config
-    }
-
     // ------------------------------------------------------------------------
-    // Additional diagnostics
+    // Files
 
-    pub fn reset_io_time(&self) {
-        self.io_time.take();
+    pub fn files(&self) -> &FileList {
+        &self.files
     }
 
-    pub fn add_io_time(&self, add: std::time::Duration) {
-        self.io_time.set(self.io_time.get() + add);
+    /// Add a new file to the context and return its index.
+    pub fn register_file(&self, path: &Path) -> FileId {
+        self.files.register(path)
     }
 
-    pub fn get_io_time(&self) -> std::time::Duration {
-        self.io_time.get()
+    /// Look up a file path by its index returned from `register_file`.
+    pub fn file_path(&self, file: FileId) -> Ref<'_, Path> {
+        self.files.get_path(file)
     }
 
     // ------------------------------------------------------------------------
@@ -429,6 +406,21 @@ impl Context {
         if self.print_all_errors(Severity::Info) {
             panic!("there were parse errors");
         }
+    }
+
+    // ------------------------------------------------------------------------
+    // Additional diagnostics
+
+    pub fn reset_io_time(&self) {
+        self.io_time.take();
+    }
+
+    pub fn add_io_time(&self, add: std::time::Duration) {
+        self.io_time.set(self.io_time.get() + add);
+    }
+
+    pub fn get_io_time(&self) -> std::time::Duration {
+        self.io_time.get()
     }
 }
 

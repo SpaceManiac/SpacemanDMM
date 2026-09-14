@@ -112,7 +112,7 @@ pub fn debugger_main<I: Iterator<Item = String>>(mut args: I) {
 
     let db = DebugDatabaseBuilder {
         root_dir: Default::default(),
-        files: ctx.clone_file_list(),
+        files: ctx.files().clone(),
         objtree,
         extools_dll: None,
         debug_server_dll: None,

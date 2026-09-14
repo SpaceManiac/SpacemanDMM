@@ -12,7 +12,7 @@ pub fn main() {
 
     let mut vis = Visualizer::default();
     let content = std::fs::read_to_string(&path).unwrap();
-    let fileid = context.file_list().register(Path::new(&path));
+    let fileid = context.register_file(Path::new(&path));
     for token in Lexer::new(&context, fileid, content.as_bytes()) {
         vis.add_spot(
             "1. Lexer",
