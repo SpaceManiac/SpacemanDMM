@@ -6,20 +6,52 @@ Errors that would fail to compile in the DM compiler or will always cause a runt
 
 As of writing, all front ends have the functionality to accept a configuration file.  They default to using `SpacemanDMM.toml` located in the same directory as the `.dme` file.
 
-## Configuration Options
+Defaults are subject to change.
 
-All of these options can be set to the following:
+## Diagnostic Options
 
-* `error`, `errors` - Severity::Error
-* `warning`, `warnings` - Severity::Warning
-* `info`, `infos` - Severity::Info
-* `hint`, `hints` - Severity::Hint
-* `disabled`, `false`, `off` - Disables it completely
-* `unset`, not present in the config file - Uses the default
+Diagnostic options can be set to the following:
+
+* `"error"`, `"errors"` - Diagnostic is an error
+* `"warning"`, `"warnings"` - Diagnostic is a warning
+* `"info"`, `"infos"` - Diagnostic is informational
+* `"hint"`, `"hints"` - Diagnostic is a hint (displayed inline, but not in the error list)
+* `"disabled"`, `"false"`, `"off"` - Diagnostic is disabled completely
+* `"unset"`, or not present in the config file - Uses the default
+
+### Display
+
+The `[display]` section has the following options:
+
+* `error_level` - Sets the level at which errors are registered instead of being ignored
 
 ### Diagnostics
 
 The `[diagnostics]` section has the following options:
+
+Raised by lexer:
+
+* `integer_precision_loss` - Raised where an integer is out of integer range and is implicitly formatted as a float
+
+Raised by preprocessor:
+
+* `duplicate_include` - Raised where the same file is included twice
+* `macro_redefined` - Raised where a macro is defined a second time
+* `macro_undefined_no_definition` - Raised where a macro is undefined where no such macro is defined
+
+Raised by parser:
+
+* `var_in_proc_parameter` - Raised where `var/` is used in proc arguments
+* `static_in_proc_parameter` - Raised where `static/` is used in proc arguments
+* `semicolon_in_proc_parameter` - Raised where `;` is used in proc arguments
+* `in_precedes_as` - Raised where `input()` calls are using `as` after `in` which DM silently ignores
+* `tmp_no_effect` - Raised where local vars are defined as `tmp` which has no effect
+* `final_no_effect` - Raised where local vars are defined as `SpacemanDMM_final` which has no effect
+* `as_local_var` - Raised where local vars are defined using the `as Foo` syntax which has no effect
+
+Raised by object tree:
+
+* `override_precedes_definition` - Raised where a proc is overridden prior to its definition in the include order, see: http://www.byond.com/forum/post/2441385
 
 Raised by DreamChecker:
 
@@ -51,33 +83,19 @@ Raised by DreamChecker:
 * `control_condition_static` - Raised on a control condition such as `if`/`while` having a static condition such as `1` or `"string"`
 * `if_condition_determinate` - Raised on if condition being always true or always false
 * `loop_condition_determinate` - Raised on loop condition such as in `for` being always true or always false
-* `improper_index` - Raised on accessing a non list with []
+* `improper_index` - Raised on accessing a non list with `[]`
 
-Raised by Lexer:
+### Code standards
 
-* `integer_precision_loss` - Raised where an integer is out of integer range and is implicitly formatted as a float
+These are extremely opinionated lint warnings and as such default to disabled.
+Set them to `true` to enable them.
 
-Raised by Parser:
+The `[code_standards]` section has the following options:
 
-* `var_in_proc_parameter` - Raised where `var/` is used in proc arguments
-* `static_in_proc_parameter` - Raised where `static/` is used in proc arguments
-* `semicolon_in_proc_parameter` - Raised where `;` is used in proc arguments
-* `in_precedes_as` - Raised where `input()` calls are using `as` after `in` which DM silently ignores
-* `tmp_no_effect` - Raised where local vars are defined as `tmp` which has no effect
-* `final_no_effect` - Raised where local vars are defined as `SpacemanDMM_final` which has no effect
-* `as_local_var` - Raised where local vars are defined using the `as Foo` syntax which has no effect
+* `disallow_relative_proc_definitions` - Raised on relative pathed proc definitions
+* `disallow_relative_type_definitions` - Raised on relative pathed subtype defintions
 
-Raised by PreProcessor:
-
-* `duplicate_include` - Raised where the same file is included twice
-* `macro_redefined` - Raised where a macro is defined a second time
-* `macro_undefined_no_definition` - Raised where a macro is undefined where no such macro is defined
-
-Raised by Object Tree:
-
-* `override_precedes_definition` - Raised where a proc is overridden prior to its definition in the include order, see: http://www.byond.com/forum/post/2441385
-
-### DreamChecker
+## DreamChecker
 
 The `[dreamchecker]` section has the following options:
 
@@ -86,32 +104,38 @@ The `[dreamchecker]` section has the following options:
   * `2` - Full dynamic dispatch analysis. Catches nearly every case, but has false positives, especially with procs that sleep or not depending on their arguments.
   * `3` - Receiver provenance analysis. Has much fewer false positives but doesn't catch some edge cases. Default.
 
-### Display
-
-The `[display]` section has the following options:
-
-* `error_level` - Sets the level at which errors are registered instead of being ignored
-
-### Language server
+## Language server
 
 The `[langserver]` section has the following options:
 
 * `dreamchecker` - Set to `true` to run dreamchecker within the language server.
 
-### Code standards
-
-These are extremely opinionated lint warnings and as such default to disabled
-
-The `[code_standards]` section has the following options:
-
-* `disallow_relative_proc_definitions` - Raised on relative pathed proc definitions
-* `disallow_relative_type_definitions` - Raised on relative pathed subtype defintions
-
-### DM Doc
+## DMDoc
 
 The `[dmdoc]` section has the following options:
 
-* `use_typepath_names` - Set to `true` to have dmdoc use the true typepath name instead of the value of the `name` var for types
+* `use_typepath_names` - Set to `true` to have dmdoc use the true typepath name instead of the value of the `name` var for types.
+* `index_file` - Set to a `.md` filename to override the contents of the documentation homepage.
+* `module_directories` - A list of directories to search for additional `.md` and `.txt` files to include in the Modules section. The default is to use any directory mentioned in a `#include` in the `.dme` file.
+
+## Debugger
+
+The `[debugger]` section has the following options:
+
+* `engine` - Set which debugging engine to use.
+  * `"auxtools"` - [Auxtools Debug Server]. Default.
+  * `"extools"` - [Extools]. Deprecated since 2021.
+
+[Auxtools Debug Server]: https://github.com/willox/auxtools/
+[Extools]: https://github.com/MCHSL/extools
+
+## Map Renderer
+
+The `[map_renderer]` section has the following options:
+
+* `render_passes` - A map from render pass name to `true` or `false` to enable or disable a render pass by default.
+* `fancy_layers` - A map from typepath to layer number to use in the `fancy-layers` pass.
+* `hide_invisible` - A list of typepaths to hide in the `hide-invisible` pass.
 
 ## Example
 
