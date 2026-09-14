@@ -8,7 +8,7 @@ use serde::Serialize;
 pub fn main() {
     let mut context = Context::default();
     context.set_print_severity(Some(Severity::Info));
-    let path = context.configure_cli(std::env::args().nth(1)).to_owned();
+    let path = context.configure_cli(std::env::args_os().nth(1).unwrap_or(".".into()));
 
     let mut vis = Visualizer::default();
     let content = std::fs::read_to_string(&path).unwrap();

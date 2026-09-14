@@ -7,7 +7,7 @@ fn main() {
     std::env::set_current_dir("../tgstation").unwrap();
 
     let mut ctx = dm::Context::default();
-    let env = ctx.configure_cli(None::<String>).to_owned();
+    let env = ctx.configure_cli(".").to_owned();
     let objtree = &ctx.parse_environment(env.as_ref()).unwrap();
 
     // Used to check https://github.com/tgstation/tgstation/pull/38171

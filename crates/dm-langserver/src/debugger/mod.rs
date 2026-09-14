@@ -102,7 +102,7 @@ pub fn debugger_main<I: Iterator<Item = String>>(mut args: I) {
     // This isn't the preferred way to run the DAP server so it's okay for it
     // to be kind of sloppy.
     let mut ctx = dm::Context::default();
-    let environment = ctx.configure_cli(None::<String>);
+    let environment = ctx.configure_cli(".");
     let mut pp = ctx.unwrap(dm::Preprocessor::new(&ctx, environment));
     let objtree = {
         let mut parser = dm::Parser::new(&ctx, &mut pp);

@@ -68,7 +68,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // configure
     let mut context = dm::Context::default();
     context.set_print_severity(Some(dm::Severity::Error));
-    let environment = context.configure_cli(environment).to_owned();
+    let environment = context.configure_cli(environment.as_deref().unwrap_or("."));
 
     // parse environment
     println!("parsing {}", environment.display());
