@@ -1,4 +1,5 @@
 use dreamchecker::test_helpers::*;
+use dreammaker::config::Config;
 
 #[test]
 fn sleep() {
@@ -291,8 +292,34 @@ fn sleep10() {
     sleep(1)
 "##
     .trim();
+
+    let mut config = Config::default();
+    config.dreamchecker.sleep_analysis_version = 2;
+    let context = parse_a_file_for_test(code, Some(config));
     #[rustfmt::skip]
-    check_errors_match(code, &[
+    assert_errors_match(context, &[
         (1, 14, "/proc/perform calls /atom/proc/container_resist_act which has override child proc that sleeps /obj/machinery/dna_scannernew/proc/container_resist_act"),
     ]);
+}
+
+#[test]
+fn sleep11() {
+    let code = r##"
+/atom/proc/perform(atom/A)
+    set SpacemanDMM_should_not_sleep = TRUE
+    var/atom/B = A ? src : A
+    B.overridden_proc()
+
+/atom/proc/overridden_proc()
+    return
+
+/atom/foo/overridden_proc()
+    sleep(1)
+"##
+    .trim();
+
+    let mut config = Config::default();
+    config.dreamchecker.sleep_analysis_version = 3;
+    let context = parse_a_file_for_test(code, Some(config));
+    assert_errors_match(context, &[]);
 }

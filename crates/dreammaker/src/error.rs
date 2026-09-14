@@ -106,6 +106,11 @@ impl Context {
         &self.config
     }
 
+    #[doc(hidden)]
+    pub fn set_config(&mut self, config: Config) {
+        self.config = config;
+    }
+
     /// Load configuration and detect root `.dme` file.
     ///
     /// The root may be one of:

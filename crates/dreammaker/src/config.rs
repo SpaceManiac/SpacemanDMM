@@ -21,6 +21,7 @@ pub struct Config {
     pub code_standards: CodeStandards,
 
     // tool-specific configuration
+    pub dreamchecker: DreamChecker,
     pub langserver: Langserver,
     pub dmdoc: DMDoc,
     pub debugger: Debugger,
@@ -32,6 +33,22 @@ pub struct Config {
 pub struct WarningDisplay {
     #[serde(default)]
     error_level: WarningLevel,
+}
+
+/// DreamChecker config options.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(default)]
+pub struct DreamChecker {
+    /// Version of the `SpacemanDMM_should_not_sleep` analysis.
+    pub sleep_analysis_version: u8,
+}
+
+impl Default for DreamChecker {
+    fn default() -> Self {
+        Self {
+            sleep_analysis_version: 3,
+        }
+    }
 }
 
 /// Langserver config options
