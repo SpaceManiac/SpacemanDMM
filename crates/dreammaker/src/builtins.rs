@@ -675,7 +675,7 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         atom/var/color;
         atom/var/list/atom/contents;  // TODO: editable on movables only
         atom/var/density = int!(0);
-        atom/var/desc;
+        atom/var/desc = string!("");
         atom/var/dir = int!(2);
         atom/var/gender = string!("neuter");
         atom/var/icon/icon;
@@ -710,7 +710,7 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         atom/var/pixloc/pixloc;
 
         atom/var/plane = int!(0);
-        atom/var/suffix;
+        atom/var/suffix = string!("");
         atom/var/text;
         atom/var/matrix/transform;
         atom/var/tmp/list/underlays;  // not editable
@@ -1043,16 +1043,16 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         database/query/proc/RowsAffected();
 
         image;
-        image/var/alpha;
+        image/var/alpha = int!(255);
         image/var/appearance;
-        image/var/appearance_flags;
-        image/var/blend_mode;
+        image/var/appearance_flags = int!(0);
+        image/var/blend_mode = int!(0);
         image/var/color;
-        image/var/desc;
+        image/var/desc = string!("");
         image/var/icon/icon;
         image/var/icon_state;
         image/var/text;
-        image/var/dir;
+        image/var/dir = int!(2);
         image/var/list/underlays;
         image/var/list/overlays;
         image/var/atom/loc;
@@ -1095,9 +1095,9 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
         image/var/name;
         image/var/opacity;
         image/var/screen_loc;
-        image/var/suffix;
+        image/var/suffix = string!("");
         image/var/verbs;
-        image/var/vis_flags;
+        image/var/vis_flags = int!(0);
 
         image/New(icon, loc, icon_state, layer, dir);
 
@@ -1186,7 +1186,7 @@ pub fn register_builtins(tree: &mut ObjectTreeBuilder) {
 
         atom/var/render_target;
         atom/var/render_source;
-        atom/var/vis_flags;
+        atom/var/vis_flags = int!(0);
 
         client/proc/MeasureText(text, style, width/*=0*/);
         client/proc/SoundQuery();
