@@ -6,11 +6,11 @@ use std::{
     time::{Duration, Instant},
 };
 
-use chrono::Datelike;
+use chrono::{Datelike, Timelike};
 use clap::{ArgAction::SetTrue, Parser, Subcommand};
 use dreammaker::Severity;
-use maud::{html, Markup};
-use rusqlite::{named_params, Connection, OptionalExtension};
+use maud::{Markup, PreEscaped, html};
+use rusqlite::{Connection, OptionalExtension, named_params};
 use serde::{Deserialize, Serialize};
 
 const COMMIT: &str = include_str!(concat!(env!("OUT_DIR"), "/build-info.txt"));
@@ -62,12 +62,19 @@ CREATE TABLE IF NOT EXISTS analysis (
     git_date TEXT,
     analysis JSON
 );
+
+CREATE TABLE IF NOT EXISTS config (
+    codebase TEXT,
+    git_rev TEXT,
+    suite TEXT,
+    config TEXT
+);
 ";
 
 fn db(repos: &Path) -> rusqlite::Connection {
     let db = repos.join("zoo.db");
     let conn = Connection::open(&db).unwrap();
-    conn.execute(SCHEMA, ()).unwrap();
+    conn.execute_batch(SCHEMA).unwrap();
     conn
 }
 
@@ -88,6 +95,8 @@ impl Zoo {
 
 impl Analyze {
     pub fn run(&self, zoo: &Zoo) -> Result<(), Box<dyn Error>> {
+        let db = db(&zoo.repos);
+
         let mut paths = Vec::new();
         for entry in fs::read_dir(&zoo.repos)? {
             let entry = entry?;
@@ -111,10 +120,13 @@ impl Analyze {
         for (i, path) in paths.iter().enumerate() {
             let repo = git2::Repository::open(&path)?;
             let short_path = path.strip_prefix(&zoo.repos).unwrap_or(path);
+            let codebase = short_path.to_string_lossy();
 
+            // Discover upstream and pull
             assert!(!repo.head_detached()?, "head detached: {:?}", path);
-            let head = repo.head()?;
+            let mut head = repo.head()?;
             assert!(head.is_branch());
+            let mut git_rev = String::new();
             match repo.branch_upstream_remote(head.name()?) {
                 Ok(remote) => {
                     let remote_name = remote.as_str().unwrap();
@@ -123,7 +135,7 @@ impl Analyze {
 
                     let mut remote = repo.find_remote(remote_name)?;
                     if !self.no_pull {
-                        eprintln!("({}/{}) {:?}: pulling", i + 1, paths.len(), short_path);
+                        eprintln!("{:?}: pulling", short_path);
                         let refspecs = remote.fetch_refspecs()?;
                         let refspecs = refspecs
                             .into_iter()
@@ -132,10 +144,9 @@ impl Analyze {
                             .collect::<Vec<_>>();
                         match remote.fetch(&refspecs, None, None) {
                             Ok(()) => {
+                                head = repo.find_reference(remote_branch)?;
                                 repo.reset(
-                                    repo.find_reference(remote_branch)?
-                                        .peel_to_commit()?
-                                        .as_object(),
+                                    head.peel_to_commit()?.as_object(),
                                     git2::ResetType::Hard,
                                     None,
                                 )?;
@@ -146,15 +157,13 @@ impl Analyze {
                         }
                     }
 
-                    remote_and_commit.insert(
-                        path.as_path(),
-                        (
-                            remote.url()?.to_string(),
-                            head.peel_to_commit()?.id().to_string(),
-                        ),
-                    );
+                    git_rev = head.peel_to_commit()?.id().to_string();
+                    remote_and_commit
+                        .insert(path.as_path(), (remote.url()?.to_string(), git_rev.clone()));
                     eprintln!(
-                        "{:?}: repo is {:?}, head is {}",
+                        "({}/{}) {:?}: repo = {:?}, head = {:10}",
+                        i + 1,
+                        paths.len(),
                         short_path,
                         remote.url()?,
                         repo.head()?.peel_to_commit()?.id()
@@ -169,20 +178,70 @@ impl Analyze {
                 },
             }
 
+            // Extract commit timestamp
             let time =
                 chrono::DateTime::from_timestamp_secs(head.peel_to_commit()?.time().seconds())
                     .unwrap();
-            let date = format!("{:04}-{:02}-{:02}", time.year(), time.month(), time.day());
-            eprintln!("{:?}: date is {}", short_path, date);
+            let date = format!(
+                "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+                time.year(),
+                time.month(),
+                time.day(),
+                time.hour(),
+                time.minute(),
+                time.second()
+            );
+            // eprintln!("{:?}: date = {}", short_path, date);
             dates.insert(path.as_path(), date);
+
+            // Extract configuration
+            let existing_row = db
+                .query_one(
+                    "SELECT * FROM config WHERE codebase = :codebase AND git_rev = :git_rev",
+                    named_params! {
+                        ":codebase": codebase,
+                        ":git_rev": git_rev,
+                    },
+                    |_| Ok(()),
+                )
+                .optional()?;
+            if existing_row.is_none() {
+                let suite = discover_suite(path);
+                let config = discover_config(path);
+                db.execute(
+                    "
+                        INSERT INTO config (
+                            codebase,
+                            git_rev,
+                            suite,
+                            config
+                        ) VALUES (
+                            :codebase,
+                            :git_rev,
+                            :suite,
+                            :config
+                        );
+                    ",
+                    named_params! {
+                        ":codebase": codebase,
+                        ":git_rev": git_rev,
+                        ":suite": suite,
+                        ":config": config,
+                    },
+                )?;
+                eprintln!(
+                    "{:?}: suite = {:?}, config = {:?}",
+                    short_path,
+                    suite,
+                    config.as_ref().map(|x| x.len())
+                );
+            }
         }
 
         // Analyze
         eprintln!("==== Analyze ====");
 
         eprintln!("SpacemanDMM commit: {}", COMMIT);
-
-        let db = db(&zoo.repos);
 
         let mut paths_by_date = paths.iter().map(|p| p.as_path()).collect::<Vec<_>>();
         paths_by_date.sort_by_key(|p| dates.get(p));
@@ -227,22 +286,22 @@ impl Analyze {
 
                         db.execute(
                             "
-                            INSERT INTO analysis (
-                                codebase,
-                                spaceman_rev,
-                                git_remote,
-                                git_rev,
-                                git_date,
-                                analysis
-                            ) VALUES (
-                                :codebase,
-                                :spaceman_rev,
-                                :git_remote,
-                                :git_rev,
-                                :git_date,
-                                :analysis
-                            );
-                        ",
+                                INSERT INTO analysis (
+                                    codebase,
+                                    spaceman_rev,
+                                    git_remote,
+                                    git_rev,
+                                    git_date,
+                                    analysis
+                                ) VALUES (
+                                    :codebase,
+                                    :spaceman_rev,
+                                    :git_remote,
+                                    :git_rev,
+                                    :git_date,
+                                    :analysis
+                                );
+                            ",
                             named_params! {
                                 ":codebase": codebase,
                                 ":spaceman_rev": COMMIT,
@@ -273,6 +332,31 @@ impl Analyze {
 
         Ok(())
     }
+}
+
+fn discover_suite(path: &Path) -> Option<String> {
+    for fname in [
+        "dependencies.sh",
+        "_build_dependencies.sh",
+        ".gitlab-ci.yml",
+        "buildByond.conf",
+        "tools/travis/install_spaceman_dmm.sh",
+    ] {
+        if let Ok(contents) = fs::read_to_string(path.join(fname))
+            && let Some(start) = contents.find("suite-")
+            && let Some(len) =
+                contents[start..].find(|ch: char| !(ch.is_alphanumeric() || ch == '-' || ch == '.'))
+        {
+            return Some(contents[start..start + len].to_owned());
+        }
+    }
+    None
+}
+
+fn discover_config(path: &Path) -> Option<String> {
+    fs::read_to_string(path.join("SpacemanDMM.toml"))
+        .ok()
+        .filter(|text| !text.starts_with("#FAKE"))
 }
 
 fn analyze(path: &Path) -> Result<Analysis, Box<dyn Error>> {
@@ -381,9 +465,16 @@ impl std::ops::Sub<ErrorCounts> for ErrorCounts {
 // Render
 
 const STYLESHEET: &str = "
+    * {
+        box-sizing: border-box;
+    }
+    html {
+        background: #f8f8f8;
+    }
     table {
         border-spacing: 0;
         border-collapse: collapse;
+        background: white;
     }
     th {
         vertical-align: bottom;
@@ -393,8 +484,27 @@ const STYLESHEET: &str = "
         border: 1px solid #eee;
         padding: 4px;
     }
-    .error-count {
+    tbody > tr:nth-child(2n+1) {
+        background: #fbfbfb;
+    }
+    td.error-count, th.error-count {
         text-align: right;
+    }
+    td.icon, th.icon {
+        cursor: default;
+        padding: 0;
+        min-width: 28px;
+        line-height: 27px;
+        text-align: center;
+        vertical-align: middle;
+    }
+    td.icon.left, th.icon.left {
+        text-align: left;
+        padding-left: 3px;
+    }
+    td.icon > a, th.icon > a {
+        display: block;
+        text-decoration: none;
     }
     td.error-count:empty::before {
         content: '✓';
@@ -407,7 +517,7 @@ const WARNING_EMOJI: &str = "⚠️";
 const INFO_EMOJI: &str = "ℹ️";
 
 const CHECK_FATAL_EMOJI: &str = ERROR_EMOJI;
-const CHECK_NEUTRAL_EMOJI: &str = "";
+const CHECK_CONFIG_EMOJI: &str = "⚙️";
 const CHECK_DESIRED_EMOJI: &str = "🟢";
 
 impl Render {
@@ -423,36 +533,45 @@ impl Render {
                 head {
                     meta charset="utf-8";
                     title { "SpacemanDMM Zoo" }
-                    style { (STYLESHEET) }
+                    style { (PreEscaped(STYLESHEET)) }
                 }
                 body {
                     table {
                         thead {
                             tr {
-                                th rowspan="2" { "Codebase" }
-                                th rowspan="2" { "Date" }
-                                th colspan="3" { "Parse" }
-                                th colspan="4" { "Check" }
+                                th colspan="4" {}
+                                th colspan="7" { "master" }
                             }
                             tr {
-                                th.error-count title="Errors" { (ERROR_EMOJI) }
-                                th.error-count title="Warnings" { (WARNING_EMOJI) }
-                                th.error-count title="Infos" { (INFO_EMOJI) }
-                                th {}
-                                th.error-count title="Errors" { (ERROR_EMOJI) }
-                                th.error-count title="Warnings" { (WARNING_EMOJI) }
-                                th.error-count title="Infos" { (INFO_EMOJI) }
+                                th rowspan="2" { "Codebase" }
+                                th rowspan="2" { "Date" }
+                                th rowspan="2" colspan="2" { "Config" }
+
+                                th rowspan="2" {}
+                                th colspan="3" { "Parse" }
+                                th colspan="3" { "Check" }
+                            }
+                            tr {
+                                th.error-count.icon title="Errors" { (ERROR_EMOJI) }
+                                th.error-count.icon title="Warnings" { (WARNING_EMOJI) }
+                                th.error-count.icon title="Infos" { (INFO_EMOJI) }
+                                th.error-count.icon title="Errors" { (ERROR_EMOJI) }
+                                th.error-count.icon title="Warnings" { (WARNING_EMOJI) }
+                                th.error-count.icon title="Infos" { (INFO_EMOJI) }
                             }
                         }
                         tbody {
                             @for row in db
                                 .prepare(
                                     "
-                                    SELECT *
-                                    FROM analysis
-                                    WHERE spaceman_rev = :spaceman_rev
-                                    ORDER BY git_date DESC;
-                                ",
+                                        SELECT *
+                                        FROM analysis
+                                        LEFT JOIN config
+                                        ON analysis.codebase = config.codebase
+                                            AND analysis.git_rev = config.git_rev
+                                        WHERE spaceman_rev = :spaceman_rev
+                                        ORDER BY git_date DESC;
+                                    ",
                                 )?
                                 .query_map(
                                     named_params! {
@@ -460,26 +579,46 @@ impl Render {
                                     },
                                     |row| {
                                         let analysis = serde_json::from_str::<Analysis>(&row.get::<_, String>("analysis")?).unwrap();
-                                        let date = html! { (row.get::<_, String>("git_date")?) };
+
+                                        let date = row.get::<_, String>("git_date")?;
+                                        let date = html! { (&date[..10]) };
                                         let date = match (row.get::<_, String>("git_remote")?.as_str(), row.get::<_, String>("git_rev")?.as_str()) {
                                             ("", "") => date,
-                                            (remote, rev) => html! { a href=(format!("{remote}/commit/{rev}")) target="_blank" { (date) } },
+                                            (remote, rev) => html! { a href=(format!("{}/commit/{}", remote.trim_end_matches('/'), rev)) target="_blank" { (date) } },
                                         };
+
+                                        let config = row.get::<_, Option<String>>("config")?;
+
                                         Ok(html! {
                                             tr {
+                                                // Codebase and revision
                                                 td { (row.get::<_, String>("codebase")?) }
                                                 td { (date) }
+
+                                                // Config of that codebase and revision
+                                                @if let Some(suite) = row.get::<_, Option<String>>("suite")? {
+                                                    td {
+                                                        a href=(format!("https://github.com/SpaceManiac/SpacemanDMM/releases/{suite}")) target="_blank" { (suite) }
+                                                    }
+                                                } @else {
+                                                    td {}
+                                                }
+                                                @if analysis.dreamchecker_voluntary {
+                                                    td.icon title="config: dreamchecker = true" { (CHECK_DESIRED_EMOJI) }
+                                                } @else if config.is_some() {
+                                                    td.icon title="config present" { (CHECK_CONFIG_EMOJI) }
+                                                } @else {
+                                                    td.icon title="no config" {}
+                                                }
+
+                                                // Loaded SpacemanDMM version
+                                                td.icon { a href="#" { "📄" } }
                                                 (error_count(analysis.parse_errors.error))
                                                 (error_count(analysis.parse_errors.warning))
                                                 (error_count(analysis.parse_errors.info))
                                                 @if analysis.fatal_errored {
-                                                    td colspan="4" title="fatal parser error" { (CHECK_FATAL_EMOJI) }
+                                                    td.icon.left colspan="3" title="fatal parser error" { (CHECK_FATAL_EMOJI) }
                                                 } @else {
-                                                    @if analysis.dreamchecker_voluntary {
-                                                        td title="config: dreamchecker = true" { (CHECK_DESIRED_EMOJI) }
-                                                    } @else {
-                                                        td { (CHECK_NEUTRAL_EMOJI) }
-                                                    }
                                                     (error_count(analysis.dreamchecker_errors.error))
                                                     (error_count(analysis.dreamchecker_errors.warning))
                                                     (error_count(analysis.dreamchecker_errors.info))
