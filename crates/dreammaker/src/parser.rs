@@ -623,6 +623,13 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 self.annotate(start, || Annotation::InSequence(idx));
                 success(i)
             },
+            Token::Int(i) => {
+                // Handles `var/const/OPEN = 1` in some old codebases.
+                DMError::new(start, format!("got `{i}`, expected identifier")).register(self.context);
+                let i = Ident::from_nonstatic(&i.to_string());
+                self.annotate(start, || Annotation::InSequence(idx));
+                success(i)
+            },
         } else try_another())
     }
 
