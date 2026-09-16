@@ -324,7 +324,8 @@ pub struct Parser<'ctx, 'an, 'inp> {
     input: Box<dyn Iterator<Item = LocatedToken> + 'inp>,
     eof: bool,
     possible_indentation_error: bool,
-    next: Option<Token>,
+    /// Lookahead buffer. Usually one token, sometimes two in error handling.
+    next: VecDeque<LocatedToken>,
     location: Location,
     expected: Vec<Cow<'static, str>>,
     skipping_location: Option<Location>,
@@ -373,7 +374,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             input: Box::new(input.into_iter()),
             eof: false,
             possible_indentation_error: false,
-            next: None,
+            next: Default::default(),
             location: Location::UNKNOWN,
             expected: Vec::new(),
             skipping_location: None,
@@ -471,11 +472,9 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             let message = format!("got `{got:#}`, expected one of: {expected}");
             let mut error = self.error(message);
             if self.possible_indentation_error {
-                let mut loc = error.location();
-                loc.line += 1;
-                loc.column = 1;
+                let next = self.peek_n(1);
                 error.add_note(
-                    loc,
+                    next.start,
                     "check for extra indentation at the start of the next line",
                 );
                 self.possible_indentation_error = false;
@@ -502,10 +501,14 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     /// Peek next token without consuming it, and update location.
     fn peek(&mut self) -> &Token {
-        loop {
-            if let Some(ref next) = self.next {
-                break next;
-            }
+        self.peek_n(0);
+        let t = self.next.front().unwrap();
+        self.location = t.start;
+        &t.token
+    }
+
+    fn peek_n(&mut self, n: usize) -> &LocatedToken {
+        while n >= self.next.len() {
             match self.input.next() {
                 Some(LocatedToken {
                     start: location,
@@ -514,24 +517,24 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 }) => {
                     self.doc_comments_pending.push_back((location, comment));
                 },
-                Some(LocatedToken {
-                    start: location,
-                    end: _,
-                    token,
-                }) => {
-                    self.location = location;
-                    self.next = Some(token);
+                Some(token) => {
+                    self.next.push_back(token);
                 },
                 None => {
                     if !self.eof {
                         self.eof = true;
-                        self.next = Some(Token::Eof);
+                        self.next.push_back(LocatedToken {
+                            start: self.location,
+                            end: self.location,
+                            token: Token::Eof,
+                        });
                     } else {
                         panic!("internal parser error: kept parsing after EOF");
                     }
                 },
             }
         }
+        self.next.get(n).unwrap()
     }
 
     /// Consume next token unconditionally. Cannot be undone. Try `take_match!` instead.
@@ -539,7 +542,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
         self.peek(); // Always populates self.next, so .take().unwrap() is OK
         self.doc_comments_pending.clear();
         self.expected.clear();
-        self.next.take().unwrap()
+        self.next.pop_front().unwrap().token
     }
 
     fn next_comment_of_target(&mut self, target: DocTarget) -> Status<DocComment> {
@@ -554,7 +557,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     return Ok(None);
                 }
             }
-            if self.next.is_some() {
+            if !self.next.is_empty() {
                 return Ok(None);
             }
             match self.input.next() {
@@ -573,8 +576,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                     }
                 },
                 Some(other) => {
-                    self.location = other.start;
-                    self.next = Some(other.token);
+                    self.next.push_back(other);
                     return Ok(None);
                 },
                 None => return Ok(None),
