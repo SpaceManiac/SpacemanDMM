@@ -630,6 +630,13 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 self.annotate(start, || Annotation::InSequence(idx));
                 success(i)
             },
+            Token![..] => {
+                // Handles unscoped `..()` in some old codebases.
+                DMError::new(start, format!("got `..`, expected identifier")).register(self.context);
+                let i = ident!("..");
+                self.annotate(start, || Annotation::InSequence(idx));
+                success(i)
+            },
         } else try_another())
     }
 
