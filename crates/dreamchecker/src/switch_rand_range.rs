@@ -50,7 +50,7 @@ pub fn check_switch_rand_range(
         if *start > first_uncovered {
             break;
         } else {
-            first_uncovered = std::cmp::max(first_uncovered, end + 1);
+            first_uncovered = std::cmp::max(first_uncovered, end.saturating_add(1));
         }
     }
 
