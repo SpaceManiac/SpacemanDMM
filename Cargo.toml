@@ -12,6 +12,7 @@ members = [
     "crates/dreammaker-macros",
     "crates/interval-tree",
     #"crates/spaceman-dmm",
+    "crates/zoo",
 ]
 
 [workspace.package]
