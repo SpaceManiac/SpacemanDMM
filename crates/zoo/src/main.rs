@@ -69,6 +69,13 @@ CREATE TABLE IF NOT EXISTS config (
     suite TEXT,
     config TEXT
 );
+
+CREATE TABLE IF NOT EXISTS spaceman_tag (
+    name TEXT,
+    spaceman_rev TEXT,
+    sort NUMBER,
+    PRIMARY KEY (name) ON CONFLICT REPLACE
+);
 ";
 
 fn db(repos: &Path) -> rusqlite::Connection {
