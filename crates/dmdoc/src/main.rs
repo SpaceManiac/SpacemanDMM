@@ -361,15 +361,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
 
                 // `type` is pulled from the parent if necessary
-                let type_ = ty.get_var_declaration(name).map(|decl| VarType {
-                    is_static: decl.var_type.flags.is_static(),
-                    is_const: decl.var_type.flags.is_const(),
-                    is_tmp: decl.var_type.flags.is_tmp(),
-                    is_final: decl.var_type.flags.is_final(),
-                    //is_private: decl.var_type.flags.is_private(),
-                    //is_protected: decl.var_type.flags.is_protected(),
-                    path: decl.var_type.type_path.as_slice(),
-                    input_type: decl.var_type.input_type,
+                let type_ = ty.get_var_declaration(name).map(|decl| {
+                    let decl = decl.get();
+                    VarType {
+                        is_static: decl.var_type.flags.is_static(),
+                        is_const: decl.var_type.flags.is_const(),
+                        is_tmp: decl.var_type.flags.is_tmp(),
+                        is_final: decl.var_type.flags.is_final(),
+                        //is_private: decl.var_type.flags.is_private(),
+                        //is_protected: decl.var_type.flags.is_protected(),
+                        path: decl.var_type.type_path.as_slice(),
+                        input_type: decl.var_type.input_type,
+                    }
                 });
                 parsed_type.vars.insert(
                     name,

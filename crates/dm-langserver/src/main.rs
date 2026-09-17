@@ -1892,7 +1892,7 @@ impl Engine {
                     },
                     UnscopedVar::Variable { ty, .. } => {
                         if let Some(decl) = ty.get_var_declaration(var_name) {
-                            type_path = decl.var_type.type_path.as_slice();
+                            type_path = decl.get().var_type.type_path.as_slice();
                         }
                     },
                     UnscopedVar::Local { var_type, .. } => {

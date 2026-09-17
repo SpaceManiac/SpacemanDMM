@@ -2991,7 +2991,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         // Or maybe we should also handle new procpath() returning a procpath.
                         Analysis::from(StaticType::Proc)
                     } else if let Some(decl) = ty.get_var_declaration(name) {
-                        if ty != self.ty && decl.var_type.flags.is_private() {
+                        if decl.ty().is_root() && !ty.is_root() {
+                            error(location, format!("undefined field: {name:?} on {ty}"))
+                                .with_note(decl.location, format!("there is a global /var/{name}"))
+                                .register(self.context);
+                        } else if ty != self.ty && decl.var_type.flags.is_private() {
                             error(
                                 location,
                                 format!("field {name:?} on {ty} is declared as private"),
@@ -3067,6 +3071,14 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     .register(self.context);
                     return Analysis::empty();
                 };
+                if decl.ty().is_root() && !real_type.is_root() {
+                    error(
+                        location,
+                        format!("undefined field: {name:?} on {real_type}"),
+                    )
+                    .with_note(decl.location, format!("there is a global /var/{name}"))
+                    .register(self.context);
+                }
 
                 self.static_type(location, decl.var_type.type_path.as_slice())
                     .with_fix_hint(decl.location, "add additional type info here")
@@ -3076,7 +3088,14 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 if let Some(ty) = lhs.static_ty.basic_type() {
                     self.check_type_sleepers(ty, location, name);
                     if let Some(proc) = ty.get_proc(name) {
-                        if let Some((privateproc, true, decllocation)) =
+                        if proc.ty().is_root() && !ty.is_root() {
+                            error(location, format!("undefined proc: {name:?} on {ty}"))
+                                .with_note(
+                                    proc.location,
+                                    format!("there is a global /proc/{name}()"),
+                                )
+                                .register(self.context);
+                        } else if let Some((privateproc, true, decllocation)) =
                             self.env.private.get_self_or_parent(proc)
                             && ty != privateproc.ty()
                         {
@@ -3091,8 +3110,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                             .with_note(decllocation, "prohibited by this private_proc annotation")
                             .register(self.context);
                             return Analysis::empty(); // dont double up with visit_call()
-                        }
-                        if let Some((protectedproc, true, decllocation)) =
+                        } else if let Some((protectedproc, true, decllocation)) =
                             self.env.protected.get_self_or_parent(proc)
                             && !self.ty.is_subtype_of(protectedproc.ty().get())
                         {
@@ -3167,6 +3185,11 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         .register(self.context);
                     return Analysis::empty();
                 };
+                if decl.ty().is_root() && !real_type.is_root() {
+                    error(location, format!("undefined proc: {name:?} on {real_type}"))
+                        .with_note(decl.location, format!("there is a global /proc/{name}()"))
+                        .register(self.context);
+                }
 
                 // Gonna build the proc's path
                 let mut path_elements: Vec<Ident> = real_type
