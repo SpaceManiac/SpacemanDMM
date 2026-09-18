@@ -11,7 +11,6 @@ clap = { version = "4.5.20", features = ["derive"] }
 dreamchecker = { version = "1.11.0", path = "../dreamchecker" }
 dreammaker = { version = "0.1.0", path = "../dreammaker" }
 git2.workspace = true
-maud = "0.27.0"
 rusqlite = "0.40.2"
 serde = { version = "1.0.213", features = ["derive"] }
 serde_json = "1.0.132"

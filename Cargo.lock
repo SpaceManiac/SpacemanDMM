@@ -2347,7 +2347,6 @@ dependencies = [
  "dreamchecker",
  "dreammaker",
  "git2",
- "maud",
  "rusqlite",
  "serde",
  "serde_json",
