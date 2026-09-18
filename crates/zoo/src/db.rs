@@ -1,6 +1,6 @@
 use std::{error::Error, ops::Deref, path::Path};
 
-use git2::Repository;
+use git2::{Commit, DescribeFormatOptions, DescribeOptions, Repository};
 use rusqlite::{Connection, named_params};
 
 use crate::format_git_time;
@@ -9,6 +9,7 @@ const SCHEMA: &'static str = r#"
 CREATE TABLE IF NOT EXISTS "spaceman_rev" (
 	"spaceman_rev"	TEXT NOT NULL,
 	"date"	TEXT NOT NULL,
+	"describe"	TEXT NOT NULL,
 	PRIMARY KEY("spaceman_rev")
 );
 CREATE TABLE IF NOT EXISTS "spaceman_tag" (
@@ -72,9 +73,7 @@ impl Db {
             .find_branch("master", git2::BranchType::Local)?
             .into_reference()
             .peel_to_commit()?;
-        let spaceman_rev = master.id().to_string();
-        self.insert_spaceman_rev(&spaceman_rev, &format_git_time(master.time()))
-            .unwrap();
+        let spaceman_rev = self.insert_spaceman_rev_commit(&master)?;
         self.insert_spaceman_tag("master", &spaceman_rev).unwrap();
         eprintln!("master = {}", &spaceman_rev[..12]);
 
@@ -89,9 +88,7 @@ impl Db {
                     .unwrap()
                     .into_commit()
                     .unwrap();
-                let spaceman_rev = commit.id().to_string();
-                self.insert_spaceman_rev(&spaceman_rev, &format_git_time(commit.time()))
-                    .unwrap();
+                let spaceman_rev = self.insert_spaceman_rev_commit(&commit).unwrap();
                 self.insert_spaceman_tag(name, &spaceman_rev).unwrap();
             }
             true
@@ -101,22 +98,41 @@ impl Db {
         let base = repo.merge_base(master.id(), head.id())?;
         let base = repo.find_commit(base)?;
         if base.id() != master.id() {
-            let spaceman_rev = base.id().to_string();
-            self.insert_spaceman_rev(&spaceman_rev, &format_git_time(base.time()))?;
+            let spaceman_rev = self.insert_spaceman_rev_commit(&base)?;
             eprintln!("HEAD = {}", &spaceman_rev[..12]);
         }
 
         Ok(())
     }
 
-    fn insert_spaceman_rev(&self, spaceman_rev: &str, date: &str) -> Result<(), Box<dyn Error>> {
+    fn insert_spaceman_rev_commit(&self, commit: &Commit) -> Result<String, Box<dyn Error>> {
+        let spaceman_rev = commit.id().to_string();
+        let date = format_git_time(commit.time());
+        let describe = commit
+            .as_object()
+            .describe(&DescribeOptions::new())?
+            .format(Some(&DescribeFormatOptions::new().abbreviated_size(12)))?;
+        self.insert_spaceman_rev(&spaceman_rev, &date, &describe)?;
+        Ok(spaceman_rev)
+    }
+
+    fn insert_spaceman_rev(
+        &self,
+        spaceman_rev: &str,
+        date: &str,
+        describe: &str,
+    ) -> Result<(), Box<dyn Error>> {
         self.0.execute(
             "
-            INSERT INTO spaceman_rev (spaceman_rev, date)
-            VALUES (:spaceman_rev, :date)
-            ON CONFLICT DO NOTHING
-        ",
-            named_params! { ":spaceman_rev": spaceman_rev, ":date": date },
+                INSERT INTO spaceman_rev (spaceman_rev, date, describe)
+                VALUES (:spaceman_rev, :date, :describe)
+                ON CONFLICT DO UPDATE SET describe = :describe
+            ",
+            named_params! {
+                ":spaceman_rev": spaceman_rev,
+                ":date": date,
+                ":describe": describe,
+            },
         )?;
         Ok(())
     }
