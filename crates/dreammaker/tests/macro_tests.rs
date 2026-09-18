@@ -14,7 +14,7 @@ fn process(source: &'static str) -> Vec<dm::lexer::Token> {
         .skip_while(|tok| *tok == Token!['\n'])
         .collect();
     ctx.assert_success();
-    while let Some(&Token!['\n']) = tokens.last() {
+    while let Some(&Token!['\n'] | &Token![' ']) = tokens.last() {
         tokens.pop();
     }
     tokens
@@ -51,6 +51,36 @@ CLAMP(alpha - CLAMP(beta - 2, 0, beta), 3, alpha)
             Token![,],
             Ident("alpha".into(), false),
             Token![')'],
+        ]
+    );
+}
+
+#[test]
+fn variadic_token_pasting() {
+    // Per https://www.byond.com/docs/ref/#/DM/preprocessor/define:
+    // > If you use this with the last argument in a variadic macro, any preceding spaces and a comma (if found) will be removed if the replacement is empty.
+    // Actually, the same applies to any empty argument.
+    assert_eq!(
+        process(
+            r#"
+#define MACRO_COMMA(x, y...) x, ##y
+#define MACRO_SLASH(x, y...) x/ ##y
+#define MANY(w, x, y, z) w ## x ## y ## z
+MACRO_COMMA(1)
+MACRO_COMMA(1, 2)
+MACRO_SLASH(1)
+MACRO_SLASH(1, 2)
+MANY(w,,,z)
+            "#
+        )
+        .split(|t| *t == Token!['\n'])
+        .collect::<Vec<_>>(),
+        &[
+            &[Int(1)][..],
+            &[Int(1), Token![,], Int(2)],
+            &[Int(1), Token![/]],
+            &[Int(1), Token![/], Int(2)],
+            &[Ident("wz".into(), false)]
         ]
     );
 }

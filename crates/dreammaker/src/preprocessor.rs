@@ -1258,59 +1258,72 @@ impl<'ctx> Preprocessor<'ctx> {
                                 },
                                 // token paste = concat two idents together, if at all possible
                                 Token![# #] => {
-                                    match (expansion.pop_back(), input.next()) {
-                                        (
-                                            Some(Token::Ident(first, ws1)),
-                                            Some(Token::Ident(param_name, ws)),
-                                        ) => match params.iter().position(|x| *x == param_name) {
-                                            Some(i) => {
-                                                let mut arg = args[i].iter().cloned();
-                                                match arg.next() {
-                                                    Some(Token::Ident(param_ident, ws)) => {
-                                                        expansion.push_back(Token::Ident(
-                                                            format!("{first}{param_ident}").into(),
-                                                            ws,
-                                                        ));
-                                                    },
-                                                    Some(Token::Int(param_int)) => expansion
-                                                        .push_back(Token::Ident(
-                                                            format!("{first}{param_int}").into(),
-                                                            ws,
-                                                        )),
-                                                    Some(other) => {
-                                                        expansion
-                                                            .push_back(Token::Ident(first, ws1));
-                                                        expansion.push_back(other);
-                                                    },
-                                                    None => {
-                                                        expansion
-                                                            .push_back(Token::Ident(first, ws1));
-                                                    },
-                                                }
-                                                expansion.extend(arg);
+                                    fn token_paste(lhs: Option<Token>, rhs: Token) -> Vec<Token> {
+                                        let Some(lhs) = lhs else { return vec![rhs] };
+                                        match (lhs, rhs) {
+                                            // ident ## ident
+                                            (Token::Ident(first, _), Token::Ident(second, ws)) => {
+                                                vec![Token::Ident(
+                                                    format!("{first}{second}").into(),
+                                                    ws,
+                                                )]
                                             },
-                                            None => expansion.push_back(Token::Ident(
-                                                format!("{first}{param_name}").into(),
-                                                ws,
-                                            )),
-                                        },
-                                        (non_ident_first, Some(Token::Ident(second, ws))) => {
-                                            expansion.extend(non_ident_first);
-                                            match params.iter().position(|x| *x == second) {
-                                                Some(i) => {
-                                                    expansion.extend(args[i].iter().cloned())
+                                            // ident ## integer
+                                            (Token::Ident(first, _), Token::Int(second)) => {
+                                                vec![Token::Ident(
+                                                    format!("{first}{second}").into(),
+                                                    true,
+                                                )]
+                                            },
+                                            // TODO: integer ## integer, integer ## float, other weirdo cases
+                                            // no paste possible
+                                            (first, second) => {
+                                                vec![first, second]
+                                            },
+                                        }
+                                    }
+
+                                    match input.next() {
+                                        // If the token following ## is the name of a parameter:
+                                        Some(Token::Ident(param_name, _))
+                                            if let Some(param) =
+                                                params.iter().position(|x| *x == param_name) =>
+                                        {
+                                            // Paste the first token of the argument onto the last of the expansion.
+                                            let mut arg = args[param].iter().cloned();
+                                            match arg.next() {
+                                                Some(first_token_of_expansion) => {
+                                                    // Try to paste together the last token and the first token of the argument.
+                                                    let pasted = token_paste(
+                                                        expansion.pop_back(),
+                                                        first_token_of_expansion,
+                                                    );
+                                                    expansion.extend(pasted);
+                                                    // Include the rest of the argument.
+                                                    expansion.extend(arg);
                                                 },
                                                 None => {
-                                                    expansion.push_back(Token::Ident(second, ws))
+                                                    // https://www.byond.com/docs/ref/#/DM/preprocessor/define
+                                                    // "the replacement is empty", therefore "any preceding spaces and a comma (if found) will be removed"
+                                                    if let Some(Token![,]) = expansion.back() {
+                                                        expansion.pop_back();
+                                                    }
+                                                    if let Some(Token::Ident(_, ws)) =
+                                                        expansion.back_mut()
+                                                    {
+                                                        *ws = false;
+                                                    }
                                                 },
                                             }
                                         },
-                                        (non_ident_first, non_ident_second) => {
-                                            expansion.extend(non_ident_first);
-                                            expansion.extend(non_ident_second);
+                                        // Otherwise it's just some token:
+                                        Some(second) => {
+                                            // Paste that token onto the last token of the expansion.
+                                            let pasted = token_paste(expansion.pop_back(), second);
+                                            expansion.extend(pasted);
                                         },
+                                        None => {},
                                     }
-                                    // read the next ident and concat it into the previous ident
                                 },
                                 // hash = must be followed by a param name, stringify the whole argument
                                 Token![#] => match input.next() {

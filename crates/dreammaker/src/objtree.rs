@@ -444,8 +444,21 @@ impl<'a> TypeRef<'a> {
     }
 
     #[inline]
-    pub fn get_var_declaration(self, name: &str) -> Option<&'a VarDeclaration> {
-        self.get().get_var_declaration(name, self.tree)
+    pub fn get_var_declaration(self, name: &str) -> Option<VarDeclarationRef<'a>> {
+        let mut current = Some(self);
+        while let Some(ty) = current {
+            if let Some((name, var)) = ty.get().vars.get_key_value(name)
+                && let Some(decl) = &var.declaration
+            {
+                return Some(VarDeclarationRef {
+                    ty,
+                    name,
+                    value: decl,
+                });
+            }
+            current = ty.parent_type();
+        }
+        None
     }
 
     pub fn get_proc(self, name: &str) -> Option<ProcRef<'a>> {
@@ -700,6 +713,41 @@ impl<'a> std::hash::Hash for ProcRef<'a> {
         self.ty.hash(state);
         self.name.hash(state);
         self.idx.hash(state);
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Var references
+
+#[derive(Clone, Copy)]
+pub struct VarDeclarationRef<'a> {
+    ty: TypeRef<'a>,
+    name: &'a str,
+    value: &'a VarDeclaration,
+}
+
+impl<'a> VarDeclarationRef<'a> {
+    pub fn get(self) -> &'a VarDeclaration {
+        self.value
+    }
+
+    pub fn ty(self) -> TypeRef<'a> {
+        self.ty
+    }
+
+    pub fn name(&self) -> &str {
+        self.name
+    }
+
+    pub fn tree(self) -> &'a ObjectTree {
+        self.ty.tree()
+    }
+}
+
+impl<'a> std::ops::Deref for VarDeclarationRef<'a> {
+    type Target = VarDeclaration;
+    fn deref(&self) -> &VarDeclaration {
+        self.get()
     }
 }
 

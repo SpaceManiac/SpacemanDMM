@@ -620,6 +620,7 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
 
     fn ident_in_seq(&mut self, idx: usize) -> Status<Ident> {
         let start = self.updated_location();
+        self.expected("identifier");
         take_match!(self {
             Token::Ident(i, _) => {
                 self.annotate(start, || Annotation::InSequence(idx));
@@ -865,8 +866,24 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
             docs.push(doc_comment);
         }
 
+        // Handle spurious `{;}` at the tree level in case of misindented block comments.
+        let mut garbage: bool = false;
+        while *self.peek() == Token!['{'] {
+            if !garbage {
+                self.expected("`/`");
+                self.expected("identifier");
+                self.parse_error().register(self.context);
+            }
+            garbage = true;
+            self.take();
+            while *self.peek() == Token![;] {
+                self.take();
+            }
+            require!(self.exact(Token!['}']));
+        }
+
         // read and calculate the current path
-        let (absolute, mut path) = if docs.is_empty() {
+        let (absolute, mut path) = if docs.is_empty() && !garbage {
             leading!(self.tree_path(false))
         } else {
             require!(self.tree_path(false))
