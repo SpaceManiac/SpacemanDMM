@@ -38,7 +38,7 @@ export function Zoo(props: ZooProps) {
         <RevisionDetail codebase={params.codebase} git_rev={params.git_rev} />
       ) : (
         // Many codebases, many SpacemanDMM versions
-        <CodebaseBySpaceman />
+        <CodebaseBySpaceman codebase={params.codebase} />
       )}
     </>
   );
@@ -155,12 +155,17 @@ function RevisionDetail(props: { codebase: string; git_rev: string }) {
   );
 }
 
-function CodebaseBySpaceman(props: { date_max?: string; date_min?: string }) {
+function CodebaseBySpaceman(props: {
+  codebase?: string;
+  date_max?: string;
+  date_min?: string;
+}) {
   const tags = useSpacemanTags();
 
   const data = useQuery<
     DbCodebase & DbCodebaseCommit & DbCommit & DbTree & DbTreeAnalysis
-  >(`
+  >(
+    `
     SELECT *
     FROM codebase
     LEFT JOIN codebase_commit
@@ -171,15 +176,28 @@ function CodebaseBySpaceman(props: { date_max?: string; date_min?: string }) {
       ON "commit".tree = tree.tree
     LEFT JOIN tree_analysis
       ON tree.tree = tree_analysis.tree
+    WHERE (codebase.codebase = :codebase OR :codebase IS NULL)
     ORDER BY date DESC
-  `);
+  `,
+    {
+      ":codebase": props.codebase || null,
+    },
+  );
 
-  const byCodebase: Record<
-    string,
-    (DbCodebase & DbCodebaseCommit & DbCommit & DbTree & DbTreeAnalysis)[]
-  > = {};
-  for (const row of data || []) {
-    (byCodebase[row.codebase] ??= []).push(row);
+  let groups:
+    | (DbCodebase & DbCodebaseCommit & DbCommit & DbTree & DbTreeAnalysis)[][]
+    | null = null;
+  if (props.codebase) {
+    groups = data?.map((d) => [d]) || null;
+  } else if (data) {
+    const byCodebase: Record<
+      string,
+      (DbCodebase & DbCodebaseCommit & DbCommit & DbTree & DbTreeAnalysis)[]
+    > = {};
+    for (const row of data || []) {
+      (byCodebase[row.codebase] ??= []).push(row);
+    }
+    groups = Object.values(byCodebase);
   }
 
   const spacemanRevSet = new Set(data?.map((row) => row.spaceman_rev));
@@ -188,104 +206,119 @@ function CodebaseBySpaceman(props: { date_max?: string; date_min?: string }) {
   );
 
   return (
-    <table>
-      <thead>
-        <tr>
-          <th colspan={4}></th>
-          {filteredTags.map((tag) => (
-            <RunHeader1 {...tag} />
-          ))}
-        </tr>
-        <tr>
-          <th rowspan={2}>Codebase</th>
-          <th rowspan={2}>Date</th>
-          <th rowspan={2} colspan={2}>
-            Config
-          </th>
-          {filteredTags.map(() => (
-            <RunHeader2 />
-          ))}
-        </tr>
-        <tr>
-          {filteredTags.map(() => (
-            <RunHeader3 />
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {data ? (
-          Object.values(byCodebase).map((group) => {
-            const row = group[0]!;
-
-            const date = row.date.substring(0, 10);
-
-            return (
-              <tr>
-                {/* Codebase part */}
-                <td>{row.codebase}</td>
-                <td>
-                  <RevisionLink row={row}>{date}</RevisionLink>
-                </td>
-                <td>
-                  {row.suite ? (
-                    <a
-                      href={`https://github.com/SpaceManiac/SpacemanDMM/releases/${row.suite}`}
-                      target="_blank"
-                    >
-                      {row.suite}
-                    </a>
-                  ) : null}
-                </td>
-                <td class="icon">
-                  {row.config && row.config.match(/dreamchecker = true/) ? (
-                    <a
-                      href={`#codebase=${row.codebase}&git_rev=${row.commit}`}
-                      title="config: dreamchecker = true"
-                    >
-                      {CONFIG_DREAMCHECKER}
-                    </a>
-                  ) : row.config ? (
-                    <a
-                      href={`#codebase=${row.codebase}&git_rev=${row.commit}`}
-                      title="config present"
-                    >
-                      {CONFIG_MISC}
-                    </a>
-                  ) : (
-                    <a
-                      href={`#codebase=${row.codebase}&git_rev=${row.commit}`}
-                      title="no config"
-                    >
-                      {CONFIG_NONE}
-                    </a>
-                  )}
-                </td>
-                {/* Analysis part */}
-                {filteredTags.map((tag) => {
-                  const row = group.find(
-                    (row) => row.spaceman_rev == tag.spaceman_rev,
-                  );
-                  return row ? (
-                    <RunEntry
-                      codebase={row.codebase}
-                      git_rev={row.commit || ""}
-                      spaceman_rev={row.spaceman_rev}
-                      analysis={JSON.parse(row.analysis)}
-                    />
-                  ) : (
-                    <td colspan={7} />
-                  );
-                })}
-              </tr>
-            );
-          })
+    <>
+      <h3>
+        {props.codebase ? (
+          <>Runs for {props.codebase}</>
         ) : (
-          <tr>
-            <td colspan={12}>Loading...</td>
-          </tr>
+          <>Latest run for each codebase</>
         )}
-      </tbody>
-    </table>
+      </h3>
+      <table>
+        <thead>
+          <tr>
+            <th colspan={4}></th>
+            {filteredTags.map((tag) => (
+              <RunHeader1 {...tag} />
+            ))}
+          </tr>
+          <tr>
+            <th rowspan={2}>Codebase</th>
+            <th rowspan={2}>Date</th>
+            <th rowspan={2} colspan={2}>
+              Config
+            </th>
+            {filteredTags.map(() => (
+              <RunHeader2 />
+            ))}
+          </tr>
+          <tr>
+            {filteredTags.map(() => (
+              <RunHeader3 />
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {groups ? (
+            groups.map((group) => {
+              const row = group[0]!;
+
+              const date = row.date.substring(0, 10);
+
+              return (
+                <tr>
+                  {/* Codebase part */}
+                  <td>
+                    {props.codebase ? (
+                      row.codebase
+                    ) : (
+                      <a href={`#codebase=${row.codebase}`}>{row.codebase}</a>
+                    )}
+                  </td>
+                  <td>
+                    <RevisionLink row={row}>{date}</RevisionLink>
+                  </td>
+                  <td>
+                    {row.suite ? (
+                      <a
+                        href={`https://github.com/SpaceManiac/SpacemanDMM/releases/${row.suite}`}
+                        target="_blank"
+                      >
+                        {row.suite}
+                      </a>
+                    ) : null}
+                  </td>
+                  <td class="icon">
+                    {row.config && row.config.match(/dreamchecker = true/) ? (
+                      <a
+                        href={`#codebase=${row.codebase}&git_rev=${row.commit}`}
+                        title="config: dreamchecker = true"
+                      >
+                        {CONFIG_DREAMCHECKER}
+                      </a>
+                    ) : row.config ? (
+                      <a
+                        href={`#codebase=${row.codebase}&git_rev=${row.commit}`}
+                        title="config present"
+                      >
+                        {CONFIG_MISC}
+                      </a>
+                    ) : (
+                      <a
+                        href={`#codebase=${row.codebase}&git_rev=${row.commit}`}
+                        title="no config"
+                      >
+                        {CONFIG_NONE}
+                      </a>
+                    )}
+                  </td>
+                  {/* Analysis part */}
+                  {filteredTags.map((tag) => {
+                    const row = group.find(
+                      (row) => row.spaceman_rev == tag.spaceman_rev,
+                    );
+                    return row ? (
+                      <RunEntry
+                        codebase={row.codebase}
+                        git_rev={row.commit || ""}
+                        spaceman_rev={row.spaceman_rev}
+                        analysis={JSON.parse(row.analysis)}
+                      />
+                    ) : (
+                      <td colspan={7} />
+                    );
+                  })}
+                </tr>
+              );
+            })
+          ) : (
+            <tr>
+              <td colspan={12}>Loading...</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </>
   );
 }
 

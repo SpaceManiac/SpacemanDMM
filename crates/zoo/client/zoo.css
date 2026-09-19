@@ -63,3 +63,9 @@ h1, h2, h3, p {
 h1 {
     margin-top: 0;
 }
+
+a[href^="http://"]::after, a[href^="https://"]::after {
+    display: inline;
+    content: '↗';
+    font-size: smaller;
+}
