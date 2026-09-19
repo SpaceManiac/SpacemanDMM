@@ -1,7 +1,8 @@
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashSet, VecDeque},
     error::Error,
     fs,
+    panic::{AssertUnwindSafe, catch_unwind},
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
@@ -42,6 +43,9 @@ enum Command {
 struct Analyze {
     #[arg(long = "no-pull", action = SetTrue)]
     no_pull: bool,
+
+    #[arg(long = "max-date")]
+    max_date: Option<String>,
 }
 
 // ----------------------------------------------------------------------------
@@ -76,7 +80,7 @@ impl Analyze {
             eprintln!("-- ({}/{}) {}", i + 1, zoo_toml.codebase.len(), codebase);
 
             // Metadata
-            let commit;
+            let mut commit;
             if self.no_pull {
                 let branch = match repo.find_branch(codebase, BranchType::Local) {
                     Ok(branch) => branch,
@@ -115,6 +119,24 @@ impl Analyze {
                 }
                 repo.branch(codebase, &commit, true)?;
             }
+
+            if let Some(max_date) = &self.max_date {
+                let mut seen = HashSet::new();
+                let mut queue = VecDeque::new();
+                queue.push_back(commit.clone());
+                while let Some(current) = queue.pop_front() {
+                    if format_git_time(current.time()) < *max_date {
+                        commit = current;
+                        break;
+                    }
+                    for each in current.parents() {
+                        if seen.insert(each.id()) {
+                            queue.push_back(each);
+                        }
+                    }
+                }
+            }
+
             let commit_sha = commit.id().to_string();
             let tree = commit.tree()?;
             let tree_sha = tree.id().to_string();
@@ -135,19 +157,22 @@ impl Analyze {
             db.insert_codebase_commit(codebase, &commit_sha)?;
 
             // Analysis
-            db.insert_tree_analysis_with(&tree_sha, &spaceman_rev, || {
-                let path = checkout(&mut checkouts, &zoo.root, &repo, &tree);
-                let analysis = analyze(&path, info.environment.as_deref()).unwrap();
-                let analysis_json = serde_json::to_string(&analysis).unwrap();
-                eprintln!(
-                    "{:?}",
-                    Analysis {
-                        errors: Default::default(),
-                        ..analysis
-                    },
-                );
-                analysis_json
-            })?;
+            _ = catch_unwind(AssertUnwindSafe(|| {
+                db.insert_tree_analysis_with(&tree_sha, &spaceman_rev, || {
+                    let path = checkout(&mut checkouts, &zoo.root, &repo, &tree);
+                    let analysis = analyze(&path, info.environment.as_deref()).unwrap();
+                    let analysis_json = serde_json::to_string(&analysis).unwrap();
+                    eprintln!(
+                        "{:?}",
+                        Analysis {
+                            errors: Default::default(),
+                            ..analysis
+                        },
+                    );
+                    analysis_json
+                })
+                .unwrap();
+            }));
         }
 
         Ok(())
