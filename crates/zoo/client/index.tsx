@@ -54,16 +54,21 @@ function SingleRunDetail(props: {
     tags.map((tag) => [tag.spaceman_rev, tag.name]),
   );
 
-  const data = useQueryOne<AnalysisRow & ConfigRow>(
+  const data = useQueryOne<DbCodebase & DbCommit & DbTree & DbTreeAnalysis>(
     `
       SELECT *
-      FROM analysis
-      LEFT JOIN config
-      ON analysis.codebase = config.codebase
-        AND analysis.git_rev = config.git_rev
-      WHERE analysis.codebase = :codebase
-        AND analysis.git_rev = :git_rev
-        AND spaceman_rev = :spaceman_rev
+      FROM codebase
+      LEFT JOIN codebase_commit
+        ON codebase.codebase = codebase_commit.codebase
+      LEFT JOIN "commit"
+        ON codebase_commit."commit" = "commit"."commit"
+      LEFT JOIN tree
+        ON "commit".tree = tree.tree
+      LEFT JOIN tree_analysis
+        ON "commit".tree = tree_analysis.tree
+      WHERE codebase.codebase = :codebase
+        AND "commit"."commit" = :git_rev
+        AND tree_analysis.spaceman_rev = :spaceman_rev
     `,
     {
       ":codebase": props.codebase,
@@ -81,9 +86,7 @@ function SingleRunDetail(props: {
         {data ? (
           <>
             {" "}
-            <RevisionLink row={data}>
-              {data.git_date.substring(0, 10)}
-            </RevisionLink>
+            <RevisionLink row={data}>{data.date.substring(0, 10)}</RevisionLink>
             {" on SpacemanDMM "}
             {reverseTags[data.spaceman_rev] || data.spaceman_rev}
           </>
@@ -114,7 +117,7 @@ function SingleRunDetail(props: {
 }
 
 function RevisionDetail(props: { codebase: string; git_rev: string }) {
-  const data = useQueryOne<AnalysisRow & ConfigRow>(
+  const data = useQueryOne<DbCodebase & DbCommit & DbCodebaseCommit>(
     `
       SELECT *
       FROM analysis
@@ -137,9 +140,7 @@ function RevisionDetail(props: { codebase: string; git_rev: string }) {
         {data ? (
           <>
             {" "}
-            <RevisionLink row={data}>
-              {data.git_date.substring(0, 10)}
-            </RevisionLink>
+            <RevisionLink row={data}>{data.date.substring(0, 10)}</RevisionLink>
           </>
         ) : null}
       </h3>
@@ -157,19 +158,30 @@ function RevisionDetail(props: { codebase: string; git_rev: string }) {
 function CodebaseBySpaceman(props: { date_max?: string; date_min?: string }) {
   const tags = useSpacemanTags();
 
-  const data = useQuery<AnalysisRow>(`
+  const data = useQuery<
+    DbCodebase & DbCodebaseCommit & DbCommit & DbTree & DbTreeAnalysis
+  >(`
     SELECT *
-    FROM analysis
-    ORDER BY git_date DESC
-  `);
-  const configs = useQuery<ConfigRow>(`
-    SELECT *
-    FROM config
+    FROM codebase
+    LEFT JOIN codebase_commit
+      ON codebase.codebase = codebase_commit.codebase
+    LEFT JOIN "commit"
+      ON codebase_commit."commit" = "commit"."commit"
+    LEFT JOIN tree
+      ON "commit".tree = tree.tree
+    LEFT JOIN tree_analysis
+      ON tree.tree = tree_analysis.tree
+    ORDER BY date DESC
   `);
 
-  const configMap = new Map(
-    configs?.map((row) => [`${row.codebase}${row.git_rev}`, row]),
-  );
+  const byCodebase: Record<
+    string,
+    (DbCodebase & DbCodebaseCommit & DbCommit & DbTree & DbTreeAnalysis)[]
+  > = {};
+  for (const row of data || []) {
+    (byCodebase[row.codebase] ??= []).push(row);
+  }
+
   const spacemanRevSet = new Set(data?.map((row) => row.spaceman_rev));
   const filteredTags = tags.filter((tag) =>
     spacemanRevSet.has(tag.spaceman_rev),
@@ -202,60 +214,46 @@ function CodebaseBySpaceman(props: { date_max?: string; date_min?: string }) {
       </thead>
       <tbody>
         {data ? (
-          data.map((row) => {
-            const config = configMap.get(`${row.codebase}${row.git_rev}`) || {
-              suite: undefined,
-              config: undefined,
-            };
-            const analysis: Analysis = JSON.parse(row.analysis);
+          Object.values(byCodebase).map((group) => {
+            const row = group[0]!;
 
-            const date = row.git_date.substring(0, 10);
+            const date = row.date.substring(0, 10);
 
             return (
               <tr>
                 {/* Codebase part */}
                 <td>{row.codebase}</td>
                 <td>
-                  {row.git_remote && row.git_rev ? (
-                    <a
-                      href={`${row.git_remote.replace(/\/$/, "")}/commit/${row.git_rev}`}
-                      target="_blank"
-                      title={`${row.git_date} UTC`}
-                    >
-                      {date}
-                    </a>
-                  ) : (
-                    date
-                  )}
+                  <RevisionLink row={row}>{date}</RevisionLink>
                 </td>
                 <td>
-                  {config.suite ? (
+                  {row.suite ? (
                     <a
-                      href={`https://github.com/SpaceManiac/SpacemanDMM/releases/${config.suite}`}
+                      href={`https://github.com/SpaceManiac/SpacemanDMM/releases/${row.suite}`}
                       target="_blank"
                     >
-                      {config.suite}
+                      {row.suite}
                     </a>
                   ) : null}
                 </td>
                 <td class="icon">
-                  {analysis.dreamchecker_voluntary ? (
+                  {row.config && row.config.match(/dreamchecker = true/) ? (
                     <a
-                      href={`#codebase=${row.codebase}&git_rev=${row.git_rev}`}
+                      href={`#codebase=${row.codebase}&git_rev=${row.commit}`}
                       title="config: dreamchecker = true"
                     >
                       {CONFIG_DREAMCHECKER}
                     </a>
-                  ) : config.config ? (
+                  ) : row.config ? (
                     <a
-                      href={`#codebase=${row.codebase}&git_rev=${row.git_rev}`}
+                      href={`#codebase=${row.codebase}&git_rev=${row.commit}`}
                       title="config present"
                     >
                       {CONFIG_MISC}
                     </a>
                   ) : (
                     <a
-                      href={`#codebase=${row.codebase}&git_rev=${row.git_rev}`}
+                      href={`#codebase=${row.codebase}&git_rev=${row.commit}`}
                       title="no config"
                     >
                       {CONFIG_NONE}
@@ -263,12 +261,21 @@ function CodebaseBySpaceman(props: { date_max?: string; date_min?: string }) {
                   )}
                 </td>
                 {/* Analysis part */}
-                <RunEntry
-                  codebase={row.codebase}
-                  git_rev={row.git_rev || ""}
-                  spaceman_rev={row.spaceman_rev}
-                  analysis={analysis}
-                />
+                {filteredTags.map((tag) => {
+                  const row = group.find(
+                    (row) => row.spaceman_rev == tag.spaceman_rev,
+                  );
+                  return row ? (
+                    <RunEntry
+                      codebase={row.codebase}
+                      git_rev={row.commit || ""}
+                      spaceman_rev={row.spaceman_rev}
+                      analysis={JSON.parse(row.analysis)}
+                    />
+                  ) : (
+                    <td colspan={7} />
+                  );
+                })}
               </tr>
             );
           })
@@ -396,19 +403,26 @@ function useHash(): string {
 
 function useSpacemanTags(): { name: string; spaceman_rev: string }[] {
   return (
-    useQuery(
-      `SELECT name, spaceman_rev FROM spaceman_tag ORDER BY sort DESC`,
+    useQuery<DbSpacemanTag & DbSpacemanRev>(
+      `
+        SELECT name, spaceman_tag.spaceman_rev, date
+        FROM spaceman_tag
+        JOIN spaceman_rev ON spaceman_tag.spaceman_rev = spaceman_rev.spaceman_rev
+        ORDER BY date DESC
+      `,
     ) || []
   );
 }
 
 function RevisionLink(props: {
-  row?: AnalysisRow | null;
+  row?: (DbCodebase & DbCodebaseCommit & DbCommit) | null;
   children?: ComponentChildren;
 }) {
-  return props.row?.git_remote && props.row.git_rev ? (
+  return props.row?.url && props.row.commit ? (
     <a
-      href={`${props.row.git_remote.replace(/\/$/, "")}/commit/${props.row.git_rev}`}
+      href={`${props.row.url.replace(/\/$/, "")}/commit/${props.row.commit}`}
+      target="_blank"
+      title={`${props.row.date} UTC`}
     >
       {props.children}
     </a>
@@ -417,23 +431,40 @@ function RevisionLink(props: {
   );
 }
 
-type ConfigRow = {
-  codebase: string;
-  git_rev: string;
+interface DbSpacemanRev {
+  spaceman_rev: string;
+  date: string;
+  describe: string;
+}
+interface DbSpacemanTag {
+  name: string;
+  spaceman_rev: string;
+}
+interface DbTree {
+  tree: string;
   suite?: string;
   config?: string;
-};
-
-type AnalysisRow = {
-  codebase: string;
+}
+interface DbTreeAnalysis {
+  tree: string;
   spaceman_rev: string;
-  git_remote?: string;
-  git_rev?: string;
-  git_date: string;
   analysis: string;
-};
+}
+interface DbCommit {
+  commit: string;
+  date: string;
+  tree: string;
+}
+interface DbCodebase {
+  codebase: string;
+  url?: string;
+}
+interface DbCodebaseCommit {
+  codebase: string;
+  commit: string;
+}
 
-type Analysis = {
+interface Analysis {
   precache_time: Duration;
   io_time: Duration;
   parse_time: Duration;
@@ -443,16 +474,16 @@ type Analysis = {
   dreamchecker_errors: ErrorCounts;
   dreamchecker_voluntary: boolean;
   errors: string;
-};
+}
 
-type Duration = {
+interface Duration {
   secs: number;
   nanos: number;
-};
+}
 
-type ErrorCounts = {
+interface ErrorCounts {
   error: number;
   warning: number;
   info: number;
   hint: number;
-};
+}
