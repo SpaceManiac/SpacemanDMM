@@ -188,7 +188,14 @@ function CodebaseBySpaceman(props: {
     | (DbCodebase & DbCodebaseCommit & DbCommit & DbTree & DbTreeAnalysis)[][]
     | null = null;
   if (props.codebase) {
-    groups = data?.map((d) => [d]) || null;
+    const byCommit: Record<
+      string,
+      (DbCodebase & DbCodebaseCommit & DbCommit & DbTree & DbTreeAnalysis)[]
+    > = {};
+    for (const row of data || []) {
+      (byCommit[row.commit] ??= []).push(row);
+    }
+    groups = Object.values(byCommit);
   } else if (data) {
     const byCodebase: Record<
       string,
@@ -258,16 +265,7 @@ function CodebaseBySpaceman(props: {
                   <td>
                     <RevisionLink row={row}>{date}</RevisionLink>
                   </td>
-                  <td>
-                    {row.suite ? (
-                      <a
-                        href={`https://github.com/SpaceManiac/SpacemanDMM/releases/${row.suite}`}
-                        target="_blank"
-                      >
-                        {row.suite}
-                      </a>
-                    ) : null}
-                  </td>
+                  <td>{row.suite}</td>
                   <td class="icon">
                     {row.config && row.config.match(/dreamchecker = true/) ? (
                       <a
