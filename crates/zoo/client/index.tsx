@@ -77,7 +77,7 @@ function SingleRunDetail(props: {
     },
   );
 
-  const analysis: Analysis = data ? JSON.parse(data.analysis) : null;
+  const analysis: Panic | Analysis = data ? JSON.parse(data.analysis) : null;
 
   return (
     <>
@@ -107,7 +107,13 @@ function SingleRunDetail(props: {
           <fieldset>
             <legend>Error detail</legend>
             <pre>
-              <AnsiHtml text={analysis.errors.trimEnd()} />
+              <AnsiHtml
+                text={
+                  "panic" in analysis
+                    ? analysis.panic
+                    : analysis.errors.trimEnd()
+                }
+              />
             </pre>
           </fieldset>
         </>
@@ -168,13 +174,13 @@ function CodebaseBySpaceman(props: {
     `
     SELECT *
     FROM codebase
-    LEFT JOIN codebase_commit
+    INNER JOIN codebase_commit
       ON codebase.codebase = codebase_commit.codebase
-    LEFT JOIN "commit"
+    INNER JOIN "commit"
       ON codebase_commit."commit" = "commit"."commit"
-    LEFT JOIN tree
+    INNER JOIN tree
       ON "commit".tree = tree.tree
-    LEFT JOIN tree_analysis
+    INNER JOIN tree_analysis
       ON tree.tree = tree_analysis.tree
     WHERE (codebase.codebase = :codebase OR :codebase IS NULL)
     ORDER BY date DESC
@@ -184,33 +190,39 @@ function CodebaseBySpaceman(props: {
     },
   );
 
-  let groups:
-    | (DbCodebase & DbCodebaseCommit & DbCommit & DbTree & DbTreeAnalysis)[][]
-    | null = null;
+  let rows: Record<
+    string,
+    (DbCodebase & DbCodebaseCommit & DbCommit & DbTree & DbTreeAnalysis)[]
+  > = {};
+  let rowOrder: string[] = [];
   if (props.codebase) {
-    const byCommit: Record<
-      string,
-      (DbCodebase & DbCodebaseCommit & DbCommit & DbTree & DbTreeAnalysis)[]
-    > = {};
+    // row = commit, column = SpacemanDMM version
     for (const row of data || []) {
-      (byCommit[row.commit] ??= []).push(row);
+      (rows[row.commit] ??= []).push(row);
     }
-    groups = Object.values(byCommit);
+    rowOrder = Object.keys(rows);
   } else if (data) {
-    const byCodebase: Record<
-      string,
-      (DbCodebase & DbCodebaseCommit & DbCommit & DbTree & DbTreeAnalysis)[]
-    > = {};
+    // row = codebase, column = SpacemanDMM version, each cell takes MAX(date) within that cell
     for (const row of data || []) {
-      (byCodebase[row.codebase] ??= []).push(row);
+      const columns = (rows[row.codebase] ??= []);
+      const existing = columns.findIndex(
+        (cell) => cell.spaceman_rev == row.spaceman_rev,
+      );
+      if (existing !== -1) {
+        if (columns[existing]!.date < row.date) {
+          columns[existing] = row;
+        }
+      } else {
+        columns.push(row);
+      }
     }
-    groups = Object.values(byCodebase);
+    rowOrder = Object.keys(rows);
   }
 
-  const spacemanRevSet = new Set(data?.map((row) => row.spaceman_rev));
-  const filteredTags = tags.filter((tag) =>
-    spacemanRevSet.has(tag.spaceman_rev),
+  const spacemanRevSet = new Set(
+    rowOrder.flatMap((key) => rows[key]!).map((cell) => cell.spaceman_rev),
   );
+  const columns = tags.filter((tag) => spacemanRevSet.has(tag.spaceman_rev));
 
   return (
     <>
@@ -225,7 +237,7 @@ function CodebaseBySpaceman(props: {
         <thead>
           <tr>
             <th colspan={4}></th>
-            {filteredTags.map((tag) => (
+            {columns.map((tag) => (
               <RunHeader1 {...tag} />
             ))}
           </tr>
@@ -235,22 +247,32 @@ function CodebaseBySpaceman(props: {
             <th rowspan={2} colspan={2}>
               Config
             </th>
-            {filteredTags.map(() => (
+            {columns.map(() => (
               <RunHeader2 />
             ))}
           </tr>
           <tr>
-            {filteredTags.map(() => (
+            {columns.map(() => (
               <RunHeader3 />
             ))}
           </tr>
         </thead>
         <tbody>
-          {groups ? (
-            groups.map((group) => {
+          {!data ? (
+            <tr>
+              <td colspan={100}>Loading...</td>
+            </tr>
+          ) : !rowOrder?.length ? (
+            <tr>
+              <td colspan={100}>No results.</td>
+            </tr>
+          ) : (
+            rowOrder.map((key) => {
+              const group = rows[key]!;
               const row = group[0]!;
+              const row0 = row;
 
-              const date = row.date.substring(0, 10);
+              const date = row.date?.substring(0, 10);
 
               return (
                 <tr>
@@ -291,7 +313,7 @@ function CodebaseBySpaceman(props: {
                     )}
                   </td>
                   {/* Analysis part */}
-                  {filteredTags.map((tag) => {
+                  {columns.map((tag) => {
                     const row = group.find(
                       (row) => row.spaceman_rev == tag.spaceman_rev,
                     );
@@ -301,6 +323,11 @@ function CodebaseBySpaceman(props: {
                         git_rev={row.commit || ""}
                         spaceman_rev={row.spaceman_rev}
                         analysis={JSON.parse(row.analysis)}
+                        configured={
+                          row.spaceman_rev ===
+                          tags.find((t) => t.name === row0.suite)?.spaceman_rev
+                        }
+                        old={row.commit !== row0.commit ? row.date : undefined}
                       />
                     ) : (
                       <td colspan={7} />
@@ -309,10 +336,6 @@ function CodebaseBySpaceman(props: {
                 </tr>
               );
             })
-          ) : (
-            <tr>
-              <td colspan={12}>Loading...</td>
-            </tr>
           )}
         </tbody>
       </table>
@@ -363,31 +386,43 @@ function RunEntry(props: {
   codebase: string;
   git_rev: string;
   spaceman_rev: string;
-  analysis: any;
+  analysis: Analysis | Panic;
+  configured: boolean;
+  old?: string;
 }) {
   const { codebase, git_rev, spaceman_rev, analysis } = props;
   return (
     <>
-      <td class="icon">
+      <td
+        class={`icon ${props.configured ? "configured" : ""} ${props.old ? "old" : ""}`}
+      >
         <a
           href={`#codebase=${codebase}&git_rev=${git_rev}&spaceman_rev=${spaceman_rev}`}
-          title="run details"
+          title={`run details${props.configured ? "\nmatches suite used in CI" : ""}${props.old ? `\nold commit: ${props.old} UTC` : ""}`}
         >
           {LOG}
         </a>
       </td>
-      <ErrorCount amount={analysis.parse_errors.error} />
-      <ErrorCount amount={analysis.parse_errors.warning} />
-      <ErrorCount amount={analysis.parse_errors.info} />
-      {analysis.fatal_errored ? (
-        <td class="icon left" colspan={3} title="fatal parser error">
+      {"panic" in analysis ? (
+        <td class="icon left" colspan={6} title={analysis.panic}>
           {FATAL_PARSER_ERROR}
         </td>
       ) : (
         <>
-          <ErrorCount amount={analysis.dreamchecker_errors.error} />
-          <ErrorCount amount={analysis.dreamchecker_errors.warning} />
-          <ErrorCount amount={analysis.dreamchecker_errors.info} />
+          <ErrorCount amount={analysis.parse_errors.error} />
+          <ErrorCount amount={analysis.parse_errors.warning} />
+          <ErrorCount amount={analysis.parse_errors.info} />
+          {analysis.fatal_errored ? (
+            <td class="icon left" colspan={3} title="fatal parser error">
+              {FATAL_PARSER_ERROR}
+            </td>
+          ) : (
+            <>
+              <ErrorCount amount={analysis.dreamchecker_errors.error} />
+              <ErrorCount amount={analysis.dreamchecker_errors.warning} />
+              <ErrorCount amount={analysis.dreamchecker_errors.info} />
+            </>
+          )}
         </>
       )}
     </>
@@ -493,6 +528,10 @@ interface DbCodebase {
 interface DbCodebaseCommit {
   codebase: string;
   commit: string;
+}
+
+interface Panic {
+  panic: string;
 }
 
 interface Analysis {

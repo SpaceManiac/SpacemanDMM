@@ -69,3 +69,13 @@ a[href^="http://"]::after, a[href^="https://"]::after {
     content: '↗';
     font-size: smaller;
 }
+
+.configured {
+    background: lightgreen;
+}
+.old {
+    background-color: lightgray;
+}
+.configured.old {
+    background: linear-gradient(lightgray, lightgreen);
+}
