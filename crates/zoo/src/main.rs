@@ -160,11 +160,10 @@ impl Analyze {
             db.insert_codebase_commit(codebase, &commit_sha)?;
 
             // Analysis
-            _ = catch_unwind(AssertUnwindSafe(|| {
-                db.insert_tree_analysis_with(&tree_sha, &spaceman_rev, || {
-                    let path = checkout(&mut checkouts, &zoo.root, &repo, &tree);
+            db.insert_tree_analysis_with(&tree_sha, &spaceman_rev, || {
+                let path = checkout(&mut checkouts, &zoo.root, &repo, &tree);
+                match catch_unwind(AssertUnwindSafe(|| {
                     let analysis = analyze(&path, info.environment.as_deref()).unwrap();
-                    let analysis_json = serde_json::to_string(&analysis).unwrap();
                     eprintln!(
                         "{:?}",
                         Analysis {
@@ -172,10 +171,12 @@ impl Analyze {
                             ..analysis
                         },
                     );
-                    analysis_json
-                })
-                .unwrap();
-            }));
+                    serde_json::to_string(&analysis).unwrap()
+                })) {
+                    Ok(v) => v,
+                    Err(e) => serde_json::to_string(&Panic::new(e.as_ref())).unwrap(),
+                }
+            })?;
         }
 
         Ok(())
@@ -262,6 +263,23 @@ fn analyze(path: &Path, override_dme: Option<&str>) -> Result<Analysis, Box<dyn 
         dreamchecker_voluntary,
         errors,
     })
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Panic {
+    panic: String,
+}
+
+impl Panic {
+    fn new(e: &(dyn std::any::Any + Send + 'static)) -> Self {
+        if let Some(panic) = e.downcast_ref::<&str>() {
+            Panic { panic: panic.to_string() }
+        } else if let Some(panic) = e.downcast_ref::<String>() {
+            Panic { panic: panic.to_string() }
+        } else {
+            panic!("couldn't get panic message")
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
