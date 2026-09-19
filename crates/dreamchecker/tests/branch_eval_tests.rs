@@ -214,8 +214,22 @@ fn do_while() {
     .trim();
     #[rustfmt::skip]
     check_errors_match(code, &[
-        (2, 5, "do while terminates without ever reaching condition"),
+        (2, 5, "do-while terminates without ever reaching condition"),
     ]);
+}
+
+#[test]
+fn do_while_continue() {
+    let code = r##"
+/proc/test()
+    do
+        if(prob(50))
+            continue
+        return
+    while(prob(50))
+"##
+    .trim();
+    check_errors_match(code, &[]);
 }
 
 #[test]

@@ -1526,6 +1526,7 @@ impl ControlFlow {
     pub fn terminates_loop(&self) -> bool {
         self.will_flags
             .intersects(ControlFlags::RETURN | ControlFlags::BREAK)
+            && !self.might_flags.intersects(ControlFlags::CONTINUE)
     }
 
     pub fn no_else(&mut self) {
@@ -1901,7 +1902,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 if state.terminates_loop() {
                     error(
                         location,
-                        "do while terminates without ever reaching condition",
+                        "do-while terminates without ever reaching condition",
                     )
                     .register(self.context);
                     state.end_guaranteed_loop();
