@@ -1,5 +1,5 @@
 import { createDbWorker, WorkerHttpvfs } from "sql.js-httpvfs";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 
 import zooDbUrl from "../zoo.db?url";
 
@@ -34,12 +34,16 @@ export function useQuery<T>(
   params?: unknown[] | object,
 ): null | T[] {
   const [data, setData] = useState<null | T[]>(null);
+  const id = useRef(0);
 
   useEffect(() => {
     (async () => {
+      const runId = ++id.current;
       const { db } = await connectToDatabase();
       const data = await db.query(sql, params);
-      setData(data as T[]);
+      if (runId === id.current) {
+        setData(data as T[]);
+      }
     })();
   }, [sql, JSON.stringify(params)]);
 
