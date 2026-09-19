@@ -10,7 +10,7 @@ use std::{
 use chrono::{Datelike, Timelike};
 use clap::{ArgAction::SetTrue, Parser, Subcommand};
 use dreammaker::Severity;
-use git2::{BranchType, FetchOptions, RemoteCallbacks, Repository, Tree};
+use git2::{BranchType, Commit, FetchOptions, RemoteCallbacks, Repository, Tree};
 use serde::{Deserialize, Serialize};
 
 mod db;
@@ -137,20 +137,7 @@ impl Analyze {
             }
 
             if let Some(max_date) = &max_date {
-                let mut seen = HashSet::new();
-                let mut queue = VecDeque::new();
-                queue.push_back(commit.clone());
-                while let Some(current) = queue.pop_front() {
-                    if format_git_time(current.time()) < **max_date {
-                        commit = current;
-                        break;
-                    }
-                    for each in current.parents() {
-                        if seen.insert(each.id()) {
-                            queue.push_back(each);
-                        }
-                    }
-                }
+                commit = with_max_date(&commit, max_date);
             }
 
             let commit_sha = commit.id().to_string();
@@ -337,6 +324,30 @@ fn format_git_time(time: git2::Time) -> String {
         time.minute(),
         time.second()
     )
+}
+
+fn with_max_date<'repo>(commit: &Commit<'repo>, max_date: &str) -> Commit<'repo> {
+    let mut best: Option<Commit<'repo>> = None;
+    let mut seen = HashSet::new();
+    let mut queue = VecDeque::new();
+    queue.push_back(commit.clone());
+    while let Some(current) = queue.pop_front() {
+        for each in current.parents() {
+            if seen.insert(each.id()) {
+                queue.push_back(each);
+            }
+        }
+
+        if format_git_time(current.time()).as_str() < max_date {
+            if best
+                .as_ref()
+                .is_none_or(|best| current.time() > best.time())
+            {
+                best = Some(current);
+            }
+        }
+    }
+    best.unwrap_or(commit.clone())
 }
 
 // ----------------------------------------------------------------------------
