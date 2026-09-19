@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashSet},
     error::Error,
     fs,
     path::{Path, PathBuf},
@@ -9,13 +9,12 @@ use std::{
 use chrono::{Datelike, Timelike};
 use clap::{ArgAction::SetTrue, Parser, Subcommand};
 use dreammaker::Severity;
-use git2::Repository;
-use rusqlite::{OptionalExtension, named_params};
+use git2::{BranchType, FetchOptions, RemoteCallbacks, Repository, Tree};
 use serde::{Deserialize, Serialize};
 
 mod db;
 
-const COMMIT: &str = include_str!(concat!(env!("OUT_DIR"), "/build-info.txt"));
+const ABBREV: usize = 12;
 
 // ----------------------------------------------------------------------------
 // CLI
@@ -27,8 +26,8 @@ pub fn main() -> Result<(), Box<dyn Error>> {
 
 #[derive(Parser, Debug)]
 struct Zoo {
-    #[arg(long = "repos")]
-    repos: PathBuf,
+    #[arg(long = "root")]
+    root: PathBuf,
 
     #[command(subcommand)]
     command: Command,
@@ -61,228 +60,94 @@ impl Zoo {
 
 impl Analyze {
     pub fn run(&self, zoo: &Zoo) -> Result<(), Box<dyn Error>> {
-        let db = db::Db::open(&zoo.repos);
+        let zoo_toml: ZooToml = toml::from_slice(&std::fs::read(zoo.root.join("zoo.toml"))?)?;
+
+        // Spaceman revisions
         eprintln!("==== SpacemanDMM revisions ====");
-        db.set_spaceman_tags()?;
-
-        let mut paths = Vec::new();
-        for entry in fs::read_dir(&zoo.repos)? {
-            let entry = entry?;
-            let name = entry.file_name();
-            let name = name.to_string_lossy();
-            if name.starts_with(".") {
-                continue;
-            }
-            let path = entry.path();
-            if !fs::metadata(&path)?.is_dir() {
-                continue;
-            }
-            paths.push(path);
-        }
-        paths.sort();
-
-        // Pull everything
-        eprintln!("==== Pull ====");
-        let mut remote_and_commit = HashMap::new();
-        let mut dates = HashMap::new();
-        for (i, path) in paths.iter().enumerate() {
-            let repo = Repository::open(&path)?;
-            let short_path = path.strip_prefix(&zoo.repos).unwrap_or(path);
-            let codebase = short_path.to_string_lossy();
-
-            // Discover upstream and pull
-            assert!(!repo.head_detached()?, "head detached: {:?}", path);
-            let mut head = repo.head()?;
-            assert!(head.is_branch());
-            let mut git_rev = String::new();
-            match repo.branch_upstream_remote(head.name()?) {
-                Ok(remote) => {
-                    let remote_name = remote.as_str().unwrap();
-                    let remote_branch = repo.branch_upstream_name(head.name()?)?;
-                    let remote_branch = remote_branch.as_str().unwrap();
-
-                    let mut remote = repo.find_remote(remote_name)?;
-                    if !self.no_pull {
-                        eprintln!("{:?}: pulling", short_path);
-                        let refspecs = remote.fetch_refspecs()?;
-                        let refspecs = refspecs
-                            .into_iter()
-                            .filter_map(|s| s.ok())
-                            .filter_map(|s| s)
-                            .collect::<Vec<_>>();
-                        match remote.fetch(&refspecs, None, None) {
-                            Ok(()) => {
-                                head = repo.find_reference(remote_branch)?;
-                                repo.reset(
-                                    head.peel_to_commit()?.as_object(),
-                                    git2::ResetType::Hard,
-                                    None,
-                                )?;
-                            },
-                            Err(e) => {
-                                eprintln!("WARNING: {:?}: not fetchable: {}", short_path, e);
-                            },
-                        }
-                    }
-
-                    git_rev = head.peel_to_commit()?.id().to_string();
-                    remote_and_commit
-                        .insert(path.as_path(), (remote.url()?.to_string(), git_rev.clone()));
-                },
-                Err(_) => {
-                    eprintln!(
-                        "WARNING: {:?}: no upstream for branch {:?}",
-                        short_path,
-                        head.name()?
-                    );
-                },
-            }
-
-            // Extract commit timestamp
-            let date = format_git_time(head.peel_to_commit()?.time());
-            dates.insert(path.as_path(), date);
-
-            // Extract configuration
-            let existing_row = db
-                .query_one(
-                    "SELECT * FROM config WHERE codebase = :codebase AND git_rev = :git_rev",
-                    named_params! {
-                        ":codebase": codebase,
-                        ":git_rev": git_rev,
-                    },
-                    |_| Ok(()),
-                )
-                .optional()?;
-            if existing_row.is_none() {
-                let suite = discover_suite(path);
-                let config = discover_config(path);
-                db.execute(
-                    "
-                        INSERT INTO config (
-                            codebase,
-                            git_rev,
-                            suite,
-                            config
-                        ) VALUES (
-                            :codebase,
-                            :git_rev,
-                            :suite,
-                            :config
-                        );
-                    ",
-                    named_params! {
-                        ":codebase": codebase,
-                        ":git_rev": git_rev,
-                        ":suite": suite,
-                        ":config": config,
-                    },
-                )?;
-                eprintln!(
-                    "({}/{}) {:?}: updated to {}, suite = {:?}, config = {:?}",
-                    i + 1,
-                    paths.len(),
-                    short_path,
-                    &git_rev[..12],
-                    suite,
-                    config.as_ref().map(|x| x.len()),
-                );
-            } else if !self.no_pull {
-                eprintln!("({}/{}) {:?}: up to date", i + 1, paths.len(), short_path);
-            } else {
-                eprintln!("({}/{}) {:?}: not updated", i + 1, paths.len(), short_path);
-            }
-        }
+        let db = db::Db::open(&zoo.root);
+        let spaceman_rev = db.set_spaceman_tags()?;
 
         // Analyze
         eprintln!("==== Analyze ====");
+        let repo = Repository::open(zoo.root.join("repo"))?;
+        let mut checkouts = HashSet::new();
 
-        eprintln!("SpacemanDMM commit: {}", COMMIT);
+        for (i, (codebase, info)) in zoo_toml.codebase.iter().enumerate() {
+            eprintln!("-- ({}/{}) {}", i + 1, zoo_toml.codebase.len(), codebase);
 
-        let mut paths_by_date = paths.iter().map(|p| p.as_path()).collect::<Vec<_>>();
-        paths_by_date.sort_by_key(|p| dates.get(p));
-        paths_by_date.reverse();
-
-        for (i, &path) in paths_by_date.iter().enumerate() {
-            let short_path = path.strip_prefix(&zoo.repos).unwrap_or(path);
-            let codebase = short_path.to_string_lossy();
-            let (git_remote, git_rev) = remote_and_commit
-                .get(path)
-                .map_or(("", ""), |(a, b)| (&a, &b));
-            let date = dates.get(path).unwrap();
-
-            let existing_row = db
-                .query_one(
-                    "
-                SELECT *
-                FROM analysis
-                WHERE codebase = :codebase
-                    AND spaceman_rev = :spaceman_rev
-                    AND git_rev = :git_rev;
-            ",
-                    named_params! {
-                        ":spaceman_rev": COMMIT,
-                        ":codebase": codebase,
-                        ":git_rev": git_rev,
+            // Metadata
+            let commit;
+            if self.no_pull {
+                let branch = match repo.find_branch(codebase, BranchType::Local) {
+                    Ok(branch) => branch,
+                    Err(e) => {
+                        eprintln!("ERROR: {codebase}: {e}");
+                        continue;
                     },
-                    |_| Ok(()),
-                )
-                .optional()?;
-            if existing_row.is_some() {
-                eprintln!(
-                    "({}/{}) {:?}: cached",
-                    (i + 1),
-                    paths_by_date.len(),
-                    short_path,
-                );
+                };
+                commit = branch.get().peel_to_commit()?;
             } else {
-                match std::panic::catch_unwind(|| analyze(path)) {
-                    Ok(Ok(analysis)) => {
-                        let json = serde_json::to_string(&analysis)?;
+                match &info.source {
+                    Source::Url { url } => {
+                        eprintln!("pulling {:?}", url);
 
-                        db.execute(
-                            "
-                                INSERT INTO analysis (
-                                    codebase,
-                                    spaceman_rev,
-                                    git_remote,
-                                    git_rev,
-                                    git_date,
-                                    analysis
-                                ) VALUES (
-                                    :codebase,
-                                    :spaceman_rev,
-                                    :git_remote,
-                                    :git_rev,
-                                    :git_date,
-                                    :analysis
-                                );
-                            ",
-                            named_params! {
-                                ":codebase": codebase,
-                                ":spaceman_rev": COMMIT,
-                                ":git_remote": git_remote,
-                                ":git_rev": git_rev,
-                                ":git_date": date,
-                                ":analysis": &json,
-                            },
+                        let mut cbs = RemoteCallbacks::new();
+                        cbs.sideband_progress(|text| {
+                            eprint!("remote: {}", String::from_utf8_lossy(text));
+                            true
+                        });
+
+                        let mut remote = repo.remote_anonymous(url)?;
+                        remote.fetch(
+                            &[format!("HEAD:refs/heads/{codebase}")],
+                            Some(FetchOptions::new().remote_callbacks(cbs)),
+                            None,
                         )?;
 
-                        eprintln!(
-                            "({}/{}) {:?}: json size = {}",
-                            (i + 1),
-                            paths_by_date.len(),
-                            short_path,
-                            json.len(),
-                        );
+                        commit = repo
+                            .find_branch(codebase, BranchType::Local)?
+                            .get()
+                            .peel_to_commit()?;
                     },
-                    Ok(Err(err)) => {
-                        eprintln!("ERROR: {:?}: {}", short_path, err);
-                    },
-                    Err(_) => {
-                        eprintln!("ERROR: {:?}: panicked", short_path);
+                    Source::Commit { commit: sha } => {
+                        commit = repo.find_commit_by_prefix(sha)?;
                     },
                 }
+                repo.branch(codebase, &commit, true)?;
             }
+            let commit_sha = commit.id().to_string();
+            let tree = commit.tree()?;
+            let tree_sha = tree.id().to_string();
+            db.insert_tree_with(&tree_sha, || {
+                let path = checkout(&mut checkouts, &zoo.root, &repo, &tree);
+                let suite = discover_suite(&path);
+                let config = discover_config(&path);
+                eprintln!(
+                    "commit = {}, suite = {:?}, config = {:?}",
+                    &commit_sha[..ABBREV],
+                    suite,
+                    config.as_ref().map(|x| x.len()),
+                );
+                (suite, config)
+            })?;
+            db.insert_commit(&commit)?;
+            db.insert_codebase(codebase, info.url())?;
+            db.insert_codebase_commit(codebase, &commit_sha)?;
+
+            // Analysis
+            db.insert_tree_analysis_with(&tree_sha, &spaceman_rev, || {
+                let path = checkout(&mut checkouts, &zoo.root, &repo, &tree);
+                let analysis = analyze(&path, info.environment.as_deref()).unwrap();
+                let analysis_json = serde_json::to_string(&analysis).unwrap();
+                eprintln!(
+                    "{:?}",
+                    Analysis {
+                        errors: Default::default(),
+                        ..analysis
+                    },
+                );
+                analysis_json
+            })?;
         }
 
         Ok(())
@@ -314,9 +179,13 @@ fn discover_config(path: &Path) -> Option<String> {
         .filter(|text| !text.starts_with("#FAKE"))
 }
 
-fn analyze(path: &Path) -> Result<Analysis, Box<dyn Error>> {
+fn analyze(path: &Path, override_dme: Option<&str>) -> Result<Analysis, Box<dyn Error>> {
     let mut context = dreammaker::Context::default();
-    let dme = context.configure(path)?;
+    let dme = match (context.configure(path), override_dme) {
+        (_, Some(forced)) => path.join(forced),
+        (Ok(detected), None) => detected,
+        (Err(err), None) => return Err(err.into()),
+    };
 
     // Preprocess once to get files in cache.
     let start = Instant::now();
@@ -427,4 +296,53 @@ fn format_git_time(time: git2::Time) -> String {
         time.minute(),
         time.second()
     )
+}
+
+// ----------------------------------------------------------------------------
+// Checkouts
+
+fn checkout(set: &mut HashSet<String>, root: &Path, repo: &Repository, tree: &Tree) -> PathBuf {
+    let tree_sha = tree.id().to_string();
+    let path = root.join("tree").join(&tree_sha);
+    if set.insert(tree_sha.clone()) {
+        eprintln!("checking out {path:?}");
+        _ = std::fs::remove_dir_all(&path);
+        std::fs::create_dir_all(&path).unwrap();
+        // let worktree = repo.worktree(&tree_sha, &path, None).unwrap();
+        repo.set_workdir(&path, false).unwrap();
+        repo.checkout_tree(tree.as_object(), None).unwrap();
+    }
+    path
+}
+
+// ----------------------------------------------------------------------------
+// Config
+
+#[derive(Debug, Deserialize)]
+struct ZooToml {
+    codebase: BTreeMap<String, Codebase>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Codebase {
+    #[serde(flatten)]
+    source: Source,
+
+    environment: Option<String>,
+}
+
+impl Codebase {
+    fn url(&self) -> Option<&str> {
+        match &self.source {
+            Source::Url { url } => Some(url),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum Source {
+    Url { url: String },
+    Commit { commit: String },
 }

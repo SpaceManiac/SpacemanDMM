@@ -24,6 +24,7 @@ rust-version = "1.95"
 [workspace.dependencies]
 chrono = "0.4.38"
 git2 = { version = "0.21.0", default-features = false }
+toml = { version = "1.1.4", features = ["fast_hash"] }
 
 [profile.dev]
 opt-level = 1

@@ -1,9 +1,9 @@
 use std::{error::Error, ops::Deref, path::Path};
 
 use git2::{Commit, DescribeFormatOptions, DescribeOptions, Repository};
-use rusqlite::{Connection, named_params};
+use rusqlite::{Connection, OptionalExtension, named_params};
 
-use crate::format_git_time;
+use crate::{ABBREV, format_git_time};
 
 const SCHEMA: &'static str = r#"
 CREATE TABLE IF NOT EXISTS "spaceman_rev" (
@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS "codebase" (
 CREATE TABLE IF NOT EXISTS "codebase_commit" (
 	"codebase"	TEXT NOT NULL,
 	"commit"	TEXT NOT NULL,
+	UNIQUE("codebase","commit"),
 	FOREIGN KEY("codebase") REFERENCES "codebase"("codebase"),
 	FOREIGN KEY("commit") REFERENCES "commit"("commit")
 );
@@ -56,9 +57,8 @@ CREATE TABLE IF NOT EXISTS "codebase_commit" (
 pub struct Db(Connection);
 
 impl Db {
-    pub fn open(zoo: &Path) -> Self {
-        let path = zoo.join("zoo.db");
-        let conn = Connection::open(&path).unwrap();
+    pub fn open(root: &Path) -> Self {
+        let conn = Connection::open(&root.join("zoo.db")).unwrap();
         conn.execute_batch(SCHEMA).unwrap();
         Db(conn)
     }
@@ -66,7 +66,7 @@ impl Db {
     // ----------------------------------------------------------------------------
     // spaceman_rev and spaceman_tag tables
 
-    pub fn set_spaceman_tags(&self) -> Result<(), Box<dyn Error>> {
+    pub fn set_spaceman_tags(&self) -> Result<String, Box<dyn Error>> {
         let repo = Repository::open_from_env()?;
 
         let master = repo
@@ -75,7 +75,7 @@ impl Db {
             .peel_to_commit()?;
         let spaceman_rev = self.insert_spaceman_rev_commit(&master)?;
         self.insert_spaceman_tag("master", &spaceman_rev).unwrap();
-        eprintln!("master = {}", &spaceman_rev[..12]);
+        eprintln!("master = {}", &spaceman_rev[..ABBREV]);
 
         repo.tag_foreach(|id, name| {
             let name = str::from_utf8(name).unwrap();
@@ -97,12 +97,9 @@ impl Db {
         let head = repo.head()?.peel_to_commit()?;
         let base = repo.merge_base(master.id(), head.id())?;
         let base = repo.find_commit(base)?;
-        if base.id() != master.id() {
-            let spaceman_rev = self.insert_spaceman_rev_commit(&base)?;
-            eprintln!("HEAD = {}", &spaceman_rev[..12]);
-        }
-
-        Ok(())
+        let spaceman_rev = self.insert_spaceman_rev_commit(&base)?;
+        eprintln!("HEAD = {}", &spaceman_rev[..ABBREV]);
+        Ok(spaceman_rev)
     }
 
     fn insert_spaceman_rev_commit(&self, commit: &Commit) -> Result<String, Box<dyn Error>> {
@@ -111,7 +108,9 @@ impl Db {
         let describe = commit
             .as_object()
             .describe(&DescribeOptions::new())?
-            .format(Some(&DescribeFormatOptions::new().abbreviated_size(12)))?;
+            .format(Some(
+                &DescribeFormatOptions::new().abbreviated_size(ABBREV as u32),
+            ))?;
         self.insert_spaceman_rev(&spaceman_rev, &date, &describe)?;
         Ok(spaceman_rev)
     }
@@ -150,9 +149,139 @@ impl Db {
     }
 
     // ----------------------------------------------------------------------------
-    // tree table
+    // codebase, tree, and commit
 
-    //pub fn insert_tree_with(&self, tree: &str, f: impl FnOnce() -> (String, String)) -> bool {}
+    pub fn insert_codebase(&self, codebase: &str, url: Option<&str>) -> Result<(), Box<dyn Error>> {
+        self.0.execute(
+            "
+                INSERT INTO codebase (codebase, url)
+                VALUES (:codebase, :url)
+                ON CONFLICT DO UPDATE SET url = :url
+            ",
+            named_params! {
+                ":codebase": codebase,
+                ":url": url,
+            },
+        )?;
+        Ok(())
+    }
+
+    pub fn insert_tree_with(
+        &self,
+        tree: &str,
+        f: impl FnOnce() -> (Option<String>, Option<String>),
+    ) -> Result<(), Box<dyn Error>> {
+        let existing_row = self
+            .0
+            .query_one(
+                "SELECT tree FROM tree WHERE tree = :tree",
+                named_params! {
+                    ":tree": tree,
+                },
+                |_| Ok(()),
+            )
+            .optional()?;
+
+        if existing_row.is_none() {
+            let (suite, config) = f();
+            self.0.execute(
+                "
+                    INSERT INTO tree (tree, suite, config)
+                    VALUES (:tree, :suite, :config)
+                    ON CONFLICT DO NOTHING
+                ",
+                named_params! {
+                    ":tree": tree,
+                    ":suite": suite,
+                    ":config": config,
+                },
+            )?;
+        }
+
+        Ok(())
+    }
+
+    pub fn insert_commit(&self, commit: &Commit) -> Result<(), Box<dyn Error>> {
+        let tree = commit.as_object().peel_to_tree()?.id().to_string();
+        let date = format_git_time(commit.time());
+        let commit = commit.id().to_string();
+        self.0.execute(
+            r#"
+                INSERT INTO "commit" ("commit", date, tree)
+                VALUES (:commit, :date, :tree)
+                ON CONFLICT DO NOTHING
+            "#,
+            named_params! {
+                ":commit": commit,
+                ":date": date,
+                ":tree": tree,
+            },
+        )?;
+        Ok(())
+    }
+
+    pub fn insert_codebase_commit(
+        &self,
+        codebase: &str,
+        commit: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        self.0.execute(
+            r#"
+                INSERT INTO codebase_commit (codebase, "commit")
+                VALUES (:codebase, :commit)
+                ON CONFLICT DO NOTHING
+            "#,
+            named_params! {
+                ":codebase": codebase,
+                ":commit": commit,
+            },
+        )?;
+        Ok(())
+    }
+
+    // ----------------------------------------------------------------------------
+    // analysis
+
+    pub fn insert_tree_analysis_with(
+        &self,
+        tree: &str,
+        spaceman_rev: &str,
+        f: impl FnOnce() -> String,
+    ) -> Result<(), Box<dyn Error>> {
+        let existing_row = self
+            .0
+            .query_one(
+                "
+                    SELECT tree FROM tree_analysis
+                    WHERE tree = :tree
+                    AND spaceman_rev = :spaceman_rev
+                ",
+                named_params! {
+                    ":tree": tree,
+                    ":spaceman_rev": spaceman_rev,
+                },
+                |_| Ok(()),
+            )
+            .optional()?;
+
+        if existing_row.is_none() {
+            let analysis = f();
+            self.0.execute(
+                "
+                    INSERT INTO tree_analysis (tree, spaceman_rev, analysis)
+                    VALUES (:tree, :spaceman_rev, :analysis)
+                    ON CONFLICT DO UPDATE SET analysis = :analysis
+                ",
+                named_params! {
+                    ":tree": tree,
+                    ":spaceman_rev": spaceman_rev,
+                    ":analysis": analysis,
+                },
+            )?;
+        }
+
+        Ok(())
+    }
 }
 
 impl Deref for Db {

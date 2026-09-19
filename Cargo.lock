@@ -2351,4 +2351,5 @@ dependencies = [
  "serde",
  "serde_json",
  "termcolor",
+ "toml",
 ]
