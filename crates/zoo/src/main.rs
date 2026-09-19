@@ -76,6 +76,22 @@ impl Analyze {
         let repo = Repository::open(zoo.root.join("repo"))?;
         let mut checkouts = HashSet::new();
 
+        let max_date = match &self.max_date {
+            None => None,
+            Some(max_date) => Some({
+                if let Ok(rev) = Repository::open_from_env()?.revparse_single(max_date) {
+                    &format_git_time(
+                        rev.peel(git2::ObjectType::Commit)?
+                            .into_commit()
+                            .unwrap()
+                            .time(),
+                    )
+                } else {
+                    max_date
+                }
+            }),
+        };
+
         for (i, (codebase, info)) in zoo_toml.codebase.iter().enumerate() {
             eprintln!("-- ({}/{}) {}", i + 1, zoo_toml.codebase.len(), codebase);
 
@@ -120,12 +136,12 @@ impl Analyze {
                 repo.branch(codebase, &commit, true)?;
             }
 
-            if let Some(max_date) = &self.max_date {
+            if let Some(max_date) = &max_date {
                 let mut seen = HashSet::new();
                 let mut queue = VecDeque::new();
                 queue.push_back(commit.clone());
                 while let Some(current) = queue.pop_front() {
-                    if format_git_time(current.time()) < *max_date {
+                    if format_git_time(current.time()) < **max_date {
                         commit = current;
                         break;
                     }
