@@ -1,3 +1,64 @@
+# [SpacemanDMM suite v1.12](https://github.com/SpaceManiac/SpacemanDMM/releases/tag/suite-1.12) (2026-09-20)
+
+This update fixes parsing and analysis bugs, adds more missing 516 features,
+and improves performance. Also, new sleep analysis modes collaborated on by
+Cyberboss, CabinetOnFire, and ZeWaka are available.
+
+## Core
+Core updates apply to all components.
+
+* Remove special handling of files named `tgstation.dme`. If needed, set `environment` in `SpacemanDMM.toml`.
+* Parse for-key-value loops (by ZeWaka, #447, and LemonInTheDark, #469).
+* Fix crash on out-of-range bitshifts in constant evaluation.
+* Fix bugs with `##` token pasting and empty arguments:
+  * Fix identifiers on the left-hand side of `##` being incorrectly dropped (by harry, #471).
+  * Fix commas on the left-hand side of `##` being incorrectly preserved (#411, #192).
+* Fix preprocessor `fexists` giving inaccurate results on `.dme` paths outside the working directory (by ZeWaka, #478).
+* Mark `vector()` as a constant constructor (by LemonInTheDark, #468).
+* Add builtins:
+  * `/icon/proc/RscFile` and `/sound/proc/RscFile` (#416).
+  * `/world/var/process` (by forgman6, #456).
+* Gracefully resume parsing after previously fatal tree-scope parsing errors:
+  * `/var/1 = 1`, such as from `/var/OPEN = 1` where `OPEN` is a macro.
+  * Tree-scope `..()`, which has no effect.
+  * Tree-scope empty blocks, such as from indented block comments, which have no effect.
+* Improve accuracy of "check for extra indentation" note location on certain rare parse errors.
+* Optimize parsing by interning keywords and other builtin strings.
+
+## Language Server
+
+* Add hover and go-to-definition for `/typepath::variable` syntax (by ZeWaka, #477).
+* Add hover for `__FILE__` and `__LINE__` (by Cyberboss, #358).
+* Fix go-to-definition failing on variables named `list`, `alist`, `input`, `locate`, and `pick`.
+* Optimize the object tree browser and enable it by default.
+* Distinguish constants, constructors, and methods in the object tree browser.
+
+### Debugger
+
+* Update Auxtools debug server from [v2.3.5 to v2.3.8](https://github.com/willox/auxtools/compare/v2.3.5...v2.3.8).
+* Change the default debug engine to Auxtools. Extools is unmaintained since 2021 and support will be removed in a future release.
+
+## DreamChecker
+
+* Fix crash on `switch(rand(..))` containing `if(x to INFINITY)`.
+* Fix undefined vars and procs not being caught if a var or proc with the same name exists globally.
+* Fix the output type of `operator[]` calls being the same as the input type (#480).
+* Improve "unreachable code" warnings to handle `continue` and `break` (by LemonInTheDark, #475).
+* Add `SpacemanDMM_should_not_call_parent` opt-in warning (by Lucy, #455).
+* Add new `SpacemanDMM_should_not_sleep` modes, configured by setting `dreamchecker.sleep_analysis_version`:
+  * `sleep_analysis_version = 1` is the old default.
+  * `sleep_analysis_version = 2` catches many more cases but has false positives (by CabinetOnFire and Cyberboss, #472).
+  * `sleep_analysis_version = 3` catches a few more cases than `1` but has many fewer false positives than `2`, and is the new default (by ZeWaka, #479).
+* Add flag definitions for `filter(type="displace")` (by Krashly, #445).
+* Add warning for using the indexing operator on types without `proc/operator[]` (by LemonInTheDark, #397).
+* Add warning for `list.Find()` with no arguments (by ZeWaka, #460).
+
+## dmm-tools
+
+* Fix loading `.dmi` icon states with backslashes or quotes in their name, such as in fonts.
+* Add `icon-smoothing-2025` render pass to support tgstation's newest system (by Lucy, #454).
+* Optimize blitting somewhat.
+
 # [SpacemanDMM suite v1.11](https://github.com/SpaceManiac/SpacemanDMM/releases/tag/suite-1.11) (2025-08-30)
 
 This maintenance update improves SpacemanDMM's support for BYOND 516, thanks to ShiftyRail, Zonespace, and other contributors.
