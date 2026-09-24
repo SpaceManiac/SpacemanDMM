@@ -1,8 +1,9 @@
-import { ComponentChildren, render } from "preact";
+import { ComponentChild, ComponentChildren, render } from "preact";
 import { useSyncExternalStore } from "preact/compat";
 import { AnsiHtml } from "fancy-ansi/react";
 import { useQuery, useQueryOne } from "./db";
 import "./zoo.css";
+import { stripAnsi } from "fancy-ansi";
 
 export interface ZooProps {}
 
@@ -98,6 +99,7 @@ function SingleRunDetail(props: {
         <>No results.</>
       ) : (
         <>
+          <RunTable rows={{ r: [data] }} />
           {data.config ? (
             <fieldset>
               <legend>SpacemanDMM.toml</legend>
@@ -107,7 +109,8 @@ function SingleRunDetail(props: {
           <fieldset>
             <legend>Error detail</legend>
             <pre>
-              <AnsiHtml
+              <ErrorLog
+                repo={data}
                 text={
                   "panic" in analysis
                     ? analysis.panic
@@ -120,6 +123,38 @@ function SingleRunDetail(props: {
       )}
     </>
   );
+}
+
+function ErrorLog(props: { text: string; repo: DbCodebase & DbCommit }) {
+  const text = stripAnsi(props.text);
+  if (props.repo.url) {
+    const re =
+      /^(?<file>[^,\n]+), line (?<line>\d+), column (?<col>\d+)(?=:$)|(?<=^- )(?<file>[^:\n]+):(?<line>\d+):(?<col>\d+)/dgim;
+    const output: ComponentChild[] = [];
+    let match;
+    let i = 0;
+    while ((match = re.exec(text))) {
+      output.push(text.substring(i, match.index));
+      if (!match.groups!.file?.startsWith("/")) {
+        output.push(
+          <a
+            href={`${props.repo.url}/blob/${props.repo.commit}/${match.groups!.file}#L${match.groups!.line}`}
+            target={"_blank"}
+          >
+            {match[0]}
+          </a>,
+        );
+      } else {
+        output.push(match[0]);
+      }
+      i = re.lastIndex;
+    }
+    output.push(text.substring(i));
+
+    return <>{output}</>;
+  } else {
+    return props.text;
+  }
 }
 
 function RevisionDetail(props: { codebase: string; git_rev: string }) {
@@ -166,8 +201,6 @@ function CodebaseBySpaceman(props: {
   date_max?: string;
   date_min?: string;
 }) {
-  const tags = useSpacemanTags();
-
   const data = useQuery<
     DbCodebase & DbCodebaseCommit & DbCommit & DbTree & DbTreeAnalysis
   >(
@@ -219,11 +252,6 @@ function CodebaseBySpaceman(props: {
     rowOrder = Object.keys(rows);
   }
 
-  const spacemanRevSet = new Set(
-    rowOrder.flatMap((key) => rows[key]!).map((cell) => cell.spaceman_rev),
-  );
-  const columns = tags.filter((tag) => spacemanRevSet.has(tag.spaceman_rev));
-
   return (
     <>
       <h3>
@@ -233,113 +261,130 @@ function CodebaseBySpaceman(props: {
           <>Latest run for each codebase</>
         )}
       </h3>
-      <table>
-        <thead>
-          <tr>
-            <th colspan={4}></th>
-            {columns.map((tag) => (
-              <RunHeader1 {...tag} />
-            ))}
-          </tr>
-          <tr>
-            <th rowspan={2}>Codebase</th>
-            <th rowspan={2}>Date</th>
-            <th rowspan={2} colspan={2}>
-              Config
-            </th>
-            {columns.map(() => (
-              <RunHeader2 />
-            ))}
-          </tr>
-          <tr>
-            {columns.map(() => (
-              <RunHeader3 />
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {!data ? (
-            <tr>
-              <td colspan={100}>Loading...</td>
-            </tr>
-          ) : !rowOrder?.length ? (
-            <tr>
-              <td colspan={100}>No results.</td>
-            </tr>
-          ) : (
-            rowOrder.map((key) => {
-              const group = rows[key]!;
-              const row = group[0]!;
-              const row0 = row;
-
-              const date = row.date?.substring(0, 10);
-
-              return (
-                <tr>
-                  {/* Codebase part */}
-                  <td>
-                    {props.codebase ? (
-                      row.codebase
-                    ) : (
-                      <a href={`#codebase=${row.codebase}`}>{row.codebase}</a>
-                    )}
-                  </td>
-                  <td>
-                    <RevisionLink row={row}>{date}</RevisionLink>
-                  </td>
-                  <td>{row.suite}</td>
-                  <td class="icon">
-                    {row.config && row.config.match(/dreamchecker = true/) ? (
-                      <a
-                        href={`#codebase=${row.codebase}&git_rev=${row.commit}`}
-                        title="config: dreamchecker = true"
-                      >
-                        {CONFIG_DREAMCHECKER}
-                      </a>
-                    ) : row.config ? (
-                      <a
-                        href={`#codebase=${row.codebase}&git_rev=${row.commit}`}
-                        title="config present"
-                      >
-                        {CONFIG_MISC}
-                      </a>
-                    ) : (
-                      <a
-                        href={`#codebase=${row.codebase}&git_rev=${row.commit}`}
-                        title="no config"
-                      >
-                        {CONFIG_NONE}
-                      </a>
-                    )}
-                  </td>
-                  {/* Analysis part */}
-                  {columns.map((tag) => {
-                    const row = group.find(
-                      (row) => row.spaceman_rev == tag.spaceman_rev,
-                    );
-                    return row ? (
-                      <RunEntry
-                        codebase={row.codebase}
-                        git_rev={row.commit || ""}
-                        spaceman_rev={row.spaceman_rev}
-                        analysis={JSON.parse(row.analysis)}
-                        configured={
-                          row.spaceman_rev ===
-                          tags.find((t) => t.name === row0.suite)?.spaceman_rev
-                        }
-                        old={row.commit !== row0.commit ? row.date : undefined}
-                      />
-                    ) : (
-                      <td colspan={7} />
-                    );
-                  })}
-                </tr>
-              );
-            })
-          )}
-        </tbody>
-      </table>
+      <RunTable rows={rows} rowOrder={rowOrder} />
     </>
+  );
+}
+
+function RunTable(props: {
+  rows?: Record<
+    string,
+    (DbCodebase & DbCodebaseCommit & DbCommit & DbTree & DbTreeAnalysis)[]
+  >;
+  rowOrder?: string[];
+}) {
+  let { rows, rowOrder } = props;
+  rowOrder ??= rows ? Object.keys(rows) : [];
+
+  const tags = useSpacemanTags();
+  const spacemanRevSet = new Set(
+    rowOrder.flatMap((key) => rows![key]!).map((cell) => cell.spaceman_rev),
+  );
+  const columns = tags.filter((tag) => spacemanRevSet.has(tag.spaceman_rev));
+
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th colspan={4}></th>
+          {columns.map((tag) => (
+            <RunHeader1 {...tag} />
+          ))}
+        </tr>
+        <tr>
+          <th rowspan={2}>Codebase</th>
+          <th rowspan={2}>Date</th>
+          <th rowspan={2} colspan={2}>
+            Config
+          </th>
+          {columns.map(() => (
+            <RunHeader2 />
+          ))}
+        </tr>
+        <tr>
+          {columns.map(() => (
+            <RunHeader3 />
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {!rows ? (
+          <tr>
+            <td colspan={100}>Loading...</td>
+          </tr>
+        ) : !rowOrder?.length ? (
+          <tr>
+            <td colspan={100}>No results.</td>
+          </tr>
+        ) : (
+          rowOrder.map((key) => {
+            const group = rows[key]!;
+            const row = group[0]!;
+            const row0 = row;
+
+            const date = row.date?.substring(0, 10);
+
+            return (
+              <tr>
+                {/* Codebase part */}
+                <td>
+                  <a href={`#codebase=${row.codebase}`}>{row.codebase}</a>
+                </td>
+                <td>
+                  <RevisionLink row={row}>{date}</RevisionLink>
+                </td>
+                <td>{row.suite}</td>
+                <td class="icon">
+                  {row.config && row.config.match(/dreamchecker = true/) ? (
+                    <a
+                      href={`#codebase=${row.codebase}&git_rev=${row.commit}`}
+                      title="config: dreamchecker = true"
+                    >
+                      {CONFIG_DREAMCHECKER}
+                    </a>
+                  ) : row.config ? (
+                    <a
+                      href={`#codebase=${row.codebase}&git_rev=${row.commit}`}
+                      title="config present"
+                    >
+                      {CONFIG_MISC}
+                    </a>
+                  ) : (
+                    <a
+                      href={`#codebase=${row.codebase}&git_rev=${row.commit}`}
+                      title="no config"
+                    >
+                      {CONFIG_NONE}
+                    </a>
+                  )}
+                </td>
+                {/* Analysis part */}
+                {columns.map((tag) => {
+                  const row = group.find(
+                    (row) => row.spaceman_rev == tag.spaceman_rev,
+                  );
+                  return row ? (
+                    <RunEntry
+                      codebase={row.codebase}
+                      git_rev={row.commit || ""}
+                      spaceman_rev={row.spaceman_rev}
+                      analysis={JSON.parse(row.analysis)}
+                      configured={
+                        row.spaceman_rev ===
+                        tags.find((t) => t.name === row0.suite)?.spaceman_rev
+                      }
+                      old={row.commit !== row0.commit ? row.date : undefined}
+                    />
+                  ) : (
+                    <td colspan={7} />
+                  );
+                })}
+              </tr>
+            );
+          })
+        )}
+      </tbody>
+    </table>
   );
 }
 
