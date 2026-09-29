@@ -29,12 +29,13 @@ mod color;
 mod completion;
 mod debugger;
 mod document;
+mod expand_macros;
 mod extras;
 mod find_references;
 mod jrpc_io;
 mod symbol_search;
 
-use crate::extras::{QueryObjectTree, Reparse, SetTraceVsc, StartDebugger};
+use crate::extras::{ExpandMacros, QueryObjectTree, Reparse, SetTraceVsc, StartDebugger};
 use dm::annotation::{Annotation, AnnotationTree};
 use dm::ast::Ident;
 use dm::objtree::TypeRef;
@@ -1363,6 +1364,7 @@ impl Engine {
         DocumentLinkRequest;
         StartDebugger;
         QueryObjectTree;
+        ExpandMacros;
     }
 
     // ------------------------------------------------------------------------
@@ -2404,6 +2406,59 @@ impl Engine {
             .find(&params.path)
             .ok_or_else(|| invalid_request(format!("Unknown type path {:?}", params.path)))?;
         Ok(self.objtree_with_placeholders(ty))
+    }
+
+    // ------------------------------------------------------------------------
+    // macro expansion preview
+    fn ExpandMacros(&mut self, params: P<ExpandMacros>) -> R<ExpandMacros> {
+        let url = &params.uri;
+        let contents = self
+            .docs
+            .get_contents(url)
+            .map_err(invalid_request)?
+            .into_owned();
+
+        // Re-running the preprocessor registers its errors a second time.
+        // We roll them back later so diagnostics are unaffected.
+        let errorlen_before = self.context.errors().len();
+
+        let text = if let Some(root) = &self.root {
+            // normal path, when we have a workspace root & an environment loaded
+            let path = url_to_path(url)?;
+            let root = url_to_path(root)?;
+            let stripped = path
+                .strip_prefix(&root)
+                .unwrap_or("<outside workspace>".as_ref());
+
+            let Some(defines) = &self.defines else {
+                return Err(invalid_request("no preprocessor history"));
+            };
+            let mut preprocessor = match self.context.files().get_id(stripped) {
+                Some(id) => defines.branch_at_file(id, &self.context),
+                None => defines.branch_at_end(&self.context),
+            };
+            let file_id = preprocessor
+                .push_file(
+                    stripped.to_owned(),
+                    self.docs.read(url).map_err(invalid_request)?,
+                )
+                .map_err(invalid_request)?;
+            expand_macros::render(&contents, file_id, &mut preprocessor)
+        } else {
+            // single-file mode
+            let filename: PathBuf = url.to_string().into();
+            let mut preprocessor =
+                dm::Preprocessor::from_buffer(&self.context, filename.clone(), contents.clone());
+            let file_id = self
+                .context
+                .files()
+                .get_id(&filename)
+                .expect("file doesn't exist?");
+            expand_macros::render(&contents, file_id, &mut preprocessor)
+        };
+
+        self.context.errors_mut().truncate(errorlen_before);
+        Ok(text)
     }
 }
 
