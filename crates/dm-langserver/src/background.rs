@@ -33,7 +33,10 @@ impl<T: Send + 'static> Background<T> {
         if let Some(rx) = self.rx.take() {
             match rx.try_recv() {
                 Ok(v) => {
-                    self.value = Some(v);
+                    if self.value.replace(v).is_some() {
+                        // The previous result was just dropped (otherwise would wait until next request)
+                        crate::collect_freed_memory();
+                    }
                 },
                 Err(TryRecvError::Empty) => self.rx = Some(rx),
                 Err(TryRecvError::Disconnected) => {},
