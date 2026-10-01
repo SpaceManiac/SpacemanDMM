@@ -80,6 +80,7 @@ where
             output.push_str(&source_line[..indent]);
             output.push_str(line);
         } else if !code[index] {
+            // comment or blank
             output.push_str(source_line);
         } else {
             continue;
