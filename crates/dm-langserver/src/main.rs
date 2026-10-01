@@ -2457,6 +2457,7 @@ impl Engine {
             expand_macros::render(&contents, file_id, &mut preprocessor)
         };
 
+        // Revert back to old diagnostics
         self.context.errors_mut().truncate(errorlen_before);
         Ok(text)
     }
