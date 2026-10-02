@@ -549,6 +549,10 @@ impl Engine {
             );
         };
 
+        // Drop the old references table.
+        self.references_table = Default::default();
+        collect_freed_memory();
+
         // Set up the preprocessor.
         self.context.reset_io_time();
         self.context.configure_from_dme(&environment);
