@@ -580,15 +580,103 @@ impl Engine {
             );
         }
 
-        // Parse the environment.
-        let fatal_errored;
-        {
-            let mut parser = dm::Parser::new(&self.context, &mut pp);
+        // Background thread: full parse for Find All References and dreamchecker.
+        let context = self.context.clone();
+        let root = self.root.clone();
+        let related_info = self.client_caps.related_info;
+        let diagnostics_tracker = self.diagnostics_tracker.clone();
+        self.references_table.spawn(move || {
+            let mut pp = dm::Preprocessor::new(&context, environment)
+                .expect("environment became unreadable during parse");
+            let mut parser = dm::Parser::new(&context, &mut pp);
             parser.enable_procs();
-            let (fatal_errored_2, objtree) = parser.parse_object_tree_2();
-            fatal_errored = fatal_errored_2;
+            let (fatal_errored, objtree) = parser.parse_object_tree_2();
+            let objtree = Arc::new(objtree);
+            let elapsed = start.elapsed();
+            start += elapsed;
+            eprint!(
+                "background parse {}.{:03}s",
+                elapsed.as_secs(),
+                elapsed.subsec_millis()
+            );
+
+            // Lock the diagnostics tracker now to avoid dreamchecker winning the race.
+            let mut diagnostics_lock = diagnostics_tracker.lock().unwrap();
+
+            // Background thread: If enabled, and parse was OK, run dreamchecker.
+            if context.config().langserver.dreamchecker && !fatal_errored {
+                issue_notification::<extras::WindowStatus>(extras::WindowStatusParams {
+                    environment: None,
+                    tasks: vec!["checking".to_owned()],
+                });
+                let context = context.clone();
+                let objtree = objtree.clone();
+                let root = root.clone();
+                let diagnostics_tracker = diagnostics_tracker.clone();
+                std::thread::spawn(move || {
+                    dreamchecker::run(&context, &objtree);
+                    let elapsed = start.elapsed();
+                    eprint!(
+                        "dreamchecker {}.{:03}s",
+                        elapsed.as_secs(),
+                        elapsed.subsec_millis()
+                    );
+                    print_thread_total();
+
+                    let map = DiagnosticsTracker::build(
+                        root.as_ref(),
+                        context.files(),
+                        &context.errors(),
+                        related_info,
+                    );
+                    diagnostics_tracker.lock().unwrap().send(map);
+
+                    issue_notification::<extras::WindowStatus>(Default::default());
+                    drop((context, objtree));
+                    collect_freed_memory();
+                });
+            } else {
+                issue_notification::<extras::WindowStatus>(Default::default());
+            }
+
+            // Send the first round of diagnostics from parsing.
+            let map = DiagnosticsTracker::build(
+                root.as_ref(),
+                context.files(),
+                &context.errors(),
+                related_info,
+            );
+            diagnostics_lock.send(map);
+            drop(diagnostics_lock);
+            let elapsed = start.elapsed();
+            start += elapsed;
+            eprint!(
+                " - diagnostics {}.{:03}s",
+                elapsed.as_secs(),
+                elapsed.subsec_millis()
+            );
+            print_thread_total();
+
+            let table = find_references::ReferencesTable::new(&objtree);
+            let elapsed = start.elapsed();
+            eprint!(
+                "references {}.{:03}s",
+                elapsed.as_secs(),
+                elapsed.subsec_millis()
+            );
+            print_thread_total();
+            drop(objtree);
+            collect_freed_memory();
+            table
+        });
+
+        // Parse the environment without proc bodies.
+        {
+            let parser = dm::Parser::new(&self.context, &mut pp);
+            let (_, objtree) = parser.parse_object_tree_2();
             self.objtree = Arc::new(objtree);
         }
+        self.defines = Some(pp.finalize());
         let elapsed = start.elapsed();
         start += elapsed;
         {
@@ -603,78 +691,6 @@ impl Engine {
             );
         }
 
-        // Background thread: prepare the Find All References database.
-        let references_objtree = self.objtree.clone();
-        self.references_table.spawn(move || {
-            let table = find_references::ReferencesTable::new(&references_objtree);
-            let elapsed = start.elapsed();
-            eprint!(
-                "references {}.{:03}s",
-                elapsed.as_secs(),
-                elapsed.subsec_millis()
-            );
-            print_thread_total();
-            collect_freed_memory();
-            table
-        });
-
-        // Lock the diagnostics tracker now to avoid dreamchecker winning the race.
-        let mut diagnostics_lock = self.diagnostics_tracker.lock().unwrap();
-
-        // Background thread: If enabled, and parse was OK, run dreamchecker.
-        if self.context.config().langserver.dreamchecker && !fatal_errored {
-            self.show_status("checking");
-            let context = self.context.clone();
-            let objtree = self.objtree.clone();
-            let root = self.root.clone();
-            let related_info = self.client_caps.related_info;
-            let diagnostics_tracker = self.diagnostics_tracker.clone();
-            std::thread::spawn(move || {
-                dreamchecker::run(&context, &objtree);
-                let elapsed = start.elapsed();
-                start += elapsed;
-                eprint!(
-                    "dreamchecker {}.{:03}s",
-                    elapsed.as_secs(),
-                    elapsed.subsec_millis()
-                );
-                print_thread_total();
-
-                let map = DiagnosticsTracker::build(
-                    root.as_ref(),
-                    context.files(),
-                    &context.errors(),
-                    related_info,
-                );
-                diagnostics_tracker.lock().unwrap().send(map);
-
-                issue_notification::<extras::WindowStatus>(Default::default());
-                drop(context);
-                collect_freed_memory();
-            });
-        } else {
-            self.issue_notification::<extras::WindowStatus>(Default::default());
-        }
-
-        // Send the first round of diagnostics from parsing.
-        let map = DiagnosticsTracker::build(
-            self.root.as_ref(),
-            self.context.files(),
-            &self.context.errors(),
-            self.client_caps.related_info,
-        );
-        diagnostics_lock.send(map);
-        drop(diagnostics_lock);
-
-        self.defines = Some(pp.finalize());
-
-        let elapsed = start.elapsed();
-        start += elapsed;
-        eprint!(
-            " - diagnostics {}.{:03}s",
-            elapsed.as_secs(),
-            elapsed.subsec_millis()
-        );
 
         // If enabled, send the JSON for the object tree panel.
         if self.client_caps.object_tree_2 {
@@ -689,10 +705,6 @@ impl Engine {
                 elapsed.subsec_millis()
             );
         }
-
-        /*if let Some(objtree) = Arc::get_mut(&mut self.objtree) {
-            objtree.drop_code();
-        }*/
 
         // Print the total time.
         print_thread_total();
