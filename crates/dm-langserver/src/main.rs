@@ -691,7 +691,6 @@ impl Engine {
             );
         }
 
-
         // If enabled, send the JSON for the object tree panel.
         if self.client_caps.object_tree_2 {
             self.update_objtree();
