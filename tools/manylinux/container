@@ -1,0 +1,19 @@
+#!/bin/bash
+# Run a command in a container built from the local Dockerfile.
+# Use rootless Podman to avoid permission conflicts with the host.
+# Make it interactive and use an init to allow input and ^C to terminate.
+# Remove the container afterwards to avoid accruing garbage.
+set -euo pipefail
+ttyopts=()
+if test -t 0; then
+	ttyopts=(--interactive --tty)
+fi
+id="$(podman build --format=docker --quiet "$(dirname "$0")")"
+exec podman run \
+	--rm \
+	--volume "$PWD":"$PWD" \
+    --volume "$HOME/.cargo":"/root/.cargo" \
+	--workdir "$PWD" \
+	"${ttyopts[@]}" --init \
+	"$id" \
+	"$@"
