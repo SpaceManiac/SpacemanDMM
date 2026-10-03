@@ -105,6 +105,20 @@ fn main() {
     engine.exit(0);
 }
 
+// mimalloc is faster for parsing, but holds on to freed pages until we collect.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
+/// Return freed memory from this thread (and exited ones)'s heap.
+// `force` is needed, otherwise freeing is deferred until the thread allocs again, which doesn't happen on idle
+fn collect_freed_memory() {
+    // SAFETY: mi_collect is a ffi call, no safety contract
+    #[allow(unsafe_code)]
+    unsafe {
+        libmimalloc_sys::mi_collect(true);
+    }
+}
+
 const VERSION: Option<jsonrpc::Version> = Some(jsonrpc::Version::V2);
 
 #[derive(PartialEq)]
@@ -600,6 +614,7 @@ impl Engine {
                 elapsed.subsec_millis()
             );
             print_thread_total();
+            collect_freed_memory();
             table
         });
 
@@ -634,6 +649,8 @@ impl Engine {
                 diagnostics_tracker.lock().unwrap().send(map);
 
                 issue_notification::<extras::WindowStatus>(Default::default());
+                drop(context);
+                collect_freed_memory();
             });
         } else {
             self.issue_notification::<extras::WindowStatus>(Default::default());
@@ -679,6 +696,9 @@ impl Engine {
 
         // Print the total time.
         print_thread_total();
+
+        // Parsing churns through a lot of short-lived allocations
+        collect_freed_memory();
 
         Ok(())
     }
