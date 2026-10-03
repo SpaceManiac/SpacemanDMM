@@ -40,6 +40,9 @@ fn main() -> Result<ExitCode, Box<dyn std::error::Error>> {
     run(&DmDocCli::parse())
 }
 
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 // ----------------------------------------------------------------------------
 // CLI driver
 

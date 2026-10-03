@@ -19,6 +19,7 @@ rayon = "1.10.0"
 dreammaker = { path = "../dreammaker" }
 dmm-tools = { path = "../dmm-tools", features = ["png"] }
 foldhash = "0.2.0"
+mimalloc.workspace = true
 
 [build-dependencies]
 chrono.workspace = true

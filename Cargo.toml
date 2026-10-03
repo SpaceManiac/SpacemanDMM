@@ -24,6 +24,8 @@ rust-version = "1.95"
 chrono = "0.4.38"
 clap = { version = "4.5.20", features = ["derive"] }
 git2 = { version = "0.21.0", default-features = false }
+mimalloc = { version = "0.1.52", features = ["v2"] }
+libmimalloc-sys = { version = "0.1.49", features = ["extended", "v2"] }
 
 [profile.dev]
 opt-level = 1

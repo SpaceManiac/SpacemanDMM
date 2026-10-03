@@ -30,6 +30,9 @@ fn main() -> ExitCode {
     DmmToolsCli::parse().run()
 }
 
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 // ----------------------------------------------------------------------------
 // CLI driver
 

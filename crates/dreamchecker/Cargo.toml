@@ -11,6 +11,7 @@ serde_json = "1.0"
 foldhash = "0.2.0"
 bitflags = "2.13.1"
 clap.workspace = true
+mimalloc.workspace = true
 
 [build-dependencies]
 chrono.workspace = true

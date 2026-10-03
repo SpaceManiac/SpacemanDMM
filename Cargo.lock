@@ -461,6 +461,7 @@ dependencies = [
  "foldhash",
  "git2",
  "maud",
+ "mimalloc",
  "pulldown-cmark",
  "walkdir",
 ]
@@ -505,6 +506,7 @@ dependencies = [
  "dreammaker",
  "foldhash",
  "git2",
+ "mimalloc",
  "rayon",
  "serde",
  "serde_derive",
@@ -530,6 +532,7 @@ dependencies = [
  "dreammaker",
  "foldhash",
  "git2",
+ "mimalloc",
  "serde_json",
 ]
 
