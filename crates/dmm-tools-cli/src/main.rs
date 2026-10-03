@@ -13,88 +13,46 @@ extern crate serde_derive;
 extern crate dmm_tools;
 extern crate dreammaker as dm;
 
-use foldhash::{HashMap, HashMapExt, HashSet};
 use std::fmt;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::process::ExitCode;
 use std::sync::RwLock;
-use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use clap::{Parser, Subcommand};
-use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
-
 use dm::objtree::ObjectTree;
 use dmm_tools::*;
+use foldhash::{HashMap, HashMapExt, HashSet};
+use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
+
+fn main() -> ExitCode {
+    DmmToolsCli::parse().run()
+}
 
 // ----------------------------------------------------------------------------
-// Main driver
-
-fn main() {
-    let opt = Opt::parse();
-    let mut context = Context::default();
-    context
-        .dm_context
-        .set_print_severity(Some(dm::Severity::Error));
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(opt.jobs)
-        .build_global()
-        .expect("failed to initialize thread pool");
-    context.parallel = opt.jobs != 1;
-
-    run(&opt, &opt.command, &mut context);
-
-    std::process::exit(context.exit_status.into_inner() as i32);
-}
-
-#[derive(Default)]
-struct Context {
-    dm_context: dm::Context,
-    objtree: ObjectTree,
-    icon_cache: IconCache,
-    exit_status: AtomicIsize,
-    parallel: bool,
-}
-
-impl Context {
-    fn objtree(&mut self, opt: &Opt) {
-        let environment = self
-            .dm_context
-            .configure_cli(opt.environment.as_deref().unwrap_or("."));
-
-        eprintln!("parsing {}", environment.display());
-
-        if let Some(parent) = environment.parent() {
-            self.icon_cache.set_icons_root(parent);
-        }
-
-        let pp = self
-            .dm_context
-            .unwrap(dm::Preprocessor::new(&self.dm_context, environment));
-        let parser = dm::Parser::new(&self.dm_context, pp);
-        self.objtree = parser.parse_object_tree();
-    }
-}
+// CLI driver
 
 #[derive(Parser, Debug)]
 #[command(
     name="dmm-tools",
-    version=concat!(
-        env!("CARGO_PKG_VERSION"), "\n",
-        include_str!(concat!(env!("OUT_DIR"), "/build-info.txt"))
-    ),
-    author="Copyright (C) 2017-2025  Tad Hardesty",
-    about="This program comes with ABSOLUTELY NO WARRANTY. This is free software,
+    version=env!("CARGO_PKG_VERSION"),
+    long_version=concat!(
+        env!("CARGO_PKG_VERSION"), "  Copyright (C) 2017-2026  Tad Hardesty", "\n",
+        "This program comes with ABSOLUTELY NO WARRANTY. This is free software,
 and you are welcome to redistribute it under the conditions of the GNU
-General Public License version 3.",
+General Public License version 3.", "\n",
+        "\n",
+        include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")),
+    ),
 )]
-struct Opt {
-    /// The environment file to operate under.
-    #[arg(short = 'e', long = "env")]
-    environment: Option<String>,
-
-    #[arg(short = 'v', long = "verbose")]
-    #[allow(dead_code)]
-    verbose: bool,
+struct DmmToolsCli {
+    /// The environment to load, usually a `.dme` file.
+    ///
+    /// May also point to a `SpacemanDMM.toml` or to a directory containing
+    /// a `.dme` file or a `SpacemanDMM.toml`.
+    #[arg(short = 'e', long = "env", default_value = ".")]
+    environment: PathBuf,
 
     /// Set the number of threads to be used for parallel execution when
     /// possible. A value of 0 will select automatically, and 1 will be serial.
@@ -104,9 +62,6 @@ struct Opt {
     #[command(subcommand)]
     command: Command,
 }
-
-// ----------------------------------------------------------------------------
-// Subcommands
 
 #[derive(Subcommand, Debug)]
 enum Command {
@@ -121,7 +76,7 @@ enum Command {
     #[command(name = "minimap")]
     Minimap {
         /// The output directory.
-        #[arg(short = 'o', default_value = "data/minimaps")]
+        #[arg(short = 'o', long = "output", default_value = "data/minimaps")]
         output: String,
 
         /// Set the minimum x,y or x,y,z coordinate to act upon (1-indexed, inclusive).
@@ -168,8 +123,56 @@ enum Command {
     RenderMany,
 }
 
-fn run(opt: &Opt, command: &Command, context: &mut Context) {
-    match *command {
+// ----------------------------------------------------------------------------
+// Execution
+
+impl DmmToolsCli {
+    pub fn run(&self) -> ExitCode {
+        let mut context = Context::default();
+        context
+            .dm_context
+            .set_print_severity(Some(dm::Severity::Error));
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(self.jobs)
+            .build_global()
+            .expect("failed to initialize thread pool");
+        context.parallel = self.jobs != 1;
+
+        run(self, &mut context);
+
+        ExitCode::from(u8::try_from(context.exit_status.into_inner()).unwrap_or(u8::MAX))
+    }
+}
+
+#[derive(Default)]
+struct Context {
+    dm_context: dm::Context,
+    objtree: ObjectTree,
+    icon_cache: IconCache,
+    exit_status: AtomicUsize,
+    parallel: bool,
+}
+
+impl Context {
+    fn objtree(&mut self, opt: &DmmToolsCli) {
+        let environment = self.dm_context.configure_cli(&opt.environment);
+
+        eprintln!("parsing {}", environment.display());
+
+        if let Some(parent) = environment.parent() {
+            self.icon_cache.set_icons_root(parent);
+        }
+
+        let pp = self
+            .dm_context
+            .unwrap(dm::Preprocessor::new(&self.dm_context, environment));
+        let parser = dm::Parser::new(&self.dm_context, pp);
+        self.objtree = parser.parse_object_tree();
+    }
+}
+
+fn run(opt: &DmmToolsCli, context: &mut Context) {
+    match opt.command {
         // --------------------------------------------------------------------
         Command::ListPasses { json } => {
             if json {

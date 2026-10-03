@@ -22,6 +22,7 @@ rust-version = "1.95"
 
 [workspace.dependencies]
 chrono = "0.4.38"
+clap = { version = "4.5.20", features = ["derive"] }
 git2 = { version = "0.21.0", default-features = false }
 
 [profile.dev]

@@ -7,7 +7,7 @@ fn main() {
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
     let mut f = File::create(out_dir.join("build-info.txt")).unwrap();
     match read_commit() {
-        Ok((commit, date)) => writeln!(f, "commit: {commit}\ndate: {date}").unwrap(),
+        Ok((commit, date)) => write!(f, "commit: {commit}\ndate: {date}").unwrap(),
         Err(err) => println!("cargo:warning=Failed to fetch commit info: {err}"),
     }
 }

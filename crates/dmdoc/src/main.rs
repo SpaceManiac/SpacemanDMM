@@ -5,27 +5,29 @@ extern crate git2;
 extern crate pulldown_cmark;
 extern crate walkdir;
 
-mod markdown;
-mod template;
-
-use dm::ast::{AbsolutePath, Ident, InputType, ProcReturnType};
-use dm::objtree::ObjectTree;
-use foldhash::HashSet;
-use maud::{Markup, PreEscaped};
-use pulldown_cmark::{BrokenLink, CowStr};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::process::ExitCode;
 use std::sync::Arc;
 
+use clap::Parser;
+use dm::ast::{AbsolutePath, Ident, InputType, ProcReturnType};
 use dm::docs::*;
+use dm::objtree::ObjectTree;
+use foldhash::HashSet;
+use maud::{Markup, PreEscaped};
+use pulldown_cmark::{BrokenLink, CowStr};
+
+mod markdown;
+mod template;
 
 use markdown::DocBlock;
 
 #[rustfmt::skip]
 const BUILD_INFO: &str = concat!(
-    "dmdoc ", env!("CARGO_PKG_VERSION"), "  Copyright (C) 2017-2025  Tad Hardesty\n",
+    env!("CARGO_PKG_VERSION"), "  Copyright (C) 2017-2025  Tad Hardesty\n",
     include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")), "\n",
     "This program comes with ABSOLUTELY NO WARRANTY. This is free software,\n",
     "and you are welcome to redistribute it under the conditions of the GNU\n",
@@ -34,41 +36,54 @@ const BUILD_INFO: &str = concat!(
 
 const DM_REFERENCE_BASE: &str = "https://www.byond.com/docs/ref/#";
 
+fn main() -> Result<ExitCode, Box<dyn std::error::Error>> {
+    run(&DmDocCli::parse())
+}
+
 // ----------------------------------------------------------------------------
-// Driver
+// CLI driver
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // command-line args
-    let mut environment = None;
-    let mut output_path = "dmdoc".to_owned();
-    let mut index_path = None;
-    let mut dry_run = false;
+#[derive(clap::Parser, Debug)]
+#[command(
+    name="dmdoc",
+    version=env!("CARGO_PKG_VERSION"),
+    long_version=concat!(
+        env!("CARGO_PKG_VERSION"), "  Copyright (C) 2017-2026  Tad Hardesty", "\n",
+        "This program comes with ABSOLUTELY NO WARRANTY. This is free software,
+and you are welcome to redistribute it under the conditions of the GNU
+General Public License version 3.", "\n",
+        "\n",
+        include_str!(concat!(env!("OUT_DIR"), "/build-info.txt")),
+    ),
+)]
+pub struct DmDocCli {
+    /// The environment to load, usually a `.dme` file.
+    ///
+    /// May also point to a `SpacemanDMM.toml` or to a directory containing
+    /// a `.dme` file or a `SpacemanDMM.toml`.
+    #[arg(short = 'e', long = "env", default_value = ".")]
+    environment: PathBuf,
 
-    let mut args = std::env::args();
-    let _ = args.next(); // skip executable name
-    while let Some(arg) = args.next() {
-        if arg == "-V" || arg == "--version" {
-            println!("{BUILD_INFO}");
-            return Ok(());
-        } else if arg == "-e" {
-            environment = Some(args.next().expect("must specify a value for -e"));
-        } else if arg == "--output" {
-            output_path = args.next().expect("must specify a value for --output");
-        } else if arg == "--index" {
-            index_path = Some(args.next().expect("must specify a value for --index"));
-        } else if arg == "--dry-run" {
-            dry_run = true;
-        } else {
-            return Err(format!("unknown argument: {arg}").into());
-        }
-    }
+    /// The HTML output directory.
+    #[arg(short = 'o', long = "output", default_value = "dmdoc")]
+    output: PathBuf,
 
-    let output_path: &Path = output_path.as_ref();
+    /// A `.md` or `.txt` file to use as the contents of the home page.
+    #[arg(long = "index")]
+    index: Option<PathBuf>,
+
+    /// Only report documentation statistics, without outputting HTML.
+    #[arg(long = "dry-run")]
+    dry_run: bool,
+}
+
+fn run(cli: &DmDocCli) -> Result<ExitCode, Box<dyn std::error::Error>> {
+    let output_path: &Path = cli.output.as_ref();
 
     // configure
     let mut context = dm::Context::default();
     context.set_print_severity(Some(dm::Severity::Error));
-    let environment = context.configure_cli(environment.as_deref().unwrap_or("."));
+    let environment = context.configure_cli(&cli.environment);
 
     // parse environment
     println!("parsing {}", environment.display());
@@ -82,8 +97,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("collating documented types");
 
-    if index_path.is_none() {
-        index_path.clone_from(&context.config().dmdoc.index_file);
+    let mut index = cli.index.as_deref();
+    if index.is_none()
+        && let Some(configured_index) = &context.config().dmdoc.index_file
+    {
+        index = Some(Path::new(configured_index));
     }
 
     let mut code_directories: HashSet<std::ffi::OsString>;
@@ -218,17 +236,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // search the code tree for Markdown files
     for modules_path in code_directories {
-        for entry in walkdir::WalkDir::new(modules_path)
+        let parent = environment.parent().unwrap();
+        for entry in walkdir::WalkDir::new(parent.join(modules_path))
             .into_iter()
             .filter_entry(is_visible)
         {
             let entry = entry?;
             let path = entry.path();
+            let path2 = path.strip_prefix(parent).unwrap_or(path);
 
             if let Some(buf) = read_as_markdown(path)?
-                && Some(path) != index_path.as_ref().map(Path::new)
+                && Some(path2) != index
             {
-                let module = module_entry(&mut modules1, path);
+                let module = module_entry(&mut modules1, path2);
                 module.items_wip.push((
                     0,
                     ModuleItem::DocComment(DocComment {
@@ -243,10 +263,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Incorporate the index file if requested.
     let mut index_docs = None;
-    if let Some(index_path) = index_path {
-        let buf =
-            read_as_markdown(index_path.as_ref())?.expect("file for --index must be .md or .txt");
-        error_entity_put(index_path);
+    if let Some(index_path) = index {
+        let buf = read_as_markdown(index_path)?.expect("file for --index must be .md or .txt");
+        error_entity_put(index_path.display().to_string());
         let broken_link_callback = &mut |link: BrokenLink| -> Option<(CowStr, CowStr)> {
             broken_link_fixer(
                 link,
@@ -626,51 +645,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         // Ensure the diagnostic count is not increased after this point.
         let exit_code = diagnostic_count.into_inner();
-        if dry_run {
-            std::process::exit(exit_code);
+        if cli.dry_run {
+            return Ok(ExitCode::from(u8::try_from(exit_code).unwrap_or(u8::MAX)));
         }
     }
-
-    /*
-    // load tera templates
-    println!("loading templates");
-    let mut tera = template::builtin()?;
-
-    // register tera extensions
-    let linkify_typenames = all_type_names.clone();
-    tera.register_filter("linkify_type", move |value: &Value, _: &HashMap<String, Value>| {
-        match *value {
-            tera::Value::String(ref s) => Ok(linkify_type(&linkify_typenames, s.split('/').skip_while(|b| b.is_empty())).into()),
-            tera::Value::Array(ref a) => Ok(linkify_type(&linkify_typenames, a.iter().filter_map(|v| v.as_str())).into()),
-            _ => Err("linkify_type() input must be string".into()),
-        }
-    });
-    tera.register_filter("length", |value: &Value, _: &HashMap<String, Value>| {
-        match *value {
-            tera::Value::String(ref s) => Ok(s.len().into()),
-            tera::Value::Array(ref a) => Ok(a.len().into()),
-            tera::Value::Object(ref o) => Ok(o.len().into()),
-            _ => Ok(0.into()),
-        }
-    });
-    tera.register_filter("substring", |value: &Value, opts: &HashMap<String, Value>| {
-        match *value {
-            tera::Value::String(ref s) => {
-                let start = opts.get("start").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-                let mut end = opts
-                    .get("end")
-                    .and_then(|v| v.as_u64())
-                    .map(|s| s as usize)
-                    .unwrap_or(s.len());
-                if end > s.len() {
-                    end = s.len();
-                }
-                Ok(s[start..end].into())
-            }
-            _ => Err("substring() input must be string".into()),
-        }
-    });
-    */
 
     // render
     println!("saving static resources");
@@ -799,7 +777,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?;
     }
 
-    Ok(())
+    Ok(ExitCode::SUCCESS)
 }
 
 fn find_return_type(code: &dm::ast::Block) -> Option<AbsolutePath> {

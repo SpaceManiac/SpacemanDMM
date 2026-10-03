@@ -429,6 +429,7 @@ version = "1.12.0"
 dependencies = [
  "bincode",
  "chrono",
+ "clap",
  "dap-types",
  "dreamchecker",
  "dreammaker",
@@ -455,6 +456,7 @@ name = "dmdoc"
 version = "1.12.0"
 dependencies = [
  "chrono",
+ "clap",
  "dreammaker",
  "foldhash",
  "git2",
@@ -524,6 +526,7 @@ version = "1.12.0"
 dependencies = [
  "bitflags 2.13.1",
  "chrono",
+ "clap",
  "dreammaker",
  "foldhash",
  "git2",
