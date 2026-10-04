@@ -374,3 +374,23 @@ fn for_key_value_with_as() {
         },
     );
 }
+
+#[test]
+fn proc_body_errors_keep_their_order() {
+    // one diagnostic per line, from both proc parameters and proc bodies, including a body that fails to parse
+    with_code(
+        "
+/proc/one(var/a)
+    var/tmp/x = 1
+    src.
+/proc/two(var/b)
+    var/z = 1 +
+/proc/three(var/c)
+    var/tmp/y = 1
+    ",
+        |context, _| {
+            let lines: Vec<u32> = context.errors().iter().map(|e| e.location().line).collect();
+            assert_eq!(lines, [1, 2, 3, 4, 5, 6, 7]);
+        },
+    );
+}
